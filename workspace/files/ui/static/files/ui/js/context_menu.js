@@ -163,7 +163,7 @@ window.contextMenu = function contextMenu() {
         }
         case 'share':
           window.dispatchEvent(new CustomEvent('open-share-modal', {
-            detail: { uuid: nd.uuid, name: nd.name }
+            detail: { uuid: nd.uuid, name: nd.name, nodeType: nd.nodeType }
           }));
           break;
         case 'properties':

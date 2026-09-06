@@ -173,16 +173,6 @@
       return this.selectedFiles.some(f => f.uuid === file.uuid);
     },
 
-    isFileType(item, category) {
-      return item.node_type === 'file' && item.category === category;
-    },
-
-    isGenericFile(item) {
-      if (item.node_type !== 'file') return false;
-      const cat = item.category || '';
-      return cat !== 'image' && cat !== 'video' && cat !== 'audio' && cat !== 'document' && cat !== 'text';
-    },
-
     async createFolder() {
       const name = this.newFolderName.trim();
       if (!name) return;
@@ -376,37 +366,10 @@
               :class="isFileMode && isSelected(item) ? 'bg-' + accent + '/10' : ''"
               @click="item.node_type === 'folder' ? navigateToFolder(item) : toggleFile(item)"
             >
-              <!-- Folder icon -->
               <i
-                data-lucide="folder"
-                x-show="item.node_type === 'folder'"
-                class="w-4 h-4 text-warning flex-shrink-0"
-              ></i>
-              <!-- File icons (file mode only) -->
-              <i
-                data-lucide="image"
-                x-show="isFileType(item, 'image')"
-                class="w-4 h-4 text-success flex-shrink-0"
-              ></i>
-              <i
-                data-lucide="film"
-                x-show="isFileType(item, 'video')"
-                class="w-4 h-4 text-info flex-shrink-0"
-              ></i>
-              <i
-                data-lucide="music"
-                x-show="isFileType(item, 'audio')"
-                class="w-4 h-4 text-secondary flex-shrink-0"
-              ></i>
-              <i
-                data-lucide="file-text"
-                x-show="isFileType(item, 'document') || isFileType(item, 'text')"
-                class="w-4 h-4 text-error flex-shrink-0"
-              ></i>
-              <i
-                data-lucide="file"
-                x-show="isGenericFile(item)"
-                class="w-4 h-4 text-base-content/50 flex-shrink-0"
+                :data-lucide="item.type_icon"
+                :class="item.type_color"
+                class="w-4 h-4 flex-shrink-0"
               ></i>
 
               <span class="text-sm truncate flex-1" x-text="item.name"></span>

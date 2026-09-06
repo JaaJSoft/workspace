@@ -8,9 +8,29 @@ might want to skip notifications, a user request always sends them).
 """
 
 from django.contrib.auth.hashers import make_password
+from rest_framework.exceptions import APIException
 
-from ..models import FileEvent, FileShare, FileShareLink
+from ..models import File, FileEvent, FileShare, FileShareLink
 from .events import record_event
+
+# Ceilings of the columns the caps land in. Above them PostgreSQL raises a
+# DataError and SQLite silently stores an oversized row, so refuse the value
+# here rather than at the database.
+MAX_FILE_BYTES_CEILING = 9223372036854775807  # PositiveBigIntegerField
+MAX_FILE_COUNT_CEILING = 2147483647  # PositiveIntegerField
+
+
+class ShareLinkRuleError(APIException):
+    """Share link parameters refused before anything was created.
+
+    A DRF exception so the endpoint answers 400 through the default handler.
+    The view must not catch a broad ValueError and echo its text: that is how
+    an internal message reaches a response.
+    """
+
+    status_code = 400
+    default_code = "invalid_share_link"
+    default_detail = "Invalid share link parameters."
 
 
 def share_file(file_obj, *, target_user, permission, acting_user):
@@ -79,13 +99,47 @@ def unshare_file(file_obj, *, target_user, acting_user):
     return deleted
 
 
-def create_share_link(file_obj, *, acting_user, password="", expires_at=None):
-    """Create a public share link, optionally password-protected and time-limited."""
+def create_share_link(
+    file_obj,
+    *,
+    acting_user,
+    password="",
+    expires_at=None,
+    mode=FileShareLink.Mode.READ,
+    max_file_bytes=None,
+    max_file_count=None,
+):
+    """Create a public share link, optionally password-protected and time-limited.
+
+    A file target is read-only by construction: there is nowhere to upload to.
+    Only a folder can carry a mode that accepts anonymous writes.
+    """
+    mode = mode or FileShareLink.Mode.READ
+    if mode not in FileShareLink.Mode.values:
+        raise ShareLinkRuleError("Unknown share link mode.")
+    if mode != FileShareLink.Mode.READ and file_obj.node_type != File.NodeType.FOLDER:
+        raise ShareLinkRuleError(
+            "Only a folder can accept uploads through a share link."
+        )
+    for cap, ceiling in (
+        (max_file_bytes, MAX_FILE_BYTES_CEILING),
+        (max_file_count, MAX_FILE_COUNT_CEILING),
+    ):
+        if cap is None:
+            continue
+        if cap < 1:
+            raise ShareLinkRuleError("A cap must be a positive number.")
+        if cap > ceiling:
+            raise ShareLinkRuleError("A cap is larger than this server can store.")
+
     link = FileShareLink.objects.create(
         file=file_obj,
         created_by=acting_user,
         password=make_password(password) if password else "",
         expires_at=expires_at,
+        mode=mode,
+        max_file_bytes=max_file_bytes,
+        max_file_count=max_file_count,
     )
     record_event(
         file_obj,
@@ -93,6 +147,7 @@ def create_share_link(file_obj, *, acting_user, password="", expires_at=None):
         FileEvent.Action.LINK_CREATED,
         {
             "link_uuid": str(link.uuid),
+            "mode": link.mode,
             "has_password": link.has_password,
             "has_expiry": link.expires_at is not None,
         },

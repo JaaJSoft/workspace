@@ -23,6 +23,14 @@ def type_to_color(file_type):
 
 
 @register.filter
+def thumbnail_url(file_obj):
+    """The authenticated API URL for *file_obj*'s thumbnail, or '' without one."""
+    if not getattr(file_obj, "has_thumbnail", False):
+        return ""
+    return f"/api/v1/files/{file_obj.uuid}/thumbnail"
+
+
+@register.filter
 def to_json(value):
     """Serialize a value to JSON for use in HTML attributes.
 

@@ -1,0 +1,74 @@
+{% comment %}
+  The viewer box inside the shared page's swappable content region: the
+  resolved file's preview, the quarantine card, or a "no preview" fallback
+  with a download link. Needs quarantine_reason, viewer_html and
+  download_url in context, plus prev_url / next_url for the arrows.
+{% endcomment %}
+<div id="shared-viewer" class="bg-base-200">
+  {% if quarantine_reason %}
+    <div class="p-12 text-center">
+      <i data-lucide="shield-alert" class="w-12 h-12 text-error mx-auto mb-4"></i>
+      <h2 class="text-lg font-bold mb-2">File quarantined</h2>
+      <p class="text-base-content/60">
+        The malware scanner flagged this file, so it can be neither previewed nor
+        downloaded.
+      </p>
+      <p class="text-base-content/40 text-sm mt-2">{{ quarantine_reason }}</p>
+    </div>
+  {% elif viewer_html %}
+    {% comment %}
+      The viewers size themselves with h-full over a flex chain, which resolves
+      to nothing here: the authenticated browser hangs them in a panel that
+      already has a height, while this page is a card that grows with its
+      content. Without a concrete height Monaco and Milkdown mount into a
+      zero-height box and the preview renders blank.
+    {% endcomment %}
+    <div class="relative">
+      <div class="h-[70vh]">{{ viewer_html|safe }}</div>
+      {% comment %}
+        Anchors, not buttons: previous and next are real addresses the server
+        computed, and the keyboard handler on the page just clicks them.
+        Centered with insets rather than a translate, which daisyUI's :active
+        rule on .btn would wipe.
+      {% endcomment %}
+      {% if prev_url %}
+        <a
+          id="shared-prev"
+          href="{{ prev_url }}"
+          x-target.push="shared-content"
+          class="btn btn-circle absolute left-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
+          title="Previous file"
+          aria-label="Previous file"
+        >
+          <i data-lucide="chevron-left" class="w-5 h-5"></i>
+        </a>
+      {% endif %}
+      {% if next_url %}
+        <a
+          id="shared-next"
+          href="{{ next_url }}"
+          x-target.push="shared-content"
+          class="btn btn-circle absolute right-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
+          title="Next file"
+          aria-label="Next file"
+        >
+          <i data-lucide="chevron-right" class="w-5 h-5"></i>
+        </a>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="p-12 text-center">
+      <i
+        data-lucide="eye-off"
+        class="w-12 h-12 text-base-content/30 mx-auto mb-4"
+      ></i>
+      <p class="text-base-content/60 mb-4">Preview not available for this file type</p>
+      {% if download_url %}
+        <a href="{{ download_url }}" class="btn btn-primary btn-sm gap-1">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          Download file
+        </a>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>

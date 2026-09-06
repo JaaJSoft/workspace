@@ -1370,6 +1370,59 @@ class ClassifyMailMessagesTests(TestCase):
         self.assertEqual(result["status"], "error")
         ai_task.refresh_from_db()
         self.assertEqual(ai_task.status, "failed")
+        self.assertEqual(ai_task.error, "Malformed JSON response from LLM")
+        self.assertEqual(ai_task.raw_messages["response"]["content"], "not json")
+
+    @patch("workspace.ai.client.get_ai_client")
+    def test_reply_cut_at_the_token_cap_names_the_cap(self, mock_client):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = ""
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.choices[0].finish_reason = "length"
+        mock_response.model = "gpt-4o-mini"
+        mock_response.usage.prompt_tokens = 50
+        mock_response.usage.completion_tokens = 2048
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(self.msg1.uuid)]},
+        )
+        from workspace.ai.tasks.mail import classify_mail_messages
+
+        result = classify_mail_messages(str(ai_task.uuid))
+
+        self.assertEqual(result["status"], "error")
+        ai_task.refresh_from_db()
+        self.assertEqual(ai_task.status, "failed")
+        self.assertIn("cut off at", ai_task.error)
+        self.assertIn("tokens", ai_task.error)
+        self.assertEqual(ai_task.raw_messages["response"]["finish_reason"], "length")
+
+    @patch("workspace.ai.client.get_ai_client")
+    def test_classify_leaves_room_for_reasoning(self, mock_client):
+        from workspace.ai.tasks.mail import CLASSIFY_MAX_TOKENS, classify_mail_messages
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = json.dumps({"results": []})
+        mock_response.choices[0].message.tool_calls = None
+        mock_response.model = "gpt-4o-mini"
+        mock_response.usage.prompt_tokens = 10
+        mock_response.usage.completion_tokens = 5
+        mock_client.return_value.chat.completions.create.return_value = mock_response
+
+        ai_task = AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CLASSIFY,
+            input_data={"message_uuids": [str(self.msg1.uuid)]},
+        )
+        classify_mail_messages(str(ai_task.uuid))
+
+        kwargs = mock_client.return_value.chat.completions.create.call_args.kwargs
+        self.assertGreaterEqual(kwargs["max_tokens"], CLASSIFY_MAX_TOKENS)
 
 
 class CleanLlmContentTests(TestCase):

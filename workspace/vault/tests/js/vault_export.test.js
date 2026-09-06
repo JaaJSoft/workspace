@@ -134,6 +134,34 @@ test('entries the format cannot carry are named, and the dialog stays to say so'
   assert.match(component.skippedMessage(), /3 entries/);
 });
 
+test('a run reports its own outcome, never the one before it', async () => {
+  // The dialog now stays open over a skipped count, so a second run happens on
+  // a component the first one left state on. An archive skips nothing and has
+  // no notion of skipping: inheriting the count would hold the dialog open on
+  // a sentence about a file that was never written that way.
+  const { component, downloads } = load({
+    vaultExportInterchange: {
+      toBitwarden: () => ({ json: { encrypted: false }, skipped: 3 }),
+      interchangeFilename: () => 'vault-export-2026-09-06.json',
+    },
+  });
+  component.exportOpen = true;
+  component.exportFormat = 'interchange';
+  await component.runExport();
+  assert.equal(component.exportSkipped, 3);
+  assert.equal(component.exportOpen, true, 'the count had nowhere to be read');
+
+  component.exportFormat = 'archive';
+  component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit');
+  await component.runExport();
+  assert.deepStrictEqual(downloads, [
+    'vault-export-2026-09-06.json',
+    'vault-export-2026-09-06.vaultarchive',
+  ]);
+  assert.equal(component.exportSkipped, 0, 'the archive run inherited the interchange count');
+  assert.equal(component.exportOpen, false, 'the dialog stayed open over a stale count');
+});
+
 test('nothing skipped closes the dialog as before', async () => {
   const { component } = load();
   component.exportOpen = true;

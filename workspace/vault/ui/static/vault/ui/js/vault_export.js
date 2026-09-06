@@ -84,6 +84,11 @@ window.vaultExportMixin = function vaultExportMixin() {
     async runExport() {
       if (this.exportBusy) return;
       if (this.exportFormat === 'archive' && !this.passphraseAccepted()) return;
+      // Each attempt reports its own outcome and nothing else. The dialog no
+      // longer closes on every success, so a count left by a previous run
+      // survives into the next one - and an archive run, which skips nothing
+      // and has no notion of skipping, would end up displaying it.
+      this.exportSkipped = 0;
       // Before anything is decrypted, so cancelling means nothing was built.
       //
       // this.confirm, from the component root: dialogs.js declares AppDialog

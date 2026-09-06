@@ -214,30 +214,40 @@ window.passwordGenerator = {
 
 // ---------------------------------------------------------------- the panel
 
-// What a device remembers between two openings. The generated value is
-// deliberately not in this list: options are a preference, a password is a
-// secret, and localStorage is the wrong place for the second.
-const OPTION_KEYS = [
-  'mode',
-  'length',
-  'upper',
-  'lower',
-  'digits',
-  'symbols',
-  'avoidLookalikes',
-  'words',
-  'separator',
-  'capitalise',
-];
+// What a device remembers between two openings, and what each key is allowed
+// to be. The generated value is deliberately absent: options are a preference,
+// a password is a secret, and localStorage is the wrong place for the second.
+//
+// Every key is checked on the way back in rather than trusted. Storage is
+// user-writable and outlives any version of this file, and a value that got
+// through would not fail loudly: a mode of 'foo' hides both option panes with
+// neither tab active, a length of 999 draws 999 characters under a slider
+// pinned at 64. The bounds are the ones the partial's controls offer.
+const OPTION_RULES = {
+  mode: { oneOf: ['password', 'passphrase'] },
+  length: { min: 8, max: 64 },
+  upper: { boolean: true },
+  lower: { boolean: true },
+  digits: { boolean: true },
+  symbols: { boolean: true },
+  avoidLookalikes: { boolean: true },
+  words: { min: 3, max: 12 },
+  separator: { oneOf: SEPARATORS.map((choice) => choice.value) },
+  capitalise: { boolean: true },
+};
+const OPTION_KEYS = Object.keys(OPTION_RULES);
 const OPTIONS_STORAGE_KEY = 'passwordGenerator.options';
-// A host takes the value back by dispatching this on window - a vault does it
-// when it locks. Named for what it asks rather than for who asks it, so this
-// file stays free of any module's vocabulary.
-const CLEAR_EVENT = 'password-generator-clear';
+
+function isStorableOption(key, value) {
+  const rule = OPTION_RULES[key];
+  if (!rule) return false;
+  if (rule.boolean) return typeof value === 'boolean';
+  if (rule.oneOf) return rule.oneOf.includes(value);
+  return Number.isInteger(value) && value >= rule.min && value <= rule.max;
+}
 
 window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
   return {
-    open: false,
     mode: 'password',
     length: 20,
     upper: true,
@@ -249,22 +259,21 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
     separator: '-',
     capitalise: true,
     value: '',
+    bits: 0,
     error: '',
 
     separators: SEPARATORS,
 
     init() {
       this.restore();
-      this.normaliseSeparator();
-      for (const key of OPTION_KEYS) this.$watch(key, () => this.optionsChanged());
-      // Bound once and kept, so destroy() can hand back the same reference.
-      this.onClearRequest = () => this.clear();
-      window.addEventListener(CLEAR_EVENT, this.onClearRequest);
+      for (const key of OPTION_KEYS) this.$watch(key, () => this.regenerate());
+      // The mode is a pair of buttons, so no change event ever bubbles for it
+      // and the root's @change cannot persist it.
+      this.$watch('mode', () => this.persist());
       this.regenerate();
     },
 
     destroy() {
-      window.removeEventListener(CLEAR_EVENT, this.onClearRequest);
       this.clear();
     },
 
@@ -283,27 +292,31 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       }
       if (!stored) return;
       for (const key of OPTION_KEYS) {
-        if (stored[key] !== undefined) this[key] = stored[key];
+        if (isStorableOption(key, stored[key])) this[key] = stored[key];
       }
     },
 
-    optionsChanged() {
+    persist() {
       try {
         window.localStorage.setItem(OPTIONS_STORAGE_KEY, JSON.stringify(this.options()));
       } catch (error) {
         // A browser refusing storage is not a reason to refuse a password.
       }
-      this.regenerate();
     },
 
     regenerate() {
       try {
         this.value = generate(this.options(), deps);
+        // Computed once per draw rather than read from the bindings: the
+        // inclusion-exclusion below is BigInt work with exponents up to 64,
+        // and the strength row reads it three times per reactive flush.
+        this.bits = entropyBits(this.options(), deps);
         this.error = '';
       } catch (failure) {
         // The old value answered the old options; showing it under the new
         // ones would read as the generator's answer to them.
         this.value = '';
+        this.bits = 0;
         this.error = failure.message;
       }
     },
@@ -312,20 +325,15 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
       this.value = '';
     },
 
-    // Options come back from a previous session, where the catalogue may have
-    // been different - or, before the picker was a closed set, empty.
-    normaliseSeparator() {
-      if (!SEPARATORS.some((choice) => choice.value === this.separator)) {
-        this.separator = '-';
-      }
-    },
-
-    entropy() {
-      try {
-        return entropyBits(this.options(), deps);
-      } catch (failure) {
-        return 0;
-      }
+    // Enter inside the host's form. Chromium submits implicitly from a range
+    // and from a checkbox - only the select is exempt - so pressing it here
+    // would save the entry with the password the draft already held, and tear
+    // this panel down with the drawn one still in it. Buttons are left alone:
+    // Enter is how they are pressed from the keyboard.
+    blockImplicitSubmit(event) {
+      const target = event.target;
+      if (target && target.closest && target.closest('button, a')) return;
+      event.preventDefault();
     },
 
     // Three rough bands, in bits: under 45 an offline attacker gets there,
@@ -333,9 +341,8 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
     // reaches it. The wording stays vague on purpose - a precise claim would
     // depend on the attacker's hardware, which this page cannot know.
     strength() {
-      const bits = this.entropy();
-      if (bits < 45) return { label: 'Weak', css: 'progress-error' };
-      if (bits < 70) return { label: 'Good', css: 'progress-warning' };
+      if (this.bits < 45) return { label: 'Weak', css: 'progress-error' };
+      if (this.bits < 70) return { label: 'Good', css: 'progress-warning' };
       return { label: 'Strong', css: 'progress-success' };
     },
 
@@ -359,7 +366,6 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps) {
     apply() {
       if (!this.value) return;
       this.$dispatch('password-apply', { value: this.value });
-      this.open = false;
     },
 
     copy() {

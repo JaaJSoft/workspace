@@ -2681,7 +2681,7 @@ test('locking takes back the password the generator drew', async () => {
   // A generated password is a plaintext held outside any entry - the panel
   // owns it, and the standalone one is not attached to a draft at all. It has
   // to go with the keys, like the drafts on the line above it in onLocked.
-  const { component, ctx } = browser();
+  const { component } = browser();
   component.init();
   component.openGenerator('password');
   component.openGeneratorDialog();
@@ -2690,7 +2690,6 @@ test('locking takes back the password the generator drew', async () => {
 
   assert.equal(component.generatorField, null);
   assert.equal(component.generatorOpen, false);
-  assert.deepStrictEqual(Array.from(ctx.dispatched || []), ['password-generator-clear']);
 });
 
 test('closing the entry dialog forgets which field had its generator open', async () => {

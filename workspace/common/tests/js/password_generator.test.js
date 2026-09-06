@@ -14,6 +14,12 @@ function load(extraGlobals = BROWSER) {
   return loadScripts([WORDLIST, GENERATOR], extraGlobals).passwordGenerator;
 }
 
+// The EFF list holds one hyphenated entry, `yo-yo`, so counting the pieces a
+// hyphen split produces is a one-in-three-hundred flake against the real list.
+// These words carry no separator, which makes the count exact - the property
+// under test is the join, not the vocabulary.
+const PLAIN_WORDS = ['alpha', 'bravo', 'delta', 'gamma', 'omega', 'sigma'];
+
 /** A byte source cycling 0..255 forever, the shape that exposes modulo bias. */
 function cyclingBytes() {
   let next = 0;
@@ -226,7 +232,7 @@ test('an empty separator never reaches the output', () => {
   // in. Words run together lose their boundaries, and two draws can then
   // spell one string while entropyBits still counts draws.
   const G = load();
-  const value = G.generatePassphrase({ words: 5, separator: '' });
+  const value = G.generatePassphrase({ words: 5, separator: '' }, { wordlist: PLAIN_WORDS });
   assert.equal(value.split('-').length, 5, value);
 });
 
@@ -237,7 +243,10 @@ test('every separator the picker offers actually separates', () => {
   const G = load();
   assert.ok(G.SEPARATORS.length >= 2);
   for (const choice of G.SEPARATORS) {
-    const value = G.generatePassphrase({ words: 4, separator: choice.value });
+    const value = G.generatePassphrase(
+      { words: 4, separator: choice.value },
+      { wordlist: PLAIN_WORDS }
+    );
     assert.equal(value.split(choice.value).length, 4, `${choice.label}: ${value}`);
   }
 });

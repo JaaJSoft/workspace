@@ -526,7 +526,10 @@ class VaultBrowserTests(PlaywrightTestCase):
                 return {
                     audited: nodes.map(identify),
                     offenders: nodes
-                        .filter((node) => !['checkbox', 'radio', 'hidden'].includes(node.type))
+                        // A slider holds no text: it has nothing to autofill
+                        // and nothing to spell-check, and the attributes were
+                        // only ever there to satisfy this scan.
+                        .filter((node) => !['checkbox', 'radio', 'hidden', 'range'].includes(node.type))
                         .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
                         .map(identify),
                 };

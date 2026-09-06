@@ -9,14 +9,7 @@ const MIXIN = 'workspace/vault/ui/static/vault/ui/js/vault_generator.js';
 
 function mixin() {
   const copied = [];
-  const dispatched = [];
   const ctx = loadScript(MIXIN, {
-    CustomEvent: class {
-      constructor(name) {
-        this.type = name;
-      }
-    },
-    dispatchEvent: (event) => dispatched.push(event.type),
     vaultClipboard: {
       copy: async (label, value, options) => copied.push({ label, value, options }),
     },
@@ -24,7 +17,7 @@ function mixin() {
       randomBytes: (count) => new Uint8Array(count),
     },
   });
-  return { component: ctx.vaultGeneratorMixin(), copied, dispatched };
+  return { component: ctx.vaultGeneratorMixin(), copied };
 }
 
 test('opening a field panel closes the one that was open', () => {
@@ -66,13 +59,17 @@ test('copying a generated password goes through the clearing clipboard', () => {
   assert.equal(copied[0].options.transient, true);
 });
 
-test('clearing asks every open panel to drop what it holds', () => {
-  const { component, dispatched } = mixin();
+test('clearing takes both panels off the screen', () => {
+  // Both are mounted under x-if on these two flags, so dropping them is what
+  // tears the panels down and runs the destroy() that lets go of the value.
+  const { component } = mixin();
   component.openGenerator('password');
+  component.openGeneratorDialog();
+  component.generatorError = 'stale';
   component.clearGenerators();
-  assert.deepEqual(dispatched, ['password-generator-clear']);
   assert.equal(component.generatorField, null);
   assert.equal(component.generatorOpen, false);
+  assert.equal(component.generatorError, '');
 });
 
 test('the byte source handed to the panel is the vault bundle, not the page', () => {
@@ -92,32 +89,27 @@ test('the byte source handed to the panel is the vault bundle, not the page', ()
   assert.deepEqual(drawn, [7]);
 });
 
-test('a refused clipboard says so instead of failing silently', () => {
-  // The panel closes on copy, taking the value with it: a rejected write that
-  // nobody catches leaves the user believing they hold a password they never
-  // got. copyField two files over sets the same message for the same reason.
+test('a refused clipboard says so beside the panel, not behind the backdrop', () => {
+  // Copying is the only way the value leaves the dialog, and closing the
+  // dialog drops it: a rejected write nobody catches leaves the user believing
+  // they hold a password they never got. It goes in generatorError rather than
+  // error because the page-level alert renders in <main>, under the modal.
   const ctx = loadScript(MIXIN, {
     vaultClipboard: { copy: async () => { throw new Error('denied'); } },
     vaultCrypto: { randomBytes: (count) => new Uint8Array(count) },
   });
   const component = ctx.vaultGeneratorMixin();
+  component.error = '';
   return component.copyGenerated('drawn').then(() => {
-    assert.match(component.error, /could not be copied/);
+    assert.match(component.generatorError, /could not be copied/);
+    assert.equal(component.error, '');
   });
 });
 
-test('a lock cancelling the copy is not reported as a failure', () => {
-  // The vault raises { reason: 'locked' } when the session goes while an
-  // operation is in flight; that is the lock working, not an error to show.
-  const ctx = loadScript(MIXIN, {
-    vaultClipboard: {
-      copy: async () => { const e = new Error('locked'); e.reason = 'locked'; throw e; },
-    },
-    vaultCrypto: { randomBytes: (count) => new Uint8Array(count) },
-  });
-  const component = ctx.vaultGeneratorMixin();
-  component.error = '';
+test('a copy that went through clears the message the last one left', () => {
+  const { component } = mixin();
+  component.generatorError = 'That value could not be copied.';
   return component.copyGenerated('drawn').then(() => {
-    assert.equal(component.error, '');
+    assert.equal(component.generatorError, '');
   });
 });

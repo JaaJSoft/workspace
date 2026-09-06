@@ -118,6 +118,13 @@ class GeneratorWalkTests(PlaywrightTestCase):
         )
 
     def test_locking_takes_the_generated_password_off_the_screen(self):
+        """The outcome, whichever mechanism produces it.
+
+        `clearGenerators()` drops the flags the dialog is mounted on, and the
+        whole unlocked subtree leaves the DOM with the session anyway: this
+        walk pins that nothing generated is left on screen, not which of the
+        two got there first.
+        """
         self._open_vault()
         self.page.click("a:has-text('Generator'), li:has-text('Generator') button")
         self.page.wait_for_selector(PREVIEW, timeout=10000)
@@ -143,10 +150,20 @@ class GeneratorWalkTests(PlaywrightTestCase):
         drawn = self.page.inner_text(PREVIEW)
 
         self.page.click(".modal-box button:has-text('Copy')")
+        # Clicked, not merely awaited: wait_for_selector calls an element under
+        # a backdrop visible, so a banner buried beneath the dialog would pass
+        # a test that only looked for its text. "Clear now" is the whole point
+        # of the banner, and a click is what proves it can be reached.
         self.page.wait_for_selector("text=Password copied", timeout=10000)
         self.assertEqual(
             self.page.evaluate("() => navigator.clipboard.readText()"), drawn
         )
+        self.page.click("button:has-text('Clear now')")
+        # x-show, so the banner is hidden rather than removed.
+        self.page.wait_for_selector(
+            "text=Password copied", state="hidden", timeout=10000
+        )
+        self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), "")
 
     def test_the_generator_answers_a_passphrase_when_asked_for_one(self):
         self._open_vault()
@@ -162,23 +179,48 @@ class GeneratorWalkTests(PlaywrightTestCase):
         phrase = self.page.inner_text(PREVIEW)
         self.assertGreaterEqual(len(phrase.split("-")), 6)
 
-    def test_opening_the_generator_adds_no_field_that_could_submit_the_form(self):
-        # The panel is embedded in the entry form, where a text-like input
-        # submits on Enter: choosing a separator would save the record -
-        # without the generated password, which has not been applied yet - and
-        # tear the panel down with the drawn value still in it.
-        #
-        # The separator is a <select> for that reason, and neither a select nor
-        # a range triggers implicit submission. Counting rather than guarding:
-        # a text field coming back here is what has to fail, and a guard on a
-        # control that cannot submit would be untestable decoration.
+    def test_enter_inside_the_generator_does_not_save_the_entry(self):
+        # The panel is embedded in the entry form, and Chromium submits
+        # implicitly from a range and from a checkbox - probed here rather than
+        # assumed, since only the select is exempt. Unguarded, Enter on the
+        # length slider saves the record with the password the draft already
+        # held and tears the panel down with the drawn one still in it.
         self._open_vault()
         self._open_new_login()
-        texts = ".modal-box input:not([type=range]):not([type=checkbox])"
-        before = self.page.locator(texts).count()
-
+        self.page.fill(".modal-box input[type=text] >> nth=0", "GitHub")
         self.page.click("button[aria-label='Generate a password']")
-        self.page.click(".modal-box button:has-text('Passphrase')")
-        self.page.wait_for_selector(".modal-box select.select-xs")
+        self.page.wait_for_selector(PREVIEW, timeout=10000)
 
-        self.assertEqual(self.page.locator(texts).count(), before)
+        for selector in (
+            ".modal-box input[type=range]",
+            ".modal-box input[type=checkbox]",
+        ):
+            self.page.focus(selector)
+            self.page.keyboard.press("Enter")
+            # A submit runs saveEntry(), which closes the dialog and takes
+            # the panel - and the drawn value - with it.
+            self.assertEqual(
+                self.page.locator(PREVIEW).count(),
+                1,
+                f"Enter on {selector} submitted the entry form",
+            )
+        self.assertEqual(self.page.locator("tbody tr:has-text('GitHub')").count(), 0)
+
+    def test_enter_on_the_panel_buttons_still_presses_them(self):
+        # The guard is a preventDefault on the panel root, and Enter is how a
+        # button is pressed from the keyboard: blocking it there would trade a
+        # save nobody asked for against a panel nobody can drive.
+        self._open_vault()
+        self._open_new_login()
+        self.page.click("button[aria-label='Generate a password']")
+        self.page.wait_for_selector(PREVIEW, timeout=10000)
+        drawn = self.page.inner_text(PREVIEW)
+
+        self.page.focus(".modal-box button:has-text('Regenerate')")
+        self.page.keyboard.press("Enter")
+        self.page.wait_for_function(
+            "(previous) => document.querySelector('.modal-box .font-mono.break-all')"
+            "?.innerText !== previous",
+            arg=drawn,
+            timeout=10000,
+        )

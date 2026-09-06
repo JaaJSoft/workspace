@@ -85,6 +85,14 @@
                 @password-apply="applyGenerated(field.field_id, $event.detail.value)"
                 @password-copy="copyGenerated($event.detail.value)"
               >
+                {% comment %}
+                  Beside the panel rather than in the page's own alert: the
+                  dialog's backdrop covers <main>, so a refused copy reported
+                  there never reaches the person who pressed Copy.
+                {% endcomment %}
+                <inline-alert type="error" class="mb-2" x-show="generatorError" x-cloak>
+                <span x-text="generatorError"></span>
+                </inline-alert>
                 {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" show_apply=True %}
               </div>
             </template>

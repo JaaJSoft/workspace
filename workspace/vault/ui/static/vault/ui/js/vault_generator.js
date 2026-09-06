@@ -9,6 +9,10 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
     generatorField: null,
     // The standalone generator, reached from the sidebar.
     generatorOpen: false,
+    // Reported next to the panel rather than through `error`: both hosts are
+    // modal dialogs, and the page-level alert renders in <main>, behind the
+    // backdrop where the user cannot see it.
+    generatorError: '',
 
     // Handed to the shared panel as its dependencies. The module's randomness
     // is audited inside the crypto bundle - guards on a missing CSPRNG and on
@@ -19,10 +23,12 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
     },
 
     openGenerator(fieldId) {
+      this.generatorError = '';
       this.generatorField = this.generatorField === fieldId ? null : fieldId;
     },
 
     openGeneratorDialog() {
+      this.generatorError = '';
       this.generatorOpen = true;
     },
 
@@ -38,25 +44,25 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
     },
 
     async copyGenerated(value) {
-      // The panel is dismissed on copy, so a rejected write - a denied
-      // permission, an unfocused document - would leave the user holding
-      // nothing and believing otherwise. Same message as copyField, which
-      // fails the same way for the same reason.
+      // Copying is the only way a value drawn here leaves the dialog, and
+      // closing the dialog drops it: a rejected write - a denied permission,
+      // an unfocused document - has to say so next to the button that was
+      // pressed, or the user closes on an empty clipboard believing otherwise.
       try {
         await window.vaultClipboard.copy('Password', value, { transient: true });
+        this.generatorError = '';
       } catch (err) {
-        if (err && err.reason === 'locked') return;
-        this.error = 'That value could not be copied.';
+        this.generatorError = 'That value could not be copied.';
       }
     },
 
-    // Takes every generated password back. The panels hold their value in
-    // their own state, so closing them is not enough: they are asked to drop
-    // it, and they answer wherever they are mounted.
+    // Takes every generated password off the screen. Both panels are mounted
+    // under x-if, so dropping the flags tears them down and runs the destroy()
+    // that lets go of what they hold.
     clearGenerators() {
       this.generatorField = null;
       this.generatorOpen = false;
-      window.dispatchEvent(new CustomEvent('password-generator-clear'));
+      this.generatorError = '';
     },
   };
 };

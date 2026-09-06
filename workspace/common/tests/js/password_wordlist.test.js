@@ -30,3 +30,11 @@ test('every word is lowercase and short enough to type', () => {
   );
   assert.deepEqual(offenders, []);
 });
+
+test('exactly one entry carries a hyphen', () => {
+  // What the passphrase tests work around, and what makes a hyphen-joined
+  // passphrase read as one word too many about once in three hundred draws.
+  const ctx = loadScript(WORDLIST);
+  const hyphenated = Array.from(ctx.PASSWORD_WORDLIST).filter((word) => word.includes('-'));
+  assert.deepEqual(hyphenated, ['yo-yo']);
+});

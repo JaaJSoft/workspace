@@ -16,6 +16,16 @@
         <span>Password generator</span>
       </h3>
 
+      {% comment %}
+        Inside the dialog, not in the page's own alert: the backdrop covers
+        <main>, so a refused copy reported there is invisible to the only
+        person who can act on it. Slot mode because inline-alert reads its
+        attributes once, when it connects.
+      {% endcomment %}
+      <inline-alert type="error" class="mt-4" x-show="generatorError" x-cloak>
+      <span x-text="generatorError"></span>
+      </inline-alert>
+
       <div class="mt-4" @password-copy="copyGenerated($event.detail.value)">
         {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" %}
       </div>

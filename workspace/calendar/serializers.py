@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from rest_framework import serializers
 
 from .models import Calendar, Event, EventMember
-from .recurrence import meeting_join_url
+from .recurrence import meeting_join_url, meeting_membership, meeting_room_url
 from .services import recurrence_rule
 from .services.timezones import normalize_all_day
 
@@ -110,6 +110,7 @@ class EventSerializer(serializers.ModelSerializer):
     ical_uid = serializers.CharField(read_only=True)
     external_organizer = serializers.EmailField(read_only=True)
     join_url = serializers.SerializerMethodField()
+    room_url = serializers.SerializerMethodField()
     recurrence_summary = serializers.SerializerMethodField()
     recurrence_simple = serializers.SerializerMethodField()
 
@@ -126,6 +127,7 @@ class EventSerializer(serializers.ModelSerializer):
             "timezone",
             "location",
             "join_url",
+            "room_url",
             "owner",
             "members",
             "recurrence_rule",
@@ -151,6 +153,29 @@ class EventSerializer(serializers.ModelSerializer):
         return meeting_join_url(
             obj.recurrence_parent or obj, self.context.get("request")
         )
+
+    def get_room_url(self, obj):
+        # Same redirection as get_join_url: the Meeting hangs off the series
+        # master, never off a materialized exception.
+        return meeting_room_url(
+            obj.recurrence_parent or obj,
+            self.context.get("request"),
+            self._meeting_membership(),
+        )
+
+    def _meeting_membership(self):
+        """The viewer's meeting membership, resolved once per render.
+
+        ``many=True`` shares the root serializer's context dict with every
+        child, so seeding it here keeps a listing at a single membership
+        query even when the caller passed nothing in.
+        """
+        context = self.context
+        membership = context.get("meeting_membership")
+        if membership is None:
+            membership = meeting_membership(context.get("request"))
+            context["meeting_membership"] = membership
+        return membership
 
     def get_recurrence_summary(self, obj):
         return recurrence_rule.describe(obj.recurrence_rule)

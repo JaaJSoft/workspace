@@ -13,6 +13,7 @@ from workspace.calendar.queries import visible_events_q
 from workspace.calendar.recurrence import (
     _member_dict,
     make_virtual_occurrence,
+    meeting_membership,
     next_occurrences_after,
     occurrences_in_range,
 )
@@ -135,6 +136,9 @@ def get_upcoming_page(
 
     user_q = visible_events_q(user)
     declined_q = Q(members__user=user, members__status=EventMember.Status.DECLINED)
+    # One membership resolution for the whole page: the serializer below and
+    # every virtual occurrence read the same set.
+    membership = meeting_membership(request)
 
     # ---- One-off events + materialized exceptions ----
     one_off_qs = (
@@ -162,7 +166,9 @@ def get_upcoming_page(
     # +1 sentinel so we can tell if there are more events after this page.
     one_off = list(one_off_qs.order_by("start")[: limit + 1])
     one_off_data = EventSerializer(
-        one_off, many=True, context={"request": request}
+        one_off,
+        many=True,
+        context={"request": request, "meeting_membership": membership},
     ).data
 
     # ---- Recurring masters ----
@@ -221,7 +227,9 @@ def get_upcoming_page(
             if key in exception_keys:
                 continue  # exception or cancellation handled separately
             recurring_data.append(
-                make_virtual_occurrence(master, occ_start, request=request)
+                make_virtual_occurrence(
+                    master, occ_start, request=request, membership=membership
+                )
             )
             collected += 1
 

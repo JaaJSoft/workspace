@@ -137,6 +137,20 @@
           </div>
         </template>
 
+        {# Member room: the API only fills room_url for a member of the meeting's conversation #}
+        <template x-if="_panelRaw?.room_url">
+          <div>
+            <a
+              class="btn btn-primary btn-sm"
+              :href="_panelRaw.room_url"
+              target="_blank"
+              rel="noopener"
+            >
+              <i data-lucide="video" class="w-4 h-4"></i> Join the meeting
+            </a>
+          </div>
+        </template>
+
         <!-- Description -->
         <template x-if="form.description">
           <div class="flex items-start gap-2.5 text-sm">

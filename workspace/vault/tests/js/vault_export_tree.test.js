@@ -47,7 +47,14 @@ function load(overrides = {}) {
     },
     vaultReader: {
       readVault: async (s, row) => Object.assign({}, row, { name: 'Perso', description: 'D' }),
-      readEntries: async (s, v, rows) => ({ rows: rows, tamperedCount: readerCounts.entries }),
+      readEntries: async (s, v, rows) => {
+        if (overrides.readerThrowsLocked) {
+          const error = new Error('locked');
+          error.reason = 'locked';
+          throw error;
+        }
+        return { rows: rows, tamperedCount: readerCounts.entries };
+      },
       readFolders: async (s, v, rows) => ({
         rows: rows.map((r) => Object.assign({}, r, { name: 'Banque' })),
         tamperedCount: readerCounts.folders,
@@ -116,6 +123,16 @@ test('one unreadable row refuses the whole export', async () => {
   await assert.rejects(
     () => ctx.vaultExportTree.buildTree(session, {}),
     (err) => err.reason === 'unreadable'
+  );
+});
+
+test('a lock during the export aborts it, and is not reported as tampering', async () => {
+  // vaultReader re-throws a locked error rather than counting it, precisely so
+  // a closed vault is never confused with a forged one.
+  const ctx = load({ readerThrowsLocked: true });
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {}),
+    (err) => err.reason === 'locked'
   );
 });
 

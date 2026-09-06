@@ -794,8 +794,21 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
           return;
         }
-        const data = await resp.json();
-        this._panelRaw = { ...this._panelRaw, join_url: data.join_url };
+        // The creation answer names no conversation, and room_url - the
+        // member door - is a property of the event, resolved server-side
+        // against the viewer's membership. So re-read the event.
+        const detail = await fetch(`/api/v1/events/${targetUuid}`, { credentials: 'same-origin' });
+        if (!detail.ok) {
+          if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
+          return;
+        }
+        const event = await detail.json();
+        // The detail answers for the series master. A panel opened on an
+        // occurrence keeps its own row - its uuid and instants drive the
+        // date line and every other action - and takes only the links.
+        this._panelRaw = event.uuid === this._panelRaw.uuid
+          ? event
+          : { ...this._panelRaw, join_url: event.join_url, room_url: event.room_url };
       } finally {
         this.creatingMeeting = false;
       }

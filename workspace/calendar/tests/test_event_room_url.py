@@ -205,6 +205,19 @@ class EventRoomUrlTests(TestCase):
         self.assertEqual(len(matching), 1)
         self.assertIsNone(matching[0]["room_url"])
 
+    def test_membership_ignores_conversations_without_a_meeting(self):
+        from workspace.calendar.recurrence import MeetingMembership
+        from workspace.chat.models import Conversation, ConversationMember
+
+        meeting = self._create_meeting(self.event)
+        chat = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, title="Lunch", created_by=self.owner
+        )
+        ConversationMember.objects.create(conversation=chat, user=self.member)
+        membership = MeetingMembership(self.member)
+        self.assertIn(meeting.conversation_id, membership)
+        self.assertNotIn(chat.uuid, membership)
+
     # ---- query budget ----
 
     def _query_count(self, url):
@@ -314,12 +327,12 @@ class EventPanelRoomButtonTests(TestCase):
     """The panel's join button is a plain link - it opens the room, it does
     not create anything (creating a meeting stays the owner's button)."""
 
-    def test_panel_renders_a_link_bound_to_room_url(self):
+    def test_panel_opens_the_room_without_acting_on_it(self):
         html = render_to_string("calendar/ui/partials/_event_detail_panel.html")
-        self.assertIn('x-if="_panelRaw?.room_url"', html)
-        self.assertIn(':href="_panelRaw.room_url"', html)
-        start = html.index(':href="_panelRaw.room_url"')
-        anchor = html[start : html.index("</a>", start)]
-        self.assertIn('target="_blank"', anchor)
-        self.assertIn('rel="noopener"', anchor)
+        marker = html.index("room_url", html.index("room_url") + 1)
+        anchor = html[html.rindex("<a", 0, marker) : html.index("</a>", marker)]
+        # A door, not a command: it navigates to the room the server
+        # handed us, and posts nothing on the way.
+        self.assertIn("target=", anchor)
+        self.assertIn("noopener", anchor)
         self.assertNotIn("@click", anchor)

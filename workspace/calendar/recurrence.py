@@ -282,7 +282,9 @@ class MeetingMembership:
     Every event of a listing asks the same question, so the answer is a
     single query for the whole request however many meeting-bearing events
     the page carries. Resolution is lazy: a page with no meeting at all
-    never asks, and never queries.
+    never asks, and never queries. Only conversations that back a meeting
+    are loaded - a calendar page has no use for the rest of someone's chat
+    list, however long it is.
     """
 
     __slots__ = ("_user", "_ids")
@@ -302,7 +304,9 @@ class MeetingMembership:
         user = self._user
         if user is None or not getattr(user, "is_authenticated", False):
             return frozenset()
-        return frozenset(user_conversation_ids(user))
+        return frozenset(
+            user_conversation_ids(user).filter(conversation__meeting__isnull=False)
+        )
 
 
 def meeting_membership(request=None):

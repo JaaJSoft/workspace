@@ -794,12 +794,22 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
           return;
         }
+        // The meeting exists from here on, so show its link and let the
+        // grid pick it up whatever the refresh below does - the cached
+        // event behind every card still says there is no meeting.
+        const data = await resp.json();
+        this._panelRaw = { ...this._panelRaw, join_url: data.join_url };
+        this.calendar.refetchEvents();
+        this.refetchAgenda();
+
         // The creation answer names no conversation, and room_url - the
         // member door - is a property of the event, resolved server-side
         // against the viewer's membership. So re-read the event.
         const detail = await fetch(`/api/v1/events/${targetUuid}`, { credentials: 'same-origin' });
         if (!detail.ok) {
-          if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
+          if (window.AppAlert) {
+            window.AppAlert.warning('The meeting link was created. Reload to see the room button.');
+          }
           return;
         }
         const event = await detail.json();

@@ -14,7 +14,7 @@ const { loadScripts } = require('../../../common/tests/js/loader');
 // calendarEventsMixin() builds a day-key formatter from window.zonedFormatter
 // as it is constructed, so that script loads first here exactly as base.html
 // loads it before the mixin.
-function makeApp(fetchImpl) {
+function makeApp(fetchImpl, alerts) {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/zoned_formatter.js',
@@ -24,11 +24,21 @@ function makeApp(fetchImpl) {
       document: { getElementById: () => null },
       fetch: fetchImpl,
       getCSRFToken: () => 'csrf',
-      AppAlert: { error() {}, success() {} },
+      AppAlert: {
+        error(message) { (alerts || []).push({ type: 'error', message }); },
+        warning(message) { (alerts || []).push({ type: 'warning', message }); },
+        success() {},
+      },
       Intl,
     },
   );
-  return ctx.calendarEventsMixin();
+  const app = ctx.calendarEventsMixin();
+  // Stand-ins for what the component owns at runtime: every mutating
+  // action refreshes the grid and the agenda through these two.
+  app.refetches = [];
+  app.calendar = { refetchEvents() { app.refetches.push('grid'); } };
+  app.refetchAgenda = () => app.refetches.push('agenda');
+  return app;
 }
 
 const jsonResponse = (data) => ({ ok: true, json: async () => data });
@@ -129,4 +139,38 @@ test('createMeetingLink keeps the occurrence its panel shows when the detail ans
   assert.equal(app._panelRaw.uuid, 'master-1:2026-09-12T10:00:00+00:00');
   assert.equal(app._panelRaw.master_event_id, 'master-1');
   assert.equal(app._panelRaw.room_url, 'http://x/chat/room/c1');
+});
+
+test('createMeetingLink refreshes the grid so a re-click does not reopen a stale panel', async () => {
+  const app = makeApp(async (url) => {
+    if (url === '/api/v1/chat/meetings') return jsonResponse({ join_url: 'http://x/meet/s' });
+    return jsonResponse({ uuid: 'master-1', join_url: 'http://x/meet/s', room_url: 'http://x/chat/room/c1' });
+  });
+  app._panelRaw = { uuid: 'master-1', join_url: null, room_url: null };
+  app.form = { uuid: 'master-1' };
+  app.creatingMeeting = false;
+
+  await app.createMeetingLink();
+
+  assert.deepEqual(app.refetches, ['grid', 'agenda']);
+});
+
+test('createMeetingLink keeps the created link when the refresh fails', async () => {
+  const alerts = [];
+  const app = makeApp(async (url) => {
+    if (url === '/api/v1/chat/meetings') return jsonResponse({ join_url: 'http://x/meet/s' });
+    return { ok: false, status: 500, json: async () => ({}) };
+  }, alerts);
+  app._panelRaw = { uuid: 'master-1', join_url: null, room_url: null };
+  app.form = { uuid: 'master-1' };
+  app.creatingMeeting = false;
+
+  await app.createMeetingLink();
+
+  // The meeting was created: losing the refresh must not lose the link.
+  assert.equal(app._panelRaw.join_url, 'http://x/meet/s');
+  assert.deepEqual(app.refetches, ['grid', 'agenda']);
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0].type, 'warning');
+  assert.match(alerts[0].message, /created/);
 });

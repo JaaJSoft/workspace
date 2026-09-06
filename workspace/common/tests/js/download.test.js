@@ -9,6 +9,7 @@ const SCRIPT = 'workspace/common/static/ui/js/download.js';
 
 function load() {
   const events = [];
+  let deferred = null;
   const anchor = {
     click: () => events.push('click'),
     remove: () => events.push('remove'),
@@ -24,9 +25,11 @@ function load() {
       createObjectURL: () => 'blob:x',
       revokeObjectURL: () => events.push('revoke'),
     },
-    setTimeout: (fn) => { events.push('deferred'); fn(); },
+    // Captured, not run: a stub that invokes the callback immediately cannot
+    // tell a deferred revocation from a synchronous one.
+    setTimeout: (fn) => { deferred = fn; },
   });
-  return { ctx, events };
+  return { ctx, events, runDeferred: () => deferred && deferred() };
 }
 
 test('the anchor is inserted before it is clicked', () => {
@@ -37,11 +40,14 @@ test('the anchor is inserted before it is clicked', () => {
   assert.ok(events.indexOf('append') < events.indexOf('click'), events.join(','));
 });
 
-test('the object url is revoked, and not before the click', () => {
-  const { ctx, events } = load();
+test('the object url is not revoked in the same tick as the click', () => {
+  // Revoking synchronously races the read the click has just started, and the
+  // user gets an empty file with nothing to explain it.
+  const { ctx, events, runDeferred } = load();
   ctx.downloadBlob({}, 'f.txt');
-  assert.ok(events.includes('revoke'));
-  assert.ok(events.indexOf('click') < events.indexOf('revoke'), events.join(','));
+  assert.ok(!events.includes('revoke'), 'revoked before the browser could read the blob');
+  runDeferred();
+  assert.ok(events.includes('revoke'), 'never revoked at all');
 });
 
 test('the filename reaches the anchor', () => {

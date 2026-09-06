@@ -614,7 +614,9 @@ class VaultBrowserTests(VaultBrowserCase):
         # The dialog's own Cancel, named by the action row it sits in: the
         # authenticator control opened above carries a Cancel too, and it
         # comes first in the document.
-        self.page.click(".modal-box:has-text('Save') .modal-action button:has-text('Cancel')")
+        self.page.click(
+            ".modal-box:has-text('Save') .modal-action button:has-text('Cancel')"
+        )
         self._open_export()
         # The confirmation field is instantiated by the first keystroke in the
         # passphrase field, so the audit has to type to see it.

@@ -212,7 +212,9 @@ class ExportWalkTests(VaultBrowserCase):
         """
         self._seeded_vault()
         self._run_archive_export()
-        self.page.wait_for_selector("#export-passphrase", state="detached", timeout=15000)
+        self.page.wait_for_selector(
+            "#export-passphrase", state="detached", timeout=15000
+        )
 
         html = self.page.content()
         self.assertNotIn(SEEDED_ENTRY_PASSWORD, html)
@@ -296,7 +298,9 @@ class ExportWalkTests(VaultBrowserCase):
         # find it on screen behind itself. Its <p> is in the DOM either way -
         # x-show hides it - so this reads visibility, not presence.
         self.assertFalse(
-            self.page.locator(f"{self.EXPORT_BOX} p:has-text('entries read')").is_visible(),
+            self.page.locator(
+                f"{self.EXPORT_BOX} p:has-text('entries read')"
+            ).is_visible(),
             "entries were being read while the warning was still on screen",
         )
 

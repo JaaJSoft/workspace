@@ -1151,6 +1151,10 @@ def shared_file_view(request, token):
             link.file, target, request.path, effective_access_token, view_mode
         )
 
+    parent_url = ""
+    if breadcrumbs and len(breadcrumbs) >= 2:
+        parent_url = breadcrumbs[-2]["url"]
+
     context = {
         "share_token": token,
         "link": link,
@@ -1158,6 +1162,8 @@ def shared_file_view(request, token):
         "is_folder": is_folder,
         "access_token": effective_access_token,
         "breadcrumbs": breadcrumbs,
+        "parent_url": parent_url,
+        "current_view_url": request.get_full_path(),
         "show_listing": show_listing,
         "show_viewer": show_viewer,
         "show_dropzone": show_dropzone,

@@ -43,10 +43,20 @@
     @ajax:missing="window.location.reload()"
     @ajax:error="window.location.reload()"
   >
+    <!-- Persistent nav links for folderNav (outside the swap target so they survive it) -->
+    <a id="folder-nav-push" class="hidden" x-target.push="shared-content"></a>
+    <a
+      id="folder-nav-replace"
+      class="hidden"
+      x-target.replace="shared-content"
+    ></a>
     {% partialdef shared-content inline %}
       <div
         id="shared-content"
         class="card bg-base-100 shadow-lg overflow-hidden"
+        data-view-url="{{ current_view_url }}"
+        data-parent-url="{{ parent_url }}"
+        x-init="$nextTick(() => window.folderNav.onNavigate($el.dataset.viewUrl))"
       >
         <!-- Header -->
         <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
@@ -86,8 +96,49 @@
 
         {% if breadcrumbs %}
           <div
-            class="flex items-center gap-3 px-6 min-h-12 border-b border-base-300 bg-base-100"
+            class="flex items-center gap-3 p-2 min-h-12 border-b border-base-300 bg-base-100"
           >
+            <div class="join flex-shrink-0" x-data="navButtons('shared-content')">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                :class="canGoBack ? 'text-base-content' : 'text-base-content/20'"
+                title="Back"
+                :disabled="!canGoBack"
+                @click="window.folderNav.back()"
+              >
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                :class="canGoForward ? 'text-base-content' : 'text-base-content/20'"
+                title="Forward"
+                :disabled="!canGoForward"
+                @click="window.folderNav.forward()"
+              >
+                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
+                :class="parentUrl ? 'text-base-content' : 'text-base-content/20'"
+                title="Up"
+                :disabled="!parentUrl"
+                @click="navigateUp()"
+              >
+                <i data-lucide="arrow-up" class="w-4 h-4"></i>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm btn-square join-item"
+                title="Refresh"
+                aria-label="Refresh"
+                @click="window.folderNav.reload()"
+              >
+                <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+              </button>
+            </div>
             <div class="flex-1 min-w-0 overflow-x-auto">
               {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="shared-content" x_target_history="push" %}
             </div>

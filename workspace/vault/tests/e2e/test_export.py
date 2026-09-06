@@ -5,7 +5,8 @@ rendering the dialog, and this module has already shipped a revealed password
 that never appeared on screen behind twenty-one green ones. Everything below
 is a property no amount of state-reading can establish:
 
-  - a file reaches the user at all, from a click on a sidebar row;
+  - a file reaches the user at all, from a click on a sidebar row, and it
+    opens with the phrase that was typed into the dialog;
   - nothing plaintext leaves the page while it is built;
   - a lock takes the dialog and the passphrase with it;
   - the plaintext format warns first, and a warning that cannot be shown is
@@ -21,6 +22,7 @@ A browser can, and does, below.
 
 import re
 
+from ..reference import archive
 from .test_browser import VaultBrowserCase
 
 SEEDED_ENTRY_NAME = "GitHub"
@@ -149,6 +151,39 @@ class ExportWalkTests(VaultBrowserCase):
             self.page.click("[data-testid='export-run']")
         return download.value
 
+    def _open_the_downloaded_archive(self, download, passphrase):
+        """Open the file the browser just handed over, from Python.
+
+        The one property the whole branch is for, and the only one no other
+        test reaches: everything else opens a vector that a Node test built by
+        calling ``buildArchive`` directly, with a passphrase it passed itself.
+        Between the field the user types into and those bytes there is a
+        stretch of wiring - which value is handed to the sealer, and whether
+        the tree it sealed was the whole account - that stays green under any
+        mistake. Sealing under the confirmation field, or under a phrase one
+        character off, passes every JS test, both vector suites and every
+        other walk in this file. (The empty string is the one wrong value
+        already caught elsewhere: Argon2 refuses a zero-length password, so
+        no file is produced at all.)
+
+        Read back by the reference reader, which has never run a line of the
+        browser's code: one implementation agreeing with itself is not
+        evidence. Nothing weaker than the tree coming back will do - a
+        magic-byte check passes on a file that decrypts to nothing.
+        """
+        blob = download.path().read_bytes()
+        self.assertTrue(blob.startswith(b"VLTARCH"), "not an archive at all")
+        return archive.open_archive(blob, passphrase)
+
+    def _assert_the_seeded_entry_is_in(self, tree):
+        entries = [entry for vault in tree["vaults"] for entry in vault["entries"]]
+        found = [e for e in entries if e["name"] == SEEDED_ENTRY_NAME]
+        self.assertEqual(
+            len(found), 1, f"the archive holds {[e['name'] for e in entries]}"
+        )
+        self.assertEqual(found[0]["fields"]["username"], SEEDED_ENTRY_LOGIN)
+        self.assertEqual(found[0]["fields"]["password"], SEEDED_ENTRY_PASSWORD)
+
     # ---- the walks --------------------------------------------------------
 
     def test_the_generator_opens_at_a_strength_worth_an_archive(self):
@@ -241,7 +276,13 @@ class ExportWalkTests(VaultBrowserCase):
         lives in a JS string no serialisation reaches.
         """
         self._seeded_vault()
-        self._run_archive_export()
+        download = self._run_archive_export()
+        # There was something to survive. Without this the two assertions
+        # below pass more easily on an export that decrypted nothing at all
+        # than on a correct one.
+        self._assert_the_seeded_entry_is_in(
+            self._open_the_downloaded_archive(download, KNOWN_PASSPHRASE)
+        )
         self.page.wait_for_selector(
             "#export-passphrase", state="detached", timeout=15000
         )
@@ -301,6 +342,12 @@ class ExportWalkTests(VaultBrowserCase):
         with self.page.expect_download(timeout=120000) as download:
             run.click()
         self.assertTrue(download.value.suggested_filename.endswith(".vaultarchive"))
+
+        # And it opens with the phrase that was typed above, in a reader that
+        # never ran the browser's code. This closes the branch's headline
+        # claim: everything before it stops at the suggested filename.
+        tree = self._open_the_downloaded_archive(download.value, KNOWN_PASSPHRASE)
+        self._assert_the_seeded_entry_is_in(tree)
 
     def test_the_interchange_export_warns_before_it_builds_anything(self):
         """The plaintext format asks first, and cancelling builds nothing.

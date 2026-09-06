@@ -1,5 +1,15 @@
 // The vector the Python reference opens. Two implementations, no shared line:
 // the browser has its own cbor.js, the reference has cbor2.
+//
+// This is a golden-file test: it rebuilds the archive and compares it to the
+// committed fixture rather than rewriting it, so CI leaves the tree clean and
+// the bytes Python opens are the bytes this bundle produces today. To refresh
+// the fixture after a deliberate format or fixture change:
+//
+//   VAULT_ARCHIVE_VECTOR_REFRESH=1 node --test workspace/vault/tests/js/vault_archive_vector.test.js
+//
+// then re-run the Python round trip - regenerating without re-running it is
+// how a stale vector turns into a test of itself.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
@@ -8,6 +18,7 @@ const vm = require('node:vm');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
 const VECTOR = path.join(__dirname, '..', 'fixtures', 'archive_vector.json');
+const REFRESH = process.env.VAULT_ARCHIVE_VECTOR_REFRESH === '1';
 const PASSPHRASE = 'correcte cheval batterie agrafe sept huit neuf';
 const TREE_JSON = JSON.stringify({
   format: 'vault-archive',
@@ -28,7 +39,7 @@ const TREE_JSON = JSON.stringify({
   }],
 });
 
-test('writes the archive vector the reference implementation opens', async () => {
+test('the committed vector is what this bundle writes today', async () => {
   // vaultCrypto is the REAL bundle here, never a stub: the vector is worthless
   // without the real Argon2 and the real CBOR encoder. It is reached the way
   // crypto_parity.test.js reaches it - the vendor bundle run through the shared
@@ -53,7 +64,7 @@ test('writes the archive vector the reference implementation opens', async () =>
   // Built inside the vm: an object created out here carries this realm's
   // prototypes, and the encoder branches on them - the cbor-x incident.
   const tree = vm.runInContext('JSON.parse(__treeJson)', ctx);
-  // Salt and nonce are pinned so the vector is reproducible; every other
+  // Salt and nonce are pinned so the archive is reproducible; every other
   // export draws both.
   const bytes = await ctx.vaultArchive.buildArchive({
     tree: tree,
@@ -61,10 +72,23 @@ test('writes the archive vector the reference implementation opens', async () =>
     salt: new Uint8Array(32).fill(0x2a),
     iv: new Uint8Array(12).fill(0x0c),
   });
-  fs.writeFileSync(VECTOR, `${JSON.stringify({
+  assert.ok(bytes.length > 50);
+
+  const vector = `${JSON.stringify({
     passphrase: PASSPHRASE,
     tree: JSON.parse(TREE_JSON),
     archive_hex: Buffer.from(bytes).toString('hex'),
-  }, null, 2)}\n`);
-  assert.ok(bytes.length > 50);
+  }, null, 2)}\n`;
+
+  if (REFRESH) {
+    fs.writeFileSync(VECTOR, vector);
+    return;
+  }
+  assert.equal(
+    fs.readFileSync(VECTOR, 'utf8').replace(/\r\n/g, '\n'),
+    vector,
+    'the committed vector no longer matches what this bundle writes. If the '
+    + 'format or the fixture changed on purpose, refresh it with '
+    + 'VAULT_ARCHIVE_VECTOR_REFRESH=1 and re-run the Python round trip'
+  );
 });

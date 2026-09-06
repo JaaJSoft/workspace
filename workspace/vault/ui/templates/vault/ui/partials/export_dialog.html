@@ -15,6 +15,15 @@
       <span x-text="exportError"></span>
       </inline-alert>
 
+      {% comment %}
+        The dialog stays open when the projection dropped entries, so this is
+        the only place that count is ever read. Slot mode, like the alert
+        above: inline-alert reads its attributes once, when it connects.
+      {% endcomment %}
+      <inline-alert type="warning" class="mt-4" x-show="exportSkipped" x-cloak>
+      <span x-text="skippedMessage()"></span>
+      </inline-alert>
+
       <div class="mt-4 flex flex-col gap-2">
         <label class="flex items-start gap-3 cursor-pointer">
           <input
@@ -56,8 +65,26 @@
           {% comment %}
             show_apply is what renders the panel's "Use" button; without it the
             password-apply event below never fires and the field stays empty.
+
+            Both events, never just one. The panel owns no clipboard: a host
+            that listens to password-apply alone leaves its Copy button doing
+            nothing at all, silently, on the one string that opens the archive.
+            copyGenerated comes from the generator mixin, spread into this same
+            component - one clipboard path, with its clearing policy.
           {% endcomment %}
-          <div @password-apply="applyGeneratedPassphrase($event.detail.value)">
+          {% comment %}
+            copyGenerated reports a refused write through the generator mixin's
+            own field, and the backdrop covers the page-level alert - so the
+            panel's host has to render it or a failed copy says nothing.
+          {% endcomment %}
+          <inline-alert type="error" x-show="generatorError" x-cloak>
+          <span x-text="generatorError"></span>
+          </inline-alert>
+
+          <div
+            @password-apply="applyGeneratedPassphrase($event.detail.value)"
+            @password-copy="copyGenerated($event.detail.value)"
+          >
             {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" show_apply=True %}
           </div>
 

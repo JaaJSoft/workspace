@@ -5,10 +5,11 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from workspace.chat.models import ConversationMember
 from workspace.chat.tests.meeting_fixtures import make_event
 from workspace.chat.throttling import MeetingPublicPageThrottle
 
@@ -135,25 +136,66 @@ class MeetPageSignedInTests(TestCase):
         self.assertNotIn('id="room-meeting-data"', html)
         self.assertNotIn(str(self.meeting.conversation_id), html)
 
+    def test_the_note_claims_no_identity_the_knock_will_not_record(self):
+        """The name is a prefill, not a credential: the knock endpoint is
+        anonymous, so a host reading the lobby cannot tell a signed-in
+        colleague from a stranger who typed the same name. Saying "signed in
+        as X" next to that would promise a binding nothing records."""
+        self.client.force_login(self.outsider)
+        html = self.client.get(f"/meet/{self.meeting.slug}").content.decode()
+        self.assertNotIn("Signed in as", html)
+
+    def test_a_member_who_left_gets_the_guest_card(self):
+        """Membership is the live one, not "was a member once": someone who
+        left the conversation has no room to be sent to."""
+        membership = ConversationMember.objects.get(
+            conversation_id=self.meeting.conversation_id, user=self.host
+        )
+        membership.left_at = timezone.now()
+        membership.save(update_fields=["left_at"])
+
+        self.client.force_login(self.host)
+        resp = self.client.get(f"/meet/{self.meeting.slug}")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode()
+        self.assertIn("You will join this meeting as a guest.", html)
+        self.assertNotIn(str(self.meeting.conversation_id), html)
+
     def test_an_anonymous_visitor_is_offered_a_sign_in_link(self):
         resp = self.client.get(f"/meet/{self.meeting.slug}")
         html = resp.content.decode()
         self.assertIn(f"/login?next=/meet/{self.meeting.slug}", html)
         self.assertNotIn("You will join this meeting as a guest.", html)
 
-    def test_the_throttle_still_guards_the_signed_in_path(self):
-        """The limit is on the route, not on the anonymous branch of it: a
-        member's request is rejected before the redirect is computed."""
-        self.client.force_login(self.host)
+    def _spend_the_ip_bucket(self, ip):
+        """Two anonymous page loads, which is the whole patched budget."""
+        anonymous = Client()
+        for _ in range(2):
+            self.assertEqual(
+                anonymous.get(f"/meet/{self.meeting.slug}", REMOTE_ADDR=ip).status_code,
+                200,
+            )
+        return anonymous
+
+    def test_the_anonymous_path_is_still_throttled_per_ip(self):
         with patch.object(MeetingPublicPageThrottle, "get_rate", return_value="2/min"):
-            for _ in range(2):
-                self.assertEqual(
-                    self.client.get(
-                        f"/meet/{self.meeting.slug}", REMOTE_ADDR="198.51.100.7"
-                    ).status_code,
-                    302,
-                )
-            blocked = self.client.get(
+            anonymous = self._spend_the_ip_bucket("198.51.100.7")
+            blocked = anonymous.get(
                 f"/meet/{self.meeting.slug}", REMOTE_ADDR="198.51.100.7"
             )
         self.assertEqual(blocked.status_code, 429)
+
+    def test_guests_behind_one_ip_cannot_lock_a_member_out_of_their_room(self):
+        """The bucket is per IP and sized for the anonymous surface, which
+        refetches the message list on every event. A meeting's guests all sit
+        behind one office NAT with the host, so spending that budget must not
+        cost the host the room they are hosting - a signed-in caller is
+        accountable by session, and the room view checks membership itself."""
+        with patch.object(MeetingPublicPageThrottle, "get_rate", return_value="2/min"):
+            self._spend_the_ip_bucket("198.51.100.8")
+            self.client.force_login(self.host)
+            resp = self.client.get(
+                f"/meet/{self.meeting.slug}", REMOTE_ADDR="198.51.100.8"
+            )
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/chat/room/", resp["Location"])

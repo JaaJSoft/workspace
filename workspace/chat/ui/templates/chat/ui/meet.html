@@ -75,10 +75,12 @@
                   required
                   autofocus
                 />
+                {% comment %}The name is a prefill, not a credential: knocking
+                is anonymous whoever is signed in, so the note says what will
+                happen and claims no identity the lobby could not verify.
+                {% endcomment %}
                 {% if signed_in_as %}
-                  <p class="text-xs text-base-content/60 mt-1.5">
-                    Signed in as {{ signed_in_as }}. You will join this meeting as a guest.
-                  </p>
+                  <p class="text-xs text-base-content/60 mt-1.5">You will join this meeting as a guest.</p>
                 {% endif %}
               </div>
               <template x-if="error">

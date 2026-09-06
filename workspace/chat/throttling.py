@@ -130,11 +130,25 @@ def meeting_public_ip_limited(
 
     The request is wrapped in a DRF ``Request`` so the throttle sees exactly
     the object it sees on the API path.
+
+    A signed-in caller skips the bucket entirely. Every scope here is keyed by
+    IP and sized for the anonymous surface, where the only identity available
+    is the address - so a meeting's guests, their message lists refetching on
+    every event, all spend one budget from the office NAT they share with the
+    host. Charging the host's own page load to that same budget would let the
+    guests lock them out of the room they are hosting. A session is an
+    identity the address is not: it is attributable, it is revocable, and the
+    views behind this decorator re-check their own access (``meet_view``
+    resolves membership before redirecting, ``meet_messages_view`` still
+    demands a meeting token). The fence in ``test_guest_containment`` reads
+    decorators, not branches, so the decorator stays on every public page.
     """
 
     def _decorate(func):
         @wraps(func)
         def _limited(request, *args, **kwargs):
+            if request.user.is_authenticated:
+                return func(request, *args, **kwargs)
             throttle = throttle_class()
             if not throttle.allow_request(Request(request), None):
                 return _throttled_response(throttle, request, template)

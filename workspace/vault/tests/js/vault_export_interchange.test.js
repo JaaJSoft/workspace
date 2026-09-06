@@ -82,6 +82,43 @@ test('tags become custom fields, since the format has nowhere else for them', ()
   assert.deepStrictEqual(Array.from(json.items[0].fields, (f) => ({ ...f })), [{ name: 'tag', value: 'perso', type: 0 }]);
 });
 
+test('a custom field survives the projection under the name the user gave it', () => {
+  // Custom fields ship today. The archive keeps them wholesale; the only place
+  // this format has for them is the same fields[] the tags go to, and dropping
+  // them would be silent data loss in the one file whose purpose is getting
+  // the data out.
+  const t = tree();
+  t.vaults[0].entries[0].fields['custom:PIN'] = '4021';
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  const fields = Array.from(json.items[0].fields, (f) => ({ ...f }));
+  assert.deepStrictEqual(fields, [
+    { name: 'tag', value: 'perso', type: 0 },
+    { name: 'PIN', value: '4021', type: 0 },
+  ]);
+});
+
+test('a reserved field is not emitted twice, once in login and once as custom', () => {
+  // Only the `custom:` prefix marks a field the user invented. Without the
+  // filter the login block's own values would be duplicated into fields[].
+  const { json } = load().vaultExportInterchange.toBitwarden(tree());
+  const names = Array.from(json.items[0].fields, (f) => f.name);
+  assert.deepStrictEqual(names, ['tag']);
+});
+
+test('a custom field called "tag" sits beside the real tags and corrupts neither', () => {
+  // Deliberate: fields[] is a list of pairs, not a map, so the collision costs
+  // nothing - and renaming what the user chose would be a lossy transform this
+  // file invented. Both rows are here, each with its own value.
+  const t = tree();
+  t.vaults[0].entries[0].fields['custom:tag'] = 'not a tag at all';
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  const fields = Array.from(json.items[0].fields, (f) => ({ ...f }));
+  assert.deepStrictEqual(fields, [
+    { name: 'tag', value: 'perso', type: 0 },
+    { name: 'tag', value: 'not a tag at all', type: 0 },
+  ]);
+});
+
 test('the trash is not in the interchange export', () => {
   // A move to a competitor, not a backup: resurrecting what the user threw
   // away is the wrong outcome, and the exporter on the other side agrees.

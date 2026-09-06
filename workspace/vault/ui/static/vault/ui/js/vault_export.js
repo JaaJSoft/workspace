@@ -62,7 +62,13 @@ window.vaultExportMixin = function vaultExportMixin() {
       // generated value left in it is one the user never typed - it would sit
       // there prefilled and no longer matching, holding Export disabled until
       // they think to clear a field they never touched.
-      if (this.exportSource === 'generated') this.exportConfirm = '';
+      // The acknowledgement goes with them. It is a deliberate statement
+      // about the phrase that is about to seal the file, so one ticked for an
+      // earlier phrase must not carry over to a different one.
+      if (this.exportSource === 'generated') {
+        this.exportConfirm = '';
+        this.exportOwnPhraseAck = false;
+      }
       this.exportSource = 'typed';
     },
 

@@ -15,6 +15,11 @@ window.vaultExportInterchange = (function () {
   // a second type must not ship disguised as the first.
   const ITEM_TYPES = { login: 1 };
 
+  // What marks a field the user named themselves, mirroring
+  // vault/services/fields.py. Everything else in `fields` is a reserved id the
+  // login block already carries.
+  const CUSTOM_PREFIX = 'custom:';
+
   function folderPath(vault, folder) {
     const parts = [escapeName(folder.name)];
     // The server is not trusted to send a well-formed tree. `seen` bounds the
@@ -76,13 +81,27 @@ window.vaultExportInterchange = (function () {
             password: entry.fields.password || null,
             totp: entry.fields.totp || null,
           },
-          // The target has one folder per item and no tags at all. Custom
-          // fields are lossy but readable by a human on the other side, which
-          // beats disappearing.
+          // The target has one folder per item and no tags at all, and no
+          // notion of a field the user invented either. Both land here, the
+          // only shelf the format has for them: lossy, but readable by a
+          // human on the other side, which beats disappearing.
+          //
+          // A custom field the user called "tag" therefore sits next to the
+          // real tag rows under that same name. Deliberate: `fields` is a list
+          // of name/value pairs, not a map, so neither overwrites the other -
+          // and renaming what the user chose would be a second lossy transform,
+          // invented here, that whoever reads the file could not undo.
           fields: entry.tags
             .map((id) => tagNames.get(id))
             .filter((name) => name !== undefined)
-            .map((name) => ({ name: 'tag', value: name, type: 0 })),
+            .map((name) => ({ name: 'tag', value: name, type: 0 }))
+            .concat(
+              Object.entries(entry.fields)
+                .filter(([id]) => id.startsWith(CUSTOM_PREFIX))
+                .map(([id, value]) => ({
+                  name: id.slice(CUSTOM_PREFIX.length), value: value, type: 0,
+                }))
+            ),
           collectionIds: null,
         });
       });

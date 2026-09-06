@@ -80,6 +80,36 @@ test('the payload is sealed with the HKDF kdf id and key version zero', async ()
   assert.equal(seenOptions.keyVersion, 0);
 });
 
+test('the encoded tree is wiped once it has been sealed', async () => {
+  // The whole account in one contiguous buffer, and the largest single copy
+  // of it that exists. The strings inside the tree cannot be wiped - a JS
+  // string is immutable - so this buffer is the part that can be.
+  const plaintext = new Uint8Array([1, 2, 3, 4]);
+  let seenDuringSeal = null;
+  const ctx = withCrypto({
+    canonicalCbor: () => plaintext,
+    seal: async (key, bytes) => {
+      seenDuringSeal = Array.from(bytes);
+      return new Uint8Array([9]);
+    },
+  });
+  await ctx.vaultArchive.buildArchive({ tree: {}, passphrase: 'x' });
+  // Read during the seal, or the assertion below would also pass on a writer
+  // that sealed four zero bytes.
+  assert.deepStrictEqual(seenDuringSeal, [1, 2, 3, 4]);
+  assert.deepStrictEqual(Array.from(plaintext), [0, 0, 0, 0]);
+});
+
+test('a seal that throws still wipes the encoded tree', async () => {
+  const plaintext = new Uint8Array([1, 2, 3, 4]);
+  const ctx = withCrypto({
+    canonicalCbor: () => plaintext,
+    seal: async () => { throw new Error('nope'); },
+  });
+  await assert.rejects(() => ctx.vaultArchive.buildArchive({ tree: {}, passphrase: 'x' }));
+  assert.deepStrictEqual(Array.from(plaintext), [0, 0, 0, 0]);
+});
+
 test('the filename carries the export date', () => {
   const ctx = withCrypto();
   assert.equal(

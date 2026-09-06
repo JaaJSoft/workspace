@@ -64,6 +64,7 @@ def serialize_response(result):
         if tc
         else None,
         "model": result.get("model", ""),
+        "finish_reason": result.get("finish_reason"),
         "prompt_tokens": result.get("prompt_tokens"),
         "completion_tokens": result.get("completion_tokens"),
     }
@@ -285,12 +286,14 @@ def call_llm(
     # composer, titles, ...) see normalized text regardless of which path they
     # took.
     content = clean_llm_content(content)
+    finish_reason = getattr(choice, "finish_reason", None)
     return {
         "content": content,
         "thinking": thinking,
         "tool_calls": choice.message.tool_calls,
         "message": choice.message,
         "model": response.model,
+        "finish_reason": finish_reason if isinstance(finish_reason, str) else None,
         "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
         "completion_tokens": response.usage.completion_tokens
         if response.usage
@@ -343,7 +346,10 @@ def call_llm_structured(
 
     Returns ``(instance, result)`` where *instance* is ``None`` when the reply
     does not validate; *result* is the raw :func:`call_llm` dict so callers can
-    still record model and token usage.
+    still record model and token usage, and tell a reply the backend cut at
+    the token cap (``finish_reason == "length"``) from one that ignored the
+    schema. Reasoning counts against that cap on Ollama-style backends, so a
+    model that thinks for long enough returns an empty content.
     """
     schema_dict = schema.model_json_schema()
     _make_strict(schema_dict)
@@ -365,9 +371,24 @@ def call_llm_structured(
     try:
         return schema.model_validate_json(raw), result
     except ValidationError as e:
-        logger.warning(
-            "LLM output failed %s validation: %s",
-            schema.__name__,
-            scrub(str(e)[:500]),
-        )
+        if reply_was_truncated(result):
+            logger.warning(
+                "LLM reply for %s was cut at the token cap (max_tokens=%s) "
+                "before it validated; content starts %r",
+                schema.__name__,
+                max_tokens or settings.AI_MAX_TOKENS,
+                scrub(raw[:200]),
+            )
+        else:
+            logger.warning(
+                "LLM output failed %s validation: %s; content starts %r",
+                schema.__name__,
+                scrub(str(e)[:500]),
+                scrub(raw[:200]),
+            )
         return None, result
+
+
+def reply_was_truncated(result: dict) -> bool:
+    """Whether the backend stopped generating at the token cap."""
+    return result.get("finish_reason") == "length"

@@ -2,11 +2,11 @@ from workspace.files.models import File
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class ToggleFavoriteAction(BaseAction):
+class ToggleFavoriteAction(BaseFileAction):
     id = "toggle_favorite"
     label = "Add to favorites"
     icon = "star"
@@ -35,7 +35,7 @@ class ToggleFavoriteAction(BaseAction):
 
 
 @ActionRegistry.register
-class TogglePinAction(BaseAction):
+class TogglePinAction(BaseFileAction):
     id = "toggle_pin"
     label = "Pin to sidebar"
     icon = "pin"
@@ -67,7 +67,7 @@ class TogglePinAction(BaseAction):
 
 
 @ActionRegistry.register
-class ManageTagsAction(BaseAction):
+class ManageTagsAction(BaseFileAction):
     id = "manage_tags"
     label = "Tags"
     icon = "tag"
@@ -85,7 +85,7 @@ class ManageTagsAction(BaseAction):
 
 
 @ActionRegistry.register
-class ShareAction(BaseAction):
+class ShareAction(BaseFileAction):
     id = "share"
     label = "Share"
     icon = "share-2"

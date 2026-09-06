@@ -67,7 +67,15 @@ function load(overrides = {}) {
     vaultCrypto: {
       fromBase64Url: (s) => s,
       AD: { entryFieldAd: (uuid, field) => `${uuid}|${field}` },
-      open: async (key, ciphertext) => new TextEncoder().encode(String(ciphertext).toLowerCase()),
+      open: async (key, ciphertext, ad) => {
+        if (overrides.unopenableField
+            && String(ad).endsWith(`|${overrides.unopenableField}`)) {
+          // What a real AEAD rejection looks like from here: bare, and
+          // carrying no reason of its own.
+          throw new Error('tag mismatch');
+        }
+        return new TextEncoder().encode(String(ciphertext).toLowerCase());
+      },
     },
   });
 }
@@ -124,6 +132,21 @@ test('one unreadable row refuses the whole export', async () => {
     () => ctx.vaultExportTree.buildTree(session, {}),
     (err) => err.reason === 'unreadable'
   );
+});
+
+test('a field that will not open names the account unreadable, not a bare failure', async () => {
+  // vaultReader opens `name` and `username` only, so a corrupted password
+  // reaches this pass with the tamper count still at zero. Unnamed, it lands
+  // in the dialog's generic branch - "The export failed." - for the likeliest
+  // tampering target there is.
+  for (const field of ['password', 'notes']) {
+    const ctx = load({ unopenableField: field });
+    await assert.rejects(
+      () => ctx.vaultExportTree.buildTree(session, {}),
+      (err) => err.reason === 'unreadable',
+      `a corrupted ${field} escaped unnamed`
+    );
+  }
 });
 
 test('a lock during the export aborts it, and is not reported as tampering', async () => {

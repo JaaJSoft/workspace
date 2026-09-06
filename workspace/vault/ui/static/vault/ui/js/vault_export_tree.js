@@ -8,7 +8,6 @@ function VaultExportError(message, reason) {
   error.reason = reason;
   return error;
 }
-window.VaultExportError = VaultExportError;
 
 window.vaultExportTree = (function () {
   // One entry key per entry, then every field opened with it. openField would
@@ -17,9 +16,22 @@ window.vaultExportTree = (function () {
   async function openEntryContent(session, vault, row) {
     const V = window.vaultCrypto;
     const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
-    const decode = async (ciphertext, fieldId) => new TextDecoder().decode(
-      await V.open(key, V.fromBase64Url(ciphertext), V.AD.entryFieldAd(row.uuid, fieldId))
-    );
+    // vaultReader opens `name` and `username` only, so refuseIfUnreadable has
+    // already answered clean by the time a corrupted password, totp, uri or
+    // note reaches this pass. Left bare, that failure surfaces as an AEAD
+    // rejection carrying no reason and the dialog says "the export failed" -
+    // for the likeliest tampering target of all. No retry with other
+    // associated data, and no skipping: the field id is not named either,
+    // since a custom one is a string the user wrote.
+    const decode = async (ciphertext, fieldId) => {
+      try {
+        return new TextDecoder().decode(
+          await V.open(key, V.fromBase64Url(ciphertext), V.AD.entryFieldAd(row.uuid, fieldId))
+        );
+      } catch {
+        throw VaultExportError('a field could not be opened', 'unreadable');
+      }
+    };
     const fields = {};
     for (const field of row.entry_fields || []) {
       fields[field.field_id] = await decode(field.encrypted_value, field.field_id);

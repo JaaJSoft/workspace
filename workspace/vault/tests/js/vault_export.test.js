@@ -194,6 +194,29 @@ test('editing over a generated phrase does not leave it in the confirmation', as
   assert.equal(component.exportConfirm, 'ma phrase a moi');
 });
 
+test('the acknowledgement does not carry from one phrase to the next', async () => {
+  // It is a deliberate statement about the phrase that is about to seal the
+  // file. Ticked for a typed phrase, then a draw, then an edit: left standing
+  // it would speak for a phrase the user never acknowledged.
+  const { component } = load();
+  component.exportFormat = 'archive';
+  component.exportPassphrase = 'ma premiere phrase';
+  component.noteTypedPassphrase();
+  component.exportConfirm = 'ma premiere phrase';
+  component.exportOwnPhraseAck = true;
+  assert.equal(component.passphraseAccepted(), true);
+
+  component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit');
+  component.exportPassphrase = 'ma seconde phrase';
+  component.noteTypedPassphrase();
+  assert.equal(component.exportOwnPhraseAck, false, 'the earlier tick survived');
+  component.exportConfirm = 'ma seconde phrase';
+  assert.equal(
+    component.passphraseAccepted(), false,
+    'a confirmed phrase was accepted on an acknowledgement given for another'
+  );
+});
+
 test('an unreadable account reports it and downloads nothing', async () => {
   const { component, downloads } = load({
     vaultExportTree: {

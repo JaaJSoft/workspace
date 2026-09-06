@@ -17,10 +17,17 @@ window.vaultExportInterchange = (function () {
 
   function folderPath(vault, folder) {
     const parts = [escapeName(folder.name)];
+    // The server is not trusted to send a well-formed tree. `seen` bounds the
+    // walk by the number of folders in the vault: every hop adds one more id
+    // to it, so a repeat means a cycle (or a folder that is its own parent),
+    // and the walk stops there instead of spinning forever. A broken or
+    // circular chain costs the entry its full nesting, not the whole export.
+    const seen = new Set([folder.id]);
     let current = folder;
-    while (current.parent !== null && current.parent !== undefined) {
+    while (current.parent !== null && current.parent !== undefined && !seen.has(current.parent)) {
       current = vault.folders.find((candidate) => candidate.id === current.parent);
       if (!current) break;
+      seen.add(current.id);
       parts.unshift(escapeName(current.name));
     }
     parts.unshift(escapeName(vault.name));

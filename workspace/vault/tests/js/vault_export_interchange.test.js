@@ -11,6 +11,21 @@ function load() {
   });
 }
 
+// Records every id the generator hands out, in order, so a test can compare
+// it against what actually ended up in the file - not just pattern-match the
+// shape of an id.
+function loadCounting() {
+  const generated = [];
+  const ctx = loadScript(SCRIPT, {
+    vaultCrypto: { uuidV7: () => {
+      const id = `uuid-${generated.length + 1}`;
+      generated.push(id);
+      return id;
+    } },
+  });
+  return { ctx, generated };
+}
+
 function tree(overrides = {}) {
   return Object.assign({
     format: 'vault-archive', version: 1, exported_at: '2026-09-06T00:00:00Z',
@@ -86,8 +101,56 @@ test('a type with no counterpart is skipped and counted, never disguised', () =>
   assert.equal(json.items.length, 1);
 });
 
-test('no identifier from the account reaches the file', () => {
-  const { json } = load().vaultExportInterchange.toBitwarden(tree());
-  json.items.forEach((item) => assert.match(item.id, /^uuid-/));
-  json.folders.forEach((folder) => assert.match(folder.id, /^uuid-/));
+test('every id in the file was drawn from the generator, and only from it', () => {
+  const { ctx, generated } = loadCounting();
+  const { json } = ctx.vaultExportInterchange.toBitwarden(tree());
+  const emitted = json.folders.map((f) => f.id).concat(json.items.map((i) => i.id));
+  assert.deepStrictEqual(Array.from(emitted), generated);
+});
+
+test('a circular parent chain does not hang the export', () => {
+  const t = tree();
+  t.vaults[0].folders = [
+    { id: 0, parent: 1, name: 'A', position: 0 },
+    { id: 1, parent: 0, name: 'B', position: 1 },
+  ];
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  assert.ok(json.folders.length >= 2);
+});
+
+test('a folder nested under another folder chains vault, parent and child into one path', () => {
+  const t = tree();
+  t.vaults[0].folders = [
+    { id: 0, parent: null, name: 'Banque', position: 0 },
+    { id: 1, parent: 0, name: 'Crédit', position: 0 },
+  ];
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  const names = json.folders.map((f) => f.name);
+  assert.ok(names.includes('Perso/Banque/Crédit'), `got ${JSON.stringify(names)}`);
+});
+
+test('a slash inside a nested folder name is substituted too, not only at the top level', () => {
+  const t = tree();
+  t.vaults[0].folders = [
+    { id: 0, parent: null, name: 'Banque', position: 0 },
+    { id: 1, parent: 0, name: 'Crédit/Débit', position: 0 },
+  ];
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  const names = json.folders.map((f) => f.name);
+  assert.ok(names.includes('Perso/Banque/Crédit∕Débit'), `got ${JSON.stringify(names)}`);
+  assert.ok(!names.some((n) => n.includes('Crédit/Débit')));
+});
+
+test('an entry filed nowhere lands on the vault-level folder', () => {
+  const t = tree();
+  t.vaults[0].entries[0].folder = null;
+  const { json } = load().vaultExportInterchange.toBitwarden(t);
+  const vaultFolder = json.folders.find((f) => f.name === 'Perso');
+  assert.equal(json.items[0].folderId, vaultFolder.id);
+});
+
+test('interchangeFilename names the file after the given date', () => {
+  const { ctx } = loadCounting();
+  const name = ctx.vaultExportInterchange.interchangeFilename(new Date('2026-09-06T12:34:56Z'));
+  assert.equal(name, 'vault-export-2026-09-06.json');
 });

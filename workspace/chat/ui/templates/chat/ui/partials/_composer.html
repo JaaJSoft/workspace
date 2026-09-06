@@ -107,7 +107,7 @@
   >
     {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
     <div
-      class="flex-1 flex items-center border border-base-300 rounded-2xl transition-colors focus-within:border-info/50 min-h-[2.375rem]"
+      class="flex-1 flex items-center border border-base-300 rounded-btn transition-colors focus-within:border-info/50 min-h-[2.375rem]"
     >
       <textarea
         x-ref="messageInputMobile"
@@ -119,7 +119,7 @@
                line-height:20px;
                padding-top:8px;
                padding-bottom:8px"
-        class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0"
+        class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0 !bg-transparent"
         placeholder="Message..."
         rows="1"
       ></textarea>
@@ -145,29 +145,34 @@
     </button>
   </div>
 
-  <!-- Recording banner -->
+  <!-- Recording banner. Below sm the buttons sit outside the bordered box,
+       sized like the idle row's send button so they line up with it. -->
   <div
     x-show="recorderState === 'recording'"
     x-cloak
-    class="flex items-center gap-2 h-[2.375rem] sm:h-auto sm:py-2 border border-error/40 rounded-2xl px-2 pl-3"
+    class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-1 sm:border sm:border-error/40 sm:rounded-btn"
   >
-    <span
-      class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"
-    ></span>
-    <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
+    <div
+      class="flex-1 flex items-center gap-2 min-h-[2.375rem] px-3 border border-error/40 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
+    >
+      <span
+        class="inline-block w-2.5 h-2.5 rounded-full bg-error animate-pulse flex-shrink-0"
+      ></span>
+      <span class="text-sm tabular-nums flex-1" x-text="recordLabel()"></span>
+    </div>
     <button
-      class="btn btn-ghost btn-sm btn-square"
+      class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
       @click="cancelRecording()"
       title="Discard"
     >
-      <i data-lucide="trash-2" class="w-4 h-4"></i>
+      <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
     </button>
     <button
-      class="btn btn-error btn-sm btn-square"
+      class="btn btn-error btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
       @click="stopRecording()"
       title="Stop"
     >
-      <i data-lucide="square" class="w-4 h-4"></i>
+      <i data-lucide="square" class="w-5 h-5 sm:w-4 sm:h-4"></i>
     </button>
   </div>
 
@@ -176,10 +181,10 @@
              built after the recording finished, not once at composer mount. -->
   <template x-if="recorderState === 'preview'">
     <div
-      class="flex items-center gap-2 h-[2.375rem] sm:h-auto sm:py-2 border border-base-300 rounded-2xl px-2 pl-3"
+      class="flex items-center gap-1.5 sm:gap-2 sm:py-2 sm:pl-3 sm:pr-1 sm:border sm:border-base-300 sm:rounded-btn"
     >
       <div
-        class="flex-1 min-w-0"
+        class="flex-1 min-w-0 flex items-center min-h-[2.375rem] px-3 border border-base-300 rounded-btn sm:min-h-0 sm:px-0 sm:border-0"
         x-data="chatAudioPlayer('preview', recordedDuration)"
         x-ref="previewPlayer"
       >
@@ -191,7 +196,7 @@
           @timeupdate="currentTime = $refs.audio.currentTime"
           @ended="onEnded()"
         ></audio>
-        <div class="flex items-center gap-1.5">
+        <div class="flex-1 min-w-0 flex items-center gap-1.5">
           <button
             class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
             @click="toggle()"
@@ -216,27 +221,30 @@
         </div>
       </div>
       <button
-        class="btn btn-ghost btn-sm btn-square"
+        class="btn btn-ghost btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="cancelRecording()"
         :disabled="sendingRecording"
         title="Discard"
       >
-        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <i data-lucide="trash-2" class="w-5 h-5 sm:w-4 sm:h-4"></i>
       </button>
       <button
-        class="btn btn-info btn-sm btn-square"
+        class="btn btn-info btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="sendRecording()"
         :disabled="sendingRecording"
         title="Send"
       >
-        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+        <i
+          data-lucide="send"
+          class="w-[1.125rem] h-[1.125rem] sm:w-3.5 sm:h-3.5"
+        ></i>
       </button>
     </div>
   </template>
 
   <!-- Desktop input (>= sm) -->
   <div
-    class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50"
+    class="hidden sm:block border border-base-300 rounded-btn transition-colors focus-within:border-info/50"
     x-show="recorderState === 'idle'"
     x-cloak
   >
@@ -360,7 +368,7 @@
       @keydown="handleInputKeydown($event)"
       @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
       @paste="handlePaste($event)"
-      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none"
+      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
       placeholder="Type a message..."
       rows="1"
     ></textarea>

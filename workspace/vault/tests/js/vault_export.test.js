@@ -1,8 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 
 const SCRIPT = 'workspace/vault/ui/static/vault/ui/js/vault_export.js';
+const WORDLIST = 'workspace/common/static/ui/js/password_wordlist.js';
+const GENERATOR = 'workspace/common/static/ui/js/password_generator.js';
+// An archive has no secret key behind it and is attacked offline for as long
+// as it exists, so the passphrase this dialog draws carries the whole of its
+// strength. 72 bits is past the panel's own Strong band; the design asked for
+// eight words, which is ~82.
+const ARCHIVE_BAR_BITS = 72;
 
 function load(overrides = {}) {
   const downloads = [];
@@ -214,4 +221,41 @@ test('locking drops the dialog and the phrase it holds', () => {
   assert.equal(component.exportPassphrase, '');
   assert.equal(component.exportConfirm, '');
   assert.equal(component.exportOwnPhraseAck, false);
+});
+
+test('the export dialog opens its generator past the archive bar', () => {
+  // Composed from the real panel and the real wordlist rather than asserting
+  // on the numbers in exportGeneratorOptions(): what matters is the entropy
+  // the panel ends up reporting, and that depends on both.
+  //
+  // Storage is seeded with the weakest thing the entry dialog could have left
+  // behind, because that is the case the pinning exists for - the stored
+  // options are shared by every host.
+  const entries = new Map([
+    ['passwordGenerator.options', JSON.stringify({
+      mode: 'password', length: 8, upper: false, digits: false, symbols: false, words: 3,
+    })],
+  ]);
+  const ctx = loadScripts([WORDLIST, GENERATOR, SCRIPT], {
+    crypto: globalThis.crypto,
+    localStorage: {
+      getItem: (key) => (entries.has(key) ? entries.get(key) : null),
+      setItem: (key, value) => entries.set(key, String(value)),
+      removeItem: (key) => entries.delete(key),
+    },
+  });
+  const panel = ctx.passwordGeneratorPanel({}, ctx.vaultExportMixin().exportGeneratorOptions());
+  panel.$watch = () => {};
+  panel.$dispatch = () => {};
+  panel.init();
+
+  assert.equal(panel.error, '');
+  assert.ok(
+    panel.bits >= ARCHIVE_BAR_BITS,
+    `the export dialog opens at ${panel.bits.toFixed(1)} bits, under ${ARCHIVE_BAR_BITS}`
+  );
+  // The value on screen is the one that was measured: a request of eight words
+  // that drew six would report a strength the file does not have.
+  assert.equal(panel.mode, 'passphrase');
+  assert.equal(panel.value.split(panel.separator).length, panel.words);
 });

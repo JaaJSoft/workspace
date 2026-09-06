@@ -18,13 +18,13 @@ function fakeStorage() {
   };
 }
 
-function makePanel(overrides = {}, storage = fakeStorage()) {
+function makePanel(overrides = {}, storage = fakeStorage(), pinned = undefined) {
   const ctx = loadScripts([WORDLIST, GENERATOR], {
     crypto: globalThis.crypto,
     localStorage: storage,
   });
   const dispatched = [];
-  const panel = ctx.passwordGeneratorPanel(overrides);
+  const panel = ctx.passwordGeneratorPanel(overrides, pinned);
   panel.$watch = () => {};
   panel.$dispatch = (name, detail) => dispatched.push({ name, detail });
   return { panel, storage, dispatched };
@@ -225,4 +225,48 @@ test('Enter is stopped everywhere but on the buttons', () => {
   };
   assert.equal(press(false), true, 'Enter on a control reached the form');
   assert.equal(press(true), false, 'Enter on a button stopped activating it');
+});
+
+test('an option the host pinned outranks what the device remembered', () => {
+  // The point of pinning: a host whose form needs a given strength opens at
+  // it whatever the last dialog on this device left behind.
+  const shared = fakeStorage();
+  shared.setItem(
+    'passwordGenerator.options',
+    JSON.stringify({ mode: 'password', length: 8, words: 3 })
+  );
+  const { panel } = makePanel({}, shared, { mode: 'passphrase', words: 9 });
+  panel.init();
+  assert.equal(panel.mode, 'passphrase');
+  assert.equal(panel.words, 9);
+  // Everything the host did not pin still comes back from storage.
+  assert.equal(panel.length, 8);
+});
+
+test('a pinned option is not written into the shared preferences', () => {
+  // The storage key is one for every host. A dialog that pins nine words must
+  // not leave nine words behind for the entry form, and must not erase the
+  // count that form had remembered either.
+  const shared = fakeStorage();
+  shared.setItem('passwordGenerator.options', JSON.stringify({ words: 4 }));
+  const { panel } = makePanel({}, shared, { words: 9 });
+  panel.init();
+  panel.capitalise = false;
+  panel.persist();
+  assert.equal(JSON.parse(shared.entries.get('passwordGenerator.options')).words, 4);
+
+  const { panel: next } = makePanel({}, shared);
+  next.init();
+  assert.equal(next.words, 4);
+  assert.equal(next.capitalise, false);
+});
+
+test('a pinned option is checked like a restored one', () => {
+  // Same filter as storage, for the same reason: a words of 0 would draw
+  // nothing under a slider that starts at 3.
+  const { panel } = makePanel({}, fakeStorage(), { mode: 'foo', words: 0, length: 999 });
+  panel.init();
+  assert.equal(panel.mode, 'password');
+  assert.equal(panel.words, 6);
+  assert.equal(panel.length, 20);
 });

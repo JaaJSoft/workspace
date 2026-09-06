@@ -110,6 +110,16 @@ test('a seal that throws still wipes the encoded tree', async () => {
   assert.deepStrictEqual(Array.from(plaintext), [0, 0, 0, 0]);
 });
 
+test('a canonicalCbor that throws still wipes the derived key', async () => {
+  const key = new Uint8Array(32).fill(7);
+  const ctx = withCrypto({
+    deriveArchiveKey: async () => key,
+    canonicalCbor: () => { throw new Error('unencodable'); },
+  });
+  await assert.rejects(() => ctx.vaultArchive.buildArchive({ tree: {}, passphrase: 'x' }));
+  assert.deepStrictEqual(Array.from(key), new Array(32).fill(0));
+});
+
 test('the filename carries the export date', () => {
   const ctx = withCrypto();
   assert.equal(

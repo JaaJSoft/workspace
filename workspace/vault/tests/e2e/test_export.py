@@ -160,11 +160,10 @@ class ExportWalkTests(VaultBrowserCase):
         Between the field the user types into and those bytes there is a
         stretch of wiring - which value is handed to the sealer, and whether
         the tree it sealed was the whole account - that stays green under any
-        mistake. Sealing under the confirmation field, or under a phrase one
-        character off, passes every JS test, both vector suites and every
-        other walk in this file. (The empty string is the one wrong value
-        already caught elsewhere: Argon2 refuses a zero-length password, so
-        no file is produced at all.)
+        mistake. Sealing under a phrase one character off passes every JS
+        test, both vector suites and every other walk in this file. (The
+        empty string is the one wrong value already caught elsewhere: Argon2
+        refuses a zero-length password, so no file is produced at all.)
 
         Read back by the reference reader, which has never run a line of the
         browser's code: one implementation agreeing with itself is not

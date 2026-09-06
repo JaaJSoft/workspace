@@ -42,8 +42,9 @@ window.vaultArchive = (function () {
     // contiguous buffer, and the largest single copy of it that exists. The
     // strings inside `tree` cannot be wiped - a JS string is immutable - so
     // the win is partial, which is a reason to take it rather than to skip it.
-    const plaintext = V.canonicalCbor(tree);
+    let plaintext;
     try {
+      plaintext = V.canonicalCbor(tree);
       const payload = await V.seal(key, plaintext, header, {
         iv: iv || V.randomBytes(IV_LENGTH),
         // The archive key is an HKDF output. Left to the default this byte
@@ -57,7 +58,7 @@ window.vaultArchive = (function () {
       return out;
     } finally {
       key.fill(0);
-      plaintext.fill(0);
+      if (plaintext) plaintext.fill(0);
     }
   }
 

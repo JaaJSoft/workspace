@@ -39,7 +39,15 @@ PANEL = "aside:has(button[aria-label='Close the panel'])"
 SIDEBAR = ".drawer-side"
 
 
-class VaultBrowserTests(PlaywrightTestCase):
+class VaultBrowserCase(PlaywrightTestCase):
+    """The harness the vault walks share: an account, an open vault, an entry.
+
+    Split from the walks below so a second file can drive the same screen
+    without a second onboarding sequence drifting from this one. It carries no
+    test of its own on purpose - a harness that also asserts gets run twice,
+    once per importer.
+    """
+
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="owner", email="owner@example.com")
@@ -163,6 +171,67 @@ class VaultBrowserTests(PlaywrightTestCase):
         )
         self.assertIn("totp", written, f"the key was not written, fields are {written}")
 
+    # The dialog, named by the one control every one of its states carries.
+    # "the modal with a Passphrase field" would miss the interchange format,
+    # which renders no passphrase at all.
+    EXPORT_BOX = ".modal-box:has([data-testid='export-run'])"
+
+    def _open_export(self):
+        """Open the export dialog from the sidebar, the way a user reaches it.
+
+        By the row's label, not by a testid: drawer_item.html is shared by six
+        modules and exposes no parameter for one. Scoped to the drawer because
+        an accessible name matches by substring, and the dialog this opens
+        carries an "Export" button of its own.
+        """
+        self.page.locator(SIDEBAR).get_by_role(
+            "button", name="Export", exact=True
+        ).click()
+        self.page.wait_for_selector(
+            "[data-testid='export-run']", state="attached", timeout=15000
+        )
+
+    def _audit_autofill(self, scope):
+        """Read every text field under ``scope`` off the rendered page.
+
+        Returns the fields it saw and the ones a browser would still offer to
+        fill or to spell-check. Two values keep a field out of that second
+        list: ``off``, and ``new-password`` for a secret the user is choosing
+        here - the token that tells a password manager this is not one of its
+        stored credentials, so it offers none of them.
+        """
+        return self.page.eval_on_selector_all(
+            f"{scope} input, {scope} textarea",
+            """(nodes) => {
+                const identify = (node) => {
+                    // Both ways a field carries a label: wrapped in one, or
+                    // named by one through `for`. A control with a button
+                    // beside it has to use the second - a label around a
+                    // button steals its click.
+                    const explicit = node.id && document.querySelector(
+                        `label[for="${CSS.escape(node.id)}"]`
+                    );
+                    const label = explicit || node.closest('label');
+                    const labelText = label && label.textContent.trim();
+                    return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
+                };
+                const declined = ['off', 'new-password'];
+                return {
+                    audited: nodes.map(identify),
+                    offenders: nodes
+                        // A slider holds no text: it has nothing to autofill
+                        // and nothing to spell-check, and the attributes were
+                        // only ever there to satisfy this scan.
+                        .filter((node) => !['checkbox', 'radio', 'hidden', 'range'].includes(node.type))
+                        // The IDL property, not the attribute: an unknown
+                        // token reads back as the empty string, so a typo
+                        // lands here rather than passing as itself.
+                        .filter((node) => !declined.includes(node.autocomplete) || node.spellcheck !== false)
+                        .map(identify),
+                };
+            }""",
+        )
+
     def _wait_for_totp_section(self, panel):
         """The section, before the code inside it.
 
@@ -172,7 +241,9 @@ class VaultBrowserTests(PlaywrightTestCase):
         """
         panel.get_by_text("Authenticator code", exact=True).wait_for(timeout=15000)
 
-    # ---- the walk ---------------------------------------------------------
+
+class VaultBrowserTests(VaultBrowserCase):
+    """The walk itself: create, browse, open, copy, lock."""
 
     def test_an_entry_is_created_browsed_and_read_back(self):
         self._open_vault()
@@ -508,33 +579,7 @@ class VaultBrowserTests(PlaywrightTestCase):
         # Scoped to the entry dialog: the shared layout also mounts the help,
         # prompt and file-picker dialogs on this page, and their fields are
         # someone else's surface to harden.
-        result = self.page.eval_on_selector_all(
-            ".modal-box:has-text('Save') input, .modal-box:has-text('Save') textarea",
-            """(nodes) => {
-                const identify = (node) => {
-                    // Both ways a field carries a label: wrapped in one, or
-                    // named by one through `for`. A control with a button
-                    // beside it has to use the second - a label around a
-                    // button steals its click.
-                    const explicit = node.id && document.querySelector(
-                        `label[for="${CSS.escape(node.id)}"]`
-                    );
-                    const label = explicit || node.closest('label');
-                    const labelText = label && label.textContent.trim();
-                    return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
-                };
-                return {
-                    audited: nodes.map(identify),
-                    offenders: nodes
-                        // A slider holds no text: it has nothing to autofill
-                        // and nothing to spell-check, and the attributes were
-                        // only ever there to satisfy this scan.
-                        .filter((node) => !['checkbox', 'radio', 'hidden', 'range'].includes(node.type))
-                        .filter((node) => node.autocomplete !== 'off' || node.spellcheck !== false)
-                        .map(identify),
-                };
-            }""",
-        )
+        result = self._audit_autofill(".modal-box:has-text('Save')")
         audited, offenders = result["audited"], result["offenders"]
         # An empty offenders list is also what a selector matching nothing
         # produces - a relabelled Save button or a restructured dialog must
@@ -544,6 +589,27 @@ class VaultBrowserTests(PlaywrightTestCase):
         # specific rather than a bare "matched zero".
         self.assertTrue(audited, "the audit selector matched no fields at all")
         for expected in ("Name", "Password", "Authenticator key"):
+            self.assertTrue(
+                any(expected in identifier for identifier in audited),
+                f"expected the audit to see the {expected!r} field, saw {audited!r}",
+            )
+        self.assertEqual(offenders, [])
+
+        # The export dialog is the other place this screen asks for a secret,
+        # and it is reached from the sidebar - which the entry dialog's
+        # backdrop covers, so that one has to go first.
+        # The dialog's own Cancel, named by the action row it sits in: the
+        # authenticator control opened above carries a Cancel too, and it
+        # comes first in the document.
+        self.page.click(".modal-box:has-text('Save') .modal-action button:has-text('Cancel')")
+        self._open_export()
+        # The confirmation field is instantiated by the first keystroke in the
+        # passphrase field, so the audit has to type to see it.
+        self.page.fill("#export-passphrase", "typed")
+        self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
+        result = self._audit_autofill(self.EXPORT_BOX)
+        audited, offenders = result["audited"], result["offenders"]
+        for expected in ("Passphrase", "Confirm"):
             self.assertTrue(
                 any(expected in identifier for identifier in audited),
                 f"expected the audit to see the {expected!r} field, saw {audited!r}",

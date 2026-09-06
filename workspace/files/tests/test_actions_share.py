@@ -122,3 +122,21 @@ class ShareActionTests(TestCase):
         f.deleted_at = timezone.now()
         action = ActionRegistry.get("share")
         self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
+
+    def test_owner_folder(self):
+        folder = _make_folder(self.user)
+        action = ActionRegistry.get("share")
+        self.assertTrue(action.is_available(self.user, folder, permission=MANAGE))
+
+    def test_non_owner_editor_on_a_folder(self):
+        """A folder's modal only offers owner-only public links, so an editor
+        who does not own it would get a dialog that can do nothing."""
+        folder = _make_folder(self.user)
+        action = ActionRegistry.get("share")
+        self.assertFalse(action.is_available(self.other, folder, permission=MANAGE))
+
+    def test_non_owner_editor_keeps_it_on_a_file(self):
+        """Files still offer user-to-user sharing to an editor."""
+        f = _make_file(self.user)
+        action = ActionRegistry.get("share")
+        self.assertTrue(action.is_available(self.other, f, permission=MANAGE))

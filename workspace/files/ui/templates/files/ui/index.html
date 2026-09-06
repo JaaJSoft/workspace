@@ -186,7 +186,7 @@
                   <!-- Breadcrumb row with action button aligned -->
                   <div class="flex items-center justify-between gap-4 mb-1">
                     <div class="flex items-center gap-2 min-w-0">
-                      <div class="join" x-data="navButtons()">
+                      <div class="join" x-data="navButtons('folder-browser')">
                         <button
                           type="button"
                           class="btn btn-ghost btn-sm btn-square join-item disabled:bg-transparent disabled:border-transparent transition-colors"
@@ -392,6 +392,7 @@
   <!-- File actions (shared) & browser -->
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/folder_nav.js' %}"></script>
   <script src="{% static 'files/ui/js/core.js' %}"></script>
   <script src="{% static 'files/ui/js/preferences.js' %}"></script>
   <script src="{% static 'files/ui/js/tags.js' %}"></script>

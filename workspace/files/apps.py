@@ -1,3 +1,4 @@
+import importlib
 import os
 
 from django.apps import AppConfig
@@ -148,3 +149,19 @@ class FilesConfig(AppConfig):
         from workspace.files.services import link_events, search_events  # noqa: F401
         from workspace.files.services.scanning import scan_events  # noqa: F401
         from workspace.files.services.thumbnails import handlers  # noqa: F401
+
+        # The actions register on import, and this is their menu order: each
+        # category has to stay contiguous. Imported here rather than lazily so
+        # a broken import fails the boot instead of a worker answering "no
+        # actions" forever.
+        for action_module in (
+            "open",
+            "transfer",
+            "organize",
+            "edit",
+            "extract",
+            "info",
+            "danger",
+            "trash",
+        ):
+            importlib.import_module(f"workspace.files.actions.{action_module}")

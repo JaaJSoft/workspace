@@ -6,7 +6,7 @@ from datetime import timedelta
 from celery import shared_task
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -381,3 +381,53 @@ def scan_file(self, file_uuid):
         restore_after_unblock(file_obj)
 
     return {"status": verdict.status, "signature": verdict.signature}
+
+
+@shared_task(name="files.notify_share_link_uploads")
+def notify_share_link_uploads(link_uuid):
+    """Tell the link owner about the uploads that landed since the last run."""
+    from django.core.cache import cache
+
+    from workspace.files.models import FileShareLink
+    from workspace.files.services.public_links import upload_notification_cache_key
+    from workspace.notifications.services.notifications import notify
+
+    link = (
+        FileShareLink.objects.select_related("file", "created_by")
+        .filter(uuid=link_uuid)
+        .first()
+    )
+    if link is None:
+        cache.delete(upload_notification_cache_key(link_uuid))
+        return
+
+    delta = link.upload_count - link.notified_upload_count
+    if delta > 0:
+        subject = "1 file was" if delta == 1 else f"{delta} files were"
+        notify(
+            recipient=link.created_by,
+            origin="files",
+            title=f'{subject} added to "{link.file.name}"',
+            body="Uploaded through your share link.",
+            url=f"/files/{link.file.uuid}",
+            source=link.file,
+        )
+        FileShareLink.objects.filter(pk=link.pk).update(
+            notified_upload_count=link.upload_count
+        )
+
+    # Last, so the next upload starts a fresh window.
+    cache.delete(upload_notification_cache_key(link_uuid))
+
+    # An upload that landed while this task ran advanced upload_count after the
+    # read above, and the update wrote back the value we read, so its delta
+    # survives. It is only reported if another upload follows and wins a fresh
+    # election - so if it was the last of the burst, elect the follow-up here.
+    from workspace.files.services.public_links import schedule_upload_notification
+
+    if (
+        FileShareLink.objects.filter(pk=link.pk)
+        .exclude(notified_upload_count=F("upload_count"))
+        .exists()
+    ):
+        schedule_upload_notification(link)

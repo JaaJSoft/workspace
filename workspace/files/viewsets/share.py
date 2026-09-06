@@ -4,9 +4,10 @@ from django.contrib.auth import get_user_model
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from workspace.files.models import FileShare, FileShareLink
+from workspace.files.models import File, FileShare, FileShareLink
 from workspace.files.services import FileService
 from workspace.files.services.sharing import (
     create_share_link as service_create_share_link,
@@ -58,11 +59,17 @@ class ShareMixin:
         file_obj = self.get_object()
         perm = FileService.get_permission(request.user, file_obj)
 
-        if not ActionRegistry.is_action_available(
-            "share",
-            request.user,
-            file_obj,
-            permission=perm,
+        # Sharing with a user is file-only: ShareAction.node_types also covers
+        # folders now, for the public-link path, so that check alone is not
+        # enough to gate this endpoint.
+        if (
+            file_obj.node_type != File.NodeType.FILE
+            or not ActionRegistry.is_action_available(
+                "share",
+                request.user,
+                file_obj,
+                permission=perm,
+            )
         ):
             return Response(
                 {"detail": "Only files can be shared."},
@@ -196,8 +203,6 @@ class ShareMixin:
         """List or create share links for a file (owner only)."""
         from django.http import Http404
 
-        from workspace.files.models import File
-
         file_obj = self.get_object()
         # get_queryset returns owned + group + shared files, so explicitly
         # gate this owner-only action.
@@ -205,22 +210,28 @@ class ShareMixin:
             raise Http404
 
         if request.method == "GET":
-            links = FileShareLink.objects.filter(file=file_obj)
+            links = FileShareLink.objects.filter(file=file_obj).select_related("file")
             data = [self._serialize_share_link(link, request) for link in links]
             return Response(data)
 
         # POST - create
-        if file_obj.node_type != File.NodeType.FILE:
-            return Response(
-                {"detail": "Share links can only be created for files."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        def _cap(field):
+            raw = request.data.get(field)
+            if raw in (None, ""):
+                return None
+            try:
+                return int(raw)
+            except (ValueError, TypeError) as exc:
+                raise ValidationError({field: "Must be a whole number."}) from exc
 
         link = service_create_share_link(
             file_obj,
             acting_user=request.user,
             password=request.data.get("password", ""),
             expires_at=request.data.get("expires_at"),
+            mode=request.data.get("mode") or FileShareLink.Mode.READ,
+            max_file_bytes=_cap("max_file_bytes"),
+            max_file_count=_cap("max_file_count"),
         )
         return Response(
             self._serialize_share_link(link, request),
@@ -265,6 +276,11 @@ class ShareMixin:
             "uuid": str(link.uuid),
             "token": link.token,
             "url": url,
+            "node_type": link.file.node_type,
+            "mode": link.mode,
+            "max_file_bytes": link.max_file_bytes,
+            "max_file_count": link.max_file_count,
+            "upload_count": link.upload_count,
             "has_password": link.has_password,
             "expires_at": self._format_dt(link.expires_at),
             "view_count": link.view_count,

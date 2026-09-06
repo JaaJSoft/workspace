@@ -1,11 +1,12 @@
+from workspace.files.models import File
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class ToggleFavoriteAction(BaseAction):
+class ToggleFavoriteAction(BaseFileAction):
     id = "toggle_favorite"
     label = "Add to favorites"
     icon = "star"
@@ -34,7 +35,7 @@ class ToggleFavoriteAction(BaseAction):
 
 
 @ActionRegistry.register
-class TogglePinAction(BaseAction):
+class TogglePinAction(BaseFileAction):
     id = "toggle_pin"
     label = "Pin to sidebar"
     icon = "pin"
@@ -66,7 +67,7 @@ class TogglePinAction(BaseAction):
 
 
 @ActionRegistry.register
-class ManageTagsAction(BaseAction):
+class ManageTagsAction(BaseFileAction):
     id = "manage_tags"
     label = "Tags"
     icon = "tag"
@@ -84,14 +85,21 @@ class ManageTagsAction(BaseAction):
 
 
 @ActionRegistry.register
-class ShareAction(BaseAction):
+class ShareAction(BaseFileAction):
     id = "share"
     label = "Share"
     icon = "share-2"
     category = ActionCategory.ORGANIZE
-    node_types = ("file",)
+    node_types = ("file", "folder")
 
     def is_available(self, user, file_obj, *, permission):
         if file_obj.deleted_at is not None:
             return False
-        return permission is not None and permission >= FilePermission.EDIT
+        if permission is None or permission < FilePermission.EDIT:
+            return False
+        # A folder's share modal offers public links and nothing else, and those
+        # are owner-only, so a non-owner editor would open a dialog that can do
+        # nothing. Files still offer user-to-user sharing to an editor.
+        if file_obj.node_type == File.NodeType.FOLDER:
+            return file_obj.owner_id == user.id
+        return True

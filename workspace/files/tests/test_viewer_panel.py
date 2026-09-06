@@ -11,6 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
+from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.ui.viewers import VIEWER_PANEL_ID
 
@@ -54,3 +55,19 @@ class ViewerPanelWrapperTests(TestCase):
         resp = self._get(folder)
         self.assertEqual(resp.status_code, 400)
         self.assertIn(PANEL_OPENING, resp.content.decode())
+
+    def test_a_content_less_text_file_renders_without_crashing(self):
+        """A text-typed row with no stored content (empty FieldFile) must
+        render an empty editor rather than 500 - the same shape a public
+        share link can point at."""
+        f = File.objects.create(
+            owner=self.user,
+            name="empty.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            type="text",
+            category="text",
+        )
+        resp = self._get(f)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("originalContent: '',", resp.content.decode())

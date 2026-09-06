@@ -1,11 +1,11 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class ViewAction(BaseAction):
+class ViewAction(BaseFileAction):
     id = "view"
     label = "Open"
     icon = "eye"
@@ -26,7 +26,7 @@ class ViewAction(BaseAction):
 
 
 @ActionRegistry.register
-class OpenFolderAction(BaseAction):
+class OpenFolderAction(BaseFileAction):
     id = "open"
     label = "Open"
     icon = "folder-open"
@@ -41,7 +41,7 @@ class OpenFolderAction(BaseAction):
 
 
 @ActionRegistry.register
-class OpenNewTabAction(BaseAction):
+class OpenNewTabAction(BaseFileAction):
     id = "open_new_tab"
     label = "Open in new tab"
     icon = "external-link"

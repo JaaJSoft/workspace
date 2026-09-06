@@ -169,11 +169,11 @@ class GetAvailableActionsTests(TestCase):
         self.assertIn("paste_into", action_ids)
         self.assertIn("properties", action_ids)
         self.assertIn("delete", action_ids)
+        self.assertIn("share", action_ids)
         # Should not see file-only actions
         self.assertNotIn("view", action_ids)
         self.assertNotIn("open_new_tab", action_ids)
         self.assertNotIn("copy_link", action_ids)
-        self.assertNotIn("share", action_ids)
 
     def test_shared_ro_file_actions(self):
         f = _make_file(self.user, mime_type="text/plain")
@@ -547,9 +547,10 @@ class FilesActionsEndpointTests(APITestCase):
         data = resp.json()
         file_ids = [a["id"] for a in actions_of(data, str(f.uuid))]
         folder_ids = [a["id"] for a in actions_of(data, str(folder.uuid))]
-        # File has share, folder has toggle_pin
+        # Share is available on both now that folders can hold a share link;
+        # toggle_pin stays folder-only.
         self.assertIn("share", file_ids)
-        self.assertNotIn("share", folder_ids)
+        self.assertIn("share", folder_ids)
         self.assertIn("toggle_pin", folder_ids)
         self.assertNotIn("toggle_pin", file_ids)
 

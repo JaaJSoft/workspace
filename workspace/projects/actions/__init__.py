@@ -1,59 +1,17 @@
-import importlib
+from workspace.common.actions import BaseActionRegistry
 
-from .base import ActionCategory, BaseProjectAction, NotOnPersonalProjectMixin
+from ..models import Task
 
 
-class ProjectActionRegistry:
-    _actions: list[BaseProjectAction] = []
-    _loaded = False
+class ProjectActionRegistry(BaseActionRegistry):
+    """The action set a project or a task can offer.
 
-    @classmethod
-    def register(cls, action_cls):
-        """Class decorator - instantiates and stores an action."""
-        instance = action_cls()
-        cls._actions.append(instance)
-        return action_cls
+    One registry for both target types: the client asks one endpoint with a
+    mixed batch, and ``target_types`` on each action says which it is for.
+    ``ProjectsConfig.ready()`` imports the action modules.
+    """
 
     @classmethod
-    def get_available_actions(cls, user, obj, *, role, archived):
-        cls._ensure_loaded()
-        from ..models import Task
-
+    def applies_to(cls, action, obj):
         target = "task" if isinstance(obj, Task) else "project"
-        result = []
-        for action in cls._actions:
-            if target not in action.target_types:
-                continue
-            if action.is_available(user, obj, role=role, archived=archived):
-                result.append(action.serialize(obj))
-        return result
-
-    @classmethod
-    def all(cls):
-        cls._ensure_loaded()
-        return list(cls._actions)
-
-    @classmethod
-    def _ensure_loaded(cls):
-        if cls._loaded:
-            return
-        cls._loaded = True
-        for module_name in (
-            "workspace.projects.actions.project",
-            "workspace.projects.actions.task",
-        ):
-            importlib.import_module(module_name)
-
-    @classmethod
-    def _reset(cls):
-        """Reset registry state - only for tests."""
-        cls._actions = []
-        cls._loaded = False
-
-
-__all__ = [
-    "ActionCategory",
-    "BaseProjectAction",
-    "NotOnPersonalProjectMixin",
-    "ProjectActionRegistry",
-]
+        return target in action.target_types

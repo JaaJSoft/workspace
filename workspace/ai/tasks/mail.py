@@ -13,6 +13,7 @@ from workspace.ai.services.ai_task import ai_task_lifecycle
 from workspace.ai.services.llm import (
     call_llm,
     call_llm_structured,
+    reply_was_truncated,
     sanitize_messages_for_storage,
     serialize_response,
 )
@@ -173,6 +174,10 @@ def compose_email(self, task_id: str):
 
 CLASSIFY_BATCH_SIZE = 10
 MAX_LABELS_PER_MESSAGE = 3
+# The answer is a few tokens per email; the rest is headroom for a reasoning
+# model, whose thinking shares this budget on Ollama-style backends and, on a
+# messy batch, runs past the 2048-token default before the answer starts.
+CLASSIFY_MAX_TOKENS = 8192
 
 
 def _classify_message_queryset(owner, message_uuids):
@@ -311,8 +316,12 @@ def classify_mail_messages(self, task_id: str):
                     ]
 
                     messages = build_classify_messages(emails, label_specs)
+                    max_tokens = max(settings.AI_MAX_TOKENS, CLASSIFY_MAX_TOKENS)
                     parsed, result = call_llm_structured(
-                        messages, ClassifiedEmails, model=settings.AI_SMALL_MODEL
+                        messages,
+                        ClassifiedEmails,
+                        model=settings.AI_SMALL_MODEL,
+                        max_tokens=max_tokens,
                     )
 
                     model_used = result["model"]
@@ -320,6 +329,17 @@ def classify_mail_messages(self, task_id: str):
                     total_completion += result["completion_tokens"] or 0
 
                     if parsed is None:
+                        # Keep the reply on the failed task: the error string
+                        # alone cannot say what the model actually sent.
+                        ai_task.raw_messages = {
+                            "messages": sanitize_messages_for_storage(messages),
+                            "response": serialize_response(result),
+                        }
+                        if reply_was_truncated(result):
+                            raise ValueError(
+                                f"LLM reply cut off at {max_tokens} tokens: the "
+                                "model ran out of budget before answering"
+                            )
                         logger.warning(
                             "Classify: malformed JSON response for task %s",
                             scrub(task_id),

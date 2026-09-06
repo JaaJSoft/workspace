@@ -125,6 +125,7 @@
         {% include "vault/ui/partials/clipboard_banner.html" %}
         {% include "vault/ui/partials/create_vault_dialog.html" %}
         {% include "vault/ui/partials/vault_dialog.html" %}
+        {% include "vault/ui/partials/generator_dialog.html" %}
         {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
       </div>
     </template>
@@ -152,5 +153,8 @@
   <script src="{% static 'vault/ui/js/vault_view_prefs.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_sidebar.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_switcher.js' %}"></script>
+  <script src="{% static 'ui/js/password_wordlist.js' %}"></script>
+  <script src="{% static 'ui/js/password_generator.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_generator.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

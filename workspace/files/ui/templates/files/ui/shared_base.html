@@ -1,0 +1,180 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Shared - Workspace{% endblock %}</title>
+    <link href="{% static 'css/app.css' %}" rel="stylesheet" />
+    {% comment %}
+      The Milkdown Crepe theme, loaded for every visitor rather than only for a
+      markdown target. Navigating from the listing onto a file swaps the
+      content fragment, which never re-renders this head, so a stylesheet the
+      viewer needs has to be here before the visitor picks the file. Without
+      it Crepe still mounts, but its toolbar, link tooltip, slash menu and
+      block handle lose their positioning rules and drop into the page as a
+      column of stray edit controls under the text.
+    {% endcomment %}
+    <link
+      href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}"
+      rel="stylesheet"
+    />
+    <link
+      href="{% static 'files/ui/css/milkdown-overrides.css' %}"
+      rel="stylesheet"
+    />
+    <script defer src="{% static 'ui/js/vendor/alpine/alpine.js' %}"></script>
+    <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
+    <script src="{% static 'ui/js/lucide.js' %}"></script>
+    <script src="{% static 'files/ui/js/folder_nav.js' %}"></script>
+    {% comment %}
+      This page does not extend base.html, so nothing base.html loads globally
+      is present. Anything a child page needs, including <inline-alert>, is
+      loaded by that page.
+    {% endcomment %}
+    {% block head_extra %}{% endblock %}
+  </head>
+  <body class="min-h-screen bg-base-200 flex flex-col">
+    <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6 flex flex-col">
+
+      {% if expired %}
+        <!-- Expired link -->
+        <div class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto">
+          <div class="card-body items-center text-center pt-10 pb-8 px-8">
+            <div
+              class="w-16 h-16 rounded-2xl bg-warning/15 flex items-center justify-center mb-4"
+            >
+              <i data-lucide="clock" class="w-7 h-7 text-warning"></i>
+            </div>
+            <h2 class="text-lg font-bold">Link expired</h2>
+            <p class="text-sm text-base-content/50">This share link is no longer available.</p>
+          </div>
+        </div>
+
+      {% elif needs_password %}
+        <!-- Password form -->
+        <div
+          class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto"
+          data-share-token="{{ share_token }}"
+          x-data="sharedFilePassword($el.dataset.shareToken)"
+        >
+          <div class="card-body items-center text-center pt-10 pb-8 px-8">
+            <!-- Lock icon -->
+            <div
+              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg transition-transform duration-300 ease-out"
+              :class="unlocked && 'scale-110'"
+            >
+              <i x-show="!unlocked" data-lucide="lock" class="w-7 h-7 text-white"></i>
+              <i
+                x-show="unlocked"
+                x-cloak
+                data-lucide="lock-open"
+                class="w-7 h-7 text-white"
+              ></i>
+            </div>
+
+            <h2 class="text-lg font-bold">Protected link</h2>
+            <p class="text-sm text-base-content/50 mb-5">Enter the password to continue</p>
+
+            <!-- Input with integrated button -->
+            <div class="w-full relative">
+              <input
+                type="password"
+                class="input input-bordered w-full pr-12"
+                :class="error ? 'input-error' : ''"
+                x-model="password"
+                @keydown.enter="verify()"
+                placeholder="Password"
+                autofocus
+              />
+              <button
+                class="absolute right-2 inset-y-0 my-auto btn btn-primary btn-sm btn-square no-animation"
+                :class="verifying && 'pointer-events-none'"
+                @click="verify()"
+                :disabled="!password"
+              >
+                <span x-show="verifying" class="loading loading-spinner loading-sm"></span>
+                <i x-show="!verifying" data-lucide="arrow-right" class="w-4 h-4"></i>
+              </button>
+            </div>
+
+            <!-- Error -->
+            <p x-show="error" x-cloak class="text-sm text-error mt-2" x-text="error"></p>
+          </div>
+        </div>
+
+        <script>
+          function sharedFilePassword(token) {
+            return {
+              password: '',
+              verifying: false,
+              unlocked: false,
+              error: '',
+              async verify() {
+                if (this.verifying) return;
+                this.verifying = true;
+                this.error = '';
+                try {
+                  const resp = await fetch('/api/v1/files/shared/' + token + '/verify', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      password: this.password
+                    }),
+                  });
+                  if (resp.ok) {
+                    const data = await resp.json();
+                    sessionStorage.setItem('share_access_' + token, data.access_token);
+                    // Let the lock open before the page goes: the reload then
+                    // reads as what the unlock led to, not as a jump.
+                    this.unlocked = true;
+                    await new Promise((resolve) => setTimeout(resolve, 400));
+                    window.location.href = '/files/shared/' + token + '?access_token=' + encodeURIComponent(data.access_token);
+                    return;
+                  } else {
+                    this.error = 'Invalid password';
+                  }
+                } catch (e) {
+                  this.error = 'An error occurred';
+                }
+                this.verifying = false;
+              }
+            };
+          }
+        </script>
+
+      {% else %}
+        {% block content %}{% endblock %}
+      {% endif %}
+
+      <!-- Footer -->
+      <footer class="mt-6 mb-4 text-center">
+        <div
+          class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
+        >
+          <div
+            class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
+          >
+            <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
+          </div>
+          <span>Shared with</span>
+          <a
+            href="/"
+            class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
+          >Workspace</a>
+        </div>
+      </footer>
+    </div>
+
+    <script>
+      // initLucideIcons() draws the icons present at load; observeLucideIcons()
+      // keeps drawing them as Alpine inserts more (breadcrumbs, entry rows).
+      document.addEventListener('DOMContentLoaded', () => {
+        initLucideIcons();
+        observeLucideIcons();
+      });
+    </script>
+  </body>
+</html>

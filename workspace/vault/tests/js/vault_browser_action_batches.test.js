@@ -25,6 +25,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/clipboard.js',
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -39,6 +40,8 @@ function browser(options = {}) {
       location: { search: '' },
       localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
       addEventListener() {},
+      CustomEvent: class { constructor(name) { this.type = name; } },
+      dispatchEvent() {},
       history: { replaceState() {} },
       setInterval: () => 1,
       clearInterval() {},

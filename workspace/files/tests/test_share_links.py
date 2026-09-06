@@ -141,18 +141,6 @@ class ShareLinkAPITests(APITestCase):
         resp = self.client.get(f"/api/v1/files/{self.file.uuid}/share-links")
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_create_share_link_on_folder_rejected(self):
-        folder = File.objects.create(
-            owner=self.user,
-            name="Docs",
-            node_type=File.NodeType.FOLDER,
-        )
-        self.client.force_authenticate(user=self.user)
-        resp = self.client.post(
-            f"/api/v1/files/{folder.uuid}/share-links", {}, format="json"
-        )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
-
     def test_delete_share_link(self):
         self.client.force_authenticate(user=self.user)
         resp = self.client.post(

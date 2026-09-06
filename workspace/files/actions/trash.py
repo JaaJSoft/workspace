@@ -1,11 +1,11 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseAction
+from .base import ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
-class RestoreAction(BaseAction):
+class RestoreAction(BaseFileAction):
     id = "restore"
     label = "Restore"
     icon = "rotate-ccw"
@@ -20,7 +20,7 @@ class RestoreAction(BaseAction):
 
 
 @ActionRegistry.register
-class PurgeAction(BaseAction):
+class PurgeAction(BaseFileAction):
     id = "purge"
     label = "Delete permanently"
     icon = "trash-2"

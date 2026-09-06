@@ -11,6 +11,7 @@ it.
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import connection
 from django.test import RequestFactory, TestCase
 from django.test.utils import CaptureQueriesContext
@@ -153,3 +154,69 @@ class MeetingProvenanceGuestTests(TestCase):
         self.assertNotIn("event_title", html)
         self.assertNotIn("join_url", html)
         self.assertNotIn("room-conversation-data", html)
+
+
+class MeetingProvenanceRefetchQueryTests(TestCase):
+    """The two write paths that answer with a whole conversation refetch it
+    with their own queryset, so each one needs the join of its own.
+
+    Measured by what a standalone ``FROM "chat_meeting"`` select means: with
+    the join in place the meeting rides in the conversation's own SELECT and
+    no such query is issued at all, while without it ``_meeting_payload``
+    goes looking for the row itself. Counting queries mentioning the table
+    would not tell the two apart - the join mentions it too.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user("refetch", "refetch@example.com", "pw")
+        self.other = User.objects.create_user("refetch2", "refetch2@example.com", "pw")
+        self.client.force_login(self.owner)
+
+    def _standalone_meeting_queries(self, captured):
+        return [
+            q["sql"]
+            for q in captured
+            if 'FROM "chat_meeting"' in q["sql"] or 'FROM "calendar_event"' in q["sql"]
+        ]
+
+    def test_creating_a_conversation_looks_for_no_meeting_of_its_own(self):
+        """The group branch answers from a refetch, which is the queryset
+        that needs the join; a brand-new conversation has no meeting, and
+        finding that out must not cost a query of its own."""
+        group = Group.objects.create(name="Refetch team")
+        self.owner.groups.add(group)
+        self.other.groups.add(group)
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.post(
+                "/api/v1/chat/conversations",
+                {"group_ids": [group.pk]},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 201)
+        self.assertIsNone(response.json()["meeting"])
+        self.assertEqual(self._standalone_meeting_queries(ctx.captured_queries), [])
+
+    def test_adding_a_member_to_a_meeting_looks_for_no_meeting_of_its_own(self):
+        now = timezone.now()
+        event = make_event(
+            self.owner,
+            start=now - timedelta(minutes=5),
+            end=now + timedelta(minutes=25),
+            title="Weekly standup",
+        )
+        meeting = create_meeting(event, self.owner)
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.post(
+                f"/api/v1/chat/conversations/{meeting.conversation_id}/members",
+                {"user_ids": [self.other.id]},
+                content_type="application/json",
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["meeting"]["event_title"],
+            "Weekly standup",
+            "the refetched payload still carries the provenance",
+        )
+        self.assertEqual(self._standalone_meeting_queries(ctx.captured_queries), [])

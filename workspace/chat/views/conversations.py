@@ -161,6 +161,9 @@ class ConversationListView(CacheControlMixin, APIView):
             conversation = create_group_conversation(request.user, groups, title)
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)
+                # The response is a full conversation payload, so the
+                # provenance field runs here too - see _meeting_payload.
+                .select_related("meeting__event")
                 .prefetch_related(
                     "groups",
                     Prefetch("members", queryset=active_members_queryset()),
@@ -458,6 +461,9 @@ class ConversationMembersView(APIView):
         # Refetch conversation with members
         conversation = (
             Conversation.objects.filter(pk=conversation.pk)
+            # A meeting's conversation reaches this endpoint whenever a host
+            # is added, and the payload carries its provenance back.
+            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",

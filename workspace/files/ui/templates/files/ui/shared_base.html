@@ -34,22 +34,26 @@
     {% block head_extra %}{% endblock %}
   </head>
   <body class="min-h-screen bg-base-200 flex flex-col">
-    <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6">
+    <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6 flex flex-col">
 
       {% if expired %}
         <!-- Expired link -->
-        <div class="card bg-base-100 shadow-lg">
-          <div class="card-body text-center py-12">
-            <i data-lucide="clock" class="w-12 h-12 text-warning mx-auto mb-4"></i>
-            <h2 class="text-xl font-bold mb-2">Link expired</h2>
-            <p class="text-base-content/60">This share link is no longer available.</p>
+        <div class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto">
+          <div class="card-body items-center text-center pt-10 pb-8 px-8">
+            <div
+              class="w-16 h-16 rounded-2xl bg-warning/15 flex items-center justify-center mb-4"
+            >
+              <i data-lucide="clock" class="w-7 h-7 text-warning"></i>
+            </div>
+            <h2 class="text-lg font-bold">Link expired</h2>
+            <p class="text-sm text-base-content/50">This share link is no longer available.</p>
           </div>
         </div>
 
       {% elif needs_password %}
         <!-- Password form -->
         <div
-          class="card bg-base-100 shadow-xl max-w-sm mx-auto mt-8"
+          class="card bg-base-100 shadow-xl max-w-sm w-full mx-auto my-auto"
           data-share-token="{{ share_token }}"
           x-data="sharedFilePassword($el.dataset.shareToken)"
         >

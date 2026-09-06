@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
+from django.template.loader import render_to_string
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from workspace.users.services.settings import set_setting
@@ -147,3 +148,33 @@ class BrowserRoutingTests(TestCase):
             reverse("vault_ui:vault", args=[make_vault(self.user).uuid])
         )
         self.assertRedirects(response, reverse("vault_ui:onboarding"))
+
+
+class ExportDialogWiringTests(SimpleTestCase):
+    """The generator panel owns no clipboard and no field.
+
+    It dispatches two events and lets its host decide what they mean, so a
+    host wiring only one leaves a button that silently does nothing - and the
+    button here saves the one string that opens the archive. Asserted on the
+    rendered partial because the wiring lives in an attribute: no unit test
+    reaches it, and by the time an e2e walk could, the value is already lost.
+    """
+
+    def render(self):
+        return render_to_string("vault/ui/partials/export_dialog.html")
+
+    def test_the_export_dialog_listens_to_both_generator_events(self):
+        html = self.render()
+        self.assertIn(
+            '@password-apply="applyGeneratedPassphrase($event.detail.value)"', html
+        )
+        self.assertIn('@password-copy="copyGenerated($event.detail.value)"', html)
+
+    def test_the_generator_panel_renders_its_use_button(self):
+        """show_apply is what renders that button, and the apply handler above
+        has nothing to fire it without one."""
+        self.assertEqual(self.render().count('@click="apply()"'), 1)
+
+    def test_the_skipped_count_has_somewhere_to_be_read(self):
+        """Computed and never rendered, it would look implemented and not be."""
+        self.assertIn('x-text="skippedMessage()"', self.render())

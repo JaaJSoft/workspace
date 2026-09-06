@@ -20,6 +20,11 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportError = '';
       this.exportProgress = 0;
       this.exportSkipped = 0;
+      // The panel inside this dialog reports a refused copy through the
+      // generator mixin's field, spread into this same component - a failure
+      // left over from the standalone generator would open here as if it had
+      // just happened.
+      this.generatorError = '';
       this.exportOpen = true;
     },
 
@@ -39,7 +44,24 @@ window.vaultExportMixin = function vaultExportMixin() {
     // Bound to the field's own input: the moment a human edits it, the panel's
     // measurement stops describing what is in there.
     noteTypedPassphrase() {
+      // The confirmation field is instantiated by the flip itself, and a
+      // generated value left in it is one the user never typed - it would sit
+      // there prefilled and no longer matching, holding Export disabled until
+      // they think to clear a field they never touched.
+      if (this.exportSource === 'generated') this.exportConfirm = '';
       this.exportSource = 'typed';
+    },
+
+    // A count, not a secret: it outlives the download so the dialog can say
+    // what was left out, and openExportDialog() clears it for the next run.
+    skippedMessage() {
+      if (!this.exportSkipped) return '';
+      if (this.exportSkipped === 1) {
+        return 'One entry has no counterpart in this format, so it was not '
+          + 'written to the file. It is still in your account.';
+      }
+      return this.exportSkipped + ' entries have no counterpart in this format, '
+        + 'so they were not written to the file. They are still in your account.';
     },
 
     // The archive is attacked offline for as long as the file exists, with
@@ -69,6 +91,19 @@ window.vaultExportMixin = function vaultExportMixin() {
       // window.AppDialog is undefined. And the option is okLabel - an invented
       // confirmLabel would leave the button reading "OK" with nothing to say so.
       if (this.exportFormat === 'interchange') {
+        // This one caller fails closed where the shared wrapper fails open.
+        // `confirm` answers true when dialogs.js has not loaded, which is the
+        // right default for a destructive action the user already asked for -
+        // and the wrong one here, because this confirm *is* the warning that a
+        // file holding every password in the clear is about to be written. A
+        // warning nobody could see was never accepted.
+        //
+        // The bare identifier, never window.AppDialog: dialogs.js declares it
+        // with a top-level `const`, which never becomes a property of window.
+        if (typeof AppDialog === 'undefined') {
+          this.exportError = 'This export could not be confirmed, so nothing was written.';
+          return;
+        }
         const accepted = await this.confirm(
           'It contains every password in this account in plain text. Anyone who '
           + 'opens the file can read them. Nothing encrypts it.',
@@ -100,7 +135,10 @@ window.vaultExportMixin = function vaultExportMixin() {
             window.vaultExportInterchange.interchangeFilename(new Date())
           );
         }
-        this.clearExport();
+        // The dialog closes on its own only when it has nothing left to say.
+        // A count the projection dropped needs somewhere to be read, and
+        // closing over it would compute the number and throw it away.
+        if (!this.exportSkipped) this.clearExport();
       } catch (err) {
         if (err && err.reason === 'unreadable') {
           this.exportError =

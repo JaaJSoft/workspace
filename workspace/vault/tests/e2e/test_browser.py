@@ -17,6 +17,7 @@ through it - which is exactly what makes the database the right place to
 imitate a hostile server.
 """
 
+import re
 import time
 
 from django.core.cache import cache
@@ -179,30 +180,40 @@ class VaultBrowserCase(PlaywrightTestCase):
     def _open_export(self):
         """Open the export dialog from the sidebar, the way a user reaches it.
 
-        By the row's label, not by a testid: drawer_item.html is shared by six
-        modules and exposes no parameter for one. Scoped to the drawer because
-        an accessible name matches by substring, and the dialog this opens
-        carries an "Export" button of its own.
+        By the row's own name, not by a testid: drawer_item.html is shared by
+        six modules and exposes no parameter for one. Scoped to the drawer
+        because an accessible name matches by substring, and the dialog this
+        opens carries an "Export" button of its own.
+
+        Either name, because the row has two. Collapsed, the label is
+        display:none and drops out of the accessible name, which falls back to
+        the title the same partial only fills in while collapsed - so a walk
+        pinned to one of the two forms passes today and breaks the day the
+        sidebar preference arrives collapsed.
         """
         self.page.locator(SIDEBAR).get_by_role(
-            "button", name="Export", exact=True
+            "button", name=re.compile(r"^Export(?: this account)?$")
         ).click()
         self.page.wait_for_selector(
             "[data-testid='export-run']", state="attached", timeout=15000
         )
 
-    def _audit_autofill(self, scope):
+    def _audit_autofill(self, scope, declined=("off",)):
         """Read every text field under ``scope`` off the rendered page.
 
         Returns the fields it saw and the ones a browser would still offer to
-        fill or to spell-check. Two values keep a field out of that second
-        list: ``off``, and ``new-password`` for a secret the user is choosing
-        here - the token that tells a password manager this is not one of its
-        stored credentials, so it offers none of them.
+        fill or to spell-check. ``declined`` names the autocomplete values that
+        keep a field out of that second list, and it is a parameter rather
+        than a constant because the two scopes are not held to the same bar: a
+        field holding an entry's content has nothing to do with any credential
+        the browser knows and says ``off``, while a field where the user is
+        choosing a new secret says ``new-password``, the token that tells a
+        password manager this is not one of its stored credentials. Widening
+        the set for the second scope would quietly widen it for the first.
         """
         return self.page.eval_on_selector_all(
             f"{scope} input, {scope} textarea",
-            """(nodes) => {
+            """(nodes, declined) => {
                 const identify = (node) => {
                     // Both ways a field carries a label: wrapped in one, or
                     // named by one through `for`. A control with a button
@@ -215,7 +226,6 @@ class VaultBrowserCase(PlaywrightTestCase):
                     const labelText = label && label.textContent.trim();
                     return labelText || node.placeholder || node.name || node.outerHTML.slice(0, 90);
                 };
-                const declined = ['off', 'new-password'];
                 return {
                     audited: nodes.map(identify),
                     offenders: nodes
@@ -230,6 +240,7 @@ class VaultBrowserCase(PlaywrightTestCase):
                         .map(identify),
                 };
             }""",
+            arg=list(declined),
         )
 
     def _wait_for_totp_section(self, panel):
@@ -579,7 +590,9 @@ class VaultBrowserTests(VaultBrowserCase):
         # Scoped to the entry dialog: the shared layout also mounts the help,
         # prompt and file-picker dialogs on this page, and their fields are
         # someone else's surface to harden.
-        result = self._audit_autofill(".modal-box:has-text('Save')")
+        # ``off`` alone here: none of these fields is a credential the browser
+        # could know, so none of them has any business naming one.
+        result = self._audit_autofill(".modal-box:has-text('Save')", declined=["off"])
         audited, offenders = result["audited"], result["offenders"]
         # An empty offenders list is also what a selector matching nothing
         # produces - a relabelled Save button or a restructured dialog must
@@ -607,7 +620,9 @@ class VaultBrowserTests(VaultBrowserCase):
         # passphrase field, so the audit has to type to see it.
         self.page.fill("#export-passphrase", "typed")
         self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
-        result = self._audit_autofill(self.EXPORT_BOX)
+        # The one scope where ``new-password`` is right: the user is choosing
+        # a secret here, not recalling one.
+        result = self._audit_autofill(self.EXPORT_BOX, declined=["off", "new-password"])
         audited, offenders = result["audited"], result["offenders"]
         for expected in ("Passphrase", "Confirm"):
             self.assertTrue(

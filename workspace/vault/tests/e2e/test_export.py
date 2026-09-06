@@ -53,6 +53,53 @@ class ExportWalkTests(VaultBrowserCase):
         # put one.
         self.page.on("download", lambda download: self._downloads.append(download))
 
+    # ---- reading what the page did ---------------------------------------
+
+    def _drain_events(self):
+        """Block until every event the page has already raised has arrived.
+
+        Playwright delivers one page's events in wire order over a single
+        connection, so a request the walk makes itself is a barrier: once its
+        event is here, everything the page raised before it is here too.
+
+        Every negative assertion below needs this. A leak fired moments before
+        a download, or a download started moments before a click was refused,
+        is still in flight when the assertions run - and an absence asserted
+        too early is an absence that proves nothing. This is the race that
+        made the first version of the leak walk pass a deliberate leak.
+        """
+        with self.page.expect_request("**/api/v1/vault/vaults"):
+            self.page.evaluate("() => { window.vaultApi.listVaults(); }")
+
+    def _component_strings(self):
+        """Every string the browser component is holding, as one blob.
+
+        Read off Alpine rather than off the DOM. A passphrase lives in a JS
+        string that no serialisation of the page ever reaches, so the HTML is
+        the wrong place to look for it: the HTML says whether a secret was
+        *rendered*, this says whether one is still *held*.
+        """
+        blob = self.page.evaluate(
+            """() => {
+                const root = document.querySelector('[x-data="vaultBrowser()"]');
+                // The names come off the data stack and the values off
+                // $data. Object.keys on the $data proxy answers an empty
+                // list - its target is a bare {} and the merge is done in the
+                // traps - so enumerating it is how this read silently
+                // inspects nothing at all.
+                const names = root._x_dataStack.flatMap((layer) => Object.keys(layer));
+                const data = window.Alpine.$data(root);
+                const held = {};
+                for (const name of names) {
+                    if (typeof data[name] === 'string') held[name] = data[name];
+                }
+                return JSON.stringify(held);
+            }"""
+        )
+        # A blob of nothing would let every assertion below pass on air.
+        self.assertIn("exportPassphrase", blob)
+        return blob
+
     # ---- getting to the dialog -------------------------------------------
 
     def _seeded_vault(self):
@@ -111,8 +158,23 @@ class ExportWalkTests(VaultBrowserCase):
         types a phrase and forgets the checkbox clicks a disabled button and
         blames the feature.
         """
-        bodies = []
-        self.page.on("request", lambda request: bodies.append(request.post_data or ""))
+        # The whole request, not its body. A body-only watch appends "" for
+        # every GET, so a leak in a query string, in a header, or through
+        # `new Image().src` sails past the one assertion meant to stop it.
+        # Headers are worth the noise here: they are as reachable from page
+        # code as a body is, and the scan only ever looks for two known
+        # strings, so nothing else in them is read.
+        requests = []
+        self.page.on(
+            "request",
+            lambda request: requests.append(
+                "\n".join(
+                    [request.url]
+                    + [f"{name}: {value}" for name, value in request.headers.items()]
+                    + [request.post_data or ""]
+                )
+            ),
+        )
         self._seeded_vault()
         self._open_export()
         drawn = self._generate_passphrase()
@@ -121,36 +183,44 @@ class ExportWalkTests(VaultBrowserCase):
             self.page.click("[data-testid='export-run']")
         self.assertTrue(download.value.suggested_filename.endswith(".vaultarchive"))
 
-        # A barrier, and the walk is worthless without one. Request events
-        # reach this side after the download does, so a leak fired moments
-        # before the file lands is still in flight when the assertions run -
-        # exactly the leak this walk exists to catch. Events arrive in order,
-        # so waiting for one the walk makes itself proves every earlier one
-        # has already been collected.
-        with self.page.expect_request("**/api/v1/vault/vaults"):
-            self.page.evaluate("() => { window.vaultApi.listVaults(); }")
+        self._drain_events()
 
         # Both secrets: the entry's password, which the export decrypts, and
         # the passphrase that seals it. Either one on the wire is the same bug.
-        for body in bodies:
-            self.assertNotIn(SEEDED_ENTRY_PASSWORD, body)
-            self.assertNotIn(drawn, body)
+        #
+        # assertFalse rather than assertNotIn, so a failure names the request
+        # instead of printing the headers that were scanned - the scan reads
+        # the session cookie, and nothing is served by copying it into a log.
+        for request in requests:
+            line = request.splitlines()[0]
+            for secret, what in (
+                (SEEDED_ENTRY_PASSWORD, "an entry's password"),
+                (drawn, "the export passphrase"),
+            ):
+                self.assertFalse(
+                    secret in request, f"{what} left the page towards {line}"
+                )
 
     def test_no_plaintext_survives_in_the_page(self):
         """Once the file is handed over, nothing it was built from is left.
 
-        The dialog going is the load-bearing half. A passphrase lives in a JS
-        string that no serialisation reaches, so the two assertions below
-        cannot see it on their own - what they can see is the tree, and what
-        says the phrase was let go of is the component that held it being torn
-        down.
+        Two places, because they answer two different questions. The markup
+        says whether a decrypted value was ever rendered - which is what the
+        tree would be. The component's own strings say whether one is still
+        held, and that is the only place a passphrase can be seen at all: it
+        lives in a JS string no serialisation reaches.
         """
         self._seeded_vault()
         self._run_archive_export()
         self.page.wait_for_selector("#export-passphrase", state="detached", timeout=15000)
+
         html = self.page.content()
         self.assertNotIn(SEEDED_ENTRY_PASSWORD, html)
         self.assertNotIn(KNOWN_PASSPHRASE, html)
+
+        held = self._component_strings()
+        self.assertNotIn(KNOWN_PASSPHRASE, held)
+        self.assertNotIn(SEEDED_ENTRY_PASSWORD, held)
 
     def test_locking_takes_the_dialog_and_the_phrase_away(self):
         """The dialog goes, and so does what was typed into it.
@@ -232,6 +302,7 @@ class ExportWalkTests(VaultBrowserCase):
 
         self.page.click(CONFIRM_CANCEL)
         self.page.wait_for_selector(f"{CONFIRM}[open]", state="detached", timeout=10000)
+        self._drain_events()
         self.assertEqual(self._downloads, [])
 
     def test_a_warning_that_cannot_be_shown_refuses_the_export(self):
@@ -256,5 +327,6 @@ class ExportWalkTests(VaultBrowserCase):
         self.page.check("input[value='interchange']")
         self.page.click("[data-testid='export-run']")
         self.page.wait_for_selector("text=could not be confirmed", timeout=15000)
+        self._drain_events()
         self.assertEqual(self._downloads, [])
         self.assertEqual(self.page.locator(f"{CONFIRM}[open]").count(), 0)

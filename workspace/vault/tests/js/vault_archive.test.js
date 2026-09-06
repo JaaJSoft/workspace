@@ -66,7 +66,8 @@ test('the whole public header is the associated data of the seal', async () => {
 });
 
 test('the payload is sealed with the HKDF kdf id and key version zero', async () => {
-  // #841 was exactly this byte lying about what produced the key.
+  // A kdf id left on its default claims a derivation that never happened,
+  // and the vector would freeze the claim.
   let seenOptions = null;
   const ctx = withCrypto({
     seal: async (key, plaintext, ad, options) => {

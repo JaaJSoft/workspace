@@ -16,7 +16,7 @@
     <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
   {% elif view_mode == 'grid' %}
     <div
-      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-6"
+      class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4"
     >
       {% for entry in entries %}
         <a
@@ -42,7 +42,7 @@
     <ul class="divide-y divide-base-300">
       {% for entry in entries %}
         <li
-          class="flex items-center gap-3 px-6 py-3 hover:bg-base-100 transition-colors{% if entry.is_quarantined %} bg-error/10{% endif %}"
+          class="flex items-center gap-3 pl-4 pr-2 py-3 hover:bg-base-100 transition-colors{% if entry.is_quarantined %} bg-error/10{% endif %}"
         >
           <i
             data-lucide="{{ entry.icon }}"

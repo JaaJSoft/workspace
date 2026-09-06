@@ -131,6 +131,7 @@
     <div class="px-3 pb-2">
       <ul class="menu p-0 space-y-1">
         {% include "ui/partials/drawer_item.html" with icon="dices" label="Generator" color="error" onclick="openGeneratorDialog()" tooltip="Password generator" %}
+        {% include "ui/partials/drawer_item.html" with icon="download" label="Export" color="error" onclick="openExportDialog()" tooltip="Export this account" %}
         {% include "ui/partials/drawer_item.html" with icon="lock" label="Lock" color="error" onclick="lockNow()" badge_binding="countdown()" tooltip="Lock" %}
         {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="error" onclick="document.getElementById('vault-help-dialog')?.showModal()" tooltip="Help" %}
       </ul>

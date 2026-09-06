@@ -957,6 +957,39 @@ def _shared_breadcrumbs(root, node, path, access_token, view_mode):
     return crumbs
 
 
+def _shared_file_siblings(link, target, path, access_token, view_mode):
+    """Previous and next file around *target* in its folder's listing order.
+
+    Files only, folders are never a neighbour, and only inside the share:
+    a file shared on its own has no folder to walk. Returns
+    ``(prev_url, next_url, position, total)`` with empty URLs at the ends
+    and zeros when there is nothing to walk.
+    """
+    if target.node_type == File.NodeType.FOLDER or target.pk == link.file.pk:
+        return "", "", 0, 0
+    uuids = list(
+        File.objects.filter(
+            scope_q(link.file),
+            parent_id=target.parent_id,
+            node_type=File.NodeType.FILE,
+            deleted_at__isnull=True,
+        )
+        .name_ordered()
+        .values_list("uuid", flat=True)
+    )
+    try:
+        index = uuids.index(target.uuid)
+    except ValueError:
+        return "", "", 0, 0
+
+    def url_for(i):
+        if not 0 <= i < len(uuids):
+            return ""
+        return _shared_page_url(path, access_token, view_mode, node=uuids[i])
+
+    return url_for(index - 1), url_for(index + 1), index + 1, len(uuids)
+
+
 def _resolve_shared_target(link, request):
     """The node ``?node=<uuid>`` names, or *link*'s own root when absent.
 
@@ -1155,6 +1188,13 @@ def shared_file_view(request, token):
     if breadcrumbs and len(breadcrumbs) >= 2:
         parent_url = breadcrumbs[-2]["url"]
 
+    prev_url = next_url = ""
+    sibling_position = sibling_total = 0
+    if show_viewer:
+        prev_url, next_url, sibling_position, sibling_total = _shared_file_siblings(
+            link, target, request.path, effective_access_token, view_mode
+        )
+
     context = {
         "share_token": token,
         "link": link,
@@ -1164,6 +1204,10 @@ def shared_file_view(request, token):
         "breadcrumbs": breadcrumbs,
         "parent_url": parent_url,
         "current_view_url": request.get_full_path(),
+        "prev_url": prev_url,
+        "next_url": next_url,
+        "sibling_position": sibling_position,
+        "sibling_total": sibling_total,
         "show_listing": show_listing,
         "show_viewer": show_viewer,
         "show_dropzone": show_dropzone,

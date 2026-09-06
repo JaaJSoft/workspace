@@ -38,6 +38,19 @@ def build_shared_tree(test, *, username="share-owner", **link_fields):
     test.readme.content = ContentFile(body, name="readme.md")
     test.readme.size = len(body)
     test.readme.save()
+    # A second file in the same folder, so there is a neighbour to walk to.
+    test.notes = File.objects.create(
+        owner=test.owner,
+        name="zz-notes.md",
+        node_type=File.NodeType.FILE,
+        parent=test.sub,
+        type="markdown",
+        mime_type="text/markdown",
+    )
+    notes_body = b"# Notes\n\nSecond file in the folder.\n"
+    test.notes.content = ContentFile(notes_body, name="zz-notes.md")
+    test.notes.size = len(notes_body)
+    test.notes.save()
     test.csv = File.objects.create(
         owner=test.owner,
         name="data.csv",

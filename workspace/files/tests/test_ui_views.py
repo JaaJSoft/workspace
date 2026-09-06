@@ -679,3 +679,73 @@ class SharedFolderListingTests(TestCase):
         self.root.refresh_from_db()
         self.assertNotContains(resp, self.root.path)
         self.assertNotContains(resp, "TopSecretParent")
+
+
+class SharedFileSiblingTests(TestCase):
+    """A file inside a shared folder knows its neighbours in that folder,
+    so the page can offer previous and next in listing order."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="sibowner", email="sibowner@example.com", password="pass123"
+        )
+        self.root = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        self.a, self.b, self.c = (
+            File.objects.create(
+                owner=self.owner,
+                name=name,
+                node_type=File.NodeType.FILE,
+                parent=self.root,
+                type="text",
+                category="text",
+                mime_type="text/plain",
+            )
+            for name in ("a.txt", "b.txt", "c.txt")
+        )
+        self.sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=self.root,
+        )
+        File.objects.create(
+            owner=self.owner,
+            name="elsewhere.txt",
+            node_type=File.NodeType.FILE,
+            parent=self.sub,
+            type="text",
+            category="text",
+            mime_type="text/plain",
+        )
+        self.link = FileShareLink.objects.create(file=self.root, created_by=self.owner)
+
+    def _open(self, node):
+        return self.client.get(f"/files/shared/{self.link.token}?node={node.uuid}")
+
+    def test_a_middle_file_has_both_neighbours_and_its_position(self):
+        resp = self._open(self.b)
+        self.assertIn(f"node={self.a.uuid}", resp.context["prev_url"])
+        self.assertIn(f"node={self.c.uuid}", resp.context["next_url"])
+        self.assertEqual(resp.context["sibling_position"], 2)
+        self.assertEqual(resp.context["sibling_total"], 3)
+
+    def test_the_first_file_has_no_previous_and_the_last_no_next(self):
+        self.assertEqual(self._open(self.a).context["prev_url"], "")
+        self.assertEqual(self._open(self.c).context["next_url"], "")
+
+    def test_neighbours_stay_inside_the_same_folder_and_skip_the_trash(self):
+        self.c.soft_delete()
+        resp = self._open(self.b)
+        self.assertEqual(resp.context["next_url"], "")
+        self.assertEqual(resp.context["sibling_total"], 2)
+        # A folder is never a neighbour, whatever its position in the listing.
+        self.assertNotIn(str(self.sub.uuid), resp.context["prev_url"])
+
+    def test_a_file_shared_on_its_own_has_no_neighbours(self):
+        link = FileShareLink.objects.create(file=self.b, created_by=self.owner)
+        resp = self.client.get(f"/files/shared/{link.token}")
+        self.assertEqual(resp.context["sibling_total"], 0)
+        self.assertEqual(resp.context["prev_url"], "")
+        self.assertEqual(resp.context["next_url"], "")

@@ -38,10 +38,11 @@
     and is more precise than catching every swap on the page from window.
   {% endcomment %}
   <div
-    x-data
+    x-data="sharedPage()"
     class="space-y-4"
     @ajax:missing="window.location.reload()"
     @ajax:error="window.location.reload()"
+    @keydown.window="onArrowKey($event)"
   >
     <!-- Persistent nav links for folderNav (outside the swap target so they survive it) -->
     <a id="folder-nav-push" class="hidden" x-target.push="shared-content"></a>
@@ -79,6 +80,9 @@
                 {% else %}
                   {{ target.type|default:"unknown" }} - {{ target.size|filesizeformat }}
                   - shared by {{ link.created_by.get_full_name|default:link.created_by.username }}
+                  {% if sibling_total > 1 %}
+                    <span class="text-white/50">· {{ sibling_position }} / {{ sibling_total }}</span>
+                  {% endif %}
                 {% endif %}
               </p>
             </div>
@@ -186,4 +190,24 @@
       {% include "files/ui/partials/shared_dropzone.html" %}
     {% endif %}
   </div>
+  <script>
+    function sharedPage() {
+      return {
+        // Left and right walk the files of the folder, like the viewers in
+        // the files and chat modules, unless the visitor is typing or has
+        // the text editor focused.
+        onArrowKey(event) {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          const active = document.activeElement;
+          const tag = active && active.tagName;
+          if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+          if (active && active.isContentEditable) return;
+          const link = document.getElementById(event.key === 'ArrowLeft' ? 'shared-prev' : 'shared-next');
+          if (!link) return;
+          event.preventDefault();
+          link.click();
+        },
+      };
+    }
+  </script>
 {% endblock %}

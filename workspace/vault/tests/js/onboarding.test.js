@@ -466,28 +466,30 @@ test('a corpus answer about a replaced password is discarded', async () => {
   assert.equal(app.breachStatus, 'found');
 });
 
-test('the download anchor is inserted before it is clicked', () => {
-  // Firefox ignores a click on a detached anchor: the kit never downloads, no
-  // error is raised, and the secret is only on screen.
-  const events = [];
-  const link = {
-    click: () => events.push('click'),
-    remove: () => events.push('remove'),
-  };
+test('the kit is built from the account state and handed to the shared download helper', () => {
+  // The anchor/object-URL mechanics (insertion order, deferred revocation)
+  // moved to the shared downloadBlob helper and are pinned there; this only
+  // has to prove downloadKit builds the right pdf and calls that helper.
+  let builtWith = null;
+  let handedOff = null;
+  const kitBlob = { marker: 'kit-pdf' };
   const app = component({
-    document: {
-      cookie: '',
-      createElement: () => link,
-      body: { appendChild: () => events.push('append') },
-    },
-    URL: { createObjectURL: () => 'blob:kit', revokeObjectURL: () => {} },
     location: { origin: 'https://workspace.example' },
-    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
+    vaultOnboardingTools: {
+      buildEmergencyKitPdf: (args) => {
+        builtWith = args;
+        return kitBlob;
+      },
+    },
+    downloadBlob: (blob, filename) => { handedOff = { blob, filename }; },
   });
   app.$root = { dataset: { email: 'owner@example.com' } };
   app.secretText = 'SECRET';
   app.downloadKit();
-  assert.deepEqual(events, ['append', 'click', 'remove']);
+  assert.equal(builtWith.email, 'owner@example.com');
+  assert.equal(builtWith.serverUrl, 'https://workspace.example');
+  assert.equal(builtWith.secretText, 'SECR-ET');
+  assert.deepEqual(handedOff, { blob: kitBlob, filename: 'vault-emergency-kit.pdf' });
 });
 
 test('the csrf token comes from the shared helper', () => {
@@ -540,35 +542,6 @@ test('a strength estimate that throws says so instead of hanging', async () => {
   assert.equal(app.score, null);
   assert.match(app.feedback, /could not be checked/);
   assert.equal(app.passwordStrongEnough(), false);
-});
-
-test('the kit download outlives the click that starts it', () => {
-  // Revoking the blob URL in the same task can cancel the download, the same
-  // silent way a detached anchor does.
-  const events = [];
-  const link = { click: () => events.push('click'), remove: () => events.push('remove') };
-  const app = component({
-    document: {
-      cookie: '',
-      createElement: () => link,
-      body: { appendChild: () => events.push('append') },
-    },
-    URL: {
-      createObjectURL: () => 'blob:kit',
-      revokeObjectURL: () => events.push('revoke'),
-    },
-    location: { origin: 'https://workspace.example' },
-    vaultOnboardingTools: { buildEmergencyKitPdf: () => new Uint8Array(1) },
-    setTimeout: (fn) => {
-      events.push('deferred');
-      fn();
-    },
-  });
-  app.$root = { dataset: { email: 'owner@example.com' } };
-  app.secretText = 'SECRET';
-  app.downloadKit();
-  // 'revoke' only ever after 'deferred': never in the task that clicked.
-  assert.deepEqual(events, ['append', 'click', 'remove', 'deferred', 'revoke']);
 });
 
 test('leaving the page is guarded until the key is acknowledged', async () => {

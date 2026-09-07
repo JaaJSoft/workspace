@@ -282,3 +282,45 @@ test('the export dialog opens its generator past the archive bar', () => {
   assert.equal(panel.mode, 'passphrase');
   assert.equal(panel.value.split(panel.separator).length, panel.words);
 });
+
+test('a lock between the tree and the sealing withholds the file', async () => {
+  // clearExport empties the passphrase, and the run that was already past its
+  // first await goes on holding the tree. Left alone it seals the account
+  // under the empty string and writes it to the disk of a machine whose vault
+  // is closed - a file weaker than the account it copies.
+  let lock = () => {};
+  const sealed = [];
+  const { component, downloads } = load({
+    vaultExportTree: {
+      buildTree: async () => { lock(); return { format: 'vault-archive', vaults: [] }; },
+    },
+    vaultArchive: {
+      buildArchive: async (args) => { sealed.push(args.passphrase); return new Uint8Array([1, 2, 3]); },
+      archiveFilename: () => 'vault-export-2026-09-06.vaultarchive',
+    },
+  });
+  lock = () => component.clearExport();
+  component.exportFormat = 'archive';
+  component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit');
+  await component.runExport();
+  assert.deepStrictEqual(sealed, [], 'the archive was sealed after the lock');
+  assert.equal(downloads.length, 0, 'a file was written after the lock');
+});
+
+test('a lock while the archive is sealed withholds the bytes it produced', async () => {
+  // The other side of the same await: the sealing started before the lock and
+  // finished after it, so the bytes exist and nothing is wrong with them. They
+  // still must not reach the disk - the user closed the vault in between.
+  let lock = () => {};
+  const { component, downloads } = load({
+    vaultArchive: {
+      buildArchive: async () => { lock(); return new Uint8Array([1, 2, 3]); },
+      archiveFilename: () => 'vault-export-2026-09-06.vaultarchive',
+    },
+  });
+  lock = () => component.clearExport();
+  component.exportFormat = 'archive';
+  component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit');
+  await component.runExport();
+  assert.equal(downloads.length, 0, 'a file was written after the lock');
+});

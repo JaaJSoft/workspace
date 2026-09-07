@@ -17,8 +17,8 @@ from workspace.common.uuids import parse_uuid_or_none
 from ..services import calls
 from ..services import meetings as meeting_service
 from ..services.calls import is_call_locked
-from ..services.conversations import get_active_membership
 from ..services.meeting_guests import issue_token
+from ..services.meeting_hosts import is_host
 from ..services.meeting_occurrences import current_occurrence
 from ..services.participant_keys import guest_key
 from ..throttling import MeetingPublicIpThrottle
@@ -88,11 +88,7 @@ class MeetingSummaryView(APIView):
     def get(self, request, slug):
         from ..models import Meeting
 
-        meeting = (
-            Meeting.objects.select_related("event", "conversation")
-            .filter(slug=slug)
-            .first()
-        )
+        meeting = Meeting.objects.select_related("event").filter(slug=slug).first()
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -105,7 +101,11 @@ class MeetingSummaryView(APIView):
         # discloses a meeting's existence and timing unconditionally, so
         # there is nothing left to hide by omitting the start too.
         occurrence = current_occurrence(meeting)
-        start = occurrence[0] if occurrence is not None else meeting.event.start
+        start = (
+            occurrence[0]
+            if occurrence is not None
+            else (meeting.event.start if meeting.event_id else None)
+        )
 
         # Only ever the resolved occurrence, never the event.start fallback:
         # a durable lock names an occurrence, and there is none to name when
@@ -124,7 +124,7 @@ class MeetingSummaryView(APIView):
         )
         return Response(
             {
-                "title": meeting.event.title,
+                "title": meeting.title,
                 "start": start,
                 "locked": locked,
                 "max_participants": calls.max_participants(),
@@ -145,11 +145,7 @@ class MeetingKnockView(APIView):
     def post(self, request, slug):
         from ..models import Meeting, MeetingGuest
 
-        meeting = (
-            Meeting.objects.select_related("event", "conversation")
-            .filter(slug=slug)
-            .first()
-        )
+        meeting = Meeting.objects.select_related("event").filter(slug=slug).first()
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -238,30 +234,16 @@ class MeetingKnockView(APIView):
 
 
 # ===========================================================================
-# Host endpoints - authenticated, membership-gated on the meeting's dedicated
-# conversation. "Host" is not a role: it is any active member of that
-# conversation, the same gate every other chat endpoint uses.
+# Host endpoints - authenticated, gated on meeting_hosts.is_host.
 # ===========================================================================
 
 
 def _meeting_for_host(request, meeting_uuid):
-    """The meeting this user may act on, or None.
-
-    A host is any active member of the meeting's conversation. The conversation
-    is dedicated to the meeting and seeded from the event's members, so "may act
-    on this meeting" and "is an internal participant of it" are the same
-    question, answered by the gate every other chat endpoint already uses.
-    """
+    """The meeting this user may act on, or None (404 either way)."""
     from ..models import Meeting
 
-    meeting = (
-        Meeting.objects.select_related("event", "conversation")
-        .filter(uuid=meeting_uuid)
-        .first()
-    )
-    if meeting is None:
-        return None
-    if not get_active_membership(request.user, meeting.conversation_id):
+    meeting = Meeting.objects.select_related("event").filter(uuid=meeting_uuid).first()
+    if meeting is None or not is_host(request.user, meeting):
         return None
     return meeting
 
@@ -281,23 +263,31 @@ def _guest_for_host(request, meeting_uuid, guest_uuid):
 class MeetingCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Create (or return) the meeting for an event")
+    @extend_schema(summary="Create (or return) a meeting, from an event or ad hoc")
     def post(self, request):
         from workspace.calendar.models import Event
 
-        event_uuid = parse_uuid_or_none(request.data.get("event_id"))
-        if event_uuid is None:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-
-        # 404 either way (unknown event, or one that exists but belongs to
-        # someone else): every other route in this file refuses to
-        # distinguish "not yours" from "does not exist", and a lone
-        # exception here would be a trap for whoever edits this file next.
-        event = Event.objects.filter(uuid=event_uuid, owner=request.user).first()
-        if event is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-        meeting = meeting_service.create_meeting(event, request.user)
+        raw_event_id = request.data.get("event_id")
+        if raw_event_id is None:
+            title = str(request.data.get("title", "")).strip()
+            if not title:
+                return Response(
+                    {"detail": "title is required for a meeting without an event."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            meeting = meeting_service.create_ad_hoc_meeting(request.user, title)
+        else:
+            event_uuid = parse_uuid_or_none(raw_event_id)
+            if event_uuid is None:
+                return Response(status=status.HTTP_400_BAD_REQUEST)
+            # 404 either way (unknown event, or one that exists but belongs
+            # to someone else): every other route in this file refuses to
+            # distinguish "not yours" from "does not exist", and a lone
+            # exception here would be a trap for whoever edits this file next.
+            event = Event.objects.filter(uuid=event_uuid, owner=request.user).first()
+            if event is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            meeting = meeting_service.create_meeting(event, request.user)
         return Response(
             {
                 "uuid": str(meeting.uuid),
@@ -329,17 +319,23 @@ class MeetingLobbyView(APIView):
             return Response([])
         occurrence_start, _occurrence_end = occurrence
 
-        guests = MeetingGuest.objects.filter(
-            meeting=meeting,
-            state=MeetingGuest.State.WAITING,
-            occurrence_start=occurrence_start,
-        ).order_by("created_at")
+        guests = (
+            MeetingGuest.objects.select_related("user")
+            .filter(
+                meeting=meeting,
+                state=MeetingGuest.State.WAITING,
+                occurrence_start=occurrence_start,
+            )
+            .order_by("created_at")
+        )
         return Response(
             [
                 {
                     "uuid": str(g.uuid),
                     "display_name": g.display_name,
                     "created_at": g.created_at,
+                    "user_id": g.user_id,
+                    "username": g.user.username if g.user_id else None,
                 }
                 for g in guests
             ]

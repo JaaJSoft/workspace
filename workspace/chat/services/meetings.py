@@ -1,62 +1,40 @@
 """Creating a meeting and driving its lifecycle.
 
-A meeting owns a dedicated conversation rather than attaching to an existing
-one, so a guest admitted to the meeting has structurally nothing else to read.
+A meeting owns nothing but itself: hosts are derived from its event (see
+meeting_hosts), guests hold tokens, and the chat is MeetingMessage.
 """
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from .call_signaling import enqueue_event, notify_participant
-from .calls import active_member_ids
+from .meeting_hosts import host_ids
 from .meeting_occurrences import current_occurrence
 from .participant_keys import guest_key, user_key
 
 
 @transaction.atomic
 def _create_meeting_once(event, created_by):
-    from workspace.calendar.models import EventMember
-
-    from ..models import Conversation, ConversationMember, Meeting
+    from ..models import Meeting
 
     existing = Meeting.objects.filter(event=event).first()
     if existing is not None:
         return existing
-
-    conversation = Conversation.objects.create(
-        kind=Conversation.Kind.GROUP,
-        title=event.title,
-        created_by=created_by,
-    )
-    member_ids = {event.owner_id, created_by.id}
-    member_ids.update(
-        EventMember.objects.filter(event=event)
-        .exclude(status=EventMember.Status.DECLINED)
-        .values_list("user_id", flat=True)
-    )
-    ConversationMember.objects.bulk_create(
-        [
-            ConversationMember(conversation=conversation, user_id=uid)
-            for uid in sorted(member_ids)
-        ]
-    )
     return Meeting.objects.create(
-        event=event, conversation=conversation, created_by=created_by
+        event=event, title=event.title[:200], created_by=created_by
     )
+
+
+def create_ad_hoc_meeting(created_by, title):
+    """A meeting with no event: its creator is its only host, and its only
+    window is the call it carries (see current_occurrence)."""
+    from ..models import Meeting
+
+    return Meeting.objects.create(title=title[:200], created_by=created_by)
 
 
 def create_meeting(event, created_by):
-    """Return the event's meeting, creating it and its conversation if needed.
-
-    Membership of the meeting's conversation - which is what makes someone a
-    host, see ``_meeting_for_host`` - is seeded once, at creation, from the
-    event's owner, its creator and every invitee whose RSVP is not DECLINED
-    (PENDING included). It is never re-synced afterwards: inviting someone
-    to the event after the meeting exists grants them no host powers, and
-    removing someone from the event does not revoke powers they already
-    have. That is a deliberate limitation, not an oversight - reconciling
-    live host membership raises its own questions (what happens to someone
-    removed mid-meeting?) that are out of scope here.
+    """Return the event's meeting, creating it if needed.
 
     Two requests racing to create the same event's meeting both pass the
     ``existing is None`` check in ``_create_meeting_once``; the loser's atomic
@@ -101,9 +79,8 @@ def _notify_guest(guest, event_name, data=None):
 
 
 def notify_hosts(meeting, event_name, data):
-    """Fan a meeting event out to every active member of the meeting's
-    conversation - the hosts - through their own mailboxes."""
-    for user_id in active_member_ids(meeting.conversation_id):
+    """Fan a meeting event out to every host through their own mailboxes."""
+    for user_id in host_ids(meeting):
         key = user_key(user_id)
         enqueue_event(key, event_name, data)
         notify_participant(key)
@@ -170,7 +147,9 @@ def set_locked(meeting, locked, now=None):
     # live flag onto a row that is already ENDED, or - back when _end_call
     # also cleared the durable value - land that clear on top of the write
     # just made and report success over an unlocked meeting.
-    session = get_active_call(meeting.conversation_id)
+    session = (
+        get_active_call(meeting.conversation_id) if meeting.conversation_id else None
+    )
 
     occurrence = current_occurrence(meeting, now=now) if locked else None
     meeting.locked_occurrence_start = occurrence[0] if occurrence is not None else None
@@ -226,7 +205,9 @@ def end_meeting(meeting, now=None):
     for guest in swept:
         _notify_guest(guest, "meeting_ended")
 
-    session = get_active_call(meeting.conversation_id)
+    session = (
+        get_active_call(meeting.conversation_id) if meeting.conversation_id else None
+    )
     if session is not None:
         _end_call(session)
     return True

@@ -131,7 +131,13 @@ class ExportWalkTests(VaultBrowserCase):
             "() => (document.getElementById('export-passphrase') || {}).value",
             timeout=10000,
         )
-        return drawn
+        # The field, not the preview, is what seals the archive - and what the
+        # request scan has to look for. A Use that applied anything other than
+        # what was on screen would leave that scan hunting a string the page
+        # never held, and every assertion built on it would pass on air.
+        applied = self.page.input_value("#export-passphrase")
+        self.assertEqual(applied, drawn, "Use applied something other than the draw")
+        return applied
 
     def _type_a_passphrase(self, phrase):
         """The other path: a phrase a human chose, confirmed and acknowledged.

@@ -712,6 +712,30 @@ class MeetingScopeTests(TestCase):
         self.assertEqual(state["meeting_id"], str(self.meeting.uuid))
         self.assertIsNone(state["conversation_id"])
 
+    def test_an_admitted_guest_who_never_joined_still_hears_the_call(self):
+        # The lobby is part of a meeting's audience, not just the seats: a
+        # guest waiting for a host to admit them into the room has no
+        # participant row, and call_ended is what turns their waiting card
+        # back into "no call is running" rather than leaving it on a room
+        # that closed. Narrow guest_keys() back to the in-call guests and
+        # this is the assertion that goes red.
+        scope = calls.MeetingScope(self.meeting)
+        calls.start_or_join_call(self.host, scope)
+        key = guest_key(self.guest.uuid)
+        sig.drain_events(key)  # clear call_started
+        self.assertFalse(
+            CallParticipant.objects.filter(guest=self.guest).exists(),
+            "this guest must never join the call",
+        )
+
+        calls.start_or_join_call(self.cohost, scope)
+        calls.leave_call(self.cohost, scope)
+        calls.leave_call(self.host, scope)
+
+        events = [e["event"] for e in sig.drain_events(key)]
+        self.assertIn("call_participant_joined", events)
+        self.assertIn("call_ended", events)
+
     def test_conversation_scope_has_no_guests_and_no_durable_lock(self):
         conv = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.host

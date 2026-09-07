@@ -37,7 +37,7 @@ class CallStateView(APIView):
     def get(self, request, conversation_id):
         if not get_active_membership(request.user, conversation_id):
             return Response(status=status.HTTP_404_NOT_FOUND)
-        session = calls.get_active_call(conversation_id)
+        session = calls.get_active_call(calls.ConversationScope(conversation_id))
         if session is None:
             return Response({"active": False})
         return Response(calls.serialize_call_state(session))
@@ -57,7 +57,9 @@ class CallJoinView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            session, _, _ = calls.start_or_join_call(request.user, conversation_id)
+            session, _, _ = calls.start_or_join_call(
+                request.user, calls.ConversationScope(conversation_id)
+            )
         except calls.CallFull:
             return Response(
                 {"detail": "Call is full."}, status=status.HTTP_409_CONFLICT
@@ -79,7 +81,7 @@ class CallLeaveView(APIView):
         # No membership gate beyond auth: a user who just left the conversation
         # must still be able to drop out of a call cleanly. leave_call is a
         # no-op when there is no active call.
-        calls.leave_call(request.user, conversation_id)
+        calls.leave_call(request.user, calls.ConversationScope(conversation_id))
         return Response({"status": "ok"})
 
 
@@ -104,7 +106,7 @@ class CallSignalView(APIView):
         # session filtering. No active call means there is nothing to signal -
         # and a guest target can only be resolved against a session anyway,
         # so this check has to run before target resolution now.
-        session = calls.get_active_call(conversation_id)
+        session = calls.get_active_call(calls.ConversationScope(conversation_id))
         if session is None:
             return Response(
                 {"detail": "No active call."},
@@ -149,7 +151,7 @@ class CallHeartbeatView(APIView):
     def post(self, request, conversation_id):
         if not get_active_membership(request.user, conversation_id):
             return Response(status=status.HTTP_404_NOT_FOUND)
-        session = calls.get_active_call(conversation_id)
+        session = calls.get_active_call(calls.ConversationScope(conversation_id))
         if session is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -161,7 +163,7 @@ class CallHeartbeatView(APIView):
         changed = calls.touch_presence(session.uuid, key, media_state)
         if changed:
             calls._broadcast(
-                conversation_id,
+                calls.ConversationScope(conversation_id),
                 "call_participant_updated",
                 {
                     "session_id": str(session.uuid),

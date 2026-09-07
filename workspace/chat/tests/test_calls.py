@@ -1,3 +1,4 @@
+from datetime import timedelta
 from unittest import mock
 from uuid import uuid4
 
@@ -6,7 +7,7 @@ from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from workspace.calendar.models import Calendar, Event
+from workspace.calendar.models import Calendar, Event, EventMember
 from workspace.chat.models import (
     CallParticipant,
     CallSession,
@@ -19,8 +20,10 @@ from workspace.chat.models import (
 from workspace.chat.services import call_signaling as sig
 from workspace.chat.services import calls
 from workspace.chat.services.meeting_occurrences import current_occurrence
-from workspace.chat.services.meetings import end_meeting, set_locked
+from workspace.chat.services.meetings import create_meeting, end_meeting, set_locked
 from workspace.chat.services.participant_keys import guest_key, user_key
+
+from .meeting_fixtures import guest_with_token, make_event
 
 
 class DurationFormatTests(SimpleTestCase):
@@ -90,7 +93,9 @@ class LifecycleTests(TestCase):
         cache.clear()
 
     def test_start_creates_session_participant_and_system_message(self):
-        session, participant, created = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, participant, created = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         self.assertTrue(created)
         self.assertEqual(session.state, CallSession.State.ACTIVE)
         self.assertIsNone(participant.left_at)
@@ -101,17 +106,21 @@ class LifecycleTests(TestCase):
         self.assertEqual(msg.tool_data["state"], "active")
 
     def test_second_caller_joins_same_session(self):
-        s1, _, c1 = calls.start_or_join_call(self.a, self.conv.uuid)
-        s2, _, c2 = calls.start_or_join_call(self.b, self.conv.uuid)
+        s1, _, c1 = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
+        s2, _, c2 = calls.start_or_join_call(
+            self.b, calls.ConversationScope(self.conv.uuid)
+        )
         self.assertTrue(c1)
         self.assertFalse(c2)
         self.assertEqual(s1.uuid, s2.uuid)
         self.assertEqual(len(calls.list_active_participants(s2)), 2)
 
     def test_join_broadcasts_participant_joined_to_members(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
         sig.drain_events(user_key(self.a.id))  # clear call_started
-        calls.start_or_join_call(self.b, self.conv.uuid)
+        calls.start_or_join_call(self.b, calls.ConversationScope(self.conv.uuid))
         envelopes = sig.drain_events(user_key(self.a.id))
         events = [e["event"] for e in envelopes]
         self.assertIn("call_participant_joined", events)
@@ -121,23 +130,23 @@ class LifecycleTests(TestCase):
         self.assertEqual(joined["data"]["display_name"], self.b.username)
 
     def test_leave_broadcasts_participant_left_with_key(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
-        calls.start_or_join_call(self.b, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
+        calls.start_or_join_call(self.b, calls.ConversationScope(self.conv.uuid))
         sig.drain_events(
             user_key(self.a.id)
         )  # clear call_started/call_participant_joined
-        calls.leave_call(self.b, self.conv.uuid)
+        calls.leave_call(self.b, calls.ConversationScope(self.conv.uuid))
         envelopes = sig.drain_events(user_key(self.a.id))
         left = next(e for e in envelopes if e["event"] == "call_participant_left")
         self.assertEqual(left["data"]["participant_key"], user_key(self.b.id))
 
     def test_broadcast_exclude_key_skips_only_that_participant(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
-        calls.start_or_join_call(self.b, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
+        calls.start_or_join_call(self.b, calls.ConversationScope(self.conv.uuid))
         sig.drain_events(user_key(self.a.id))
         sig.drain_events(user_key(self.b.id))
         calls._broadcast(
-            self.conv.uuid,
+            calls.ConversationScope(self.conv.uuid),
             "call_participant_left",
             {"probe": True},
             exclude_key=user_key(self.a.id),
@@ -147,10 +156,14 @@ class LifecycleTests(TestCase):
         self.assertIn("call_participant_left", events)
 
     def test_rejoin_reactivates_left_participant(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
-        calls.start_or_join_call(self.b, self.conv.uuid)
-        calls.leave_call(self.b, self.conv.uuid)
-        _, p, created = calls.start_or_join_call(self.b, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
+        calls.start_or_join_call(self.b, calls.ConversationScope(self.conv.uuid))
+        calls.leave_call(self.b, calls.ConversationScope(self.conv.uuid))
+        _, p, created = calls.start_or_join_call(
+            self.b, calls.ConversationScope(self.conv.uuid)
+        )
         self.assertFalse(created)
         self.assertIsNone(p.left_at)
         self.assertEqual(
@@ -158,8 +171,10 @@ class LifecycleTests(TestCase):
         )
 
     def test_last_leaver_ends_session_and_finalizes_message(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
-        ended = calls.leave_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
+        ended = calls.leave_call(self.a, calls.ConversationScope(self.conv.uuid))
         self.assertEqual(ended.state, CallSession.State.ENDED)
         self.assertIsNotNone(ended.ended_at)
         ended.system_message.refresh_from_db()
@@ -171,44 +186,43 @@ class LifecycleTests(TestCase):
         from django.test import override_settings
 
         with override_settings(CHAT_CALL_MAX_PARTICIPANTS=1):
-            calls.start_or_join_call(self.a, self.conv.uuid)
+            calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
             with self.assertRaises(calls.CallFull):
-                calls.start_or_join_call(self.b, self.conv.uuid)
+                calls.start_or_join_call(
+                    self.b, calls.ConversationScope(self.conv.uuid)
+                )
 
 
 class BroadcastGuestTests(TestCase):
+    """A meeting's fan-out audience is its hosts plus the guests of the
+    occurrence reachable right now - in the call or still on the waiting
+    card, since the lobby is the only place a guest learns a call started."""
+
     def setUp(self):
         cache.clear()
         User = get_user_model()
         self.a = User.objects.create_user(username="bcg", password="x")
-        cal = Calendar.objects.create(name="C", owner=self.a)
-        event = Event.objects.create(
-            calendar=cal, owner=self.a, title="E", start=timezone.now()
+        now = timezone.now()
+        event = make_event(
+            self.a, start=now - timedelta(minutes=5), end=now + timedelta(minutes=25)
         )
-        self.conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.a
-        )
-        ConversationMember.objects.create(conversation=self.conv, user=self.a)
-        meeting = Meeting.objects.create(
-            event=event, conversation=self.conv, created_by=self.a
-        )
-        self.guest = MeetingGuest.objects.create(
-            meeting=meeting,
+        self.meeting = create_meeting(event, self.a)
+        self.scope = calls.MeetingScope(self.meeting)
+        self.guest, _token = guest_with_token(
+            self.meeting,
+            current_occurrence(self.meeting, now=now)[0],
             display_name="Visitor",
-            state=MeetingGuest.State.ADMITTED,
-            occurrence_start=timezone.now(),
-            token_hash="9" * 64,
         )
 
     def tearDown(self):
         cache.clear()
 
     def test_broadcast_reaches_an_admitted_guest_in_the_call(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.a, self.scope)
         CallParticipant.objects.create(session=session, guest=self.guest)
         sig.drain_events(guest_key(self.guest.uuid))  # clear join noise
         calls._broadcast(
-            self.conv.uuid,
+            self.scope,
             "call_participant_left",
             {"session_id": str(session.uuid)},
         )
@@ -216,28 +230,43 @@ class BroadcastGuestTests(TestCase):
         self.assertEqual([e["event"] for e in events], ["call_participant_left"])
 
     def test_broadcast_excludes_a_guest_by_key(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.a, self.scope)
         CallParticipant.objects.create(session=session, guest=self.guest)
         key = guest_key(self.guest.uuid)
         sig.drain_events(key)
-        calls._broadcast(self.conv.uuid, "x", {}, exclude_key=key)
+        calls._broadcast(self.scope, "x", {}, exclude_key=key)
         self.assertEqual(sig.drain_events(key), [])
 
     def test_broadcast_ignores_a_removed_guest(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.a, self.scope)
         CallParticipant.objects.create(session=session, guest=self.guest)
         self.guest.state = MeetingGuest.State.REMOVED
         self.guest.save(update_fields=["state"])
         sig.drain_events(guest_key(self.guest.uuid))
-        calls._broadcast(self.conv.uuid, "x", {})
+        calls._broadcast(self.scope, "x", {})
         self.assertEqual(sig.drain_events(guest_key(self.guest.uuid)), [])
+
+    def test_broadcast_ignores_a_guest_of_another_occurrence(self):
+        calls.start_or_join_call(self.a, self.scope)
+        stale, _token = guest_with_token(
+            self.meeting,
+            self.guest.occurrence_start - timedelta(weeks=1),
+            display_name="Last week",
+        )
+        sig.drain_events(guest_key(stale.uuid))
+        sig.drain_events(guest_key(self.guest.uuid))
+        calls._broadcast(self.scope, "x", {})
+        self.assertEqual(sig.drain_events(guest_key(stale.uuid)), [])
+        self.assertEqual(
+            [e["event"] for e in sig.drain_events(guest_key(self.guest.uuid))], ["x"]
+        )
 
     def test_stale_sweep_still_reaches_the_guest_with_call_ended(self):
         # The sweep marks every stale row left_at BEFORE ending the call, and
         # _active_guest_keys only matches an ACTIVE, still-joined guest - so
         # _end_call's own recipient lookup found nobody and the guest never
         # learned the call was over.
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.a, self.scope)
         CallParticipant.objects.create(session=session, guest=self.guest)
         key = guest_key(self.guest.uuid)
         sig.drain_events(key)
@@ -247,15 +276,6 @@ class BroadcastGuestTests(TestCase):
 
         events = [e["event"] for e in sig.drain_events(key)]
         self.assertIn("call_ended", events)
-
-    def test_broadcast_ignores_a_departed_guest(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
-        p = CallParticipant.objects.create(session=session, guest=self.guest)
-        p.left_at = timezone.now()
-        p.save(update_fields=["left_at"])
-        sig.drain_events(guest_key(self.guest.uuid))
-        calls._broadcast(self.conv.uuid, "x", {})
-        self.assertEqual(sig.drain_events(guest_key(self.guest.uuid)), [])
 
 
 class StaleReconciliationTests(TestCase):
@@ -274,8 +294,10 @@ class StaleReconciliationTests(TestCase):
         cache.clear()
 
     def test_participant_without_a_heartbeat_is_reaped(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
-        session, _, _ = calls.start_or_join_call(self.b, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
+        session, _, _ = calls.start_or_join_call(
+            self.b, calls.ConversationScope(self.conv.uuid)
+        )
         # Only a keeps a live heartbeat; b's expired.
         calls.drop_presence(session.uuid, f"u:{self.b.id}")
         calls.cleanup_stale_participants(session)
@@ -283,7 +305,9 @@ class StaleReconciliationTests(TestCase):
         self.assertEqual(remaining, {f"u:{self.a.id}"})
 
     def test_call_ends_when_every_heartbeat_is_gone(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         calls.drop_presence(session.uuid, f"u:{self.a.id}")
         self.assertTrue(calls.cleanup_stale_participants(session))
         session.refresh_from_db()
@@ -300,35 +324,26 @@ class LockOutlivesTheCallTests(TestCase):
         cache.clear()
         User = get_user_model()
         self.a = User.objects.create_user(username="lock-a", password="x")
-        self.conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.a
-        )
-        ConversationMember.objects.create(conversation=self.conv, user=self.a)
-        cal = Calendar.objects.create(name="C", owner=self.a)
-        event = Event.objects.create(
-            calendar=cal, owner=self.a, title="E", start=timezone.now()
-        )
-        self.meeting = Meeting.objects.create(
-            event=event, conversation=self.conv, created_by=self.a
-        )
+        self.meeting = create_meeting(make_event(self.a), self.a)
+        self.scope = calls.MeetingScope(self.meeting)
         self.occurrence_start = current_occurrence(self.meeting)[0]
 
     def tearDown(self):
         cache.clear()
 
     def test_lock_survives_a_call_that_empties_out(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.a, self.scope)
         set_locked(self.meeting, True)
 
-        ended = calls.leave_call(self.a, self.conv.uuid)
+        ended = calls.leave_call(self.a, self.scope)
         self.assertEqual(ended.state, CallSession.State.ENDED)
 
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
-        self.assertTrue(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
+        self.assertTrue(calls.is_call_locked(self.scope, self.occurrence_start))
 
     def test_lock_survives_the_stale_sweep(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(self.a, self.scope)
         set_locked(self.meeting, True)
 
         calls.drop_presence(session.uuid, user_key(self.a.id))
@@ -336,17 +351,17 @@ class LockOutlivesTheCallTests(TestCase):
 
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
-        self.assertTrue(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
+        self.assertTrue(calls.is_call_locked(self.scope, self.occurrence_start))
 
     def test_end_meeting_still_releases_the_lock(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.a, self.scope)
         set_locked(self.meeting, True)
 
         self.assertTrue(end_meeting(self.meeting))
 
         self.meeting.refresh_from_db()
         self.assertIsNone(self.meeting.locked_occurrence_start)
-        self.assertFalse(calls.is_call_locked(self.conv.uuid, self.occurrence_start))
+        self.assertFalse(calls.is_call_locked(self.scope, self.occurrence_start))
 
 
 class FirstJoinRaceTests(TestCase):
@@ -372,7 +387,9 @@ class FirstJoinRaceTests(TestCase):
 
     def test_loser_of_first_join_race_joins_winner_session(self):
         # a wins the race and commits the only active session.
-        winner, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        winner, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
 
         # b is the loser: its first locked read still sees "no active call"
         # (the winner's row was created in a concurrent, not-yet-visible txn),
@@ -380,17 +397,17 @@ class FirstJoinRaceTests(TestCase):
         real_lookup = calls._active_session_for_update
         first_read = {"done": False}
 
-        def stale_then_real(conversation_id):
+        def stale_then_real(scope):
             if not first_read["done"]:
                 first_read["done"] = True
                 return None
-            return real_lookup(conversation_id)
+            return real_lookup(scope)
 
         with mock.patch.object(
             calls, "_active_session_for_update", side_effect=stale_then_real
         ):
             session, participant, created = calls.start_or_join_call(
-                self.b, self.conv.uuid
+                self.b, calls.ConversationScope(self.conv.uuid)
             )
 
         # Loser recovers into the winner's session, no error, not a new session.
@@ -417,7 +434,9 @@ class FirstJoinRaceTests(TestCase):
         from django.db import IntegrityError
 
         # A real active session so the race-winner guard passes on every attempt.
-        winner, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        winner, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         sentinel = (winner, object(), False)
 
         with mock.patch.object(
@@ -425,7 +444,9 @@ class FirstJoinRaceTests(TestCase):
             "_start_or_join_once",
             side_effect=[IntegrityError("x"), IntegrityError("y"), sentinel],
         ) as once:
-            result = calls.start_or_join_call(self.b, self.conv.uuid)
+            result = calls.start_or_join_call(
+                self.b, calls.ConversationScope(self.conv.uuid)
+            )
 
         self.assertIs(result, sentinel)
         self.assertEqual(once.call_count, 3)
@@ -440,7 +461,9 @@ class FirstJoinRaceTests(TestCase):
             calls, "_start_or_join_once", side_effect=IntegrityError("boom")
         ) as once:
             with self.assertRaises(IntegrityError):
-                calls.start_or_join_call(self.b, self.conv.uuid)
+                calls.start_or_join_call(
+                    self.b, calls.ConversationScope(self.conv.uuid)
+                )
 
         self.assertEqual(once.call_count, 1)
 
@@ -459,7 +482,9 @@ class CleanupTests(TestCase):
         cache.clear()
 
     def test_cleanup_ends_session_when_no_fresh_presence(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         cache.clear()  # wipe heartbeats -> everyone looks stale
         ended = calls.cleanup_stale_participants(session)
         self.assertTrue(ended)
@@ -467,14 +492,16 @@ class CleanupTests(TestCase):
         self.assertEqual(session.state, CallSession.State.ENDED)
 
     def test_cleanup_keeps_session_with_fresh_presence(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         ended = calls.cleanup_stale_participants(session)
         self.assertFalse(ended)
         session.refresh_from_db()
         self.assertEqual(session.state, CallSession.State.ACTIVE)
 
     def test_end_stale_calls_counts_ended(self):
-        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
         cache.clear()
         self.assertEqual(calls.end_stale_calls(), 1)
 
@@ -483,21 +510,31 @@ class CleanupTests(TestCase):
         # or cache restart) leaves an ACTIVE row in the DB with no live
         # presence. The read path must self-heal so the banner stops advertising
         # a phantom call, without depending on the Celery beat sweep running.
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         cache.clear()  # wipe heartbeats: nobody is live anymore
-        self.assertIsNone(calls.get_active_call(self.conv.uuid))
+        self.assertIsNone(
+            calls.get_active_call(calls.ConversationScope(self.conv.uuid))
+        )
         session.refresh_from_db()
         self.assertEqual(session.state, CallSession.State.ENDED)
 
     def test_get_active_call_keeps_live_call(self):
         # A call with a fresh heartbeat must survive the self-heal read path.
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
-        self.assertIsNotNone(calls.get_active_call(self.conv.uuid))
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
+        self.assertIsNotNone(
+            calls.get_active_call(calls.ConversationScope(self.conv.uuid))
+        )
         session.refresh_from_db()
         self.assertEqual(session.state, CallSession.State.ACTIVE)
 
     def test_serialize_call_state(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         state = calls.serialize_call_state(session)
         self.assertTrue(state["active"])
         self.assertEqual(state["session_id"], str(session.uuid))
@@ -510,7 +547,9 @@ class CleanupTests(TestCase):
         # Contract: arbitrary media_state keys (video, screen) must survive
         # heartbeat -> presence cache -> serialize_call_state unchanged.
         # Pins the passthrough the frontend video feature depends on.
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         calls.touch_presence(
             session.uuid,
             f"u:{self.a.id}",
@@ -540,10 +579,12 @@ class EndStaleCallsTaskTests(TestCase):
     def test_task_ends_stale_call(self):
         from workspace.chat.tasks import end_stale_calls
 
-        calls.start_or_join_call(self.a, self.conv.uuid)
+        calls.start_or_join_call(self.a, calls.ConversationScope(self.conv.uuid))
         cache.clear()
         self.assertEqual(end_stale_calls(), 1)
-        self.assertIsNone(calls.get_active_call(self.conv.uuid))
+        self.assertIsNone(
+            calls.get_active_call(calls.ConversationScope(self.conv.uuid))
+        )
 
 
 class SerializeCallStateTests(TestCase):
@@ -562,7 +603,9 @@ class SerializeCallStateTests(TestCase):
         cache.clear()
 
     def test_participant_carries_key_and_user_id(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         state = calls.serialize_call_state(session)
         self.assertEqual(len(state["participants"]), 1)
         p = state["participants"][0]
@@ -572,13 +615,17 @@ class SerializeCallStateTests(TestCase):
         self.assertEqual(p["media_state"], {"audio": True})
 
     def test_media_state_is_read_by_participant_key(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         calls.touch_presence(session.uuid, f"u:{self.a.id}", {"audio": False})
         state = calls.serialize_call_state(session)
         self.assertEqual(state["participants"][0]["media_state"], {"audio": False})
 
     def test_serialize_call_state_carries_locked_flag(self):
-        session, _, _ = calls.start_or_join_call(self.a, self.conv.uuid)
+        session, _, _ = calls.start_or_join_call(
+            self.a, calls.ConversationScope(self.conv.uuid)
+        )
         self.assertFalse(calls.serialize_call_state(session)["locked"])
         session.locked = True
         session.save(update_fields=["locked"])
@@ -606,3 +653,71 @@ class SerializeCallStateTests(TestCase):
         p = state["participants"][0]
         self.assertIsNone(p["user_id"])
         self.assertEqual(p["display_name"], "Visitor")
+
+
+class MeetingScopeTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User = get_user_model()
+        self.host = User.objects.create_user(username="ms-host", password="x")
+        self.cohost = User.objects.create_user(username="ms-cohost", password="x")
+        self.now = timezone.now()
+        self.event = make_event(
+            self.host,
+            start=self.now - timedelta(minutes=5),
+            end=self.now + timedelta(minutes=25),
+        )
+        EventMember.objects.create(event=self.event, user=self.cohost)
+        self.meeting = create_meeting(self.event, self.host)
+        self.occurrence_start = current_occurrence(self.meeting, now=self.now)[0]
+        self.guest, _ = guest_with_token(self.meeting, self.occurrence_start)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_start_creates_a_meeting_session_without_a_system_message(self):
+        session, participant, created = calls.start_or_join_call(
+            self.host, calls.MeetingScope(self.meeting)
+        )
+        self.assertTrue(created)
+        self.assertEqual(session.meeting_id, self.meeting.uuid)
+        self.assertIsNone(session.conversation_id)
+        self.assertIsNone(session.system_message)
+        self.assertEqual(Message.objects.count(), 0)
+
+    def test_call_started_reaches_every_host_and_admitted_guest(self):
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
+        cohost_events = [e["event"] for e in sig.drain_events(user_key(self.cohost.id))]
+        guest_events = [
+            e["event"] for e in sig.drain_events(guest_key(self.guest.uuid))
+        ]
+        self.assertIn("call_started", cohost_events)
+        self.assertIn("call_started", guest_events)
+
+    def test_durable_lock_seeds_the_meeting_session(self):
+        set_locked(self.meeting, True, now=self.now)
+        scope = calls.MeetingScope(self.meeting)
+        self.assertTrue(calls.is_call_locked(scope, self.occurrence_start))
+        session, _, _ = calls.start_or_join_call(self.host, scope)
+        self.assertTrue(session.locked)
+
+    def test_scope_of_round_trips(self):
+        session, _, _ = calls.start_or_join_call(
+            self.host, calls.MeetingScope(self.meeting)
+        )
+        scope = calls.scope_of(session)
+        self.assertIsInstance(scope, calls.MeetingScope)
+        self.assertEqual(scope.meeting.uuid, self.meeting.uuid)
+        state = calls.serialize_call_state(session)
+        self.assertEqual(state["meeting_id"], str(self.meeting.uuid))
+        self.assertIsNone(state["conversation_id"])
+
+    def test_conversation_scope_has_no_guests_and_no_durable_lock(self):
+        conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.host
+        )
+        ConversationMember.objects.create(conversation=conv, user=self.host)
+        scope = calls.ConversationScope(conv.uuid)
+        self.assertEqual(scope.guest_keys(), [])
+        self.assertFalse(scope.durable_lock_holds(self.occurrence_start))
+        self.assertEqual(scope.member_ids(), {self.host.id})

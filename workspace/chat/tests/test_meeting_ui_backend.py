@@ -1,5 +1,3 @@
-from unittest import skip
-
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -27,10 +25,9 @@ class MeetingUiBackendTests(TestCase):
         self.occurrence_start = current_occurrence(self.meeting)[0]
         self.client.force_login(self.host)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_call_state_carries_the_capacity(self):
         session, _participant, _created = calls.start_or_join_call(
-            self.host, self.meeting.conversation_id
+            self.host, calls.MeetingScope(self.meeting)
         )
         state = calls.serialize_call_state(session)
         self.assertEqual(state["max_participants"], calls.max_participants())
@@ -42,17 +39,15 @@ class MeetingUiBackendTests(TestCase):
         self.assertEqual(resp.json()["max_participants"], calls.max_participants())
         self.assertEqual(resp.json()["participant_count"], 0)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_summary_participant_count_reflects_an_active_call(self):
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         self.client.logout()
         resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
         self.assertEqual(resp.json()["participant_count"], 1)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_the_summary_counts_members_and_guests_alike(self):
         session, _participant, _created = calls.start_or_join_call(
-            self.host, self.meeting.conversation_id
+            self.host, calls.MeetingScope(self.meeting)
         )
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
@@ -81,7 +76,6 @@ class MeetingUiBackendTests(TestCase):
         self.assertEqual(events[0]["data"]["guest_uuid"], str(guest.uuid))
         self.assertEqual(events[0]["data"]["meeting_id"], str(self.meeting.uuid))
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_join_and_state_return_the_guests_own_participant_key(self):
         guest, token = guest_with_token(
             self.meeting,
@@ -89,7 +83,7 @@ class MeetingUiBackendTests(TestCase):
             display_name="Visitor",
             state=MeetingGuest.State.ADMITTED,
         )
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         self.client.logout()
         resp = self.client.post(
             f"/api/v1/chat/meet/{self.meeting.slug}/join",
@@ -143,9 +137,8 @@ class CallStartedReachesTheLobbyTests(TestCase):
         cache.clear()
 
     def _start_the_call(self):
-        return calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        return calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_an_admitted_guest_is_told_the_call_started(self):
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
@@ -155,7 +148,6 @@ class CallStartedReachesTheLobbyTests(TestCase):
         events = drain_events(guest_key(guest.uuid))
         self.assertEqual([e["event"] for e in events], ["call_started"])
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_the_guests_copy_carries_no_conversation_id(self):
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
@@ -167,7 +159,6 @@ class CallStartedReachesTheLobbyTests(TestCase):
         self.assertEqual(payload["session_id"], str(session.uuid))
         self.assertEqual(payload["started_by"], self.host.id)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_the_member_still_receives_the_full_payload(self):
         guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
@@ -175,9 +166,9 @@ class CallStartedReachesTheLobbyTests(TestCase):
         self._start_the_call()
 
         payload = drain_events(user_key(self.host.id))[0]["data"]
-        self.assertEqual(payload["conversation_id"], str(self.meeting.conversation_id))
+        self.assertEqual(payload["meeting_id"], str(self.meeting.uuid))
+        self.assertIsNone(payload["conversation_id"])
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_a_waiting_guest_is_told_nothing(self):
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.WAITING
@@ -186,7 +177,6 @@ class CallStartedReachesTheLobbyTests(TestCase):
 
         self.assertEqual(drain_events(guest_key(guest.uuid)), [])
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_a_guest_of_another_occurrence_is_told_nothing(self):
         guest, _token = guest_with_token(
             self.meeting,
@@ -253,24 +243,22 @@ class GuestLeaveFanOutTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_leaving_with_no_participant_row_tells_the_host_nothing(self):
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
         )
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         drain_events(user_key(self.host.id))
 
         calls.leave_call_as_guest(guest)
 
         self.assertEqual(drain_events(user_key(self.host.id)), [])
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_leaving_an_actual_seat_still_tells_the_host(self):
         guest, _token = guest_with_token(
             self.meeting, self.occurrence_start, state=MeetingGuest.State.ADMITTED
         )
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         calls.join_call_as_guest(guest)
         drain_events(user_key(self.host.id))
 

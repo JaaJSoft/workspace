@@ -13,7 +13,7 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
-from .services.calls import is_call_locked
+from .services.calls import MeetingScope, is_call_locked
 from .services.identities import identity_payload
 from .services.meeting_occurrences import current_occurrence
 
@@ -279,7 +279,7 @@ def _meeting_payload(conversation, context):
     payload["next_start"] = (
         occurrence_start.isoformat() if occurrence_start is not None else None
     )
-    payload["locked"] = is_call_locked(conversation.uuid, occurrence_start)
+    payload["locked"] = is_call_locked(MeetingScope(meeting), occurrence_start)
     return payload
 
 

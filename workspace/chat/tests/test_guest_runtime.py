@@ -64,7 +64,7 @@ class GuestRuntimeTests(TestCase):
     # --- join ---
 
     def test_guest_joins_active_call(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         resp = self._post("join", token)
         self.assertEqual(resp.status_code, 200)
@@ -75,7 +75,7 @@ class GuestRuntimeTests(TestCase):
 
     def test_join_touches_presence_under_guest_key_not_bare_uuid(self):
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         guest, token = self._admit()
         self._post("join", token)
@@ -93,7 +93,7 @@ class GuestRuntimeTests(TestCase):
         self.assertIn("detail", resp.data)
 
     def test_join_refused_when_locked(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         set_locked(self.meeting, True)
         guest, token = self._admit()
         resp = self._post("join", token)
@@ -107,7 +107,7 @@ class GuestRuntimeTests(TestCase):
         self.assertEqual(resp.status_code, 423)
 
     def test_join_refused_when_full(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         with override_settings(CHAT_CALL_MAX_PARTICIPANTS=1):
             resp = self._post("join", token)
@@ -138,7 +138,7 @@ class GuestRuntimeTests(TestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_removed_guests_token_stops_working_mid_session(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self.assertEqual(self._post("join", token).status_code, 200)
 
@@ -151,7 +151,7 @@ class GuestRuntimeTests(TestCase):
 
     def test_leave_marks_participant_left_and_drops_presence(self):
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         guest, token = self._admit()
         self._post("join", token)
@@ -172,7 +172,7 @@ class GuestRuntimeTests(TestCase):
 
     def test_heartbeat_writes_presence_under_guest_key(self):
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         guest, token = self._admit()
         self._post("join", token)
@@ -198,7 +198,7 @@ class GuestRuntimeTests(TestCase):
         # at 120/min, for a participant table this guest is not in.
         # MeetingGuestSignalView already requires the row; so must this.
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         guest, token = self._admit()
 
@@ -212,7 +212,7 @@ class GuestRuntimeTests(TestCase):
         # shared per-session presence cache and rebroadcast to every peer -
         # only the known boolean flags may survive.
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         guest, token = self._admit()
         self._post("join", token)
@@ -233,7 +233,7 @@ class GuestRuntimeTests(TestCase):
         # I-2: call.js heartbeats every 5s per participant, about 12/min,
         # which must not trip the shared 30/min public scope - especially
         # with more than one guest behind the same IP.
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post("join", token)
 
@@ -284,7 +284,7 @@ class GuestRuntimeTests(TestCase):
         self.assertFalse(resp.data["active"])
 
     def test_state_for_admitted_guest_in_an_active_call(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post("join", token)
 
@@ -349,7 +349,7 @@ class GuestSignalTests(TestCase):
         )
 
     def test_guest_can_signal_a_member(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post_join(token)
         sig.drain_events(user_key(self.owner.id))  # clear lifecycle noise
@@ -368,7 +368,7 @@ class GuestSignalTests(TestCase):
         )
 
     def test_guest_can_signal_another_guest(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest_a, token_a = self._admit(display_name="Ada")
         guest_b, token_b = self._admit(display_name="Bea")
         self._post_join(token_a)
@@ -389,20 +389,20 @@ class GuestSignalTests(TestCase):
         )
 
     def test_signal_to_a_participant_of_a_different_session_is_refused(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post_join(token)
 
         other_owner = User.objects.create_user(username="other-host", password="x")
         other_event = make_event(other_owner)
         other_meeting = create_meeting(other_event, other_owner)
-        calls.start_or_join_call(other_owner, other_meeting.conversation_id)
+        calls.start_or_join_call(other_owner, calls.MeetingScope(other_meeting))
 
         resp = self._signal(token, user_key(other_owner.id))
         self.assertEqual(resp.status_code, 400)
 
     def test_signal_rejects_a_non_canonical_member_key(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post_join(token)
 
@@ -410,7 +410,7 @@ class GuestSignalTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_signal_rejects_a_non_canonical_guest_key(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest_a, token_a = self._admit(display_name="Ada")
         guest_b, _token_b = self._admit(display_name="Bea")
         self._post_join(token_a)
@@ -419,7 +419,7 @@ class GuestSignalTests(TestCase):
         self.assertEqual(resp.status_code, 400)
 
     def test_guest_who_has_not_joined_the_call_cannot_signal(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         # Deliberately no join call here.
 
@@ -438,7 +438,7 @@ class GuestSignalTests(TestCase):
         # drive close to that, not just past the old 30/min scope, so a
         # future tightening of the new scope trips this test rather than
         # shipping silently.
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         guest, token = self._admit()
         self._post_join(token)
 

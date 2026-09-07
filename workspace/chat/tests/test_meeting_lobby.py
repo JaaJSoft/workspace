@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest import skip
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -310,7 +309,6 @@ class MeetingHostViewTests(TestCase):
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_pre_lock_carries_over_to_the_session_created_on_join(self):
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
@@ -320,14 +318,16 @@ class MeetingHostViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
 
+        # The endpoint wrote the lock; a scope answers from the instance it
+        # holds, so this one has to be the committed row, not the stale copy.
+        self.meeting.refresh_from_db()
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         self.assertTrue(session.locked)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_lock_locks_the_active_call(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
             f"/api/v1/chat/meetings/{self.meeting.uuid}/lock",
@@ -335,12 +335,11 @@ class MeetingHostViewTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        session = calls.get_active_call(self.meeting.conversation_id)
+        session = calls.get_active_call(calls.MeetingScope(self.meeting))
         self.assertTrue(session.locked)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_lock_uses_is_truthy_not_python_truthiness(self):
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         self.client.force_authenticate(self.owner)
         resp = self.client.post(
             f"/api/v1/chat/meetings/{self.meeting.uuid}/lock",
@@ -348,7 +347,7 @@ class MeetingHostViewTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 200)
-        session = calls.get_active_call(self.meeting.conversation_id)
+        session = calls.get_active_call(calls.MeetingScope(self.meeting))
         self.assertFalse(session.locked)
 
     def test_lock_reports_false_when_there_is_no_occurrence_to_lock(self):
@@ -386,15 +385,16 @@ class MeetingHostViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_lock_does_not_carry_into_the_next_occurrence(self):
         # I-1 regression: the durable lock must be scoped to the occurrence
         # it was set during. Locking this week's standup must not 423 next
         # week's guests once the host has ended this occurrence.
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         set_locked(self.meeting, True)
         self.assertTrue(
-            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+            calls.is_call_locked(
+                calls.MeetingScope(self.meeting), self.occurrence_start
+            )
         )
 
         end_meeting(self.meeting)
@@ -402,17 +402,18 @@ class MeetingHostViewTests(TestCase):
         self.meeting.refresh_from_db()
         self.assertIsNone(self.meeting.locked_occurrence_start)
         self.assertFalse(
-            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+            calls.is_call_locked(
+                calls.MeetingScope(self.meeting), self.occurrence_start
+            )
         )
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_lock_survives_the_self_heal_of_a_phantom_call(self):
         # I-2 regression: set_locked saved the meeting first and read the call
         # after, so get_active_call's self-heal - which ends a phantom session
         # through _end_call, and _end_call releases the durable lock - landed
         # on top of the write just made. The committed meeting came out
         # unlocked while the endpoint answered {"locked": true}.
-        calls.start_or_join_call(self.owner, self.meeting.conversation_id)
+        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
         cache.clear()
 
         set_locked(self.meeting, True)
@@ -420,7 +421,9 @@ class MeetingHostViewTests(TestCase):
         self.meeting.refresh_from_db()
         self.assertEqual(self.meeting.locked_occurrence_start, self.occurrence_start)
         self.assertTrue(
-            calls.is_call_locked(self.meeting.conversation_id, self.occurrence_start)
+            calls.is_call_locked(
+                calls.MeetingScope(self.meeting), self.occurrence_start
+            )
         )
 
     def test_a_lock_nobody_ever_ended_does_not_reach_the_next_occurrence(self):
@@ -542,24 +545,22 @@ class MeetingPublicViewTests(TestCase):
         for forbidden in ("participants", "conversation", "conversation_id", "guests"):
             self.assertNotIn(forbidden, keys)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_summary_reflects_locked_call(self):
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         session.locked = True
         session.save(update_fields=["locked"])
         resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
         self.assertTrue(resp.data["locked"])
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_summary_does_not_end_a_stale_call(self):
         # get_active_call self-heals a call whose participants have no live
         # heartbeat by ending it (write + call_ended broadcast). The public
         # summary endpoint must not trigger that off a bare, unauthenticated
         # GET - it only reads the locked flag.
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         cache.clear()  # wipes every heartbeat -> the participant looks stale
 
@@ -665,10 +666,9 @@ class MeetingPublicViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 404)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_knock_returns_423_when_locked(self):
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         session.locked = True
         session.save(update_fields=["locked"])
@@ -692,13 +692,12 @@ class MeetingPublicViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 423)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_knock_does_not_end_a_stale_call(self):
         # Same self-heal hazard as the summary endpoint above, but on the
         # POST path: a knock must not end a stale call as a side effect of
         # checking whether it is locked.
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         cache.clear()
 

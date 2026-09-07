@@ -7,8 +7,9 @@ from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
-from workspace.chat.models import Conversation, Meeting
+from workspace.chat.models import CallSession, Conversation, Meeting
 from workspace.chat.services.meeting_occurrences import current_occurrence
+from workspace.chat.services.meetings import create_ad_hoc_meeting
 
 
 class OccurrenceTests(TestCase):
@@ -185,3 +186,28 @@ class OccurrenceTests(TestCase):
             current_occurrence(m, now=new_start),
             (new_start.replace(microsecond=0), new_end.replace(microsecond=0)),
         )
+
+
+class AdHocWindowTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="adhoc", password="x")
+        self.meeting = create_ad_hoc_meeting(self.user, "Quick")
+
+    def test_no_session_means_no_window(self):
+        self.assertIsNone(current_occurrence(self.meeting))
+
+    def test_an_active_call_opens_the_window_at_its_start(self):
+        session = CallSession.objects.create(meeting=self.meeting, started_by=self.user)
+        start, end = current_occurrence(self.meeting)
+        self.assertEqual(start, session.started_at.replace(microsecond=0))
+        self.assertIsNone(end)
+
+    def test_the_window_survives_the_grace_after_the_call_ends(self):
+        session = CallSession.objects.create(meeting=self.meeting, started_by=self.user)
+        session.state = CallSession.State.ENDED
+        session.ended_at = timezone.now()
+        session.save(update_fields=["state", "ended_at"])
+        inside = session.ended_at + settings.MEETING_GRACE - timedelta(seconds=1)
+        outside = session.ended_at + settings.MEETING_GRACE + timedelta(seconds=1)
+        self.assertIsNotNone(current_occurrence(self.meeting, now=inside))
+        self.assertIsNone(current_occurrence(self.meeting, now=outside))

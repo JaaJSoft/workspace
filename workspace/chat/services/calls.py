@@ -1,5 +1,11 @@
 """Call lifecycle, presence and cleanup for chat voice rooms.
 
+A call lives in exactly one scope: a conversation or a meeting. The scope is
+what answers "who is in the room" (members, or hosts plus admitted guests),
+"is it locked" and "does starting it deserve a system message" - everything
+below takes a ConversationScope or a MeetingScope rather than an id, so no
+call path has to branch on which of the two it is holding.
+
 Durable state (CallSession, CallParticipant, the system message) is in the DB.
 Live presence is a cache heartbeat (auto-expiring) so a crashed/closed tab is
 reaped without a clean "leave". Lifecycle mutations fan out cache events via
@@ -69,12 +75,94 @@ def max_participants():
     return int(getattr(settings, "CHAT_CALL_MAX_PARTICIPANTS", 6))
 
 
-def get_active_call(conversation_id):
+class ConversationScope:
+    """A call that lives in a conversation: members only, no guests, no lock
+    that outlives the session."""
+
+    posts_system_message = True
+    meeting = None
+
+    def __init__(self, conversation_id):
+        self.conversation_id = conversation_id
+
+    @property
+    def session_filter(self):
+        return {"conversation_id": self.conversation_id}
+
+    @property
+    def create_kwargs(self):
+        return {"conversation_id": self.conversation_id}
+
+    def member_ids(self):
+        return set(active_member_ids(self.conversation_id))
+
+    def guest_keys(self):
+        return []
+
+    def durable_lock_holds(self, occurrence_start=None):
+        return False
+
+
+class MeetingScope:
+    """A call that lives in a meeting: hosts plus admitted guests, and the
+    meeting's durable lock."""
+
+    posts_system_message = False
+    conversation_id = None
+
+    def __init__(self, meeting):
+        self.meeting = meeting
+
+    @property
+    def session_filter(self):
+        return {"meeting_id": self.meeting.pk}
+
+    @property
+    def create_kwargs(self):
+        return {"meeting_id": self.meeting.pk}
+
+    def member_ids(self):
+        from .meeting_hosts import host_ids
+
+        return host_ids(self.meeting)
+
+    def guest_keys(self):
+        return list(
+            dict.fromkeys(
+                _active_guest_keys(self.meeting.pk) + _admitted_guest_keys(self.meeting)
+            )
+        )
+
+    def durable_lock_holds(self, occurrence_start=None):
+        if self.meeting.locked_occurrence_start is None:
+            return False
+        if occurrence_start is None:
+            from .meeting_occurrences import current_occurrence
+
+            occurrence = current_occurrence(self.meeting)
+            occurrence_start = occurrence[0] if occurrence is not None else None
+        return (
+            occurrence_start is not None
+            and self.meeting.locked_occurrence_start == occurrence_start
+        )
+
+
+def scope_of(session):
+    """The scope a session was created in."""
+    if session.meeting_id is not None:
+        meeting = session.meeting
+        if meeting.event_id is not None:
+            meeting.event  # noqa: B018 - warm the relation used by host_ids
+        return MeetingScope(meeting)
+    return ConversationScope(session.conversation_id)
+
+
+def get_active_call(scope):
     from ..models import CallSession
 
     session = (
         CallSession.objects.filter(
-            conversation_id=conversation_id, state=CallSession.State.ACTIVE
+            **scope.session_filter, state=CallSession.State.ACTIVE
         )
         .select_related("system_message", "started_by")
         .first()
@@ -92,9 +180,9 @@ def get_active_call(conversation_id):
     return session
 
 
-def active_call_session(conversation_id):
-    """Plain (non-locking, non-self-healing) read of *conversation_id*'s
-    active call session, or None.
+def active_call_session(scope):
+    """Plain (non-locking, non-self-healing) read of *scope*'s active call
+    session, or None.
 
     Sibling of ``active_call_session_for_guest``, for the host-reachable but
     still-anonymous-adjacent read in ``MeetingSummaryView``: that view is
@@ -106,12 +194,12 @@ def active_call_session(conversation_id):
     from ..models import CallSession
 
     return CallSession.objects.filter(
-        conversation_id=conversation_id, state=CallSession.State.ACTIVE
+        **scope.session_filter, state=CallSession.State.ACTIVE
     ).first()
 
 
-def is_call_locked(conversation_id, occurrence_start=None):
-    """Whether *conversation_id* has a locked call, no self-heal.
+def is_call_locked(scope, occurrence_start=None):
+    """Whether *scope* has a locked call, no self-heal.
 
     Unlike ``get_active_call``, this never takes the cleanup write-lock or
     ends a stale call - it is for the public meeting endpoints, which are
@@ -119,46 +207,27 @@ def is_call_locked(conversation_id, occurrence_start=None):
     able to drive a DB write and an SSE broadcast off a plain GET/POST.
 
     Prefers the session's flag (the live value) while a call is active, and
-    falls back to the meeting's durable lock when there is no session yet -
-    a host can pre-lock an empty room, see set_locked. That fallback answers
-    only for the occurrence the lock was set during, which is why
-    *occurrence_start* is the caller's: every caller has already resolved
-    the occurrence it is asking about, and re-deriving it here would both
-    repeat that work and let the two answers disagree. None means "no
-    occurrence is reachable right now", which no durable lock can match.
+    falls back to the scope's durable lock when there is no session yet - a
+    host can pre-lock an empty meeting room, see set_locked; a conversation
+    has no lock that outlives its session. That fallback answers only for
+    the occurrence the lock was set during, which is why *occurrence_start*
+    is the caller's: every caller has already resolved the occurrence it is
+    asking about, and passing it in keeps the two from disagreeing. Omitting
+    it makes the scope resolve the occurrence itself, at the cost of one
+    more recurrence expansion.
     """
-    from ..models import CallSession, Meeting
+    from ..models import CallSession
 
     session = (
         CallSession.objects.filter(
-            conversation_id=conversation_id, state=CallSession.State.ACTIVE
+            **scope.session_filter, state=CallSession.State.ACTIVE
         )
         .only("locked")
         .first()
     )
     if session is not None:
         return session.locked
-    if occurrence_start is None:
-        return False
-    return Meeting.objects.filter(
-        conversation_id=conversation_id, locked_occurrence_start=occurrence_start
-    ).exists()
-
-
-def _durable_lock_holds(meeting):
-    """Whether *meeting*'s durable lock names the occurrence reachable now.
-
-    Only for the paths that hold a Meeting instance and no occurrence of
-    their own (the session seed in ``_start_or_join_once``); everywhere else
-    the caller already resolved the occurrence and passes it to
-    ``is_call_locked``.
-    """
-    from .meeting_occurrences import current_occurrence
-
-    if meeting is None or meeting.locked_occurrence_start is None:
-        return False
-    occurrence = current_occurrence(meeting)
-    return occurrence is not None and meeting.locked_occurrence_start == occurrence[0]
+    return scope.durable_lock_holds(occurrence_start)
 
 
 def active_call_session_for_guest(guest):
@@ -173,7 +242,7 @@ def active_call_session_for_guest(guest):
     from ..models import CallSession
 
     return CallSession.objects.filter(
-        conversation_id=guest.meeting.conversation_id, state=CallSession.State.ACTIVE
+        meeting_id=guest.meeting_id, state=CallSession.State.ACTIVE
     ).first()
 
 
@@ -201,7 +270,7 @@ def close_guest_participation(guest):
 
     key = guest_key(guest.uuid)
     participants = list(
-        CallParticipant.objects.select_related("session").filter(
+        CallParticipant.objects.select_related("session__meeting__event").filter(
             guest=guest, left_at__isnull=True, session__state=CallSession.State.ACTIVE
         )
     )
@@ -217,7 +286,7 @@ def close_guest_participation(guest):
     # rows are closed, so the recipient lookup no longer includes them.
     for participant in participants:
         _broadcast(
-            participant.session.conversation_id,
+            scope_of(participant.session),
             "call_participant_left",
             {"session_id": str(participant.session_id), "participant_key": key},
         )
@@ -254,8 +323,8 @@ def active_member_ids(conversation_id):
     )
 
 
-def _active_guest_keys(conversation_id):
-    """Participant keys for admitted guests in the conversation's active call.
+def _active_guest_keys(meeting_id):
+    """Participant keys for admitted guests in the meeting's active call.
 
     A plain read on purpose: get_active_call self-heals, and _broadcast is
     called from inside that self-heal (via cleanup_stale_participants), so
@@ -271,7 +340,7 @@ def _active_guest_keys(conversation_id):
     return [
         guest_key(guest_uuid)
         for guest_uuid in CallParticipant.objects.filter(
-            session__conversation_id=conversation_id,
+            session__meeting_id=meeting_id,
             session__state=CallSession.State.ACTIVE,
             left_at__isnull=True,
             guest__isnull=False,
@@ -310,14 +379,13 @@ def _admitted_guest_keys(meeting):
     ]
 
 
-def _active_recipient_keys(conversation_id):
-    """Every active member key plus every admitted-guest-in-the-call key."""
-    return [
-        user_key(uid) for uid in active_member_ids(conversation_id)
-    ] + _active_guest_keys(conversation_id)
+def active_recipient_keys(scope):
+    """Everyone the scope fans call events out to: its members (conversation
+    members, or the meeting's hosts) plus its guest audience."""
+    return [user_key(uid) for uid in scope.member_ids()] + scope.guest_keys()
 
 
-def _broadcast(conversation_id, event, data, exclude_key=None, recipients=None):
+def _broadcast(scope, event, data, exclude_key=None, recipients=None):
     """Fan a call event out to every active member and guest, then wake them.
 
     *recipients*, when given, is used verbatim instead of a fresh lookup. This
@@ -326,7 +394,7 @@ def _broadcast(conversation_id, event, data, exclude_key=None, recipients=None):
     resolve who was in the call first and pass that list through, or every
     guest recipient silently drops out of their own end-of-call notice.
     """
-    keys = _active_recipient_keys(conversation_id) if recipients is None else recipients
+    keys = active_recipient_keys(scope) if recipients is None else recipients
     for key in keys:
         if exclude_key is not None and key == exclude_key:
             continue
@@ -342,8 +410,8 @@ def _render_system_call_body(state, duration_label=None):
     return "Call started"
 
 
-def _active_session_for_update(conversation_id):
-    """Locked read of the conversation's active call session (or None).
+def _active_session_for_update(scope):
+    """Locked read of the scope's active call session (or None).
 
     Isolated as a single mockable seam: the first-join race tests simulate the
     loser's stale "no active call" read by patching this one function. (The
@@ -354,47 +422,45 @@ def _active_session_for_update(conversation_id):
 
     return (
         CallSession.objects.select_for_update()
-        .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
+        .filter(**scope.session_filter, state=CallSession.State.ACTIVE)
         .first()
     )
 
 
 @transaction.atomic
-def _start_or_join_once(user, conversation_id):
-    from ..models import CallParticipant, CallSession, Meeting, Message
+def _start_or_join_once(user, scope):
+    from ..models import CallParticipant, CallSession, Message
 
-    session = _active_session_for_update(conversation_id)
+    session = _active_session_for_update(scope)
     created_session = False
-    meeting = None
     if session is None:
-        # Seed from the meeting's durable lock, if this conversation belongs
-        # to one: a host locking the room before anyone has joined still
-        # finds it locked on the session created here. Plain (non-meeting)
-        # conversations have no Meeting row, so this is a no-op for them.
-        meeting = (
-            Meeting.objects.select_related("event")
-            .filter(conversation_id=conversation_id)
-            .first()
-        )
+        # Seed from the meeting's durable lock: a host locking the room
+        # before anyone has joined still finds it locked on the session
+        # created here. Always False in a conversation, which has no lock
+        # that outlives a session.
         session = CallSession.objects.create(
-            conversation_id=conversation_id,
             started_by=user,
-            locked=_durable_lock_holds(meeting),
+            locked=scope.durable_lock_holds(),
+            **scope.create_kwargs,
         )
-        msg = Message.objects.create(
-            conversation_id=conversation_id,
-            author=user,
-            kind=Message.Kind.SYSTEM,
-            body=_render_system_call_body("active"),
-            tool_data={
-                "type": "call",
-                "session_id": str(session.uuid),
-                "media_kind": session.media_kind,
-                "state": "active",
-            },
-        )
-        session.system_message = msg
-        session.save(update_fields=["system_message"])
+        # A meeting's call is the meeting: there is no transcript for a
+        # "Call started" bubble to sit in, and nothing would ever finalize
+        # it into "Call ended - 12 min".
+        if scope.posts_system_message:
+            msg = Message.objects.create(
+                conversation_id=scope.conversation_id,
+                author=user,
+                kind=Message.Kind.SYSTEM,
+                body=_render_system_call_body("active"),
+                tool_data={
+                    "type": "call",
+                    "session_id": str(session.uuid),
+                    "media_kind": session.media_kind,
+                    "state": "active",
+                },
+            )
+            session.system_message = msg
+            session.save(update_fields=["system_message"])
         created_session = True
 
     # Capacity check counts currently-active participants (excluding a rejoin).
@@ -417,36 +483,35 @@ def _start_or_join_once(user, conversation_id):
     if created_session:
         payload = {
             "session_id": str(session.uuid),
-            "conversation_id": str(conversation_id),
+            "conversation_id": str(scope.conversation_id)
+            if scope.conversation_id
+            else None,
+            "meeting_id": str(scope.meeting.pk) if scope.meeting else None,
             "started_by": user.id,
             "media_kind": session.media_kind,
         }
         # Two fan-outs rather than one, because the recipients are not
         # allowed to read the same payload: conversation_id is the single
         # field _guest_call_state strips, and the containment suite cannot
-        # catch it here - it is the guest's own conversation, so no sentinel
+        # catch it here - it is the guest's own meeting, so no sentinel
         # of the foreign world would ever appear in it.
-        guest_keys = list(
-            dict.fromkeys(
-                _active_guest_keys(conversation_id) + _admitted_guest_keys(meeting)
-            )
-        )
+        guest_keys = scope.guest_keys()
         _broadcast(
-            conversation_id,
+            scope,
             "call_started",
             payload,
-            recipients=[user_key(uid) for uid in active_member_ids(conversation_id)],
+            recipients=[user_key(uid) for uid in scope.member_ids()],
         )
         if guest_keys:
             _broadcast(
-                conversation_id,
+                scope,
                 "call_started",
                 {k: v for k, v in payload.items() if k != "conversation_id"},
                 recipients=guest_keys,
             )
     else:
         _broadcast(
-            conversation_id,
+            scope,
             "call_participant_joined",
             {
                 "session_id": str(session.uuid),
@@ -460,12 +525,13 @@ def _start_or_join_once(user, conversation_id):
     return session, participant, created_session
 
 
-def start_or_join_call(user, conversation_id):
+def start_or_join_call(user, scope):
     from ..models import CallSession
 
     # Only the first-join race is recoverable: a competing request committed the
     # active session between our "no active call" read and our INSERT, tripping
-    # the one_active_call_per_conversation partial unique constraint. That race is
+    # the scope's partial unique constraint (one_active_call_per_conversation or
+    # one_active_call_per_meeting). That race is
     # identifiable by an active session now existing (our atomic block rolled
     # back). Any other IntegrityError is a real failure and must propagate rather
     # than be masked by a blind retry.
@@ -477,10 +543,10 @@ def start_or_join_call(user, conversation_id):
     max_attempts = 4
     for attempt in range(max_attempts):
         try:
-            return _start_or_join_once(user, conversation_id)
+            return _start_or_join_once(user, scope)
         except IntegrityError:
             race_winner_exists = CallSession.objects.filter(
-                conversation_id=conversation_id, state=CallSession.State.ACTIVE
+                **scope.session_filter, state=CallSession.State.ACTIVE
             ).exists()
             if not race_winner_exists or attempt == max_attempts - 1:
                 raise
@@ -506,7 +572,8 @@ def join_call_as_guest(guest):
     """
     from ..models import CallParticipant
 
-    session = _active_session_for_update(guest.meeting.conversation_id)
+    scope = MeetingScope(guest.meeting)
+    session = _active_session_for_update(scope)
     if session is None:
         return None
 
@@ -526,7 +593,7 @@ def join_call_as_guest(guest):
     touch_presence(session.uuid, key, DEFAULT_MEDIA_STATE)
 
     _broadcast(
-        guest.meeting.conversation_id,
+        scope,
         "call_participant_joined",
         {
             "session_id": str(session.uuid),
@@ -540,12 +607,12 @@ def join_call_as_guest(guest):
 
 
 @transaction.atomic
-def leave_call(user, conversation_id):
+def leave_call(user, scope):
     from ..models import CallParticipant, CallSession
 
     session = (
         CallSession.objects.select_for_update()
-        .filter(conversation_id=conversation_id, state=CallSession.State.ACTIVE)
+        .filter(**scope.session_filter, state=CallSession.State.ACTIVE)
         .first()
     )
     if session is None:
@@ -559,7 +626,7 @@ def leave_call(user, conversation_id):
 
     if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
         _broadcast(
-            conversation_id,
+            scope,
             "call_participant_left",
             {"session_id": str(session.uuid), "participant_key": key},
         )
@@ -573,12 +640,10 @@ def leave_call_as_guest(guest):
     """Guest counterpart of ``leave_call``. A no-op when there is no active call."""
     from ..models import CallParticipant, CallSession
 
+    scope = MeetingScope(guest.meeting)
     session = (
         CallSession.objects.select_for_update()
-        .filter(
-            conversation_id=guest.meeting.conversation_id,
-            state=CallSession.State.ACTIVE,
-        )
+        .filter(**scope.session_filter, state=CallSession.State.ACTIVE)
         .first()
     )
     if session is None:
@@ -599,7 +664,7 @@ def leave_call_as_guest(guest):
 
     if CallParticipant.objects.filter(session=session, left_at__isnull=True).exists():
         _broadcast(
-            guest.meeting.conversation_id,
+            scope,
             "call_participant_left",
             {"session_id": str(session.uuid), "participant_key": key},
         )
@@ -623,11 +688,12 @@ def _end_call(session, recipients=None):
     """
     from ..models import CallSession
 
+    scope = scope_of(session)
     # Resolve who is in the call before flipping state to ENDED:
     # _active_guest_keys only matches an ACTIVE session, so computing this
     # after the save below would silently drop every guest from call_ended.
     if recipients is None:
-        recipients = _active_recipient_keys(session.conversation_id)
+        recipients = active_recipient_keys(scope)
 
     session.state = CallSession.State.ENDED
     session.ended_at = timezone.now()
@@ -647,7 +713,7 @@ def _end_call(session, recipients=None):
         msg.save(update_fields=["tool_data", "body", "edited_at"])
 
     _broadcast(
-        session.conversation_id,
+        scope,
         "call_ended",
         {
             "session_id": str(session.uuid),
@@ -675,11 +741,12 @@ def cleanup_stale_participants(session):
     if session is None:
         return False
 
+    scope = scope_of(session)
     fresh = set(get_presence(session.uuid))
     # Before anyone is marked left: _active_guest_keys matches only a guest
     # still joined to an ACTIVE session, so resolving this after the update
     # below would drop every guest from the call_ended fan-out.
-    recipients = _active_recipient_keys(session.conversation_id)
+    recipients = active_recipient_keys(scope)
     # Bounded by CHAT_CALL_MAX_PARTICIPANTS, and the session row lock above
     # serializes this against concurrent joins - safe to materialize.
     active = list(CallParticipant.objects.filter(session=session, left_at__isnull=True))
@@ -690,7 +757,7 @@ def cleanup_stale_participants(session):
         )
         for p in stale:
             _broadcast(
-                session.conversation_id,
+                scope,
                 "call_participant_left",
                 {
                     "session_id": str(session.uuid),
@@ -738,7 +805,10 @@ def serialize_call_state(session):
     return {
         "active": session.state == session.State.ACTIVE,
         "session_id": str(session.uuid),
-        "conversation_id": str(session.conversation_id),
+        "conversation_id": str(session.conversation_id)
+        if session.conversation_id
+        else None,
+        "meeting_id": str(session.meeting_id) if session.meeting_id else None,
         "started_by": session.started_by_id,
         "started_at": session.started_at.isoformat(),
         "media_kind": session.media_kind,

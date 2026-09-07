@@ -110,15 +110,16 @@ class MeetingSummaryView(APIView):
         # Only ever the resolved occurrence, never the event.start fallback:
         # a durable lock names an occurrence, and there is none to name when
         # nothing is reachable.
+        scope = calls.MeetingScope(meeting)
         locked = is_call_locked(
-            meeting.conversation_id,
+            scope,
             occurrence[0] if occurrence is not None else None,
         )
 
         # Plain read only: this view is AllowAny, so calls.get_active_call's
         # self-heal (select_for_update, can end a stale session and
         # broadcast) must never run off an anonymous GET.
-        session = calls.active_call_session(meeting.conversation_id)
+        session = calls.active_call_session(scope)
         participant_count = (
             calls.active_participant_count(session) if session is not None else 0
         )
@@ -166,7 +167,7 @@ class MeetingKnockView(APIView):
         if meeting.closed_occurrence_start == occurrence_start:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        if is_call_locked(meeting.conversation_id, occurrence_start):
+        if is_call_locked(calls.MeetingScope(meeting), occurrence_start):
             return Response(status=status.HTTP_423_LOCKED)
 
         # Rate limit: max 10 knocks per IP per hour, mirroring

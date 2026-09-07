@@ -23,7 +23,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
-from workspace.chat.services.calls import is_call_locked
+from workspace.chat.services.calls import MeetingScope, is_call_locked
 from workspace.chat.services.conversations import (
     active_members_queryset,
     display_name_for,
@@ -270,7 +270,7 @@ def chat_room_view(request, conversation_uuid):
             "uuid": str(meeting.uuid),
             "slug": meeting.slug,
             "locked": is_call_locked(
-                conversation.uuid, occurrence[0] if occurrence is not None else None
+                MeetingScope(meeting), occurrence[0] if occurrence is not None else None
             ),
             "join_url": request.build_absolute_uri(meeting.join_path),
         }

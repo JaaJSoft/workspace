@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest import mock, skip
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -208,11 +208,10 @@ class MeetingLifecycleTests(TestCase):
         self.assertEqual(self.guest.state, MeetingGuest.State.REMOVED)
         self.assertIsNotNone(self.guest.removed_at)
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_remove_closes_the_guests_call_participation(self):
         admit_guest(self.guest, self.owner)
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         participant = CallParticipant.objects.create(session=session, guest=self.guest)
         calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})
@@ -223,14 +222,13 @@ class MeetingLifecycleTests(TestCase):
         self.assertIsNotNone(participant.left_at)
         self.assertNotIn(guest_key(self.guest.uuid), calls.get_presence(session.uuid))
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_remove_broadcasts_call_participant_left(self):
         # I-4 regression: every other leave path fans call_participant_left
         # out. Without it the removed guest's tile and RTCPeerConnection stay
         # up for everyone else until their heartbeat lapses on its own.
         admit_guest(self.guest, self.owner)
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         CallParticipant.objects.create(session=session, guest=self.guest)
         calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})
@@ -276,11 +274,10 @@ class MeetingLifecycleTests(TestCase):
         end_meeting(self.meeting)
         self.assertIsNone(resolve_guest(token))
 
-    @skip("Task 3: start_or_join_call still requires a conversation_id")
     def test_ending_notifies_an_admitted_guest_in_the_call(self):
         admit_guest(self.guest, self.owner)
         session, _, _ = calls.start_or_join_call(
-            self.owner, self.meeting.conversation_id
+            self.owner, calls.MeetingScope(self.meeting)
         )
         CallParticipant.objects.create(session=session, guest=self.guest)
         calls.touch_presence(session.uuid, guest_key(self.guest.uuid), {"audio": True})

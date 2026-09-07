@@ -138,7 +138,7 @@ def set_locked(meeting, locked, now=None):
     get_active_call self-heal is fine here - it just has to settle before
     either write, see below.
     """
-    from .calls import get_active_call
+    from .calls import MeetingScope, get_active_call
 
     locked = bool(locked)
     # Read the call BEFORE writing anything: get_active_call self-heals, and
@@ -147,9 +147,7 @@ def set_locked(meeting, locked, now=None):
     # live flag onto a row that is already ENDED, or - back when _end_call
     # also cleared the durable value - land that clear on top of the write
     # just made and report success over an unlocked meeting.
-    session = (
-        get_active_call(meeting.conversation_id) if meeting.conversation_id else None
-    )
+    session = get_active_call(MeetingScope(meeting))
 
     occurrence = current_occurrence(meeting, now=now) if locked else None
     meeting.locked_occurrence_start = occurrence[0] if occurrence is not None else None
@@ -170,7 +168,7 @@ def set_locked(meeting, locked, now=None):
 def end_meeting(meeting, now=None):
     """Close the occurrence that is reachable right now. False when none is."""
     from ..models import MeetingGuest
-    from .calls import _end_call, get_active_call
+    from .calls import MeetingScope, _end_call, get_active_call
 
     occurrence = current_occurrence(meeting, now=now)
     if occurrence is None:
@@ -205,9 +203,7 @@ def end_meeting(meeting, now=None):
     for guest in swept:
         _notify_guest(guest, "meeting_ended")
 
-    session = (
-        get_active_call(meeting.conversation_id) if meeting.conversation_id else None
-    )
+    session = get_active_call(MeetingScope(meeting))
     if session is not None:
         _end_call(session)
     return True

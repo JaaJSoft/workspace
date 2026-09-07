@@ -3,7 +3,8 @@
 A meeting has one stable join URL for a whole recurring series, so validity is
 not a pair of timestamps stored on the row - it is derived per request from the
 event's recurrence. That is what makes a host ending today's standup close only
-today's, and what makes the same link open again next week.
+today's, and what makes the same link open again next week. An ad hoc meeting
+has no event; its window is the call it carries.
 
 ``occurrence_start`` and ``closed_occurrence_start`` may only ever be written
 from this function's return value, never from ``event.start``: dateutil's
@@ -83,6 +84,33 @@ def _exception_original_starts(event, floor):
     )
 
 
+def _ad_hoc_window(meeting, now):
+    """An ad hoc meeting is reachable while its call runs, plus the grace.
+
+    The window starts at the latest session's start (microsecond-free, like
+    every other start this module returns) and has no end while the call is
+    active: the tuple's second item is None then, and callers only ever read
+    the first.
+    """
+    from ..models import CallSession
+
+    session = (
+        CallSession.objects.filter(meeting_id=meeting.pk)
+        .order_by("-started_at")
+        .only("state", "started_at", "ended_at")
+        .first()
+    )
+    if session is None:
+        return None
+    start = session.started_at.replace(microsecond=0)
+    if session.state == CallSession.State.ACTIVE:
+        return start, None
+    if session.ended_at is None:
+        return None
+    end = session.ended_at.replace(microsecond=0)
+    return (start, end) if now <= session.ended_at + settings.MEETING_GRACE else None
+
+
 def current_occurrence(meeting, now=None):
     """Return ``(start, end)`` of the occurrence whose window contains *now*.
 
@@ -93,6 +121,8 @@ def current_occurrence(meeting, now=None):
     reschedule is checked at its own start/end, a cancellation is skipped.
     """
     now = now or timezone.now()
+    if meeting.event_id is None:
+        return _ad_hoc_window(meeting, now)
     event = meeting.event
     duration = _duration(event)
 

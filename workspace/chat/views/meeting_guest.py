@@ -116,7 +116,9 @@ class MeetingGuestJoinView(APIView):
         # guest.occurrence_start is the occurrence resolve_guest just
         # validated as the reachable one, so it is the occurrence the durable
         # lock has to be asked about - no second recurrence expansion here.
-        if calls.is_call_locked(guest.meeting.conversation_id, guest.occurrence_start):
+        if calls.is_call_locked(
+            calls.MeetingScope(guest.meeting), guest.occurrence_start
+        ):
             return Response(status=status.HTTP_423_LOCKED)
 
         try:
@@ -206,7 +208,7 @@ class MeetingGuestHeartbeatView(APIView):
         changed = calls.touch_presence(session.uuid, key, media_state)
         if changed:
             calls._broadcast(
-                guest.meeting.conversation_id,
+                calls.MeetingScope(guest.meeting),
                 "call_participant_updated",
                 {
                     "session_id": str(session.uuid),

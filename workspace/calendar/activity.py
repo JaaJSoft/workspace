@@ -2,6 +2,7 @@ from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 from django.utils import formats, timezone
 
+from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
 
 
@@ -17,10 +18,11 @@ class CalendarActivityProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.calendar.models import Event
 
+        start, end = local_date_range(date_from, date_to)
         qs = Event.objects.filter(
             is_cancelled=False,
-            updated_at__date__gte=date_from,
-            updated_at__date__lte=date_to,
+            updated_at__gte=start,
+            updated_at__lt=end,
         )
         if user_id is not None:
             qs = qs.filter(

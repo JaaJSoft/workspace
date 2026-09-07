@@ -1,3 +1,6 @@
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -6,6 +9,7 @@ from workspace.mail.activity import MailActivityProvider
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 
 User = get_user_model()
+PARIS = ZoneInfo("Europe/Paris")
 
 
 class MailActivityProviderTests(TestCase):
@@ -144,6 +148,24 @@ class MailActivityProviderTests(TestCase):
         )
         # 2 inbox alice + 1 inbox bob = 3
         self.assertEqual(counts.get(today, 0), 3)
+
+    def test_daily_counts_bounds_follow_the_active_timezone(self):
+        """A day starts and ends at local midnight, not UTC midnight."""
+        for hour, minute in ((21, 30), (22, 30)):
+            MailMessage.objects.create(
+                account=self.account,
+                folder=self.sent,
+                imap_uid=100 + hour,
+                subject="Late sent",
+                date=datetime(2026, 7, 5, hour, minute, tzinfo=UTC),
+            )
+        # In July Paris is UTC+2: 21:30 UTC is still July 5 there, 22:30 UTC is
+        # already July 6.
+        with timezone.override(PARIS):
+            counts = self.provider.get_daily_counts(
+                self.user.id, date(2026, 7, 5), date(2026, 7, 5)
+            )
+        self.assertEqual(counts, {date(2026, 7, 5): 1})
 
     # ── get_recent_events ─────────────────────────────────
 

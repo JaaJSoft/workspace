@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 
+from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
 
 
@@ -28,10 +29,11 @@ class MailActivityProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.mail.models import MailMessage
 
+        start, end = local_date_range(date_from, date_to)
         qs = MailMessage.objects.filter(
             deleted_at__isnull=True,
-            date__date__gte=date_from,
-            date__date__lte=date_to,
+            date__gte=start,
+            date__lt=end,
         ).filter(
             self._base_filter(user_id),
             self._viewer_filter(user_id, viewer_id),

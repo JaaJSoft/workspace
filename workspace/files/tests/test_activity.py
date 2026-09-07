@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -7,6 +8,8 @@ from django.utils import timezone
 from workspace.files.activity import FilesActivityProvider
 from workspace.files.models import File, FileEvent, FileShare
 from workspace.files.services.events import record_event
+
+PARIS = ZoneInfo("Europe/Paris")
 
 User = get_user_model()
 
@@ -75,6 +78,23 @@ class FilesActivityProviderTests(TestCase):
             today,
         )
         self.assertEqual(counts.get(today, 0), 2)
+
+    def test_daily_counts_bounds_follow_the_active_timezone(self):
+        """A day starts and ends at local midnight, not UTC midnight."""
+        for hour in (21, 22):
+            event = record_event(
+                self.alice_file1, self.alice, FileEvent.Action.CONTENT_REPLACED
+            )
+            FileEvent.objects.filter(pk=event.pk).update(
+                created_at=datetime(2026, 7, 5, hour, 30, tzinfo=UTC)
+            )
+        # In July Paris is UTC+2: 21:30 UTC is still July 5 there, 22:30 UTC is
+        # already July 6.
+        with timezone.override(PARIS):
+            counts = self.provider.get_daily_counts(
+                self.alice.id, date(2026, 7, 5), date(2026, 7, 5)
+            )
+        self.assertEqual(counts, {date(2026, 7, 5): 1})
 
     def test_daily_counts_viewer_sees_only_shared(self):
         """Bob looking at Alice's activity only sees the 1 shared event."""

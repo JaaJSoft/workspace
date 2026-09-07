@@ -18,7 +18,7 @@ from ..services import calls
 from ..services import meetings as meeting_service
 from ..services.calls import is_call_locked
 from ..services.meeting_guests import issue_token
-from ..services.meeting_hosts import is_host
+from ..services.meeting_hosts import reachable_meeting
 from ..services.meeting_occurrences import current_occurrence
 from ..services.participant_keys import guest_key
 from ..throttling import MeetingPublicIpThrottle
@@ -241,12 +241,7 @@ class MeetingKnockView(APIView):
 
 def _meeting_for_host(request, meeting_uuid):
     """The meeting this user may act on, or None (404 either way)."""
-    from ..models import Meeting
-
-    meeting = Meeting.objects.select_related("event").filter(uuid=meeting_uuid).first()
-    if meeting is None or not is_host(request.user, meeting):
-        return None
-    return meeting
+    return reachable_meeting(request.user, meeting_uuid)
 
 
 def _guest_for_host(request, meeting_uuid, guest_uuid):

@@ -1,10 +1,17 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import EventMember
 from workspace.chat.models import Meeting
-from workspace.chat.services.meeting_hosts import host_ids, hosted_meeting_ids, is_host
+from workspace.chat.services.meeting_hosts import (
+    host_ids,
+    hosted_meeting_ids,
+    is_host,
+    reachable_meeting,
+)
 from workspace.chat.services.meetings import create_ad_hoc_meeting, create_meeting
 
 from .meeting_fixtures import make_event
@@ -60,3 +67,8 @@ class HostDerivationTests(TestCase):
         )
         self.assertEqual(set(hosted_meeting_ids(self.declined)), set())
         self.assertEqual(Meeting.objects.count(), 2)
+
+    def test_reachable_meeting(self):
+        self.assertEqual(reachable_meeting(self.owner, self.meeting.uuid), self.meeting)
+        self.assertIsNone(reachable_meeting(self.declined, self.meeting.uuid))
+        self.assertIsNone(reachable_meeting(self.owner, uuid.uuid4()))

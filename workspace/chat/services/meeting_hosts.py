@@ -51,3 +51,14 @@ def hosted_meeting_ids(user):
     return (
         Meeting.objects.filter(_host_q(user)).values_list("uuid", flat=True).distinct()
     )
+
+
+def reachable_meeting(user, meeting_uuid):
+    """The meeting *user* may run, or None (the caller answers 404 either way,
+    so an unknown uuid and someone else's meeting look the same)."""
+    from ..models import Meeting
+
+    meeting = Meeting.objects.select_related("event").filter(uuid=meeting_uuid).first()
+    if meeting is None or not is_host(user, meeting):
+        return None
+    return meeting

@@ -11,7 +11,7 @@ from rest_framework.views import APIView
 from ..models import CallParticipant, Meeting
 from ..services import calls
 from ..services.call_signaling import send_signal
-from ..services.meeting_hosts import host_ids, is_host
+from ..services.meeting_hosts import host_ids, reachable_meeting
 from ..services.participant_keys import (
     guest_key,
     guest_uuid_from_key,
@@ -20,20 +20,13 @@ from ..services.participant_keys import (
 )
 
 
-def _hosted_meeting(request, meeting_uuid):
-    meeting = Meeting.objects.select_related("event").filter(uuid=meeting_uuid).first()
-    if meeting is None or not is_host(request.user, meeting):
-        return None
-    return meeting
-
-
 @extend_schema(tags=["Chat - Meetings"])
 class MeetingCallStateView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Current call state for a meeting")
     def get(self, request, meeting_uuid):
-        meeting = _hosted_meeting(request, meeting_uuid)
+        meeting = reachable_meeting(request.user, meeting_uuid)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         session = calls.get_active_call(calls.MeetingScope(meeting))
@@ -48,7 +41,7 @@ class MeetingCallJoinView(APIView):
 
     @extend_schema(summary="Join or start the meeting call as a host", request=None)
     def post(self, request, meeting_uuid):
-        meeting = _hosted_meeting(request, meeting_uuid)
+        meeting = reachable_meeting(request.user, meeting_uuid)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         try:
@@ -88,7 +81,7 @@ class MeetingCallHeartbeatView(APIView):
 
     @extend_schema(summary="Refresh call presence and media state")
     def post(self, request, meeting_uuid):
-        meeting = _hosted_meeting(request, meeting_uuid)
+        meeting = reachable_meeting(request.user, meeting_uuid)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         scope = calls.MeetingScope(meeting)
@@ -119,7 +112,7 @@ class MeetingCallSignalView(APIView):
 
     @extend_schema(summary="Relay a WebRTC signal to a peer of the meeting call")
     def post(self, request, meeting_uuid):
-        meeting = _hosted_meeting(request, meeting_uuid)
+        meeting = reachable_meeting(request.user, meeting_uuid)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         to_participant = request.data.get("to_participant")

@@ -15,6 +15,13 @@ window.vaultExportMixin = function vaultExportMixin() {
     exportBusy: false,
     exportError: '',
     exportSkipped: 0,
+    // A lock is a decision about the run in flight, not only about the dialog.
+    // clearExport lands between two of runExport's awaits, and the continuation
+    // that resumes after it still holds the tree - it would seal the account
+    // under the passphrase that call had just emptied, and write the file to a
+    // machine whose vault is closed. This counter is what that continuation
+    // reads to know the run it belongs to is over.
+    exportGeneration: 0,
 
     // What the generator panel opens at inside this dialog, pinned rather than
     // left to the panel's own defaults or to what the device last remembered.
@@ -109,6 +116,7 @@ window.vaultExportMixin = function vaultExportMixin() {
       // survives into the next one - and an archive run, which skips nothing
       // and has no notion of skipping, would end up displaying it.
       this.exportSkipped = 0;
+      const generation = this.exportGeneration;
       // Before anything is decrypted, so cancelling means nothing was built.
       //
       // this.confirm, from the component root: dialogs.js declares AppDialog
@@ -135,6 +143,7 @@ window.vaultExportMixin = function vaultExportMixin() {
           { title: 'This file is not protected', okLabel: 'Export anyway', okClass: 'btn-error' }
         );
         if (!accepted) return;
+        if (generation !== this.exportGeneration) return;
       }
       this.exportBusy = true;
       this.exportError = '';
@@ -143,11 +152,18 @@ window.vaultExportMixin = function vaultExportMixin() {
         const tree = await window.vaultExportTree.buildTree(window.vaultSession, {
           onProgress: () => { this.exportProgress += 1; },
         });
+        // The passphrase is read on the far side of this check and never
+        // captured before it: holding a copy across the awaits would keep the
+        // phrase alive exactly as long as the lock says it must not be.
+        if (generation !== this.exportGeneration) return;
         if (this.exportFormat === 'archive') {
           const bytes = await window.vaultArchive.buildArchive({
             tree: tree,
             passphrase: this.exportPassphrase,
           });
+          // Nothing is wrong with these bytes - the sealing started before the
+          // lock and finished after it. They still do not reach the disk.
+          if (generation !== this.exportGeneration) return;
           window.downloadBlob(
             new Blob([bytes], { type: 'application/octet-stream' }),
             window.vaultArchive.archiveFilename(new Date())
@@ -185,6 +201,7 @@ window.vaultExportMixin = function vaultExportMixin() {
     // under x-if, so dropping the flag tears it down - but the phrase is a JS
     // string and cannot be wiped, so all that is left is letting go of it.
     clearExport() {
+      this.exportGeneration += 1;
       this.exportOpen = false;
       this.exportPassphrase = '';
       this.exportConfirm = '';

@@ -332,3 +332,35 @@ class GuestIdentityTests(TestCase):
         CallParticipant.objects.create(session=self.session, user=self.user)
         with self.assertRaises(IntegrityError):
             CallParticipant.objects.create(session=self.session, user=self.user)
+
+
+class CallSessionScopeTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username="scope", password="x")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        self.meeting = Meeting.objects.create(title="Ad hoc", created_by=self.user)
+
+    def test_a_session_belongs_to_a_conversation_or_a_meeting(self):
+        CallSession.objects.create(conversation=self.conv, started_by=self.user)
+        CallSession.objects.create(meeting=self.meeting, started_by=self.user)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CallSession.objects.create(started_by=self.user)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CallSession.objects.create(
+                    conversation=self.conv, meeting=self.meeting, started_by=self.user
+                )
+
+    def test_one_active_call_per_meeting(self):
+        CallSession.objects.create(meeting=self.meeting, started_by=self.user)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CallSession.objects.create(meeting=self.meeting, started_by=self.user)
+
+    def test_an_ad_hoc_meeting_has_no_event(self):
+        self.assertTrue(self.meeting.is_ad_hoc)
+        self.assertEqual(self.meeting.join_path, f"/meetings/{self.meeting.slug}")

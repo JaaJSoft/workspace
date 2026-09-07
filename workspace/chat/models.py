@@ -476,8 +476,21 @@ class CallSession(models.Model):
         SCREEN = "screen", "Screen"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    # Exactly one of the two: a chat call lives in a conversation, a meeting
+    # call lives in a meeting. Nothing below the scope changes shape.
     conversation = models.ForeignKey(
-        Conversation, on_delete=models.CASCADE, related_name="call_sessions"
+        Conversation,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="call_sessions",
+    )
+    meeting = models.ForeignKey(
+        "Meeting",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="call_sessions",
     )
     started_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
@@ -507,19 +520,31 @@ class CallSession(models.Model):
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(conversation__isnull=False, meeting__isnull=True)
+                | models.Q(conversation__isnull=True, meeting__isnull=False),
+                name="call_session_one_scope",
+            ),
             models.UniqueConstraint(
                 fields=["conversation"],
-                condition=models.Q(state="active"),
+                condition=models.Q(state="active", conversation__isnull=False),
                 name="one_active_call_per_conversation",
+            ),
+            models.UniqueConstraint(
+                fields=["meeting"],
+                condition=models.Q(state="active", meeting__isnull=False),
+                name="one_active_call_per_meeting",
             ),
         ]
         indexes = [
             models.Index(fields=["conversation", "state"]),
+            models.Index(fields=["meeting", "state"]),
             models.Index(fields=["state"]),
         ]
 
     def __str__(self):
-        return f"Call {self.uuid} in {self.conversation_id} ({self.state})"
+        scope = self.conversation_id or self.meeting_id
+        return f"Call {self.uuid} in {scope} ({self.state})"
 
     @property
     def duration_seconds(self):
@@ -592,7 +617,7 @@ def _generate_meeting_slug():
 
 
 class Meeting(models.Model):
-    """A joinable meeting attached to a calendar event.
+    """A joinable meeting, scheduled from a calendar event or started ad hoc.
 
     One row per event, so the join URL is stable across a recurring series;
     which occurrence is currently open is derived per request rather than
@@ -601,11 +626,25 @@ class Meeting(models.Model):
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     event = models.OneToOneField(
-        "calendar.Event", on_delete=models.CASCADE, related_name="meeting"
+        "calendar.Event",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="meeting",
     )
+    # Temporary: a meeting still owns a conversation until Task 9 drops it.
     conversation = models.OneToOneField(
-        Conversation, on_delete=models.CASCADE, related_name="meeting"
+        Conversation,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="meeting",
     )
+    # Copied from the event at creation and editable; an ad hoc meeting has
+    # no event to borrow a name from.
+    title = models.CharField(max_length=200)
+    # The slug always exists; the public surface answers 404 while this is off.
+    public_link_enabled = models.BooleanField(default=True)
     slug = models.CharField(max_length=32, unique=True, default=_generate_meeting_slug)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
@@ -630,11 +669,15 @@ class Meeting(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Meeting {self.slug} for event {self.event_id}"
+        return f"Meeting {self.slug} ({self.title})"
+
+    @property
+    def is_ad_hoc(self):
+        return self.event_id is None
 
     @property
     def join_path(self):
-        return f"/meet/{self.slug}"
+        return f"/meetings/{self.slug}"
 
 
 class MeetingGuest(models.Model):
@@ -655,6 +698,15 @@ class MeetingGuest(models.Model):
         Meeting, on_delete=models.CASCADE, related_name="guests"
     )
     display_name = models.CharField(max_length=80)
+    # A signed-in visitor who is not a host knocks like a guest, with their
+    # account bound here so the lobby and the chat show who they really are.
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     state = models.CharField(max_length=8, choices=State.choices, default=State.WAITING)
     occurrence_start = models.DateTimeField()
     # sha256 hex of the bearer token; the token itself is never stored.
@@ -678,3 +730,51 @@ class MeetingGuest(models.Model):
 
     def __str__(self):
         return f"{self.display_name} ({self.state}) in {self.meeting_id}"
+
+
+class MeetingMessage(models.Model):
+    """One line of a meeting's own chat, by a host or an admitted guest.
+
+    Plain text with a rendered body: no threads, reactions, pins, edits,
+    attachments or mentions. ``occurrence_start`` is the occurrence the line
+    belongs to (None for an ad hoc meeting); a guest reads only their own.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    meeting = models.ForeignKey(
+        Meeting, on_delete=models.CASCADE, related_name="messages"
+    )
+    occurrence_start = models.DateTimeField(null=True, blank=True)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+    )
+    guest = models.ForeignKey(
+        MeetingGuest,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+    body = models.TextField()
+    body_html = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(author__isnull=False, guest__isnull=True)
+                | models.Q(author__isnull=True, guest__isnull=False),
+                name="meeting_message_one_identity",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["meeting", "created_at"], name="mmsg_meeting_created"),
+        ]
+
+    def __str__(self):
+        return f"MeetingMessage {self.uuid} in {self.meeting_id}"

@@ -100,7 +100,7 @@ dev = [
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.6",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
-    "djlint>=1.44.2",
+    "djlint>=1.45.0",
     # Office authoring libraries, used only to write the fixtures the text
     # extractors are tested against. A container built by hand encodes the same
     # assumptions the extractor makes, so the two agree with each other rather

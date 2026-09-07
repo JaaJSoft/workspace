@@ -506,3 +506,27 @@ class SearchTodayTimezoneTests(ChatTestMixin, APITestCase):
             resp = self.client.get(self.url(self.group.uuid), {"date_range": "today"})
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data["count"], 0)
+
+    def test_custom_date_bounds_use_user_timezone(self):
+        # In July Paris is UTC+2: 21:30 UTC on July 5 is still July 5 there,
+        # 22:30 UTC is already July 6, so a July 5 window keeps only the first.
+        kept = Message.objects.create(
+            conversation=self.group, author=self.member, body="kept"
+        )
+        dropped = Message.objects.create(
+            conversation=self.group, author=self.member, body="dropped"
+        )
+        Message.objects.filter(pk=kept.pk).update(
+            created_at=datetime(2026, 7, 5, 21, 30, tzinfo=UTC)
+        )
+        Message.objects.filter(pk=dropped.pk).update(
+            created_at=datetime(2026, 7, 5, 22, 30, tzinfo=UTC)
+        )
+        set_setting(self.member, "core", "timezone", "Europe/Paris")
+        self.client.force_login(self.member)
+        resp = self.client.get(
+            self.url(self.group.uuid),
+            {"date_from": "2026-07-05", "date_to": "2026-07-05"},
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual([r["uuid"] for r in resp.data["results"]], [str(kept.uuid)])

@@ -279,7 +279,7 @@
             x-show="showTooltip"
             x-cloak
             class="fixed z-50 px-2 py-1 text-xs bg-neutral text-neutral-content rounded shadow-lg pointer-events-none whitespace-nowrap"
-            :style="'left: ' + tooltipX + 'px; top: ' + (tooltipY - 32) + 'px; transform: translateX(-50%)'"
+            :style="{ left: tooltipX + 'px', top: (tooltipY - 32) + 'px', transform: 'translateX(-50%)' }"
             x-text="tooltip"
           ></div>
 

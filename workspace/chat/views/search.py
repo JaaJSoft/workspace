@@ -9,6 +9,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.datetimes import local_date_range
 from workspace.common.mixins import CacheControlMixin
 
 from ..models import Message, MessageAttachment, Reaction
@@ -99,7 +100,9 @@ class ConversationMessageSearchView(APIView):
 
         now = timezone.now()
         if date_range == "today":
-            qs = qs.filter(created_at__date=timezone.localdate())
+            today = timezone.localdate()
+            start, end = local_date_range(today, today)
+            qs = qs.filter(created_at__gte=start, created_at__lt=end)
         elif date_range == "7d":
             qs = qs.filter(created_at__gte=now - timedelta(days=7))
         elif date_range == "30d":
@@ -123,7 +126,8 @@ class ConversationMessageSearchView(APIView):
                     {"detail": "Invalid date_from."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            qs = qs.filter(created_at__date__gte=parsed)
+            start, _ = local_date_range(parsed, parsed)
+            qs = qs.filter(created_at__gte=start)
         if date_to:
             parsed = parse_date(date_to)
             if parsed is None:
@@ -131,7 +135,8 @@ class ConversationMessageSearchView(APIView):
                     {"detail": "Invalid date_to."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            qs = qs.filter(created_at__date__lte=parsed)
+            _, end = local_date_range(parsed, parsed)
+            qs = qs.filter(created_at__lt=end)
 
         if has_files:
             qs = qs.filter(attachments__isnull=False)

@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest import skip
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -276,15 +275,15 @@ def make_event(owner, start=None, end=None):
     )
 
 
-@skip("Task 4: a host reaches a meeting call through the meeting endpoints")
 class CallSignalToGuestTests(TestCase):
-    """I3: a member must be able to signal an admitted meeting guest in the
+    """I3: a host must be able to signal an admitted meeting guest in the
     same call - without this, a guest's offer/ICE candidates have no route
     back and the handshake can never complete.
 
-    Driven through the conversation signal route, which a meeting no longer
-    has: the host-side counterpart of the guest endpoints is Task 4's, and
-    this class moves onto it there.
+    Driven through the meeting call routes: a meeting's call has no
+    conversation to signal through, so the host joins and signals via
+    /api/v1/chat/meetings/<uuid>/call/*, and the guest joins the same
+    session through the existing guest runtime.
     """
 
     def setUp(self):
@@ -315,17 +314,17 @@ class CallSignalToGuestTests(TestCase):
         calls.join_call_as_guest(guest)
         return guest
 
-    def _url(self):
-        return f"/api/v1/chat/conversations/{self.meeting.conversation_id}/call/signal"
+    def _url(self, meeting):
+        return f"/api/v1/chat/meetings/{meeting.uuid}/call/signal"
 
     def test_member_can_signal_an_admitted_guest_in_the_same_call(self):
-        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
+        self.client.force_authenticate(self.owner)
+        self.client.post(f"/api/v1/chat/meetings/{self.meeting.uuid}/call/join")
         guest = self._admit_and_join(self.meeting)
         sig.drain_events(guest_key(guest.uuid))  # clear lifecycle noise
 
-        self.client.force_authenticate(self.owner)
         resp = self.client.post(
-            self._url(),
+            self._url(self.meeting),
             {"to_participant": guest_key(guest.uuid), "signal": {"type": "offer"}},
             format="json",
         )
@@ -340,7 +339,8 @@ class CallSignalToGuestTests(TestCase):
         self.assertEqual(delivered[0]["data"]["from_participant"], f"u:{self.owner.id}")
 
     def test_member_signal_to_guest_in_a_different_call_is_refused(self):
-        calls.start_or_join_call(self.owner, calls.MeetingScope(self.meeting))
+        self.client.force_authenticate(self.owner)
+        self.client.post(f"/api/v1/chat/meetings/{self.meeting.uuid}/call/join")
 
         other_owner = User.objects.create_user(username="other-host", password="x")
         other_event = make_event(other_owner)
@@ -348,9 +348,8 @@ class CallSignalToGuestTests(TestCase):
         calls.start_or_join_call(other_owner, calls.MeetingScope(other_meeting))
         other_guest = self._admit_and_join(other_meeting, display_name="Bea")
 
-        self.client.force_authenticate(self.owner)
         resp = self.client.post(
-            self._url(),
+            self._url(self.meeting),
             {
                 "to_participant": guest_key(other_guest.uuid),
                 "signal": {"type": "offer"},

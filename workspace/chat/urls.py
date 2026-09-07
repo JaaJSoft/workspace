@@ -8,6 +8,7 @@ from .views import (
     conversations,
     goals,
     interactions,
+    meeting_calls,
     meeting_guest,
     meetings,
     messages,
@@ -308,6 +309,31 @@ urlpatterns = [
         "api/v1/chat/meetings/<uuid:meeting_uuid>/end",
         meetings.MeetingEndView.as_view(),
         name="chat-meeting-end",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call",
+        meeting_calls.MeetingCallStateView.as_view(),
+        name="chat-meeting-call-state",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/join",
+        meeting_calls.MeetingCallJoinView.as_view(),
+        name="chat-meeting-call-join",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/leave",
+        meeting_calls.MeetingCallLeaveView.as_view(),
+        name="chat-meeting-call-leave",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/heartbeat",
+        meeting_calls.MeetingCallHeartbeatView.as_view(),
+        name="chat-meeting-call-heartbeat",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/signal",
+        meeting_calls.MeetingCallSignalView.as_view(),
+        name="chat-meeting-call-signal",
     ),
     # Attachments
     path(

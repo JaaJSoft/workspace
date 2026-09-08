@@ -9,15 +9,15 @@ is a property no amount of state-reading can establish:
     opens with the phrase that was typed into the dialog;
   - nothing plaintext leaves the page while it is built;
   - a lock takes the dialog and the passphrase with it;
-  - the plaintext format warns first, and a warning that cannot be shown is
-    a refusal rather than a silent yes.
+  - the plaintext format warns first, in this dialog rather than in a second
+    one stacked over it, and nothing is decrypted until that warning is
+    answered.
 
-The last one is the reason this file exists. ``dialogs.js`` declares its
-component with a top-level ``const``, so the bare name resolves and
-``window.AppDialog`` does not - and the ``node:vm`` loader the JS suite runs
-on sets ``sandbox.window = sandbox``, which makes the two lookups the same
-access by construction. No unit test in this repository can tell them apart.
-A browser can, and does, below.
+The last one is the reason this file exists. Whether the warning is one box or
+two, whether it replaced the form or was laid over it, and whether the account
+was already being read while it was on screen are all properties of a rendered
+page: the JS suite reads the mixin's state without ever mounting the dialog, so
+none of them can be established there.
 """
 
 import re
@@ -32,14 +32,15 @@ SEEDED_ENTRY_LOGIN = "octocat"
 SEEDED_ENTRY_PASSWORD = "trombone-sunset-91"
 KNOWN_PASSPHRASE = "the-phrase-a-person-typed-42"
 
-# The shared confirm dialog's own ids, read off
-# common/templates/ui/partials/dialogs.html. That partial serves six modules
-# and gets no testid for this.
-CONFIRM = "#app-dialog-confirm"
-CONFIRM_CANCEL = "#app-dialog-confirm-cancel"
+# The warning step of the export dialog itself. It carries no id of its own -
+# it is a branch of the same modal box - so the heading is what identifies it.
+WARNING_HEADING = "text=This file is not protected"
+WARNING_BACK = "[data-testid='export-warning-back']"
+WARNING_ACCEPT = "[data-testid='export-warning-accept']"
 
-# The script that declares the confirm dialog. Serving it empty is how a walk
-# reproduces "the warning cannot be shown" without touching the page's code.
+# The script that declares the shared confirm dialog. Serving it empty is how a
+# walk reproduces "dialogs.js never loaded" without touching the page's code -
+# the warning below must not care.
 DIALOGS_SCRIPT = "**/ui/js/dialogs.js"
 
 
@@ -355,29 +356,32 @@ class ExportWalkTests(VaultBrowserCase):
         self._assert_the_seeded_entry_is_in(tree)
 
     def test_the_interchange_export_warns_before_it_builds_anything(self):
-        """The plaintext format asks first, and cancelling builds nothing.
-
-        This walk also settles which lookup the guard uses. In a browser the
-        bare name resolves and window.AppDialog does not, so a guard written
-        the window way would refuse here and no dialog would ever open.
-        """
+        """The plaintext format asks first, and going back builds nothing."""
         self._seeded_vault()
-        self.assertEqual(self.page.evaluate("() => typeof AppDialog"), "object")
-        self.assertEqual(
-            self.page.evaluate("() => typeof window.AppDialog"),
-            "undefined",
-            "window.AppDialog resolving would make this walk prove nothing",
-        )
-
         self._open_export()
         self.page.check("input[value='interchange']")
         self.page.click("[data-testid='export-run']")
-        self.page.wait_for_selector(f"{CONFIRM}[open]", timeout=15000)
+        self.page.wait_for_selector(WARNING_HEADING, timeout=15000)
+
+        # One box, not two. The warning used to be a second modal opened over
+        # this one, which darkened the page twice and left Escape closing
+        # whichever of them was listening.
+        self.assertEqual(
+            self.page.locator(".modal.modal-open").count(),
+            1,
+            "the warning opened a second modal over the export dialog",
+        )
+        # And it is the same box: the form it replaced is gone, not covered.
+        self.assertEqual(
+            self.page.locator("input[value='interchange']").count(),
+            0,
+            "the warning was laid over the form instead of replacing it",
+        )
 
         # Asserted while the warning is up, which is what makes "before" a
         # claim and not a coincidence: the progress line shows for as long as
-        # the tree is being read, so a confirm moved after that read would
-        # find it on screen behind itself. Its <p> is in the DOM either way -
+        # the tree is being read, so a warning moved after that read would
+        # find it on screen beside itself. Its <p> is in the DOM either way -
         # x-show hides it - so this reads visibility, not presence.
         self.assertFalse(
             self.page.locator(
@@ -386,19 +390,19 @@ class ExportWalkTests(VaultBrowserCase):
             "entries were being read while the warning was still on screen",
         )
 
-        self.page.click(CONFIRM_CANCEL)
-        self.page.wait_for_selector(f"{CONFIRM}[open]", state="detached", timeout=10000)
+        self.page.click(WARNING_BACK)
+        self.page.wait_for_selector("input[value='interchange']", timeout=10000)
         self._drain_events()
         self.assertEqual(self._downloads, [])
 
-    def test_a_warning_that_cannot_be_shown_refuses_the_export(self):
-        """No confirm dialog, no file - never a silent yes.
+    def test_the_warning_does_not_depend_on_the_shared_dialog_script(self):
+        """The gate is this dialog's own state, so nothing can fail to load it.
 
-        The screen's general-purpose confirm wrapper answers true when
-        dialogs.js has not loaded, which is the right default for a
-        destructive action the user already asked for. It is the wrong one
-        here, because this confirm *is* the warning that a file holding every
-        password in the clear is about to be written.
+        It used to be a call into dialogs.js, whose wrapper answers true when
+        the script is missing - the right default for a destructive action the
+        user already asked for, and the wrong one for the warning that a file
+        holding every password in the clear is about to be written. Served
+        empty, the script now changes nothing here.
         """
         self.page.route(
             DIALOGS_SCRIPT,
@@ -412,7 +416,10 @@ class ExportWalkTests(VaultBrowserCase):
         self._open_export()
         self.page.check("input[value='interchange']")
         self.page.click("[data-testid='export-run']")
-        self.page.wait_for_selector("text=could not be confirmed", timeout=15000)
+        self.page.wait_for_selector(WARNING_HEADING, timeout=15000)
         self._drain_events()
-        self.assertEqual(self._downloads, [])
-        self.assertEqual(self.page.locator(f"{CONFIRM}[open]").count(), 0)
+        self.assertEqual(self._downloads, [], "a file was written before the warning")
+
+        with self.page.expect_download(timeout=120000) as download:
+            self.page.click(WARNING_ACCEPT)
+        self.assertTrue(download.value.suggested_filename.endswith(".json"))

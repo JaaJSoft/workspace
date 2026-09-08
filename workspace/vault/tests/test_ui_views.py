@@ -153,22 +153,52 @@ class BrowserRoutingTests(TestCase):
 class ExportDialogWiringTests(SimpleTestCase):
     """The generator panel owns no clipboard and no field.
 
-    It dispatches two events and lets its host decide what they mean, so a
-    host wiring only one leaves a button that silently does nothing - and the
-    button here saves the one string that opens the archive. Asserted on the
-    rendered partial because the wiring lives in an attribute: no unit test
-    reaches it, and by the time an e2e walk could, the value is already lost.
+    It dispatches three events and lets its host decide what they mean, so a
+    host wiring only some of them leaves a button that silently does nothing -
+    or, worse, a field holding a phrase the panel has already replaced. Both
+    are about the one string that opens the archive. Asserted on the rendered
+    partial because the wiring lives in an attribute: no unit test reaches it,
+    and by the time an e2e walk could, the value is already lost.
     """
 
     def render(self):
         return render_to_string("vault/ui/partials/export_dialog.html")
 
-    def test_the_export_dialog_listens_to_both_generator_events(self):
+    def test_the_export_dialog_listens_to_every_generator_event(self):
         html = self.render()
         self.assertIn(
             '@password-apply="applyGeneratedPassphrase($event.detail.value)"', html
         )
-        self.assertIn('@password-copy="copyGenerated($event.detail.value)"', html)
+        self.assertIn(
+            '@password-regenerate="trackGeneratedPassphrase($event.detail.value)"',
+            html,
+        )
+        self.assertIn(
+            '@password-copy="copyGenerated($event.detail.value, '
+            'exportClipboardPolicy())"',
+            html,
+        )
+
+    def test_the_plaintext_warning_is_a_step_of_this_dialog(self):
+        """Not a second modal over it.
+
+        A stacked confirm darkens the page twice and answers Escape with
+        whichever of the two boxes is listening. The warning lives in the same
+        modal box, as the branch the form is replaced by.
+        """
+        html = self.render()
+        self.assertEqual(html.count('class="modal modal-open"'), 1)
+        self.assertIn('<template x-if="exportConfirming">', html)
+        self.assertIn("This file is not protected", html)
+
+    def test_export_asks_before_it_runs(self):
+        """The button goes through requestExport, which is what raises the
+        warning; wired straight to runExport it would write the plaintext file
+        with nothing in front of it."""
+        html = self.render()
+        self.assertIn('@click="requestExport()"', html)
+        self.assertIn('data-testid="export-warning-accept"', html)
+        self.assertIn('data-testid="export-warning-back"', html)
 
     def test_the_generator_panel_renders_its_use_button(self):
         """show_apply is what renders that button, and the apply handler above

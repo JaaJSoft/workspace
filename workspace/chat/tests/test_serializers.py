@@ -15,6 +15,35 @@ from workspace.chat.serializers import (
 User = get_user_model()
 
 
+class MessageSerializerAuthorTests(TestCase):
+    """The author field is the identity payload, not a bare user id."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="alice",
+            email="a@test.com",
+            password="pw",
+            first_name="Alice",
+            last_name="W",
+        )
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+
+    def test_a_members_message_carries_their_identity(self):
+        msg = Message.objects.create(
+            conversation=self.conv, author=self.user, body="hi"
+        )
+
+        payload = MessageSerializer(msg).data["author"]
+
+        self.assertEqual(payload["id"], self.user.id)
+        self.assertEqual(payload["username"], "alice")
+        self.assertEqual(payload["display_name"], "Alice W")
+        self.assertFalse(payload["is_guest"])
+
+
 class MessageSerializerInteractionTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(

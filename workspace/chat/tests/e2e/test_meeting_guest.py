@@ -8,6 +8,12 @@ body are therefore fine, but anything a stream must notice - knocking,
 admitting, starting the call - goes through the live server, either through
 the browser or through an authenticated ``APIRequestContext``, never through
 a service call in the test body.
+
+The pane both sides chat in is the meeting chat, rendered client-side from
+one JSON shape: the same partial, the same composer, the same
+<chat-message-group> shell on the host page and on the guest page. Every
+assertion below therefore reads what that shared render produces - group
+attributes and bubble ids - rather than anything one side draws on its own.
 """
 
 from __future__ import annotations
@@ -18,7 +24,7 @@ import time
 from django.utils import timezone
 from playwright.sync_api import expect
 
-from workspace.chat.models import MeetingGuest
+from workspace.chat.models import MeetingGuest, MeetingMessage
 from workspace.chat.services.meetings import create_meeting
 from workspace.chat.tests.meeting_fixtures import make_event
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -33,6 +39,21 @@ def _tile(grid, display_name):
     display name itself renders twice inside a tile (avatar caption and video
     overlay), which strict mode refuses."""
     return grid.get_by_role("button", name=f"Spotlight {display_name}")
+
+
+def _send(pane, body):
+    """Type into a meeting chat pane's composer and click its send button.
+
+    Scoped to the pane, and the button addressed by its accessible name: it
+    is an icon button whose only stable handle is that name.
+    """
+    pane.locator('textarea[placeholder="Type a message..."]').fill(body)
+    pane.get_by_role("button", name="Send message").click()
+
+
+def _group_for(pane, message_uuid):
+    """The <chat-message-group> holding one message's bubble."""
+    return pane.locator(f'chat-message-group:has([data-message-uuid="{message_uuid}"])')
 
 
 class MeetingGuestTests(PlaywrightTestCase):
@@ -156,6 +177,20 @@ class MeetingGuestTests(PlaywrightTestCase):
         )
         return grid
 
+    def _message(self, pane, body):
+        """The row the server stored for a body typed in a composer.
+
+        Waits for the given pane to hold a bubble carrying that text first:
+        every bubble is built from the JSON the server answered with (a POST
+        response on the sender's side, a mailbox event on the other), so
+        seeing one is what makes the ORM read below race-free. The uuid it
+        returns is how both panes address the message.
+        """
+        expect(pane.locator("[data-message-uuid]").filter(has_text=body)).to_have_count(
+            1, timeout=CROSS_CONTEXT_TIMEOUT_MS
+        )
+        return MeetingMessage.objects.get(meeting=self.meeting, body=body)
+
     # ---- the flows -------------------------------------------------------
 
     def test_guest_knocks_is_admitted_and_joins_a_running_call(self):
@@ -191,6 +226,42 @@ class MeetingGuestTests(PlaywrightTestCase):
         expect(_tile(host_grid, "Visitor")).to_be_visible(
             timeout=CROSS_CONTEXT_TIMEOUT_MS
         )
+
+        host_pane = self.page.locator('[data-testid="meeting-chat"]')
+        guest_pane = guest.locator('[data-testid="meeting-chat"]')
+
+        # The host speaks first, and the line reaches the guest as somebody
+        # else's: neither their own nor a guest's.
+        _send(host_pane, "welcome to the meeting")
+        self._message(guest_pane, "welcome to the meeting")
+        expect(guest_pane.locator("chat-message-group[own]")).to_have_count(0)
+        expect(guest_pane.locator("chat-message-group[guest]")).to_have_count(0)
+
+        # The guest answers through the same composer, and their line lands in
+        # the host's pane marked as a guest's.
+        _send(guest_pane, "hello from outside")
+        guest_message = self._message(host_pane, "hello from outside")
+        expect(_group_for(host_pane, guest_message.uuid)).to_have_attribute("guest", "")
+        expect(host_pane.locator("chat-message-group[guest]")).to_have_count(1)
+
+        # The same row, re-rendered for its author, is the one group the guest
+        # owns.
+        expect(_group_for(guest_pane, guest_message.uuid)).to_have_attribute(
+            "own", "", timeout=CROSS_CONTEXT_TIMEOUT_MS
+        )
+
+        # Deleting is the host's alone: the guest's pane renders no toolbar at
+        # all, not even on their own line.
+        expect(guest_pane.get_by_title("Delete")).to_have_count(0)
+
+        # For the host the button rides in the hover toolbar the shell lifts
+        # out of the bubble and next to it.
+        host_bubble = host_pane.locator(f"#mmsg-{guest_message.uuid}")
+        host_bubble.hover()
+        host_bubble.locator("xpath=..").get_by_title("Delete").click()
+        expect(
+            guest_pane.locator(f'[data-message-uuid="{guest_message.uuid}"]')
+        ).to_have_count(0, timeout=CROSS_CONTEXT_TIMEOUT_MS)
 
         # Removing the guest closes their page, whatever they were doing.
         self.page.get_by_title("Remove guest").click()

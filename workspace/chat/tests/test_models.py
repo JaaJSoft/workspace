@@ -278,9 +278,7 @@ class GuestParticipantIdentityTests(TestCase):
         event = Event.objects.create(
             calendar=cal, owner=self.user, title="E", start=timezone.now()
         )
-        self.meeting = Meeting.objects.create(
-            event=event, created_by=self.user
-        )
+        self.meeting = Meeting.objects.create(event=event, created_by=self.user)
         self.guest = MeetingGuest.objects.create(
             meeting=self.meeting,
             display_name="Ada",

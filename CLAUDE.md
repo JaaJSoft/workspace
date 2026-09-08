@@ -38,7 +38,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 |---|---|
 | `ai` | LLM tools, AI assistants, prompt routing |
 | `calendar` | Events, recurrence, external calendar sync |
-| `chat` | Conversations, messages, typing indicators, link previews |
+| `chat` | Conversations, messages, typing indicators, link previews, calls and meetings |
 | `common` | Toolbox: Python helpers, DRF plumbing, full-text search abstraction, UI kit. Names no other app - see *core vs common* below |
 | `core` | The app itself: plugin registries (modules, search, activity, SSE), unified search and activity endpoints, health and `/metrics`, changelog, onboarding, admin dashboard, DB maintenance, project-level tests |
 | `dashboard` | User home page widgets |

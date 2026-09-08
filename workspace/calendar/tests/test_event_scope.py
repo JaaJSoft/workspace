@@ -121,3 +121,33 @@ class ScopedEditStorageInvariantsTests(TestCase):
         self.assertEqual(
             Event.objects.filter(recurrence_parent=master, is_cancelled=True).count(), 1
         )
+
+    def test_single_occurrence_exception_keeps_the_master_owner(self):
+        # workspace.chat.services.meetings.create_meeting redirects an
+        # exception to its recurrence_parent and trusts that row's owner
+        # check to also cover the exception - that only holds because the
+        # exception always inherits the master's owner, never the acting
+        # editor's. update_event itself does not gate on ownership (the
+        # view and the AI tool do, before calling in), so this is provable
+        # with an editor who differs from the owner.
+        master = self._weekly()
+        editor = User.objects.create_user(username="editor", password="pw")
+        second = master.start + timedelta(weeks=1)
+
+        exc = update_event(
+            master, {"title": "Moved"}, editor, scope="this", original_start=second
+        )
+
+        self.assertEqual(exc.owner_id, master.owner_id)
+        self.assertNotEqual(exc.owner_id, editor.id)
+
+    def test_cancelling_one_occurrence_keeps_the_master_owner(self):
+        master = self._weekly()
+        editor = User.objects.create_user(username="canceleditor", password="pw")
+        second = master.start + timedelta(weeks=1)
+
+        cancel_event(master, editor, scope="this", original_start=second)
+
+        exc = Event.objects.get(recurrence_parent=master, is_cancelled=True)
+        self.assertEqual(exc.owner_id, master.owner_id)
+        self.assertNotEqual(exc.owner_id, editor.id)

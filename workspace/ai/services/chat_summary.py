@@ -11,6 +11,7 @@ from django.conf import settings
 from django.db.models import Q
 
 from workspace.ai.services.llm import call_llm
+from workspace.chat.services.identities import display_name_for_identity
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ def update_summary(conversation_id: str) -> dict:
     # Format messages - truncate individually to keep the summarisation prompt lean.
     lines = []
     for msg in new_messages:
-        name = msg.author.get_full_name() or msg.author.username
+        name = display_name_for_identity(msg.author, None)
         is_bot = hasattr(msg.author, "bot_profile")
         label = f"[Bot] {name}" if is_bot else name
         body = msg.body[:1000] if len(msg.body) > 1000 else msg.body

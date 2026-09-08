@@ -96,8 +96,9 @@ class ChatSSEProvider(SSEProvider):
         # Call events (lifecycle + WebRTC signaling) - always drained, like
         # typing, so signaling latency stays low even on idle (None) polls.
         from .services.call_signaling import drain_events
+        from .services.participant_keys import user_key
 
-        for envelope in drain_events(user_id):
+        for envelope in drain_events(user_key(user_id)):
             events.append((envelope["event"], envelope["data"], None))
 
         # Only query for new events if dirty flag changed

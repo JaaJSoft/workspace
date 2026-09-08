@@ -45,6 +45,28 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        # Meeting module's public surface (no auth of any kind). v1 starting
+        # value; retune on telemetry. Defence-in-depth on top of the knock
+        # endpoint's own per-meeting counter, and the only limit on the
+        # summary endpoint.
+        "chat.meeting.public.ip": "30/min",
+        # Guest call heartbeat: fires every 5s per participant while in a
+        # call (~12/min each), and several guests can share one IP behind a
+        # NAT, so it needs its own, more generous v1 starting value than the
+        # scope above - retune on telemetry, same as it.
+        "chat.meeting.guest.heartbeat.ip": "120/min",
+        # Guest WebRTC signalling: bursts with the offer/answer exchange and
+        # ICE trickle for every peer already in the call, not a steady
+        # cadence like the heartbeat above - see
+        # MeetingGuestSignalThrottle's docstring for the arithmetic.
+        "chat.meeting.guest.signal.ip": "150/min",
+        # The two public HTML routes: the meeting page and the message list
+        # it loads. The list is re-fetched off the guest's SSE stream, so it
+        # follows the conversation's cadence rather than the sparse anonymous
+        # action .public.ip is sized for - same reasoning as the heartbeat
+        # scope, and several guests behind one NAT share this bucket too. v1
+        # starting value; retune on telemetry.
+        "chat.meeting.public.page": "120/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",
@@ -107,6 +129,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Chat - Attachments",
             "description": "Message attachments and the conversation media gallery.",
+        },
+        {
+            "name": "Chat - Meetings",
+            "description": "Meetings attached to calendar events: hosting, guest admission, public joining, and the guest lobby.",
         },
         {
             "name": "Files",

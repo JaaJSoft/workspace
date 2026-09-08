@@ -23,7 +23,7 @@ class SystemCallGroupingTests(TestCase):
             tool_data={"type": "call", "state": "active"},
         )
         msgs = list(self.conv.messages.order_by("created_at"))
-        groups = group_messages(msgs, self.user)
+        groups = group_messages(msgs, self.user.id)
         types = [g["type"] for g in groups]
         self.assertIn("system", types)
         system_groups = [g for g in groups if g["type"] == "system"]

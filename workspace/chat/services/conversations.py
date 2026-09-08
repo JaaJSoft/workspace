@@ -19,6 +19,25 @@ def user_conversation_ids(user):
     ).values_list("conversation_id", flat=True)
 
 
+def active_member_users(conversation_id):
+    """The user rows that are active members of *conversation_id*.
+
+    The pool a mention posted into that conversation may resolve against. An
+    unnarrowed pool turns a rendered badge's data-user-id into a
+    username -> id map for the whole workspace, which is a disclosure on any
+    path whose author is not themselves a member.
+    """
+    from django.contrib.auth import get_user_model
+
+    from ..models import ConversationMember
+
+    return get_user_model().objects.filter(
+        id__in=ConversationMember.objects.filter(
+            conversation_id=conversation_id, left_at__isnull=True
+        ).values("user_id")
+    )
+
+
 def active_members_queryset():
     """Active members with the user rows a serializer needs, in MEMBER_ORDER.
 

@@ -1,0 +1,459 @@
+"""Join, leave, heartbeat and state for an admitted meeting guest.
+
+A guest reaches every view in this file from the meeting page at
+/meetings/<slug> plus a knock-issued token - no account, no session. ``permission_classes =
+[AllowAny]`` is not enough on its own: DRF still runs SessionAuthentication by
+default, which enforces CSRF for a signed-in visitor and populates
+request.user, so a logged-in host previewing their own link would be treated
+differently than an anonymous guest hitting the same URL. Every class below
+also empties ``authentication_classes`` so the token is the only thing that
+grants anything, for every caller alike.
+
+On the three content endpoints (join, leave, heartbeat), a 404 means
+exactly one thing: the token is missing, unknown, revoked, or names a guest
+of a different meeting than *slug*. Every other failure on those three (no
+call to join yet, the call is full, the call is locked) has its own status
+code, so a client can tell "you are not this meeting's guest" apart from
+"you are, but something else is stopping you".
+
+state is the deliberate exception, and only a partial one: an unknown token
+or one naming a guest of a different meeting still 404s there too, same as
+the other three. What state does differently is a token that fails the
+admitted-and-current check yet still names a real guest of *this* meeting
+(waiting, refused, removed, or admitted to an occurrence the host has since
+ended) - that gets 200 with a body describing the guest's own status,
+never 404, because a guest has to be able to learn their own status,
+including a revoked one, without the response itself looking like a dead
+end.
+
+Messages are MeetingMessage rows of the guest's occurrence; nothing here
+touches a conversation.
+"""
+
+from django.conf import settings
+from django.http import StreamingHttpResponse
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from ..models import CallParticipant
+from ..services import calls, meeting_messages
+from ..services.call_signaling import send_signal
+from ..services.guest_stream import stream_guest_events
+from ..services.meeting_guests import guest_for_slug, guest_for_token
+from ..services.meeting_occurrences import current_occurrence
+from ..services.participant_keys import (
+    guest_key,
+    guest_uuid_from_key,
+    user_id_from_key,
+    user_key,
+)
+from ..throttling import (
+    MeetingGuestHeartbeatThrottle,
+    MeetingGuestSignalThrottle,
+    MeetingPublicIpThrottle,
+    MeetingPublicPageThrottle,
+)
+from .meeting_messages import clean_body, page_args
+
+# The only media_state keys chatCallMediaState() (call.js) ever produces.
+# request.data is anonymous input reaching one shared cache value per session
+# (touch_presence) that gets rebroadcast verbatim to every other participant,
+# so unlike the member heartbeat this cannot trust an arbitrary dict through -
+# unknown keys are dropped rather than the request rejected, since a stray key
+# is just noise for a peer that does not recognize that media flag.
+_KNOWN_MEDIA_STATE_KEYS = ("audio", "video", "screen")
+
+
+def _guest_for_request(request, slug):
+    """The admitted guest this request authorizes for this meeting, or None."""
+    return guest_for_slug(request.headers.get("X-Meeting-Token", ""), slug)
+
+
+def _guest_call_state(session):
+    """serialize_call_state, minus what a guest must never see: the
+    conversation id, which would let a guest address the host-side
+    conversation endpoints directly."""
+    data = calls.serialize_call_state(session)
+    data.pop("conversation_id", None)
+    return data
+
+
+def _sanitize_media_state(raw):
+    """Coerce arbitrary guest input down to the known boolean media flags,
+    falling back to the default when nothing usable survives."""
+    if isinstance(raw, dict):
+        cleaned = {key: bool(raw[key]) for key in _KNOWN_MEDIA_STATE_KEYS if key in raw}
+        if cleaned:
+            return cleaned
+    return dict(calls.DEFAULT_MEDIA_STATE)
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestJoinView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="Join the meeting's active call as an admitted guest")
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # guest.occurrence_start is the occurrence resolve_guest just
+        # validated as the reachable one, so it is the occurrence the durable
+        # lock has to be asked about - no second recurrence expansion here.
+        if calls.is_call_locked(
+            calls.MeetingScope(guest.meeting), guest.occurrence_start
+        ):
+            return Response(status=status.HTTP_423_LOCKED)
+
+        try:
+            session = calls.join_call_as_guest(guest)
+        except calls.CallFull:
+            return Response(
+                {"detail": "Call is full."}, status=status.HTTP_409_CONFLICT
+            )
+        if session is None:
+            # Not 404: the token is valid and the guest is admitted, there is
+            # simply no call to join yet - a guest can never start one. Doing
+            # so would mean an anonymous caller creating a CallSession, a
+            # system Message in the host's conversation, and a call_started
+            # broadcast: exactly the "anonymous caller drives a DB write and
+            # a fan-out" property the never-call-get_active_call rule (see
+            # is_call_locked, active_call_session_for_guest) exists to keep
+            # out of this file.
+            return Response(
+                {"detail": "No call has been started in this meeting yet."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        return Response(
+            {
+                "state": _guest_call_state(session),
+                "ice_servers": getattr(settings, "CHAT_CALL_ICE_SERVERS", []),
+                "participant_key": guest_key(guest.uuid),
+            }
+        )
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestLeaveView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="Leave the meeting's call", request=None)
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # No further gate beyond the token: leave_call_as_guest is a no-op
+        # when there is no active call, same as the member CallLeaveView.
+        calls.leave_call_as_guest(guest)
+        return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestHeartbeatView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    # Its own scope, not MeetingPublicIpThrottle's: see
+    # MeetingGuestHeartbeatThrottle's docstring for why the shared 30/min
+    # budget does not fit a heartbeat firing every 5s.
+    throttle_classes = [MeetingGuestHeartbeatThrottle]
+
+    @extend_schema(summary="Refresh a guest's call presence and media state")
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        session = calls.active_call_session_for_guest(guest)
+        if session is None:
+            return Response(
+                {"detail": "No call has been started in this meeting yet."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        key = guest_key(guest.uuid)
+        # Same requirement MeetingGuestSignalView enforces, same refusal: a
+        # heartbeat writes into the session's shared presence value and fans
+        # call_participant_updated out at up to 120/min, for a participant
+        # table this guest is not in.
+        is_own_active_participant = CallParticipant.objects.filter(
+            session=session, guest=guest, left_at__isnull=True
+        ).exists()
+        if not is_own_active_participant:
+            return Response(
+                {"detail": "Join the call before sending a heartbeat."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        media_state = _sanitize_media_state(request.data.get("media_state"))
+        changed = calls.touch_presence(session.uuid, key, media_state)
+        if changed:
+            calls._broadcast(
+                calls.MeetingScope(guest.meeting),
+                "call_participant_updated",
+                {
+                    "session_id": str(session.uuid),
+                    "participant_key": key,
+                    "media_state": media_state,
+                },
+                exclude_key=key,
+            )
+        return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestSignalView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    # Its own scope, not MeetingPublicIpThrottle's: see
+    # MeetingGuestSignalThrottle's docstring for why the shared 30/min budget
+    # does not fit the offer/answer + ICE trickle burst a call join produces.
+    throttle_classes = [MeetingGuestSignalThrottle]
+
+    @extend_schema(summary="Relay a WebRTC signal to a peer in the guest's call")
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        session = calls.active_call_session_for_guest(guest)
+        if session is None:
+            return Response(
+                {"detail": "No active call."}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        own_key = guest_key(guest.uuid)
+        is_own_active_participant = CallParticipant.objects.filter(
+            session=session, guest=guest, left_at__isnull=True
+        ).exists()
+        if not is_own_active_participant:
+            return Response(
+                {"detail": "Join the call before signalling."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        to_participant = request.data.get("to_participant")
+        signal = request.data.get("signal")
+        if not isinstance(to_participant, str) or not isinstance(signal, dict):
+            return Response(
+                {"detail": "to_participant (string) and signal (object) are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # A guest may reach a member or another guest, but only one who is
+        # themselves an active participant of this SAME session - which is
+        # already scoped to this guest's own meeting, so this single check
+        # also rejects any target from a different meeting's call.
+        target_user_id = user_id_from_key(to_participant)
+        target_guest_uuid = guest_uuid_from_key(to_participant)
+        if target_user_id is not None:
+            target_key = user_key(target_user_id)
+            target_is_active = CallParticipant.objects.filter(
+                session=session, user_id=target_user_id, left_at__isnull=True
+            ).exists()
+        elif target_guest_uuid is not None:
+            target_key = guest_key(target_guest_uuid)
+            target_is_active = CallParticipant.objects.filter(
+                session=session, guest_id=target_guest_uuid, left_at__isnull=True
+            ).exists()
+        else:
+            target_key = None
+            target_is_active = False
+
+        if not target_is_active:
+            return Response(
+                {"detail": "Target is not a participant of this call."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        send_signal(session.uuid, target_key, own_key, signal)
+        return Response({"status": "ok"})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestStateView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="The guest's own call state, or their lobby status")
+    def get(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is not None:
+            session = calls.active_call_session_for_guest(guest)
+            if session is None:
+                return Response(
+                    {
+                        "admitted": True,
+                        "active": False,
+                        "participant_key": guest_key(guest.uuid),
+                    }
+                )
+            return Response(
+                {
+                    "admitted": True,
+                    **_guest_call_state(session),
+                    "ice_servers": getattr(settings, "CHAT_CALL_ICE_SERVERS", []),
+                    "participant_key": guest_key(guest.uuid),
+                }
+            )
+
+        # Not (or no longer) admitted through the real gate above:
+        # guest_for_token deliberately skips the state/occurrence check
+        # resolve_guest enforces, so a guest who is WAITING, REFUSED or
+        # REMOVED - or whose ADMITTED row belongs to an occurrence the host
+        # has since ended - can still be told their own status. Still
+        # slug-scoped, same as _guest_for_request, so a token for another
+        # meeting learns nothing either way.
+        from ..models import MeetingGuest
+
+        token = request.headers.get("X-Meeting-Token", "")
+        lobby_guest = guest_for_token(token)
+        if lobby_guest is None or lobby_guest.meeting.slug != slug:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        reported_state = lobby_guest.state
+        if lobby_guest.state == MeetingGuest.State.ADMITTED:
+            # end_meeting only sweeps the WAITING rows of the occurrence it
+            # closes - an ADMITTED row survives its own occurrence closing
+            # verbatim, and resolve_guest above already rejected it on the
+            # occurrence check. Report the meeting as ended rather than
+            # parroting a DB status that stopped being true.
+            reported_state = "ended"
+        elif lobby_guest.state == MeetingGuest.State.WAITING:
+            # Same reasoning one occurrence over: a WAITING row nothing ever
+            # swept (the host never ended that occurrence, it simply
+            # elapsed) is a lobby nobody is watching any more, and the stream
+            # already 404s this same token. Reporting "waiting" would tell
+            # the guest to keep waiting for an admission that cannot come.
+            occurrence = current_occurrence(lobby_guest.meeting)
+            if occurrence is None or occurrence[0] != lobby_guest.occurrence_start:
+                reported_state = "ended"
+        return Response({"admitted": False, "state": reported_state})
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestStreamView(APIView):
+    """Server-sent events for a meeting guest: lobby status, call signalling
+    and messages.
+
+    Gated on ``guest_for_token`` (the WAITING-tolerant lookup), not
+    ``resolve_guest`` like every other view in this file - deliberately
+    wider. A WAITING guest has to be able to hold a stream open to learn
+    they were admitted; gating on ``resolve_guest`` here would 404 that
+    guest before the generator ever runs, which is exactly what made
+    ``meeting_refused`` undeliverable before this view existed (see
+    ``guest_stream``'s module docstring). The generator itself still fences
+    every piece of *content*: ``call_*`` events and messages are only ever
+    forwarded once its own per-cycle ``resolve_guest`` call succeeds, so a
+    WAITING/REFUSED/REMOVED guest's stream carries nothing but the four
+    ``meeting_*`` lifecycle events.
+
+    This does widen the unauthenticated, long-lived surface: any token that
+    merely names a real guest of this meeting - including one never
+    admitted - can now hold a connection open. Bounding that requires more
+    than the knock endpoint's 10/IP/hour cap and ``MEETING_MAX_WAITING_GUESTS``
+    (20): both cap WAITING rows *within one occurrence*, but ``guest_for_token``
+    does no occurrence check, stale WAITING rows are never purged (a host
+    ending a meeting only sweeps the occurrence being closed, see
+    ``end_meeting``), and a WAITING guest's own generator loop has no
+    occurrence check either - so an unbounded gate here would let a token
+    from occurrence N-5 hold a full 600s connection, reconnected forever by
+    EventSource, and the real cap would be 20 WAITING streams *per
+    occurrence the series has ever had*, not per occurrence. So a WAITING
+    guest is refused here, at connect time, unless their ``occurrence_start``
+    is the occurrence reachable right now - the same 404 an unknown token
+    gets. That makes the 20-per-occurrence bound true at connect time; it is
+    not re-checked once the stream is open, so a WAITING guest whose
+    occurrence rolls over mid-connection keeps their stream until the 600s
+    budget forces a reconnect, which then re-runs this same check. No
+    in-loop occurrence query was added for that narrower, self-correcting
+    case.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [MeetingPublicIpThrottle]
+
+    @extend_schema(summary="Server-sent event stream for a meeting guest")
+    def get(self, request, slug):
+        from ..models import MeetingGuest
+
+        token = request.headers.get("X-Meeting-Token", "")
+        lobby_guest = guest_for_token(token)
+        if lobby_guest is None or lobby_guest.meeting.slug != slug:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if lobby_guest.state == MeetingGuest.State.WAITING:
+            occurrence = current_occurrence(lobby_guest.meeting)
+            if occurrence is None or occurrence[0] != lobby_guest.occurrence_start:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+
+        last_event_id = request.META.get("HTTP_LAST_EVENT_ID")
+        response = StreamingHttpResponse(
+            stream_guest_events(
+                token, lobby_guest.meeting_id, last_event_id=last_event_id
+            ),
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache, no-transform"
+        response["X-Accel-Buffering"] = "no"
+        response.streaming = True
+        response["Content-Encoding"] = "identity"
+        return response
+
+
+@extend_schema(tags=["Chat - Meetings"])
+class MeetingGuestMessagesView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get_throttles(self):
+        cls = (
+            MeetingPublicPageThrottle
+            if self.request.method == "GET"
+            else MeetingPublicIpThrottle
+        )
+        return [cls()]
+
+    @extend_schema(summary="The meeting chat of the guest's occurrence")
+    def get(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        before, limit = page_args(request.query_params)
+        rows, has_more = meeting_messages.messages_for_guest(
+            guest, before=before, limit=limit
+        )
+        return Response(
+            {
+                "messages": [
+                    meeting_messages.guest_view(meeting_messages.serialize_message(m))
+                    for m in rows
+                ],
+                "has_more": has_more,
+            }
+        )
+
+    @extend_schema(summary="Post a line to the meeting chat as an admitted guest")
+    def post(self, request, slug):
+        guest = _guest_for_request(request, slug)
+        if guest is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        body, error = clean_body(request.data)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        message = meeting_messages.post_message(guest.meeting, body, guest=guest)
+        return Response(
+            meeting_messages.guest_view(meeting_messages.serialize_message(message)),
+            status=status.HTTP_201_CREATED,
+        )

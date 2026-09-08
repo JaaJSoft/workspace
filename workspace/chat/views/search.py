@@ -14,6 +14,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from ..models import Message, MessageAttachment, Reaction
 from ..services.conversations import get_active_membership
+from ..services.identities import identity_payload
 from ..services.message_search import search_messages_qs
 
 logger = logging.getLogger(__name__)
@@ -149,10 +150,7 @@ class ConversationMessageSearchView(APIView):
         results = [
             {
                 "uuid": str(msg.uuid),
-                "author": {
-                    "id": msg.author.id,
-                    "username": msg.author.username,
-                },
+                "author": identity_payload(msg.author, None),
                 "body": msg.body,
                 "body_html": msg.body_html,
                 # Lets the UI open the thread a hit lives in: a threaded reply
@@ -247,6 +245,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         data = []
         for att in items:
             author = att.message.author
+            identity = identity_payload(author, None)
             data.append(
                 {
                     "uuid": att.uuid,
@@ -261,8 +260,8 @@ class ConversationMediaView(CacheControlMixin, APIView):
                     "created_at": att.created_at.isoformat(),
                     "message_uuid": att.message_id,
                     "author": {
-                        "id": author.id,
-                        "username": author.username,
+                        "id": identity["id"],
+                        "username": identity["username"],
                         "first_name": author.first_name,
                         "last_name": author.last_name,
                     },

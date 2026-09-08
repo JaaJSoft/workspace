@@ -5,6 +5,7 @@ import orjson
 from django.http import StreamingHttpResponse
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
+from workspace.common.sse import format_sse
 
 from ..sse_registry import sse_registry
 
@@ -47,24 +48,6 @@ SSE_PUBSUB_MESSAGES = safe_counter(
 _MAX_CONNECTION_SECONDS = 600
 
 
-def _format_sse(event_type, data, event_id=None):
-    """Format an SSE event string.
-
-    Uses a single SSE event type 'sse' with the real event name inside the JSON payload.
-    """
-    payload = {
-        "event": event_type,
-        "data": data,
-    }
-    lines = ["event: sse"]
-    if event_id:
-        lines.append(f"id: {event_id}")
-    lines.append(f"data: {orjson.dumps(payload).decode()}")
-    lines.append("")
-    lines.append("")
-    return "\n".join(lines)
-
-
 def global_stream(request):
     """Global SSE endpoint that aggregates events from all registered providers."""
     if not request.user.is_authenticated:
@@ -101,7 +84,7 @@ def _emit_initial_events(providers, user_id):
         try:
             for event_name, data, event_id in provider.get_initial_events():
                 SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
-                yield _format_sse(f"{slug}.{event_name}", data, event_id)
+                yield format_sse(f"{slug}.{event_name}", data, event_id)
         except Exception:
             logger.exception(
                 "Failed to get initial events from SSE provider '%s' for user %s",
@@ -119,7 +102,7 @@ def _poll_provider(slug, provider, cache_value, user_id):
             events = list(provider.poll(cache_value))
         for event_name, data, event_id in events:
             SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
-            yield _format_sse(
+            yield format_sse(
                 f"{slug}.{event_name}",
                 data,
                 event_id,

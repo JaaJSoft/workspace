@@ -504,7 +504,7 @@ class MessageDetailView(APIView):
             retract_thread_reply(message)
             recount_thread(message.thread_root)
         else:
-            # Decrement unread_count for members who hadn't read this message
+            # Decrement unread_count for members who hadn't read this message.
             ConversationMember.objects.filter(
                 conversation_id=message.conversation_id,
                 left_at__isnull=True,

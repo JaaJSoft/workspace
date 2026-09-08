@@ -4,25 +4,9 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-// chatRoomFormatDuration is a top-level function exposed on window - load the
-// script with the same mixin stubs as room.test.js so it initialises cleanly,
-// then call the formatter directly without instantiating the factory.
-const stubs = {
-  chatUiHelpersMixin: () => ({}),
-  chatConversationsMixin: () => ({ _conversations: true }),
-  chatMessagesMixin: () => ({ _msg: true, loadMessages: async () => {} }),
-  chatInputMixin: () => ({ _input: true }),
-  chatSseMixin: () => ({ _sse: true }),
-  chatMembersMixin: () => ({ _members: true }),
-  chatPanelsMixin: () => ({ _panels: true }),
-  chatBotMixin: () => ({ _bot: true }),
-  chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
-  chatCallDiagnosticMixin: () => ({ _diag: true }),
-  chatRecorderMixin: () => ({ initRecorder: () => {} }),
-  chatCallShouldOwnMedia: (r) => r !== 'observer',
-};
-
-const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', stubs);
+// The formatter is a pure helper in call_room.js, which the member room, the
+// main-tab observer and the guest page all load - no mixin stubs needed.
+const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/call_room.js');
 
 const fmt = ctx.chatRoomFormatDuration;
 

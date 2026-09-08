@@ -778,6 +778,61 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.deleting = false;
     },
 
+    // --- Meeting link ---
+    async createMeetingLink() {
+      if (!this._panelRaw || this.creatingMeeting) return;
+      this.creatingMeeting = true;
+      try {
+        const targetUuid = this._panelRaw.master_event_id || this.form.uuid;
+        const resp = await fetch('/api/v1/chat/meetings', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ event_id: targetUuid }),
+        });
+        if (!resp.ok) {
+          if (window.AppAlert) window.AppAlert.error('Could not create the meeting link');
+          return;
+        }
+        // The meeting exists from here on, so show its link and let the
+        // grid pick it up whatever the refresh below does - the cached
+        // event behind every card still says there is no meeting.
+        const data = await resp.json();
+        this._panelRaw = { ...this._panelRaw, join_url: data.join_url };
+        this.calendar.refetchEvents();
+        this.refetchAgenda();
+
+        // The creation answer names no conversation, and room_url - the
+        // member door - is a property of the event, resolved server-side
+        // against the viewer's membership. So re-read the event.
+        const detail = await fetch(`/api/v1/events/${targetUuid}`, { credentials: 'same-origin' });
+        if (!detail.ok) {
+          if (window.AppAlert) {
+            window.AppAlert.warning('The meeting link was created. Reload to see the room button.');
+          }
+          return;
+        }
+        const event = await detail.json();
+        // The detail answers for the series master. A panel opened on an
+        // occurrence keeps its own row - its uuid and instants drive the
+        // date line and every other action - and takes only the links.
+        this._panelRaw = event.uuid === this._panelRaw.uuid
+          ? event
+          : { ...this._panelRaw, join_url: event.join_url, room_url: event.room_url };
+      } finally {
+        this.creatingMeeting = false;
+      }
+    },
+    copyJoinUrl() {
+      const url = this._panelRaw && this._panelRaw.join_url;
+      if (!url) return;
+      navigator.clipboard.writeText(url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Join link copied', { duration: 2000 });
+      }).catch(() => {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy the link');
+      });
+    },
+
     // --- Respond ---
     async respondToInvitation(newStatus) {
       try {

@@ -32,6 +32,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 {% block drawer_attrs %}
   x-data="chatApp({{ user.id }})"
   @ajax:missing="_onAjaxMissing($event)"
+  @ajax:error="onMessagesAjaxError($event)"
   @chat-message.window="handleSSEMessage($event.detail)"
   @chat-message_edited.window="handleSSEMessageEdited($event.detail)"
   @chat-message_deleted.window="handleSSEMessageDeleted($event.detail)"

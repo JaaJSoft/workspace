@@ -1,0 +1,71 @@
+{# Text, markdown and emoji only: the meeting chat has no attachments, voice, mentions or threads. #}
+<div class="p-3 bg-base-100 border-t border-base-300">
+  <div
+    class="border border-base-300 rounded-xl transition-colors focus-within:border-info/50"
+  >
+    <div class="flex items-center gap-0.5 pl-2 pr-1 py-1">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Bold (Ctrl+B)"
+        @click="wrapSelection('**')"
+      >
+        <i data-lucide="bold" class="w-3.5 h-3.5"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Italic (Ctrl+I)"
+        @click="wrapSelection('*')"
+      >
+        <i data-lucide="italic" class="w-3.5 h-3.5"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Code (Ctrl+E)"
+        @click="wrapSelection('`')"
+      >
+        <i data-lucide="code" class="w-3.5 h-3.5"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Insert link"
+        @click="insertLink()"
+      >
+        <i data-lucide="link" class="w-3.5 h-3.5"></i>
+      </button>
+      <div class="flex-1"></div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Emoji"
+        @click="openEmojiPicker('input', $event)"
+      >
+        <i data-lucide="smile" class="w-3.5 h-3.5"></i>
+      </button>
+      <div class="w-px self-stretch my-1 bg-base-300"></div>
+      <button
+        type="button"
+        class="btn btn-info btn-sm btn-square"
+        @click="sendMeetingMessage()"
+        title="Send"
+        aria-label="Send message"
+        :disabled="!(messageBody || '').trim()"
+      >
+        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+    <textarea
+      id="meeting-chat-input"
+      x-model="messageBody"
+      @keydown="handleMeetingKeydown($event)"
+      @input="autoResize($el)"
+      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
+      placeholder="Type a message..."
+      rows="1"
+      maxlength="4000"
+    ></textarea>
+  </div>
+</div>

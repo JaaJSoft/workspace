@@ -277,7 +277,8 @@ class ConversationDetailView(APIView):
         conversation.notification_level = membership.notification_level
         return Response(
             ConversationDetailSerializer(
-                conversation, context={"request": request}
+                conversation,
+                context={"request": request},
             ).data
         )
 

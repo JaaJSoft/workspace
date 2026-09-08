@@ -92,7 +92,7 @@ def _prefetch_event(qs):
                 queryset=EventMember.objects.select_related("user"),
             ),
         )
-        .select_related("owner", "calendar")
+        .select_related("owner", "calendar", "meeting")
         .annotate(
             _poll_id=Subquery(
                 Poll.objects.filter(event=OuterRef("pk")).values("uuid")[:1]
@@ -185,6 +185,7 @@ class EventListView(CacheControlMixin, APIView):
             limit=limit,
             calendar_ids=calendar_ids,
             show_declined=show_declined,
+            request=request,
         )
         _mark_displayed_events_read(request.user, [e.get("uuid") for e in events])
         return Response({"events": events, "next_after": next_after})
@@ -232,7 +233,9 @@ class EventListView(CacheControlMixin, APIView):
         )
         non_recurring = _prefetch_event(non_recurring).order_by("start")
 
-        non_recurring_data = EventSerializer(non_recurring, many=True).data
+        non_recurring_data = EventSerializer(
+            non_recurring, many=True, context={"request": request}
+        ).data
 
         # Recurring masters overlapping the range
         masters = Event.objects.filter(
@@ -245,7 +248,9 @@ class EventListView(CacheControlMixin, APIView):
         )
         masters = _prefetch_event(masters)
 
-        recurring_data = expand_recurring_events(masters, range_start, range_end)
+        recurring_data = expand_recurring_events(
+            masters, range_start, range_end, request=request
+        )
 
         # Merge and sort as instants: values mix date-only all-day labels
         # with ISO datetimes whose offsets can differ, so a plain string
@@ -311,7 +316,10 @@ class EventListView(CacheControlMixin, APIView):
             )
 
         event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
-        return Response(EventSerializer(event).data, status=status.HTTP_201_CREATED)
+        return Response(
+            EventSerializer(event, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 @extend_schema(tags=["Calendar"])
@@ -356,12 +364,14 @@ class EventDetailView(APIView):
                     )
                 ).first()
                 if exc:
-                    return Response(EventSerializer(exc).data)
+                    return Response(
+                        EventSerializer(exc, context={"request": request}).data
+                    )
                 # Build virtual occurrence
-                occ = make_virtual_occurrence(event, original_start)
+                occ = make_virtual_occurrence(event, original_start, request=request)
                 return Response(occ)
 
-        return Response(EventSerializer(event).data)
+        return Response(EventSerializer(event, context={"request": request}).data)
 
     @extend_schema(summary="Update an event", request=EventUpdateSerializer)
     def put(self, request, event_id):
@@ -392,7 +402,7 @@ class EventDetailView(APIView):
             return Response({"detail": exc.detail}, status=exc.status_code)
 
         written = _prefetch_event(Event.objects.filter(pk=written.pk)).first()
-        return Response(EventSerializer(written).data)
+        return Response(EventSerializer(written, context={"request": request}).data)
 
     @extend_schema(summary="Delete an event")
     def delete(self, request, event_id):

@@ -38,7 +38,7 @@ class ReactionPickerTagTests(TestCase):
         )
 
     def _picker(self, message, user):
-        ctx = render_reaction_picker(message, user, DEFAULT_QUICK_REACTIONS)
+        ctx = render_reaction_picker(message, user.id, DEFAULT_QUICK_REACTIONS)
         return {r["emoji"]: r["has_mine"] for r in ctx["quick_reactions"]}
 
     def test_emoji_reacted_by_current_user_is_marked_mine(self):

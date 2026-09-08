@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ meeting.title }} - Meeting - Workspace{% endblock %}
+
+{% block extra_head %}
+  {% comment %}In <head> and not deferred: the two custom elements must be
+  defined before the parser reaches markup using them, or the first render
+  flashes unstyled.{% endcomment %}
+  <script src="{% static 'chat/ui/js/conversation_avatar.js' %}"></script>
+  <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
+  <link rel="stylesheet" href="{% static 'chat/ui/css/chat.css' %}" />
+  <script
+    type="module"
+    src="{% static 'chat/ui/js/vendor/emoji-picker/emoji-picker.js' %}"
+  ></script>
+{% endblock %}
+
+{% block body %}
+  {{ meeting|json_script:"meeting-data" }}
+  {{ ice_servers|json_script:"call-ice-servers-data" }}
+  {{ call_sounds_enabled|json_script:"call-sounds-enabled-data" }}
+  {{ chat_prefs|json_script:"chat-prefs-data" }}
+  <div
+    class="h-screen flex flex-col"
+    x-data="chatMeetingHostApp({{ current_user_id }})"
+    @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
+    @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
+    @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
+    @chat-call_started.window="onCallStarted($event.detail)"
+    @chat-call_ended.window="onCallEnded($event.detail)"
+    @chat-call_signal.window="onCallSignal($event.detail)"
+    @chat-meeting_guest_waiting.window="onGuestWaiting($event.detail)"
+    @chat-meeting_message.window="onMeetingMessage($event.detail)"
+    @chat-meeting_message_deleted.window="onMeetingMessageDeleted($event.detail)"
+    @sse:reconnect.window="loadMeetingMessages()"
+  >
+    <div class="flex flex-1 min-h-0">
+      {% comment %}x-if, not x-show: the stage's tiles take their constructor
+      arguments from call state that does not exist until the call does, and a
+      hidden x-show branch would have been built with the empty one.
+      {% endcomment %}
+      <template x-if="inCall">
+        <div class="flex-1 flex min-w-0">
+          {% include "chat/ui/partials/call_stage.html" with meeting_controls=True chat_toggle=True %}
+        </div>
+      </template>
+      <template x-if="!inCall">
+        <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
+          <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
+            {% include "chat/ui/partials/meet_card_header.html" with icon="video" title_expr="meetingTitle()" subtitle_expr="summaryLine()" %}
+            <div class="p-6 flex flex-col gap-3">
+              <p
+                class="text-sm text-base-content/70"
+                x-text="callSession ? 'A call is in progress.' : 'Nobody is in the call yet.'"
+              ></p>
+              <div class="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  @click="joinMeetingCall()"
+                  :disabled="joiningCall"
+                >
+                  <i data-lucide="phone" class="w-4 h-4"></i> Join the call
+                </button>
+                <button type="button" class="btn btn-sm" @click="openLobby()">
+                  <i data-lucide="door-open" class="w-4 h-4"></i> Lobby
+                  <span
+                    class="badge badge-xs badge-warning"
+                    x-show="lobby.length"
+                    x-text="lobby.length"
+                  ></span>
+                </button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="copyJoinUrl()">
+                  <i data-lucide="link" class="w-4 h-4"></i> Copy link
+                </button>
+                <button type="button" class="btn btn-sm md:hidden" @click="toggleChat()">
+                  <i data-lucide="message-square" class="w-4 h-4"></i> Chat
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </template>
+      {% include "chat/ui/partials/meeting_chat.html" %}
+    </div>
+    {% comment %}Mounted once, outside both branches: two elements carrying the
+    same x-ref in one component fight over the key, and Alpine's cleanup on the
+    branch that unmounts deletes the entry the surviving one had just written -
+    leaving openLobby() with nothing to call showModal on.{% endcomment %}
+    <template x-if="meeting">
+      {% include "chat/ui/partials/lobby_dialog.html" %}
+    </template>
+    {% comment %}Singleton emoji picker. Escape is handled here rather than by
+    the composer's keydown handler, which never sees it while the caret sits in
+    the picker's search field; the event is composed, so it reaches this
+    wrapper from the shadow DOM.{% endcomment %}
+    <div
+      x-show="emojiPickerVisible"
+      x-cloak
+      class="fixed z-[100]"
+      :style="{ left: emojiPickerX + 'px', top: emojiPickerY + 'px' }"
+      @click.outside="closeEmojiPicker()"
+      @keydown.escape.stop="closeEmojiPicker()"
+    >
+      {# The element's built-in default for data-source is a CDN URL. #}
+      <emoji-picker x-ref="emojiPicker" data-source="{% static 'chat/ui/js/vendor/emoji-picker/data.json' %}"></emoji-picker>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'ui/js/attachment_input.js' %}"></script>
+  <script src="{% static 'chat/ui/js/chat_preferences.js' %}"></script>
+  <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
+  <script src="{% static 'chat/ui/js/input.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call.js' %}"></script>
+  <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+  <script src="{% static 'chat/ui/js/meeting_host.js' %}"></script>
+  <script src="{% static 'chat/ui/js/meeting_chat.js' %}"></script>
+  <script src="{% static 'chat/ui/js/meeting_page.js' %}"></script>
+{% endblock %}

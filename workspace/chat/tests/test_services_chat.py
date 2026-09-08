@@ -3,7 +3,10 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from workspace.chat.models import Conversation, ConversationMember
+from workspace.chat.models import (
+    Conversation,
+    ConversationMember,
+)
 from workspace.chat.services.notifications import (
     notification_title,
     notify_new_message,

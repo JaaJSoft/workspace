@@ -4,13 +4,15 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db.models import OuterRef, Prefetch, Subquery, prefetch_related_objects
 from django.http import Http404, HttpResponse, HttpResponseForbidden
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
+    Meeting,
     Message,
     MessageAttachment,
     PinnedConversation,
@@ -18,6 +20,7 @@ from workspace.chat.models import (
 )
 from workspace.chat.serializers import ConversationListSerializer
 from workspace.chat.services.avatar import avatar_initial_for
+from workspace.chat.services.calls import MeetingScope, is_call_locked
 from workspace.chat.services.conversations import (
     active_members_queryset,
     display_name_for,
@@ -26,8 +29,12 @@ from workspace.chat.services.conversations import (
     get_unread_counts,
     user_conversation_ids,
 )
+from workspace.chat.services.identities import display_name_for_identity
+from workspace.chat.services.meeting_hosts import is_host
+from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.reactions import quick_reactions_for
 from workspace.chat.services.threads import show_thread_replies_inline
+from workspace.chat.throttling import meeting_public_ip_limited
 from workspace.common.dates import time_ago
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
@@ -39,9 +46,9 @@ def _user_chat_groups(user):
     return [{"id": g.pk, "name": g.name} for g in user.groups.order_by("name")]
 
 
-def _display(user):
+def _display(msg):
     """The name a person is shown under in a message preview."""
-    return user.get_full_name() or user.username
+    return display_name_for_identity(msg.author, None)
 
 
 # Entrance animation styles offered in the preferences panel; the values are
@@ -142,12 +149,12 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
             if body:
                 if len(body) > 30:
                     body = body[:30] + "\u2026"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {body}"
+                c.last_message_preview = f"{_display(c._last_message)}: {body}"
             elif att := list(c._last_message.attachments.all()):
                 label = "sent a file" if len(att) == 1 else f"sent {len(att)} files"
-                c.last_message_preview = f"{_display(c._last_message.author)}: {label}"
+                c.last_message_preview = f"{_display(c._last_message)}: {label}"
             else:
-                c.last_message_preview = f"{_display(c._last_message.author)}: "
+                c.last_message_preview = f"{_display(c._last_message)}: "
             c.time_ago = time_ago(c._last_message.created_at, now=now)
         else:
             c.last_message_preview = "No messages yet"
@@ -218,7 +225,8 @@ def chat_room_view(request, conversation_uuid):
     )
 
     conversation_data = ConversationListSerializer(
-        conversation, context={"request": request}
+        conversation,
+        context={"request": request},
     ).data
 
     # Reuse the prefetched members so the heading matches the sidebar row.
@@ -246,6 +254,69 @@ def chat_room_view(request, conversation_uuid):
             "voice_max_seconds": settings.CHAT_VOICE_MAX_SECONDS,
         },
     )
+
+
+def _meeting_page_payload(meeting, request):
+    occurrence = current_occurrence(meeting)
+    occurrence_start = occurrence[0] if occurrence is not None else None
+    return {
+        "uuid": str(meeting.uuid),
+        "slug": meeting.slug,
+        "title": meeting.title,
+        "join_url": request.build_absolute_uri(meeting.join_path),
+        "locked": is_call_locked(MeetingScope(meeting), occurrence_start),
+        "next_start": occurrence_start.isoformat() if occurrence_start else None,
+        "public_link_enabled": meeting.public_link_enabled,
+        "ad_hoc": meeting.is_ad_hoc,
+    }
+
+
+@meeting_public_ip_limited(template="chat/ui/meet_throttled.html")
+@ensure_csrf_cookie
+def meeting_view(request, slug):
+    """The meeting page. A host gets the room with its controls inside the
+    app shell; anyone else gets the standalone guest document, which knocks
+    with a token - a signed-in stranger with their account bound to it."""
+    meeting = Meeting.objects.select_related("event").filter(slug=slug).first()
+    if meeting is None:
+        raise Http404
+
+    if is_host(request.user, meeting):
+        return render(
+            request,
+            "chat/ui/meeting_host.html",
+            {
+                "meeting": _meeting_page_payload(meeting, request),
+                "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+                "call_sounds_enabled": get_setting(
+                    request.user, "chat", "call_sounds", default=True
+                ),
+                "chat_prefs": _chat_prefs(request.user),
+                "current_user_id": request.user.id,
+            },
+        )
+
+    if not meeting.public_link_enabled:
+        raise Http404
+
+    signed_in_as = ""
+    if request.user.is_authenticated:
+        signed_in_as = display_name_for_identity(request.user, None)
+    return render(
+        request,
+        "chat/ui/meeting_guest.html",
+        {
+            "slug": slug,
+            "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
+            "signed_in_as": signed_in_as,
+        },
+    )
+
+
+@meeting_public_ip_limited
+def meet_redirect_view(request, slug):
+    """The first iteration's link, kept alive as a redirect."""
+    return redirect(reverse("chat_meeting:page", kwargs={"slug": slug}))
 
 
 @login_required
@@ -301,18 +372,31 @@ def conversation_items_view(request):
     )
 
 
-def group_messages(messages, current_user):
+def group_messages(messages, user_id):
     """Group consecutive messages by same author within 5 min, with date separators.
 
     Returns a list of dicts:
       {'type': 'date', 'date': date_obj}
       {'type': 'messages', 'author': user, 'is_own': bool, 'messages': [msg, ...]}
+
+    Also stamps a `quote_author_name` onto every replied-to message this batch
+    touches (msg.reply_to), since this is the one place that already walks
+    every message headed for the template - the reply quote otherwise has no
+    other pass to piggyback on.
     """
     groups = []
     current_date = None
     current_group = None
 
     for msg in messages:
+        # The reply quote renders a single name, never id/username - a plain
+        # string sidesteps the template's {{ x|default:y }} filter-argument
+        # trap entirely.
+        if msg.reply_to_id and msg.reply_to is not None:
+            msg.reply_to.quote_author_name = display_name_for_identity(
+                msg.reply_to.author, None
+            )
+
         msg_date = timezone.localdate(msg.created_at)
 
         # Insert date separator when the day changes
@@ -334,10 +418,9 @@ def group_messages(messages, current_user):
             groups.append({"type": "system", "message": msg})
             continue
 
-        # Check if this message continues the current group
         can_group = (
             current_group
-            and current_group["author"].id == msg.author_id
+            and current_group["author_id"] == msg.author_id
             and not msg.deleted_at
             and not (current_group["messages"][-1].deleted_at)
             and (msg.created_at - current_group["messages"][-1].created_at)
@@ -351,8 +434,9 @@ def group_messages(messages, current_user):
                 groups.append(current_group)
             current_group = {
                 "type": "messages",
+                "author_id": msg.author_id,
                 "author": msg.author,
-                "is_own": msg.author_id == current_user.id,
+                "is_own": msg.author_id == user_id,
                 "is_bot": hasattr(msg.author, "bot_profile"),
                 "messages": [msg],
             }
@@ -441,7 +525,7 @@ def conversation_messages_view(request, conversation_uuid):
         or "dm"
     )
 
-    groups = group_messages(messages_page, request.user)
+    groups = group_messages(messages_page, request.user.id)
 
     first_uuid = str(messages_page[0].uuid) if messages_page else ""
 
@@ -467,7 +551,7 @@ def conversation_messages_view(request, conversation_uuid):
             "groups": groups,
             "has_more": has_more,
             "first_uuid": first_uuid,
-            "current_user": request.user,
+            "current_user_id": request.user.id,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": conversation_kind,
@@ -482,7 +566,13 @@ def thread_messages_view(request, root_uuid):
     """Partial: a thread's root message followed by its replies."""
     root = (
         Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
-        .select_related("author", "author__bot_profile", "conversation")
+        .select_related(
+            "author",
+            "author__bot_profile",
+            "reply_to",
+            "reply_to__author",
+            "conversation",
+        )
         .first()
     )
     if root is None:
@@ -541,18 +631,18 @@ def thread_messages_view(request, root_uuid):
         request,
         "chat/ui/partials/thread_message_list.html",
         {
-            "groups": group_messages(page, request.user),
+            "groups": group_messages(page, request.user.id),
             # The root renders outside the paginated list, on the first page
             # only: "load older" prepends into the list, so a root inside it
             # would sink below the older replies; an older page prepends into a
             # panel that already shows it.
             "root_groups": None
             if is_older_page
-            else group_messages([root], request.user),
+            else group_messages([root], request.user.id),
             "has_more": has_more,
             "first_uuid": str(page[0].uuid) if page else "",
             "root_uuid": root.uuid,
-            "current_user": request.user,
+            "current_user_id": request.user.id,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": root.conversation.kind,

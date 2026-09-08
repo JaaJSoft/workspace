@@ -84,10 +84,15 @@ def render_read_receipt(message, conversation_kind):
     }
 
 
+def _reacted_emojis(message, user_id):
+    """The emojis the reader already put on *message*."""
+    return {r.emoji for r in message.reactions.all() if r.user_id == user_id}
+
+
 @register.inclusion_tag("chat/ui/partials/_reaction_picker.html")
-def render_reaction_picker(message, current_user, quick_emojis):
+def render_reaction_picker(message, user_id, quick_emojis):
     """Quick-reaction emojis for the hover toolbar, each flagged with whether
-    the current user already reacted with it so the picker shows it as selected.
+    the viewer already reacted with it so the picker shows it as selected.
 
     `quick_emojis` is the per-user list computed once per render by the view
     (see workspace.chat.services.reactions.quick_reactions_for); this tag only
@@ -99,7 +104,7 @@ def render_reaction_picker(message, current_user, quick_emojis):
     from `conversation_messages_view`, whose queryset already prefetches
     `reactions__user`.
     """
-    mine = {r.emoji for r in message.reactions.all() if r.user_id == current_user.id}
+    mine = _reacted_emojis(message, user_id)
     return {
         "message_uuid": message.uuid,
         "quick_reactions": [{"emoji": e, "has_mine": e in mine} for e in quick_emojis],
@@ -107,8 +112,8 @@ def render_reaction_picker(message, current_user, quick_emojis):
 
 
 @register.inclusion_tag("chat/ui/partials/_reactions.html")
-def render_reactions(message, current_user):
-    """Group reactions by emoji and check if current user reacted.
+def render_reactions(message, user_id):
+    """Group reactions by emoji and check if the reader reacted.
 
     Callers MUST `prefetch_related('reactions__user')` on the message
     queryset, otherwise iterating reactions hits the DB once per row to
@@ -119,6 +124,7 @@ def render_reactions(message, current_user):
     if not reactions:
         return {"groups": [], "message_uuid": message.uuid}
 
+    mine = _reacted_emojis(message, user_id)
     emoji_map = {}
     for r in reactions:
         if r.emoji not in emoji_map:
@@ -126,12 +132,10 @@ def render_reactions(message, current_user):
                 "emoji": r.emoji,
                 "count": 0,
                 "users": [],
-                "has_mine": False,
+                "has_mine": r.emoji in mine,
             }
         emoji_map[r.emoji]["count"] += 1
         emoji_map[r.emoji]["users"].append(r.user.username)
-        if r.user_id == current_user.id:
-            emoji_map[r.emoji]["has_mine"] = True
 
     return {
         "groups": list(emoji_map.values()),

@@ -8,6 +8,10 @@ from .views import (
     conversations,
     goals,
     interactions,
+    meeting_calls,
+    meeting_guest,
+    meeting_messages,
+    meetings,
     messages,
     pins,
     scheduled,
@@ -223,6 +227,124 @@ urlpatterns = [
         "api/v1/chat/conversations/<uuid:conversation_id>/regenerate-title",
         bots.ConversationRegenerateTitleView.as_view(),
         name="chat-conversation-regenerate-title",
+    ),
+    # Meetings - public surface, no authentication
+    path(
+        "api/v1/chat/meet/<str:slug>",
+        meetings.MeetingSummaryView.as_view(),
+        name="chat-meeting-summary",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/knock",
+        meetings.MeetingKnockView.as_view(),
+        name="chat-meeting-knock",
+    ),
+    # Meetings - guest runtime, token-authorized (X-Meeting-Token header)
+    path(
+        "api/v1/chat/meet/<str:slug>/join",
+        meeting_guest.MeetingGuestJoinView.as_view(),
+        name="chat-meeting-guest-join",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/leave",
+        meeting_guest.MeetingGuestLeaveView.as_view(),
+        name="chat-meeting-guest-leave",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/heartbeat",
+        meeting_guest.MeetingGuestHeartbeatView.as_view(),
+        name="chat-meeting-guest-heartbeat",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/state",
+        meeting_guest.MeetingGuestStateView.as_view(),
+        name="chat-meeting-guest-state",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/signal",
+        meeting_guest.MeetingGuestSignalView.as_view(),
+        name="chat-meeting-guest-signal",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/messages",
+        meeting_guest.MeetingGuestMessagesView.as_view(),
+        name="chat-meeting-guest-messages",
+    ),
+    path(
+        "api/v1/chat/meet/<str:slug>/stream",
+        meeting_guest.MeetingGuestStreamView.as_view(),
+        name="chat-meeting-guest-stream",
+    ),
+    # Meetings - host endpoints
+    path(
+        "api/v1/chat/meetings",
+        meetings.MeetingCreateView.as_view(),
+        name="chat-meeting-create",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/lobby",
+        meetings.MeetingLobbyView.as_view(),
+        name="chat-meeting-lobby",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/admit",
+        meetings.MeetingGuestAdmitView.as_view(),
+        name="chat-meeting-guest-admit",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/refuse",
+        meetings.MeetingGuestRefuseView.as_view(),
+        name="chat-meeting-guest-refuse",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/guests/<uuid:guest_uuid>/remove",
+        meetings.MeetingGuestRemoveView.as_view(),
+        name="chat-meeting-guest-remove",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/lock",
+        meetings.MeetingLockView.as_view(),
+        name="chat-meeting-lock",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/end",
+        meetings.MeetingEndView.as_view(),
+        name="chat-meeting-end",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call",
+        meeting_calls.MeetingCallStateView.as_view(),
+        name="chat-meeting-call-state",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/join",
+        meeting_calls.MeetingCallJoinView.as_view(),
+        name="chat-meeting-call-join",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/leave",
+        meeting_calls.MeetingCallLeaveView.as_view(),
+        name="chat-meeting-call-leave",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/heartbeat",
+        meeting_calls.MeetingCallHeartbeatView.as_view(),
+        name="chat-meeting-call-heartbeat",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/call/signal",
+        meeting_calls.MeetingCallSignalView.as_view(),
+        name="chat-meeting-call-signal",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/messages",
+        meeting_messages.MeetingMessagesView.as_view(),
+        name="chat-meeting-messages",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/messages/<uuid:message_uuid>",
+        meeting_messages.MeetingMessageDetailView.as_view(),
+        name="chat-meeting-message-detail",
     ),
     # Attachments
     path(

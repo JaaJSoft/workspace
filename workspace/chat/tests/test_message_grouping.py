@@ -4,7 +4,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone as dj_timezone
 
-from workspace.chat.models import Message
+from workspace.chat.models import (
+    Message,
+)
 from workspace.chat.ui.views import group_messages
 
 User = get_user_model()
@@ -30,6 +32,6 @@ class GroupMessagesTimezoneTests(TestCase):
             created_at=datetime(2026, 1, 31, 23, 30, tzinfo=UTC),
         )
         dj_timezone.activate("Europe/Paris")
-        groups = group_messages([m1, m2], user)
+        groups = group_messages([m1, m2], user.id)
         dates = [g["date"] for g in groups if g["type"] == "date"]
         self.assertEqual(dates, [date(2026, 1, 31), date(2026, 2, 1)])

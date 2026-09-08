@@ -20,6 +20,8 @@
   {# A reaction toggled in the main flow repainted the flow only; the panel's copy of the message goes stale without this. #}
   @chat-refresh-thread.window="refreshPanelOnly()"
   @ajax:missing="_onAjaxMissing($event)"
+  {# The panel overrides _messagesUrl, so the URL match is thread-aware on its own. #}
+  @ajax:error="onMessagesAjaxError($event)"
 >
 
   <div

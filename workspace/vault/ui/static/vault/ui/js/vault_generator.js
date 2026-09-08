@@ -43,13 +43,20 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
       this.generatorField = null;
     },
 
-    async copyGenerated(value) {
+    // The label and the clearing window belong to the host. This mixin serves
+    // the entry dialog, the standalone generator and the export dialog, and
+    // only the last of those copies something no vault can hand back.
+    async copyGenerated(value, options) {
+      const policy = options || {};
       // Copying is the only way a value drawn here leaves the dialog, and
       // closing the dialog drops it: a rejected write - a denied permission,
       // an unfocused document - has to say so next to the button that was
       // pressed, or the user closes on an empty clipboard believing otherwise.
       try {
-        await window.vaultClipboard.copy('Password', value, { transient: true });
+        await window.vaultClipboard.copy(policy.label || 'Password', value, {
+          transient: true,
+          seconds: policy.seconds,
+        });
         this.generatorError = '';
       } catch (err) {
         this.generatorError = 'That value could not be copied.';

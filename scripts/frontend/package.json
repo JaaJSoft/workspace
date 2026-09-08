@@ -23,7 +23,7 @@
     "watch:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --watch"
   },
   "dependencies": {
-    "@alpinejs/collapse": "3.16.3",
+    "@alpinejs/collapse": "3.17.1",
     "@fullcalendar/luxon3": "6.1.15",
     "@hpke/core": "1.9.0",
     "@hpke/dhkem-x25519": "1.8.0",
@@ -32,7 +32,7 @@
     "@milkdown/plugin-slash": "7.22.1",
     "@zxcvbn-ts/core": "3.0.4",
     "@zxcvbn-ts/language-common": "3.0.4",
-    "alpinejs": "3.16.3",
+    "alpinejs": "3.17.1",
     "cbor-x": "1.6.6",
     "codemirror": "6.0.2",
     "cropperjs": "1.6.2",

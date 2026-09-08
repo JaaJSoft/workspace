@@ -80,7 +80,12 @@ function load(overrides = {}) {
   });
 }
 
-const session = { openEntryKey: async () => 'entry-key' };
+const session = {
+  openEntryKey: async () => 'entry-key',
+  // buildTree runs its whole walk inside this, so the stub has to be the real
+  // shape: a function that runs what it is handed and returns its result.
+  withEntryKeyCache: (run) => run(),
+};
 
 test('the tree carries every vault, folder, tag and entry', async () => {
   const ctx = load();

@@ -68,14 +68,14 @@ def update_summary(conversation_id: str) -> dict:
     if conv_summary and conv_summary.up_to:
         new_qs = new_qs.filter(created_at__gt=conv_summary.up_to)
 
-    new_messages = list(new_qs.select_related("author", "author__bot_profile", "guest"))
+    new_messages = list(new_qs.select_related("author", "author__bot_profile"))
     if not new_messages:
         return {"status": "skipped", "reason": "no new messages to summarize"}
 
     # Format messages - truncate individually to keep the summarisation prompt lean.
     lines = []
     for msg in new_messages:
-        name = display_name_for_identity(msg.author, msg.guest)
+        name = display_name_for_identity(msg.author, None)
         is_bot = hasattr(msg.author, "bot_profile")
         label = f"[Bot] {name}" if is_bot else name
         body = msg.body[:1000] if len(msg.body) > 1000 else msg.body

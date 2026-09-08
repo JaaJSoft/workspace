@@ -50,9 +50,7 @@ class MeetingModelTests(TestCase):
         )
 
     def _meeting(self):
-        return Meeting.objects.create(
-            event=self.event, conversation=self.conv, created_by=self.user
-        )
+        return Meeting.objects.create(event=self.event, created_by=self.user)
 
     def test_slug_is_generated_and_unique(self):
         m = self._meeting()
@@ -61,12 +59,7 @@ class MeetingModelTests(TestCase):
 
     def test_two_meetings_get_different_slugs(self):
         m1 = self._meeting()
-        other_conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        m2 = Meeting.objects.create(
-            event=make_event(self.user), conversation=other_conv, created_by=self.user
-        )
+        m2 = Meeting.objects.create(event=make_event(self.user), created_by=self.user)
         self.assertNotEqual(m1.slug, m2.slug)
 
     def test_join_path_uses_the_slug(self):
@@ -75,13 +68,8 @@ class MeetingModelTests(TestCase):
 
     def test_one_meeting_per_event(self):
         self._meeting()
-        other_conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
         with self.assertRaises(IntegrityError):
-            Meeting.objects.create(
-                event=self.event, conversation=other_conv, created_by=self.user
-            )
+            Meeting.objects.create(event=self.event, created_by=self.user)
 
     def test_closed_occurrence_start_defaults_to_none(self):
         self.assertIsNone(self._meeting().closed_occurrence_start)
@@ -95,7 +83,7 @@ class MeetingGuestModelTests(TestCase):
             kind=Conversation.Kind.GROUP, created_by=self.user
         )
         self.meeting = Meeting.objects.create(
-            event=make_event(self.user), conversation=self.conv, created_by=self.user
+            event=make_event(self.user), created_by=self.user
         )
 
     def test_guest_defaults_to_waiting(self):

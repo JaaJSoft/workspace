@@ -97,14 +97,14 @@ def search_chat_messages(query, user, limit):
 
     messages = (
         search_messages_qs(user, query)
-        .select_related("author", "guest", "conversation")
+        .select_related("author", "conversation")
         .prefetch_related("conversation__members__user")[:limit]
     )
 
     results = []
     for msg in messages:
         conv = msg.conversation
-        author = display_name_for_identity(msg.author, msg.guest)
+        author = display_name_for_identity(msg.author, None)
         if conv.title:
             name = conv.title
         elif conv.kind == Conversation.Kind.DM:

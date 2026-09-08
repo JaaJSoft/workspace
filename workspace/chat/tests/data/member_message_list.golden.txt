@@ -28,8 +28,7 @@
         
 
 
-  
-  <chat-message-group own  author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
+  <chat-message-group own author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
 
   
     
@@ -144,7 +143,6 @@
               </button>
             
             
-            
               <button
                 class="btn btn-ghost btn-xs btn-square text-error"
                 @click="deleteMessage('<uuid-2>')"
@@ -233,12 +231,11 @@
         
 
 
-  
-  <chat-message-group  guest  author-username="Ada" author-name="Ada" id-prefix="msg">
+  <chat-message-group  author-id="<user-2>" author-username="snapother" author-name="snapother" id-prefix="msg">
 
   
     
-      <div slot="message" id="msg-<uuid-3>" data-message-uuid="<uuid-3>" data-body="hello from a guest"   >
+      <div slot="message" id="msg-<uuid-3>" data-message-uuid="<uuid-3>" data-body="hello from a member"   >
 
         
         
@@ -318,7 +315,7 @@
             </button>
             <button
               class="btn btn-ghost btn-xs btn-square"
-              @click="startReply('<uuid-3>', 'Ada', 'hello from a guest')"
+              @click="startReply('<uuid-3>', 'snapother', 'hello from a member')"
               title="Reply"
             >
               <i data-lucide="reply" class="w-3.5 h-3.5"></i>
@@ -333,15 +330,6 @@
               </button>
             
             
-            
-            
-              <button
-                class="btn btn-ghost btn-xs btn-square text-error"
-                @click="deleteMessage('<uuid-3>')"
-                title="Delete"
-              >
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-              </button>
             
           </div>
         </div>
@@ -399,12 +387,11 @@
         
 
 
-  
-  <chat-message-group own  author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
+  <chat-message-group own author-id="<user-1>" author-username="snaphost" author-name="Hana Host" id-prefix="msg">
 
   
     
-      <div slot="message" id="msg-<uuid-5>" data-message-uuid="<uuid-5>" data-body="answering the guest"    data-reply-uuid="<uuid-3>"    data-reply-author="Ada" data-reply-preview="hello from a guest"  >
+      <div slot="message" id="msg-<uuid-5>" data-message-uuid="<uuid-5>" data-body="answering the other member"    data-reply-uuid="<uuid-3>"    data-reply-author="snapother" data-reply-preview="hello from a member"  >
 
         
         
@@ -484,7 +471,7 @@
             </button>
             <button
               class="btn btn-ghost btn-xs btn-square"
-              @click="startReply('<uuid-5>', 'Hana Host', 'answering the guest')"
+              @click="startReply('<uuid-5>', 'Hana Host', 'answering the other member')"
               title="Reply"
             >
               <i data-lucide="reply" class="w-3.5 h-3.5"></i>
@@ -506,7 +493,6 @@
               >
                 <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
               </button>
-            
             
             
               <button

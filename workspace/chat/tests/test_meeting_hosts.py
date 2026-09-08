@@ -50,8 +50,7 @@ class HostDerivationTests(TestCase):
         EventMember.objects.create(event=self.event, user=self.stranger)
         self.assertTrue(is_host(self.stranger, self.meeting))
 
-    def test_create_meeting_makes_no_conversation_and_copies_the_title(self):
-        self.assertIsNone(self.meeting.conversation_id)
+    def test_create_meeting_copies_the_title(self):
         self.assertEqual(self.meeting.title, self.event.title)
 
     def test_ad_hoc_meeting_is_hosted_by_its_creator_only(self):

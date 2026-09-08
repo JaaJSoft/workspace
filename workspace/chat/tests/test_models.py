@@ -264,7 +264,7 @@ class CallParticipantKeyTests(TestCase):
         self.assertEqual(participant.participant_key, f"u:{user.id}")
 
 
-class GuestIdentityTests(TestCase):
+class GuestParticipantIdentityTests(TestCase):
     def setUp(self):
         User = get_user_model()
         self.user = User.objects.create_user(username="gi", password="x")
@@ -278,11 +278,8 @@ class GuestIdentityTests(TestCase):
         event = Event.objects.create(
             calendar=cal, owner=self.user, title="E", start=timezone.now()
         )
-        self.meeting_conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
         self.meeting = Meeting.objects.create(
-            event=event, conversation=self.meeting_conv, created_by=self.user
+            event=event, created_by=self.user
         )
         self.guest = MeetingGuest.objects.create(
             meeting=self.meeting,
@@ -311,17 +308,6 @@ class GuestIdentityTests(TestCase):
             CallParticipant.objects.create(
                 session=self.session, user=self.user, guest=self.guest
             )
-
-    def test_message_needs_exactly_one_identity(self):
-        with self.assertRaises(IntegrityError):
-            Message.objects.create(conversation=self.conv, body="x")
-
-    def test_guest_message_is_allowed(self):
-        msg = Message.objects.create(
-            conversation=self.meeting_conv, guest=self.guest, body="hello"
-        )
-        self.assertIsNone(msg.author)
-        self.assertEqual(msg.guest_id, self.guest.uuid)
 
     def test_a_guest_can_be_in_a_session_only_once(self):
         CallParticipant.objects.create(session=self.session, guest=self.guest)
@@ -364,3 +350,16 @@ class CallSessionScopeTests(TestCase):
     def test_an_ad_hoc_meeting_has_no_event(self):
         self.assertTrue(self.meeting.is_ad_hoc)
         self.assertEqual(self.meeting.join_path, f"/meetings/{self.meeting.slug}")
+
+
+class MessageAuthorRequiredTests(TestCase):
+    def test_a_message_always_has_an_author(self):
+        user = get_user_model().objects.create_user(username="req", password="x")
+        conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=user
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Message.objects.create(conversation=conv, author=None, body="ghost")
+        self.assertFalse(hasattr(Message, "guest"))
+        self.assertFalse(hasattr(Meeting, "conversation"))

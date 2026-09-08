@@ -103,21 +103,8 @@ class Message(models.Model):
     )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
         on_delete=models.CASCADE,
         related_name="chat_messages",
-    )
-    # Pairing with conversation (guest.meeting.conversation must equal this
-    # message's conversation) is a service-layer invariant, not a database one.
-    # Removing a guest is a state transition (State.REMOVED + removed_at), never
-    # a row delete: on_delete=CASCADE would take their messages with it.
-    guest = models.ForeignKey(
-        "MeetingGuest",
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="+",
     )
     reply_to = models.ForeignKey(
         "self",
@@ -148,13 +135,6 @@ class Message(models.Model):
 
     class Meta:
         ordering = ["created_at"]
-        constraints = [
-            models.CheckConstraint(
-                condition=models.Q(author__isnull=False, guest__isnull=True)
-                | models.Q(author__isnull=True, guest__isnull=False),
-                name="message_one_identity",
-            ),
-        ]
         indexes = [
             # B-tree is bidirectional in PostgreSQL and SQLite: this single index
             # serves both ASC and DESC ordering on (conversation, created_at).
@@ -627,14 +607,6 @@ class Meeting(models.Model):
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     event = models.OneToOneField(
         "calendar.Event",
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name="meeting",
-    )
-    # Temporary: a meeting still owns a conversation until Task 9 drops it.
-    conversation = models.OneToOneField(
-        Conversation,
         null=True,
         blank=True,
         on_delete=models.CASCADE,

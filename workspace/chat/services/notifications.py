@@ -35,7 +35,6 @@ def notify_new_message(
     conversation,
     author,
     body,
-    guest=None,
     mentioned_user_ids=None,
     mention_everyone=False,
     thread_recipient_ids=None,
@@ -89,7 +88,7 @@ def notify_new_message(
     if not member_ids:
         return
 
-    author_name = display_name_for_identity(author, guest)
+    author_name = display_name_for_identity(author, None)
     preview = (body[:150] + "...") if len(body) > 150 else body
     title = notification_title(conversation, author_name)
 

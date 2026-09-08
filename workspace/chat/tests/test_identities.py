@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
-from workspace.chat.models import Conversation, Meeting, MeetingGuest
+from workspace.chat.models import Meeting, MeetingGuest
 from workspace.chat.services.identities import (
     display_name_for_identity,
     identity_payload,
@@ -21,12 +21,7 @@ class IdentityPayloadTests(TestCase):
         event = Event.objects.create(
             calendar=cal, owner=self.user, title="E", start=timezone.now()
         )
-        conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        meeting = Meeting.objects.create(
-            event=event, conversation=conv, created_by=self.user
-        )
+        meeting = Meeting.objects.create(event=event, created_by=self.user)
         self.guest = MeetingGuest.objects.create(
             meeting=meeting,
             display_name="Visitor",

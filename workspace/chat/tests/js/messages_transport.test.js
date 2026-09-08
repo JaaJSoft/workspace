@@ -7,11 +7,9 @@ const { loadScript } = require('../../../common/tests/js/loader');
 /**
  * Where every message request goes, and with which headers.
  *
- * The guest meeting page spreads this same mixin and points it at the
- * token-authenticated /meet endpoints, so the addressing is now a seam
- * rather than a literal. These tests pin the member side of that seam: the
- * conversation being viewed, the conversation being marked read and the
- * conversation the HTML list is fetched for are three DISTINCT ids, so a
+ * Addressing goes through a seam rather than a literal, so these tests pin
+ * it: the conversation being viewed, the conversation being marked read and
+ * the conversation the HTML list is fetched for are three DISTINCT ids, so a
  * site that reads the wrong source still fails even though it produced a
  * perfectly well-formed URL.
  */

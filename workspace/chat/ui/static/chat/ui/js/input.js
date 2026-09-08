@@ -317,8 +317,7 @@ window.chatInputMixin = function chatInputMixin() {
     // The roster this composer can address, self excluded, or null when the
     // surface has no roster at all - which also takes @everyone away, the
     // point being "this composer mentions nobody" rather than "everyone is
-    // busy". The meeting page overrides it: a guest is never shown who else
-    // is in the conversation.
+    // busy".
     _mentionCandidates() {
       if (!this.activeConversation?.members) return null;
       return this.activeConversation.members.filter((m) => m.user.id !== this.currentUserId);
@@ -385,12 +384,8 @@ window.chatInputMixin = function chatInputMixin() {
     },
 
     // ── Typing indicator ─────────────────────────────────────
-    // Whether this composer has a typing channel to speak on. A guest posts
-    // through the meeting's token endpoints, which expose none.
-    _canSendTyping() { return true; },
-
     sendTypingSignal() {
-      if (!this.activeConversation || !this._canSendTyping()) return;
+      if (!this.activeConversation) return;
       const now = Date.now();
       if (now - this._lastTypingSent < 3000) return;
       this._lastTypingSent = now;

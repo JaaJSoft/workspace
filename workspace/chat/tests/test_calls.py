@@ -636,9 +636,7 @@ class SerializeCallStateTests(TestCase):
         event = Event.objects.create(
             calendar=cal, owner=self.a, title="E", start=timezone.now()
         )
-        meeting = Meeting.objects.create(
-            event=event, conversation=self.conv, created_by=self.a
-        )
+        meeting = Meeting.objects.create(event=event, created_by=self.a)
         guest = MeetingGuest.objects.create(
             meeting=meeting,
             display_name="Visitor",

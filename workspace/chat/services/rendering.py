@@ -60,7 +60,7 @@ def render_message_body(body, mention_map=None, *, allow_everyone=True):
 
     ``@everyone`` is otherwise always renderable, whether or not the caller
     put it in the map. *allow_everyone=False* is for a caller that will not
-    notify anyone - the guest message path - where the badge would promise a
+    notify anyone - the meeting chat - where the badge would promise a
     ping nobody receives; it is refused here rather than at the map, because
     the map alone cannot express it (a body naming a real member keeps the
     map non-empty, and the default below would put "everyone" back).

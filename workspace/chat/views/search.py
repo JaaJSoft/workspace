@@ -140,12 +140,12 @@ class ConversationMessageSearchView(APIView):
             qs = qs.filter(attachments__mime_type__startswith="image/")
 
         order = ("-search_rank", "-created_at") if query else ("-created_at",)
-        messages = qs.select_related("author", "guest").order_by(*order).distinct()[:50]
+        messages = qs.select_related("author").order_by(*order).distinct()[:50]
 
         results = [
             {
                 "uuid": str(msg.uuid),
-                "author": identity_payload(msg.author, msg.guest),
+                "author": identity_payload(msg.author, None),
                 "body": msg.body,
                 "body_html": msg.body_html,
                 # Lets the UI open the thread a hit lives in: a threaded reply
@@ -197,7 +197,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
                 message__conversation_id=conversation_id,
                 message__deleted_at__isnull=True,
             )
-            .select_related("message__author", "message__guest")
+            .select_related("message__author")
             .order_by("-created_at")
         )
 
@@ -240,7 +240,7 @@ class ConversationMediaView(CacheControlMixin, APIView):
         data = []
         for att in items:
             author = att.message.author
-            identity = identity_payload(author, att.message.guest)
+            identity = identity_payload(author, None)
             data.append(
                 {
                     "uuid": att.uuid,
@@ -257,9 +257,8 @@ class ConversationMediaView(CacheControlMixin, APIView):
                     "author": {
                         "id": identity["id"],
                         "username": identity["username"],
-                        "first_name": author.first_name if author else "",
-                        "last_name": author.last_name if author else "",
-                        "is_guest": identity["is_guest"],
+                        "first_name": author.first_name,
+                        "last_name": author.last_name,
                     },
                 }
             )

@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
-from workspace.chat.models import Conversation, Meeting, MeetingGuest
+from workspace.chat.models import Meeting, MeetingGuest
 from workspace.chat.services.meeting_guests import (
     guest_for_token,
     hash_token,
@@ -40,12 +40,7 @@ class ResolveGuestTests(TestCase):
             start=self.now - timedelta(minutes=5),
             end=self.now + timedelta(minutes=25),
         )
-        conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        self.meeting = Meeting.objects.create(
-            event=self.event, conversation=conv, created_by=self.user
-        )
+        self.meeting = Meeting.objects.create(event=self.event, created_by=self.user)
         # occurrence_start must be current_occurrence()'s own output, not
         # event.start verbatim - the two differ by microseconds (see
         # meeting_occurrences.py's module docstring).
@@ -124,12 +119,7 @@ class GuestForTokenTests(TestCase):
             start=self.now - timedelta(minutes=5),
             end=self.now + timedelta(minutes=25),
         )
-        conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        self.meeting = Meeting.objects.create(
-            event=self.event, conversation=conv, created_by=self.user
-        )
+        self.meeting = Meeting.objects.create(event=self.event, created_by=self.user)
         self.occurrence_start = current_occurrence(self.meeting, now=self.now)[0]
         self.token, digest = issue_token()
         self.guest = MeetingGuest.objects.create(
@@ -187,12 +177,7 @@ class ResolveGuestRecurringTests(TestCase):
         )
         apply_rule(self.event, "RRULE:FREQ=WEEKLY")
         self.event.save()
-        conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        self.meeting = Meeting.objects.create(
-            event=self.event, conversation=conv, created_by=self.user
-        )
+        self.meeting = Meeting.objects.create(event=self.event, created_by=self.user)
         occurrence = current_occurrence(self.meeting, now=self.now)
         assert occurrence is not None
         self.occurrence_start = occurrence[0]

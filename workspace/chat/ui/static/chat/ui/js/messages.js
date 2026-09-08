@@ -56,11 +56,8 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     _replyTarget() { return this.replyingTo?.uuid || null; },
 
     // ── Transport seam ───────────────────────────────────────
-    // Four hooks, and everything the mixin sends or fetches goes through
-    // them. The member pane addresses the conversation API with the session
-    // cookie; the public meeting page (meet.js) spreads this same mixin and
-    // re-points all four at /meet/<slug>/..., authenticated by a token
-    // header instead. Nothing else in here names an endpoint.
+    // Every send and every fetch goes through these, so a surface can
+    // re-point them: the thread panel overrides _messagesUrl below.
     _messageEndpoint(conversationId) {
       return `/api/v1/chat/conversations/${conversationId}/messages`;
     },
@@ -75,27 +72,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       const base = `/chat/${conversationId}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;
     },
-    // Passed as $ajax's `headers` on every load below; alpine-ajax merges
-    // them into the fetch it issues. Empty for a member - the cookie is the
-    // credential.
-    _messagesPartialHeaders() { return {}; },
     _messagesUrl(cursor) {
       return this._messagesPartialUrl(this.activeConversation.uuid, cursor);
     },
-    // Whether the person looking is a guest, which the optimistic bubble
-    // has to say so the shell skips the presence dot and the profile card
-    // the guest cannot reach. The server stamps the same attribute on the
-    // groups it renders.
-    _viewerIsGuest() { return false; },
-    // What a failed send should say. The member pane says nothing: the text
-    // and the attachments are back in the composer, which is the message.
-    _onSendFailed() {},
-    // Whether this surface has a read cursor to move at all. A guest's
-    // membership is the meeting, not a conversation row, so it has none.
-    _canMarkRead() { return true; },
-    // What a merge must be stamped with to belong here. The conversation
-    // uuid for a member; the meeting slug for a guest, who never learns the
-    // conversation the meeting chat lives in.
+    // What a merge must be stamped with to belong here.
     _expectedListKey() { return this.activeConversation?.uuid; },
 
     // Every rendered copy of a message, across surfaces. With the inline
@@ -171,7 +151,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
-          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         // A vetoed or superseded response merges nothing; leave the state
@@ -212,7 +191,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         // request before it can prepend a stale page into fresh content.
         const render = await this.$ajax(this._messagesUrl(cursor), {
           targets: [this._messageListStateId(), this._messageListItemsId()],
-          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         if ((render || []).some(Boolean)) {
@@ -363,7 +341,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           this.pendingPickedFiles = wsFiles;
           this.botTyping = false;
           this.clearBotStep?.();
-          this._onSendFailed(resp.status);
         }
       } catch (e) {
         console.error('Failed to send message', e);
@@ -373,7 +350,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         this.pendingPickedFiles = wsFiles;
         this.botTyping = false;
         this.clearBotStep?.();
-        this._onSendFailed(null);
       }
     },
 
@@ -460,14 +436,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       group.id = tempId;
       group.setAttribute('own', '');
       group.setAttribute('pending', '');
-      if (this._viewerIsGuest()) group.setAttribute('viewer-guest', '');
       const user = this._getCurrentUser();
       if (user) {
-        // A guest has no user row, so no id and no avatar to fetch - only a
-        // name and the badge that says where it comes from.
-        if (user.id != null) group.setAttribute('author-id', user.id);
+        group.setAttribute('author-id', user.id);
         group.setAttribute('author-username', user.username);
-        if (user.is_guest) group.setAttribute('guest', '');
       }
       group.body = body || '';
       group.replyInfo = replyInfo || null;
@@ -546,7 +518,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       try {
         const render = await this.$ajax(this._messagesUrl(null), {
           targets: this._loadTargets(),
-          headers: this._messagesPartialHeaders(),
           focus: false,
         });
         if ((render || []).some(Boolean)) {
@@ -812,7 +783,6 @@ window.chatMessagesMixin = function chatMessagesMixin() {
 
     // ── Read status ────────────────────────────────────────
     async markAsRead(conversationId) {
-      if (!this._canMarkRead()) return;
       try {
         await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',

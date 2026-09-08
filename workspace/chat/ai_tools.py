@@ -73,7 +73,7 @@ class SummarizeConversationParams(BaseModel):
 
 def _format_message(msg, user_tz):
     """Render one message as a transcript entry."""
-    name = display_name_for_identity(msg.author, msg.guest)
+    name = display_name_for_identity(msg.author, None)
     author = f"[Bot] {name}" if hasattr(msg.author, "bot_profile") else name
 
     body = msg.body
@@ -104,7 +104,7 @@ def _read_transcript(conversation_id, user_tz, limit):
             conversation_id=conversation_id,
             deleted_at__isnull=True,
         )
-        .select_related("author", "author__bot_profile", "guest")
+        .select_related("author", "author__bot_profile")
         .prefetch_related("attachments")
         .order_by("-created_at")[: limit + 1]
     )
@@ -162,7 +162,7 @@ or references a past discussion."""
             qs = search_messages_qs(user, query, conversation_id=conversation_id)
         else:
             qs = search_messages_qs(user, query)
-        qs = qs.select_related("author", "guest", "conversation")
+        qs = qs.select_related("author", "conversation")
 
         author = args.author.strip()
         if author:
@@ -195,7 +195,7 @@ or references a past discussion."""
 
         results = []
         for msg in matches:
-            author_name = display_name_for_identity(msg.author, msg.guest)
+            author_name = display_name_for_identity(msg.author, None)
             conv_name = msg.conversation.title or "DM"
             snippet = msg.body[:200]
             ts = msg.created_at.astimezone(user_tz).strftime("%Y-%m-%d %H:%M")

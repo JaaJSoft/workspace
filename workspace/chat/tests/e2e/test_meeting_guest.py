@@ -8,12 +8,6 @@ body are therefore fine, but anything a stream must notice - knocking,
 admitting, starting the call - goes through the live server, either through
 the browser or through an authenticated ``APIRequestContext``, never through
 a service call in the test body.
-
-The pane the guest chats in is the member pane: the same server-rendered
-partial, the same composer, the same message shell. Every assertion below
-therefore reads what the member side reads - <chat-message-group> elements
-and their attributes - rather than anything the guest page renders on its
-own, because it renders nothing on its own.
 """
 
 from __future__ import annotations
@@ -24,11 +18,10 @@ import time
 from django.utils import timezone
 from playwright.sync_api import expect
 
-from workspace.chat.models import MeetingGuest, Message
+from workspace.chat.models import MeetingGuest
 from workspace.chat.services.meetings import create_meeting
 from workspace.chat.tests.meeting_fixtures import make_event
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.users.services.settings import set_setting
 
 # Cross-context expectations wait on a real SSE hop: the guest's stream, the
 # host's stream, a poll interval on each side.
@@ -40,32 +33,6 @@ def _tile(grid, display_name):
     display name itself renders twice inside a tile (avatar caption and video
     overlay), which strict mode refuses."""
     return grid.get_by_role("button", name=f"Spotlight {display_name}")
-
-
-def _composer(page):
-    """The shared composer's desktop textarea.
-
-    Both inputs the partial renders carry the same mixin state; below sm the
-    compact one takes over, and the default viewport is wide enough that the
-    desktop one is the visible half on every page this suite drives.
-    """
-    return page.locator('textarea[placeholder="Type a message..."]')
-
-
-def _send(page, body):
-    """Type into the shared composer and click its send button.
-
-    The button is addressed by its accessible name: it is an icon button, and
-    the compact input renders a second copy of it that CSS keeps out of the
-    accessibility tree at this viewport.
-    """
-    _composer(page).fill(body)
-    page.get_by_role("button", name="Send message").click()
-
-
-def _group_for(root, message_uuid):
-    """The <chat-message-group> holding one server-rendered message."""
-    return root.locator(f'chat-message-group:has([data-message-uuid="{message_uuid}"])')
 
 
 class MeetingGuestTests(PlaywrightTestCase):
@@ -106,11 +73,6 @@ class MeetingGuestTests(PlaywrightTestCase):
             self.host, start=timezone.now() - timezone.timedelta(minutes=5)
         )
         self.meeting = create_meeting(event, self.host)
-        # A member's reply is a thread reply, filed into the thread panel
-        # unless they asked for replies in the flow. A guest has no threads
-        # at all, so their copy is always in the flow; this puts the two
-        # panes on the same footing, which is what the parity below reads.
-        set_setting(self.host, "chat", "preferences", {"showThreadRepliesInline": True})
         self.login_as(self.host)
 
     def tearDown(self):
@@ -144,7 +106,7 @@ class MeetingGuestTests(PlaywrightTestCase):
         self.addCleanup(guest_ctx.close)
         guest_ctx.grant_permissions(["microphone"])
         guest = guest_ctx.new_page()
-        guest.goto(f"{self.live_server_url}/meet/{self.meeting.slug}")
+        guest.goto(f"{self.live_server_url}/meetings/{self.meeting.slug}")
         return guest
 
     def _knock(self, guest, name):
@@ -180,30 +142,19 @@ class MeetingGuestTests(PlaywrightTestCase):
         self.assertTrue(resp.ok, f"{resp.status}: {resp.text()}")
 
     def _open_host_room(self):
-        self.page.goto(
-            f"{self.live_server_url}/chat/room/{self.meeting.conversation_id}"
-        )
+        """The host's meeting page, with the host inside the call.
+
+        Joining is a click on this page: the stage only exists once the host
+        is in the call, and it is the call that carries the lobby and the
+        guest tiles this suite drives."""
+        self.page.goto(f"{self.live_server_url}/meetings/{self.meeting.slug}")
+        self.page.get_by_role("button", name="Join the call").click()
         grid = self.page.locator('[data-testid="participants-grid"]')
         expect(grid).to_be_visible(timeout=CROSS_CONTEXT_TIMEOUT_MS)
         expect(grid.locator('[data-testid="self-tile"]')).to_contain_text(
             "meet-host", timeout=CROSS_CONTEXT_TIMEOUT_MS
         )
         return grid
-
-    def _message(self, pane, body):
-        """The row the server stored for a body typed in a composer.
-
-        Waits for the given pane to hold a bubble the server rendered for it
-        first: data-message-uuid only exists on the server's render, so seeing
-        one is what makes the ORM read below race-free. The uuid it returns is
-        how both panes address the message.
-        """
-        expect(pane.locator("[data-message-uuid]").filter(has_text=body)).to_have_count(
-            1, timeout=CROSS_CONTEXT_TIMEOUT_MS
-        )
-        return Message.objects.get(
-            conversation_id=self.meeting.conversation_id, body=body
-        )
 
     # ---- the flows -------------------------------------------------------
 
@@ -240,56 +191,6 @@ class MeetingGuestTests(PlaywrightTestCase):
         expect(_tile(host_grid, "Visitor")).to_be_visible(
             timeout=CROSS_CONTEXT_TIMEOUT_MS
         )
-
-        host_list = self.page.locator("#messages-container")
-        guest_list = guest.locator("#message-list")
-
-        # The host speaks first, and it reaches the guest as a server-rendered
-        # group - not a bubble the guest page drew for itself.
-        _send(self.page, "welcome to the meeting")
-        host_message = self._message(guest_list, "welcome to the meeting")
-        expect(_group_for(guest_list, host_message.uuid)).to_have_count(1)
-        expect(guest_list.get_by_text("welcome to the meeting")).to_be_visible()
-        # Somebody else's message: neither the viewer's own nor a guest's.
-        expect(guest_list.locator("chat-message-group[own]")).to_have_count(0)
-
-        # The guest answers through the same composer, and lands in the member
-        # timeline marked as a guest's.
-        _send(guest, "hello from outside")
-        guest_message = self._message(host_list, "hello from outside")
-        expect(_group_for(host_list, guest_message.uuid)).to_have_attribute("guest", "")
-        expect(host_list.locator("chat-message-group[guest]")).to_have_count(1)
-
-        # The same row, re-rendered for its author, is the one group the guest
-        # owns.
-        expect(_group_for(guest_list, guest_message.uuid)).to_have_attribute(
-            "own", "", timeout=CROSS_CONTEXT_TIMEOUT_MS
-        )
-        expect(guest_list.locator("chat-message-group[own]")).to_have_count(1)
-
-        # Replying is a hover away, exactly as it is for a member: the toolbar
-        # under the bubble is the shared template's, and the banner it raises
-        # is the shared composer's.
-        host_bubble = guest_list.locator(f'[data-message-uuid="{host_message.uuid}"]')
-        host_bubble.hover()
-        # The toolbar is a sibling of the bubble: the shell lifts every
-        # data-part="after-bubble" child out into the hover wrapper.
-        host_bubble.locator("xpath=..").get_by_title("Reply").click()
-        expect(guest.get_by_text("Replying to meet-host")).to_be_visible()
-        _send(guest, "answering the host")
-
-        # The quote is server-built from data-reply-uuid on both sides, and
-        # the shell turns it into a link to the message it quotes.
-        reply = self._message(guest_list, "answering the host")
-        for pane in (guest_list, host_list):
-            quoted = pane.locator(
-                f'[data-message-uuid="{reply.uuid}"]'
-                f'[data-reply-uuid="{host_message.uuid}"]'
-            )
-            expect(quoted).to_have_count(1, timeout=CROSS_CONTEXT_TIMEOUT_MS)
-            expect(
-                quoted.locator(f'a[href="#msg-{host_message.uuid}"]')
-            ).to_contain_text("welcome to the meeting")
 
         # Removing the guest closes their page, whatever they were doing.
         self.page.get_by_title("Remove guest").click()

@@ -1,4 +1,3 @@
-from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 
 from workspace.ai.models import AgentGoal, ScheduledMessage
@@ -13,9 +12,7 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
-from .services.calls import MeetingScope, is_call_locked
 from .services.identities import identity_payload
-from .services.meeting_occurrences import current_occurrence
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -66,7 +63,7 @@ class PinnedMessageSerializer(serializers.ModelSerializer):
         return body[:100] + "\u2026" if len(body) > 100 else body
 
     def get_message_author(self, obj):
-        return identity_payload(obj.message.author, obj.message.guest)
+        return identity_payload(obj.message.author, None)
 
 
 class MessageAttachmentSerializer(serializers.ModelSerializer):
@@ -109,7 +106,7 @@ class ReplyToSerializer(serializers.ModelSerializer):
         return body[:200] + "\u2026" if len(body) > 200 else body
 
     def get_author(self, obj):
-        return identity_payload(obj.author, obj.guest)
+        return identity_payload(obj.author, None)
 
 
 class LinkPreviewSerializer(serializers.Serializer):
@@ -172,49 +169,7 @@ class MessageSerializer(serializers.ModelSerializer):
         ]
 
     def get_author(self, obj):
-        return identity_payload(obj.author, obj.guest)
-
-
-class GuestMessageSerializer(MessageSerializer):
-    """MessageSerializer, redacted for a guest audience.
-
-    Two things the plain serializer emits are unsafe once a guest is reading
-    it: ``conversation_id`` (the same "must not learn to address the
-    host-side conversation endpoints" invariant guest call state enforces),
-    and a ``reply_to``/``thread_root`` pointing below this guest's occurrence
-    floor. The top-level queryset floors at ``created_at >= occurrence_start``,
-    but an in-window reply can legitimately target a pre-window message -
-    ordinary behaviour in a recurring meeting's conversation - and
-    reply_to/thread_root are hydrated from that target regardless of its own
-    created_at. Left alone, ReplyToSerializer would hand a guest the
-    pre-window body and author, and the bare thread_root UUID would let them
-    name that pre-window message as reply_to_uuid on a POST - a pull
-    primitive around the floor. Redacting post-serialization (rather than
-    re-querying) is cheap: reply_to and thread_root are already
-    select_related, so their created_at is already in memory.
-
-    A subclass instead of touching MessageSerializer itself: the redaction is
-    a guest-only concern with no meaning on the member path, and every other
-    behaviour must resolve through get_author, ReplyToSerializer etc.
-    unmodified.
-
-    Public and imported from both the guest REST views and the guest SSE
-    stream - it must stay the one place this redaction is implemented, or the
-    two paths can silently drift apart on what a guest is allowed to read.
-    """
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data.pop("conversation_id", None)
-        # A missing floor must fail loud (KeyError), never default to None -
-        # a None floor would compare False to every created_at below it and
-        # silently hand a guest pre-window reply_to/thread_root content.
-        floor = self.context["floor"]
-        if instance.reply_to_id and instance.reply_to.created_at < floor:
-            data["reply_to"] = None
-        if instance.thread_root_id and instance.thread_root.created_at < floor:
-            data["thread_root"] = None
-        return data
+        return identity_payload(obj.author, None)
 
 
 class LastMessageSerializer(serializers.ModelSerializer):
@@ -234,53 +189,12 @@ class LastMessageSerializer(serializers.ModelSerializer):
         return obj.attachments.exists()
 
     def get_author(self, obj):
-        return identity_payload(obj.author, obj.guest)
+        return identity_payload(obj.author, None)
 
 
 class GroupBriefSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     name = serializers.CharField()
-
-
-def _meeting_payload(conversation, context):
-    """Where *conversation* came from, or None when it is not a meeting's.
-
-    Two shapes, one field, and the caller picks with the
-    ``include_meeting_occurrence`` context flag.
-
-    The default shape carries only what a conversation row already knows once
-    ``meeting__event`` rides along with it: the event's title and the join
-    link. That is what a list payload gets, because the two values it leaves
-    out cost a query each - ``current_occurrence`` expands a recurring event's
-    rule and reads its exceptions, and the lock is read off the live call
-    session - which on a list is a query per conversation.
-
-    The flag adds ``next_start`` and ``locked`` and is set only by the payloads
-    that carry a single conversation (the room page, the detail endpoint).
-    The difference is an absent key, not a null one: absent means "not computed
-    here", null means "no occurrence is open right now", and the banner reading
-    this has to tell those two apart rather than announce an empty schedule it
-    was never handed.
-    """
-    try:
-        meeting = conversation.meeting
-    except ObjectDoesNotExist:
-        return None
-
-    payload = {
-        "event_title": meeting.event.title,
-        "join_url": context["request"].build_absolute_uri(meeting.join_path),
-    }
-    if not context.get("include_meeting_occurrence"):
-        return payload
-
-    occurrence = current_occurrence(meeting)
-    occurrence_start = occurrence[0] if occurrence is not None else None
-    payload["next_start"] = (
-        occurrence_start.isoformat() if occurrence_start is not None else None
-    )
-    payload["locked"] = is_call_locked(MeetingScope(meeting), occurrence_start)
-    return payload
 
 
 class ConversationListSerializer(serializers.ModelSerializer):
@@ -293,7 +207,6 @@ class ConversationListSerializer(serializers.ModelSerializer):
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
-    meeting = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -319,12 +232,8 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "is_pinned",
             "pin_position",
             "is_bot_conversation",
-            "meeting",
             "notification_level",
         ]
-
-    def get_meeting(self, obj):
-        return _meeting_payload(obj, self.context)
 
     def get_member_count(self, obj):
         # Members are prefetched (filtered to active) by the view, so len()
@@ -358,7 +267,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             msg = (
                 obj.messages.filter(deleted_at__isnull=True)
                 .order_by("-created_at")
-                .select_related("author", "guest")
+                .select_related("author")
                 .first()
             )
         if msg:
@@ -370,7 +279,6 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
     members = ConversationMemberSerializer(many=True, read_only=True)
     groups = GroupBriefSerializer(many=True, read_only=True)
     avatar_initial = serializers.SerializerMethodField()
-    meeting = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
         default=ConversationMember.NotificationLevel.ALL,
@@ -390,15 +298,11 @@ class ConversationDetailSerializer(serializers.ModelSerializer):
             "avatar_initial",
             "members",
             "groups",
-            "meeting",
             "notification_level",
         ]
 
     def get_avatar_initial(self, obj) -> str:
         return conversation_avatar_initial(obj, self.context["request"].user)
-
-    def get_meeting(self, obj):
-        return _meeting_payload(obj, self.context)
 
 
 class NotificationLevelSerializer(serializers.Serializer):

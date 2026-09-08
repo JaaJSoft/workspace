@@ -1,5 +1,4 @@
 from datetime import timedelta
-from types import SimpleNamespace
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -41,8 +40,6 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.ui.viewers import ViewerRegistry
 from workspace.users.services.settings import get_setting
 
-from .viewer import for_user, message_participant_key
-
 
 def _user_chat_groups(user):
     """Groups the user can attach conversations to, shaped for json_script."""
@@ -51,7 +48,7 @@ def _user_chat_groups(user):
 
 def _display(msg):
     """The name a person is shown under in a message preview."""
-    return display_name_for_identity(msg.author, msg.guest)
+    return display_name_for_identity(msg.author, None)
 
 
 # Entrance animation styles offered in the preferences panel; the values are
@@ -87,13 +84,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     """
     member_convos = user_conversation_ids(user)
 
-    # meeting__event rides along: the serializer's provenance field reads the
-    # meeting's event title off every row, which is a query per conversation
-    # without this. A conversation with no meeting caches the absence, so the
-    # join costs nothing on the common row either.
-    conversations = Conversation.objects.filter(uuid__in=member_convos).select_related(
-        "meeting__event"
-    )
+    conversations = Conversation.objects.filter(uuid__in=member_convos)
     if conversation_uuids is not None:
         conversations = conversations.filter(uuid__in=conversation_uuids)
     if embed_members:
@@ -118,7 +109,7 @@ def _build_conversation_context(user, conversation_uuids=None, *, embed_members=
     last_msgs = {
         m.uuid: m
         for m in Message.objects.filter(uuid__in=last_msg_ids)
-        .select_related("author", "guest")
+        .select_related("author")
         .prefetch_related("attachments")
     }
 
@@ -231,9 +222,6 @@ def chat_room_view(request, conversation_uuid):
         [conversation],
         Prefetch("members", queryset=active_members_queryset()),
         "groups",
-        # The serializer's provenance field reads the meeting's event title;
-        # a conversation with no meeting caches the absence here too.
-        "meeting__event",
     )
 
     conversation_data = ConversationListSerializer(
@@ -268,7 +256,7 @@ def chat_room_view(request, conversation_uuid):
     )
 
 
-def _meeting_payload(request, meeting):
+def _meeting_page_payload(meeting, request):
     occurrence = current_occurrence(meeting)
     occurrence_start = occurrence[0] if occurrence is not None else None
     return {
@@ -298,7 +286,7 @@ def meeting_view(request, slug):
             request,
             "chat/ui/meeting_host.html",
             {
-                "meeting": _meeting_payload(request, meeting),
+                "meeting": _meeting_page_payload(meeting, request),
                 "ice_servers": settings.CHAT_CALL_ICE_SERVERS,
                 "call_sounds_enabled": get_setting(
                     request.user, "chat", "call_sounds", default=True
@@ -384,42 +372,17 @@ def conversation_items_view(request):
     )
 
 
-def _group_author(msg):
-    """The value the message-group template reads as `author`.
-
-    A real author is passed through unchanged - a `User` has no `is_guest`,
-    so templates read it as `author.is_guest|default:False`. A guest has no
-    user row, so it gets a stand-in exposing exactly the surface the
-    templates read off it - `.id`, `.username`, `.get_full_name()`,
-    `.is_guest` - computed through the same resolver as everywhere else,
-    rather than a second guest-formatting rule growing here.
-    """
-    if msg.author is not None:
-        return msg.author
-    display_name = display_name_for_identity(msg.author, msg.guest)
-    return SimpleNamespace(
-        id=None,
-        username=display_name,
-        get_full_name=lambda: display_name,
-        is_guest=True,
-    )
-
-
-def group_messages(messages, viewer):
+def group_messages(messages, user_id):
     """Group consecutive messages by same author within 5 min, with date separators.
-
-    *viewer* is a ``ui.viewer.Viewer``: ``is_own`` compares participant keys
-    rather than user ids, so a meeting guest reading the same list recognizes
-    their own messages without a user row to compare against.
 
     Returns a list of dicts:
       {'type': 'date', 'date': date_obj}
       {'type': 'messages', 'author': user, 'is_own': bool, 'messages': [msg, ...]}
 
-    Also stamps a guest-safe `quote_author_name` onto every replied-to
-    message this batch touches (msg.reply_to), since this is the one place
-    that already walks every message headed for the template - the reply
-    quote otherwise has no other pass to piggyback on.
+    Also stamps a `quote_author_name` onto every replied-to message this batch
+    touches (msg.reply_to), since this is the one place that already walks
+    every message headed for the template - the reply quote otherwise has no
+    other pass to piggyback on.
     """
     groups = []
     current_date = None
@@ -428,11 +391,10 @@ def group_messages(messages, viewer):
     for msg in messages:
         # The reply quote renders a single name, never id/username - a plain
         # string sidesteps the template's {{ x|default:y }} filter-argument
-        # trap entirely (see _group_author), rather than making the quote
-        # walk a shim built for the group header's three-attribute needs.
+        # trap entirely.
         if msg.reply_to_id and msg.reply_to is not None:
             msg.reply_to.quote_author_name = display_name_for_identity(
-                msg.reply_to.author, msg.reply_to.guest
+                msg.reply_to.author, None
             )
 
         msg_date = timezone.localdate(msg.created_at)
@@ -456,13 +418,9 @@ def group_messages(messages, viewer):
             groups.append({"type": "system", "message": msg})
             continue
 
-        # Check if this message continues the current group. A guest has no
-        # user row, so "same author" compares the (author_id, guest_id) pair
-        # rather than dereferencing a possibly-None author.
         can_group = (
             current_group
             and current_group["author_id"] == msg.author_id
-            and current_group["guest_id"] == msg.guest_id
             and not msg.deleted_at
             and not (current_group["messages"][-1].deleted_at)
             and (msg.created_at - current_group["messages"][-1].created_at)
@@ -477,9 +435,8 @@ def group_messages(messages, viewer):
             current_group = {
                 "type": "messages",
                 "author_id": msg.author_id,
-                "guest_id": msg.guest_id,
-                "author": _group_author(msg),
-                "is_own": message_participant_key(msg) == viewer.participant_key,
+                "author": msg.author,
+                "is_own": msg.author_id == user_id,
                 "is_bot": hasattr(msg.author, "bot_profile"),
                 "messages": [msg],
             }
@@ -502,10 +459,8 @@ def conversation_messages_view(request, conversation_uuid):
         .select_related(
             "author",
             "author__bot_profile",
-            "guest",
             "reply_to",
             "reply_to__author",
-            "reply_to__guest",
             "conversation",
             "interaction",
             "interaction__interacted_by",
@@ -570,8 +525,7 @@ def conversation_messages_view(request, conversation_uuid):
         or "dm"
     )
 
-    viewer = for_user(request.user)
-    groups = group_messages(messages_page, viewer)
+    groups = group_messages(messages_page, request.user.id)
 
     first_uuid = str(messages_page[0].uuid) if messages_page else ""
 
@@ -597,7 +551,7 @@ def conversation_messages_view(request, conversation_uuid):
             "groups": groups,
             "has_more": has_more,
             "first_uuid": first_uuid,
-            "viewer": viewer,
+            "current_user_id": request.user.id,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": conversation_kind,
@@ -615,10 +569,8 @@ def thread_messages_view(request, root_uuid):
         .select_related(
             "author",
             "author__bot_profile",
-            "guest",
             "reply_to",
             "reply_to__author",
-            "reply_to__guest",
             "conversation",
         )
         .first()
@@ -635,10 +587,8 @@ def thread_messages_view(request, root_uuid):
         .select_related(
             "author",
             "author__bot_profile",
-            "guest",
             "reply_to",
             "reply_to__author",
-            "reply_to__guest",
             "conversation",
             "interaction",
             "interaction__interacted_by",
@@ -677,22 +627,22 @@ def thread_messages_view(request, root_uuid):
         )
     )
 
-    viewer = for_user(request.user)
-
     return render(
         request,
         "chat/ui/partials/thread_message_list.html",
         {
-            "groups": group_messages(page, viewer),
+            "groups": group_messages(page, request.user.id),
             # The root renders outside the paginated list, on the first page
             # only: "load older" prepends into the list, so a root inside it
             # would sink below the older replies; an older page prepends into a
             # panel that already shows it.
-            "root_groups": None if is_older_page else group_messages([root], viewer),
+            "root_groups": None
+            if is_older_page
+            else group_messages([root], request.user.id),
             "has_more": has_more,
             "first_uuid": str(page[0].uuid) if page else "",
             "root_uuid": root.uuid,
-            "viewer": viewer,
+            "current_user_id": request.user.id,
             "quick_emojis": quick_reactions_for(request.user),
             "pinned_message_ids": pinned_message_ids,
             "conversation_kind": root.conversation.kind,

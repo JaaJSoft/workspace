@@ -9,7 +9,6 @@ from workspace.chat.models import (
 )
 from workspace.chat.services.reactions import DEFAULT_QUICK_REACTIONS
 from workspace.chat.ui.templatetags.chat_tags import render_reaction_picker
-from workspace.chat.ui.viewer import Viewer, for_user
 
 User = get_user_model()
 
@@ -39,7 +38,7 @@ class ReactionPickerTagTests(TestCase):
         )
 
     def _picker(self, message, user):
-        ctx = render_reaction_picker(message, for_user(user), DEFAULT_QUICK_REACTIONS)
+        ctx = render_reaction_picker(message, user.id, DEFAULT_QUICK_REACTIONS)
         return {r["emoji"]: r["has_mine"] for r in ctx["quick_reactions"]}
 
     def test_emoji_reacted_by_current_user_is_marked_mine(self):
@@ -61,15 +60,3 @@ class ReactionPickerTagTests(TestCase):
         flags = self._picker(self.message, self.alice)
         self.assertTrue(all(v is False for v in flags.values()))
         self.assertEqual(set(flags), set(DEFAULT_QUICK_REACTIONS))
-
-    def test_a_viewer_without_can_react_gets_no_picker(self):
-        """The picker is the one control whose absence must not depend on the
-        template alone: the tag itself returns nothing for a reader whose
-        reaction endpoint would refuse them."""
-        Reaction.objects.create(
-            message=self.message, user=self.alice, emoji=DEFAULT_QUICK_REACTIONS[0]
-        )
-        ctx = render_reaction_picker(
-            self.message, Viewer(participant_key="g:x"), DEFAULT_QUICK_REACTIONS
-        )
-        self.assertEqual(ctx["quick_reactions"], [])

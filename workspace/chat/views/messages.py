@@ -81,10 +81,8 @@ class MessageListView(CacheControlMixin, APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
-                "guest",
                 "reply_to",
                 "reply_to__author",
-                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )
@@ -359,10 +357,8 @@ class MessageListView(CacheControlMixin, APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
-                "guest",
                 "reply_to",
                 "reply_to__author",
-                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )
@@ -442,10 +438,8 @@ class MessageDetailView(APIView):
             .select_related(
                 "author",
                 "author__bot_profile",
-                "guest",
                 "reply_to",
                 "reply_to__author",
-                "reply_to__guest",
                 "interaction",
                 "interaction__interacted_by",
             )
@@ -490,14 +484,7 @@ class MessageDetailView(APIView):
 
         is_author = message.author_id == request.user.id
         is_bot_message = hasattr(message.author, "bot_profile")
-        # A guest has no user row, so author_id is None and the author test
-        # can never pass - which left a guest's message undeletable by
-        # anyone. Every active member of a meeting's conversation is a host,
-        # and the membership gate above already established this requester is
-        # one. Editing stays refused: a guest's words are not a member's to
-        # rewrite under the guest's own name.
-        is_guest_message = message.author_id is None and message.guest_id is not None
-        if not is_author and not is_bot_message and not is_guest_message:
+        if not is_author and not is_bot_message:
             return Response(
                 {"detail": "Only the author can delete this message."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -518,9 +505,6 @@ class MessageDetailView(APIView):
             recount_thread(message.thread_root)
         else:
             # Decrement unread_count for members who hadn't read this message.
-            # exclude(user=message.author) excludes nobody for a guest author
-            # (ConversationMember.user is non-nullable) - correct, a guest
-            # never held an unread count to begin with.
             ConversationMember.objects.filter(
                 conversation_id=message.conversation_id,
                 left_at__isnull=True,

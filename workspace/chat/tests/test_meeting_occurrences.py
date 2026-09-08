@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from workspace.calendar.models import Calendar, Event
 from workspace.calendar.services.recurrence_rule import apply_rule
-from workspace.chat.models import CallSession, Conversation, Meeting
+from workspace.chat.models import CallSession, Meeting
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_ad_hoc_meeting
 
@@ -22,12 +22,7 @@ class OccurrenceTests(TestCase):
         event = Event(calendar=self.cal, owner=self.user, title="E", **event_kwargs)
         apply_rule(event, recurrence_rule)
         event.save()
-        conv = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.user
-        )
-        return Meeting.objects.create(
-            event=event, conversation=conv, created_by=self.user
-        )
+        return Meeting.objects.create(event=event, created_by=self.user)
 
     def test_single_event_in_progress(self):
         now = timezone.now()

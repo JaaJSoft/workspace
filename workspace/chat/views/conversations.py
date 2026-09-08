@@ -76,9 +76,6 @@ class ConversationListView(CacheControlMixin, APIView):
 
         conversations = (
             Conversation.objects.filter(uuid__in=member_convos)
-            # See _meeting_payload: the provenance field reads the meeting's
-            # event title per row, so it travels with the conversation query.
-            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",
@@ -109,7 +106,7 @@ class ConversationListView(CacheControlMixin, APIView):
         last_msgs = {
             m.uuid: m
             for m in Message.objects.filter(uuid__in=last_msg_ids)
-            .select_related("author", "guest")
+            .select_related("author")
             .prefetch_related("attachments")
         }
 
@@ -161,9 +158,6 @@ class ConversationListView(CacheControlMixin, APIView):
             conversation = create_group_conversation(request.user, groups, title)
             conversation = (
                 Conversation.objects.filter(pk=conversation.pk)
-                # The response is a full conversation payload, so the
-                # provenance field runs here too - see _meeting_payload.
-                .select_related("meeting__event")
                 .prefetch_related(
                     "groups",
                     Prefetch("members", queryset=active_members_queryset()),
@@ -274,7 +268,6 @@ class ConversationDetailView(APIView):
 
         conversation = (
             Conversation.objects.filter(pk=conversation_id)
-            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",
@@ -285,9 +278,7 @@ class ConversationDetailView(APIView):
         return Response(
             ConversationDetailSerializer(
                 conversation,
-                # One conversation: the occurrence and the lock are worth
-                # their queries here, and the pane's banner needs them.
-                context={"request": request, "include_meeting_occurrence": True},
+                context={"request": request},
             ).data
         )
 
@@ -461,9 +452,6 @@ class ConversationMembersView(APIView):
         # Refetch conversation with members
         conversation = (
             Conversation.objects.filter(pk=conversation.pk)
-            # A meeting's conversation reaches this endpoint whenever a host
-            # is added, and the payload carries its provenance back.
-            .select_related("meeting__event")
             .prefetch_related(
                 Prefetch("members", queryset=active_members_queryset()),
                 "groups",

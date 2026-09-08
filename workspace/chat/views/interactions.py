@@ -25,10 +25,8 @@ def _refetch_for_serialization(message_pk):
         .select_related(
             "author",
             "author__bot_profile",
-            "guest",
             "reply_to",
             "reply_to__author",
-            "reply_to__guest",
             "interaction",
             "interaction__interacted_by",
         )

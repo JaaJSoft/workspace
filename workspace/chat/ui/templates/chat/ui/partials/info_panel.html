@@ -4,6 +4,7 @@
 >
   <h4 class="font-semibold text-sm">Conversation info</h4>
   <button
+    type="button"
     class="btn btn-ghost btn-xs btn-square"
     @click="showInfoPanel = false"
   >
@@ -40,6 +41,7 @@
     </div>
     <!-- Remove avatar button -->
     <button
+      type="button"
       x-show="activeConversation.kind === 'group' && activeConversation.has_avatar"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="removeGroupAvatar()"
@@ -53,6 +55,7 @@
         x-text="conversationName(activeConversation)"
       ></h3>
       <button
+        type="button"
         x-show="activeConversation.kind === 'group'"
         class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100"
         @click="renameConversation()"
@@ -103,6 +106,7 @@
         class="whitespace-pre-line break-words flex-1"
       ></span>
       <button
+        type="button"
         class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100 flex-shrink-0"
         @click="editDescription()"
         title="Edit description"
@@ -111,6 +115,7 @@
       </button>
     </div>
     <button
+      type="button"
       x-show="!activeConversation.description"
       class="btn btn-ghost btn-xs gap-1 text-base-content/50"
       @click="editDescription()"
@@ -123,6 +128,7 @@
   <!-- Actions -->
   <div class="flex flex-wrap gap-1.5">
     <button
+      type="button"
       class="btn btn-ghost btn-xs gap-1"
       @click="copyConversationLink()"
       :title="_linkCopied ? 'Copied!' : 'Copy link'"
@@ -131,6 +137,7 @@
       <span x-text="_linkCopied ? 'Copied!' : 'Copy link'"></span>
     </button>
     <button
+      type="button"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="clearConversation()"
     >
@@ -138,6 +145,7 @@
       Clear
     </button>
     <button
+      type="button"
       x-show="!isGroupLinkedConversation()"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="leaveConversation()"
@@ -204,6 +212,7 @@
         </div>
         <!-- Remove button (visible to creator, not on self) -->
         <button
+          type="button"
           x-show="activeConversation.kind === 'group' && !isGroupLinkedConversation() && activeConversation.created_by_id === currentUserId && member.user.id !== currentUserId"
           class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-error transition-opacity"
           @click="removeMember(member.user.id)"
@@ -256,6 +265,7 @@
             ></p>
           </div>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-error transition-opacity flex-shrink-0"
             @click.stop="unpinMessage(pin.message_uuid)"
             title="Unpin"
@@ -284,6 +294,7 @@
   <!-- Filter tabs -->
   <div class="flex gap-1">
     <button
+      type="button"
       class="btn btn-xs"
       :class="mediaFilter === 'images' ? 'btn-primary' : 'btn-ghost'"
       @click="changeMediaFilter('images')"
@@ -291,6 +302,7 @@
       <i data-lucide="image" class="w-3 h-3"></i> Media
     </button>
     <button
+      type="button"
       class="btn btn-xs"
       :class="mediaFilter === 'files' ? 'btn-primary' : 'btn-ghost'"
       @click="changeMediaFilter('files')"
@@ -298,6 +310,7 @@
       <i data-lucide="file" class="w-3 h-3"></i> Files
     </button>
     <button
+      type="button"
       class="btn btn-xs"
       :class="mediaFilter === 'all' ? 'btn-primary' : 'btn-ghost'"
       @click="changeMediaFilter('all')"
@@ -434,6 +447,7 @@
   >
     <div class="text-center">
       <button
+        type="button"
         class="btn btn-ghost btn-xs gap-1"
         @click="loadMoreMedia()"
         :disabled="loadingMoreMedia"
@@ -547,6 +561,7 @@
           x-model.debounce.200ms="memorySearch"
         />
         <button
+          type="button"
           x-show="memorySearch"
           @click="memorySearch = ''"
           class="btn btn-ghost btn-xs btn-square absolute right-0.5 top-1/2 -translate-y-1/2"
@@ -593,6 +608,7 @@
                 class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               >
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click="editMemory(mem)"
                   title="Edit"
@@ -600,6 +616,7 @@
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square text-error"
                   @click="deleteMemory(mem)"
                   title="Delete"
@@ -700,6 +717,7 @@
                 class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0"
               >
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click="toggleGoalPause(goal)"
                   :title="goal.status === 'paused' ? 'Resume' : 'Pause'"
@@ -711,6 +729,7 @@
                   ></i>
                 </button>
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click="editGoal(goal)"
                   title="Edit"
@@ -719,6 +738,7 @@
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square text-error"
                   @click="stopGoal(goal)"
                   title="Stop"
@@ -788,6 +808,7 @@
                 class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               >
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square"
                   @click="editSchedule(sched)"
                   title="Edit"
@@ -795,6 +816,7 @@
                   <i data-lucide="pencil" class="w-3 h-3"></i>
                 </button>
                 <button
+                  type="button"
                   class="btn btn-ghost btn-xs btn-square text-error"
                   @click="deleteSchedule(sched)"
                   title="Delete"
@@ -837,6 +859,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button @click="cancelAvatarCrop()">close</button>
+    <button type="submit" @click="cancelAvatarCrop()">close</button>
   </form>
 </dialog>

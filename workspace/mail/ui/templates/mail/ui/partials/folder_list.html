@@ -10,6 +10,7 @@
   :class="{ hidden: !(accounts.length > 0 && !sidebarCollapsed()) }"
 >
   <button
+    type="button"
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
     @click="selectUnifiedInbox()"
@@ -32,6 +33,7 @@
   :class="{ hidden: !(accounts.length > 0 && sidebarCollapsed()) }"
 >
   <button
+    type="button"
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
     :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
     title="All Inboxes"
@@ -65,6 +67,7 @@
         x-text="account.display_name || account.email"
       ></span>
       <button
+        type="button"
         class="btn btn-ghost btn-xs btn-square opacity-50 hover:opacity-100"
         @click.stop="openAccountContextMenu($event, account)"
       >
@@ -82,6 +85,7 @@
       >
         Folders
         <button
+          type="button"
           class="btn btn-ghost btn-square btn-xs"
           @click="_createFolder(account.uuid)"
           title="New folder"
@@ -94,6 +98,7 @@
         :key="node.folder.uuid + '-' + (node.folder.icon || '') + '-' + (node.folder.color || '')"
       >
         <button
+          type="button"
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
           :style="node.depth > 0 ? `padding-left: ${0.75 + node.depth * 1}rem` : ''"
           :class="{
@@ -151,6 +156,7 @@
         >
           Labels
           <button
+            type="button"
             class="btn btn-ghost btn-square btn-xs"
             @click="showLabelModal(account.uuid)"
             title="New label"
@@ -160,6 +166,7 @@
         </div>
         <template x-for="label in labels[account.uuid]" :key="label.uuid">
           <button
+            type="button"
             class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
             :class="{
               'ring-2 ring-offset-1 bg-base-content/5': dragOverLabel?.uuid === label.uuid,
@@ -194,6 +201,7 @@
     >
       <div>
         <button
+          type="button"
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
           @click="showLabelModal(account.uuid)"
         >
@@ -210,6 +218,7 @@
         :key="'c-' + folder.uuid + '-' + (folder.icon || '') + '-' + (folder.color || '')"
       >
         <button
+          type="button"
           class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
           :class="{
             'bg-warning/10 text-warning': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
@@ -242,6 +251,7 @@
   x-show="!sidebarCollapsed()"
 >
   <button
+    type="button"
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
     @click="showAddAccount()"
   >

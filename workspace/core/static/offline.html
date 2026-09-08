@@ -7,14 +7,15 @@
     <script>
       document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light');
     </script>
-    <!-- Literal paths, not {% static %}: the service worker serves this file
-       as it is, so a template tag would ship as text. collectstatic keeps the
-       unhashed names beside the hashed ones, so they resolve in production. -->
+    <!-- Literal paths, not the static template tag: the service worker serves
+       this file as it is, so a template tag would ship as text. collectstatic
+       keeps the unhashed names beside the hashed ones, so they resolve in
+       production. -->
     <!-- djlint:off D004 -->
-    <link href="/static/css/app.css" rel="stylesheet" type="text/css" />
+    <link href="/static/css/app.css" rel="stylesheet" />
     <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml" />
-    <!-- djlint:on -->
     <script src="/static/ui/js/vendor/lucide/lucide.js"></script>
+    <!-- djlint:on -->
   </head>
   <body class="min-h-screen flex items-center justify-center bg-base-200">
     <div class="text-center p-8">
@@ -30,7 +31,7 @@
       </div>
       <h1 class="text-xl font-semibold mb-2">You're offline</h1>
       <p class="text-base-content/60 mb-6">Check your internet connection and try again.</p>
-      <button class="btn btn-primary" onclick="location.reload()">Retry</button>
+      <button type="button" class="btn btn-primary" onclick="location.reload()">Retry</button>
     </div>
     <script>
       lucide.createIcons();

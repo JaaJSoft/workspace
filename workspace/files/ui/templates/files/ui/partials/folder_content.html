@@ -336,7 +336,7 @@
       {% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}
     >
       {% if nodes %}
-        {% if view_mode != 'mosaic' %}
+        {% if view_mode != "mosaic" %}
           <table
             class="table table-fixed [&_td]:align-middle [&_th]:align-middle"
             :class="compactList ? 'table-xs [&_svg]:h-4 [&_svg]:w-4 [&_.checkbox]:h-4 [&_.checkbox]:w-4 [&_.btn-square]:h-5 [&_.btn-square]:w-5 [&_.btn-square]:min-h-0' : ''"
@@ -360,7 +360,9 @@
                 <th class="hidden lg:table-cell w-40" data-col="tags">Tags</th>
                 <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
                 <th class="hidden md:table-cell w-36" data-col="created">Created</th>
-                <th class="hidden md:table-cell w-36" data-col="modified">{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
+                <th class="hidden md:table-cell w-36" data-col="modified">
+                  {% if is_trash_view %}Deleted{% else %}Modified{% endif %}
+                </th>
                 {% if show_actions != False %}
                   <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
                 {% endif %}
@@ -409,7 +411,7 @@
                     />
                   </td>
                   <td class="text-base-content/60" data-col="icon">
-                    {% if node.node_type == 'folder' %}
+                    {% if node.node_type == "folder" %}
                       <i
                         data-lucide="{{ node.icon|default:'folder' }}"
                         class="w-5 h-5 {{ node.color|default:'text-warning' }}"
@@ -428,7 +430,7 @@
                   the alignment of every other column in the listing.
                     {% endcomment %}
                     <div class="flex items-center gap-1.5 min-w-0">
-                      {% if node.node_type == 'folder' and not is_trash_view %}
+                      {% if node.node_type == "folder" and not is_trash_view %}
                         {% comment %}
                     draggable="false" hands the drag back to the row: an anchor
                     is draggable by default, and a link drag carries a
@@ -443,7 +445,7 @@
                           draggable="false"
                           title="{{ node.name }}"
                         >{{ node.name }}</a>
-                      {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %}
+                      {% elif node.node_type == "file" and not is_trash_view and node.is_viewable %}
                         <span
                           class="font-medium block truncate min-w-0 group-hover:text-primary group-hover:underline"
                           title="{{ node.name }}"
@@ -504,7 +506,7 @@
                     class="hidden sm:table-cell text-sm text-base-content/70"
                     data-col="size"
                   >
-                    {% if node.node_type == 'file' %}
+                    {% if node.node_type == "file" %}
                       {{ node.size|filesizeformat }}
                     {% else %}
                       -
@@ -554,7 +556,7 @@
           </table>
         {% endif %}
 
-        {% if view_mode == 'mosaic' %}
+        {% if view_mode == "mosaic" %}
           <!-- Mosaic/Grid view -->
           <div :class="mosaicTileSize <= 2 ? 'p-2' : 'p-4'">
             <div
@@ -633,8 +635,8 @@
                   {% endif %}
 
                   <!-- Preview/Icon area (square) -->
-                  {% if node.node_type == 'folder' %}
-                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:'folder' icon_color=node.color|default:'text-warning' icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
+                  {% if node.node_type == "folder" %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
                   {% else %}
                     {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
                   {% endif %}
@@ -652,7 +654,7 @@
                           :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"
                           x-cloak
                         >
-                          {% if node.node_type == 'file' %}
+                          {% if node.node_type == "file" %}
                             {{ node.size|filesizeformat }}
                           {% else %}
                             Folder

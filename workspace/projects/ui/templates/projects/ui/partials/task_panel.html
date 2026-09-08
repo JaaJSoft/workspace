@@ -108,7 +108,9 @@
       :title="linkCopied ? 'Copied' : 'Copy link'"
     >
       <span x-show="!linkCopied" class="inline-flex"><i data-lucide="link" class="w-4 h-4"></i></span>
-      <span x-show="linkCopied" x-cloak class="inline-flex text-success"><i data-lucide="check" class="w-4 h-4"></i></span>
+      <span x-show="linkCopied" x-cloak class="inline-flex text-success">
+        <i data-lucide="check" class="w-4 h-4"></i>
+      </span>
     </button>
     {% if "delete" in panel_action_ids %}
       <button
@@ -197,7 +199,9 @@
       </label>
       {% if project.estimate_unit %}
         <label class="form-control">
-          <div class="label py-1"><span class="label-text text-xs">Estimate ({{ project.get_estimate_unit_display|lower }})</span></div>
+          <div class="label py-1">
+            <span class="label-text text-xs">Estimate ({{ project.get_estimate_unit_display|lower }})</span>
+          </div>
           {# '' commits as null (unestimated); '0' is a real value, hence the explicit check. #}
           <input
             type="number"

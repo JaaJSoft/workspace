@@ -3,7 +3,11 @@
   class="px-4 py-3 border-b border-base-300 flex items-center justify-between"
 >
   <h4 class="font-semibold text-sm">Search messages</h4>
-  <button class="btn btn-ghost btn-xs btn-square" @click="closeSearchPanel()">
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square"
+    @click="closeSearchPanel()"
+  >
     <i data-lucide="x" class="w-3.5 h-3.5"></i>
   </button>
 </div>
@@ -34,6 +38,7 @@
   <!-- Filter toggle -->
   <div class="flex items-center gap-2">
     <button
+      type="button"
       class="btn btn-xs btn-ghost gap-1"
       :class="searchFiltersExpanded ? 'btn-active' : ''"
       @click="searchFiltersExpanded = !searchFiltersExpanded"
@@ -46,6 +51,7 @@
       ></span>
     </button>
     <button
+      type="button"
       x-show="hasActiveSearchFilters()"
       class="btn btn-xs btn-ghost text-error gap-1"
       @click="clearSearchFilters()"
@@ -119,6 +125,7 @@
       <label class="text-xs font-medium text-base-content/60 mb-1 block">Attachments</label>
       <div class="flex gap-1">
         <button
+          type="button"
           class="btn btn-xs gap-1"
           :class="searchFilterHasFiles ? 'btn-primary' : 'btn-ghost'"
           @click="searchFilterHasFiles = !searchFilterHasFiles; if (searchFilterHasFiles) searchFilterHasImages = false; searchMessages()"
@@ -127,6 +134,7 @@
           Has files
         </button>
         <button
+          type="button"
           class="btn btn-xs gap-1"
           :class="searchFilterHasImages ? 'btn-primary' : 'btn-ghost'"
           @click="searchFilterHasImages = !searchFilterHasImages; if (searchFilterHasImages) searchFilterHasFiles = false; searchMessages()"

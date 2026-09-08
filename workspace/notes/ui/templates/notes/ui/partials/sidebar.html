@@ -48,6 +48,7 @@ the target element outright when an OK response lacks it.
         Tags
       </span>
       <button
+        type="button"
         class="btn btn-ghost btn-square btn-xs"
         @click="showTagModal()"
         title="New tag"
@@ -62,43 +63,12 @@ the target element outright when an OK response lacks it.
             class="list-none"
             x-show="notePrefs.showHidden || !isHidden('{{ tag.uuid }}')"
           >
+            {% comment %}
+              The tag color tints the icon (inline style, since it is a CSS color and not a theme token); the
+              active row keeps the neutral highlight so every tag reads the same when selected.
+            {% endcomment %}
             <div
               class="group flex items-center w-full gap-3 p-2 text-base rounded-lg transition-colors cursor-pointer"
-              {% comment %}
-              The
-              tag
-              color
-              tints
-              the
-              icon
-              (inline
-              style,
-              since
-              it
-              is
-              a
-              CSS
-              color
-              and
-              not
-              a
-              theme
-              token);
-              the
-              active
-              row
-              keeps
-              the
-              neutral
-              highlight
-              so
-              every
-              tag
-              reads
-              the
-              same
-              when
-              selected.{% endcomment %}
               :class="activeView === 'tag' && activeId === '{{ tag.uuid }}' ? 'bg-base-content/10 text-base-content' : 'text-base-content/70 hover:bg-base-content/5'"
               data-tag-uuid="{{ tag.uuid }}"
               data-tag-name="{{ tag.name }}"
@@ -135,6 +105,7 @@ the target element outright when an OK response lacks it.
         Folders
       </span>
       <button
+        type="button"
         class="btn btn-ghost btn-square btn-xs"
         @click="showCreateFolderDialog()"
         title="New folder"
@@ -160,6 +131,7 @@ the target element outright when an OK response lacks it.
       </span>
       {% if available_groups %}
         <button
+          type="button"
           class="btn btn-ghost btn-square btn-xs"
           @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
           title="Create group folder"

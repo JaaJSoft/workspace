@@ -9,6 +9,7 @@
     <div class="flex items-center justify-between px-5 pt-5 pb-2">
       <h3 class="font-bold text-lg">New conversation</h3>
       <button
+        type="button"
         class="btn btn-ghost btn-sm btn-square"
         @click="$refs.newConvDialog.close()"
       >
@@ -165,8 +166,15 @@
 
       <!-- Actions -->
       <div class="flex justify-end gap-2 pt-1">
-        <button class="btn btn-ghost btn-sm" @click="$refs.newConvDialog.close()">Cancel</button>
         <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.newConvDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
           class="btn btn-info btn-sm gap-1.5"
           @click="createConversation()"
           :disabled="(newConvMode === 'groups' ? selectedGroups.length === 0 : selectedUsers.length === 0) || creatingConversation"
@@ -186,6 +194,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

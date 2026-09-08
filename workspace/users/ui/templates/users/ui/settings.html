@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Settings · Workspace{% endblock %}
@@ -29,6 +29,7 @@
       <nav class="md:w-64 flex-shrink-0">
         <div class="border border-base-300 rounded-lg p-3 space-y-1 w-full">
           <button
+            type="button"
             @click="tab = 'profile'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'profile'
@@ -39,6 +40,7 @@
             Profile
           </button>
           <button
+            type="button"
             @click="tab = 'appearance'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'appearance'
@@ -49,6 +51,7 @@
             Appearance
           </button>
           <button
+            type="button"
             @click="tab = 'timezone'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'timezone'
@@ -59,6 +62,7 @@
             Timezone
           </button>
           <button
+            type="button"
             @click="tab = 'security'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'security'
@@ -69,6 +73,7 @@
             Security
           </button>
           <button
+            type="button"
             @click="tab = 'tokens'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'tokens'
@@ -79,6 +84,7 @@
             API Tokens
           </button>
           <button
+            type="button"
             @click="tab = 'usage'; updateHash()"
             class="flex items-center gap-3 w-full px-4 py-2.5 rounded-lg text-sm transition-colors"
             :class="tab === 'usage'

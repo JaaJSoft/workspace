@@ -25,6 +25,7 @@
 
   <div class="flex items-center gap-1.5 min-w-0">
     <button
+      type="button"
       class="btn btn-ghost btn-xs btn-circle flex-shrink-0"
       @click="toggle()"
       :title="playing ? 'Pause' : 'Play'"
@@ -51,6 +52,7 @@
     ></span>
 
     <button
+      type="button"
       class="btn btn-ghost btn-xs px-1 tabular-nums flex-shrink-0"
       @click="cycleSpeed()"
       x-text="speedLabel()"
@@ -58,6 +60,7 @@
     ></button>
 
     <button
+      type="button"
       class="btn btn-ghost btn-xs btn-square flex-shrink-0"
       @click="detailsOpen = !detailsOpen"
       title="File details"
@@ -88,6 +91,7 @@
       <i data-lucide="download" class="w-3.5 h-3.5"></i>
     </a>
     <button
+      type="button"
       class="btn btn-ghost btn-xs btn-square flex-shrink-0"
       @click="saveAttachmentToFiles('{{ att.uuid }}')"
       title="Save to Files"

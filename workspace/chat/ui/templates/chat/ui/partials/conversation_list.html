@@ -33,7 +33,11 @@ reference the parent chatApp() x-data scope.
           <i data-lucide="message-circle" class="w-6 h-6 text-info"></i>
         </div>
         <p class="text-sm text-base-content/60 mb-3">No conversations yet</p>
-        <button class="btn btn-info btn-xs" @click="showNewConversationDialog()">
+        <button
+          type="button"
+          class="btn btn-info btn-xs"
+          @click="showNewConversationDialog()"
+        >
           <i data-lucide="plus" class="w-3 h-3"></i> New chat
         </button>
       {% endif %}

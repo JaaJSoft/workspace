@@ -8,6 +8,7 @@
     <div class="flex items-center justify-between px-5 pt-5 pb-2">
       <h3 class="font-bold text-lg">Add members</h3>
       <button
+        type="button"
         class="btn btn-ghost btn-sm btn-square"
         @click="$refs.addMemberDialog.close()"
       >
@@ -96,8 +97,15 @@
 
       <!-- Actions -->
       <div class="flex justify-end gap-2 pt-1">
-        <button class="btn btn-ghost btn-sm" @click="$refs.addMemberDialog.close()">Cancel</button>
         <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.addMemberDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
           class="btn btn-info btn-sm gap-1.5"
           @click="confirmAddMembers()"
           :disabled="addMemberSelected.length === 0 || addMemberSaving"
@@ -114,6 +122,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

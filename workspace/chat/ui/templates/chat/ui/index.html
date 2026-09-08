@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Chat - Workspace{% endblock %}
@@ -21,7 +21,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 {% endblock %}
 
 {% block navbar %}
-  {% include 'core/partials/navbar.html' with navbar_full_width=True %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}drawer-open{% endblock %}
@@ -94,6 +94,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             {% include "ui/partials/preferences_popover.html" with component="chatPreferences()" content="chat/ui/partials/_preferences_content.html" accent="text-info" button_class="hover:text-info" close_on_event="chat-run-diagnostic" %}
             {% if ai_enabled %}
               <button
+                type="button"
                 class="btn btn-ghost btn-sm btn-square hover:text-secondary"
                 @click="botFilter = ''; showBotPicker = true"
                 title="New AI Chat"
@@ -102,6 +103,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               </button>
             {% endif %}
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-info"
               @click="showNewConversationDialog()"
               title="New conversation (Alt+N)"
@@ -207,6 +209,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             </div>
           </div>
           <button
+            type="button"
             class="btn btn-xs btn-success gap-1"
             @click="openCallRoom(callSession && callSession.conversation_id)"
           >

@@ -19,7 +19,7 @@ from ..services import meetings as meeting_service
 from ..services.calls import is_call_locked
 from ..services.identities import display_name_for_identity
 from ..services.meeting_guests import issue_token
-from ..services.meeting_hosts import is_host, reachable_meeting
+from ..services.meeting_hosts import is_host, public_meeting, reachable_meeting
 from ..services.meeting_occurrences import current_occurrence
 from ..services.participant_keys import guest_key
 from ..throttling import MeetingPublicIpThrottle
@@ -89,9 +89,7 @@ class MeetingSummaryView(APIView):
 
     @extend_schema(summary="Public summary of a meeting, by slug")
     def get(self, request, slug):
-        from ..models import Meeting
-
-        meeting = Meeting.objects.select_related("event").filter(slug=slug).first()
+        meeting = public_meeting(slug)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -152,9 +150,12 @@ class MeetingKnockView(APIView):
         summary="Knock to join a meeting's lobby", request=DisplayNameSerializer
     )
     def post(self, request, slug):
-        from ..models import Meeting, MeetingGuest
+        from ..models import MeetingGuest
 
-        meeting = Meeting.objects.select_related("event").filter(slug=slug).first()
+        # Only the door to newcomers: tokens already issued keep resolving
+        # through guest_for_slug, so turning the link off never evicts a
+        # guest who is already inside.
+        meeting = public_meeting(slug)
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 

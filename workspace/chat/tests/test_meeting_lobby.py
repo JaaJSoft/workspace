@@ -878,3 +878,54 @@ class MeetingPublicViewTests(TestCase):
         )
         self.assertEqual(resp.status_code, 403)
         self.assertFalse(MeetingGuest.objects.filter(meeting=self.meeting).exists())
+
+    # --- public link toggle ---
+
+    def _disable_public_link(self):
+        self.meeting.public_link_enabled = False
+        self.meeting.save(update_fields=["public_link_enabled"])
+
+    def test_summary_404_while_the_public_link_is_off(self):
+        self._disable_public_link()
+        resp = self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_knock_404_while_the_public_link_is_off(self):
+        self._disable_public_link()
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertFalse(MeetingGuest.objects.filter(meeting=self.meeting).exists())
+
+    def test_summary_and_knock_answer_normally_while_the_link_is_on(self):
+        self.assertTrue(self.meeting.public_link_enabled)
+        self.assertEqual(
+            self.client.get(f"/api/v1/chat/meet/{self.meeting.slug}").status_code, 200
+        )
+        resp = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+
+    def test_an_admitted_guest_keeps_their_state_after_the_link_is_off(self):
+        # Turning the link off shuts the door on newcomers; it never evicts
+        # a guest already inside.
+        knock = self.client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        token = knock.data["token"]
+        admit_guest(MeetingGuest.objects.get(meeting=self.meeting), self.owner)
+        self._disable_public_link()
+
+        resp = self.client.get(
+            f"/api/v1/chat/meet/{self.meeting.slug}/state",
+            headers={"X-Meeting-Token": token},
+        )
+        self.assertEqual(resp.status_code, 200)

@@ -62,3 +62,18 @@ def reachable_meeting(user, meeting_uuid):
     if meeting is None or not is_host(user, meeting):
         return None
     return meeting
+
+
+def public_meeting(slug):
+    """The public surface's slug lookup.
+
+    None means 404 whether the slug is unknown or the host turned the link
+    off.
+    """
+    from ..models import Meeting
+
+    return (
+        Meeting.objects.select_related("event")
+        .filter(slug=slug, public_link_enabled=True)
+        .first()
+    )

@@ -55,6 +55,28 @@ class MeetingPageTests(TestCase):
             self.assertIn("admitGuest(", html)
             self.assertIn("workspace-modules-data", html)
 
+    def test_the_lobby_dialog_is_mounted_exactly_once(self):
+        """Two elements carrying one x-ref fight over the key: Alpine's ref
+        cleanup runs when the losing branch unmounts and deletes the entry the
+        surviving one had just written, so openLobby() finds nothing to show.
+        The page mounts the dialog; the stage only draws the buttons."""
+        self.client.force_login(self.host)
+        html = self.client.get(self.url).content.decode()
+        self.assertEqual(html.count('x-ref="lobbyDialog"'), 1)
+
+    def test_the_call_stage_draws_the_lobby_button_without_the_dialog(self):
+        """Read off the partial itself, not a page that includes it: the page
+        test above counts one dialog either way once the stage stops shipping
+        its own copy, so the rule that keeps it that way belongs here."""
+        from django.template.loader import render_to_string
+
+        stage = render_to_string(
+            "chat/ui/partials/call_stage.html",
+            {"meeting_controls": True, "chat_toggle": True},
+        )
+        self.assertIn('@click="openLobby()"', stage)
+        self.assertNotIn("lobbyDialog", stage)
+
     def test_signed_in_stranger_gets_the_guest_document_with_their_name(self):
         self.client.force_login(self.outsider)
         html = self.client.get(self.url).content.decode()

@@ -58,6 +58,16 @@ window.chatMeetingChatMixin = function chatMeetingChatMixin() {
     // ask for presence or open a profile card (see message_shell.js).
     _viewerIsGuest() { return false; },
 
+    // The meeting this pane shows, or null when the transport is already
+    // scoped to one and has nothing else to carry. The host page reads the
+    // global stream, which carries every meeting that host runs, so two of
+    // their meetings open in two tabs would cross-post without this.
+    meetingId() { return null; },
+    _ownsMeetingEvent(detail) {
+      const own = this.meetingId();
+      return own == null || detail.meeting_id === own;
+    },
+
     // Looked up by id, not through $refs: Alpine scopes every x-if clone as a
     // root of its own, and both $refs and $root resolve against whichever
     // element the expression that reached this method was bound to. A frame
@@ -133,13 +143,13 @@ window.chatMeetingChatMixin = function chatMeetingChatMixin() {
     },
 
     onMeetingMessage(detail) {
-      if (!detail || !detail.message) return;
+      if (!detail || !detail.message || !this._ownsMeetingEvent(detail)) return;
       this._appendMeetingMessage(detail.message);
       this._onMeetingMessageArrived?.(detail.message);
     },
 
     onMeetingMessageDeleted(detail) {
-      if (!detail || !detail.message_id) return;
+      if (!detail || !detail.message_id || !this._ownsMeetingEvent(detail)) return;
       this.meetingMessages = this.meetingMessages.filter((m) => m.uuid !== detail.message_id);
       this.renderMeetingMessages();
     },

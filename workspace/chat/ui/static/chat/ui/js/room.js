@@ -10,12 +10,6 @@ function chatRoomApp(currentUserId, conversationId) {
     currentUserId: currentUserId,
     roomConversationId: conversationId,
     callRole: 'owner',
-    speakingIds: {},
-    pinnedKey: null,
-    pinnedManually: false,
-    callElapsed: '00:00',
-    _callStartMs: null,
-    _durationTimer: null,
     _audioCtx: null,
     _meterTimer: null,
     chatPrefs: { ...(window._chatPrefsCache || {}) },
@@ -30,6 +24,7 @@ function chatRoomApp(currentUserId, conversationId) {
     ...threads,
     ...chatBotMixin(),
     ...chatCallMixin(),
+    ...chatCallStageMixin(),
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
 
@@ -132,26 +127,6 @@ function chatRoomApp(currentUserId, conversationId) {
       }, 100);
     },
 
-    _startDurationTimer() {
-      if (this._durationTimer) return; // idempotent
-      // Prefer the server-supplied start so all participants share the same clock.
-      const serverTs = this.callSession && this.callSession.started_at;
-      const start = serverTs ? new Date(serverTs).getTime() : Date.now();
-      this._callStartMs = isNaN(start) ? Date.now() : start;
-      this.callElapsed = this._formatDuration(Date.now() - this._callStartMs);
-      this._durationTimer = setInterval(() => {
-        this.callElapsed = this._formatDuration(Date.now() - this._callStartMs);
-      }, 1000);
-    },
-
-    _stopDurationTimer() {
-      if (this._durationTimer) { clearInterval(this._durationTimer); this._durationTimer = null; }
-    },
-
-    _formatDuration(ms) {
-      return window.chatRoomFormatDuration(ms);
-    },
-
     _stopSpeakingMeter() {
       if (this._meterTimer) { clearInterval(this._meterTimer); this._meterTimer = null; }
       if (this._audioCtx) { try { this._audioCtx.close(); } catch (e) {} this._audioCtx = null; }
@@ -164,78 +139,6 @@ function chatRoomApp(currentUserId, conversationId) {
         // direct visit or refresh of the room URL); fall back to the chat list.
         setTimeout(() => { window.location.href = '/chat'; }, 100);
       });
-    },
-
-    isSpeaking(participantKey) {
-      return !!this.speakingIds[participantKey];
-    },
-
-    remoteParticipants() {
-      return this.callParticipants.filter((p) => p.participant_key !== this.currentParticipantKey);
-    },
-
-    selfParticipant() {
-      return this.callParticipants.find((p) => p.participant_key === this.currentParticipantKey) || null;
-    },
-
-    gridColumns() {
-      return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
-    },
-
-    pinTile(participantKey) {
-      // Click a tile to spotlight it; click the pinned tile again to return to
-      // the grid. Any click marks the choice manual so auto-pin yields to it.
-      this.pinnedKey = (this.pinnedKey === participantKey) ? null : participantKey;
-      this.pinnedManually = true;
-    },
-
-    backToGrid() {
-      this.pinnedKey = null;
-      this.pinnedManually = true;
-    },
-
-    spotlightKey() {
-      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedKey, this.pinnedManually);
-    },
-
-    isSpotlight() {
-      return this.spotlightKey() != null;
-    },
-
-    spotlightParticipant() {
-      const key = this.spotlightKey();
-      return key == null ? null : this.callParticipants.find((p) => p.participant_key === key) || null;
-    },
-
-    stripParticipants() {
-      // Everyone except the spotlighted participant, for the thumbnail strip.
-      const key = this.spotlightKey();
-      return this.callParticipants.filter((p) => p.participant_key !== key);
-    },
-
-    hasVideo(p) {
-      if (p && p.participant_key === this.currentParticipantKey) return !!(this.cameraOn || this.sharing);
-      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
-    },
-
-    streamFor(participantKey) {
-      if (participantKey === this.currentParticipantKey) return this.localVideoStream || null;
-      return this.remoteStreams[participantKey] || null;
-    },
-
-    // No onCallParticipantUpdated override: the call mixin applies media_state,
-    // and spotlightKey() derives the auto-pin from that live state, so a
-    // sharer is spotlighted (or cleared) reactively without latching an event.
-
-    onCallParticipantLeft(detail) {
-      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (detail.participant_key !== this.currentParticipantKey) this._playCallCue('peer-leave');
-      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
-      this._closePeer(detail.participant_key);
-      if (this.pinnedKey === detail.participant_key) {
-        this.pinnedKey = null;
-        this.pinnedManually = false;  // pin gone; allow auto-pin again
-      }
     },
   };
 }

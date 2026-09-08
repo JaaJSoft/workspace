@@ -57,9 +57,11 @@ test('opening the lobby shows the dialog and loads it; closing does not reload',
   assert.deepStrictEqual(urls, ['/api/v1/chat/meetings/m1/lobby']);
 });
 
-test('capacity label and guest tile detection', () => {
+test('guest tile detection', () => {
+  // capacityLabel moved to chatCallStageMixin (call_room.js): every page that
+  // mounts the stage binds it, not only the ones with host controls.
   const m = host(async () => ({ ok: true, json: async () => ({}) }));
-  assert.equal(m.capacityLabel(), '2 / 6');
+  assert.equal(m.capacityLabel, undefined);
   assert.equal(m.isGuestTile({ participant_key: 'g:9' }), true);
   assert.equal(m.isGuestTile({ participant_key: 'u:1' }), false);
 });

@@ -22,7 +22,15 @@ const stubs = {
   chatCallShouldOwnMedia: (r) => r !== 'observer',
 };
 
-const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', stubs);
+// call_room.js rides along unstubbed: it holds chatCallStageMixin, whose tile
+// and pin helpers several tests below assert on directly.
+const ctx = loadScripts(
+  [
+    'workspace/chat/ui/static/chat/ui/js/call_room.js',
+    'workspace/chat/ui/static/chat/ui/js/room.js',
+  ],
+  stubs,
+);
 
 // Integration test against the REAL chatCallMixin (not the double above): the
 // stubbed suite cannot catch currentParticipantKey being clobbered by a mixin
@@ -107,13 +115,31 @@ test('pinTile toggles on a participant key', () => {
 
 test('the room teardown reaches the mixin that declares one', () => {
   const stopped = [];
-  const ctx2 = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', {
+  const ctx2 = loadScripts(
+    [
+      'workspace/chat/ui/static/chat/ui/js/call_room.js',
+      'workspace/chat/ui/static/chat/ui/js/room.js',
+    ],
+    {
     ...stubs,
     // Object spread would let a later mixin's destroy() win silently, which
     // is the whole reason destroy() is declared on the room itself.
     chatThreadsMixin: () => ({ destroy() { stopped.push('threads'); } }),
-  });
+    },
+  );
   const app = ctx2.chatRoomApp(7, 'conv-1');
   app.destroy();
   assert.deepStrictEqual(Array.from(stopped), ['threads']);
+});
+
+test('the room labels the call capacity the stage status bar asks for', () => {
+  // call_stage.html binds x-text="capacityLabel()" unconditionally, for every
+  // page that mounts it - it is stage state, not a meeting-host control.
+  const app = integrationCtx.chatRoomApp(7, 'conv-1');
+  app.callParticipants = [{ participant_key: 'u:7' }, { participant_key: 'u:8' }];
+  app.callSession = { max_participants: 6 };
+  assert.equal(app.capacityLabel(), '2 / 6');
+
+  app.callSession = null;
+  assert.equal(app.capacityLabel(), '2');
 });

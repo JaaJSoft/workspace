@@ -262,6 +262,7 @@ function chatMeetApp(slug) {
   const uiHelpers = chatUiHelpersMixin();
   const input = chatInputMixin();
   const call = chatCallMixin();
+  const stage = chatCallStageMixin();
   const chat = chatMeetingChatMixin();
   const sse = chatMeetSseMixin();
   const meetMessages = chatMeetMessagesMixin();
@@ -273,6 +274,7 @@ function chatMeetApp(slug) {
     ...uiHelpers,
     ...input,
     ...call,
+    ...stage,
     ...chat,
     ...sse,
     ...meetMessages,
@@ -299,12 +301,6 @@ function chatMeetApp(slug) {
     // them, so the pane gets the shipped defaults rather than chatPrefs
     // from chat_preferences.js.
     chatPrefs: { compactMessageView: false, messageAnimation: 'slide' },
-    speakingIds: {},
-    pinnedKey: null,
-    pinnedManually: false,
-    callElapsed: '00:00',
-    _callStartMs: null,
-    _durationTimer: null,
     _reapRejoins: 0,
     _joinRefusal: null,
     _refusedOnce: false,
@@ -342,7 +338,7 @@ function chatMeetApp(slug) {
     // cannot quietly drop another's.
     destroy() {
       this.releasePaneVisibility();
-      for (const mixin of [uiHelpers, input, call, chat, sse, meetMessages]) {
+      for (const mixin of [uiHelpers, input, call, stage, chat, sse, meetMessages]) {
         mixin.destroy?.call(this);
       }
     },
@@ -458,10 +454,6 @@ function chatMeetApp(slug) {
     isFull() {
       return !!(this.summary && this.summary.max_participants
         && this.summary.participant_count >= this.summary.max_participants);
-    },
-    capacityLabel() {
-      const max = this.callSession && this.callSession.max_participants;
-      return max ? `${this.callParticipants.length} / ${max}` : String(this.callParticipants.length);
     },
     waitingCapacityLine() {
       if (!this.summary || !this.summary.max_participants) return '';
@@ -633,19 +625,6 @@ function chatMeetApp(slug) {
       await this.waitForCall();
     },
 
-    // Copied from the member room: a departing peer that held the manual pin
-    // releases it, so the stage falls back to the automatic spotlight.
-    onCallParticipantLeft(detail) {
-      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (detail.participant_key !== this.currentParticipantKey) this._playCallCue('peer-leave');
-      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
-      this._closePeer(detail.participant_key);
-      if (this.pinnedKey === detail.participant_key) {
-        this.pinnedKey = null;
-        this.pinnedManually = false;
-      }
-    },
-
     leaveLobby() {
       this._closeStream();
       this.reset();
@@ -700,67 +679,6 @@ function chatMeetApp(slug) {
       this.error = '';
       this.joinError = '';
       this.phase = 'name';
-    },
-
-    // -- Call duration ---------------------------------------
-    _startDurationTimer() {
-      if (this._durationTimer) return;
-      const serverTs = this.callSession && this.callSession.started_at;
-      const start = serverTs ? new Date(serverTs).getTime() : Date.now();
-      this._callStartMs = isNaN(start) ? Date.now() : start;
-      this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
-      this._durationTimer = setInterval(() => {
-        this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
-      }, 1000);
-    },
-    _stopDurationTimer() {
-      if (this._durationTimer) { clearInterval(this._durationTimer); this._durationTimer = null; }
-    },
-
-    // -- Stage helpers the shared partial reads --------------
-    // Same names, same bodies as the member room's (room.js), so both pages
-    // compute their tiles through the same call_room.js helpers.
-    isSpeaking(participantKey) {
-      return !!this.speakingIds[participantKey];
-    },
-    remoteParticipants() {
-      return this.callParticipants.filter((p) => p.participant_key !== this.currentParticipantKey);
-    },
-    selfParticipant() {
-      return this.callParticipants.find((p) => p.participant_key === this.currentParticipantKey) || null;
-    },
-    gridColumns() {
-      return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
-    },
-    pinTile(participantKey) {
-      this.pinnedKey = (this.pinnedKey === participantKey) ? null : participantKey;
-      this.pinnedManually = true;
-    },
-    backToGrid() {
-      this.pinnedKey = null;
-      this.pinnedManually = true;
-    },
-    spotlightKey() {
-      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedKey, this.pinnedManually);
-    },
-    isSpotlight() {
-      return this.spotlightKey() != null;
-    },
-    spotlightParticipant() {
-      const key = this.spotlightKey();
-      return key == null ? null : this.callParticipants.find((p) => p.participant_key === key) || null;
-    },
-    stripParticipants() {
-      const key = this.spotlightKey();
-      return this.callParticipants.filter((p) => p.participant_key !== key);
-    },
-    hasVideo(p) {
-      if (p && p.participant_key === this.currentParticipantKey) return !!(this.cameraOn || this.sharing);
-      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
-    },
-    streamFor(participantKey) {
-      if (participantKey === this.currentParticipantKey) return this.localVideoStream || null;
-      return this.remoteStreams[participantKey] || null;
     },
   };
 }

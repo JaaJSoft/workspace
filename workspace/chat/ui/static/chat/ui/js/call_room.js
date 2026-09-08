@@ -74,6 +74,115 @@ function chatCallSpotlightTarget(participants, pinnedKey, pinnedManually) {
   return chatCallAutoPinTarget(list, pinnedManually);
 }
 
+// The call stage's shared state and helpers: the tile split, the spotlight,
+// the manual pin and the elapsed clock. The member room, the guest page and
+// the meeting page all mount call_stage.html, which binds every name below -
+// held here so the three cannot compute their tiles differently.
+window.chatCallStageMixin = function chatCallStageMixin() {
+  return {
+    speakingIds: {},
+    pinnedKey: null,
+    pinnedManually: false,
+    callElapsed: '00:00',
+    _callStartMs: null,
+    _durationTimer: null,
+
+    // The status bar's "2 / 6", or a bare count when the call names no cap.
+    capacityLabel() {
+      const max = this.callSession && this.callSession.max_participants;
+      const n = (this.callParticipants || []).length;
+      return max ? `${n} / ${max}` : String(n);
+    },
+
+    isSpeaking(participantKey) {
+      return !!this.speakingIds[participantKey];
+    },
+
+    remoteParticipants() {
+      return this.callParticipants.filter((p) => p.participant_key !== this.currentParticipantKey);
+    },
+
+    selfParticipant() {
+      return this.callParticipants.find((p) => p.participant_key === this.currentParticipantKey) || null;
+    },
+
+    gridColumns() {
+      return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1)));
+    },
+
+    // Click a tile to spotlight it; click the pinned tile again to return to
+    // the grid. Any click marks the choice manual so auto-pin yields to it.
+    pinTile(participantKey) {
+      this.pinnedKey = (this.pinnedKey === participantKey) ? null : participantKey;
+      this.pinnedManually = true;
+    },
+
+    backToGrid() {
+      this.pinnedKey = null;
+      this.pinnedManually = true;
+    },
+
+    spotlightKey() {
+      return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedKey, this.pinnedManually);
+    },
+
+    isSpotlight() {
+      return this.spotlightKey() != null;
+    },
+
+    spotlightParticipant() {
+      const key = this.spotlightKey();
+      return key == null ? null : this.callParticipants.find((p) => p.participant_key === key) || null;
+    },
+
+    // Everyone except the spotlighted participant, for the thumbnail strip.
+    stripParticipants() {
+      const key = this.spotlightKey();
+      return this.callParticipants.filter((p) => p.participant_key !== key);
+    },
+
+    hasVideo(p) {
+      if (p && p.participant_key === this.currentParticipantKey) return !!(this.cameraOn || this.sharing);
+      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
+    },
+
+    streamFor(participantKey) {
+      if (participantKey === this.currentParticipantKey) return this.localVideoStream || null;
+      return this.remoteStreams[participantKey] || null;
+    },
+
+    // Overrides the call mixin's: a departing peer that held the manual pin
+    // releases it, so the stage falls back to the automatic spotlight.
+    onCallParticipantLeft(detail) {
+      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
+      if (detail.participant_key !== this.currentParticipantKey) this._playCallCue('peer-leave');
+      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
+      this._closePeer(detail.participant_key);
+      if (this.pinnedKey === detail.participant_key) {
+        this.pinnedKey = null;
+        this.pinnedManually = false;  // pin gone; allow auto-pin again
+      }
+    },
+
+    // Idempotent. Prefers the server-supplied start so every participant
+    // reads the same clock rather than counting from their own join.
+    _startDurationTimer() {
+      if (this._durationTimer) return;
+      const serverTs = this.callSession && this.callSession.started_at;
+      const start = serverTs ? new Date(serverTs).getTime() : Date.now();
+      this._callStartMs = isNaN(start) ? Date.now() : start;
+      this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
+      this._durationTimer = setInterval(() => {
+        this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
+      }, 1000);
+    },
+
+    _stopDurationTimer() {
+      if (this._durationTimer) { clearInterval(this._durationTimer); this._durationTimer = null; }
+    },
+  };
+};
+
 window.chatRoomFormatDuration = chatRoomFormatDuration;
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;

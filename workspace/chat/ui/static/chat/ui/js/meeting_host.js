@@ -95,10 +95,5 @@ window.chatMeetingHostMixin = function chatMeetingHostMixin() {
     isGuestTile(p) {
       return !!(p && typeof p.participant_key === 'string' && p.participant_key.startsWith('g:'));
     },
-    capacityLabel() {
-      const max = this.callSession && this.callSession.max_participants;
-      const n = (this.callParticipants || []).length;
-      return max ? `${n} / ${max}` : String(n);
-    },
   };
 };

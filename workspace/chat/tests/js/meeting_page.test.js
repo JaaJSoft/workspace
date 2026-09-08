@@ -155,11 +155,11 @@ test('a line arriving with the slide-over closed is counted, and reading clears 
   });
   a.meeting = MEETING;
 
-  a.onMeetingMessage({ message: { uuid: 'm1', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'g:1' } } });
+  a.onMeetingMessage({ meeting_id: 'm-1', message: { uuid: 'm1', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'g:1' } } });
   assert.equal(a.unreadMessages, 1);
 
   // My own line is not news to me.
-  a.onMeetingMessage({ message: { uuid: 'm2', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'u:7' } } });
+  a.onMeetingMessage({ meeting_id: 'm-1', message: { uuid: 'm2', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'u:7' } } });
   assert.equal(a.unreadMessages, 1);
 
   a.toggleChat();
@@ -173,6 +173,51 @@ test('above md the pane is on screen, so nothing is unread', () => {
   });
   a.meeting = MEETING;
 
-  a.onMeetingMessage({ message: { uuid: 'm1', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'g:1' } } });
+  a.onMeetingMessage({ meeting_id: 'm-1', message: { uuid: 'm1', body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z', author: { participant_key: 'g:1' } } });
   assert.equal(a.unreadMessages, 0);
+});
+
+test('a frame for another meeting never lands in this pane', () => {
+  // The host page reads the global stream, which carries every meeting the
+  // host runs - two meetings open in two tabs otherwise cross-post.
+  const { a } = app(okFetch, {
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+  });
+  a.meeting = MEETING;
+  const line = (uuid) => ({
+    uuid, body_html: '<p>x</p>', created_at: '2026-09-07T10:00:00Z',
+    author: { participant_key: 'g:1' },
+  });
+
+  a.onMeetingMessage({ meeting_id: 'another-meeting', message: line('m1') });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), []);
+  assert.equal(a.unreadMessages, 0);
+
+  a.onMeetingMessage({ meeting_id: 'm-1', message: line('m2') });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), ['m2']);
+  assert.equal(a.unreadMessages, 1);
+
+  a.onMeetingMessageDeleted({ meeting_id: 'another-meeting', message_id: 'm2' });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), ['m2']);
+
+  a.onMeetingMessageDeleted({ meeting_id: 'm-1', message_id: 'm2' });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), []);
+});
+
+test('the host app exposes the whole call-stage surface the partial binds', () => {
+  // The stage helpers live in chatCallStageMixin now; a spread order that
+  // shadowed them would only surface as a blank stage in the browser.
+  const { a } = app(okFetch);
+  for (const name of [
+    'isSpeaking', 'remoteParticipants', 'selfParticipant', 'gridColumns', 'pinTile',
+    'backToGrid', 'spotlightKey', 'isSpotlight', 'spotlightParticipant',
+    'stripParticipants', 'hasVideo', 'streamFor', 'onCallParticipantLeft',
+    '_startDurationTimer', '_stopDurationTimer',
+  ]) {
+    assert.equal(typeof a[name], 'function', name);
+  }
+  assert.equal(a.callElapsed, '00:00');
+  assert.deepStrictEqual({ ...a.speakingIds }, {});
+  assert.equal(a.pinnedKey, null);
+  assert.equal(a.pinnedManually, false);
 });

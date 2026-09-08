@@ -64,3 +64,81 @@ test('the pane is addressed by id, not through the calling scope', () => {
   assert.equal(component.getMessageInput(), null);
   assert.deepEqual(Array.from(seen), ['meeting-chat-list', 'meeting-chat-input']);
 });
+
+// -- The rendered list ------------------------------------------------------
+
+// The shell element (message_shell.js) rebuilds this subtree when it upgrades,
+// so the delete control cannot rely on Alpine walking an x-on attribute after
+// the fact: in the browser that produced a button that swallowed every click.
+function stubElement(tag) {
+  return {
+    tag,
+    children: [],
+    attrs: {},
+    listeners: {},
+    className: '',
+    textContent: '',
+    innerHTML: '',
+    id: '',
+    title: '',
+    setAttribute(name, value) { this.attrs[name] = String(value); },
+    appendChild(child) { this.children.push(child); return child; },
+    addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); },
+    replaceChildren(fragment) { this.children = fragment.children.slice(); },
+    querySelectorAll() { return []; },
+  };
+}
+
+function descendants(node) {
+  return (node.children || []).flatMap((child) => [child, ...descendants(child)]);
+}
+
+function renderedHostPane(messages) {
+  const list = stubElement('div');
+  const ctxWithDom = loadScript('workspace/chat/ui/static/chat/ui/js/meeting_chat.js', {
+    document: {
+      getElementById: (id) => (id === 'meeting-chat-list' ? list : null),
+      createElement: stubElement,
+      createDocumentFragment: () => stubElement('#fragment'),
+    },
+  });
+  const component = ctxWithDom.chatMeetingChatMixin();
+  component.meetingMessages = messages;
+  component.currentParticipantKey = 'u:1';
+  component._canDeleteMeetingMessages = () => true;
+  component.$nextTick = (fn) => { if (fn) fn(); };
+  component.deleted = [];
+  component.deleteMeetingMessage = function (uuid) { this.deleted.push(uuid); };
+  component.renderMeetingMessages();
+  return { component, list };
+}
+
+test('the delete control calls deleteMeetingMessage with its own uuid', () => {
+  const { component, list } = renderedHostPane([msg({ uuid: 'm-9' })]);
+
+  const buttons = descendants(list).filter((node) => node.tag === 'button');
+  assert.equal(buttons.length, 1, 'one delete control per message');
+  assert.equal(buttons[0].title, 'Delete');
+  const clicks = buttons[0].listeners.click || [];
+  assert.equal(clicks.length, 1, 'bound with a real listener, not an x-on attribute');
+
+  clicks[0]();
+  assert.deepEqual(Array.from(component.deleted), ['m-9']);
+});
+
+test('a reader who cannot delete gets no control at all', () => {
+  const list = stubElement('div');
+  const ctxWithDom = loadScript('workspace/chat/ui/static/chat/ui/js/meeting_chat.js', {
+    document: {
+      getElementById: (id) => (id === 'meeting-chat-list' ? list : null),
+      createElement: stubElement,
+      createDocumentFragment: () => stubElement('#fragment'),
+    },
+  });
+  const component = ctxWithDom.chatMeetingChatMixin();
+  component.meetingMessages = [msg({ uuid: 'm-9' })];
+  component.$nextTick = (fn) => { if (fn) fn(); };
+  component.renderMeetingMessages();
+
+  assert.equal(descendants(list).filter((node) => node.tag === 'button').length, 0);
+});

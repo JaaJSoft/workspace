@@ -990,3 +990,16 @@ test('a malformed signed-in payload leaves the field empty rather than throwing'
   });
   assert.equal(a.displayName, '');
 });
+
+test('the guest app exposes the whole call-stage surface the partial binds', () => {
+  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+  for (const name of [
+    'isSpeaking', 'remoteParticipants', 'selfParticipant', 'gridColumns', 'pinTile',
+    'backToGrid', 'spotlightKey', 'isSpotlight', 'spotlightParticipant',
+    'stripParticipants', 'hasVideo', 'streamFor', 'onCallParticipantLeft',
+    '_startDurationTimer', '_stopDurationTimer',
+  ]) {
+    assert.equal(typeof a[name], 'function', name);
+  }
+  assert.equal(a.callElapsed, '00:00');
+});

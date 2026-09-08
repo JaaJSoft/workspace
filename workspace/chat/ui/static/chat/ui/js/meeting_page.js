@@ -7,6 +7,7 @@ const CHAT_MEETING_PANE_ON_SCREEN = '(min-width: 768px)';
 
 function chatMeetingHostApp(currentUserId) {
   const call = chatCallMixin();
+  const stage = chatCallStageMixin();
   const host = chatMeetingHostMixin();
   const chat = chatMeetingChatMixin();
   const input = chatInputMixin();
@@ -16,6 +17,7 @@ function chatMeetingHostApp(currentUserId) {
     ...uiHelpers,
     ...input,
     ...call,
+    ...stage,
     ...host,
     ...chat,
 
@@ -27,12 +29,6 @@ function chatMeetingHostApp(currentUserId) {
     // looking; the stage's dock is the only place the count is drawn.
     unreadMessages: 0,
     chatPrefs: { ...(window._chatPrefsCache || {}) },
-    speakingIds: {},
-    pinnedKey: null,
-    pinnedManually: false,
-    callElapsed: '00:00',
-    _callStartMs: null,
-    _durationTimer: null,
     activeConversation: null,
 
     async init() {
@@ -52,7 +48,7 @@ function chatMeetingHostApp(currentUserId) {
     destroy() {
       this._stopLobbyRefresh?.();
       this._stopDurationTimer();
-      for (const mixin of [uiHelpers, input, call, host, chat]) mixin.destroy?.call(this);
+      for (const mixin of [uiHelpers, input, call, stage, host, chat]) mixin.destroy?.call(this);
     },
 
     meetingTitle() { return (this.meeting && this.meeting.title) || 'Meeting'; },
@@ -123,48 +119,9 @@ function chatMeetingHostApp(currentUserId) {
       return cursor ? `${base}?before=${cursor}` : base;
     },
     _meetingMessageHeaders() { return { 'X-CSRFToken': this._csrf() }; },
+    meetingId() { return this.meeting ? this.meeting.uuid : null; },
     _canDeleteMeetingMessages() { return true; },
     isBotMessage() { return false; },
-
-    // -- Duration and stage helpers (same bodies as room.js) --
-    _startDurationTimer() {
-      if (this._durationTimer) return;
-      const serverTs = this.callSession && this.callSession.started_at;
-      const start = serverTs ? new Date(serverTs).getTime() : Date.now();
-      this._callStartMs = isNaN(start) ? Date.now() : start;
-      this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
-      this._durationTimer = setInterval(() => {
-        this.callElapsed = window.chatRoomFormatDuration(Date.now() - this._callStartMs);
-      }, 1000);
-    },
-    _stopDurationTimer() {
-      if (this._durationTimer) { clearInterval(this._durationTimer); this._durationTimer = null; }
-    },
-    isSpeaking(key) { return !!this.speakingIds[key]; },
-    remoteParticipants() { return this.callParticipants.filter((p) => p.participant_key !== this.currentParticipantKey); },
-    selfParticipant() { return this.callParticipants.find((p) => p.participant_key === this.currentParticipantKey) || null; },
-    gridColumns() { return Math.max(1, Math.ceil(Math.sqrt(this.remoteParticipants().length || 1))); },
-    pinTile(key) { this.pinnedKey = (this.pinnedKey === key) ? null : key; this.pinnedManually = true; },
-    backToGrid() { this.pinnedKey = null; this.pinnedManually = true; },
-    spotlightKey() { return window.chatCallSpotlightTarget(this.callParticipants, this.pinnedKey, this.pinnedManually); },
-    isSpotlight() { return this.spotlightKey() != null; },
-    spotlightParticipant() { const k = this.spotlightKey(); return k == null ? null : this.callParticipants.find((p) => p.participant_key === k) || null; },
-    stripParticipants() { const k = this.spotlightKey(); return this.callParticipants.filter((p) => p.participant_key !== k); },
-    hasVideo(p) {
-      if (p && p.participant_key === this.currentParticipantKey) return !!(this.cameraOn || this.sharing);
-      return !!(p && p.media_state && (p.media_state.video || p.media_state.screen));
-    },
-    streamFor(key) {
-      if (key === this.currentParticipantKey) return this.localVideoStream || null;
-      return this.remoteStreams[key] || null;
-    },
-    onCallParticipantLeft(detail) {
-      if (this.inCall && !window.chatCallEventForCurrentSession(detail, this.callSession)) return;
-      if (detail.participant_key !== this.currentParticipantKey) this._playCallCue('peer-leave');
-      this.callParticipants = this.callParticipants.filter((p) => p.participant_key !== detail.participant_key);
-      this._closePeer(detail.participant_key);
-      if (this.pinnedKey === detail.participant_key) { this.pinnedKey = null; this.pinnedManually = false; }
-    },
   };
 }
 

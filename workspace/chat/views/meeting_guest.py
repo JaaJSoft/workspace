@@ -25,12 +25,12 @@ ended) - that gets 200 with a body describing the guest's own status,
 never 404, because a guest has to be able to learn their own status,
 including a revoked one, without the response itself looking like a dead
 end.
+
+Messages are MeetingMessage rows of the guest's occurrence; nothing here
+touches a conversation.
 """
 
-import logging
-
 from django.conf import settings
-from django.db import transaction
 from django.http import StreamingHttpResponse
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -38,35 +38,26 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.common.logging import scrub
-from workspace.common.uuids import parse_uuid_or_none
-
-from ..models import CallParticipant, Conversation, Message
-from ..serializers import GuestMessageSerializer, MessageCreateSerializer
+from ..models import CallParticipant
 from ..services import calls
+from ..services import meeting_messages as chat_service
 from ..services.call_signaling import send_signal
-from ..services.conversations import active_member_users
-from ..services.guest_messages import message_queryset
 from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_slug, guest_for_token
 from ..services.meeting_occurrences import current_occurrence
-from ..services.mentions import build_mention_map
 from ..services.participant_keys import (
     guest_key,
     guest_uuid_from_key,
     user_id_from_key,
     user_key,
 )
-from ..services.posting import deliver_message
-from ..services.rendering import render_message_body
-from ..services.threads import resolve_thread_root
 from ..throttling import (
     MeetingGuestHeartbeatThrottle,
     MeetingGuestSignalThrottle,
     MeetingPublicIpThrottle,
+    MeetingPublicPageThrottle,
 )
-
-logger = logging.getLogger(__name__)
+from .meeting_messages import clean_body, page_args
 
 # The only media_state keys chatCallMediaState() (call.js) ever produces.
 # request.data is anonymous input reaching one shared cache value per session
@@ -426,186 +417,40 @@ class MeetingGuestStreamView(APIView):
 class MeetingGuestMessagesView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [MeetingPublicIpThrottle]
 
-    @extend_schema(
-        summary="List messages in the guest's meeting, floored to their occurrence"
-    )
+    def get_throttles(self):
+        cls = (
+            MeetingPublicPageThrottle
+            if self.request.method == "GET"
+            else MeetingPublicIpThrottle
+        )
+        return [cls()]
+
+    @extend_schema(summary="The meeting chat of the guest's occurrence")
     def get(self, request, slug):
         guest = _guest_for_request(request, slug)
         if guest is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-
-        conversation_id = guest.meeting.conversation_id
-        try:
-            limit = min(max(int(request.query_params.get("limit", 50)), 1), 100)
-        except TypeError, ValueError:
-            limit = 50
-        before = request.query_params.get("before")
-
-        # Floored to guest.occurrence_start - the value resolve_guest already
-        # validated for this token - never recomputed here. A guest must never
-        # read the conversation's history from before their occurrence opened.
-        messages = message_queryset().filter(
-            conversation_id=conversation_id, created_at__gte=guest.occurrence_start
+        before, limit = page_args(request.query_params)
+        rows, has_more = chat_service.messages_for_guest(
+            guest, before=before, limit=limit
+        )
+        return Response(
+            {
+                "messages": [chat_service.serialize_message(m) for m in rows],
+                "has_more": has_more,
+            }
         )
 
-        if before:
-            before_uuid = parse_uuid_or_none(before)
-            if before_uuid is None:
-                logger.debug("Ignoring malformed ?before cursor: %s", scrub(before))
-            else:
-                cursor_msg = (
-                    Message.objects.filter(
-                        conversation_id=conversation_id,
-                        uuid=before_uuid,
-                        created_at__gte=guest.occurrence_start,
-                    )
-                    .only("created_at")
-                    .first()
-                )
-                if cursor_msg is not None:
-                    messages = messages.filter(created_at__lt=cursor_msg.created_at)
-                else:
-                    logger.debug("Ignoring unknown ?before cursor: %s", scrub(before))
-
-        messages = list(messages.order_by("-created_at")[: limit + 1])
-        has_more = len(messages) > limit
-        if has_more:
-            messages = messages[:limit]
-        messages.reverse()
-
-        serializer = GuestMessageSerializer(
-            messages, many=True, context={"floor": guest.occurrence_start}
-        )
-        return Response({"messages": serializer.data, "has_more": has_more})
-
-    @extend_schema(
-        summary="Post a message as an admitted meeting guest",
-        request=MessageCreateSerializer,
-    )
+    @extend_schema(summary="Post a line to the meeting chat as an admitted guest")
     def post(self, request, slug):
         guest = _guest_for_request(request, slug)
         if guest is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-
-        serializer = MessageCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        # No attachment support for a guest (see the module docstring's
-        # posting section for why): silently dropping file_uuids/duration
-        # would hide that boundary behind a message with no attachment and
-        # no explanation. Reject instead, so it is visible from the API.
-        if serializer.validated_data.get("file_uuids") or (
-            serializer.validated_data.get("duration") is not None
-        ):
-            return Response(
-                {"detail": "Guest messages do not support file uploads."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        body = serializer.validated_data.get("body", "").strip()
-        if not body:
-            return Response(
-                {"detail": "Message must have text."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # conversation_id always comes from the guest's own meeting - never
-        # from the request body, which carries no such field to begin with
-        # (MessageCreateSerializer has none). That is what keeps a guest from
-        # ever naming a conversation to write into.
-        conversation_id = guest.meeting.conversation_id
-
-        # Narrowed to the conversation's own active members: an unnarrowed
-        # pool resolves any username in the workspace, and the rendered badge
-        # carries that user's id - a username-existence oracle and a
-        # username -> id map for anyone holding a guest token. The narrowing
-        # also bounds mentioned_user_ids, which deliver_message turns into
-        # ThreadParticipant rows.
-        mention_map, _has_everyone = build_mention_map(
-            body, users=active_member_users(conversation_id)
+        body, error = clean_body(request.data)
+        if error:
+            return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
+        message = chat_service.post_message(guest.meeting, body, guest=guest)
+        return Response(
+            chat_service.serialize_message(message), status=status.HTTP_201_CREATED
         )
-        mentioned_user_ids = {uid for uid in mention_map.values() if uid}
-        # allow_everyone=False, not a key dropped from the map: the renderer
-        # adds "everyone" back to any non-empty map, so a guest body that also
-        # names a member would still carry the badge - a promise that everyone
-        # was pinged, when mention_everyone below pings nobody.
-        body_html = render_message_body(
-            body, mention_map=mention_map or None, allow_everyone=False
-        )
-
-        reply_to = None
-        reply_to_uuid = serializer.validated_data.get("reply_to_uuid")
-        if reply_to_uuid:
-            try:
-                # Floored the same as the read side: a reply target below
-                # guest.occurrence_start is refused exactly like one in
-                # another conversation - otherwise a guest could read a
-                # pre-window UUID off an in-window reply's (unfloored)
-                # thread_root and use it here to pull that pre-window
-                # message's excerpt back through the 201 response, and to
-                # bump its reply_count/last_reply_at besides.
-                reply_to = Message.objects.get(
-                    uuid=reply_to_uuid,
-                    conversation_id=conversation_id,
-                    deleted_at__isnull=True,
-                    created_at__gte=guest.occurrence_start,
-                )
-            except Message.DoesNotExist:
-                return Response(
-                    {"detail": "Reply target message not found in this conversation."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-        thread_root = resolve_thread_root(reply_to) if reply_to else None
-        # The reply target itself can be in-window while the thread it
-        # belongs to is not: resolve_thread_root hops straight to that root,
-        # one step past the floor already checked above. A guest may see the
-        # in-window reply but not the thread it is part of, so refuse rather
-        # than store the reply unthreaded (which would break the "replies
-        # flatten onto one root" invariant) - same failure as any other
-        # below-floor target.
-        if thread_root is not None and thread_root.created_at < guest.occurrence_start:
-            return Response(
-                {"detail": "Reply target message not found in this conversation."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        with transaction.atomic():
-            message = Message.objects.create(
-                conversation_id=conversation_id,
-                guest=guest,
-                body=body,
-                body_html=body_html,
-                reply_to=reply_to,
-                thread_root=thread_root,
-            )
-            conversation = Conversation.objects.get(pk=conversation_id)
-            deliver_message(
-                conversation,
-                message,
-                mentioned_user_ids=mentioned_user_ids,
-                # Never the body's own @everyone: an unauthenticated party
-                # must not fire a high-priority push at every member.
-                mention_everyone=False,
-            )
-
-        # Deliberately no AI bot trigger here, unlike MessageListView.post:
-        # an unauthenticated guest must never drive a billable LLM call or
-        # write into the host's conversation under a bot identity. This is a
-        # permanent omission, not a gap to fill in.
-
-        if body:
-            from ..services.link_preview import extract_urls
-
-            urls = extract_urls(body)
-            if urls:
-                from ..tasks import fetch_link_previews
-
-                fetch_link_previews.delay(str(message.pk), urls)
-
-        msg = message_queryset().filter(pk=message.pk).first()
-        response_serializer = GuestMessageSerializer(
-            msg, context={"floor": guest.occurrence_start}
-        )
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)

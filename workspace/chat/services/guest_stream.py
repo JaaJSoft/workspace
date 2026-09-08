@@ -16,10 +16,10 @@ core itself has between its Pub/Sub timeout tick and its cache dirty-check
 throttle: the mailbox (``drain_events``, and so every ``meeting_*``/``call_*``
 event) is drained every ``_POLL_INTERVAL_SECONDS`` (1s) so call signalling
 latency stays low, same reasoning as the no-wake-up-channel paragraph above.
-``resolve_guest`` and the message query are the expensive, DB-hitting half
-and only run every ``_GATE_INTERVAL_SECONDS`` (2s), matching core's own
-content cadence. Forwarding a ``call_*`` event therefore trusts the
-``admitted`` flag most recently set by a gate cycle, which can be up to 2s
+``resolve_guest`` is the expensive, DB-hitting half and only runs every
+``_GATE_INTERVAL_SECONDS`` (2s), matching core's own content cadence.
+Forwarding a ``call_*`` event therefore trusts the ``admitted`` flag most
+recently set by a gate cycle, which can be up to 2s
 stale - the same staleness core accepts for its own dirty-flag check, and
 bounded the same way: a removal or an occurrence closing is never learned
 this way, because those go through the mailbox drain (meeting_removed) or
@@ -55,9 +55,10 @@ always meant for: a removed or refused guest learns why, instead of a
 channel that silently goes quiet. The same mailbox-before-gate ordering is
 also what lets a WAITING guest hold a stream open to learn they were
 admitted (``meeting_admitted`` is not terminal): the gate still fences every
-other kind of content - a WAITING guest's ``call_*``/``message`` mailbox
-contents are never forwarded, only a cycle where ``resolve_guest`` itself
-resolves the guest as ADMITTED forwards those (see ``admitted`` below).
+other kind of content - a WAITING guest's ``call_*``/``meeting_message*``
+mailbox contents are never forwarded, only a cycle where ``resolve_guest``
+itself resolves the guest as ADMITTED forwards those (see ``admitted``
+below).
 
 ``meeting_ended`` reaches a guest two ways, and never both in one stream.
 ``end_meeting`` enqueues it to each WAITING row it sweeps, because that
@@ -70,17 +71,12 @@ case: an ADMITTED guest whose gate check nonetheless fails (closed
 occurrence, or the window elapsed) is reported as ended, then the stream
 stops. Both spellings are terminal.
 
-Resume across a reconnect: the 600s budget forces one on schedule, and
-``core.views.sse`` handles it by reading ``Last-Event-Id`` - this stream does
-the same. A message's own uuid is its event id (see the ``message`` yield
-below), so a reconnecting client's ``Last-Event-Id`` names the last message
-it actually saw; resolving it to that message's ``created_at`` and using that
-as the floor for ``since`` closes the gap a bare "since I connected" cursor
-would otherwise drop on every reconnect - and, on the very first connect,
-between the guest's REST history fetch and the stream opening. The
-occurrence floor (``occurrence_start``) still wins via ``max()``: a
-``Last-Event-Id`` naming a pre-window message can only be clamped up to the
-floor, never used to reach below it.
+Messages travel through the mailbox like every other event: ``post_message``
+enqueues ``meeting_message`` to every admitted guest of the occurrence, and
+the reader reloads the list when it reconnects. That is also why this stream
+carries no cursor of its own and ignores ``Last-Event-Id``: a mailbox is not
+a history, so nothing drained by a dead connection can be replayed here, and
+only a fresh list fetch recovers it.
 """
 
 import time
@@ -88,12 +84,9 @@ import time
 from django.utils import timezone
 
 from workspace.common.sse import format_sse
-from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import MeetingGuest, Message
-from ..serializers import GuestMessageSerializer
+from ..models import MeetingGuest
 from .call_signaling import drain_events
-from .guest_messages import message_queryset
 from .meeting_guests import guest_for_token, resolve_guest
 from .participant_keys import guest_key
 
@@ -104,7 +97,6 @@ _KEEPALIVE_SECONDS = 15
 _POLL_INTERVAL_SECONDS = 1
 # core.views.sse._event_stream_polling's own dirty-check throttle.
 _GATE_INTERVAL_SECONDS = 2
-_MESSAGE_BATCH_LIMIT = 50
 
 _LIFECYCLE_EVENTS = {
     "meeting_admitted",
@@ -119,38 +111,14 @@ _TERMINAL_LIFECYCLE_EVENTS = {
 }
 
 
-def _resolve_since(last_event_id, guest, fallback):
-    """(since, uuid-to-preseed-into-seen) for the reconnect cursor.
-
-    *fallback* is the stream's own connect instant, never "now" at the time
-    the gate first passes - a guest who takes several gate cycles to be
-    admitted must still see whatever was posted while they waited, not only
-    what arrives after. The returned uuid, when not None, must be added to
-    the caller's seen-message set: the message query below uses ``__gte`` on
-    the floor (see its own comment), which would otherwise re-yield exactly
-    the message the client is reconnecting from.
-    """
-    if not last_event_id:
-        return fallback, None
-    msg_uuid = parse_uuid_or_none(last_event_id)
-    if msg_uuid is None:
-        return fallback, None
-    msg = (
-        Message.objects.filter(
-            uuid=msg_uuid, conversation_id=guest.meeting.conversation_id
-        )
-        .only("created_at")
-        .first()
-    )
-    if msg is None:
-        return fallback, None
-    return msg.created_at, msg_uuid
-
-
 def stream_guest_events(
     token, meeting_uuid, *, last_event_id=None, now=None, sleep=None
 ):
     """Yield formatted SSE strings for the guest named by *token*.
+
+    *last_event_id* is accepted so the view can pass the header through
+    unconditionally, and deliberately ignored: nothing here is replayable,
+    so a reconnecting client reloads the message list instead.
 
     *meeting_uuid* comes from the caller (``MeetingGuestStreamView``), which
     already paid for one ``guest_for_token`` + ``.meeting`` dereference to
@@ -171,15 +139,9 @@ def stream_guest_events(
     sleep = sleep or time.sleep
 
     start = now()
-    since = None
     last_keepalive = start
     last_gate_check = None
     admitted = False
-    # uuid -> created_at, pruned after each batch: since only grows, so an
-    # entry whose created_at is already below it can never satisfy a future
-    # __gte floor again - keeping it around would grow unboundedly over a
-    # 600s connection for no reason.
-    seen_message_ids = {}
 
     while True:
         current = now()
@@ -192,12 +154,19 @@ def stream_guest_events(
 
         drained = drain_events(guest_key(lobby_guest.uuid))
         lifecycle_events = [e for e in drained if e["event"] in _LIFECYCLE_EVENTS]
-        call_events = [e for e in drained if e["event"].startswith("call_")]
+        forwarded = [
+            e
+            for e in drained
+            if e["event"].startswith("call_")
+            or e["event"].startswith("meeting_message")
+        ]
         # Every event this codebase ever enqueues into a guest mailbox is one
-        # of the four meeting_* lifecycle names or a call_* name (see
-        # services/meetings.py and services/calls.py); anything else is
-        # dropped here rather than forwarded to an audience it was never
-        # meant for.
+        # of the four meeting_* lifecycle names, a call_* name or a
+        # meeting_message* one (see services/meetings.py, services/calls.py
+        # and services/meeting_messages.py); anything else is dropped here
+        # rather than forwarded to an audience it was never meant for. The
+        # two meeting_ families do not overlap: the lifecycle filter is set
+        # membership, never a prefix.
 
         just_admitted = False
         for envelope in lifecycle_events:
@@ -223,62 +192,24 @@ def stream_guest_events(
         )
         if run_gate:
             last_gate_check = current
-            guest = resolve_guest(token, now=current)
-            admitted = guest is not None
-            if guest is not None:
-                if since is None:
-                    since, resume_uuid = _resolve_since(last_event_id, guest, start)
-                    if resume_uuid is not None:
-                        seen_message_ids[resume_uuid] = since
-
-                floor = max(since, guest.occurrence_start)
-                new_messages = (
-                    message_queryset()
-                    .filter(
-                        conversation_id=guest.meeting.conversation_id,
-                        # >=, not >: a batch capped at _MESSAGE_BATCH_LIMIT
-                        # can end on several messages sharing one timestamp,
-                        # and a strict > would permanently skip whichever of
-                        # those lands just past the cap next cycle.
-                        # seen_message_ids is what keeps this from
-                        # re-yielding ones already sent.
-                        created_at__gte=floor,
-                    )
-                    .exclude(guest_id=guest.uuid)
-                    .exclude(uuid__in=seen_message_ids)
-                    .order_by("created_at")[:_MESSAGE_BATCH_LIMIT]
-                )
-                for msg in new_messages:
-                    seen_message_ids[msg.uuid] = msg.created_at
-                    since = max(since, msg.created_at)
-                    serialized = GuestMessageSerializer(
-                        msg, context={"floor": guest.occurrence_start}
-                    ).data
-                    yield format_sse(
-                        "message",
-                        {"type": "message", "message": serialized},
-                        str(msg.uuid),
-                    )
-                seen_message_ids = {
-                    uuid: created
-                    for uuid, created in seen_message_ids.items()
-                    if created >= since
-                }
-            elif lobby_guest.state == MeetingGuest.State.ADMITTED:
-                # ADMITTED per the DB row, yet resolve_guest just rejected
-                # it: the occurrence closed or its window elapsed - report it
-                # the way MeetingGuestStateView does, then stop.
-                yield format_sse("meeting_ended", {})
-                return
-            elif lobby_guest.state != MeetingGuest.State.WAITING:
-                # REFUSED/REMOVED with nothing left to drain (already
-                # delivered on an earlier cycle, or through a different
-                # request entirely).
-                return
-            # else: WAITING and not yet admitted - keep the stream open.
+            admitted = resolve_guest(token, now=current) is not None
+            if not admitted:
+                if lobby_guest.state == MeetingGuest.State.ADMITTED:
+                    # ADMITTED per the DB row, yet resolve_guest just
+                    # rejected it: the occurrence closed or its window
+                    # elapsed - report it the way MeetingGuestStateView does,
+                    # then stop.
+                    yield format_sse("meeting_ended", {})
+                    return
+                if lobby_guest.state != MeetingGuest.State.WAITING:
+                    # REFUSED/REMOVED with nothing left to drain (already
+                    # delivered on an earlier cycle, or through a different
+                    # request entirely).
+                    return
+                # else: WAITING and not yet admitted - keep the stream open.
 
         if admitted:
-            for envelope in call_events:
+            for envelope in forwarded:
                 yield format_sse(envelope["event"], envelope["data"])
 
         if (current - last_keepalive).total_seconds() >= _KEEPALIVE_SECONDS:

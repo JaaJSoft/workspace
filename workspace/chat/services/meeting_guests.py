@@ -11,6 +11,7 @@ import hashlib
 import secrets
 
 from .meeting_occurrences import current_occurrence
+from .participant_keys import guest_key
 
 TOKEN_BYTES = 32
 
@@ -113,3 +114,18 @@ def guest_for_token(token):
         return None
 
     return MeetingGuest.objects.filter(token_hash=digest).first()
+
+
+def admitted_guest_keys(meeting, occurrence_start):
+    """Mailbox keys of every admitted guest of *occurrence_start*."""
+    from ..models import MeetingGuest
+
+    return [
+        guest_key(uuid)
+        for uuid in MeetingGuest.objects.filter(
+            meeting=meeting,
+            state=MeetingGuest.State.ADMITTED,
+            occurrence_start=occurrence_start,
+            removed_at__isnull=True,
+        ).values_list("uuid", flat=True)
+    ]

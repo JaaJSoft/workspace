@@ -20,7 +20,8 @@ def display_name_for_identity(user, guest):
 
 
 def identity_payload(user, guest):
-    """Serialized identity. ``id`` is None for a guest, which has no user row.
+    """Serialized identity. ``id`` is None for an unbound guest, which has no
+    user row; a guest who knocked while signed in carries theirs.
 
     ``participant_key`` is the one field both halves always have: it is what
     a call tile is addressed by, so a reader holding its own key can tell
@@ -36,9 +37,10 @@ def identity_payload(user, guest):
             "participant_key": user_key(user.id),
         }
     return {
-        "id": None,
-        # Callers that fall back to a username must still get a label.
-        "username": display_name,
+        # A bound guest carries the account so the avatar resolves; an
+        # anonymous one has nothing to resolve.
+        "id": guest.user_id,
+        "username": guest.user.username if guest.user_id else display_name,
         "display_name": display_name,
         "is_guest": True,
         "participant_key": guest_key(guest.uuid),

@@ -355,13 +355,14 @@ def _admitted_guest_keys(meeting):
 
     The audience ``_active_guest_keys`` above structurally cannot reach: a
     guest admitted to a room where nobody has started a call yet is in no
-    session, so every in-call fan-out skips them - and ``call_started`` is
-    the one event they must receive, because it is the only thing that tells
-    them there is now a call to join. Scoped to the current occurrence for
-    the same reason the stream is: an ADMITTED row of a past occurrence is
-    never swept, and its holder must not be woken by next week's call.
+    session, so every in-call fan-out skips them - yet they receive every
+    call event, because the lobby panel has to track a call it is not in
+    (starting with ``call_started``, the only thing that tells them there is
+    now a call to join). Scoped to the current occurrence for the same reason
+    the stream is: an ADMITTED row of a past occurrence is never swept, and
+    its holder must not be woken by next week's call.
     """
-    from ..models import MeetingGuest
+    from .meeting_guests import admitted_guest_keys
     from .meeting_occurrences import current_occurrence
 
     if meeting is None:
@@ -369,14 +370,7 @@ def _admitted_guest_keys(meeting):
     occurrence = current_occurrence(meeting)
     if occurrence is None:
         return []
-    return [
-        guest_key(guest_uuid)
-        for guest_uuid in MeetingGuest.objects.filter(
-            meeting=meeting,
-            state=MeetingGuest.State.ADMITTED,
-            occurrence_start=occurrence[0],
-        ).values_list("uuid", flat=True)
-    ]
+    return admitted_guest_keys(meeting, occurrence[0])
 
 
 def active_recipient_keys(scope):

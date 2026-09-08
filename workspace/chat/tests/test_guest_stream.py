@@ -17,9 +17,10 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from workspace.chat.models import MeetingGuest, Message
+from workspace.chat.models import MeetingGuest
 from workspace.chat.services.call_signaling import enqueue_event
 from workspace.chat.services.meeting_guests import issue_token
+from workspace.chat.services.meeting_messages import delete_message, post_message
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import create_meeting, end_meeting, remove_guest
 from workspace.chat.services.participant_keys import guest_key
@@ -31,7 +32,6 @@ from .meeting_fixtures import (
     guest_with_token,
     make_event,
     parse_sse,
-    sse_event_id,
 )
 
 User = get_user_model()
@@ -65,22 +65,6 @@ class GuestStreamTests(TestCase):
             display_name=display_name,
             state=MeetingGuest.State.WAITING,
         )
-
-    def _make_message(
-        self, created_at, body="hi", author=None, guest=None, reply_to=None
-    ):
-        if author is None and guest is None:
-            author = self.owner
-        message = Message.objects.create(
-            conversation=self.meeting.conversation,
-            author=author,
-            guest=guest,
-            body=body,
-            reply_to=reply_to,
-            thread_root=reply_to,
-        )
-        Message.objects.filter(pk=message.pk).update(created_at=created_at)
-        return message
 
     # --- exit conditions ---
 
@@ -172,7 +156,15 @@ class GuestStreamTests(TestCase):
             {"meeting_id": str(self.meeting.uuid)},
         )
         enqueue_event(guest_key(guest.uuid), "call_started", {"session_id": "whatever"})
-        self._make_message(self.now + timedelta(seconds=1))
+        # post_message never addresses a WAITING guest, so the fan-out
+        # alone would make this vacuous: the raw envelope below is what
+        # puts a meeting_message in the mailbox for the gate to fence.
+        post_message(self.meeting, "hi", author=self.owner, now=self.now)
+        enqueue_event(
+            guest_key(guest.uuid),
+            "meeting_message",
+            {"meeting_id": str(self.meeting.uuid), "message": {}},
+        )
 
         clock = FakeClock(self.now, max_cycles=1)
         events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
@@ -223,106 +215,80 @@ class GuestStreamTests(TestCase):
 
     # --- message content ---
 
-    def test_pre_floor_message_not_emitted_on_first_connect(self):
+    def test_admitted_guest_receives_a_meeting_message(self):
         _guest, token = self._admit()
-        self._make_message(
-            self.occurrence_start - timedelta(minutes=1), author=self.owner
-        )
+        post_message(self.meeting, "hi there", author=self.owner, now=self.now)
 
         clock = FakeClock(self.now, max_cycles=1)
         events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [parse_sse(e) for e in events]
-        self.assertNotIn("message", [name for name, _data in parsed])
-
-    def test_in_window_message_is_emitted_redacted(self):
-        _guest, token = self._admit()
-        pre_window = self._make_message(
-            self.occurrence_start - timedelta(minutes=1), author=self.owner
-        )
-        self._make_message(
-            self.now + timedelta(seconds=1),
-            author=self.owner,
-            reply_to=pre_window,
-        )
-
-        clock = FakeClock(self.now, max_cycles=1)
-        events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
-
-        self.assertFalse(terminated)
-        parsed = [parse_sse(e) for e in events]
-        message_events = [data for name, data in parsed if name == "message"]
+        message_events = [data for name, data in parsed if name == "meeting_message"]
         self.assertEqual(len(message_events), 1)
         envelope = message_events[0]
+        self.assertEqual(envelope["meeting_id"], str(self.meeting.uuid))
+        self.assertEqual(envelope["message"]["body"], "hi there")
+        # A meeting message is not a conversation message and never
+        # carries the id of one.
         self.assertNotIn("conversation_id", envelope)
-        serialized = envelope["message"]
-        self.assertNotIn("conversation_id", serialized)
-        self.assertIsNone(serialized["reply_to"])
+        self.assertNotIn("conversation_id", envelope["message"])
+
+    def test_a_message_of_another_occurrence_never_reaches_the_guest(self):
+        _guest, token = self._admit()
+        stale_occurrence_start = self.occurrence_start - timedelta(weeks=1)
+        stale, _stale_token = guest_with_token(
+            self.meeting, stale_occurrence_start, display_name="Last week"
+        )
+        # post_message stamps the occurrence from current_occurrence(now),
+        # never from the poster's own row, so reaching last week's fan-out
+        # (and excluding today's guest from it) means patching what "now"
+        # resolves to, not passing a stale `now` - the fixture event has no
+        # recurrence rule, so a `now` a week in the past resolves to no
+        # occurrence at all rather than to last week's.
+        with patch(
+            "workspace.chat.services.meeting_messages.current_occurrence",
+            return_value=(stale_occurrence_start, None),
+        ):
+            post_message(self.meeting, "old news", guest=stale, now=self.now)
+
+        clock = FakeClock(self.now, max_cycles=1)
+        events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
+
+        self.assertFalse(terminated)
+        parsed = [parse_sse(e) for e in events]
+        self.assertNotIn("meeting_message", [name for name, _data in parsed])
 
     def test_guests_own_message_is_not_echoed_back(self):
         guest, token = self._admit()
-        self._make_message(self.now + timedelta(seconds=1), guest=guest)
+        post_message(self.meeting, "mine", guest=guest, now=self.now)
 
         clock = FakeClock(self.now, max_cycles=1)
         events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
 
         self.assertFalse(terminated)
         parsed = [parse_sse(e) for e in events]
-        self.assertNotIn("message", [name for name, _data in parsed])
+        self.assertNotIn("meeting_message", [name for name, _data in parsed])
 
-    # --- Last-Event-Id resume ---
-
-    def test_message_posted_between_connections_is_delivered_on_reconnect(self):
+    def test_deleting_a_message_reaches_the_guest(self):
         _guest, token = self._admit()
-        first_msg = self._make_message(
-            self.now + timedelta(seconds=1), author=self.owner
-        )
-
-        first_clock = FakeClock(self.now, max_cycles=1)
-        first_events, _terminated = drive_guest_stream(
-            token, self.meeting.uuid, first_clock
-        )
-        first_message_chunks = [e for e in first_events if parse_sse(e)[0] == "message"]
-        self.assertEqual(len(first_message_chunks), 1)
-        last_id = sse_event_id(first_message_chunks[0])
-        self.assertEqual(last_id, str(first_msg.pk))
-
-        second_msg = self._make_message(
-            self.now + timedelta(seconds=2), author=self.owner
-        )
-
-        # The reconnect clock starts well after second_msg's created_at, so
-        # the plain "since I connected" fallback would miss it entirely -
-        # this is what proves the Last-Event-Id resume, not just its dedup,
-        # is what recovers the gap message.
-        second_clock = FakeClock(self.now + timedelta(seconds=10), max_cycles=1)
-        second_events, _terminated = drive_guest_stream(
-            token, self.meeting.uuid, second_clock, last_event_id=last_id
-        )
-        parsed = [parse_sse(e) for e in second_events]
-        message_events = [data for name, data in parsed if name == "message"]
-        # Exactly the message posted in the gap - not first_msg again.
-        self.assertEqual(len(message_events), 1)
-        self.assertEqual(message_events[0]["message"]["uuid"], str(second_msg.pk))
-
-    def test_last_event_id_naming_a_pre_floor_message_does_not_lower_the_floor(self):
-        _guest, token = self._admit()
-        pre_floor = self._make_message(
-            self.occurrence_start - timedelta(minutes=1), author=self.owner
-        )
-        in_window = self._make_message(
-            self.now + timedelta(seconds=1), author=self.owner
-        )
+        message = post_message(self.meeting, "oops", author=self.owner, now=self.now)
+        message_uuid = str(message.uuid)
+        delete_message(message)  # clears message.uuid, so it was captured above
 
         clock = FakeClock(self.now, max_cycles=1)
-        events, _terminated = drive_guest_stream(
-            token, self.meeting.uuid, clock, last_event_id=str(pre_floor.pk)
-        )
+        events, terminated = drive_guest_stream(token, self.meeting.uuid, clock)
+
+        self.assertFalse(terminated)
         parsed = [parse_sse(e) for e in events]
-        message_events = [data for name, data in parsed if name == "message"]
-        self.assertEqual(len(message_events), 1)
-        self.assertEqual(message_events[0]["message"]["uuid"], str(in_window.pk))
+        self.assertEqual(
+            [
+                data["message_id"]
+                for name, data in parsed
+                if name == "meeting_message_deleted"
+            ],
+            [message_uuid],
+        )
 
 
 class GuestStreamViewTests(TestCase):

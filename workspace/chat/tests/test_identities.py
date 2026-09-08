@@ -78,3 +78,23 @@ class IdentityPayloadTests(TestCase):
     def test_neither_identity_is_a_programming_error(self):
         with self.assertRaises(ValueError):
             identity_payload(None, None)
+
+
+class BoundGuestIdentityTests(TestCase):
+    def test_a_bound_guest_carries_the_account_for_the_avatar(self):
+        user = get_user_model().objects.create_user(
+            username="bound", password="x", first_name="Bo", last_name="Und"
+        )
+        meeting = Meeting.objects.create(title="T", created_by=user)
+        guest = MeetingGuest.objects.create(
+            meeting=meeting,
+            display_name="Bo Und",
+            user=user,
+            occurrence_start=timezone.now(),
+            token_hash="b" * 64,
+        )
+        payload = identity_payload(None, guest)
+        self.assertEqual(payload["id"], user.id)
+        self.assertEqual(payload["username"], "bound")
+        self.assertTrue(payload["is_guest"])
+        self.assertEqual(payload["participant_key"], guest_key(guest.uuid))

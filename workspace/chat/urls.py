@@ -10,6 +10,7 @@ from .views import (
     interactions,
     meeting_calls,
     meeting_guest,
+    meeting_messages,
     meetings,
     messages,
     pins,
@@ -334,6 +335,16 @@ urlpatterns = [
         "api/v1/chat/meetings/<uuid:meeting_uuid>/call/signal",
         meeting_calls.MeetingCallSignalView.as_view(),
         name="chat-meeting-call-signal",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/messages",
+        meeting_messages.MeetingMessagesView.as_view(),
+        name="chat-meeting-messages",
+    ),
+    path(
+        "api/v1/chat/meetings/<uuid:meeting_uuid>/messages/<uuid:message_uuid>",
+        meeting_messages.MeetingMessageDetailView.as_view(),
+        name="chat-meeting-message-detail",
     ),
     # Attachments
     path(

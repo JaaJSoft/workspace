@@ -50,9 +50,13 @@ Loaded by:
             ></i>
             <div class="flex-1 min-w-0">
               <p class="text-sm leading-tight">
-                <span
-                  class="font-medium"
-                >{% if event.actor %}{{ event.actor.username }}{% else %}System{% endif %}</span>
+                <span class="font-medium">
+                  {% if event.actor %}
+                    {{ event.actor.username }}
+                  {% else %}
+                    System
+                  {% endif %}
+                </span>
                 {% if event.action == "renamed" %}
                   renamed
                   <span class="text-base-content/60">{{ event.metadata.old_name|default:'' }}</span>
@@ -78,10 +82,10 @@ Loaded by:
                   permission
                   {% if event.metadata.new_permission == "rw" %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
                 {% elif event.action == "unshared" %}
-                  revoked
-                  <span
-                    class="text-base-content/60"
-                  >{{ event.metadata.shared_with_username|default:'a user' }}</span>'s access
+                  {% with revoked_from=event.metadata.shared_with_username|default:"a user" %}
+                    revoked
+                    <span class="text-base-content/60">{{ revoked_from }}</span>'s access
+                  {% endwith %}
                 {% elif event.action == "link_created" %}
                   created a public link
                   {% if event.metadata.has_password %}

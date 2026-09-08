@@ -120,14 +120,12 @@
                   <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
                   <div>
                     <span>Your votes have been saved!</span>
-                    <p
-                      class="text-sm opacity-60 mt-0.5"
-                      x-show="guestEmail.trim()"
-                    >You'll receive an email once a final slot is chosen.</p>
-                    <p
-                      class="text-sm opacity-60 mt-0.5"
-                      x-show="!guestEmail.trim()"
-                    >Bookmark this page to come back and see the final result.</p>
+                    <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">
+                      You'll receive an email once a final slot is chosen.
+                    </p>
+                    <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">
+                      Bookmark this page to come back and see the final result.
+                    </p>
                   </div>
                 </div>
               </template>

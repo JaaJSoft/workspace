@@ -92,9 +92,9 @@
                       <div class="font-medium text-xs text-base-content mt-0.5 line-clamp-2">{{ lp.preview.title }}</div>
                     {% endif %}
                     {% if lp.preview.description %}
-                      <div
-                        class="text-[0.7rem] text-base-content/60 mt-0.5 line-clamp-2"
-                      >{{ lp.preview.description }}</div>
+                      {# djlint:off #}
+                      <div class="text-[0.7rem] text-base-content/60 mt-0.5 line-clamp-2">{{ lp.preview.description }}</div>
+                      {# djlint:on #}
                     {% endif %}
                   </div>
                 </a>
@@ -239,9 +239,9 @@
               holds several messages, so a positional lookup would land on a
               neighbour's counter.
             {% endcomment %}
-            <span
-              data-thread-count="{{ msg.uuid }}"
-            >{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
+            {# djlint:off #}
+            <span data-thread-count="{{ msg.uuid }}">{{ msg.reply_count }} repl{{ msg.reply_count|pluralize:"y,ies" }}</span>
+            {# djlint:on #}
             <span
               x-show="threadUnread('{{ msg.uuid }}') > 0"
               x-cloak

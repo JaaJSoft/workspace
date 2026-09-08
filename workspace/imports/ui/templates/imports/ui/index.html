@@ -27,9 +27,9 @@
           </div>
           <h1 class="text-2xl font-bold">Imports</h1>
         </div>
-        <p
-          class="text-base-content/60 text-sm mt-1"
-        >Bring your files over from another cloud - Nextcloud, any WebDAV host, and more to come.</p>
+        <p class="text-base-content/60 text-sm mt-1">
+          Bring your files over from another cloud - Nextcloud, any WebDAV host, and more to come.
+        </p>
       </div>
       <div class="flex gap-2">
         <button
@@ -58,9 +58,9 @@
           class="border border-dashed border-base-300 rounded-lg p-8 text-center"
         >
           <i data-lucide="plug" class="w-8 h-8 mx-auto text-base-content/40 mb-2"></i>
-          <p
-            class="text-sm text-base-content/60 mb-3"
-          >Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder.</p>
+          <p class="text-sm text-base-content/60 mb-3">
+            Connect the cloud you are leaving - a Nextcloud account or any WebDAV folder.
+          </p>
           <button
             type="button"
             class="btn btn-sm btn-primary"
@@ -243,9 +243,10 @@
             x-text="connEditing ? 'Edit connection' : 'Add a connection'"
           ></h3>
         </div>
-        <p
-          class="text-sm text-base-content/60 mb-4"
-        >Nothing is saved until the server has answered with these credentials.</p>
+        <p class="text-sm text-base-content/60 mb-4">
+          Nothing is saved until the server
+          has answered with these credentials.
+        </p>
         <form class="space-y-3" @submit.prevent="saveConnection()">
           <div class="form-control" x-show="!connEditing">
             <label class="label"><span class="label-text font-medium">Provider</span></label>
@@ -402,9 +403,9 @@
               </div>
             </label>
           </template>
-          <p
-            class="text-xs text-base-content/50"
-          >Other kinds of data (calendars, contacts, boards…) will appear here as providers gain them.</p>
+          <p class="text-xs text-base-content/50">
+            Other kinds of data (calendars, contacts, boards…) will appear here as providers gain them.
+          </p>
         </div>
 
         <!-- Step 3: options -->
@@ -517,9 +518,11 @@
             />
             <span class="text-sm">Put everything in a folder named <code x-text="rootFolderName()"></code>
               <br />
-              <span
-                class="text-xs text-base-content/60"
-              >Untick to merge the remote tree directly into the destination.</span></span>
+              <span class="text-xs text-base-content/60">
+                Untick to merge the remote tree
+                directly into the destination.
+              </span>
+            </span>
           </label>
         </div>
 

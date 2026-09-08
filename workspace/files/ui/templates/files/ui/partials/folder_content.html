@@ -360,10 +360,9 @@
                 <th class="hidden lg:table-cell w-40" data-col="tags">Tags</th>
                 <th class="hidden sm:table-cell w-24" data-col="size">Size</th>
                 <th class="hidden md:table-cell w-36" data-col="created">Created</th>
-                <th
-                  class="hidden md:table-cell w-36"
-                  data-col="modified"
-                >{% if is_trash_view %}Deleted{% else %}Modified{% endif %}</th>
+                <th class="hidden md:table-cell w-36" data-col="modified">
+                  {% if is_trash_view %}Deleted{% else %}Modified{% endif %}
+                </th>
                 {% if show_actions != False %}
                   <th class="w-16" data-col="actions"><span class="sr-only">Actions</span></th>
                 {% endif %}

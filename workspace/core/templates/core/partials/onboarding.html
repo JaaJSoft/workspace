@@ -72,9 +72,9 @@
       <!-- Step 2: Modules -->
       <div x-show="step === 2" data-step="2" x-cloak>
         <h2 data-step-title tabindex="-1" class="text-xl font-bold mb-1">Everything in one place</h2>
-        <p
-          class="text-sm text-base-content/60 mb-4"
-        >Each module lives in its own page. Pick one to jump straight in - you can always come back here later.</p>
+        <p class="text-sm text-base-content/60 mb-4">
+          Each module lives in its own page. Pick one to jump straight in - you can always come back here later.
+        </p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {% for module in workspace_active_modules %}
             {% if module.show_on_dashboard is False %}
@@ -152,9 +152,10 @@
             </div>
             <div>
               <div class="font-medium text-sm">Re-open this tour anytime</div>
-              <div
-                class="text-xs text-base-content/60"
-              >Click "Welcome tour" in the user menu to revisit these steps.</div>
+              <div class="text-xs text-base-content/60">
+                Click "Welcome tour" in the user menu
+                to revisit these steps.
+              </div>
             </div>
           </li>
           <li class="flex items-start gap-3">

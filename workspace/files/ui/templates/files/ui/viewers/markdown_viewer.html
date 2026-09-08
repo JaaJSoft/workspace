@@ -147,7 +147,13 @@
       Someone else saved this note while you were away, so your changes were not
       saved. Copy anything you need, then reload.
     </span>
-    <button type="button" class="btn btn-error btn-xs" @click="window.location.reload()">Reload</button>
+    <button
+      type="button"
+      class="btn btn-error btn-xs"
+      @click="window.location.reload()"
+    >
+      Reload
+    </button>
   </div>
 
   <!-- Loading State -->
@@ -460,7 +466,9 @@
           }
           if (!response.ok) throw new Error('Failed to save');
 
-          const saved = await response.json().catch(function() { return null; });
+          const saved = await response.json().catch(function() {
+            return null;
+          });
           if (saved && saved.content_hash) this.baseHash = saved.content_hash;
           this.originalContent = content;
           this.isDirty = false;

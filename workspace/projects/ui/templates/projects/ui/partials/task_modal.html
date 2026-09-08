@@ -63,7 +63,9 @@
         </label>
         {% if project.estimate_unit %}
           <label class="form-control">
-            <div class="label"><span class="label-text">Estimate ({{ project.get_estimate_unit_display|lower }})</span></div>
+            <div class="label">
+              <span class="label-text">Estimate ({{ project.get_estimate_unit_display|lower }})</span>
+            </div>
             <input
               type="number"
               class="input input-bordered input-sm"

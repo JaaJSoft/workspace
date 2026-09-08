@@ -165,7 +165,9 @@
     <li>Check <em>Connect using different credentials</em> and enter your username and password.</li>
     <li>
       If connecting over HTTP, add a registry key to allow Basic auth:
-      <code class="block bg-base-300 px-3 py-2 rounded text-xs mt-1">HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2</code>
+      <code
+        class="block bg-base-300 px-3 py-2 rounded text-xs mt-1"
+      >HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\WebClient\Parameters\BasicAuthLevel = 2</code>
       then restart the <em>WebClient</em> service.
     </li>
   </ol>
@@ -208,7 +210,10 @@
   <ul>
     <li><strong>Base URL:</strong> <code>/api/v1/files</code></li>
     <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
-    <li><strong>Documentation:</strong> Full API docs are available at <a href="/schema/swagger-ui/" class="link link-primary">/schema/swagger-ui/</a>.</li>
+    <li>
+      <strong>Documentation:</strong> Full API docs are available at
+      <a href="/schema/swagger-ui/" class="link link-primary">/schema/swagger-ui/</a>.
+    </li>
   </ul>
 {% endhelp_items %}
 {% include "ui/partials/help_dialog.html" with dialog_id="help-dialog" accent_color="primary" items=help_items %}

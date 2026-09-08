@@ -61,7 +61,9 @@
           {% if not writable %}disabled{% endif %}
         />
         <div class="label py-1">
-          <span class="label-text-alt">Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
+          <span
+            class="label-text-alt"
+          >Used in task references ({{ project.key }}-42). Changing it changes every reference shown.</span>
         </div>
       </label>
       <div class="form-control w-full">
@@ -123,7 +125,7 @@
       </div>
     </section>
 
-    {% if project.type != 'personal' %}
+    {% if project.type != "personal" %}
       <section
         id="settings-members"
         class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
@@ -183,7 +185,9 @@
             </template>
           </div>
           <p class="text-sm text-base-content/60" x-show="!items.length">No groups attached.</p>
-          <p class="label-text-alt text-base-content/60">Members of attached groups get member access implicitly; they are not listed below.</p>
+          <p
+            class="label-text-alt text-base-content/60"
+          >Members of attached groups get member access implicitly; they are not listed below.</p>
         </div>
 
         <h4 class="text-sm font-medium text-base-content/70">People</h4>
@@ -241,7 +245,7 @@
       </section>
     {% endif %}
 
-    {% if project.type != 'personal' %}
+    {% if project.type != "personal" %}
       <section
         id="settings-board-model"
         class="rounded-box bg-base-200 p-4 flex flex-col gap-3 xl:col-span-2"
@@ -256,7 +260,9 @@
             <i data-lucide="layout-dashboard" class="w-4 h-4 text-accent"></i>
             Board model
           </h3>
-          <p class="text-sm text-base-content/60 mt-0.5">Tasks, columns, comments and history are kept either way. Converting takes effect immediately.</p>
+          <p
+            class="text-sm text-base-content/60 mt-0.5"
+          >Tasks, columns, comments and history are kept either way. Converting takes effect immediately.</p>
         </div>
         <template x-if="error">
           <inline-alert type="error"><span x-text="error"></span></inline-alert>
@@ -899,7 +905,7 @@
       </p>
     </section>
 
-    {% if project.type != 'personal' %}
+    {% if project.type != "personal" %}
       <section
         id="settings-danger"
         class="rounded-box border border-error/30 bg-error/5 p-4 flex flex-col gap-3 xl:col-span-2"
@@ -917,7 +923,9 @@
             class="rounded-box bg-base-100 p-3 flex items-center justify-between gap-3 flex-wrap"
           >
             <div>
-              <p class="font-medium">{% if project.archived_at %}Unarchive project{% else %}Archive project{% endif %}</p>
+              <p
+                class="font-medium"
+              >{% if project.archived_at %}Unarchive project{% else %}Archive project{% endif %}</p>
               <p class="text-sm text-base-content/60">
                 {% if project.archived_at %}Make the project editable again.{% else %}Read-only for everyone until unarchived.{% endif %}
               </p>

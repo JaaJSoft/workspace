@@ -3,7 +3,7 @@
   class="w-full flex flex-col gap-3"
   {% if backlog_status %} data-status-uuid="{{ backlog_status.uuid }}" @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')" {% endif %}
 >
-  {% if project.type == 'scrum' %}
+  {% if project.type == "scrum" %}
     {# Same switcher component as the board's, scoping the list instead of the columns. #}
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:backlog' project.uuid as sprint_switcher_url %}
@@ -29,7 +29,7 @@
             <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
             <span class="hidden sm:inline">Clear</span>
           </button>
-          {% if project.type == 'scrum' %}
+          {% if project.type == "scrum" %}
             <div class="dropdown dropdown-end">
               <button
                 type="button"
@@ -52,7 +52,9 @@
                       @click="sendSelectedToSprint('{{ sprint.uuid }}'); document.activeElement.blur()"
                     >
                       <span class="truncate flex-1">{{ sprint.name }}</span>
-                      {% if sprint.state == 'active' %}<span class="badge badge-accent badge-sm">Active</span>{% endif %}
+                      {% if sprint.state == "active" %}
+                        <span class="badge badge-accent badge-sm">Active</span>
+                      {% endif %}
                     </button>
                   </li>
                 {% empty %}
@@ -72,7 +74,7 @@
               </ul>
             </div>
           {% endif %}
-          {% if project.type != 'scrum' %}
+          {% if project.type != "scrum" %}
             <div class="join">
               <button
                 type="button"
@@ -181,7 +183,7 @@
         </div>
       {% elif filters_active %}
         <inline-alert type="info" message="No tasks match the current filters."></inline-alert>
-      {% elif backlog_scope == 'none' %}
+      {% elif backlog_scope == "none" %}
         <inline-alert type="info" message="Every backlog task is planned into a sprint."></inline-alert>
       {% elif backlog_scope %}
         <inline-alert type="info" message="No backlog tasks in this sprint."></inline-alert>

@@ -64,7 +64,9 @@
         <i data-lucide="activity" class="w-4 h-4 text-accent"></i>
         Created vs completed
       </h2>
-      <p class="text-xs text-base-content/50 mb-3">Weekly, oldest first. The final bar covers the current week so far.</p>
+      <p
+        class="text-xs text-base-content/50 mb-3"
+      >Weekly, oldest first. The final bar covers the current week so far.</p>
       {% include "ui/partials/column_chart.html" with chart=flow_chart aria_label="Tasks created and completed per week over the last 12 weeks" %}
     </section>
 
@@ -116,7 +118,7 @@
       {% include "ui/partials/line_chart.html" with chart=cumulative_flow_chart aria_label="Tasks per status category per day over the last 12 weeks" %}
     </section>
 
-    {% if project.type == 'scrum' %}
+    {% if project.type == "scrum" %}
       <section class="rounded-box bg-base-200 p-4">
         <div class="flex flex-wrap items-start justify-between gap-2 mb-1">
           <h2 class="font-semibold flex items-center gap-2">

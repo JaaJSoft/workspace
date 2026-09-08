@@ -100,7 +100,7 @@ dev = [
     # pyproject.toml, keeping CI and local runs on the same ruff release.
     "ruff==0.16.6",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
-    "djlint>=1.44.2",
+    "djlint>=1.46.1",
     # Office authoring libraries, used only to write the fixtures the text
     # extractors are tested against. A container built by hand encodes the same
     # assumptions the extractor makes, so the two agree with each other rather
@@ -142,9 +142,15 @@ custom_blocks = "help_items,partialdef"
 #       help dialogs; not worth converting to {% url %} wholesale.
 # H019: the static error pages (400/403/404/500) rely on javascript:history.back().
 # H021: inline styles carry dynamic widths/positions computed by Alpine.
-# H023: typographic entities (&mdash;, &larr;, ...) are used on purpose.
-# H030/H031: SEO meta tags are pointless behind a login wall.
-ignore = "D018,H019,H021,H023,H030,H031"
+# H023: typographic entities (&mdash;, &larr;, ...) are used on purpose - and
+#       kept as written in the source, see no_entity_formatting below.
+# H030: SEO meta tags are pointless behind a login wall.
+# H057: the only videos are user-uploaded attachments, which carry no captions.
+ignore = "D018,H019,H021,H023,H030,H057"
+# The formatter would otherwise rewrite every entity as the character it names
+# (&mdash; -> "—", &nbsp; -> an invisible U+00A0), which is exactly what the
+# H023 exemption above keeps out of the templates.
+no_entity_formatting = true
 
 # Embedded <style>/<script> blocks follow the same 2-space indent as the HTML.
 # (The indent_css/indent_js spellings are CLI-only flags; in config files the

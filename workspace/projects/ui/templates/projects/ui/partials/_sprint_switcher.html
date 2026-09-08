@@ -34,13 +34,13 @@ Params:
     class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
   >
     <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
-    {% if selected == 'none' %}
+    {% if selected == "none" %}
       <span class="font-medium">Unplanned</span>
     {% elif selected %}
       <span class="font-medium">{{ selected.name }}</span>
-      {% if selected.state == 'active' %}
+      {% if selected.state == "active" %}
         <span class="badge badge-accent badge-sm">Active</span>
-      {% elif selected.state == 'closed' %}
+      {% elif selected.state == "closed" %}
         <span class="badge badge-ghost badge-sm">Closed</span>
       {% endif %}
     {% else %}
@@ -102,9 +102,9 @@ Params:
             @click="document.activeElement.blur()"
           >
             <span class="truncate flex-1">{{ s.name }}</span>
-            {% if s.state == 'active' %}
+            {% if s.state == "active" %}
               <span class="badge badge-accent badge-sm">Active</span>
-            {% elif s.state == 'closed' %}
+            {% elif s.state == "closed" %}
               <span class="badge badge-ghost badge-sm">Closed</span>
             {% else %}
               <span class="badge badge-ghost badge-sm">Planned</span>
@@ -117,7 +117,7 @@ Params:
         {% endif %}
       {% endfor %}
     </ul>
-    {% if with_closed_toggle or role == 'admin' and writable %}
+    {% if with_closed_toggle or role == "admin" and writable %}
       <ul class="menu w-full p-0 gap-1 border-t border-base-300 pt-1">
         {% if with_closed_toggle %}
           <li>
@@ -132,7 +132,7 @@ Params:
             </label>
           </li>
         {% endif %}
-        {% if role == 'admin' and writable %}
+        {% if role == "admin" and writable %}
           <li>
             <button type="button" @click="openSprints({ add: true })">
               <i data-lucide="plus" class="w-4 h-4 text-accent"></i>

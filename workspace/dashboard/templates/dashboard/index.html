@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static ui_filters %}
 
 {% block title %}Dashboard - Workspace{% endblock %}
@@ -42,7 +42,7 @@
             x-transition.opacity
             class="absolute right-0 top-full mt-2 z-50 w-72 bg-base-100 rounded-box shadow-xl border border-base-300 p-4"
           >
-            {% include 'dashboard/partials/usage_widget.html' %}
+            {% include "dashboard/partials/usage_widget.html" %}
           </div>
         </div>
 
@@ -79,7 +79,7 @@
       x-data="commandPaletteDropdown()"
     >
       <div class="relative">
-        {% include 'core/partials/search/search_input.html' with input_class='input-md text-base shadow-sm' show_kbd=True size='lg' %}
+        {% include "core/partials/search/search_input.html" with input_class="input-md text-base shadow-sm" show_kbd=True size="lg" %}
 
         {# ── Dropdown ── #}
         <div
@@ -88,8 +88,8 @@
           @click.outside="close()"
           class="absolute z-[100] mt-2 w-full bg-base-100 rounded-box shadow-2xl border border-base-300 overflow-hidden"
         >
-          {% include 'core/partials/search/quick_actions.html' with size='lg' %}
-          {% include 'core/partials/search/search_results.html' with size='lg' %}
+          {% include "core/partials/search/quick_actions.html" with size="lg" %}
+          {% include "core/partials/search/search_results.html" with size="lg" %}
 
           {# ── Footer hints ── #}
           <div
@@ -130,13 +130,13 @@
     {# ── Modules grid ── #}
     {# The x-data wrapper sits outside the swap target so the SSE listeners survive every fragment refresh. #}
     <div x-data="dashboardBadges('{% url 'dashboard:modules_fragment' %}')">
-      {% include 'dashboard/partials/modules_grid_fragment.html' %}
+      {% include "dashboard/partials/modules_grid_fragment.html" %}
     </div>
 
     {% if show_upcoming_events %}
       {# ── Upcoming events (loaded async via alpine-ajax) ── #}
       <section>
-        {% include 'dashboard/partials/upcoming_skeleton.html' %}
+        {% include "dashboard/partials/upcoming_skeleton.html" %}
       </section>
     {% endif %}
 
@@ -147,7 +147,7 @@
       {% if show_my_tasks %} x-data="{}" x-init="$ajax('{% url 'dashboard:tasks_fragment' %}')" @ajax:error="$el.replaceChildren()" {% endif %}
     >
       {% if show_my_tasks %}
-        {% include 'dashboard/partials/my_tasks_skeleton.html' %}
+        {% include "dashboard/partials/my_tasks_skeleton.html" %}
       {% endif %}
     </section>
 
@@ -217,7 +217,9 @@
 
             {# Error markup, copied into the feed target by @ajax:error above so the card is never left blank #}
             <div x-ref="feedFailed" hidden>
-              <p class="py-3 text-sm text-base-content/60">Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a></p>
+              <p class="py-3 text-sm text-base-content/60">
+                Couldn't load activity. <a href="{% url 'dashboard:index' %}" class="link link-hover">Reload</a>
+              </p>
             </div>
           </div>
         </div>

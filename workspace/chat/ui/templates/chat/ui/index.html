@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Chat - Workspace{% endblock %}
@@ -21,7 +21,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 {% endblock %}
 
 {% block navbar %}
-  {% include 'core/partials/navbar.html' with navbar_full_width=True %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}drawer-open{% endblock %}

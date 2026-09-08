@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Mail - Workspace{% endblock %}
@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block navbar %}
-  {% include 'core/partials/navbar.html' with navbar_full_width=True %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
@@ -620,7 +620,10 @@
               />
             </label>
             <label class="form-control w-full">
-              <div class="label"><span class="label-text">Password</span><span class="label-text-alt text-base-content/40">Leave empty to keep current</span></div>
+              <div class="label">
+                <span class="label-text">Password</span>
+                <span class="label-text-alt text-base-content/40">Leave empty to keep current</span>
+              </div>
               <input
                 type="password"
                 x-model="editAccount.password"

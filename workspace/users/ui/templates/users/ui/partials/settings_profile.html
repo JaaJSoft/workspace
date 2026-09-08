@@ -8,7 +8,9 @@
           Profile Picture
         </h2>
 
-        <p class="text-sm text-base-content/60 mt-1">Upload a photo to personalize your account. The image will be cropped to a square.</p>
+        <p
+          class="text-sm text-base-content/60 mt-1"
+        >Upload a photo to personalize your account. The image will be cropped to a square.</p>
 
         <!-- Feedback -->
         <div x-ref="avatarFeedback"></div>
@@ -114,7 +116,9 @@
           @blur="saveField('role', role)"
           @keydown.enter="$event.target.blur()"
         />
-        <label class="label"><span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span></label>
+        <label class="label">
+          <span class="label-text-alt text-base-content/40">Displayed below your name on your profile.</span>
+        </label>
       </div>
 
       <!-- Bio -->

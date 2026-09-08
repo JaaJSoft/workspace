@@ -6,7 +6,7 @@ the board's empty state, not from the settings page. Closing it
 refreshes the content so new sprints reach the switchers and planning
 menus without a reload.
 {% endcomment %}
-{% if project.type == 'scrum' and role == 'admin' %}
+{% if project.type == "scrum" and role == "admin" %}
   <dialog id="sprints-dialog" class="modal" @close="refreshContent()">
     <div
       class="modal-box max-w-xl flex flex-col gap-3"
@@ -20,7 +20,9 @@ menus without a reload.
           </div>
           <div class="min-w-0">
             <h3 class="font-bold text-lg">Sprints</h3>
-            <p class="text-sm text-base-content/60">Plan sprints from the backlog; start and complete them from the board.</p>
+            <p
+              class="text-sm text-base-content/60"
+            >Plan sprints from the backlog; start and complete them from the board.</p>
           </div>
         </div>
         <div class="flex items-center gap-1 shrink-0">

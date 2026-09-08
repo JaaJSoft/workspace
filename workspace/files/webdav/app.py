@@ -116,9 +116,29 @@ def create_webdav_app():
             "enable_loggers": [],
         },
         "property_manager": False,
-        "lock_storage": _build_lock_storage(),
+        # No lock storage in the config: WsgiDAVApp would wrap it in a plain
+        # LockManager, and the storage classes refuse to be opened twice, so
+        # the manager we actually want has to be the first one built over it.
+        "lock_storage": None,
         "dir_browser": {
             "enable": False,
         },
     }
-    return _LockContentTypeFix(WsgiDAVApp(config))
+    app = WsgiDAVApp(config)
+    _install_app_lock_manager(app, _build_lock_storage())
+    return _LockContentTypeFix(app)
+
+
+def _install_app_lock_manager(app, storage):
+    """Give *app* the lock manager that mirrors DAV locks onto ``File.locked_by``.
+
+    Both the app and every provider hold a reference; the provider's is the
+    one each resource reads, and its presence is also what makes OPTIONS
+    advertise ``DAV: 1,2``.
+    """
+    from .locks import AppLockManager
+
+    manager = AppLockManager(storage)
+    app.lock_manager = manager
+    for provider in app.provider_map.values():
+        provider.set_lock_manager(manager)

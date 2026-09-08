@@ -238,7 +238,7 @@
         <button
           type="button"
           class="btn btn-primary btn-xs"
-          :disabled="!isDirty || saving"
+          :disabled="!isDirty || saving || staleConflict"
           @click="save()"
           title="Save (Ctrl+S)"
         >
@@ -259,6 +259,20 @@
     <i data-lucide="lock" class="w-4 h-4 text-warning shrink-0"></i>
     <span class="flex-1"><strong x-text="lockOwner"></strong> is editing this file</span>
     <button type="button" class="btn btn-warning btn-xs" @click="forceUnlock()">Force unlock</button>
+  </div>
+
+  <!-- Stale buffer banner -->
+  <div
+    x-show="staleConflict"
+    x-cloak
+    class="flex items-center gap-2 px-3 py-2 bg-error/10 border-b border-error/30 text-error-content text-sm"
+  >
+    <i data-lucide="alert-triangle" class="w-4 h-4 text-error shrink-0"></i>
+    <span class="flex-1">
+      Someone else saved this file while you were away, so your changes were not
+      saved. Copy anything you need, then reload.
+    </span>
+    <button type="button" class="btn btn-error btn-xs" @click="window.location.reload()">Reload</button>
   </div>
 
   <!-- Monaco Container -->
@@ -376,6 +390,11 @@
       fileUuid: '{{ file.uuid }}',
       fileName: '{{ file.name }}',
       language: '{{ language }}',
+      // The hash of the blob this buffer was loaded from. Sent with every
+      // save so a write built on a version someone else has already replaced
+      // is refused (412) instead of overwriting them.
+      baseHash: '{{ file.content_hash|escapejs }}',
+      staleConflict: false,
       lockOwner: {% if lock_info %} '{{ lock_info.locked_by_username|escapejs }}'
       {% else %}null{% endif %},
 
@@ -574,7 +593,7 @@
       },
 
       async save() {
-        if (!_editor || this.saving || !this.isDirty) return;
+        if (!_editor || this.saving || !this.isDirty || this.staleConflict) return;
         this.saving = true;
 
         try {
@@ -584,6 +603,7 @@
           });
           const formData = new FormData();
           formData.append('content', blob, this.fileName || 'file.txt');
+          formData.append('base_hash', this.baseHash || '');
 
           const response = await fetch('/api/v1/files/' + this.fileUuid, {
             method: 'PATCH',
@@ -593,8 +613,16 @@
             body: formData,
           });
 
+          if (response.status === 412) {
+            // Saving again would only overwrite the other write, so stop and
+            // leave the buffer on screen for the user to salvage.
+            this.staleConflict = true;
+            return;
+          }
           if (!response.ok) throw new Error('Failed to save');
 
+          const saved = await response.json().catch(function() { return null; });
+          if (saved && saved.content_hash) this.baseHash = saved.content_hash;
           this.originalContent = content;
           this.isDirty = false;
 

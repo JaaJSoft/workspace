@@ -41,12 +41,9 @@ WORKSPACE = Path(__file__).resolve().parents[2]
 # table cells, <pre>, <textarea> and every inline element are left out, because
 # there a line break is content.
 BLOCK_ELEMENTS = frozenset(
-    (
-        "article", "aside", "blockquote", "dd", "details", "dialog", "div",
-        "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
-        "h1", "h2", "h3", "h4", "h5", "h6", "header", "li", "main", "nav",
-        "ol", "section", "summary", "ul",
-    )
+    "article aside blockquote dd details dialog div dl dt fieldset figcaption "
+    "figure footer form h1 h2 h3 h4 h5 h6 header li main nav ol section "
+    "summary ul".split()
 )
 
 # A line that opens with the closing bracket of a tag spread over several

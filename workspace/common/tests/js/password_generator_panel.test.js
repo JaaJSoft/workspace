@@ -122,6 +122,10 @@ test('applying hands the value to the host', () => {
   // Whether the panel then goes away is the host's call: it owns the x-if.
   const { panel, dispatched } = makePanel();
   panel.init();
+  // init() draws, and a draw is announced. What this test is about is what
+  // apply() adds to that, so the opening draw is dropped rather than folded
+  // into the expectation.
+  dispatched.length = 0;
   const drawn = panel.value;
   panel.apply();
   assert.deepEqual(
@@ -136,6 +140,7 @@ test('copying asks the host to copy rather than touching the clipboard itself', 
   // timer, elsewhere it is the plain browser one.
   const { panel, dispatched } = makePanel();
   panel.init();
+  dispatched.length = 0;
   panel.copy();
   assert.equal(dispatched[0].name, 'password-copy');
   assert.equal(dispatched[0].detail.value, panel.value);
@@ -269,4 +274,36 @@ test('a pinned option is checked like a restored one', () => {
   assert.equal(panel.mode, 'password');
   assert.equal(panel.words, 6);
   assert.equal(panel.length, 20);
+});
+
+test('every draw is announced, so a host holding one knows it is stale', () => {
+  // A host that put a draw in a field has no other way to learn the panel has
+  // moved on: the value it applied is a string it copied, not a binding.
+  const { panel, dispatched } = makePanel();
+  panel.init();
+  assert.deepEqual(dispatched.map((d) => d.name), ['password-regenerate']);
+  assert.equal(dispatched[0].detail.value, panel.value);
+
+  dispatched.length = 0;
+  panel.regenerate();
+  assert.deepEqual(dispatched.map((d) => d.name), ['password-regenerate']);
+  assert.equal(dispatched[0].detail.value, panel.value);
+});
+
+test('a draw that failed is announced as the empty value it left', () => {
+  // regenerate() empties the value when the request is impossible, and a host
+  // holding the previous draw must not go on showing it as the panel's answer.
+  const { panel, dispatched } = makePanel();
+  panel.init();
+  dispatched.length = 0;
+  panel.mode = 'password';
+  panel.length = 4;
+  panel.upper = false;
+  panel.lower = false;
+  panel.digits = false;
+  panel.symbols = false;
+  panel.regenerate();
+  assert.ok(panel.error, 'the request was satisfiable after all');
+  assert.deepEqual(dispatched.map((d) => d.name), ['password-regenerate']);
+  assert.equal(dispatched[0].detail.value, '');
 });

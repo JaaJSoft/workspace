@@ -343,6 +343,11 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps, pinned) {
         this.bits = 0;
         this.error = failure.message;
       }
+      // Announced on every draw, including the failed one that emptied the
+      // value: a host that put an earlier draw in a field is holding one the
+      // panel no longer shows, and only the host knows whether that field is
+      // still the panel's to write.
+      this.$dispatch('password-regenerate', { value: this.value });
     },
 
     clear() {

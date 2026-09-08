@@ -867,3 +867,14 @@ class MeetingPublicViewTests(TestCase):
         self.assertIsNone(
             MeetingGuest.objects.get(uuid=resp.data["guest_uuid"]).user_id
         )
+
+    def test_a_signed_in_knock_needs_csrf(self):
+        client = APIClient(enforce_csrf_checks=True)
+        client.force_login(self.viewer)
+        resp = client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Impostor"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertFalse(MeetingGuest.objects.filter(meeting=self.meeting).exists())

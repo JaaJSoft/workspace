@@ -1,13 +1,21 @@
 """Rate limiting for the meeting module's unauthenticated surface.
 
-Every view in ``workspace.chat.views.meetings`` and ``workspace.chat.views.
-meeting_guest`` that a guest reaches runs with ``authentication_classes =
-[]``, so ``request.user`` is always ``AnonymousUser``. DRF's own
-``AnonRateThrottle`` would technically apply here, but its ``get_ident``
-trusts the whole ``X-Forwarded-For`` header when ``NUM_PROXIES`` is unset
-(the default), letting a caller mint a fresh identity per request and defeat
-the limit. ``workspace.common.request_ip.client_ip`` does not have that gap,
-so all three throttles below use it instead.
+Most views in ``workspace.chat.views.meetings`` and ``workspace.chat.views.
+meeting_guest`` that a guest reaches empty ``authentication_classes``, so
+``request.user`` is always ``AnonymousUser`` on them - the summary view and
+the whole guest runtime (join/leave/state/heartbeat/signal/messages/stream).
+``MeetingKnockView`` is the one exception: it keeps the default
+authentication so a signed-in visitor's session binds their account to the
+guest row they knock into, while a stranger still reaches it with no
+authentication at all. Either way, none of these views can rely on
+``request.user`` to identify a caller - a knock's signed-in binding is
+optional, not required - so every one of them is throttled by client IP.
+DRF's own ``AnonRateThrottle`` would technically apply to the anonymous
+ones, but its ``get_ident`` trusts the whole ``X-Forwarded-For`` header when
+``NUM_PROXIES`` is unset (the default), letting a caller mint a fresh
+identity per request and defeat the limit. ``workspace.common.request_ip.
+client_ip`` does not have that gap, so all three throttles below use it
+instead.
 
 The public *pages* under /meet are plain Django views, which no DRF
 machinery ever runs a throttle for; ``meeting_public_ip_limited`` at the

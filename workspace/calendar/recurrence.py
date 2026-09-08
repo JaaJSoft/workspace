@@ -2,7 +2,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.urls import reverse
 
 from workspace.common.logging import scrub
 
@@ -277,15 +276,7 @@ def meeting_join_url(event, request=None):
 
 
 class MeetingMembership:
-    """The meeting conversations a viewer may open, resolved once.
-
-    Every event of a listing asks the same question, so the answer is a
-    single query for the whole request however many meeting-bearing events
-    the page carries. Resolution is lazy: a page with no meeting at all
-    never asks, and never queries. Only conversations that back a meeting
-    are loaded - a calendar page has no use for the rest of someone's chat
-    list, however long it is.
-    """
+    """The meetings a viewer hosts, resolved once per request (lazily)."""
 
     __slots__ = ("_user", "_ids")
 
@@ -293,20 +284,12 @@ class MeetingMembership:
         self._user = user
         self._ids = None
 
-    def __contains__(self, conversation_id):
+    def __contains__(self, meeting_id):
         if self._ids is None:
-            self._ids = self._resolve()
-        return conversation_id in self._ids
+            from workspace.chat.services.meeting_hosts import hosted_meeting_ids
 
-    def _resolve(self):
-        from workspace.chat.services.conversations import user_conversation_ids
-
-        user = self._user
-        if user is None or not getattr(user, "is_authenticated", False):
-            return frozenset()
-        return frozenset(
-            user_conversation_ids(user).filter(conversation__meeting__isnull=False)
-        )
+            self._ids = frozenset(hosted_meeting_ids(self._user))
+        return meeting_id in self._ids
 
 
 def meeting_membership(request=None):
@@ -315,13 +298,12 @@ def meeting_membership(request=None):
 
 
 def meeting_room_url(event, request=None, membership=None):
-    """Absolute URL of the meeting's member room for *event*, or None.
+    """Absolute URL of the meeting's page for *event*, or None.
 
     The counterpart of ``meeting_join_url``: that one is the public guest
     link and is offered to anyone who can read the event, this one opens the
-    hosts' room and is offered only to someone the room view would let in -
-    an active member of the meeting's conversation. A viewer of a shared
-    calendar gets None, and so does an owner who left the conversation.
+    hosts' page and is offered only to a host of the meeting - the event's
+    owner, or an invitee whose RSVP is not declined. Everyone else gets None.
 
     Pass *membership* on any path that builds more than one payload, so the
     whole listing shares a single resolution.
@@ -332,9 +314,9 @@ def meeting_room_url(event, request=None, membership=None):
         return None
     if membership is None:
         membership = meeting_membership(request)
-    if meeting.conversation_id not in membership:
+    if meeting.uuid not in membership:
         return None
-    path = reverse("chat_ui:room", args=[meeting.conversation_id])
+    path = meeting.join_path
     return request.build_absolute_uri(path) if request else path
 
 

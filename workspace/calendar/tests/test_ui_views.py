@@ -217,5 +217,5 @@ class EventCardMembersTests(TestCase):
         resp = self.client.get(f"/calendar/events/{exception.pk}/card")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            resp.context["join_url"], f"http://testserver/meet/{meeting.slug}"
+            resp.context["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )

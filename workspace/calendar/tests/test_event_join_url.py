@@ -45,7 +45,7 @@ class EventJoinUrlTests(TestCase):
         meeting = create_meeting(self.event, self.user)
         resp = self.client.get(f"/api/v1/events/{self.event.uuid}")
         self.assertEqual(
-            resp.json()["join_url"], f"http://testserver/meet/{meeting.slug}"
+            resp.json()["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )
 
     def test_listing_events_does_not_query_per_event_for_the_meeting(self):
@@ -95,7 +95,9 @@ class EventJoinUrlTests(TestCase):
         occurrences = [e for e in resp.json() if e["title"] == "Standup"]
         self.assertGreaterEqual(len(occurrences), 3)
         for occ in occurrences:
-            self.assertEqual(occ["join_url"], f"http://testserver/meet/{meeting.slug}")
+            self.assertEqual(
+                occ["join_url"], f"http://testserver/meetings/{meeting.slug}"
+            )
 
     def test_recurring_occurrences_are_null_without_a_meeting(self):
         master = Event(
@@ -174,7 +176,7 @@ class EventJoinUrlTests(TestCase):
         matching = [e for e in events if e["uuid"] == str(self.event.uuid)]
         self.assertEqual(len(matching), 1)
         self.assertEqual(
-            matching[0]["join_url"], f"http://testserver/meet/{meeting.slug}"
+            matching[0]["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )
 
     def test_upcoming_listing_does_not_query_per_event_for_the_meeting(self):
@@ -216,7 +218,7 @@ class EventJoinUrlTests(TestCase):
         resp = self.client.get(f"/api/v1/events/{exception.uuid}")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            resp.json()["join_url"], f"http://testserver/meet/{meeting.slug}"
+            resp.json()["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )
 
     def test_upcoming_listing_carries_the_absolute_join_url_on_an_exception(self):
@@ -234,7 +236,7 @@ class EventJoinUrlTests(TestCase):
         matching = [e for e in events if e["uuid"] == str(exception.uuid)]
         self.assertEqual(len(matching), 1)
         self.assertEqual(
-            matching[0]["join_url"], f"http://testserver/meet/{meeting.slug}"
+            matching[0]["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )
 
     def test_put_scope_this_returns_the_series_join_url(self):
@@ -264,5 +266,5 @@ class EventJoinUrlTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
-            resp.json()["join_url"], f"http://testserver/meet/{meeting.slug}"
+            resp.json()["join_url"], f"http://testserver/meetings/{meeting.slug}"
         )

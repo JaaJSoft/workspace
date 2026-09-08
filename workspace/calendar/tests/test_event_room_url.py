@@ -1,9 +1,9 @@
-"""``room_url`` - the member door to an event's meeting.
+"""``room_url`` - the host door to an event's meeting.
 
 ``join_url`` is the public guest link and is offered to anyone who can read
-the event. ``room_url`` is the member room, so it is offered only to someone
-the room view would actually let in: an active member of the meeting's
-conversation. A viewer of a shared calendar gets ``null``.
+the event. ``room_url`` is the meeting page, so it is offered only to a host:
+the event's owner, or an invitee whose RSVP is not declined. A viewer of a
+shared calendar gets ``null``.
 """
 
 from django.contrib.auth import get_user_model
@@ -25,7 +25,7 @@ User = get_user_model()
 
 
 def _room_url(meeting):
-    return f"http://testserver/chat/room/{meeting.conversation_id}"
+    return f"http://testserver/meetings/{meeting.slug}"
 
 
 class EventRoomUrlTests(TestCase):
@@ -39,8 +39,8 @@ class EventRoomUrlTests(TestCase):
         # original_start can never match.
         self.now = timezone.now().replace(microsecond=0)
         # Both non-owners read every event on the calendar; only the invited
-        # one lands in the meeting's conversation, which is what separates a
-        # member from a mere viewer.
+        # one is a host of its meeting, which is what separates a member
+        # from a mere viewer.
         for user in (self.member, self.viewer):
             CalendarSubscription.objects.create(user=user, calendar=self.calendar)
         self.event = Event.objects.create(
@@ -103,24 +103,23 @@ class EventRoomUrlTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["room_url"], _room_url(meeting))
 
-    def test_viewer_who_is_not_a_conversation_member_gets_null(self):
+    def test_viewer_who_is_not_invited_gets_null(self):
         meeting = self._create_meeting(self.event)
         self.client.force_login(self.viewer)
         resp = self.client.get(f"/api/v1/events/{self.event.uuid}")
         self.assertEqual(resp.status_code, 200)
         payload = resp.json()
-        # The guest link stays public; only the member room is withheld.
-        self.assertEqual(payload["join_url"], f"http://testserver/meet/{meeting.slug}")
+        # The guest link stays public; only the host door is withheld.
+        self.assertEqual(
+            payload["join_url"], f"http://testserver/meetings/{meeting.slug}"
+        )
         self.assertIsNone(payload["room_url"])
 
-    def test_owner_who_left_the_conversation_gets_null(self):
-        from workspace.chat.models import ConversationMember
-
-        meeting = self._create_meeting(self.event)
-        ConversationMember.objects.filter(
-            conversation_id=meeting.conversation_id, user=self.owner
-        ).update(left_at=timezone.now())
-        self.client.force_login(self.owner)
+    def test_declined_invitee_gets_null(self):
+        self._create_meeting(self.event)
+        EventMember.objects.filter(event=self.event, user=self.member).update(
+            status=EventMember.Status.DECLINED
+        )
         resp = self.client.get(f"/api/v1/events/{self.event.uuid}")
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.json()["room_url"])
@@ -205,18 +204,21 @@ class EventRoomUrlTests(TestCase):
         self.assertEqual(len(matching), 1)
         self.assertIsNone(matching[0]["room_url"])
 
-    def test_membership_ignores_conversations_without_a_meeting(self):
+    def test_membership_excludes_meetings_the_user_does_not_host(self):
         from workspace.calendar.recurrence import MeetingMembership
-        from workspace.chat.models import Conversation, ConversationMember
 
         meeting = self._create_meeting(self.event)
-        chat = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, title="Lunch", created_by=self.owner
+        other_event = Event.objects.create(
+            calendar=self.calendar,
+            owner=self.owner,
+            title="Other",
+            start=self.now + timezone.timedelta(hours=5),
+            end=self.now + timezone.timedelta(hours=6),
         )
-        ConversationMember.objects.create(conversation=chat, user=self.member)
+        other_meeting = self._create_meeting(other_event)
         membership = MeetingMembership(self.member)
-        self.assertIn(meeting.conversation_id, membership)
-        self.assertNotIn(chat.uuid, membership)
+        self.assertIn(meeting.uuid, membership)
+        self.assertNotIn(other_meeting.uuid, membership)
 
     # ---- query budget ----
 
@@ -310,17 +312,19 @@ class EventCardRoomUrlTests(TestCase):
         resp = self.client.get(f"/calendar/events/{self.event.pk}/card")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["room_url"], _room_url(meeting))
-        self.assertContains(resp, f"/chat/room/{meeting.conversation_id}")
+        # join_url and room_url point at the same meeting page now, so the
+        # host door is asserted through its own markup, not the shared URL.
+        self.assertContains(resp, 'data-lucide="door-open"')
 
     def test_card_hides_the_room_from_a_non_member(self):
         from workspace.chat.services.meetings import create_meeting
 
-        meeting = create_meeting(self.event, self.owner)
+        create_meeting(self.event, self.owner)
         self.client.force_login(self.viewer)
         resp = self.client.get(f"/calendar/events/{self.event.pk}/card")
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.context["room_url"])
-        self.assertNotContains(resp, f"/chat/room/{meeting.conversation_id}")
+        self.assertNotContains(resp, 'data-lucide="door-open"')
 
 
 class EventPanelRoomButtonTests(TestCase):

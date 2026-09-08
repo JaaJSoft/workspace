@@ -70,7 +70,9 @@
       >
         Mail
       </div>
-      {% if usage_stats.mail.unread_messages %}<div class="text-xs text-base-content/50">{{ usage_stats.mail.unread_messages }} unread</div>{% endif %}
+      {% if usage_stats.mail.unread_messages %}
+        <div class="text-xs text-base-content/50">{{ usage_stats.mail.unread_messages }} unread</div>
+      {% endif %}
     </div>
     <div
       class="font-semibold text-sm flex-shrink-0"

@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 
+from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
 
 
@@ -22,9 +23,10 @@ class ProjectsActivityProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.projects.models import TaskEvent
 
+        start, end = local_date_range(date_from, date_to)
         qs = TaskEvent.objects.filter(
-            created_at__date__gte=date_from,
-            created_at__date__lte=date_to,
+            created_at__gte=start,
+            created_at__lt=end,
         )
         if user_id is not None:
             qs = qs.filter(actor_id=user_id)

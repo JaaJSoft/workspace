@@ -32,6 +32,7 @@
             <li class="flex items-center shrink-0">
               <div class="dropdown dropdown-hover dropdown-bottom dropdown-center">
                 <button
+                  type="button"
                   tabindex="0"
                   class="flex items-center hover:opacity-70 cursor-pointer"
                 >
@@ -104,7 +105,9 @@
                       class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
                     ></i>
                   {% endif %}
-                  <span class="truncate">{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}</span>
+                  <span class="truncate">
+                    {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
+                  </span>
                 </a>
               {% else %}
                 <span class="flex items-center gap-1 min-w-0">
@@ -114,7 +117,9 @@
                       class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
                     ></i>
                   {% endif %}
-                  <span class="truncate">{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}</span>
+                  <span class="truncate">
+                    {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
+                  </span>
                 </span>
               {% endif %}
             </li>

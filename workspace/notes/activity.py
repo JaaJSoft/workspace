@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 
+from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
 
 # Notes are markdown files; their activity is the FileEvent stream filtered
@@ -64,9 +65,10 @@ class NotesActivityProvider(ActivityProvider):
         return qs.filter(self._event_visibility_filter(user_id, viewer_id))
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
+        start, end = local_date_range(date_from, date_to)
         qs = self._events_qs(user_id, viewer_id).filter(
-            created_at__date__gte=date_from,
-            created_at__date__lte=date_to,
+            created_at__gte=start,
+            created_at__lt=end,
         )
         rows = (
             qs.annotate(day=TruncDate("created_at"))

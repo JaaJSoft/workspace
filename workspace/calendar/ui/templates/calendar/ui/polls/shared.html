@@ -120,8 +120,12 @@
                   <i data-lucide="check-circle-2" class="w-5 h-5 text-success"></i>
                   <div>
                     <span>Your votes have been saved!</span>
-                    <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">You'll receive an email once a final slot is chosen.</p>
-                    <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">Bookmark this page to come back and see the final result.</p>
+                    <p class="text-sm opacity-60 mt-0.5" x-show="guestEmail.trim()">
+                      You'll receive an email once a final slot is chosen.
+                    </p>
+                    <p class="text-sm opacity-60 mt-0.5" x-show="!guestEmail.trim()">
+                      Bookmark this page to come back and see the final result.
+                    </p>
                   </div>
                 </div>
               </template>
@@ -207,6 +211,7 @@
                         <template x-for="slot in poll.slots" :key="slot.uuid">
                           <td class="text-center">
                             <button
+                              type="button"
                               class="w-8 h-8 rounded-lg flex items-center justify-center mx-auto cursor-pointer transition-all hover:scale-110 active:scale-95"
                               :class="voteClass(myVotes[slot.uuid])"
                               @click="cycleVote(slot.uuid)"
@@ -272,6 +277,7 @@
               <template x-if="poll.status === 'open'">
                 <div class="mt-4 flex justify-end">
                   <button
+                    type="button"
                     class="btn btn-primary btn-sm gap-2"
                     @click="submitVotes()"
                     :disabled="!guestName.trim() || submitting || Object.keys(myVotes).length === 0"

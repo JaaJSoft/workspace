@@ -49,6 +49,7 @@
 }"
 >
   <button
+    type="button"
     @click="toggle()"
     class="btn btn-ghost btn-circle btn-sm hover:bg-primary/10 transition-all indicator"
     title="Notifications"
@@ -79,6 +80,7 @@
       <h3 class="font-semibold text-base-content">Notifications</h3>
       <div class="flex items-center gap-1">
         <button
+          type="button"
           x-show="$store.push.supported"
           x-cloak
           @click="$store.push.toggle()"
@@ -93,6 +95,7 @@
           ></i>
         </button>
         <button
+          type="button"
           @click="searchOpen ? clearSearch() : (searchOpen = true, $nextTick(() => $refs.searchInput.focus()))"
           class="btn btn-ghost btn-xs btn-circle"
           :class="searchOpen ? 'text-primary' : 'text-base-content/50'"
@@ -101,6 +104,7 @@
           <i data-lucide="search" class="w-3.5 h-3.5"></i>
         </button>
         <button
+          type="button"
           x-show="$store.notifications.unread > 0"
           @click="$store.notifications.markAllRead()"
           class="btn btn-ghost btn-xs text-primary hover:bg-primary/10"
@@ -129,6 +133,7 @@
       class="px-2 pt-2 pb-1 flex gap-1 flex-wrap justify-center"
     >
       <button
+        type="button"
         @click="applyFilter('all')"
         class="badge badge-sm gap-1 cursor-pointer transition-colors"
         :class="filter === 'all' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
@@ -137,6 +142,7 @@
         All
       </button>
       <button
+        type="button"
         @click="applyFilter('unread')"
         class="badge badge-sm gap-1 cursor-pointer transition-colors"
         :class="filter === 'unread' ? 'badge-neutral' : 'badge-ghost hover:bg-base-200'"
@@ -146,6 +152,7 @@
       </button>
       <template x-for="o in origins" :key="o">
         <button
+          type="button"
           @click="applyFilter(o)"
           class="badge badge-sm gap-1 cursor-pointer capitalize transition-colors"
           :class="filter === o
@@ -245,6 +252,7 @@
 
       <!-- Load more -->
       <button
+        type="button"
         x-cloak
         x-show="$store.notifications.hasMore"
         @click="$store.notifications.loadMore()"
@@ -265,6 +273,7 @@
       class="p-2 border-t border-base-300"
     >
       <button
+        type="button"
         @click="$store.notifications.markAllRead(); notificationsOpen = false;"
         class="btn btn-ghost btn-sm btn-block text-primary hover:bg-primary/10"
       >

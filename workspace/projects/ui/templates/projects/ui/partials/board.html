@@ -1,5 +1,5 @@
 <div id="board" class="flex flex-col gap-3 min-h-0">
-  {% if project.type == 'scrum' %}
+  {% if project.type == "scrum" %}
     {% if sprint_data %}{{ sprint_data|json_script:"board-sprint-data" }}{% endif %}
     <div class="flex flex-wrap items-center gap-3">
       {% url 'projects_ui:board' project.uuid as sprint_switcher_url %}
@@ -16,7 +16,7 @@
           {% endif %}
           {% if selected_sprint.goal %}<span class="truncate">{{ selected_sprint.goal }}</span>{% endif %}
         </span>
-        {% if role == 'admin' and writable and selected_sprint.state == 'active' %}
+        {% if role == "admin" and writable and selected_sprint.state == "active" %}
           <button
             type="button"
             class="btn btn-accent btn-sm ml-auto"
@@ -37,7 +37,7 @@
       class="flex flex-col gap-3 min-h-0"
       x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
     >
-      {% if project.type == 'scrum' and not selected_sprint %}
+      {% if project.type == "scrum" and not selected_sprint %}
         <div
           class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
         >
@@ -50,7 +50,7 @@
                 <li class="rounded-box bg-base-200 p-3 flex items-center gap-3 text-left">
                   <span class="font-medium truncate flex-1">{{ s.name }}</span>
                   <span class="badge badge-ghost badge-sm">{{ s.task_count }} task{{ s.task_count|pluralize }}</span>
-                  {% if role == 'admin' and writable %}
+                  {% if role == "admin" and writable %}
                     <button
                       type="button"
                       class="btn btn-accent btn-xs"
@@ -63,7 +63,7 @@
                 </li>
               {% endfor %}
             </ul>
-          {% elif role == 'admin' %}
+          {% elif role == "admin" %}
             <p class="text-sm text-base-content/60">Create a sprint, then plan it from the backlog.</p>
             {% if writable %}
               <button
@@ -114,6 +114,7 @@
                   {% endif %}
                   {% if writable and not sprint_read_only %}
                     <button
+                      type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       title="New task"
                       @click="newTask('{{ column.status.uuid }}')"

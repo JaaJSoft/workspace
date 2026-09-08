@@ -1,5 +1,81 @@
 # Changelog
 
+## 0.39.0 - Sharing, Search & Reports
+
+### Highlights
+
+Folders can now be shared by link, including a drop mode where anyone can send you files without an account. Search finally reads what is inside your documents, Projects gains the flow reports a team needs to see how work actually moves, and the assistant can now answer your mail and fix the meetings it books.
+
+### Files
+
+- Share a folder by link. A link can let recipients browse the folder and open what is inside, let them drop files in without an account and without seeing what is already there, or both. Set a per-file size cap and a maximum number of uploads, alongside the password and expiry you already had. A file opened inside a shared folder gets its own address, its own viewer, and arrows to walk through its neighbours.
+- You are notified when someone sends files to a shared folder, once per batch rather than once per file.
+- Large folders open without freezing the page. A folder of over a thousand entries used to leave the browser unresponsive for a long time; it now shows a loading overlay for the wait, and the wait itself is much shorter. Folders above 200 entries also regain their context menu, favourite toggle and bulk bar, which used to vanish there.
+- Downloading a large selection as an archive is no longer refused above 200 items, and when the server does decline a download it tells you why.
+- Uploads can now be scanned for malware. When enabled, a flagged file is quarantined: it cannot be downloaded, previewed or shared by link, stays out of search, cannot be attached to a message, an email or a task, and is not readable by the assistant - while remaining visible to its owner so nothing silently disappears. An administrator can clear a false positive, with a note of who did it and why, and a file whose content changed after a verdict is scanned again. Scanning is off by default and never slows an upload down.
+- Storage quotas are now enforced. The per-user and per-group limits were displayed but never applied; they now stop an upload, a note, a copy or a WebDAV write that would exceed them, and every usage figure in the app reports the same number. Limits are editable by an administrator.
+- A file restored from the trash could come back with another file's content, when a new file had reused the trashed file's name in the meantime. Trashed files are now kept apart from the live tree, so their bytes survive.
+- Importing from Nextcloud brings your favorites and tags along with the files.
+- "Properties" now sits last in the context menu, just above "Delete", on files and folders alike.
+
+### Search
+
+- Search inside documents. Notes, text files, PDFs, Word, Excel and PowerPoint files and their OpenDocument equivalents are now found by what they contain, not only by their name. File name search is also ranked by relevance and ignores accents.
+- The search panel tells you what is going on: placeholder rows while the first results load, a progress bar while a refined query runs, a clear message when the request fails, and a hint when the query is too short.
+- Press Ctrl+Shift+K (Cmd+Shift+K on a Mac), or start a query with `>`, to search actions only: the apps and what they can do, without files, notes or mail in the way. Results appear instantly from the first character.
+- A note no longer shows up twice in the global search, once as a file and once as a note.
+- Tags on search results look like tags everywhere else in the app, and follow the light and dark theme.
+
+### Projects
+
+- Flow reports on the analytics page: cycle and lead time with a distribution of how long tasks take, a cumulative flow diagram over the last twelve weeks, and on scrum projects a sprint burndown with a sprint switcher and the velocity of closed sprints. Reports replay the task history, so a deleted task still counts in the sprints and weeks it took part in.
+- Filtering the board, switching sprint or moving between project views now shows a loading veil instead of a page that seems to ignore the click.
+- Task lists on scrum projects load faster.
+
+### Mail
+
+- Merge duplicate folders. When your provider forces its own Trash, Sent or Drafts next to the one you created, declare them synonyms from the account menu: one folder shows all the mail, carries the combined counts and receives what the app files from then on, and the aliases leave the sidebar. Nothing is moved on the server, and the mapping can be undone.
+- Tell the AI what each label means. Every label can carry a one-line description, and the assistant reads it when it sorts your mail - so a label named after your own workflow, like "Client X" or "Follow-up", gets the right messages without guesswork.
+- The AI sorts mail with more context: whether the message was addressed to you directly or sent to a list, where replies would go, which folder it sits in, and whether it carries attachments, a calendar invitation or is part of a thread.
+- Every account gets a "Suspicious" label, so the assistant can flag phishing, scams and unsolicited mail that slipped past your provider's filter.
+- AI sorting no longer fails on batches where the model takes long to decide; a batch that is cut short is reported as such instead of being silently discarded.
+
+### AI Assistants
+
+- The assistant can handle your mail: draft a message, reply to one, and triage an inbox. Sending is a separate permission, off by default per assistant, and always goes through a confirmation where you see exactly what would go out.
+- It can also fix what it books: change or cancel an event, answer an invitation, create a scheduling poll and read its results. Cancelling a series, or only one occurrence of it, is always an explicit choice.
+- Send a voice message to a bot and it understands what you said, instead of answering that it cannot listen to recordings. Needs speech recognition configured on the instance.
+- A bot's voice now holds steady from one message to the next: an administrator gives it a reference recording to clone, rather than a description the speech model reinterpreted on every call. Asked what it sounds like, a bot now answers with a voice message.
+- Voice messages no longer read stage directions like "laughter" out loud. Which cues a voice can perform is now a deployment setting, empty until one is known to work.
+- In a conversation where a bot had written twice in a row, such as a scheduled follow-up after its own reply, it could mistake its second message for yours and answer its own question. Each message now says who sent it and why.
+
+### Chat
+
+- New messages animate into the conversation. Pick the style in the chat preferences: Slide, Pop, Fade, Bounce or None. The animation plays once per message and is disabled when your system asks for reduced motion.
+- A message written on several lines with Shift+Enter now keeps its line breaks instead of collapsing into one paragraph. Assistant replies get the same treatment.
+- Every group conversation now has a name of its own, and its avatar is built from that name rather than from the initials of whichever members happened to load first. The conversation list also refreshes faster.
+- Deleting a message now really deletes it: its text, images, files and voice notes are removed, where they used to stay on disk and reachable by link.
+- The emoji picker opens with the cursor in its search field, and hands focus back to the composer when it closes.
+- Editing a message places the cursor at the end of the text, whether you start from the message menu or with the Up arrow.
+- On a phone, opening Chat with no conversation selected shows the welcome screen and its "Start a conversation" button next to the rail, instead of an empty page. The composer's corners also follow your theme's button style.
+- A long conversation list no longer pushes the message header and the composer off the bottom of the screen.
+- Messages in a call room render as proper bubbles with avatars again.
+- Searching messages by date, and the "today" shortcut, are faster in large conversations.
+
+### Calendar
+
+- Recurring events created elsewhere keep their exact rule. "Every second Tuesday of the month" or "repeat 10 times" used to be flattened to "monthly" or a date when synced in; the rule is now stored as sent, so it round-trips faithfully. The last occurrence of a series also no longer disappears from a view that starts part-way through it.
+- The task and recurring icons sit on the line with the event title, at every display scaling.
+
+### Interface
+
+- Jump between apps from anywhere: the title of a module's sidebar now opens an "Apps" grid with a tile per module, unread counts, and a settings link. Alt+K opens it from the keyboard; arrows and letters move across the tiles.
+- Pages no longer flicker while loading. Sidebars paint at their final width from the first frame, the chat list shows placeholder rows until it is ready, and the page title no longer jumps sideways on long pages.
+- Whether a module's sidebar is collapsed now follows your account across browsers and devices, and Mail remembers it like the other modules.
+- The Preferences panel in the Files, Calendar, Notes and Projects sidebars closes when you click its button a second time.
+- The button that dismisses search results is now a cross, like every other close control, and rows in the compact search palette are evenly padded.
+- The activity heatmap on a profile loads faster on busy accounts, and its tooltip no longer stays on screen after the pointer leaves.
+
 ## 0.38.0 - Sprints, Office & Voice
 
 ### Highlights
@@ -27,12 +103,6 @@ Projects grows up: work in sprints, group tasks under epics, break them into che
 ### Files
 
 - Edit office documents in the browser. Word, Excel and PowerPoint files - and their OpenDocument equivalents - now open and save directly in the file viewer when your instance is set up with an editor. Without one, office files keep their download-only behavior.
-- Uploads can now be scanned for malware. When enabled, a flagged file is
-  quarantined: it cannot be downloaded, previewed or shared by link, stays out
-  of search, cannot be attached to a message, an email or a task, and is not
-  readable by the assistant - while remaining visible to its owner so nothing
-  silently disappears. Scanning is off by default and never slows an upload
-  down.
 
 ### AI Assistants
 

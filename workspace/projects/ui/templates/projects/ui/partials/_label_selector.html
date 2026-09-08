@@ -24,7 +24,7 @@ label (handled once on the board root), then the selection event.
 {% endcomment %}
 {% with entity=entity|default:"label" %}
   <div
-    x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if role == "admin" and writable and not no_create %}/api/v1/projects/{{ project.uuid }}/labels{% endif %}')"
+    x-data="labelSelector('{{ on_select_event }}', () => {{ all_source }}, () => {{ selected_source }}, '{% if "admin" == role and writable and not no_create %}/api/v1/projects/{{ project.uuid }}/labels{% endif %}')"
     class="relative"
     @click.outside="showDropdown = false"
   >

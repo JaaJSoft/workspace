@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from django.db.models.functions import TruncDate
 
+from workspace.common.datetimes import local_date_range
 from workspace.core.activity_registry import ActivityProvider
 
 
@@ -35,6 +36,7 @@ class FilesActivityProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.files.models import File, FileEvent
 
+        start, end = local_date_range(date_from, date_to)
         # Events on soft-deleted files are kept in the feed: hiding them
         # would also hide the DELETED event itself (the file is in trash
         # by the time that event lands), and aligns this provider with the
@@ -44,8 +46,8 @@ class FilesActivityProvider(ActivityProvider):
         # here keeps the two feeds disjoint so a note edit isn't counted twice.
         qs = FileEvent.objects.filter(
             file__node_type=File.NodeType.FILE,
-            created_at__date__gte=date_from,
-            created_at__date__lte=date_to,
+            created_at__gte=start,
+            created_at__lt=end,
         ).exclude(file__mime_type="text/markdown")
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)

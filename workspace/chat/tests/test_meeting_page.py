@@ -82,8 +82,29 @@ class MeetingPageTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertIn('id="meet-signed-in-data"', html)
         self.assertIn("Ada Lovelace", html)
-        self.assertIn("You will join this meeting as a guest.", html)
+        self.assertIn("You will join this meeting as a guest, under your account", html)
         self.assertNotIn("admitGuest(", html)
+
+    def test_the_signed_in_knock_name_is_locked_and_the_anonymous_one_is_not(self):
+        """The server derives a signed-in visitor's name from their account, so
+        the field states it rather than inviting an edit the knock discards."""
+        self.client.force_login(self.outsider)
+        signed_in = self.client.get(self.url).content.decode()
+        field = signed_in[signed_in.index('id="meet-display-name"') :][:400]
+        self.assertIn("readonly", field)
+
+        self.client.logout()
+        anonymous = self.client.get(self.url).content.decode()
+        field = anonymous[anonymous.index('id="meet-display-name"') :][:400]
+        self.assertNotIn("readonly", field)
+
+    def test_the_lobby_shows_a_bound_guest_as_their_own_account(self):
+        """A signed-in visitor's knock binds their account, so the host admits
+        someone the workspace can name: real avatar, workspace mark."""
+        self.client.force_login(self.host)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn(':user-id="g.user_id"', html)
+        self.assertIn('x-show="g.user_id"', html)
 
     def test_public_link_off_hides_the_page_from_non_hosts(self):
         self.meeting.public_link_enabled = False

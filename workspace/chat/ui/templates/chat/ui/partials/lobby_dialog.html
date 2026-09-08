@@ -29,8 +29,15 @@
       <div class="flex flex-col gap-2" x-show="lobby.length">
         <template x-for="g in lobby" :key="g.uuid">
           <div class="flex items-center gap-2">
-            <user-avatar :username="g.display_name" size="sm"></user-avatar>
-            <span class="text-sm truncate flex-1" x-text="g.display_name"></span>
+            <user-avatar :user-id="g.user_id" :username="g.display_name" size="sm"></user-avatar>
+            <span class="text-sm truncate" x-text="g.display_name"></span>
+            {% comment %}
+              A knock from a signed-in visitor binds their account to the guest
+              row: the host is admitting someone the workspace can name, not a
+              stranger who typed that name in.
+            {% endcomment %}
+            <span class="badge badge-xs badge-outline" x-show="g.user_id">Workspace</span>
+            <span class="flex-1"></span>
             <button
               type="button"
               class="btn btn-success btn-sm"
@@ -71,6 +78,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button type="button">close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

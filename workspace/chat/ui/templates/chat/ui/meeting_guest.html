@@ -65,20 +65,23 @@
                 <label class="label py-1 px-0" for="meet-display-name">
                   <span class="label-text">Your name</span>
                 </label>
+                {% comment %}
+                  Signed in, the field is a readout, not an input: the knock
+                  endpoint binds the account and derives the name from it, so
+                  an editable box would offer a choice the server ignores.
+                {% endcomment %}
                 <input
                   id="meet-display-name"
                   class="input input-bordered w-full"
                   x-model="displayName"
                   maxlength="80"
                   required
-                  autofocus
+                  {% if signed_in_as %}readonly{% else %}autofocus{% endif %}
                 />
-                {% comment %}The name is a prefill, not a credential: knocking
-                is anonymous whoever is signed in, so the note says what will
-                happen and claims no identity the lobby could not verify.
-                {% endcomment %}
                 {% if signed_in_as %}
-                  <p class="text-xs text-base-content/60 mt-1.5">You will join this meeting as a guest.</p>
+                  <p
+                    class="text-xs text-base-content/60 mt-1.5"
+                  >You will join this meeting as a guest, under your account's name.</p>
                 {% endif %}
               </div>
               <template x-if="error">
@@ -94,7 +97,7 @@
                   >Sign in</a>
                 {% endif %}
                 <button
-                  type="button"
+                  type="submit"
                   class="btn btn-primary btn-sm w-full sm:w-auto"
                   :disabled="knocking || (summary && summary.locked)"
                 >

@@ -126,16 +126,22 @@ window.vaultExportTree = (function () {
       if (!vaultRows.length) {
         throw VaultExportError('this account holds no vault', 'empty');
       }
-      const vaults = [];
-      for (const vaultRow of vaultRows) {
-        vaults.push(await buildVault(session, vaultRow, onProgress));
-      }
-      return {
-        format: 'vault-archive',
-        version: 1,
-        exported_at: new Date().toISOString(),
-        vaults: vaults,
-      };
+      // Every entry here is read twice - verified by the reader, then opened
+      // for its content - and both passes ask for the same entry key. Held for
+      // the length of the walk and dropped with it; a lock inside still throws
+      // 'locked', which is what refuses the export rather than tampering.
+      return session.withEntryKeyCache(async () => {
+        const vaults = [];
+        for (const vaultRow of vaultRows) {
+          vaults.push(await buildVault(session, vaultRow, onProgress));
+        }
+        return {
+          format: 'vault-archive',
+          version: 1,
+          exported_at: new Date().toISOString(),
+          vaults: vaults,
+        };
+      });
     },
   };
 })();

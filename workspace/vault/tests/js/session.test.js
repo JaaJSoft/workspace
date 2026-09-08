@@ -772,3 +772,105 @@ test('setting the delay on a locked session does not open one', async () => {
   assert.equal(h.session.isUnlocked(), false);
   assert.equal(h.session.secondsUntilLock(), 0);
 });
+
+// The entry keys the export walks the account with. Deriving one is an HPKE
+// open plus an HKDF, and `hkdf` is already recorded by the harness, so the
+// count of derivations is readable without touching the stubs.
+function readerHarness() {
+  return harness({
+    vaultCrypto: {
+      AD: {
+        unwrapInfo: () => 'unwrap-info',
+        kexPrivAd: (uuid) => `kex:${uuid}`,
+        sigPrivAd: (uuid) => `sig:${uuid}`,
+        kexPubPayload: (uuid, pub) => `kexpub:${uuid}:${pub}`,
+        vaultKeyInfo: (v, r) => `vaultkey:${v}:${r}`,
+        vaultMetaInfo: (v) => `vaultmeta:${v}`,
+        entryKeyInfo: (uuid) => `entrykey:${uuid}`,
+      },
+      importAeadKey: async () => ({ handle: 'aead' }),
+    },
+  });
+}
+
+test('one read of the account derives each entry key once', async () => {
+  // The export walks every entry twice - once to verify it and once to open
+  // its content - and each pass asks for the same key. Uncached that is two
+  // X25519 opens and two HKDFs per entry, which doubles the wall-clock of the
+  // slowest thing this module does on exactly the accounts where it hurts.
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const derivations = () => h.calls.filter((c) => c === 'hkdf').length;
+  const before = derivations();
+
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  });
+
+  assert.equal(derivations() - before, 1, 'the same key was derived twice in one read');
+});
+
+test('separate entries still get separate keys', async () => {
+  // The cache is a memo, not a shortcut: two entries must never share a key.
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const before = h.calls.filter((c) => c === 'hkdf').length;
+
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-2');
+  });
+
+  assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
+});
+
+test('a key derived for one read is not reused by the next', async () => {
+  // Scoped to the walk that needed it. Left standing, a key would outlive the
+  // export and be handed to whatever asked next.
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const before = h.calls.filter((c) => c === 'hkdf').length;
+
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  });
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  });
+
+  assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
+});
+
+test('a lock is still a lock in the middle of a cached read', async () => {
+  // The guard compares a generation precisely so a key derived before a lock
+  // is never handed back after one. A cache that survived the lock would hand
+  // one back without ever reaching the guard.
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    h.session.lock();
+    await assert.rejects(
+      h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1'),
+      (err) => err.reason === 'locked'
+    );
+  });
+});
+
+test('the cache does not outlive a read that threw', async () => {
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  await assert.rejects(
+    h.session.withEntryKeyCache(async () => { throw new Error('boom'); }),
+    /boom/
+  );
+  const before = h.calls.filter((c) => c === 'hkdf').length;
+  await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  assert.equal(
+    h.calls.filter((c) => c === 'hkdf').length - before, 2,
+    'a cache survived the read that threw'
+  );
+});

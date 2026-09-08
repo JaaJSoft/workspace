@@ -831,3 +831,39 @@ class MeetingPublicViewTests(TestCase):
         )
         self.assertEqual(anon.status_code, authed.status_code)
         self.assertEqual(set(anon.data.keys()), set(authed.data.keys()))
+
+    def test_a_signed_in_stranger_knocks_with_their_account(self):
+        client = APIClient(enforce_csrf_checks=False)
+        client.force_login(self.viewer)
+        resp = client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Impostor"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        guest = MeetingGuest.objects.get(uuid=resp.data["guest_uuid"])
+        self.assertEqual(guest.user_id, self.viewer.id)
+        self.assertEqual(guest.display_name, "pub-viewer")
+        self.assertEqual(resp.data["display_name"], "pub-viewer")
+
+    def test_a_host_cannot_knock_on_their_own_meeting(self):
+        client = APIClient()
+        client.force_login(self.owner)
+        resp = client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "me"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 409)
+
+    def test_an_anonymous_knock_still_needs_no_csrf(self):
+        client = APIClient(enforce_csrf_checks=True)
+        resp = client.post(
+            f"/api/v1/chat/meet/{self.meeting.slug}/knock",
+            {"display_name": "Ada"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 201)
+        self.assertIsNone(
+            MeetingGuest.objects.get(uuid=resp.data["guest_uuid"]).user_id
+        )

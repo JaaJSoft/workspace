@@ -17,8 +17,9 @@ from workspace.common.uuids import parse_uuid_or_none
 from ..services import calls
 from ..services import meetings as meeting_service
 from ..services.calls import is_call_locked
+from ..services.identities import display_name_for_identity
 from ..services.meeting_guests import issue_token
-from ..services.meeting_hosts import reachable_meeting
+from ..services.meeting_hosts import is_host, reachable_meeting
 from ..services.meeting_occurrences import current_occurrence
 from ..services.participant_keys import guest_key
 from ..throttling import MeetingPublicIpThrottle
@@ -50,16 +51,18 @@ _BIDI_CONTROL_CODEPOINTS = frozenset(
 
 
 # ===========================================================================
-# Public surface - no authentication of any kind. A guest reaches these from
-# a bare /meet/<slug> link with no account, so the slug (and, on knock, the
-# issued token) has to be the only thing that grants anything.
+# Public surface - reached from a bare /meet/<slug> link with no account, so
+# the slug (and, on knock, the issued token) has to be the only thing that
+# grants anything.
 #
-# AllowAny alone is not enough: DRF still runs SessionAuthentication by
-# default, which enforces CSRF for a signed-in visitor and populates
-# request.user - so a logged-in host previewing their own link would be
-# treated differently than an anonymous guest hitting the same URL. Emptying
-# the authentication list below removes that entirely, so every caller,
-# signed in or not, is handled identically.
+# MeetingSummaryView is anonymous outright: AllowAny alone is not enough,
+# because DRF still runs SessionAuthentication by default, which enforces
+# CSRF for a signed-in visitor and populates request.user - so a logged-in
+# host previewing their own link would be treated differently than an
+# anonymous guest hitting the same URL. Emptying its authentication list
+# removes that entirely, so every caller, signed in or not, is handled
+# identically. MeetingKnockView keeps the default authentication instead -
+# see its own docstring for why.
 # ===========================================================================
 
 
@@ -136,8 +139,13 @@ class MeetingSummaryView(APIView):
 
 @extend_schema(tags=["Chat - Meetings"])
 class MeetingKnockView(APIView):
+    """Knock to join a meeting's lobby.
+
+    Anonymous for a stranger; a signed-in visitor is bound to the row, so
+    the session and its CSRF check apply to them.
+    """
+
     permission_classes = [AllowAny]
-    authentication_classes = []
     throttle_classes = [MeetingPublicIpThrottle]
 
     @extend_schema(
@@ -170,6 +178,15 @@ class MeetingKnockView(APIView):
         if is_call_locked(calls.MeetingScope(meeting), occurrence_start):
             return Response(status=status.HTTP_423_LOCKED)
 
+        # A host already has the run endpoints for their own meeting; a
+        # knock is how a stranger asks to be let in, so a host knocking on
+        # their own room is a caller error, not a lobby entry.
+        user = request.user if request.user.is_authenticated else None
+        if user is not None and is_host(user, meeting):
+            return Response(
+                {"detail": "You host this meeting."}, status=status.HTTP_409_CONFLICT
+            )
+
         # Rate limit: max 10 knocks per IP per hour, mirroring
         # SharedPollVoteView's counter shape.
         ip = client_ip(request)
@@ -196,15 +213,23 @@ class MeetingKnockView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        ser = DisplayNameSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        display_name = ser.validated_data["display_name"]
+        # A signed-in stranger is bound to their own account, not whatever
+        # name they typed - the posted display_name is ignored for them, the
+        # same way a host's display name would be if they were allowed to
+        # knock at all.
+        if user is not None:
+            display_name = display_name_for_identity(user, None)[:80]
+        else:
+            ser = DisplayNameSerializer(data=request.data)
+            ser.is_valid(raise_exception=True)
+            display_name = ser.validated_data["display_name"]
 
         # occurrence_start must come from current_occurrence()'s own output,
         # never event.start verbatim - see meeting_occurrences.py's docstring.
         token, token_hash = issue_token()
         guest = MeetingGuest.objects.create(
             meeting=meeting,
+            user=user,
             display_name=display_name,
             occurrence_start=occurrence_start,
             token_hash=token_hash,
@@ -221,6 +246,7 @@ class MeetingKnockView(APIView):
                 "meeting_id": str(meeting.uuid),
                 "guest_uuid": str(guest.uuid),
                 "display_name": guest.display_name,
+                "user_id": guest.user_id,
             },
         )
         return Response(
@@ -229,6 +255,8 @@ class MeetingKnockView(APIView):
                 "state": guest.state,
                 "display_name": guest.display_name,
                 "participant_key": guest_key(guest.uuid),
+                "guest_uuid": str(guest.uuid),
+                "user_id": guest.user_id,
             },
             status=status.HTTP_201_CREATED,
         )

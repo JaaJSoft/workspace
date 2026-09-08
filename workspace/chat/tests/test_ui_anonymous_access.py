@@ -73,5 +73,10 @@ class ChatUiAnonymousAccessTests(TestCase):
                     self.assertIn("/login", resp["Location"], path)
 
     def test_the_meeting_page_is_public(self):
-        resp = self.client.get(f"/meet/{self.meeting.slug}")
+        resp = self.client.get(f"/meetings/{self.meeting.slug}")
         self.assertEqual(resp.status_code, 200)
+
+    def test_the_old_meeting_link_redirects_without_a_session(self):
+        resp = self.client.get(f"/meet/{self.meeting.slug}")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], f"/meetings/{self.meeting.slug}")

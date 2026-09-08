@@ -54,19 +54,18 @@ function mediaStub(matches) {
   };
 }
 
-// The guest page mounts the member conversation pane, so the component is
-// built from the pane's mixins too - the same load order meet.html uses.
-// The Alpine surface those mixins reach for ($refs, $nextTick, $ajax) is
-// stubbed here; a test that cares about a swap overrides $ajax.
+// The guest page composes the same call, input and meeting-chat mixins the
+// host page composes - the same load order meeting_guest.html uses. The
+// Alpine surface those mixins reach for ($refs, $nextTick) is stubbed here.
 function app(fetchImpl, extra = {}, tweak = null) {
   const ctx = loadScripts(
     [
       'workspace/common/static/ui/js/attachment_input.js',
       'workspace/chat/ui/static/chat/ui/js/ui_helpers.js',
-      'workspace/chat/ui/static/chat/ui/js/messages.js',
       'workspace/chat/ui/static/chat/ui/js/input.js',
       'workspace/chat/ui/static/chat/ui/js/call.js',
       'workspace/chat/ui/static/chat/ui/js/call_room.js',
+      'workspace/chat/ui/static/chat/ui/js/meeting_chat.js',
       'workspace/chat/ui/static/chat/ui/js/meet.js',
     ],
     { ...baseStubs, sessionStorage: newStorage(), fetch: fetchImpl, ...extra },
@@ -106,9 +105,21 @@ function frame(payload, id) {
 
 function messageFrame(uuid, body, id) {
   return frame({
-    event: 'message',
-    data: { type: 'message', message: { uuid, body, author: { display_name: 'Bo', is_guest: false, participant_key: 'u:2' } } },
+    event: 'meeting_message',
+    data: { meeting_id: 'm-1', message: { uuid, body, body_html: `<p>${body}</p>`, created_at: '2026-09-07T10:00:00Z', occurrence_start: null, author: { id: 2, username: 'bo', display_name: 'Bo', is_guest: false, participant_key: 'u:2' } } },
   }, id);
+}
+
+// The shape the meeting chat delivers, through the stream or a reload.
+function meetingMessage(uuid, authorKey) {
+  return {
+    uuid,
+    body: 'hi',
+    body_html: '<p>hi</p>',
+    created_at: '2026-09-07T10:00:00Z',
+    occurrence_start: null,
+    author: { id: null, username: 'x', display_name: 'X', is_guest: true, participant_key: authorKey },
+  };
 }
 
 // The re-join chain continues through promises nothing awaits (the fresh
@@ -216,15 +227,6 @@ test('the stage helpers split self from remote on the participant key', () => {
   assert.deepStrictEqual(a.stripParticipants().map((p) => p.participant_key), ['g:1']);
 });
 
-test('a message is mine when its author key is my participant key', () => {
-  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
-  a.currentParticipantKey = 'g:1';
-  assert.equal(a.isOwnMessage({ author: { participant_key: 'g:1' } }), true);
-  assert.equal(a.isOwnMessage({ author: { participant_key: 'g:2' } }), false);
-  assert.equal(a.isOwnMessage({ author: { participant_key: 'u:5' } }), false);
-  assert.equal(a.isOwnMessage(null), false);
-});
-
 // -- The event stream reader ------------------------------------------------
 
 test('the reader dispatches each frame once, across chunk and character splits', async () => {
@@ -236,15 +238,11 @@ test('the reader dispatches each frame once, across chunk and character splits',
   const a = app(async () => ({ ok: true, status: 200, body: bodyOf([bytes.slice(0, cut), bytes.slice(cut)]) }));
   a.token = 'tok';
   a.phase = 'lobby';
-  // The list itself is server-rendered now, so what the reader produces is
-  // a sequence of handler calls rather than an array to inspect.
-  const seen = [];
-  a.onMeetingMessage = async (message) => { seen.push(message); };
 
   await a._openStream();
 
-  assert.deepStrictEqual(seen.map((m) => m.uuid), ['m1', 'm2']);
-  assert.equal(seen[1].body, 'café au lait');
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), ['m1', 'm2']);
+  assert.equal(a.meetingMessages[1].body, 'café au lait');
   assert.equal(a._lastEventId, '8');
 });
 
@@ -688,71 +686,78 @@ test('messages that arrive with the chat panel closed are counted, and reading c
   const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
   a.currentParticipantKey = 'g:1';
 
-  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
-  await a.onMeetingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m1', 'u:2') });
+  a.onMeetingMessage({ message: meetingMessage('m2', 'u:2') });
   assert.equal(a.unreadMessages, 2);
 
   // My own message is not news to me.
-  await a.onMeetingMessage({ uuid: 'm3', author: { participant_key: 'g:1' } });
+  a.onMeetingMessage({ message: meetingMessage('m3', 'g:1') });
   assert.equal(a.unreadMessages, 2);
 
   a.toggleChat();
   assert.equal(a.chatOpen, true);
   assert.equal(a.unreadMessages, 0);
 
-  await a.onMeetingMessage({ uuid: 'm4', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m4', 'u:2') });
   assert.equal(a.unreadMessages, 0, 'nothing is unread while the panel is open');
 
   a.toggleChat();
-  await a.onMeetingMessage({ uuid: 'm5', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m5', 'u:2') });
   assert.equal(a.unreadMessages, 1);
+  assert.deepStrictEqual(
+    Array.from(a.meetingMessages, (m) => m.uuid),
+    ['m1', 'm2', 'm3', 'm4', 'm5'],
+    'and every one of them landed in the list',
+  );
 });
 
-test('a message frame re-renders the list rather than appending to it', async () => {
-  // The pane is server-rendered, so the frame is a signal, not a payload -
-  // the member pane answers its own SSE the same way.
+test('a meeting_message frame appends, a meeting_message_deleted takes it back', async () => {
   const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
-  const swaps = [];
-  a.$ajax = async (url, options) => { swaps.push({ url, options }); return []; };
+  a.currentParticipantKey = 'g:1';
 
   await a._dispatchStreamEvent({
-    event: 'message',
-    data: { message: { uuid: 'm1', author: { participant_key: 'u:2' } } },
+    event: 'meeting_message',
+    data: { meeting_id: 'm-1', message: meetingMessage('m1', 'u:2') },
   });
-
-  assert.equal(swaps.length, 1);
-  assert.equal(swaps[0].url, '/meet/abc123/messages');
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), ['m1']);
   assert.equal(a.unreadMessages, 1);
+
+  await a._dispatchStreamEvent({
+    event: 'meeting_message_deleted',
+    data: { meeting_id: 'm-1', message_id: 'm1' },
+  });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), []);
 });
 
-// -- The conversation pane's transport seam ---------------------------------
+// -- The meeting chat's transport seam --------------------------------------
 
-test('the pane fetches its server-rendered list from the meet endpoint, with the token', async () => {
-  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+test('the pane reads its list from the guest messages endpoint, with the token', async () => {
+  const calls = [];
+  const a = app(async (url, opts = {}) => {
+    calls.push({ url, headers: opts.headers || {} });
+    return { ok: true, status: 200, json: async () => ({ messages: [meetingMessage('m1', 'u:2')], has_more: true }) };
+  });
   a.token = 'tok';
-  const swaps = [];
-  a.$ajax = async (url, options) => { swaps.push({ url, options }); return []; };
 
-  await a.loadMessages();
-  await a.loadMoreMessages.call({ ...a, hasMoreMessages: false });
+  await a.loadMeetingMessages();
 
-  assert.equal(swaps[0].url, '/meet/abc123/messages');
-  assert.deepStrictEqual(Array.from(swaps[0].options.targets), ['message-list']);
-  assert.equal(swaps[0].options.headers['X-Meeting-Token'], 'tok');
-  // The cursor rides the same URL the member pane uses, one level down.
-  assert.equal(a._messagesUrl('m9'), '/meet/abc123/messages?before=m9');
+  assert.equal(calls[0].url, '/api/v1/chat/meet/abc123/messages');
+  assert.equal(calls[0].headers['X-Meeting-Token'], 'tok');
+  assert.equal(a.meetingHasMore, true);
+  // The cursor rides the same URL, one query parameter down.
+  assert.equal(a._meetingMessagesUrl('m9'), '/api/v1/chat/meet/abc123/messages?before=m9');
 });
 
 test('sending posts JSON to the meet endpoint with the token, never the CSRF cookie', async () => {
   const calls = [];
   const a = app(async (url, opts = {}) => {
     calls.push({ url, method: opts.method || 'GET', headers: opts.headers || {}, body: opts.body });
-    return { ok: true, status: 200, json: async () => ({ uuid: 'm1' }) };
+    return { ok: true, status: 201, json: async () => meetingMessage('m1', 'g:1') };
   });
   a.token = 'tok';
   a.messageBody = 'hello there';
 
-  await a.sendMessage();
+  await a.sendMeetingMessage();
 
   const post = calls.find((c) => c.method === 'POST');
   assert.equal(post.url, '/api/v1/chat/meet/abc123/messages');
@@ -760,6 +765,7 @@ test('sending posts JSON to the meet endpoint with the token, never the CSRF coo
   assert.equal(post.headers['Content-Type'], 'application/json');
   assert.equal(post.headers['X-CSRFToken'], undefined);
   assert.deepStrictEqual(JSON.parse(post.body), { body: 'hello there' });
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), ['m1']);
 });
 
 test('a refused send says so and hands the text back', async () => {
@@ -771,49 +777,16 @@ test('a refused send says so and hands the text back', async () => {
   a.token = 'tok';
   a.messageBody = 'hello there';
 
-  await a.sendMessage();
+  await a.sendMeetingMessage();
 
   assert.equal(alerts.length, 1);
   assert.equal(a.messageBody, 'hello there');
 });
 
-test('the guest has no read cursor, no typing channel and no roster', () => {
+test('a guest reads the chat as a guest and cannot delete a line', () => {
   const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
-  const calls = [];
-  a.$ajax = async () => [];
-
-  assert.equal(a._canMarkRead(), false);
-  assert.equal(a._canSendTyping(), false);
-  // null, not []: an empty roster in a group conversation would still offer
-  // @everyone, and an invisible dropdown swallows the Enter that sends.
-  assert.equal(a._mentionCandidates(), null);
-  a.filterMentionResults();
-  assert.deepStrictEqual(Array.from(a.mentionResults), []);
-  assert.deepStrictEqual(calls, []);
-});
-
-test('a merge is stamped with the slug, since the guest never learns the conversation', () => {
-  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
-  const event = (stamp) => ({
-    detail: { content: { getAttribute: () => stamp } },
-    prevented: false,
-    preventDefault() { this.prevented = true; },
-  });
-
-  const mine = event('abc123');
-  a._vetoStaleMerge(mine);
-  assert.equal(mine.prevented, false);
-
-  const other = event('some-conversation-uuid');
-  a._vetoStaleMerge(other);
-  assert.equal(other.prevented, true);
-});
-
-test('the optimistic bubble is authored by a guest with no user row to look up', () => {
-  const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }));
-  a.displayName = 'Robin';
-  assert.deepStrictEqual({ ...a._getCurrentUser() }, { id: null, username: 'Robin', is_guest: true });
   assert.equal(a._viewerIsGuest(), true);
+  assert.equal(a._canDeleteMeetingMessages(), false);
 });
 
 // A server whose /join refuses with a bodyless 404 while its /state keeps
@@ -916,7 +889,7 @@ test('a message arriving while the pane is on screen is not unread', async () =>
   const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
   a.currentParticipantKey = 'g:1';
 
-  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m1', 'u:2') });
 
   assert.equal(a.unreadMessages, 0);
 });
@@ -926,15 +899,15 @@ test('below md the same message is unread, and opening the panel clears it', asy
   const a = app(async () => ({ ok: true, status: 200, json: async () => ({}) }), media.stubs);
   a.currentParticipantKey = 'g:1';
 
-  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
-  await a.onMeetingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m1', 'u:2') });
+  a.onMeetingMessage({ message: meetingMessage('m2', 'u:2') });
   assert.equal(a.unreadMessages, 2);
 
   a.toggleChat();
   assert.equal(a.unreadMessages, 0);
 
   // Open, so nothing accumulates behind it.
-  await a.onMeetingMessage({ uuid: 'm3', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m3', 'u:2') });
   assert.equal(a.unreadMessages, 0);
 });
 
@@ -944,14 +917,14 @@ test('widening the window past md clears what the hidden panel had counted', asy
   a.currentParticipantKey = 'g:1';
   a._watchPaneVisibility();
 
-  await a.onMeetingMessage({ uuid: 'm1', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m1', 'u:2') });
   assert.equal(a.unreadMessages, 1);
 
   media.flip(true);
   assert.equal(a.unreadMessages, 0, 'the panel is on screen now, so it has been read');
 
   media.flip(false);
-  await a.onMeetingMessage({ uuid: 'm2', author: { participant_key: 'u:2' } });
+  a.onMeetingMessage({ message: meetingMessage('m2', 'u:2') });
   assert.equal(a.unreadMessages, 1);
 });
 

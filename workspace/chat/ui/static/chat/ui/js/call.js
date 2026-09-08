@@ -434,13 +434,14 @@ window.chatCallMixin = function chatCallMixin() {
       if (this._heartbeatTimer) { clearInterval(this._heartbeatTimer); this._heartbeatTimer = null; }
     },
     async _sendHeartbeat() {
-      // Always target the call's own conversation, not the one being viewed:
-      // you stay in the call while browsing elsewhere, so a heartbeat to the
-      // active conversation would miss the call and let the sweep reap you.
-      const convId = this.callSession && this.callSession.conversation_id;
-      if (!this.inCall || !convId) return;
+      // The same seam the leave POST is addressed through, not the conversation
+      // being viewed: you stay in the call while browsing elsewhere, so a
+      // heartbeat to the active conversation would miss the call and let the
+      // sweep reap you. A meeting has no conversation to name at all.
+      const target = this._leaveTarget();
+      if (!this.inCall || !target) return;
       try {
-        await fetch(this._callEndpoint('heartbeat', convId), {
+        await fetch(this._callEndpoint('heartbeat', target), {
           method: 'POST',
           headers: this._callHeaders({ json: true }),
           body: JSON.stringify({ media_state: this._mediaState() }),

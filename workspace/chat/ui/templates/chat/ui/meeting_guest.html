@@ -1,4 +1,4 @@
-{% load static ui_tags %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
   <head>
@@ -23,24 +23,22 @@
     <script src="{% static 'chat/ui/js/message_shell.js' %}"></script>
     <script src="{% static 'ui/js/attachment_input.js' %}"></script>
     <script src="{% static 'chat/ui/js/ui_helpers.js' %}"></script>
-    <script src="{% static 'chat/ui/js/messages.js' %}"></script>
     <script src="{% static 'chat/ui/js/input.js' %}"></script>
     <script src="{% static 'chat/ui/js/call_sounds.js' %}"></script>
     <script src="{% static 'chat/ui/js/call.js' %}"></script>
     <script src="{% static 'chat/ui/js/call_room.js' %}"></script>
+    <script src="{% static 'chat/ui/js/meeting_chat.js' %}"></script>
     <script src="{% static 'chat/ui/js/meet.js' %}"></script>
   </head>
   <body class="min-h-screen bg-base-200">
     {{ ice_servers|json_script:"call-ice-servers-data" }}
     {% comment %}Empty for an anonymous visitor, which is what the component
-    reads as "nobody to prefill". A member never reaches this template: the
-    view redirects them to their room.{% endcomment %}
+    reads as "nobody to prefill". A host never reaches this template: the
+    view renders them the host page instead.{% endcomment %}
     {{ signed_in_as|json_script:"meet-signed-in-data" }}
     <div
       class="h-screen flex flex-col"
       x-data="chatMeetApp('{{ slug }}')"
-      @ajax:missing="_onAjaxMissing($event)"
-      @ajax:error="onMessagesAjaxError($event)"
       @chat-call_participant_joined.window="onCallParticipantJoined($event.detail)"
       @chat-call_participant_left.window="onCallParticipantLeft($event.detail)"
       @chat-call_participant_updated.window="onCallParticipantUpdated($event.detail)"
@@ -134,7 +132,7 @@
         <div class="flex flex-1 min-h-0">
           <template x-if="inCall">
             <div class="flex-1 flex min-w-0">
-              {% include "chat/ui/partials/call_stage.html" with host_controls=False chat_toggle=True %}
+              {% include "chat/ui/partials/call_stage.html" with chat_toggle=True %}
             </div>
           </template>
           <template x-if="!inCall">
@@ -184,79 +182,7 @@
               </div>
             </section>
           </template>
-          {% comment %}One element, two layouts: a column beside the stage at md
-          and above, a full-screen slide-over below it, where a 384px aside
-          would leave the stage too narrow to show its own controls. x-cloak
-          because the visibility classes only arrive once Alpine binds.{% endcomment %}
-          <aside
-            class="fixed inset-0 z-30 w-full flex-col min-w-0 bg-base-100 border-base-300 md:static md:z-auto md:w-96 md:max-w-[40%] md:border-l"
-            :class="chatOpen ? 'flex' : 'hidden md:flex'"
-            x-cloak
-          >
-            {% comment %}The member pane's header, at its measurements: an
-            initials disc, the title, and what the pane is.
-            <conversation-avatar> draws the disc without asking the server
-            for anything as long as has-avatar is absent.{% endcomment %}
-            <div
-              class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100"
-            >
-              {# chatMeetTitleInitials mirrors the server's group rule, so host and guest letter one meeting the same way. #}
-              <conversation-avatar kind="group" size="md" active :initials="chatMeetTitleInitials(summary && summary.title ? summary.title : 'Meeting')"></conversation-avatar>
-              <div class="flex-1 min-w-0">
-                <h3
-                  class="font-semibold text-sm truncate"
-                  x-text="summary ? summary.title : 'Meeting'"
-                ></h3>
-                <p class="text-xs text-base-content/60 truncate">Meeting chat</p>
-              </div>
-              <button
-                class="btn btn-ghost btn-sm btn-square md:hidden"
-                @click="toggleChat()"
-                title="Close"
-              >
-                <i data-lucide="x" class="w-4 h-4"></i>
-              </button>
-            </div>
-
-            <div
-              class="flex-1 overflow-y-auto overflow-x-hidden p-4"
-              x-ref="messagesContainer"
-              @scroll="handleScroll()"
-            >
-              <div x-show="hasMoreMessages" x-cloak class="flex justify-center py-2">
-                <button
-                  class="btn btn-ghost btn-xs"
-                  @click="loadMoreMessages()"
-                  :disabled="loadingMoreMessages"
-                >
-                  <span x-show="!loadingMoreMessages">Load older messages</span>
-                  <span
-                    x-show="loadingMoreMessages"
-                    class="loading loading-spinner loading-xs"
-                  ></span>
-                </button>
-              </div>
-
-              <div x-show="loadingMessages" class="flex justify-center py-8">
-                <span class="loading loading-spinner loading-md text-info"></span>
-              </div>
-
-              {% comment %}The merge targets the member pane uses, and the
-              server partial is the same one. The empty #message-list is the
-              placeholder the first $ajax load replaces; @ajax:merge refuses
-              content stamped for anything but this meeting.{% endcomment %}
-              <div
-                id="messages-container"
-                :data-msg-animation="chatPrefs.messageAnimation"
-                @ajax:merge="_vetoStaleMerge($event)"
-              >
-                <div id="message-list"></div>
-              </div>
-            </div>
-
-            {% capabilities attachments=False voice=False mentions=False as guest_composer %}
-            {% include "chat/ui/partials/_composer.html" with composer_capabilities=guest_composer %}
-          </aside>
+          {% include "chat/ui/partials/meeting_chat.html" %}
         </div>
       </template>
 

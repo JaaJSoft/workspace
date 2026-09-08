@@ -1,4 +1,8 @@
-{# Shared call stage: the member room and the guest page include this with host_controls=True/False. #}
+{% comment %}Shared call stage: the member room includes this with
+host_controls=True (diagnostic), the meeting page with meeting_controls=True
+(lobby, lock, end, remove guest) and chat_toggle=True. meeting_controls draws
+the buttons only - the lobby dialog they open is mounted once by the page, so
+one x-ref names one element whichever branch the stage is in.{% endcomment %}
 <!-- Participants grid -->
 <section
   data-testid="participants-grid"
@@ -69,7 +73,7 @@
               data-lucide="mic-off"
               class="absolute top-1 right-1 w-4 h-4 text-error"
             ></i>
-            {% if host_controls %}
+            {% if meeting_controls %}
               <button
                 type="button"
                 class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
@@ -148,7 +152,7 @@
                 class="absolute bottom-0.5 left-1 text-[10px] bg-black/50 text-white rounded px-1 truncate max-w-[6rem]"
                 x-text="p.display_name"
               ></span>
-              {% if host_controls %}
+              {% if meeting_controls %}
                 <button
                   type="button"
                   class="btn btn-xs btn-circle btn-error absolute top-1 left-1"
@@ -248,6 +252,8 @@
         >
           <i data-lucide="activity" class="w-4 h-4 md:w-5 md:h-5"></i>
         </button>
+      {% endif %}
+      {% if meeting_controls %}
         <template x-if="meeting">
           <div class="contents">
             <button
@@ -262,7 +268,6 @@
                 x-text="lobby.length"
               ></span>
             </button>
-            {% include "chat/ui/partials/lobby_dialog.html" %}
             <button
               class="btn btn-sm md:btn-md btn-circle border-0"
               :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'"

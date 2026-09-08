@@ -30,7 +30,6 @@ function chatRoomApp(currentUserId, conversationId) {
     ...threads,
     ...chatBotMixin(),
     ...chatCallMixin(),
-    ...chatMeetingHostMixin(),
     ...chatCallDiagnosticMixin(),
     ...chatRecorderMixin(),
 
@@ -54,15 +53,6 @@ function chatRoomApp(currentUserId, conversationId) {
         try { conv = JSON.parse(convEl.textContent); } catch (e) { conv = null; }
       }
       this.activeConversation = conv || { uuid: this.roomConversationId };
-
-      const meetingEl = document.getElementById('room-meeting-data');
-      if (meetingEl) {
-        try { this.meeting = JSON.parse(meetingEl.textContent); } catch (e) { this.meeting = null; }
-      }
-      if (this.meeting) {
-        await this.loadLobby();
-        this._startLobbyRefresh();
-      }
 
       // Announce room presence so the main tab flips Join <-> Return instantly,
       // without waiting on the heartbeat/SSE round-trip.
@@ -91,7 +81,6 @@ function chatRoomApp(currentUserId, conversationId) {
     // here, after the spreads, so adding a mixin with its own destroy cannot
     // quietly drop another's.
     destroy() {
-      this._stopLobbyRefresh?.();
       this._cancelMessagesRetry?.();
       threads.destroy?.call(this);
     },

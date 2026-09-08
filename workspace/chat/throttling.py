@@ -92,16 +92,15 @@ class MeetingGuestSignalThrottle(MeetingPublicIpThrottle):
 class MeetingPublicPageThrottle(MeetingPublicIpThrottle):
     """Same IP-scoped throttle as above, under its own, more generous scope.
 
-    The two public HTML routes - the meeting page and the message list it
-    loads - are not the sparse anonymous action ``chat.meeting.public.ip`` is
-    sized for. The list is re-fetched whenever the guest's SSE stream reports
-    a message, so it follows the conversation's cadence: a lively meeting
-    produces a request per event, and a reconnect re-loads it outright. That
-    is a machine-driven, per-participant pattern, the same shape as the
-    heartbeat scope, and several guests behind one NAT share the bucket the
-    same way - so it gets its own budget rather than eating the one sized for
-    knocking and joining. v1 starting value; retune on telemetry, same as the
-    two above.
+    The public HTML routes - the meeting page and the redirect that still
+    points at it - are not the sparse anonymous action
+    ``chat.meeting.public.ip`` is sized for, and neither is the guest message
+    listing beside them, which is re-read on every reconnect. That is a
+    machine-driven, per-participant pattern, the same shape as the heartbeat
+    scope, and several guests behind one NAT share the bucket the same way -
+    so it gets its own budget rather than eating the one sized for knocking
+    and joining. v1 starting value; retune on telemetry, same as the two
+    above.
     """
 
     scope = "chat.meeting.public.page"
@@ -146,9 +145,9 @@ def meeting_public_ip_limited(
     host. Charging the host's own page load to that same budget would let the
     guests lock them out of the room they are hosting. A session is an
     identity the address is not: it is attributable, it is revocable, and the
-    views behind this decorator re-check their own access (``meet_view``
-    resolves membership before redirecting, ``meet_messages_view`` still
-    demands a meeting token). The fence in ``test_guest_containment`` reads
+    views behind this decorator re-check their own access (``meeting_view``
+    resolves hosting before it renders anything, and answers 404 on a meeting
+    whose public link is off). The fence in ``test_guest_containment`` reads
     decorators, not branches, so the decorator stays on every public page.
     """
 

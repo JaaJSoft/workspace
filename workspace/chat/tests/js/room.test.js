@@ -17,7 +17,6 @@ const stubs = {
   chatThreadsMixin: () => ({ _threads: true }),
   chatBotMixin: () => ({ _bot: true }),
   chatCallMixin: () => ({ startOrJoinCall: async () => {}, _start: true }),
-  chatMeetingHostMixin: () => ({ loadLobby: async () => {} }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
   chatCallShouldOwnMedia: (r) => r !== 'observer',
@@ -40,7 +39,6 @@ const nonCallStubs = {
   chatPanelsMixin: () => ({ _panels: true }),
   chatThreadsMixin: () => ({ _threads: true }),
   chatBotMixin: () => ({ _bot: true }),
-  chatMeetingHostMixin: () => ({ loadLobby: async () => {} }),
   chatCallDiagnosticMixin: () => ({ _diag: true }),
   chatRecorderMixin: () => ({ initRecorder: () => {} }),
 };
@@ -107,19 +105,15 @@ test('pinTile toggles on a participant key', () => {
   assert.equal(app.pinnedKey, null);
 });
 
-test('the room teardown stops the lobby refresh and still tears down the panel', () => {
+test('the room teardown reaches the mixin that declares one', () => {
   const stopped = [];
   const ctx2 = loadScript('workspace/chat/ui/static/chat/ui/js/room.js', {
     ...stubs,
-    // Two mixins with a teardown: object spread would let the later one win
-    // silently, which is the whole reason destroy() is declared on the room.
+    // Object spread would let a later mixin's destroy() win silently, which
+    // is the whole reason destroy() is declared on the room itself.
     chatThreadsMixin: () => ({ destroy() { stopped.push('threads'); } }),
-    chatMeetingHostMixin: () => ({
-      loadLobby: async () => {},
-      _stopLobbyRefresh() { stopped.push('lobby'); },
-    }),
   });
   const app = ctx2.chatRoomApp(7, 'conv-1');
   app.destroy();
-  assert.deepStrictEqual(Array.from(stopped).sort(), ['lobby', 'threads']);
+  assert.deepStrictEqual(Array.from(stopped), ['threads']);
 });

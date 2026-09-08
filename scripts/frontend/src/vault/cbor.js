@@ -101,7 +101,15 @@ function normalise(value) {
 }
 
 export function canonicalCbor(payload) {
-  const encoded = new Uint8Array(encoder.encode(normalise(payload)));
+  // cbor-x hands back a view into a buffer it keeps and reuses between calls
+  // (`return target.subarray(start, position)`), not a buffer of its own. The
+  // copy is what the caller gets to keep and to wipe; the view is wiped here,
+  // because otherwise the largest plaintext this module ever produces - the
+  // whole account, on an export - stays resident in that buffer after the
+  // vault locks, and no caller can reach it to do anything about it.
+  const view = encoder.encode(normalise(payload));
+  const encoded = new Uint8Array(view);
+  view.fill(0);
   // Re-decode check: structurally invalid output is caught here rather than by
   // a signature that stops verifying. It does not catch a tag or an indefinite
   // length - cbor-x decodes both quite happily - which is why the encoder is

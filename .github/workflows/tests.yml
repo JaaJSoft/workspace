@@ -322,6 +322,15 @@ jobs:
         with:
           node-version: '24'
 
+      # The vault's cbor scratch test runs against the bundle SOURCE, so it
+      # needs cbor-x itself: the leak it guards is a buffer inside that
+      # library, which the built bundle closes over where nothing can see it.
+      # Without this the test skips, and a skipped guard is no guard.
+      - name: Install frontend dependencies
+        if: matrix.module == 'vault'
+        run: npm ci
+        working-directory: scripts/frontend
+
       - name: Run JS unit tests
         run: node --test "workspace/${{ matrix.module }}/tests/js/**/*.test.js"
 

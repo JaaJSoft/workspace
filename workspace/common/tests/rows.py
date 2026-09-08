@@ -31,10 +31,13 @@ def count_rows(model):
     counter = RowCount()
 
     # Signature passed straight through: Django grows keyword arguments on
-    # from_db between releases (``fetch_mode`` in 6.1).
-    def counting(*args, **kwargs):
+    # from_db between releases (``fetch_mode`` in 6.1). The replacement has to
+    # stay a classmethod: since 6.1.1 the queryset iterator inspects
+    # ``Model.from_db.__func__``, which a plain function patched onto the class
+    # does not have.
+    def counting(cls, *args, **kwargs):
         counter.count += 1
         return original(*args, **kwargs)
 
-    with patch.object(model, "from_db", counting):
+    with patch.object(model, "from_db", classmethod(counting)):
         yield counter

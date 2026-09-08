@@ -1,11 +1,11 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
 {% block body_class %}bg-base-100 h-dvh overflow-hidden flex flex-col{% endblock %}
 
 {% block body %}
   <!-- Navbar (always full width) -->
   {% block navbar %}
-    {% include 'core/partials/navbar.html' %}
+    {% include "core/partials/navbar.html" %}
   {% endblock %}
 
   {% comment %}Drawer below navbar. `grid-rows-1` (minmax(0,1fr)) is load-bearing:

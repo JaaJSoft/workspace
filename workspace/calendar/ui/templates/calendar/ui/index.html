@@ -1,4 +1,4 @@
-{% extends 'base_with_navbar.html' %}
+{% extends "base_with_navbar.html" %}
 {% load static %}
 
 {% block title %}Calendar - Workspace{% endblock %}
@@ -9,7 +9,7 @@
 {% endblock %}
 
 {% block navbar %}
-  {% include 'core/partials/navbar.html' with navbar_full_width=True %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
@@ -210,6 +210,7 @@
 
     <!-- Mobile new event FAB -->
     <button
+      type="button"
       class="btn btn-accent btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
       @click="createEventNow()"
       x-show="!showPanel"
@@ -239,12 +240,12 @@
       <div class="mt-4">{% include "calendar/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">Close</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 {% endblock %}

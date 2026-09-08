@@ -50,40 +50,48 @@ Loaded by:
             ></i>
             <div class="flex-1 min-w-0">
               <p class="text-sm leading-tight">
-                <span class="font-medium">{% if event.actor %}{{ event.actor.username }}{% else %}System{% endif %}</span>
-                {% if event.action == 'renamed' %}
+                <span class="font-medium">
+                  {% if event.actor %}
+                    {{ event.actor.username }}
+                  {% else %}
+                    System
+                  {% endif %}
+                </span>
+                {% if event.action == "renamed" %}
                   renamed
                   <span class="text-base-content/60">{{ event.metadata.old_name|default:'' }}</span>
                   →
                   <span class="text-base-content/60">{{ event.metadata.new_name|default:'' }}</span>
-                {% elif event.action == 'moved' %}
+                {% elif event.action == "moved" %}
                   moved this
-                {% elif event.action == 'content_replaced' %}
+                {% elif event.action == "content_replaced" %}
                   updated the file
-                {% elif event.action == 'created' %}
+                {% elif event.action == "created" %}
                   {% if event.metadata.source_uuid %}copied from <span class="text-base-content/60">{{ event.metadata.source_name|default:'another file' }}</span>{% else %}created this{% endif %}
-                {% elif event.action == 'deleted' %}
+                {% elif event.action == "deleted" %}
                   moved this to the trash
-                {% elif event.action == 'restored' %}
+                {% elif event.action == "restored" %}
                   restored this from the trash
-                {% elif event.action == 'shared' %}
+                {% elif event.action == "shared" %}
                   shared with
                   <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>
-                  {% if event.metadata.permission == 'rw' %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-                {% elif event.action == 'share_permission_changed' %}
+                  {% if event.metadata.permission == "rw" %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
+                {% elif event.action == "share_permission_changed" %}
                   changed
                   <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>'s
                   permission
-                  {% if event.metadata.new_permission == 'rw' %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
-                {% elif event.action == 'unshared' %}
-                  revoked
-                  <span class="text-base-content/60">{{ event.metadata.shared_with_username|default:'a user' }}</span>'s access
-                {% elif event.action == 'link_created' %}
+                  {% if event.metadata.new_permission == "rw" %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
+                {% elif event.action == "unshared" %}
+                  {% with revoked_from=event.metadata.shared_with_username|default:"a user" %}
+                    revoked
+                    <span class="text-base-content/60">{{ revoked_from }}</span>'s access
+                  {% endwith %}
+                {% elif event.action == "link_created" %}
                   created a public link
                   {% if event.metadata.has_password %}
                     <i data-lucide="lock" class="w-3 h-3 inline text-base-content/40"></i>
                   {% endif %}
-                {% elif event.action == 'link_revoked' %}
+                {% elif event.action == "link_revoked" %}
                   revoked a public link
                 {% else %}
                   {{ event.short_label|lower }}

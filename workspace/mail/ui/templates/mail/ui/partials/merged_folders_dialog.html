@@ -36,6 +36,7 @@ mergedGroupsAccount, both filled by _showMergedFolders.
                 >
                   <span class="text-sm truncate" x-text="alias.display_name"></span>
                   <button
+                    type="button"
                     class="btn btn-ghost btn-xs"
                     @click="unmergeFolder(alias.uuid)"
                     title="Unmerge"
@@ -52,11 +53,11 @@ mergedGroupsAccount, both filled by _showMergedFolders.
 
     <div class="modal-action">
       <form method="dialog">
-        <button class="btn btn-sm">Close</button>
+        <button type="submit" class="btn btn-sm">Close</button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

@@ -21,8 +21,9 @@ rules folder dropdown, so the picker looks identical everywhere.
     ></p>
     {% include "mail/ui/partials/_folder_list.html" with model="moveSelectedId" folders="moveTargets" %}
     <div class="modal-action">
-      <button class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
+      <button type="button" class="btn btn-ghost btn-sm" @click="moveCancel()">Cancel</button>
       <button
+        type="button"
         class="btn btn-warning btn-sm"
         :disabled="!moveSelectedId"
         @click="moveConfirm()"
@@ -32,6 +33,6 @@ rules folder dropdown, so the picker looks identical everywhere.
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

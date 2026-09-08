@@ -1,14 +1,14 @@
 // Second bundle, loaded on demand. Everything here serves onboarding and
 // password rotation only; none of it may ever land on the unlock path, where
 // the main bundle has a 75 KB gzipped budget.
-import { zxcvbnAsync, zxcvbnOptions } from '@zxcvbn-ts/core';
+import { ZxcvbnFactory } from '@zxcvbn-ts/core';
 import * as common from '@zxcvbn-ts/language-common';
 import { jsPDF } from 'jspdf';
 
-zxcvbnOptions.setOptions({ dictionary: common.dictionary, graphs: common.adjacencyGraphs });
+const zxcvbn = new ZxcvbnFactory({ dictionary: common.dictionary, graphs: common.adjacencyGraphs });
 
 export async function estimateStrength(password) {
-  const result = await zxcvbnAsync(password);
+  const result = await zxcvbn.checkAsync(password);
   return { score: result.score, feedback: result.feedback };
 }
 

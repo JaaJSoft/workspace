@@ -132,7 +132,7 @@ test_db.sqlite3*
 /projects/
 /ai/
 /mail/scripts/node_modules/
-/scripts/node_modules/
+/**/node_modules/
 /scripts/package.json
 /scripts/package-lock.json
 .superpowers/

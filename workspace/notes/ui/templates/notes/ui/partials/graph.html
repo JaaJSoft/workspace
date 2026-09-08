@@ -12,6 +12,7 @@
       ></h3>
       <div class="join w-36 flex-shrink-0">
         <button
+          type="button"
           class="btn btn-xs join-item flex-1"
           :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
           @click="setGraphScope('mine')"
@@ -19,6 +20,7 @@
           My notes
         </button>
         <button
+          type="button"
           class="btn btn-xs join-item flex-1"
           :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
           @click="setGraphScope('all')"
@@ -63,6 +65,7 @@
           @click.outside="showGraphTagDropdown = false"
         >
           <button
+            type="button"
             class="btn btn-sm gap-1"
             :class="graphTags.length > 0 ? 'btn-secondary' : 'btn-ghost'"
             @click="showGraphTagDropdown = !showGraphTagDropdown"
@@ -92,6 +95,7 @@
             </div>
             <div class="overflow-y-auto py-1">
               <button
+                type="button"
                 class="w-full text-left px-3 py-1.5 hover:bg-base-200 text-xs text-base-content/60"
                 x-show="graphTags.length > 0"
                 @click="clearGraphTags()"
@@ -122,6 +126,7 @@
         </div>
       </div>
       <button
+        type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"
         @click="resetGraphView()"
         aria-label="Reset view"
@@ -131,6 +136,7 @@
       </button>
       <div class="dropdown dropdown-end flex-shrink-0">
         <button
+          type="button"
           tabindex="0"
           class="btn btn-ghost btn-sm btn-square"
           aria-label="Legend"
@@ -144,7 +150,9 @@
         >
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span> Favorite</div>
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> Journal</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note</div>
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note
+          </div>
         </div>
       </div>
     </div>

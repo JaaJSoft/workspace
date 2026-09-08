@@ -396,6 +396,44 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
         self.assertEqual(leave.status_code, 200)
         self.assert_contained("POST leave", self.body_text(leave))
 
+    def test_no_message_surface_names_the_account_behind_a_host(self):
+        """Containment over the avatar: the meeting chat is shared, the
+        workspace identities behind it are not.
+
+        Targeted rather than a sentinel on ``self.sentinels``: the host is a
+        legitimate part of this guest's world (their display name is on every
+        line they wrote, their participant key drives the call tiles), so only
+        the two account fields are audited, and only where a message payload
+        carries them.
+        """
+        header = {"HTTP_X_MEETING_TOKEN": self.token}
+        posted = self.client.post(
+            self.url("messages"), {"body": "hello"}, format="json", **header
+        )
+        self.assertEqual(posted.status_code, 201)
+        listed = self.client.get(self.url("messages"), **header)
+        self.assertEqual(listed.status_code, 200)
+
+        payloads = [posted.json()] + listed.json()["messages"]
+        _stream, frames = self.drain_stream(self.token)
+        for frame in frames:
+            if frame.startswith(":"):
+                continue
+            name, data = parse_sse(frame)
+            if name == "meeting_message":
+                payloads.append(data["message"])
+
+        # The positive control: a host-authored line really is in there, so a
+        # regression cannot pass by returning nothing.
+        self.assertIn(self.host_message.body, [p["body"] for p in payloads])
+        for payload in payloads:
+            author = payload["author"]
+            self.assertNotIn("id", author, author)
+            self.assertNotIn("username", author, author)
+            text = json.dumps(payload, ensure_ascii=False, default=str)
+            self.assertNotIn(self.host.username, text)
+            self.assertNotIn(f'"id": {self.host.id}', text)
+
     def test_the_host_api_of_this_meeting_refuses_the_token(self):
         """A meeting token authorizes a guest, never a host.
 

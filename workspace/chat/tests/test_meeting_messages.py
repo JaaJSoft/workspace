@@ -82,6 +82,25 @@ class MeetingMessageServiceTests(TestCase):
         self.assertFalse(has_more)
         self.assertEqual([m.body for m in older], ["m0"])
 
+    def test_the_guest_fan_out_carries_no_account_identity(self):
+        # The host key gets the full payload, the guest key the redacted one.
+        post_message(self.meeting, "hello", author=self.host, now=self.now)
+        cohost_frame = sig.drain_events(user_key(self.cohost.id))[0]
+        guest_frame = sig.drain_events(guest_key(self.guest.uuid))[0]
+
+        cohost_author = cohost_frame["data"]["message"]["author"]
+        self.assertEqual(cohost_author["id"], self.host.id)
+        self.assertEqual(cohost_author["username"], self.host.username)
+
+        guest_author = guest_frame["data"]["message"]["author"]
+        self.assertNotIn("id", guest_author)
+        self.assertNotIn("username", guest_author)
+        self.assertEqual(guest_author["display_name"], cohost_author["display_name"])
+        self.assertEqual(
+            guest_author["participant_key"], cohost_author["participant_key"]
+        )
+        self.assertFalse(guest_author["is_guest"])
+
     def test_delete_fans_out(self):
         msg = post_message(self.meeting, "oops", guest=self.guest, now=self.now)
         msg_pk = msg.pk
@@ -194,3 +213,36 @@ class MeetingMessageViewTests(TestCase):
             f"{self.guest_url}/{msg2.uuid}", HTTP_X_MEETING_TOKEN=self.token
         )
         self.assertIn(resp.status_code, (404, 405))
+
+    def test_the_guest_list_and_post_carry_no_account_identity(self):
+        # One host-authored line and one guest-authored line: neither may name
+        # a workspace account on the guest surface.
+        post_message(self.meeting, "from the host", author=self.host, now=self.now)
+        posted = self.client.post(
+            self.guest_url,
+            {"body": "from outside"},
+            format="json",
+            HTTP_X_MEETING_TOKEN=self.token,
+        )
+        self.assertEqual(posted.status_code, 201)
+        self.assertNotIn("id", posted.data["author"])
+        self.assertNotIn("username", posted.data["author"])
+
+        listed = self.client.get(self.guest_url, HTTP_X_MEETING_TOKEN=self.token)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.data["messages"]), 2)
+        for message in listed.data["messages"]:
+            author = message["author"]
+            self.assertNotIn("id", author)
+            self.assertNotIn("username", author)
+            self.assertIn("display_name", author)
+            self.assertIn("participant_key", author)
+            self.assertIn("is_guest", author)
+
+    def test_the_host_list_keeps_the_account_identity(self):
+        post_message(self.meeting, "from the host", author=self.host, now=self.now)
+        self.client.force_authenticate(self.host)
+        listed = self.client.get(self.host_url)
+        author = listed.data["messages"][0]["author"]
+        self.assertEqual(author["id"], self.host.id)
+        self.assertEqual(author["username"], self.host.username)

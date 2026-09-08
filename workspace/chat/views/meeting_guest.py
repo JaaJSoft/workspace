@@ -437,7 +437,10 @@ class MeetingGuestMessagesView(APIView):
         )
         return Response(
             {
-                "messages": [chat_service.serialize_message(m) for m in rows],
+                "messages": [
+                    chat_service.guest_view(chat_service.serialize_message(m))
+                    for m in rows
+                ],
                 "has_more": has_more,
             }
         )
@@ -452,5 +455,6 @@ class MeetingGuestMessagesView(APIView):
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
         message = chat_service.post_message(guest.meeting, body, guest=guest)
         return Response(
-            chat_service.serialize_message(message), status=status.HTTP_201_CREATED
+            chat_service.guest_view(chat_service.serialize_message(message)),
+            status=status.HTTP_201_CREATED,
         )

@@ -33,19 +33,47 @@ def serialize_message(message):
     }
 
 
+def guest_view(payload):
+    """*payload*, with the workspace account behind its author taken out.
+
+    A guest reads a display name, a guest flag and the participant key that
+    addresses the call tile; the account id and username never cross into the
+    guest audience, whoever wrote the line. Post-processing rather than a
+    second builder, so ``serialize_message`` stays the one shape both
+    audiences are cut from.
+    """
+    author = {
+        key: value
+        for key, value in payload["author"].items()
+        if key not in ("id", "username")
+    }
+    return {**payload, "author": author}
+
+
+def host_keys(meeting):
+    return [user_key(uid) for uid in host_ids(meeting)]
+
+
+def guest_audience_keys(meeting, occurrence_start):
+    if occurrence_start is None:
+        return []
+    return admitted_guest_keys(meeting, occurrence_start)
+
+
 def recipient_keys(meeting, occurrence_start):
-    keys = [user_key(uid) for uid in host_ids(meeting)]
-    if occurrence_start is not None:
-        keys += admitted_guest_keys(meeting, occurrence_start)
-    return keys
+    return host_keys(meeting) + guest_audience_keys(meeting, occurrence_start)
 
 
-def _fan_out(meeting, occurrence_start, event_name, data, exclude_key=None):
-    for key in recipient_keys(meeting, occurrence_start):
+def _dispatch(keys, event_name, data, exclude_key=None):
+    for key in keys:
         if key == exclude_key:
             continue
         enqueue_event(key, event_name, data)
         notify_participant(key)
+
+
+def _fan_out(meeting, occurrence_start, event_name, data, exclude_key=None):
+    _dispatch(recipient_keys(meeting, occurrence_start), event_name, data, exclude_key)
 
 
 def post_message(meeting, body, *, author=None, guest=None, now=None):
@@ -64,11 +92,14 @@ def post_message(meeting, body, *, author=None, guest=None, now=None):
         )
     message = MeetingMessage.objects.select_related(*_SELECT_RELATED).get(pk=message.pk)
     own_key = user_key(author.id) if author is not None else guest_key(guest.uuid)
-    _fan_out(
-        meeting,
-        occurrence_start,
+    # Two fan-outs, because the two audiences are not allowed to read the same
+    # payload: guest_view strips the author's account from the guest half.
+    payload = {"meeting_id": str(meeting.uuid), "message": serialize_message(message)}
+    _dispatch(host_keys(meeting), "meeting_message", payload, exclude_key=own_key)
+    _dispatch(
+        guest_audience_keys(meeting, occurrence_start),
         "meeting_message",
-        {"meeting_id": str(meeting.uuid), "message": serialize_message(message)},
+        {**payload, "message": guest_view(payload["message"])},
         exclude_key=own_key,
     )
     return message

@@ -15,7 +15,12 @@ from ..services.meeting_hosts import reachable_meeting
 
 def clean_body(data):
     """(body, error) for a posted message, shared with the guest view."""
-    body = str(data.get("body", "")).strip()
+    if not isinstance(data, dict):
+        return None, "Message body must be an object."
+    raw = data.get("body", "")
+    if not isinstance(raw, str):
+        return None, "Message text must be a string."
+    body = raw.strip()
     if not body:
         return None, "Message must have text."
     if len(body) > chat_service.MEETING_MESSAGE_MAX_LENGTH:

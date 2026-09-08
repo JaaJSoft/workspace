@@ -161,6 +161,27 @@ class MeetingMessageViewTests(TestCase):
             resp = self.client.post(self.host_url, {"body": body}, format="json")
             self.assertEqual(resp.status_code, 400)
 
+    def test_a_non_mapping_body_is_400_not_500(self):
+        self.client.force_authenticate(self.host)
+        resp = self.client.post(self.host_url, [], format="json")
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post(
+            self.guest_url, [], format="json", HTTP_X_MEETING_TOKEN=self.token
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_a_non_text_body_value_is_400(self):
+        self.client.force_authenticate(self.host)
+        resp = self.client.post(self.host_url, {"body": 123}, format="json")
+        self.assertEqual(resp.status_code, 400)
+        resp = self.client.post(
+            self.guest_url,
+            {"body": 123},
+            format="json",
+            HTTP_X_MEETING_TOKEN=self.token,
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_host_deletes_any_message_guest_cannot(self):
         msg = post_message(self.meeting, "bye", guest=self.guest, now=self.now)
         self.client.force_authenticate(self.host)

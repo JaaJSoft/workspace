@@ -1,26 +1,27 @@
 """Containment audit: a guest learns nothing beyond their own meeting.
 
 A guest holds an opaque token and reaches nine routes under
-``/api/v1/chat/meet/<slug>/``. Three things they see there are deliberate and
-stay in: the meeting's own title, the real conversation of that meeting floored
-at their occurrence, and the participant keys and display names of the members
-they are in a call with. Everything else that could reach them - another
-conversation, another meeting, an email address, a foreign uuid - is a leak.
+``/api/v1/chat/meet/<slug>/``, plus the meeting page at ``/meetings/<slug>``.
+Three things they see there are deliberate and stay in: the meeting's own
+title, the meeting's own chat of their occurrence, and the participant keys
+and display names of the members they are in a call with. Everything else
+that could reach them - another meeting, a conversation of any kind, an email
+address, a foreign uuid - is a leak.
 
 That property is invisible to the per-route behavioural suites, which each
 assert on the one field they are about. So this module builds a second,
 FOREIGN world next to the meeting under test (a control user who shares a
 conversation with the host, a control conversation, a control meeting with its
-own event, slug, conversation and admitted guest), gives every string in it a
-sentinel spelling, then walks every guest-reachable route and every SSE frame
-and fails on the whole response text rather than on a named field. A leak
-through a field nobody thought to check still carries one of those sentinels.
+own event, slug, admitted guest and chat), gives every string in it a sentinel
+spelling, then walks every guest-reachable route and every SSE frame and fails
+on the whole response text rather than on a named field. A leak through a
+field nobody thought to check still carries one of those sentinels.
 
 The last class pins the four structural properties the runtime rules depend
 on - which views are anonymous, that no service imports a view, that no public
-path calls the self-healing ``get_active_call``, and that guest-facing code
-serializes messages only through ``GuestMessageSerializer`` - by reading the
-source, so the baseline cannot drift silently.
+path calls the self-healing ``get_active_call``, and that the meeting chat has
+exactly one serializer - by reading the source, so the baseline cannot drift
+silently.
 """
 
 import ast
@@ -32,18 +33,22 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
+from django.urls import resolve
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 import workspace.chat
+from workspace.calendar.models import EventMember
 from workspace.chat.models import (
     Conversation,
     ConversationMember,
     MeetingGuest,
+    MeetingMessage,
     Message,
 )
 from workspace.chat.services import calls
 from workspace.chat.services.call_signaling import enqueue_event
+from workspace.chat.services.meeting_messages import post_message, serialize_message
 from workspace.chat.services.meeting_occurrences import current_occurrence
 from workspace.chat.services.meetings import admit_guest, create_meeting
 from workspace.chat.services.participant_keys import guest_key, user_key
@@ -70,6 +75,7 @@ SENTINEL_CONVERSATION_TITLE = "Sentinel-Control-Conversation"
 SENTINEL_MEETING_TITLE = "Sentinel-Control-Meeting"
 SENTINEL_CALENDAR_NAME = "Sentinel-Control-Calendar"
 SENTINEL_MESSAGE_BODY = "Sentinel-Control-Message-Body"
+SENTINEL_MEETING_LINE = "Sentinel-Control-Meeting-Line"
 SENTINEL_GUEST_NAME = "Sentinel-Control-Guest"
 FOREIGN_USERNAME = "zz_foreign_member"
 EMAIL_DOMAIN = "sentinel.example"
@@ -86,24 +92,26 @@ class GuestContainmentFixture(TestCase):
 
         self.host = self._user("meeting_host", first_name="Hana", last_name="Host")
         self.member = self._user("meeting_member", first_name="Mo", last_name="Member")
+        # Neither host nor part of the foreign world: the signed-in stranger
+        # the knock endpoint binds an account to.
+        self.outsider = self._user(
+            "meeting_outsider", first_name="Ola", last_name="Outsider"
+        )
         self.event = make_event(
             self.host,
             start=self.now - timedelta(minutes=5),
             end=self.now + timedelta(minutes=25),
             title="Weekly sync",
         )
+        # Hosts are derived from the event, so a co-host is an invitee.
+        EventMember.objects.create(event=self.event, user=self.member)
         self.meeting = create_meeting(self.event, self.host)
-        ConversationMember.objects.create(
-            conversation=self.meeting.conversation, user=self.member
-        )
         self.occurrence_start = current_occurrence(self.meeting, now=self.now)[0]
         self.guest, self.token = guest_with_token(
             self.meeting, self.occurrence_start, display_name="Ada"
         )
-        self.host_message = Message.objects.create(
-            conversation=self.meeting.conversation,
-            author=self.host,
-            body="host says hi",
+        self.host_message = post_message(
+            self.meeting, "host says hi", author=self.host, now=self.now
         )
 
         self._build_foreign_world()
@@ -121,7 +129,8 @@ class GuestContainmentFixture(TestCase):
 
     def _build_foreign_world(self):
         """Everything a naive query could drag in: a user who shares a
-        conversation with the host, and a whole second meeting."""
+        conversation with the host, and a whole second meeting with its own
+        chat."""
         self.foreign_user = self._user(
             FOREIGN_USERNAME, first_name="Zoe", last_name="Sentinel-Foreign"
         )
@@ -153,13 +162,11 @@ class GuestContainmentFixture(TestCase):
             title=SENTINEL_MEETING_TITLE,
             calendar_name=SENTINEL_CALENDAR_NAME,
         )
+        # The host runs the control meeting too, so "the meetings of this
+        # meeting's host" is not a query that could accidentally look scoped
+        # while surfacing the control meeting.
+        EventMember.objects.create(event=self.control_event, user=self.host)
         self.control_meeting = create_meeting(self.control_event, self.foreign_user)
-        # The host is a member of the control meeting too, so "the meetings of
-        # this meeting's host" is not a query that could accidentally look
-        # scoped while surfacing the control meeting.
-        ConversationMember.objects.create(
-            conversation=self.control_meeting.conversation, user=self.host
-        )
         self.control_occurrence_start = current_occurrence(
             self.control_meeting, now=self.now
         )[0]
@@ -168,26 +175,35 @@ class GuestContainmentFixture(TestCase):
             self.control_occurrence_start,
             display_name=SENTINEL_GUEST_NAME,
         )
+        self.control_meeting_message = post_message(
+            self.control_meeting,
+            SENTINEL_MEETING_LINE,
+            author=self.foreign_user,
+            now=self.now,
+        )
 
         self.sentinels = [
             SENTINEL_CONVERSATION_TITLE,
+            # Also the control meeting's own title: Meeting.title is copied
+            # from the event at creation, so one spelling covers both rows.
             SENTINEL_MEETING_TITLE,
             SENTINEL_CALENDAR_NAME,
             SENTINEL_MESSAGE_BODY,
+            SENTINEL_MEETING_LINE,
             SENTINEL_GUEST_NAME,
             FOREIGN_USERNAME,
             "Zoe Sentinel-Foreign",
             self.control_meeting.slug,
             self.control_token,
             str(self.control_meeting.uuid),
-            str(self.control_meeting.conversation_id),
             str(self.control_conversation.uuid),
             str(self.control_event.uuid),
             str(self.control_guest.uuid),
             str(self.control_message.uuid),
-            # A mention badge naming a user outside this meeting: the guest
-            # message path resolves @mentions against the meeting's own
-            # members only, so this pairing can never legitimately render.
+            str(self.control_meeting_message.uuid),
+            # A mention badge naming a user outside this meeting: the meeting
+            # chat renders no mention map at all, so this pairing can never
+            # legitimately render.
             f'data-user-id="{self.foreign_user.id}"',
         ]
 
@@ -197,9 +213,9 @@ class GuestContainmentFixture(TestCase):
         """Fail if *text* carries anything from outside the guest's meeting.
 
         Case-insensitive: a uuid re-spelled in upper case is the same
-        disclosure. Emails and foreign conversation ids are re-read from the
-        database on every call rather than snapshotted in setUp, so a row a
-        test creates on its own is covered too.
+        disclosure. Emails and conversation ids are re-read from the database
+        on every call rather than snapshotted in setUp, so a row a test
+        creates on its own is covered too.
 
         *echo* is text the caller submitted in that same request: a route
         that repeats a guest's own input back cannot disclose anything by
@@ -221,10 +237,9 @@ class GuestContainmentFixture(TestCase):
                 email.lower(), haystack, f"{label} leaked the address {email!r}"
             )
 
-        foreign_conversation_ids = Conversation.objects.exclude(
-            uuid=self.meeting.conversation_id
-        ).values_list("uuid", flat=True)
-        for conversation_id in foreign_conversation_ids:
+        # A meeting owns no conversation, so every conversation row in the
+        # database is foreign to a guest, without exception to carve out.
+        for conversation_id in Conversation.objects.values_list("uuid", flat=True):
             self.assertNotIn(
                 str(conversation_id).lower(),
                 haystack,
@@ -242,6 +257,10 @@ class GuestContainmentFixture(TestCase):
 
     def url(self, action=""):
         base = f"/api/v1/chat/meet/{self.meeting.slug}"
+        return f"{base}/{action}" if action else base
+
+    def host_url(self, action=""):
+        base = f"/api/v1/chat/meetings/{self.meeting.uuid}"
         return f"{base}/{action}" if action else base
 
     def drain_stream(self, token):
@@ -277,9 +296,11 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
         must answer successfully - an empty 404 body would pass containment
         while proving nothing.
         """
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         media_state = {"audio": True, "video": False, "screen": False}
         header = {"HTTP_X_MEETING_TOKEN": self.token}
+        signed_in = APIClient()
+        signed_in.force_login(self.outsider)
 
         walk = [
             ("GET summary", 200, self.client.get(self.url())),
@@ -287,6 +308,16 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 "POST knock",
                 201,
                 self.client.post(
+                    self.url("knock"), {"display_name": "Bo"}, format="json"
+                ),
+            ),
+            (
+                # The same door with a session behind it: knocking binds the
+                # visitor's account to the guest row, so this response
+                # carries an identity the anonymous one has nothing to carry.
+                "POST knock signed in",
+                201,
+                signed_in.post(
                     self.url("knock"), {"display_name": "Bo"}, format="json"
                 ),
             ),
@@ -342,13 +373,11 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 (f"@{FOREIGN_USERNAME}",),
             ),
             (
-                # The server-rendered half of the same listing: the guest pane
-                # loads the member pane's partial, so the HTML is held to the
-                # same bar as the JSON.
-                "GET meet messages HTML",
+                # The page itself, fetched by a stranger with no token at
+                # all: it is the document every route above is loaded from.
+                "GET meeting page",
                 200,
-                self.client.get(f"/meet/{self.meeting.slug}/messages", **header),
-                (f"@{FOREIGN_USERNAME}",),
+                self.client.get(self.meeting.join_path),
             ),
         ]
 
@@ -367,6 +396,52 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
         self.assertEqual(leave.status_code, 200)
         self.assert_contained("POST leave", self.body_text(leave))
 
+    def test_the_host_api_of_this_meeting_refuses_the_token(self):
+        """A meeting token authorizes a guest, never a host.
+
+        The host routes carry ``IsAuthenticated``, and the token is not an
+        authentication credential to them - so every one of them must refuse,
+        including the ones addressed by this guest's own meeting uuid.
+        """
+        header = {"HTTP_X_MEETING_TOKEN": self.token}
+        guest_path = f"guests/{self.guest.uuid}"
+        post = self.client.post
+
+        attempts = [
+            ("GET lobby", self.host_url("lobby"), self.client.get),
+            ("POST admit", self.host_url(f"{guest_path}/admit"), post),
+            ("POST refuse", self.host_url(f"{guest_path}/refuse"), post),
+            ("POST remove", self.host_url(f"{guest_path}/remove"), post),
+            ("POST lock", self.host_url("lock"), post),
+            ("POST end", self.host_url("end"), post),
+            ("GET call", self.host_url("call"), self.client.get),
+            ("POST call join", self.host_url("call/join"), post),
+            ("POST call leave", self.host_url("call/leave"), post),
+            ("POST call heartbeat", self.host_url("call/heartbeat"), post),
+            ("POST call signal", self.host_url("call/signal"), post),
+            ("GET host messages", self.host_url("messages"), self.client.get),
+            ("POST host messages", self.host_url("messages"), post),
+            (
+                "DELETE host message",
+                self.host_url(f"messages/{self.host_message.uuid}"),
+                self.client.delete,
+            ),
+        ]
+
+        for label, path, method in attempts:
+            with self.subTest(route=label):
+                # Resolved first: a path this file spells wrong would 404 and
+                # sail through the refusal check below having exercised no
+                # view at all.
+                resolve(path)
+                response = method(path, **header)
+                self.assertIn(response.status_code, (401, 403, 404), label)
+                self.assert_contained(label, self.body_text(response))
+
+        self.assertTrue(
+            MeetingMessage.objects.filter(uuid=self.host_message.uuid).exists()
+        )
+
     def test_the_guests_own_meeting_is_still_visible(self):
         """The negative control for the walk above: containment must not be
         passing because the routes return nothing at all."""
@@ -384,7 +459,7 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
         slug-addressed, so they never read the header and answer the same way
         for everyone.
         """
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         header = {"HTTP_X_MEETING_TOKEN": self.control_token}
 
         attempts = [
@@ -417,10 +492,6 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
             ),
             ("GET messages", self.client.get(self.url("messages"), **header)),
             (
-                "GET meet messages HTML",
-                self.client.get(f"/meet/{self.meeting.slug}/messages", **header),
-            ),
-            (
                 "POST messages",
                 self.client.post(
                     self.url("messages"),
@@ -437,7 +508,9 @@ class GuestRouteContainmentTests(GuestContainmentFixture):
                 self.assertEqual(response.status_code, 404, label)
                 self.assert_contained(label, self.body_text(response))
 
-        self.assertFalse(Message.objects.filter(guest=self.control_guest).exists())
+        self.assertFalse(
+            MeetingMessage.objects.filter(guest=self.control_guest).exists()
+        )
 
 
 class GuestStreamContainmentTests(GuestContainmentFixture):
@@ -445,24 +518,53 @@ class GuestStreamContainmentTests(GuestContainmentFixture):
         """Every SSE frame an admitted guest receives, held to the same bar as
         a REST body - the stream is the only guest surface that pushes without
         being asked."""
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         calls.join_call_as_guest(self.guest)
-        # A second member joining is a real fan-out that reaches the guest's
+        # A second host joining is a real fan-out that reaches the guest's
         # mailbox, rather than an event enqueued by hand.
-        calls.start_or_join_call(self.member, self.meeting.conversation_id)
-        Message.objects.create(
-            conversation=self.meeting.conversation,
-            author=self.host,
-            body="a message during the call",
-        )
+        calls.start_or_join_call(self.member, calls.MeetingScope(self.meeting))
 
         clock = FakeClock(self.now, max_cycles=1)
         frames, _terminated = drive_guest_stream(self.token, self.meeting.uuid, clock)
         names = [parse_sse(f)[0] for f in frames if not f.startswith(":")]
 
-        self.assertIn("message", names)
+        self.assertIn("meeting_message", names)
         self.assertTrue(any(name.startswith("call_") for name in names), names)
         self.assert_contained("guest stream", "".join(frames))
+
+    def test_a_line_posted_mid_stream_reaches_the_guest_contained(self):
+        """The meeting's own chat is the one content stream a guest is pushed
+        without asking: a line posted while they hold the connection open
+        lands on the next cycle, carrying its author and nothing else. Posted
+        mid-stream rather than before it opens, so the frame under audit is
+        the one the fan-out produced, not a mailbox leftover."""
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
+        calls.join_call_as_guest(self.guest)
+
+        def _post_to_both_meetings():
+            post_message(
+                self.meeting, "posted mid-stream", author=self.host, now=self.now
+            )
+            # The same instant in the control meeting: its fan-out reaches
+            # the control meeting's own guest, never this one.
+            post_message(
+                self.control_meeting,
+                SENTINEL_MEETING_LINE,
+                author=self.foreign_user,
+                now=self.now,
+            )
+
+        clock = _CallbackClock(self.now, _post_to_both_meetings, max_cycles=2)
+        frames, _terminated = drive_guest_stream(self.token, self.meeting.uuid, clock)
+        parsed = [parse_sse(f) for f in frames if not f.startswith(":")]
+        bodies = [
+            data["message"]["body"]
+            for name, data in parsed
+            if name == "meeting_message"
+        ]
+
+        self.assertIn("posted mid-stream", bodies)
+        self.assert_contained("mid-stream meeting_message", "".join(frames))
 
     def test_a_waiting_guest_receives_only_lifecycle_events(self):
         """The lobby is not a preview: until the host admits them, a guest's
@@ -474,23 +576,28 @@ class GuestStreamContainmentTests(GuestContainmentFixture):
             display_name="Wendy",
             state=MeetingGuest.State.WAITING,
         )
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
-        Message.objects.create(
-            conversation=self.meeting.conversation,
-            author=self.host,
-            body="members only, for now",
-        )
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
+        line = post_message(self.meeting, "members only, for now", author=self.host)
         key = guest_key(waiting_guest.uuid)
         # meeting_admitted is the positive control: without it the test would
         # also pass if nothing at all were being drained.
         enqueue_event(key, "meeting_admitted", {"meeting_id": str(self.meeting.uuid)})
+        # post_message fans out to admitted guests only, so the message half
+        # of the gate is exercised by putting the frame in the mailbox by
+        # hand - what a fan-out regression would do - rather than trusting
+        # the fan-out to have already withheld it.
+        enqueue_event(
+            key,
+            "meeting_message",
+            {
+                "meeting_id": str(self.meeting.uuid),
+                "message": serialize_message(line),
+            },
+        )
         enqueue_event(
             key,
             "call_started",
-            {
-                "session_id": "x",
-                "conversation_id": str(self.meeting.conversation_id),
-            },
+            {"session_id": "x", "meeting_id": str(self.meeting.uuid)},
         )
         enqueue_event(
             key,
@@ -517,17 +624,13 @@ class GuestStreamContainmentTests(GuestContainmentFixture):
             display_name="Wendy",
             state=MeetingGuest.State.WAITING,
         )
-        calls.start_or_join_call(self.host, self.meeting.conversation_id)
-        Message.objects.create(
-            conversation=self.meeting.conversation,
-            author=self.host,
-            body="posted while the guest waited",
-        )
+        calls.start_or_join_call(self.host, calls.MeetingScope(self.meeting))
         key = guest_key(waiting_guest.uuid)
         enqueue_event(key, "call_started", {"session_id": "x"})
 
         def _admit_and_fan_out():
             admit_guest(waiting_guest, self.host)
+            post_message(self.meeting, "posted once the guest was in", author=self.host)
             enqueue_event(
                 key,
                 "call_participant_joined",
@@ -541,7 +644,7 @@ class GuestStreamContainmentTests(GuestContainmentFixture):
         names = [parse_sse(f)[0] for f in frames if not f.startswith(":")]
 
         self.assertIn("meeting_admitted", names)
-        self.assertIn("message", names)
+        self.assertIn("meeting_message", names)
         self.assertIn("call_participant_joined", names)
         # Drained and dropped while the guest was still waiting: forwarding is
         # not retroactive.
@@ -583,6 +686,14 @@ def _calls_to(tree, name):
     ]
 
 
+def _class_named(tree, name):
+    return next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef) and node.name == name
+    )
+
+
 def _is_empty_list(value):
     """``[]`` and ``list()`` are the same emptiness to DRF, so they are the
     same emptiness here."""
@@ -621,6 +732,32 @@ def _has_empty_authentication_classes(class_node):
         ):
             return True
     return False
+
+
+def _body_html_dict_builders(tree):
+    """Scopes in *tree* that construct a dict carrying a ``body_html`` key.
+
+    A function is named by its own name; a dict built outside any function is
+    reported as ``<module>``. Walked scope by scope rather than with
+    ``ast.walk``, which flattens the tree and loses the enclosing function -
+    the very thing the fence below has to name.
+    """
+    found = set()
+
+    def visit(node, scope):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                visit(child, child.name)
+                continue
+            if isinstance(child, ast.Dict) and any(
+                isinstance(key, ast.Constant) and key.value == "body_html"
+                for key in child.keys
+            ):
+                found.add(scope)
+            visit(child, scope)
+
+    visit(tree, "<module>")
+    return found
 
 
 # workspace.chat.views, named either absolutely or from inside the chat package.
@@ -696,11 +833,11 @@ class GuestSurfaceSourceTests(SimpleTestCase):
 
     # Every view that answers without authenticating anyone. Emptying
     # authentication_classes is what makes a route reachable by a stranger, so
-    # the set is enumerated rather than counted: an eleventh anonymous view is
+    # the set is enumerated rather than counted: a tenth anonymous view is
     # a decision, not an accident.
     ANONYMOUS_VIEWS = {
         "avatar.py": {"GroupAvatarRetrieveView"},
-        "meetings.py": {"MeetingSummaryView", "MeetingKnockView"},
+        "meetings.py": {"MeetingSummaryView"},
         "meeting_guest.py": {
             "MeetingGuestJoinView",
             "MeetingGuestLeaveView",
@@ -726,21 +863,22 @@ class GuestSurfaceSourceTests(SimpleTestCase):
                 found[path.name] = classes
 
         self.assertEqual(found, self.ANONYMOUS_VIEWS)
-        self.assertEqual(sum(len(names) for names in found.values()), 10)
+        self.assertEqual(sum(len(names) for names in found.values()), 9)
 
     # The UI half of the same fence. The API views above are enumerated by
     # what empties authentication_classes; a page view is enumerated by what
     # it is missing instead - @login_required - because that decorator is the
     # only thing standing between a template and a stranger. Both entries are
-    # the meeting page: the document, and the message list it loads with the
-    # token in a header.
-    ANONYMOUS_UI_VIEWS = {"meet_view", "meet_messages_view"}
+    # the meeting page: the document itself, and the first link's redirect
+    # onto it.
+    ANONYMOUS_UI_VIEWS = {"meeting_view", "meet_redirect_view"}
 
     def _ui_view_decorators(self):
         """{view name: decorator names} for every view in chat/ui/views.py.
 
         A view is what Django calls with a request; the module's other
-        top-level functions are helpers that take a user or a message.
+        top-level functions are helpers that take a user, a message or the
+        meeting they build a payload for.
 
         ``AsyncFunctionDef`` is not a variant to skip: Django routes an async
         view exactly like a sync one, so a fence that only walks
@@ -830,16 +968,27 @@ class GuestSurfaceSourceTests(SimpleTestCase):
         for node in public_classes:
             self.assertEqual(_calls_to(node, "get_active_call"), [], node.name)
 
-    def test_guest_paths_serialize_messages_only_for_a_guest_audience(self):
-        """``MessageSerializer`` emits ``conversation_id`` and hydrates
-        ``reply_to``/``thread_root`` below the occurrence floor.
-        ``GuestMessageSerializer`` is the redaction, and it is only a fence
-        while it is the single one these three files use."""
+        # MeetingKnockView keeps DRF's default authentication so a signed-in
+        # visitor is bound to the guest row, which takes it out of the set
+        # above - but a stranger still reaches it with no credentials at all,
+        # so the rule holds for it by name.
+        knock = _class_named(meetings, "MeetingKnockView")
+        self.assertEqual(_calls_to(knock, "get_active_call"), [])
+
+    def test_the_meeting_chat_paths_call_no_message_serializer(self):
+        """``MessageSerializer`` is the conversation's, and it emits
+        ``conversation_id`` and hydrates ``reply_to``/``thread_root``. The
+        meeting chat is a different model with a different audience: its
+        payload is built by ``serialize_message`` alone, so a serializer
+        reached from any of these files is a conversation payload crossing
+        into a meeting."""
         used = set()
         for path in (
             VIEWS_DIR / "meetings.py",
             VIEWS_DIR / "meeting_guest.py",
+            VIEWS_DIR / "meeting_messages.py",
             SERVICES_DIR / "guest_stream.py",
+            SERVICES_DIR / "meeting_messages.py",
         ):
             for node in ast.walk(_parse_module(path)):
                 if not isinstance(node, ast.Call):
@@ -848,4 +997,19 @@ class GuestSurfaceSourceTests(SimpleTestCase):
                 if name and name.endswith("MessageSerializer"):
                     used.add(name)
 
-        self.assertEqual(used, {"GuestMessageSerializer"})
+        self.assertEqual(used, set())
+
+    def test_serialize_message_is_the_only_meeting_message_payload(self):
+        """The other half of the fence above: one serializer is only a fence
+        while it is the only one. A second function assembling the same
+        payload by hand would be free to add a field - the guest audience is
+        what ``serialize_message`` was shaped around - so the ``body_html``
+        key is claimed for it across the whole services package."""
+        builders = set()
+        for path in sorted(SERVICES_DIR.rglob("*.py")):
+            builders.update(
+                f"{path.name}:{scope}"
+                for scope in _body_html_dict_builders(_parse_module(path))
+            )
+
+        self.assertEqual(builders, {"meeting_messages.py:serialize_message"})

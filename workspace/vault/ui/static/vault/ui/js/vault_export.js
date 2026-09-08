@@ -13,6 +13,10 @@ window.vaultExportMixin = function vaultExportMixin() {
     exportOwnPhraseAck: false,
     exportProgress: 0,
     exportBusy: false,
+    // The plaintext warning, standing as a step of this dialog rather than as
+    // a second dialog over it. Also the gate itself: runExport refuses to
+    // write an interchange file while this is false.
+    exportConfirming: false,
     exportError: '',
     exportSkipped: 0,
     // A lock is a decision about the run in flight, not only about the dialog.
@@ -37,10 +41,23 @@ window.vaultExportMixin = function vaultExportMixin() {
       return { mode: 'passphrase', words: 8 };
     },
 
+    // The clipboard clears itself after half a minute, which is the right
+    // answer for an entry password: it stays in the vault, so an early clear
+    // costs a second Copy and nothing else. This phrase is in no vault. It is
+    // the one secret in the module whose loss is final, the warning above the
+    // field tells the user to file it with their emergency kit, and a browser
+    // save dialog stands between Copy and wherever they are pasting it. Long
+    // enough to get through that, still short enough not to leave it lying on
+    // a shared clipboard.
+    exportClipboardPolicy() {
+      return { label: 'Export passphrase', seconds: 180 };
+    },
+
     openExportDialog() {
       this.exportError = '';
       this.exportProgress = 0;
       this.exportSkipped = 0;
+      this.exportConfirming = false;
       // The panel inside this dialog reports a refused copy through the
       // generator mixin's field, spread into this same component - a failure
       // left over from the standalone generator would open here as if it had
@@ -53,6 +70,26 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.clearExport();
     },
 
+    // What the dialog's Export button calls. The archive states its own terms
+    // in the form above - a passphrase, and an acknowledgement when the user
+    // chose it themselves - so it runs. The interchange file states none: it
+    // is every password in the account in the clear, and the only thing
+    // between the user and that file is being told so. That warning is a step
+    // of this dialog, not a second dialog on top of it: stacked, the two
+    // darken the page twice, and Escape closes whichever of them happens to be
+    // listening while the other stays.
+    requestExport() {
+      if (this.exportFormat === 'interchange') {
+        this.exportConfirming = true;
+        return undefined;
+      }
+      return this.runExport();
+    },
+
+    dismissWarning() {
+      this.exportConfirming = false;
+    },
+
     // Methods, never getters: this object is spread into the component, and
     // object spread copies values - a getter would be evaluated once, at
     // spread time, and frozen at whatever the state was then.
@@ -60,6 +97,23 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportPassphrase = value;
       this.exportConfirm = value;
       this.exportSource = 'generated';
+    },
+
+    // The panel redraws on every option change and on Regenerate, and it
+    // announces each draw. A phrase it drew and this field still holds is one
+    // the user no longer sees anywhere: the field is masked, so what is on
+    // screen is the panel's new draw, and Copy sends that one. Left to drift,
+    // the user files away a phrase that opens nothing and the archive is lost
+    // exactly as the warning above the field says it would be.
+    //
+    // Only while the phrase is still the panel's: one the user typed is
+    // theirs, and an empty field means they never pressed Use - tracking into
+    // it would arm Export with a phrase they never took.
+    trackGeneratedPassphrase(value) {
+      if (this.exportSource !== 'generated') return;
+      if (!this.exportPassphrase) return;
+      this.exportPassphrase = value;
+      this.exportConfirm = value;
     },
 
     // Bound to the field's own input: the moment a human edits it, the panel's
@@ -116,41 +170,25 @@ window.vaultExportMixin = function vaultExportMixin() {
       // survives into the next one - and an archive run, which skips nothing
       // and has no notion of skipping, would end up displaying it.
       this.exportSkipped = 0;
+      // Checked before anything is decrypted, so a warning that was never
+      // answered means nothing was built. State rather than an awaited
+      // promise: there is no script that might not have loaded and no window
+      // for a lock to land in between the question and the work, and a caller
+      // that reached here without the step writes nothing.
+      if (this.exportFormat === 'interchange' && !this.exportConfirming) return;
       const generation = this.exportGeneration;
-      // Before anything is decrypted, so cancelling means nothing was built.
-      //
-      // this.confirm, from the component root: dialogs.js declares AppDialog
-      // with a top-level `const`, which never becomes a property of window, so
-      // window.AppDialog is undefined. And the option is okLabel - an invented
-      // confirmLabel would leave the button reading "OK" with nothing to say so.
-      if (this.exportFormat === 'interchange') {
-        // This one caller fails closed where the shared wrapper fails open.
-        // `confirm` answers true when dialogs.js has not loaded, which is the
-        // right default for a destructive action the user already asked for -
-        // and the wrong one here, because this confirm *is* the warning that a
-        // file holding every password in the clear is about to be written. A
-        // warning nobody could see was never accepted.
-        //
-        // The bare identifier, never window.AppDialog: dialogs.js declares it
-        // with a top-level `const`, which never becomes a property of window.
-        if (typeof AppDialog === 'undefined') {
-          this.exportError = 'This export could not be confirmed, so nothing was written.';
-          return;
-        }
-        const accepted = await this.confirm(
-          'It contains every password in this account in plain text. Anyone who '
-          + 'opens the file can read them. Nothing encrypts it.',
-          { title: 'This file is not protected', okLabel: 'Export anyway', okClass: 'btn-error' }
-        );
-        if (!accepted) return;
-        if (generation !== this.exportGeneration) return;
-      }
       this.exportBusy = true;
       this.exportError = '';
       this.exportProgress = 0;
       try {
         const tree = await window.vaultExportTree.buildTree(window.vaultSession, {
-          onProgress: () => { this.exportProgress += 1; },
+          // Guarded like every other write below: this callback belongs to the
+          // run that passed it in, and a cancelled run goes on walking the
+          // account until its own await returns. Unguarded it counts into the
+          // run that replaced it, which zeroed the number for itself.
+          onProgress: () => {
+            if (generation === this.exportGeneration) this.exportProgress += 1;
+          },
         });
         // The passphrase is read on the far side of this check and never
         // captured before it: holding a copy across the awaits would keep the
@@ -181,6 +219,10 @@ window.vaultExportMixin = function vaultExportMixin() {
         // closing over it would compute the number and throw it away.
         if (!this.exportSkipped) this.clearExport();
       } catch (err) {
+        // A run the lock overtook has nothing to say. Its failure is about an
+        // account state nobody is waiting on any more, and the dialog it would
+        // write to belongs to whoever opened it next.
+        if (generation !== this.exportGeneration) return;
         if (err && err.reason === 'unreadable') {
           this.exportError =
             'Part of this account could not be read, so no file was written. '
@@ -193,7 +235,17 @@ window.vaultExportMixin = function vaultExportMixin() {
           this.exportError = 'The export failed.';
         }
       } finally {
-        this.exportBusy = false;
+        // The one write that runs whichever way the guards above went, so it
+        // needs the guard most: releasing the button from a superseded run
+        // offers Export again while the live one is still decrypting, and
+        // takes "N entries read..." off the screen from under it.
+        if (generation === this.exportGeneration) {
+          this.exportBusy = false;
+          // Back to the form. The dialog stays open over a skipped count, and
+          // that count has to be read against the choices that produced it,
+          // not against the warning the user already answered.
+          this.exportConfirming = false;
+        }
       }
     },
 
@@ -210,6 +262,7 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportProgress = 0;
       this.exportError = '';
       this.exportBusy = false;
+      this.exportConfirming = false;
     },
   };
 };

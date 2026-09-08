@@ -112,6 +112,7 @@
           <div class="flex items-center gap-2 min-w-0">
             <!-- Mobile: back to list -->
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square lg:hidden"
               @click="history.back()"
             >
@@ -130,6 +131,7 @@
           </div>
           <div class="flex items-center gap-1 flex-shrink-0">
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square"
               @click="toggleFavorite(selectedNote)"
               :disabled="togglingFavorite || !canDoOnSelected('toggle_favorite')"
@@ -149,6 +151,7 @@
             </button>
             {% include "files/ui/partials/tag_manager.html" %}
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square"
               @click="moveNote(selectedNote.uuid, selectedNote.name)"
               title="Move to folder"
@@ -163,6 +166,7 @@
               <i data-lucide="hard-drive" class="w-4 h-4"></i>
             </a>
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square text-error"
               @click="deleteNote()"
               :disabled="!canDoOnSelected('delete')"
@@ -224,6 +228,7 @@
 
     <!-- Mobile new note FAB -->
     <button
+      type="button"
       class="btn btn-success btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
       @click="createNote()"
       x-show="!selectedNote && ['all', 'folder', 'group_folder'].includes(activeView)"
@@ -304,7 +309,7 @@
       {% endif %}
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -318,12 +323,12 @@
       <div class="mt-4">{% include "notes/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">Close</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 {% endblock %}

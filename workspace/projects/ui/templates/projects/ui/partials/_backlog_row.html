@@ -84,6 +84,7 @@
       and the backend adds board entrants to the running sprint - which is
       what the gesture means on a scrum project.{% endcomment %}
       <button
+        type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
         title="Send to current sprint"
         @click.stop="sendToBoard('{{ task.uuid }}')"
@@ -92,6 +93,7 @@
       </button>
     {% else %}
       <button
+        type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
         title="Send to board"
         @click.stop="sendToBoard('{{ task.uuid }}')"

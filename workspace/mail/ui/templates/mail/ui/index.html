@@ -47,6 +47,7 @@
           >
             {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-warning" button_class="hover:text-warning" %}
             <button
+              type="button"
               class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
               @click="showCompose()"
               title="Compose (C)"
@@ -101,7 +102,11 @@
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium mb-2">No mail accounts configured</p>
           <p class="text-sm mb-4">Add a mail account to get started</p>
-          <button class="btn btn-warning btn-sm" @click="showAddAccount()">
+          <button
+            type="button"
+            class="btn btn-warning btn-sm"
+            @click="showAddAccount()"
+          >
             <i data-lucide="plus" class="w-4 h-4"></i>
             Add Account
           </button>
@@ -134,6 +139,7 @@
 
     <!-- Mobile compose FAB -->
     <button
+      type="button"
       class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
       @click="showCompose()"
       x-show="!selectedMessage"
@@ -270,7 +276,7 @@
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -322,7 +328,7 @@
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -339,12 +345,12 @@
       <div class="mt-4">{% include "mail/ui/partials/_preferences_content.html" %}</div>
       <div class="modal-action">
         <form method="dialog">
-          <button class="btn btn-sm">Close</button>
+          <button type="submit" class="btn btn-sm">Close</button>
         </form>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -533,7 +539,7 @@
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -659,7 +665,7 @@
       </div>
     </template>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 
@@ -714,7 +720,7 @@
       </form>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>close</button>
+      <button type="submit">close</button>
     </form>
   </dialog>
 

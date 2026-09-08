@@ -72,6 +72,7 @@
       <div class="flex items-center gap-2 mb-2">
         <!-- Back button (mobile) -->
         <button
+          type="button"
           class="btn btn-ghost btn-sm btn-circle lg:hidden"
           @click="history.back()"
         >
@@ -92,6 +93,7 @@
           ></span>
           <!-- Always visible actions -->
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square"
             @click="replyTo(messageDetail)"
             title="Reply (R)"
@@ -99,6 +101,7 @@
             <i data-lucide="reply" class="w-4 h-4"></i>
           </button>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square"
             @click="toggleStar(messageDetail)"
             :disabled="actionInProgress"
@@ -111,6 +114,7 @@
             ></i>
           </button>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square text-error"
             @click="deleteMessage(messageDetail)"
             :disabled="actionInProgress"
@@ -120,6 +124,7 @@
           </button>
           <!-- Desktop-only actions -->
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
             @click="toggleRead(messageDetail)"
             :disabled="actionInProgress"
@@ -131,6 +136,7 @@
             ></i>
           </button>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
             @click="replyAll(messageDetail)"
             title="Reply all (A)"
@@ -138,6 +144,7 @@
             <i data-lucide="reply-all" class="w-4 h-4"></i>
           </button>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
             @click="forwardMessage(messageDetail)"
             title="Forward (F)"
@@ -146,6 +153,7 @@
           </button>
           {% if ai_enabled %}
             <button
+              type="button"
               class="btn btn-ghost btn-xs btn-square hidden lg:inline-flex"
               @click="summarizeMessage(messageDetail)"
               :disabled="actionInProgress || aiSummarizing"
@@ -286,6 +294,7 @@
             ></span>
           </a>
           <button
+            type="button"
             class="btn btn-ghost btn-xs btn-square opacity-100 lg:opacity-0 lg:group-hover/att:opacity-100 transition-opacity ml-0.5"
             title="Save to Files"
             @click.prevent="saveAttachmentToFiles(att.uuid)"
@@ -328,6 +337,7 @@
             class="text-xs font-semibold text-secondary tracking-wide uppercase flex-1"
           >Summary</span>
           <button
+            type="button"
             class="opacity-40 hover:opacity-100 transition-opacity"
             @click="dismissSummary(messageDetail)"
             title="Dismiss summary"

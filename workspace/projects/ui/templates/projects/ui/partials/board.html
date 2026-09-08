@@ -114,6 +114,7 @@
                   {% endif %}
                   {% if writable and not sprint_read_only %}
                     <button
+                      type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       title="New task"
                       @click="newTask('{{ column.status.uuid }}')"

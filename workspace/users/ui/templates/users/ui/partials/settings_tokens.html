@@ -13,6 +13,7 @@
           API Tokens
         </h2>
         <button
+          type="button"
           @click="$refs.createDialog.showModal()"
           class="btn btn-primary btn-sm gap-1"
         >
@@ -45,6 +46,7 @@
             placeholder="Search tokens..."
           />
           <button
+            type="button"
             x-show="search"
             @click="search = ''"
             class="btn btn-ghost btn-xs btn-square"
@@ -113,6 +115,7 @@
               </div>
             </div>
             <button
+              type="button"
               @click="revokeToken(token)"
               class="btn btn-ghost btn-sm text-error opacity-0 group-hover/token:opacity-100 transition-opacity"
               title="Revoke token"
@@ -155,8 +158,15 @@
       </div>
 
       <div class="modal-action">
-        <button @click="closeCreateDialog()" class="btn btn-ghost btn-sm">Cancel</button>
         <button
+          type="button"
+          @click="closeCreateDialog()"
+          class="btn btn-ghost btn-sm"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
           @click="createToken()"
           class="btn btn-primary btn-sm"
           :disabled="creating"
@@ -167,7 +177,7 @@
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button @click="closeCreateDialog()">close</button>
+      <button type="submit" @click="closeCreateDialog()">close</button>
     </form>
   </dialog>
 
@@ -187,6 +197,7 @@
       <div class="flex items-center gap-2 bg-base-200 rounded-lg p-3">
         <code class="text-sm break-all flex-1 select-all" x-text="createdToken"></code>
         <button
+          type="button"
           @click="copyToken()"
           class="btn btn-ghost btn-sm btn-square flex-shrink-0"
           title="Copy"
@@ -197,7 +208,13 @@
       </div>
 
       <div class="modal-action">
-        <button @click="closeTokenCreatedDialog()" class="btn btn-primary btn-sm">Done</button>
+        <button
+          type="button"
+          @click="closeTokenCreatedDialog()"
+          class="btn btn-primary btn-sm"
+        >
+          Done
+        </button>
       </div>
     </div>
   </dialog>

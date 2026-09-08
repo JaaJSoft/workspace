@@ -140,6 +140,7 @@ be defined before the parser reaches the markup using it, or server-rendered
                   x-text="spotlightParticipant() ? spotlightParticipant().display_name : ''"
                 ></span>
                 <button
+                  type="button"
                   class="btn btn-xs absolute top-2 right-2"
                   @click.stop="backToGrid()"
                   title="Back to grid"
@@ -225,6 +226,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             class="inline-flex items-center gap-3 p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg"
           >
             <button
+              type="button"
               class="btn btn-circle border-0"
               :class="isMuted ? 'btn-error' : 'btn-neutral'"
               @click="toggleMute()"
@@ -233,6 +235,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i :data-lucide="isMuted ? 'mic-off' : 'mic'" class="w-5 h-5"></i>
             </button>
             <button
+              type="button"
               class="btn btn-circle border-0"
               :class="cameraOn ? 'btn-primary' : 'btn-neutral'"
               @click="toggleCamera()"
@@ -241,6 +244,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i :data-lucide="cameraOn ? 'video' : 'video-off'" class="w-5 h-5"></i>
             </button>
             <button
+              type="button"
               class="btn btn-circle border-0"
               :class="sharing ? 'btn-primary' : 'btn-neutral'"
               @click="toggleScreenShare()"
@@ -249,6 +253,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i data-lucide="screen-share" class="w-5 h-5"></i>
             </button>
             <button
+              type="button"
               class="btn btn-neutral btn-circle border-0"
               @click="openDiagnostic()"
               :disabled="diagRunning"
@@ -257,6 +262,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               <i data-lucide="activity" class="w-5 h-5"></i>
             </button>
             <button
+              type="button"
               class="btn btn-error btn-circle border-0"
               @click="leaveRoom()"
               title="Leave call"

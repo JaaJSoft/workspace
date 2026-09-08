@@ -30,6 +30,7 @@
       Thread
     </h4>
     <button
+      type="button"
       class="btn btn-ghost btn-xs btn-square"
       @click="closeThread()"
       title="Close thread"
@@ -49,6 +50,7 @@
   >
     <div x-show="hasMoreMessages" class="flex justify-center py-2">
       <button
+        type="button"
         class="btn btn-ghost btn-xs"
         @click="loadMoreMessages()"
         :disabled="loadingMoreMessages"

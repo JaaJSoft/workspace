@@ -1,7 +1,10 @@
 <dialog id="{{ dialog_id }}" class="modal">
   <div class="modal-box max-w-3xl">
     <form method="dialog">
-      <button class="btn btn-sm btn-square btn-ghost absolute right-2 top-2">
+      <button
+        type="submit"
+        class="btn btn-sm btn-square btn-ghost absolute right-2 top-2"
+      >
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </form>
@@ -17,6 +20,6 @@
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

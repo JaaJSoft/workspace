@@ -48,6 +48,7 @@ the target element outright when an OK response lacks it.
         Tags
       </span>
       <button
+        type="button"
         class="btn btn-ghost btn-square btn-xs"
         @click="showTagModal()"
         title="New tag"
@@ -104,6 +105,7 @@ the target element outright when an OK response lacks it.
         Folders
       </span>
       <button
+        type="button"
         class="btn btn-ghost btn-square btn-xs"
         @click="showCreateFolderDialog()"
         title="New folder"
@@ -129,6 +131,7 @@ the target element outright when an OK response lacks it.
       </span>
       {% if available_groups %}
         <button
+          type="button"
           class="btn btn-ghost btn-square btn-xs"
           @click="document.getElementById('notes-create-group-folder-dialog').showModal()"
           title="Create group folder"

@@ -34,6 +34,7 @@
           ></i>
         </button>
         <button
+          type="button"
           class="btn btn-primary btn-sm"
           @click="rulesOpenForm()"
           aria-label="New rule"
@@ -84,6 +85,7 @@
               <!-- Reorder arrows: hidden during search so positions are unambiguous -->
               <div x-show="!rulesSearch.trim()" class="join join-vertical flex-shrink-0">
                 <button
+                  type="button"
                   x-show="rulesCanMoveUp(rule)"
                   class="btn btn-ghost btn-xs join-item"
                   @click="rulesMove(rule, -1)"
@@ -93,6 +95,7 @@
                   <i data-lucide="chevron-up" class="w-4 h-4"></i>
                 </button>
                 <button
+                  type="button"
                   x-show="rulesCanMoveDown(rule)"
                   class="btn btn-ghost btn-xs join-item"
                   @click="rulesMove(rule, 1)"
@@ -110,6 +113,7 @@
                 @change="rulesToggle(rule, $event.target.checked)"
               />
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square flex-shrink-0"
                 @click="rulesOpenApply(rule)"
                 title="Apply to a folder"
@@ -118,6 +122,7 @@
                 <i data-lucide="play" class="w-4 h-4"></i>
               </button>
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square flex-shrink-0"
                 @click="rulesOpenForm(rule)"
                 title="Edit"
@@ -126,6 +131,7 @@
                 <i data-lucide="pencil" class="w-4 h-4"></i>
               </button>
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square text-error flex-shrink-0"
                 @click="rulesDelete(rule)"
                 title="Delete"
@@ -190,6 +196,7 @@
 
         <div class="modal-action">
           <button
+            type="button"
             class="btn btn-ghost btn-sm"
             @click="rulesCancelApply()"
             :disabled="rulesApplyBusy"
@@ -197,6 +204,7 @@
             Back
           </button>
           <button
+            type="button"
             class="btn btn-sm"
             @click="rulesPreviewApply()"
             :disabled="!rulesApplyFolderId || rulesApplyBusy"
@@ -208,6 +216,7 @@
             ></span>
           </button>
           <button
+            type="button"
             class="btn btn-warning btn-sm"
             @click="rulesRunApply()"
             :disabled="!rulesApplyFolderId || rulesApplyBusy"
@@ -232,6 +241,7 @@
           ></h4>
           <div class="tabs tabs-boxed">
             <button
+              type="button"
               class="tab tab-sm"
               :class="rulesForm.mode === 'simple' ? 'tab-active' : ''"
               @click="rulesSetMode('simple')"
@@ -239,6 +249,7 @@
               Simple
             </button>
             <button
+              type="button"
               class="tab tab-sm"
               :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''"
               @click="rulesSetMode('advanced')"
@@ -444,6 +455,7 @@
 
         <div class="modal-action">
           <button
+            type="button"
             class="btn btn-ghost btn-sm"
             @click="rulesCancelEdit()"
             :disabled="rulesForm.saving"
@@ -451,6 +463,7 @@
             Back
           </button>
           <button
+            type="button"
             class="btn btn-primary btn-sm"
             @click="rulesSave()"
             :disabled="!rulesEditing.name || rulesForm.saving"
@@ -467,11 +480,11 @@
       x-show="rulesEditing === null && rulesApplying === null"
     >
       <form method="dialog">
-        <button class="btn btn-sm">Close</button>
+        <button type="submit" class="btn btn-sm">Close</button>
       </form>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="submit">close</button>
   </form>
 </dialog>

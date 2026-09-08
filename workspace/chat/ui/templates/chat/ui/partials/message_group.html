@@ -133,6 +133,7 @@
         {# Retry button for bot error messages #}
         {% if not is_own and msg.body|slice:":1" == "⚠" %}
           <button
+            type="button"
             data-part="after-bubble"
             class="btn btn-ghost btn-xs gap-1 text-warning mt-0.5"
             @click="retryBotResponse('{{ msg.uuid }}')"
@@ -155,6 +156,7 @@
             <div class="w-px self-stretch my-0.5 bg-base-300"></div>
             {# Full emoji picker #}
             <button
+              type="button"
               class="btn btn-ghost btn-xs btn-square"
               @click="openEmojiPicker('reaction', $event, '{{ msg.uuid }}')"
               title="More reactions"
@@ -162,6 +164,7 @@
               <i data-lucide="smile-plus" class="w-3.5 h-3.5"></i>
             </button>
             <button
+              type="button"
               class="btn btn-ghost btn-xs btn-square"
               @click="startReply('{{ msg.uuid }}', '{{ msg.author.get_full_name|default:msg.author.username|escapejs }}', '{{ msg.body|truncatechars:100|escapejs }}')"
               title="Reply"
@@ -170,6 +173,7 @@
             </button>
             {% if msg.uuid in pinned_message_ids %}
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square"
                 @click="unpinMessage('{{ msg.uuid }}')"
                 title="Unpin"
@@ -178,6 +182,7 @@
               </button>
             {% else %}
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square"
                 @click="pinMessage('{{ msg.uuid }}')"
                 title="Pin"
@@ -187,6 +192,7 @@
             {% endif %}
             {% if is_own %}
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square"
                 @click="startEdit('{{ msg.uuid }}')"
                 title="Edit"
@@ -196,6 +202,7 @@
             {% endif %}
             {% if is_own or is_bot %}
               <button
+                type="button"
                 class="btn btn-ghost btn-xs btn-square text-error"
                 @click="deleteMessage('{{ msg.uuid }}')"
                 title="Delete"

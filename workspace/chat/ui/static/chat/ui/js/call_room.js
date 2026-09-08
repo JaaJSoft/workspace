@@ -20,6 +20,29 @@ function chatRoomFormatDuration(ms) {
   return `${pad(m)}:${pad(s)}`;
 }
 
+/**
+ * The initials a group conversation is drawn with, the way the server draws
+ * them (chat/services/avatar.py, _name_initials): the first letter of the
+ * first two parts, split on commas when the name lists several people and on
+ * whitespace otherwise. Duplicated rather than fetched because the guest page
+ * is handed a title and nothing else, and a header lettering the same meeting
+ * differently from the host's is exactly the drift this pairing avoids.
+ * Returns '' for a nameless meeting, leaving the element's own fallback.
+ * @param {?string} title
+ * @returns {string}
+ */
+function chatMeetTitleInitials(title) {
+  const name = (title || '').trim();
+  if (name === '') return '';
+  const parts = name.includes(',') ? name.split(',') : name.split(/\s+/);
+  return parts
+    .slice(0, 2)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+}
+
 function chatCallRoomUrl(conversationId) {
   return `/chat/room/${conversationId}`;
 }
@@ -184,6 +207,7 @@ window.chatCallStageMixin = function chatCallStageMixin() {
 };
 
 window.chatRoomFormatDuration = chatRoomFormatDuration;
+window.chatMeetTitleInitials = chatMeetTitleInitials;
 window.chatCallRoomUrl = chatCallRoomUrl;
 window.chatCallRoomTabName = chatCallRoomTabName;
 window.chatCallBannerAction = chatCallBannerAction;

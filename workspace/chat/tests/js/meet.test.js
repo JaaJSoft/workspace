@@ -867,7 +867,7 @@ test('the header disc is lettered the way the server letters a group', () => {
   // two parts, commas taking precedence over spaces when the name lists
   // several people. A host showing PC and a guest showing P for the same
   // meeting is the drift this exists to stop.
-  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/meet.js', baseStubs);
+  const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/call_room.js', baseStubs);
   const initials = ctx.chatMeetTitleInitials;
   assert.equal(initials('Parity Check'), 'PC');
   assert.equal(initials('Design sync'), 'DS');

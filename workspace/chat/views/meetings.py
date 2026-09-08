@@ -51,9 +51,9 @@ _BIDI_CONTROL_CODEPOINTS = frozenset(
 
 
 # ===========================================================================
-# Public surface - reached from a bare /meet/<slug> link with no account, so
-# the slug (and, on knock, the issued token) has to be the only thing that
-# grants anything.
+# Public surface - reached from the meeting page at /meetings/<slug> with no
+# account, so the slug (and, on knock, the issued token) has to be the only
+# thing that grants anything.
 #
 # MeetingSummaryView is anonymous outright: AllowAny alone is not enough,
 # because DRF still runs SessionAuthentication by default, which enforces
@@ -294,7 +294,13 @@ class MeetingCreateView(APIView):
 
         raw_event_id = request.data.get("event_id")
         if raw_event_id is None:
-            title = str(request.data.get("title", "")).strip()
+            raw_title = request.data.get("title", "")
+            if not isinstance(raw_title, str):
+                return Response(
+                    {"detail": "title must be a string."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            title = raw_title.strip()
             if not title:
                 return Response(
                     {"detail": "title is required for a meeting without an event."},

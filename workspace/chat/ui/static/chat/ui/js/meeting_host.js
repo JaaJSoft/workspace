@@ -1,5 +1,5 @@
-// Host controls for a meeting room: the lobby (waiting guests), lock, remove
-// and end. Spread into chatRoomApp; inert when the room has no meeting.
+// Host controls for a meeting: the lobby (waiting guests), lock, remove and
+// end. Spread into the meeting page's host app; inert with no meeting loaded.
 window.chatMeetingHostMixin = function chatMeetingHostMixin() {
   return {
     meeting: null,

@@ -158,7 +158,9 @@ window.chatMeetingChatMixin = function chatMeetingChatMixin() {
       const resp = await fetch(`${this._meetingMessagesUrl(null)}/${uuid}`, {
         method: 'DELETE', headers: this._meetingMessageHeaders(),
       });
-      if (resp.ok) this.onMeetingMessageDeleted({ message_id: uuid });
+      // Named the way a frame is, so _ownsMeetingEvent accepts the local
+      // removal instead of waiting for the server's own fan-out.
+      if (resp.ok) this.onMeetingMessageDeleted({ message_id: uuid, meeting_id: this.meetingId() });
     },
 
     _appendMeetingMessage(message) {

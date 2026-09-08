@@ -221,3 +221,32 @@ test('the host app exposes the whole call-stage surface the partial binds', () =
   assert.equal(a.pinnedKey, null);
   assert.equal(a.pinnedManually, false);
 });
+
+test('a host deleting a line sees the row go before any frame arrives', async () => {
+  // The optimistic removal goes through the same guard the stream does, so it
+  // has to name the meeting the way a frame would - otherwise the row only
+  // disappears when the server's own fan-out comes back.
+  const { a } = app(async () => ({ ok: true, status: 204, json: async () => ({}) }));
+  a.meeting = MEETING;
+  a.renderMeetingMessages = () => {};
+  a.meetingMessages = [{ uuid: 'm9', body: 'bye', author: { participant_key: 'u:7' } }];
+
+  await a.deleteMeetingMessage('m9');
+
+  assert.deepStrictEqual(Array.from(a.meetingMessages, (m) => m.uuid), []);
+});
+
+test('init() survives a missing meeting-data block', async () => {
+  const { a } = app(okFetch, {
+    document: {
+      getElementById: () => null,
+      addEventListener() {},
+      createElement: () => ({ setAttribute() {}, appendChild() {}, classList: { add() {} } }),
+    },
+  });
+
+  await a.init();
+
+  assert.equal(a.meeting, null);
+  assert.equal(a.activeConversation, null);
+});

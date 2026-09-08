@@ -38,8 +38,8 @@ def create_meeting(event, created_by):
 
     Two requests racing to create the same event's meeting both pass the
     ``existing is None`` check in ``_create_meeting_once``; the loser's atomic
-    block rolls back cleanly (no orphan conversation) but trips ``Meeting.event``'s
-    unique constraint on INSERT. Recovered the same way
+    block rolls back cleanly but trips ``Meeting.event``'s unique constraint
+    on INSERT. Recovered the same way
     ``calls.start_or_join_call`` recovers the equivalent race on
     ``one_active_call_per_conversation``: retry a bounded number of times,
     identifying the race by the meeting now existing rather than masking an

@@ -35,6 +35,9 @@ function chatMeetingHostApp(currentUserId) {
       this._initCallSounds?.();
       const el = document.getElementById('meeting-data');
       try { this.meeting = el ? JSON.parse(el.textContent) : null; } catch (e) { this.meeting = null; }
+      // Every call below is addressed by the meeting uuid, so there is nothing
+      // this page can do without it.
+      if (!this.meeting) return;
       // The call mixin gates on "is there something to talk to"; the meeting
       // uuid stands in for the conversation uuid it expects.
       this.activeConversation = { uuid: this.meeting.uuid, kind: 'group', members: [] };

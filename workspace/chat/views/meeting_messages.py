@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import MeetingMessage
-from ..services import meeting_messages as chat_service
+from ..services import meeting_messages
 from ..services.meeting_hosts import reachable_meeting
 
 
@@ -23,7 +23,7 @@ def clean_body(data):
     body = raw.strip()
     if not body:
         return None, "Message must have text."
-    if len(body) > chat_service.MEETING_MESSAGE_MAX_LENGTH:
+    if len(body) > meeting_messages.MEETING_MESSAGE_MAX_LENGTH:
         return None, "Message is too long."
     return body, None
 
@@ -47,12 +47,12 @@ class MeetingMessagesView(APIView):
         if meeting is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         before, limit = page_args(request.query_params)
-        rows, has_more = chat_service.messages_for_host(
+        rows, has_more = meeting_messages.messages_for_host(
             meeting, before=before, limit=limit
         )
         return Response(
             {
-                "messages": [chat_service.serialize_message(m) for m in rows],
+                "messages": [meeting_messages.serialize_message(m) for m in rows],
                 "has_more": has_more,
             }
         )
@@ -65,9 +65,9 @@ class MeetingMessagesView(APIView):
         body, error = clean_body(request.data)
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-        message = chat_service.post_message(meeting, body, author=request.user)
+        message = meeting_messages.post_message(meeting, body, author=request.user)
         return Response(
-            chat_service.serialize_message(message), status=status.HTTP_201_CREATED
+            meeting_messages.serialize_message(message), status=status.HTTP_201_CREATED
         )
 
 
@@ -85,5 +85,5 @@ class MeetingMessageDetailView(APIView):
         ).first()
         if message is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        chat_service.delete_message(message)
+        meeting_messages.delete_message(message)
         return Response(status=status.HTTP_204_NO_CONTENT)

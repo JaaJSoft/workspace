@@ -1,7 +1,7 @@
 """Join, leave, heartbeat and state for an admitted meeting guest.
 
-A guest reaches every view in this file from a bare /meet/<slug> link plus a
-knock-issued token - no account, no session. ``permission_classes =
+A guest reaches every view in this file from the meeting page at
+/meetings/<slug> plus a knock-issued token - no account, no session. ``permission_classes =
 [AllowAny]`` is not enough on its own: DRF still runs SessionAuthentication by
 default, which enforces CSRF for a signed-in visitor and populates
 request.user, so a logged-in host previewing their own link would be treated
@@ -39,8 +39,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import CallParticipant
-from ..services import calls
-from ..services import meeting_messages as chat_service
+from ..services import calls, meeting_messages
 from ..services.call_signaling import send_signal
 from ..services.guest_stream import stream_guest_events
 from ..services.meeting_guests import guest_for_slug, guest_for_token
@@ -432,13 +431,13 @@ class MeetingGuestMessagesView(APIView):
         if guest is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
         before, limit = page_args(request.query_params)
-        rows, has_more = chat_service.messages_for_guest(
+        rows, has_more = meeting_messages.messages_for_guest(
             guest, before=before, limit=limit
         )
         return Response(
             {
                 "messages": [
-                    chat_service.guest_view(chat_service.serialize_message(m))
+                    meeting_messages.guest_view(meeting_messages.serialize_message(m))
                     for m in rows
                 ],
                 "has_more": has_more,
@@ -453,8 +452,8 @@ class MeetingGuestMessagesView(APIView):
         body, error = clean_body(request.data)
         if error:
             return Response({"detail": error}, status=status.HTTP_400_BAD_REQUEST)
-        message = chat_service.post_message(guest.meeting, body, guest=guest)
+        message = meeting_messages.post_message(guest.meeting, body, guest=guest)
         return Response(
-            chat_service.guest_view(chat_service.serialize_message(message)),
+            meeting_messages.guest_view(meeting_messages.serialize_message(message)),
             status=status.HTTP_201_CREATED,
         )

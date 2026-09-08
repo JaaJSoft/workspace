@@ -150,10 +150,7 @@ class MeetingScope:
 def scope_of(session):
     """The scope a session was created in."""
     if session.meeting_id is not None:
-        meeting = session.meeting
-        if meeting.event_id is not None:
-            meeting.event  # noqa: B018 - warm the relation used by host_ids
-        return MeetingScope(meeting)
+        return MeetingScope(session.meeting)
     return ConversationScope(session.conversation_id)
 
 

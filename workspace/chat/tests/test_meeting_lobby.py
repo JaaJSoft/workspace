@@ -83,6 +83,18 @@ class MeetingHostViewTests(TestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertEqual(resp.data["uuid"], str(self.meeting.uuid))
 
+    def test_an_ad_hoc_title_that_is_not_a_string_is_400(self):
+        # str() on a dict would coerce a caller error into a meeting titled
+        # "{'x': 1}", which the host then has to rename.
+        self.client.force_authenticate(self.owner)
+        for title in ({"x": 1}, [1, 2], 42):
+            with self.subTest(title=title):
+                resp = self.client.post(
+                    "/api/v1/chat/meetings", {"title": title}, format="json"
+                )
+                self.assertEqual(resp.status_code, 400)
+        self.assertFalse(Meeting.objects.filter(event__isnull=True).exists())
+
     def test_non_owner_cannot_create(self):
         # 404, not 403: an event that exists but belongs to someone else
         # must look the same as one that does not exist at all, matching

@@ -94,6 +94,7 @@
                   >Sign in</a>
                 {% endif %}
                 <button
+                  type="button"
                   class="btn btn-primary btn-sm w-full sm:w-auto"
                   :disabled="knocking || (summary && summary.locked)"
                 >
@@ -121,7 +122,7 @@
                 <span class="badge badge-ghost">The meeting is currently full</span>
               </div>
               <div class="card-actions justify-end">
-                <button class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="leaveLobby()">Cancel</button>
               </div>
             </div>
           </div>
@@ -131,9 +132,7 @@
       <template x-if="phase === 'room'">
         <div class="flex flex-1 min-h-0">
           <template x-if="inCall">
-            <div class="flex-1 flex min-w-0">
-              {% include "chat/ui/partials/call_stage.html" with chat_toggle=True %}
-            </div>
+            <div class="flex-1 flex min-w-0">{% include "chat/ui/partials/call_stage.html" with chat_toggle=True %}</div>
           </template>
           <template x-if="!inCall">
             <section class="flex-1 flex items-center justify-center p-4 bg-base-200">
@@ -158,7 +157,7 @@
                   </div>
                   <div class="card-actions justify-end">
                     {# On a phone the stage carries the chat toggle, and there is no stage until the call starts. #}
-                    <button class="btn btn-sm md:hidden" @click="toggleChat()">
+                    <button type="button" class="btn btn-sm md:hidden" @click="toggleChat()">
                       <i data-lucide="message-square" class="w-4 h-4"></i>
                       Open the chat
                       <span
@@ -169,6 +168,7 @@
                       ></span>
                     </button>
                     <button
+                      type="button"
                       class="btn btn-ghost btn-sm"
                       x-show="joinError"
                       @click="joinWhenCallStarts()"
@@ -176,7 +176,7 @@
                       Try again
                     </button>
                     {# The stage's red button is the only other way out, and it is not rendered here. #}
-                    <button class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
+                    <button type="button" class="btn btn-ghost btn-sm" @click="leaveRoom()">Leave the meeting</button>
                   </div>
                 </div>
               </div>
@@ -194,7 +194,7 @@
               <h2 class="font-semibold" x-text="overTitle()"></h2>
               <p class="text-sm text-base-content/70" x-text="overDetail()"></p>
               <div class="card-actions justify-end" x-show="canReturn()">
-                <button class="btn btn-ghost btn-sm" @click="reset()">Back</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="reset()">Back</button>
               </div>
             </div>
           </div>
@@ -219,7 +219,7 @@
       </div>
     </div>
 
-    {% include 'ui/partials/toasts.html' %}
+    {% include "ui/partials/toasts.html" %}
     <script src="{% static 'ui/js/lucide_boot.js' %}"></script>
     <script src="{% static 'ui/js/inline_alert.js' %}"></script>
     <script src="{% static 'ui/js/toast.js' %}"></script>

@@ -20,7 +20,9 @@
         {% include "chat/ui/partials/meet_card_header.html" with inline_icon="hourglass" title="Too many requests" subtitle="You are loading this page too often." %}
         <div class="p-6">
           {% if retry_after %}
-            <p class="text-sm text-base-content/70">Try again in {{ retry_after }} second{{ retry_after|pluralize }}.</p>
+            <p
+              class="text-sm text-base-content/70"
+            >Try again in {{ retry_after }} second{{ retry_after|pluralize }}.</p>
           {% else %}
             <p class="text-sm text-base-content/70">Try again in a moment.</p>
           {% endif %}

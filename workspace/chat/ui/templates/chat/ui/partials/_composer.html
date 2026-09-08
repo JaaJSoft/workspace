@@ -9,7 +9,10 @@
 <!-- Input area -->
 <div
   class="p-3 bg-base-100 border-t border-base-300"
-  @dragenter.prevent="handleDragEnter($event)" @dragover.prevent="handleDragOver($event)" @dragleave.prevent="handleDragLeave($event)" @drop.prevent="handleDrop($event)"
+  @dragenter.prevent="handleDragEnter($event)"
+  @dragover.prevent="handleDragOver($event)"
+  @dragleave.prevent="handleDragLeave($event)"
+  @drop.prevent="handleDrop($event)"
 >
 
   <!-- Reply preview banner -->
@@ -105,7 +108,8 @@
   <!-- Mobile input (< sm) -->
   <div
     class="flex sm:hidden items-end gap-1.5"
-    x-show="recorderState === 'idle'" x-cloak
+    x-show="recorderState === 'idle'"
+    x-cloak
   >
     {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
     <div
@@ -116,7 +120,11 @@
         x-model="messageBody"
         @keydown="handleInputKeydown($event)"
         @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
-        @paste="handlePaste($event)" style="min-height:36px; line-height:20px; padding-top:8px; padding-bottom:8px"
+        @paste="handlePaste($event)"
+        style="min-height:36px;
+               line-height:20px;
+               padding-top:8px;
+               padding-bottom:8px"
         class="textarea textarea-ghost w-full max-h-[6rem] resize-none px-3 focus:outline-none text-sm !border-0 !outline-0 !bg-transparent"
         placeholder="Message..."
         rows="1"
@@ -250,7 +258,8 @@
   <!-- Desktop input (>= sm) -->
   <div
     class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50"
-    x-show="recorderState === 'idle'" x-cloak
+    x-show="recorderState === 'idle'"
+    x-cloak
   >
     <!-- Toolbar + Send -->
     <div class="flex items-center gap-0.5 pl-2 pr-1 py-1">
@@ -380,7 +389,8 @@
       x-model="messageBody"
       @keydown="handleInputKeydown($event)"
       @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
-      @paste="handlePaste($event)" class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
+      @paste="handlePaste($event)"
+      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
       placeholder="Type a message..."
       rows="1"
     ></textarea>

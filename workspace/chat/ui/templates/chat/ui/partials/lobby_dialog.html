@@ -14,7 +14,11 @@
           x-text="meeting && meeting.locked ? 'Locked' : 'Open'"
         ></span>
       </div>
-      <button class="btn btn-ghost btn-sm btn-square" @click="closeLobby()">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square"
+        @click="closeLobby()"
+      >
         <i data-lucide="x" class="w-4 h-4"></i>
       </button>
     </div>
@@ -27,8 +31,20 @@
           <div class="flex items-center gap-2">
             <user-avatar :username="g.display_name" size="sm"></user-avatar>
             <span class="text-sm truncate flex-1" x-text="g.display_name"></span>
-            <button class="btn btn-success btn-sm" @click="admitGuest(g.uuid)">Admit</button>
-            <button class="btn btn-ghost btn-sm" @click="refuseGuest(g.uuid)">Refuse</button>
+            <button
+              type="button"
+              class="btn btn-success btn-sm"
+              @click="admitGuest(g.uuid)"
+            >
+              Admit
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="refuseGuest(g.uuid)"
+            >
+              Refuse
+            </button>
           </div>
         </template>
       </div>
@@ -40,6 +56,7 @@
           :value="meeting ? meeting.join_url : ''"
         />
         <button
+          type="button"
           class="btn btn-sm"
           @click="navigator.clipboard.writeText(meeting.join_url).then(() => AppAlert.success('Join link copied', { duration: 2000 }))"
         >
@@ -49,11 +66,11 @@
 
       <!-- Actions -->
       <div class="flex justify-end pt-1">
-        <button class="btn btn-ghost btn-sm" @click="closeLobby()">Close</button>
+        <button type="button" class="btn btn-ghost btn-sm" @click="closeLobby()">Close</button>
       </div>
     </div>
   </div>
   <form method="dialog" class="modal-backdrop">
-    <button>close</button>
+    <button type="button">close</button>
   </form>
 </dialog>

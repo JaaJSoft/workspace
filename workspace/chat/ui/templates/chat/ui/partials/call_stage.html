@@ -114,6 +114,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
             x-text="spotlightParticipant() ? spotlightParticipant().display_name : ''"
           ></span>
           <button
+            type="button"
             class="btn btn-xs absolute top-2 right-2"
             @click.stop="backToGrid()"
             title="Back to grid"
@@ -213,6 +214,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
       class="inline-flex flex-wrap justify-center items-center max-w-full gap-2 p-2 md:gap-3 md:p-3 rounded-full bg-base-100/90 backdrop-blur border border-base-300 shadow-lg"
     >
       <button
+        type="button"
         class="btn btn-sm md:btn-md btn-circle border-0"
         :class="isMuted ? 'btn-error' : 'btn-neutral'"
         @click="toggleMute()"
@@ -224,6 +226,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
         ></i>
       </button>
       <button
+        type="button"
         class="btn btn-sm md:btn-md btn-circle border-0"
         :class="cameraOn ? 'btn-primary' : 'btn-neutral'"
         @click="toggleCamera()"
@@ -235,6 +238,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
         ></i>
       </button>
       <button
+        type="button"
         class="btn btn-sm md:btn-md btn-circle border-0"
         :class="sharing ? 'btn-primary' : 'btn-neutral'"
         @click="toggleScreenShare()"
@@ -245,6 +249,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
       {% if host_controls %}
         {# The diagnostic panel is a member-room feature: it names the conversation and its members. #}
         <button
+          type="button"
           class="btn btn-sm md:btn-md btn-neutral btn-circle border-0"
           @click="openDiagnostic()"
           :disabled="diagRunning"
@@ -257,6 +262,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
         <template x-if="meeting">
           <div class="contents">
             <button
+              type="button"
               class="btn btn-sm md:btn-md btn-circle border-0 relative"
               @click="openLobby()"
               title="Lobby"
@@ -269,6 +275,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
               ></span>
             </button>
             <button
+              type="button"
               class="btn btn-sm md:btn-md btn-circle border-0"
               :class="meeting && meeting.locked ? 'btn-warning' : 'btn-neutral'"
               @click="toggleLock()"
@@ -280,6 +287,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
               ></i>
             </button>
             <button
+              type="button"
               class="btn btn-sm md:btn-md btn-neutral btn-circle border-0"
               @click="endMeeting()"
               title="End meeting for everyone"
@@ -292,6 +300,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
       {% if chat_toggle %}
         {# Below md the chat is a slide-over, so it needs a way in from the dock. #}
         <button
+          type="button"
           class="btn btn-sm md:btn-md btn-circle border-0 relative md:hidden"
           :class="chatOpen ? 'btn-primary' : 'btn-neutral'"
           @click="toggleChat()"
@@ -306,6 +315,7 @@ one x-ref names one element whichever branch the stage is in.{% endcomment %}
         </button>
       {% endif %}
       <button
+        type="button"
         class="btn btn-sm md:btn-md btn-error btn-circle border-0"
         @click="leaveRoom()"
         title="Leave call"

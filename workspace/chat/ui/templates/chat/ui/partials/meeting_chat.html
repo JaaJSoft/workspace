@@ -9,25 +9,48 @@ and, below md, chatOpen/toggleChat() for the slide-over.
   x-cloak
   data-testid="meeting-chat"
 >
-  <div class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100">
+  <div
+    class="px-4 py-2.5 border-b border-base-300 flex items-center gap-3 bg-base-100"
+  >
     <conversation-avatar kind="group" size="md" active :initials="chatMeetTitleInitials(meetingTitle())"></conversation-avatar>
     <div class="flex-1 min-w-0">
       <h3 class="font-semibold text-sm truncate" x-text="meetingTitle()"></h3>
       <p class="text-xs text-base-content/60 truncate">Meeting chat</p>
     </div>
-    <button class="btn btn-ghost btn-sm btn-square md:hidden" @click="toggleChat()" title="Close">
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-square md:hidden"
+      @click="toggleChat()"
+      title="Close"
+    >
       <i data-lucide="x" class="w-4 h-4"></i>
     </button>
   </div>
 
-  <div class="flex-1 overflow-y-auto overflow-x-hidden p-4" id="meeting-chat-scroll">
+  <div
+    class="flex-1 overflow-y-auto overflow-x-hidden p-4"
+    id="meeting-chat-scroll"
+  >
     <div x-show="meetingHasMore" x-cloak class="flex justify-center py-2">
-      <button class="btn btn-ghost btn-xs" @click="loadOlderMeetingMessages()" :disabled="meetingChatLoading">Load older messages</button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs"
+        @click="loadOlderMeetingMessages()"
+        :disabled="meetingChatLoading"
+      >
+        Load older messages
+      </button>
     </div>
-    <div x-show="meetingChatLoading && !meetingMessages.length" class="flex justify-center py-8">
+    <div
+      x-show="meetingChatLoading && !meetingMessages.length"
+      class="flex justify-center py-8"
+    >
       <span class="loading loading-spinner loading-md text-info"></span>
     </div>
-    <div id="meeting-chat-list" :data-msg-animation="chatPrefs.messageAnimation"></div>
+    <div
+      id="meeting-chat-list"
+      :data-msg-animation="chatPrefs.messageAnimation"
+    ></div>
   </div>
 
   {% include "chat/ui/partials/meeting_composer.html" %}

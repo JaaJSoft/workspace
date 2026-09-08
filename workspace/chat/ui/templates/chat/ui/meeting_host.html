@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
 
 {% block title %}{{ meeting.title }} - Meeting - Workspace{% endblock %}
@@ -50,17 +50,33 @@
           <div class="card bg-base-100 shadow-lg w-full max-w-md overflow-hidden">
             {% include "chat/ui/partials/meet_card_header.html" with icon="video" title_expr="meetingTitle()" subtitle_expr="summaryLine()" %}
             <div class="p-6 flex flex-col gap-3">
-              <p class="text-sm text-base-content/70" x-text="callSession ? 'A call is in progress.' : 'Nobody is in the call yet.'"></p>
+              <p
+                class="text-sm text-base-content/70"
+                x-text="callSession ? 'A call is in progress.' : 'Nobody is in the call yet.'"
+              ></p>
               <div class="flex items-center gap-2 flex-wrap">
-                <button class="btn btn-primary btn-sm" @click="joinMeetingCall()" :disabled="joiningCall">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  @click="joinMeetingCall()"
+                  :disabled="joiningCall"
+                >
                   <i data-lucide="phone" class="w-4 h-4"></i> Join the call
                 </button>
-                <button class="btn btn-sm" @click="openLobby()">
+                <button type="button" class="btn btn-sm" @click="openLobby()">
                   <i data-lucide="door-open" class="w-4 h-4"></i> Lobby
-                  <span class="badge badge-xs badge-warning" x-show="lobby.length" x-text="lobby.length"></span>
+                  <span
+                    class="badge badge-xs badge-warning"
+                    x-show="lobby.length"
+                    x-text="lobby.length"
+                  ></span>
                 </button>
-                <button class="btn btn-ghost btn-sm" @click="copyJoinUrl()"><i data-lucide="link" class="w-4 h-4"></i> Copy link</button>
-                <button class="btn btn-sm md:hidden" @click="toggleChat()"><i data-lucide="message-square" class="w-4 h-4"></i> Chat</button>
+                <button type="button" class="btn btn-ghost btn-sm" @click="copyJoinUrl()">
+                  <i data-lucide="link" class="w-4 h-4"></i> Copy link
+                </button>
+                <button type="button" class="btn btn-sm md:hidden" @click="toggleChat()">
+                  <i data-lucide="message-square" class="w-4 h-4"></i> Chat
+                </button>
               </div>
             </div>
           </div>
@@ -72,7 +88,9 @@
     same x-ref in one component fight over the key, and Alpine's cleanup on the
     branch that unmounts deletes the entry the surviving one had just written -
     leaving openLobby() with nothing to call showModal on.{% endcomment %}
-    <template x-if="meeting">{% include "chat/ui/partials/lobby_dialog.html" %}</template>
+    <template x-if="meeting">
+      {% include "chat/ui/partials/lobby_dialog.html" %}
+    </template>
     {% comment %}Singleton emoji picker. Escape is handled here rather than by
     the composer's keydown handler, which never sees it while the caret sits in
     the picker's search field; the event is composed, so it reaches this

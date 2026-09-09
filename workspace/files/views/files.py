@@ -27,7 +27,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
-from workspace.files.services.locking import conflicting_lock
+from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
 from ..models import File, FileShare
@@ -702,8 +702,18 @@ class FileViewSet(
             status=423,
         )
 
+    def get_serializer_context(self):
+        # The serializer re-asks the precondition inside the write, where the
+        # database can serialise it (FileService.update_content). Parsing it
+        # once here keeps the two answers from drifting apart.
+        context = super().get_serializer_context()
+        request = self.request
+        if request is not None and request.method in {"PATCH", "PUT"}:
+            context["expected_content_hash"] = precondition_hash(request)
+        return context
+
     def _stale_write_response(self, request, uuid):
-        """412 when the caller's precondition no longer matches the stored blob.
+        """412 when the caller's precondition already fails on a read.
 
         A lock only covers writers who are still holding it: a tab that slept
         past the 5-minute TTL wakes up with a buffer loaded before somebody
@@ -711,14 +721,18 @@ class FileViewSet(
         ``content_hash`` the buffer started from - as ``If-Match`` or a
         ``base_hash`` part - is what lets the write be refused instead.
 
+        This is the early-out, not the guarantee: it settles the sequential
+        case before a byte of the upload is read, and it is the only check a
+        write that carries no content (a rename under ``If-Match``) ever gets.
+        A content write is decided again by the conditional UPDATE inside
+        ``FileService.update_content``, which is what holds when two callers
+        race with the same expectation.
+
         Optional by design: a caller that sends no precondition (WebDAV, the
         upload paths, an API script) keeps the old last-write-wins behaviour.
         """
-        expected = request.headers.get("If-Match")
-        if not expected and hasattr(request.data, "get"):
-            expected = request.data.get("base_hash")
-        expected = (expected or "").strip().strip('"')
-        if not expected or expected == "*":
+        expected = precondition_hash(request)
+        if not expected:
             return None
 
         target = self._write_target(request, uuid)

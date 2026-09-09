@@ -453,9 +453,36 @@ class FileService:
 
     @staticmethod
     def update_content(
-        file_obj, content, *, name=None, mime_type=None, acting_user=None
+        file_obj,
+        content,
+        *,
+        name=None,
+        mime_type=None,
+        acting_user=None,
+        expected_hash=None,
     ):
-        """Replace a file's content, updating size, MIME type and hash."""
+        """Replace a file's content, updating size, MIME type and hash.
+
+        ``expected_hash`` turns the write into a compare-and-swap: the row is
+        claimed with an UPDATE whose WHERE clause carries both the caller's
+        expectation and the lock predicate, and a claim that matches no row
+        raises ``StaleContent`` instead of writing. Checking those conditions
+        beforehand cannot serialise them with the write - two callers holding
+        the same expectation would both pass - whereas the claim is decided by
+        the database: the statement that verifies the expectation is the same
+        one that invalidates it, so the second caller finds nothing to match
+        and is refused. ``SELECT ... FOR UPDATE`` would be the obvious
+        alternative and is not available: SQLite backs dev and the whole test
+        suite, and has no row locks.
+
+        The claim runs before ``save()``, which is what commits the blob, so a
+        refused write leaves nothing behind in storage. It must run inside the
+        caller's transaction, or the claim can commit while the content that
+        justified it does not.
+
+        Callers that pass nothing keep the unconditional last-write-wins
+        behaviour every upload path relies on.
+        """
         from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
             detect_from_stream,
@@ -481,6 +508,10 @@ class FileService:
             file_obj.type, mime_type or getattr(content, "content_type", None)
         )
         file_obj.has_thumbnail = False
+
+        if expected_hash is not None:
+            FileService._claim_for_write(file_obj, acting_user, expected_hash)
+
         file_obj.content = content
         file_obj.save()
         # Ordering is load-bearing: after the save (nothing here is atomic, so a
@@ -494,6 +525,35 @@ class FileService:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
         return file_obj
+
+    @staticmethod
+    def _claim_for_write(file_obj, acting_user, expected_hash):
+        """Take the row for this write, or raise ``StaleContent``.
+
+        ``file_obj.content_hash`` already holds the hash of the incoming bytes,
+        so the claim swaps the expectation out for it in one statement and a
+        second writer holding the same expectation then matches no row.
+
+        The predicate is the version, not "has anyone touched this": a
+        competing write that stores the same bytes the caller started from
+        leaves the hash where it was, and the caller is right to proceed -
+        there is nothing of the other write left to lose.
+        """
+        from workspace.files.services.locking import StaleContent, unlocked_for_q
+
+        claimed = (
+            File.objects.filter(pk=file_obj.pk, content_hash=expected_hash)
+            .filter(unlocked_for_q(acting_user))
+            .update(content_hash=file_obj.content_hash)
+        )
+        if claimed:
+            return
+        current = (
+            File.objects.filter(pk=file_obj.pk)
+            .values_list("content_hash", flat=True)
+            .first()
+        )
+        raise StaleContent(current or "")
 
     @staticmethod
     def replace_content_from(target, source, *, acting_user=None):

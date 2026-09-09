@@ -6,7 +6,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FilePermission, FileService
-from workspace.files.services.locking import conflicting_lock
+from workspace.files.services.locking import StaleContent, conflicting_lock
 
 from .models import File, FileComment
 
@@ -15,6 +15,12 @@ class FileLocked(APIException):
     status_code = 423
     default_detail = "File is locked by another user."
     default_code = "locked"
+
+
+class FileContentStale(APIException):
+    status_code = 412
+    default_detail = "The file changed since it was loaded."
+    default_code = "precondition_failed"
 
 
 def ensure_unlocked(user, target):
@@ -504,13 +510,26 @@ class FileSerializer(serializers.ModelSerializer):
 
         if content_provided:
             if instance.node_type == File.NodeType.FILE and uploaded is not None:
-                FileService.update_content(
-                    instance,
-                    uploaded,
-                    name=instance.name,
-                    mime_type=explicit_mime_type,
-                    acting_user=acting_user,
-                )
+                # The viewset answers 412 before a byte is read when the row has
+                # already moved; this passes the same expectation down so the
+                # database decides it, which is the half that holds under two
+                # writers racing with the same expectation.
+                try:
+                    FileService.update_content(
+                        instance,
+                        uploaded,
+                        name=instance.name,
+                        mime_type=explicit_mime_type,
+                        acting_user=acting_user,
+                        expected_hash=self.context.get("expected_content_hash") or None,
+                    )
+                except StaleContent as exc:
+                    raise FileContentStale(
+                        {
+                            "detail": FileContentStale.default_detail,
+                            "content_hash": exc.current_hash,
+                        }
+                    ) from exc
             else:
                 instance.content = uploaded
                 instance.size = None

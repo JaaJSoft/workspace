@@ -115,7 +115,7 @@
         <button
           type="button"
           class="btn btn-ghost btn-xs"
-          :disabled="!isDirty || saveStatus === 'saving'"
+          :disabled="!isDirty || saveStatus === 'saving' || staleConflict"
           @click="save()"
           title="Save (Ctrl+S)"
         >
@@ -240,6 +240,10 @@
     }
 
     function _scheduleAutosave(self) {
+      // A stale buffer has nowhere to go: save() refuses it, so re-arming the
+      // timers on every keystroke would only spin. The banner is the way out.
+      if (self.staleConflict) return;
+
       // Debounce: reset 2s timer on every change
       if (_debounceTimer) clearTimeout(_debounceTimer);
       _debounceTimer = setTimeout(function() {

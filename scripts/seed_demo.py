@@ -54,6 +54,7 @@ import random
 import re
 import sys
 import unicodedata
+from collections import defaultdict
 from io import BytesIO
 from pathlib import Path
 
@@ -569,6 +570,24 @@ def create_users(count, domain, password, avatar_ratio, keep_intro_modals=False)
     return users, n_avatars
 
 
+def _free_file_name(stem, ext, taken):
+    """``<stem>-<n>.<ext>`` under a name no sibling is using yet.
+
+    *taken* holds the lowercased names already placed in that folder. The
+    random suffix keeps the listing looking unplanned; the fallback counter is
+    what guarantees termination once a folder has drawn the same stem often
+    enough for the random half to keep missing.
+    """
+    for _ in range(10):
+        name = f"{stem}-{random.randint(1, 999)}.{ext}"
+        if name.lower() not in taken:
+            return name
+    n = 1
+    while f"{stem}-{n}.{ext}".lower() in taken:
+        n += 1
+    return f"{stem}-{n}.{ext}"
+
+
 def build_file_tree(user, min_files, max_files, max_depth, history_days):
     """Create a random folder tree + files for one user. Returns file count.
 
@@ -587,35 +606,49 @@ def build_file_tree(user, min_files, max_files, max_depth, history_days):
         TOP_FOLDERS, k=min(len(TOP_FOLDERS), max(2, n_folders // 3))
     )
 
+    # Lowercased names already placed under each parent (None == user root).
+    # A name is unique per folder case-insensitively and across both node
+    # types, so a second draw landing on a pair already taken makes the
+    # service raise and takes the whole seeding run down with it - and with a
+    # 20-name pool drawn tens of times, that is ordinary rather than rare.
+    taken = defaultdict(set)
+
     with transaction.atomic():
         for name in top_pool:
             ts = _rand_past(history_days)
             folder = FileService.create_folder(owner=user, name=name)
             _backdate_file(folder, ts)
             targets.append((folder, 1, ts))
+            taken[None].add(name.lower())
 
         for _ in range(n_folders):
             parent, depth, parent_ts = random.choice(targets)
             if depth >= max_depth:
                 continue
-            name = random.choice(SUB_FOLDERS)
+            siblings = taken[parent.pk if parent else None]
+            free = [n for n in SUB_FOLDERS if n.lower() not in siblings]
+            if not free:
+                continue
+            name = random.choice(free)
             ts = _rand_past(history_days, until=timezone.now())
             ts = max(ts, parent_ts)  # never predate the parent folder
             folder = FileService.create_folder(owner=user, name=name, parent=parent)
             _backdate_file(folder, ts)
             targets.append((folder, depth + 1, ts))
+            siblings.add(name.lower())
 
         for _ in range(n_files):
             parent, _depth, parent_ts = random.choice(targets)
+            siblings = taken[parent.pk if parent else None]
             ext, data = _make_file_content()
-            stem = random.choice(FILE_STEMS)
-            name = f"{stem}-{random.randint(1, 999)}.{ext}"
+            name = _free_file_name(random.choice(FILE_STEMS), ext, siblings)
             f = FileService.create_file(
                 owner=user,
                 name=name,
                 parent=parent,
                 content=ContentFile(data, name=name),
             )
+            siblings.add(name.lower())
             ts = max(_rand_past(history_days), parent_ts)
             _backdate_file(f, ts)
     return n_files

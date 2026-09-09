@@ -83,6 +83,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # The owner is spelled `JaaJSoft` and a Docker reference may not contain
       # uppercase. metadata-action lowercases what it emits, but the digest push

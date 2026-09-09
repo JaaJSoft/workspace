@@ -36,6 +36,12 @@ class AppLockManager(LockManager):
     """A wsgidav lock manager that keeps ``File.locked_by`` in step."""
 
     def acquire(self, *, url, principal, **kwargs):
+        """Grant a DAV lock and put it on the File row, or refuse with 423.
+
+        Refusing here is what stops a DAV client from believing it owns a file
+        the browser editor is holding - wsgidav's own lock table knows nothing
+        about the app lock.
+        """
         file_obj, user = _dav_file(url, principal)
 
         holder = conflicting_lock(file_obj, user)
@@ -53,6 +59,7 @@ class AppLockManager(LockManager):
         return lock
 
     def refresh(self, token, *, timeout=None):
+        """Extend a DAV lock, carrying the new deadline onto the File row."""
         lock = super().refresh(token, timeout=timeout)
         if lock:
             File.objects.filter(lock_token=lock["token"]).update(
@@ -61,6 +68,12 @@ class AppLockManager(LockManager):
         return lock
 
     def release(self, token):
+        """Drop a DAV lock and clear the File row it was mirrored onto.
+
+        Also reached through ``remove_all_locks_from_url``, which wsgidav calls
+        when a resource is deleted or moved, so a vanished file never leaves
+        the app lock set behind it.
+        """
         # Read the row before the UPDATE clears the token it is found by, so
         # the editors watching this file can be told it is writable again -
         # the same ``lock_released`` the in-app endpoint pushes on DELETE.

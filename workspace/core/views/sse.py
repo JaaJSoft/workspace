@@ -1,3 +1,4 @@
+import base64
 import logging
 import time
 
@@ -46,6 +47,9 @@ SSE_PUBSUB_MESSAGES = safe_counter(
 # auto-reconnects via EventSource and resumes from Last-Event-Id.
 _MAX_CONNECTION_SECONDS = 600
 
+# Upper bound on an incoming Last-Event-Id before it is ignored outright.
+_MAX_CURSOR_CHARS = 512
+
 
 def _format_sse(event_type, data, event_id=None):
     """Format an SSE event string.
@@ -83,25 +87,81 @@ def global_stream(request):
     return response
 
 
-def _init_providers(user, last_event_id):
+def encode_stream_cursor(cursors):
+    """Pack the per-provider resume points into one opaque SSE event id.
+
+    The stream multiplexes every provider onto a single ``id:`` field, but the
+    browser only ever replays the last one it saw - so an id naming a single
+    provider's position would lose every other provider's. The id carries the
+    whole map instead, and each provider is handed its own entry back.
+    """
+    packed = base64.urlsafe_b64encode(orjson.dumps(cursors)).decode()
+    return packed.rstrip("=")
+
+
+def decode_stream_cursor(raw):
+    """Unpack a cursor produced by :func:`encode_stream_cursor`.
+
+    Anything else - a truncated header, an id minted before this encoding, a
+    hand-crafted query parameter - yields an empty map, which starts every
+    provider from scratch rather than failing the connection.
+    """
+    if not raw or len(raw) > _MAX_CURSOR_CHARS:
+        return {}
+    try:
+        padded = raw + "=" * (-len(raw) % 4)
+        cursors = orjson.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        return {}
+    if not isinstance(cursors, dict):
+        return {}
+    return {
+        str(slug): str(value)
+        for slug, value in cursors.items()
+        if isinstance(value, str | int)
+    }
+
+
+def _incoming_cursors(request):
+    """Resume points the client sent, by provider slug.
+
+    ``EventSource`` replays the last id in a header on its own reconnects, but
+    a stream the page reopens itself (visibility change, bfcache restore)
+    starts a brand new ``EventSource`` with no header at all - so sse.js passes
+    the same value as a query parameter. The header wins when both are there.
+    """
+    raw = request.META.get("HTTP_LAST_EVENT_ID") or request.GET.get("last_event_id")
+    return decode_stream_cursor(raw)
+
+
+def _init_providers(user, cursors):
     """Instantiate one provider per registered app."""
     providers_info = sse_registry.get_all()
     providers = {}
     for slug, info in providers_info.items():
         try:
-            providers[slug] = info.provider_cls(user, last_event_id)
+            providers[slug] = info.provider_cls(user, cursors.get(slug))
         except Exception:
             logger.exception("Failed to instantiate SSE provider '%s'", slug)
     return providers
 
 
-def _emit_initial_events(providers, user_id):
+def _emit(slug, event_name, data, event_id, cursors):
+    """Format one provider event, advancing the stream cursor it resumes from."""
+    SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
+    stream_id = None
+    if event_id:
+        cursors[slug] = str(event_id)
+        stream_id = encode_stream_cursor(cursors)
+    return _format_sse(f"{slug}.{event_name}", data, stream_id)
+
+
+def _emit_initial_events(providers, user_id, cursors):
     """Yield initial SSE events from all providers."""
     for slug, provider in providers.items():
         try:
             for event_name, data, event_id in provider.get_initial_events():
-                SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
-                yield _format_sse(f"{slug}.{event_name}", data, event_id)
+                yield _emit(slug, event_name, data, event_id, cursors)
         except Exception:
             logger.exception(
                 "Failed to get initial events from SSE provider '%s' for user %s",
@@ -110,7 +170,7 @@ def _emit_initial_events(providers, user_id):
             )
 
 
-def _poll_provider(slug, provider, cache_value, user_id):
+def _poll_provider(slug, provider, cache_value, user_id, cursors):
     """Poll a single provider and yield any SSE events."""
     try:
         # Force-evaluate inside the timer so we measure the actual work even if
@@ -118,12 +178,7 @@ def _poll_provider(slug, provider, cache_value, user_id):
         with SSE_PROVIDER_POLL_DURATION.labels(provider=slug).time():
             events = list(provider.poll(cache_value))
         for event_name, data, event_id in events:
-            SSE_EVENTS_EMITTED.labels(provider=slug, event=event_name).inc()
-            yield _format_sse(
-                f"{slug}.{event_name}",
-                data,
-                event_id,
-            )
+            yield _emit(slug, event_name, data, event_id, cursors)
     except Exception:
         logger.exception(
             "SSE provider '%s' poll failed for user %s",
@@ -151,11 +206,11 @@ def _event_stream_pubsub(request, redis):
     """Pub/Sub-based SSE generator for near-instant event delivery."""
     user = request.user
     user_id = user.id
-    last_event_id = request.META.get("HTTP_LAST_EVENT_ID")
+    cursors = _incoming_cursors(request)
 
-    providers = _init_providers(user, last_event_id)
+    providers = _init_providers(user, cursors)
 
-    yield from _emit_initial_events(providers, user_id)
+    yield from _emit_initial_events(providers, user_id, cursors)
 
     pubsub = redis.pubsub()
     pubsub.subscribe(f"sse:user:{user_id}")
@@ -181,7 +236,7 @@ def _event_stream_pubsub(request, redis):
             if message is None:
                 # Timeout: poll all providers with None (timer-based checks)
                 for slug, provider in providers.items():
-                    yield from _poll_provider(slug, provider, None, user_id)
+                    yield from _poll_provider(slug, provider, None, user_id, cursors)
             elif message["type"] == "message":
                 SSE_PUBSUB_MESSAGES.inc()
                 try:
@@ -194,6 +249,7 @@ def _event_stream_pubsub(request, redis):
                             providers[slug],
                             time.monotonic(),
                             user_id,
+                            cursors,
                         )
                 except Exception:
                     logger.exception(
@@ -212,9 +268,9 @@ def _event_stream_polling(request):
 
     user = request.user
     user_id = user.id
-    last_event_id = request.META.get("HTTP_LAST_EVENT_ID")
+    cursors = _incoming_cursors(request)
 
-    providers = _init_providers(user, last_event_id)
+    providers = _init_providers(user, cursors)
 
     last_cache_values = {slug: None for slug in providers}
 
@@ -222,7 +278,7 @@ def _event_stream_polling(request):
     last_check = time.time()
     last_keepalive = time.time()
 
-    yield from _emit_initial_events(providers, user_id)
+    yield from _emit_initial_events(providers, user_id, cursors)
 
     SSE_CONNECTIONS.inc()
     try:
@@ -257,6 +313,7 @@ def _event_stream_polling(request):
                             provider,
                             changed_value,
                             user_id,
+                            cursors,
                         )
                     except Exception:
                         logger.exception(

@@ -1,9 +1,6 @@
 import logging
 import threading
-import time
-import uuid
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from dataclasses import dataclass
 
 import orjson
@@ -110,67 +107,129 @@ def notify_sse(provider_slug: str, user_id: int):
 # -- per-user event mailbox ---------------------------------------------------
 #
 # Providers that fan out discrete events (a file changed, an import progressed)
-# park them in a per-user list in the cache and wake the stream; the provider's
-# poll() drains the list. The short cache lock closes the read-modify-write
-# window between a pusher and the poller so neither drops the other's events.
+# append them to a per-user log and wake the stream; every stream of that user
+# reads the log from its own cursor. Reads are non-destructive, so two tabs both
+# see the event instead of racing for it, and a stream that reconnects resumes
+# from the sequence number it last received rather than from whatever is left.
+#
+# Each entry lives under its own cache key, numbered by an atomic counter: a
+# push writes one key nobody else writes, a read only reads. There is no
+# read-modify-write of a shared list, and therefore no mutex whose failure
+# would silently drop an event.
 
-_MAILBOX_KEY = "sse:{slug}:mailbox:{user_id}"
+_MAILBOX_ENTRY_KEY = "sse:{slug}:mailbox:{user_id}:{seq}"
+_MAILBOX_SEQ_KEY = "sse:{slug}:mailbox:{user_id}:seq"
 _MAILBOX_TTL = 300
-_MAILBOX_LOCK_KEY = "sse:{slug}:mailbox:{user_id}:lock"
-_MAILBOX_LOCK_TTL = 2
+# The counter must outlive the newest entry it numbered: were it to expire
+# first, sequence numbers would restart below the cursor of a live stream.
+_MAILBOX_SEQ_TTL = _MAILBOX_TTL * 12
+# Ceiling on how far back a resuming stream replays, so one read stays bounded.
+_MAILBOX_MAX_REPLAY = 500
 
 
-@contextmanager
-def _mailbox_lock(slug, user_id):
-    """Best-effort mutex around one user's mailbox.
+def _entry_key(slug, user_id, seq):
+    return _MAILBOX_ENTRY_KEY.format(slug=slug, user_id=user_id, seq=seq)
 
-    Waits up to the lock TTL for the current holder; past that the operation
-    proceeds anyway (a stuck holder must not stall the stream) with a warning.
-    Release is ownership-safe: a holder whose lock expired does not delete the
-    lock a later caller acquired.
-    """
-    key = _MAILBOX_LOCK_KEY.format(slug=slug, user_id=user_id)
-    token = uuid.uuid4().hex
-    deadline = time.monotonic() + _MAILBOX_LOCK_TTL
-    acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
-    while not acquired and time.monotonic() < deadline:
-        time.sleep(0.005)
-        acquired = cache.add(key, token, _MAILBOX_LOCK_TTL)
-    if not acquired:
-        logger.warning(
-            "SSE mailbox lock for %s/%s not acquired in time; proceeding unlocked",
-            slug,
-            scrub(user_id),
-        )
+
+def _next_seq(slug, user_id):
+    """Hand out the next sequence number for a mailbox, atomically."""
+    key = _MAILBOX_SEQ_KEY.format(slug=slug, user_id=user_id)
+    cache.add(key, 0, _MAILBOX_SEQ_TTL)
     try:
-        yield
-    finally:
-        if acquired and cache.get(key) == token:
-            cache.delete(key)
+        seq = cache.incr(key)
+    except ValueError:
+        # The counter expired between the add and the incr.
+        cache.add(key, 0, _MAILBOX_SEQ_TTL)
+        seq = cache.incr(key)
+    cache.touch(key, _MAILBOX_SEQ_TTL)
+    return seq
+
+
+def mailbox_head(slug, user_id):
+    """Highest sequence number handed out for this mailbox (0 when empty)."""
+    return cache.get(_MAILBOX_SEQ_KEY.format(slug=slug, user_id=user_id)) or 0
 
 
 def push_user_event(slug, user_id, payload, *, supersedes=None):
     """Queue *payload* for *user_id* on provider *slug* and wake the stream.
 
     ``supersedes=(field, value)`` drops earlier queued payloads carrying the
-    same value - for progress-style events where only the newest matters.
+    same value - for progress-style events where only the newest matters. The
+    collapse happens when a stream reads, so it costs the push nothing and
+    applies to every reader independently.
     """
-    key = _MAILBOX_KEY.format(slug=slug, user_id=user_id)
-    with _mailbox_lock(slug, user_id):
-        events = cache.get(key, [])
-        if supersedes is not None:
-            field, value = supersedes
-            events = [e for e in events if e.get(field) != value]
-        events.append(payload)
-        cache.set(key, events, _MAILBOX_TTL)
+    seq = _next_seq(slug, user_id)
+    entry = {"seq": seq, "payload": payload}
+    if supersedes is not None:
+        field, value = supersedes
+        entry["supersedes"] = [field, value]
+    cache.set(_entry_key(slug, user_id, seq), entry, _MAILBOX_TTL)
     notify_sse(slug, user_id)
 
 
-def drain_user_events(slug, user_id):
-    """Return and clear the queued payloads for *user_id* on provider *slug*."""
-    key = _MAILBOX_KEY.format(slug=slug, user_id=user_id)
-    with _mailbox_lock(slug, user_id):
-        events = cache.get(key, [])
-        if events:
-            cache.delete(key)
-    return events
+def _collapse_superseded(entries):
+    """Drop entries a later one supersedes, keeping the survivors in order."""
+    kept = []
+    for entry in entries:
+        supersedes = entry.get("supersedes")
+        if supersedes:
+            field, value = supersedes
+            kept = [e for e in kept if e["payload"].get(field) != value]
+        kept.append(entry)
+    return [(entry["seq"], entry["payload"]) for entry in kept]
+
+
+def read_user_events(slug, user_id, cursor):
+    """Return ``(entries, new_cursor)`` for what was queued after *cursor*.
+
+    ``entries`` is a list of ``(seq, payload)`` in queue order. The read leaves
+    the mailbox untouched: the caller advances its own cursor and every other
+    stream of the same user still sees the same entries.
+    """
+    head = mailbox_head(slug, user_id)
+    if head < cursor:
+        # The counter expired and restarted; a cursor from the previous
+        # incarnation would swallow every event until it caught up again.
+        cursor = 0
+    if head == cursor:
+        return [], cursor
+    low = max(cursor, head - _MAILBOX_MAX_REPLAY)
+    keys = [_entry_key(slug, user_id, seq) for seq in range(low + 1, head + 1)]
+    found = cache.get_many(keys)
+    entries = sorted(
+        (e for e in found.values() if isinstance(e, dict) and "payload" in e),
+        key=lambda e: e["seq"],
+    )
+    return _collapse_superseded(entries), head
+
+
+class MailboxSSEProvider(SSEProvider):
+    """Provider whose events all come from the per-user mailbox.
+
+    Subclasses only set ``slug``. The cursor lives on the connection: it
+    resumes from the id the browser replays on a reconnect, and otherwise
+    starts at the head, because a page that has just rendered from the database
+    already reflects everything queued before it opened the stream.
+    """
+
+    slug: str
+
+    def __init__(self, user, last_event_id):
+        super().__init__(user, last_event_id)
+        self._cursor = self._seed_cursor(last_event_id)
+
+    def _seed_cursor(self, last_event_id):
+        try:
+            return max(int(last_event_id), 0)
+        except TypeError, ValueError:
+            return mailbox_head(self.slug, self.user.id)
+
+    def get_initial_events(self):
+        return self._read()
+
+    def poll(self, cache_value):
+        return self._read()
+
+    def _read(self):
+        entries, self._cursor = read_user_events(self.slug, self.user.id, self._cursor)
+        return [(payload["type"], payload, str(seq)) for seq, payload in entries]

@@ -111,7 +111,7 @@ Visit `http://localhost:8000`. No webpack, no npm, no build step.
 
 ### Prerequisites
 
-- Python 3.14+
+- Python 3.14.1+ (a final release - a 3.14 release candidate is refused, see `requires-python`)
 - [uv](https://docs.astral.sh/uv/) (recommended package manager)
 - Redis (optional, for caching and Celery)
 

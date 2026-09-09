@@ -3,7 +3,11 @@ name = "workspace"
 version = "0.39.0"
 description = "Self-hosted productivity suite (files, chat, mail, calendar, notes, AI assistants) designed to run anywhere — from a single Raspberry Pi to a multi-node Kubernetes deployment."
 readme = "README.md"
-requires-python = ">=3.14"
+# Names a patch release on purpose: uv installs a pre-release when it is the
+# only interpreter its index has for the lower bound, and `>=3.14` and
+# `>=3.14.0` both let 3.14.0rc2 through - where every command dies on a bare
+# AssertionError from pydantic. Keep manage.py's MINIMUM_PYTHON in step.
+requires-python = ">=3.14.1"
 dependencies = [
     "django>=6.1.1,<7.0",
     "djangorestframework==3.18.0",

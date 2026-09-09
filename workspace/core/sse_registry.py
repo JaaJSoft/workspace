@@ -200,7 +200,16 @@ def read_user_events(slug, user_id, cursor):
         (e for e in found.values() if isinstance(e, dict) and "payload" in e),
         key=lambda e: e["seq"],
     )
-    return _collapse_superseded(entries), head
+    # A push takes the sequence number first and writes the entry second, so
+    # the newest numbers can be reserved while their entries are still in
+    # flight. Stopping below the highest one that is missing leaves them for
+    # the next read instead of stepping over them; `low` floors the walk so an
+    # entry that genuinely expired cannot stall the cursor for good.
+    found_seqs = {entry["seq"] for entry in entries}
+    new_cursor = head
+    while new_cursor > low and new_cursor not in found_seqs:
+        new_cursor -= 1
+    return _collapse_superseded(entries), new_cursor
 
 
 class MailboxSSEProvider(SSEProvider):

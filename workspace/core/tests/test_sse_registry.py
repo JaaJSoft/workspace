@@ -140,6 +140,41 @@ class UserEventMailboxTests(TestCase):
         self.assertEqual(payloads, [{"type": "a"}])
         self.assertEqual(self._read("x", 7, cursor)[0], [{"type": "b"}])
 
+    def test_a_reserved_sequence_number_is_not_skipped_before_its_entry_lands(self):
+        """Regression: taking the number and writing the entry are two
+        round-trips, and a read landing between them used to carry its cursor
+        past an event whose entry was still in flight."""
+        from workspace.core.sse_registry import push_user_event, read_user_events
+
+        push_user_event("x", 7, {"type": "a"})
+        real_set = cache.set
+        mid_push = {}
+
+        def read_between_the_two_writes(key, value, *args, **kwargs):
+            if "read" not in mid_push:
+                mid_push["read"] = read_user_events("x", 7, 0)
+            return real_set(key, value, *args, **kwargs)
+
+        with patch.object(cache, "set", side_effect=read_between_the_two_writes):
+            push_user_event("x", 7, {"type": "b"})
+
+        entries, cursor = mid_push["read"]
+        self.assertEqual([payload for _seq, payload in entries], [{"type": "a"}])
+        self.assertEqual(self._read("x", 7, cursor)[0], [{"type": "b"}])
+
+    def test_an_expired_entry_does_not_stall_the_cursor_behind_it(self):
+        """The held-back cursor is for entries in flight, not for missing ones:
+        a later entry that did arrive still carries the cursor forward."""
+        from workspace.core.sse_registry import _entry_key, push_user_event
+
+        push_user_event("x", 7, {"type": "a"})
+        push_user_event("x", 7, {"type": "b"})
+        cache.delete(_entry_key("x", 7, 1))  # aged out of the retention window
+
+        payloads, cursor = self._read("x", 7)
+        self.assertEqual(payloads, [{"type": "b"}])
+        self.assertEqual(cursor, 2)
+
     def test_concurrent_pushes_all_get_a_sequence_number_of_their_own(self):
         """No read-modify-write of a shared list, so no lock left to lose."""
         import threading

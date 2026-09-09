@@ -555,3 +555,84 @@ class GroupFileEventTests(TestCase):
             [e["type"] for e in drain_user_events("files", self.member.pk)],
             ["lock_released"],
         )
+
+
+class WriteGuardScopeTests(APITestCase):
+    """The write guards must not answer for a file the caller cannot reach.
+
+    Both answers are built from the row itself - the holder's username on a
+    423, the stored hash on a 412 - so an unscoped lookup turns a write
+    endpoint into a probe: knowing a UUID would be enough to learn who is
+    editing a stranger's file, or how its content has changed over time.
+    """
+
+    def setUp(self):
+        self.owner = User.objects.create_user(
+            username="scopeowner",
+            email="scopeowner@test.com",
+            password="pass123",
+        )
+        self.holder = User.objects.create_user(
+            username="scopeholder",
+            email="scopeholder@test.com",
+            password="pass123",
+        )
+        self.outsider = User.objects.create_user(
+            username="scopeoutsider",
+            email="scopeoutsider@test.com",
+            password="pass123",
+        )
+        self.file = FileService.create_file(
+            self.owner,
+            "secret.md",
+            content=ContentFile(b"private", name="secret.md"),
+            mime_type="text/markdown",
+        )
+        self.client.force_authenticate(self.outsider)
+
+    def _url(self):
+        return f"/api/v1/files/{self.file.uuid}"
+
+    def test_outsider_cannot_probe_the_lock_holder(self):
+        now = timezone.now()
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.holder,
+            locked_at=now,
+            lock_expires_at=now + timedelta(minutes=5),
+        )
+        resp = self.client.patch(self._url(), {"name": "renamed.md"})
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertNotIn("scopeholder", str(resp.data))
+
+    def test_outsider_cannot_probe_the_content_hash(self):
+        resp = self.client.patch(
+            self._url(),
+            {
+                "content": SimpleUploadedFile("secret.md", b"clobbered"),
+                "base_hash": "not-the-stored-hash",
+            },
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertNotIn(self.file.content_hash, str(resp.data))
+
+    def test_a_reachable_file_still_answers_423(self):
+        """Scoping the lookup must not cost a collaborator their lock conflict."""
+        FileShare.objects.create(
+            file=self.file,
+            shared_by=self.owner,
+            shared_with=self.outsider,
+            permission=FileShare.Permission.READ_WRITE,
+        )
+        now = timezone.now()
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.holder,
+            locked_at=now,
+            lock_expires_at=now + timedelta(minutes=5),
+        )
+        resp = self.client.patch(
+            self._url(),
+            {"content": SimpleUploadedFile("secret.md", b"clobbered")},
+            format="multipart",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)

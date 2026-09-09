@@ -1829,7 +1829,13 @@ class WebDAVIntegrationTests(TestCase):
         )
 
     def _locked_by_someone_else(self, name="held.txt", body=b"editor buffer"):
-        """A file this session can reach, locked by another user."""
+        """A file this session can reach, locked by another user.
+
+        Refreshed before it is handed back: ``_hold_lock`` writes through a
+        queryset, which leaves the in-memory instance believing it is unlocked
+        - a caller reading ``file_obj.locked_by`` off a stale copy would get
+        None and quietly test nothing.
+        """
         other = User.objects.create_user(
             username="davholder", email="hold@test.com", password="p"
         )
@@ -1840,6 +1846,7 @@ class WebDAVIntegrationTests(TestCase):
             mime_type="text/plain",
         )
         self._hold_lock(file_obj, other)
+        file_obj.refresh_from_db()
         return file_obj
 
     def test_put_refused_while_another_user_holds_the_app_lock(self):
@@ -1855,6 +1862,11 @@ class WebDAVIntegrationTests(TestCase):
     def test_put_allowed_once_the_app_lock_expired(self):
         file_obj = self._locked_by_someone_else(name="stale.txt")
         self._hold_lock(file_obj, file_obj.locked_by, expires_in=-timedelta(seconds=1))
+        # The write has to get through an expired lock, not through no lock:
+        # without a holder on the row this asserts nothing at all.
+        file_obj.refresh_from_db()
+        self.assertIsNotNone(file_obj.locked_by_id)
+
         code, _, _ = self._request("PUT", "/stale.txt", body=b"fresh")
         self.assertIn(code, (201, 204))
         code, _, body = self._request("GET", "/stale.txt")

@@ -651,10 +651,18 @@ class FileViewSet(
         return Response(serializer.data)
 
     def _write_target(self, request, uuid):
-        """The row this PUT/PATCH is about to write, fetched once per request."""
+        """The row this PUT/PATCH is about to write, fetched once per request.
+
+        Scoped to what the caller can reach, like the lock endpoint: the
+        answers built from this row - the holder's name on a 423, the stored
+        hash on a 412 - would otherwise let anyone holding a UUID probe a file
+        they have no rights to. Out of reach it yields None, and the write
+        falls through to ``get_object()``'s 404.
+        """
         if not hasattr(request, "_files_write_target"):
             request._files_write_target = (
                 File.objects.filter(
+                    FileService.accessible_files_q(request.user),
                     uuid=uuid,
                     deleted_at__isnull=True,
                 )

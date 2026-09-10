@@ -390,7 +390,12 @@ class FileService:
         # Update parent in DB before propagating group to avoid unique constraint
         # violations (e.g. unique_group_root_folder).
         file_obj.parent = new_parent
-        file_obj.save()
+        # Only the two columns this move actually changed, ``content`` being
+        # where the blob now lives. A bare save() writes every column back from
+        # an instance loaded before the move began, so a content write or a
+        # lock that landed in between would be reverted by a request that never
+        # meant to touch either.
+        file_obj.save(update_fields=["parent", "content"])
 
         # Propagate group change
         if (old_group and old_group != new_group) or (not old_group and new_group):
@@ -440,7 +445,9 @@ class FileService:
                 FileService._rename_file_storage(file_obj, new_name)
 
         file_obj.name = new_name
-        file_obj.save()
+        # The name and the blob's new path, and nothing else - see the same
+        # constraint in ``move``.
+        file_obj.save(update_fields=["name", "content"])
         record_event(
             file_obj,
             acting_user,

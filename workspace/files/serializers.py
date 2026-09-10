@@ -29,6 +29,13 @@ class FileContentStale(APIException):
     default_code = "precondition_failed"
 
 
+# The columns a PATCH may write through the serializer. The primary key is out:
+# a request may legitimately echo it, and ``update_fields`` rejects it.
+_WRITABLE_COLUMNS = frozenset(
+    field.name for field in File._meta.concrete_fields if not field.primary_key
+)
+
+
 def locked_payload(holder):
     """The 423 body, holder included so the UI can name who is editing."""
     body = {"detail": FileLocked.default_detail}
@@ -547,7 +554,17 @@ class FileSerializer(serializers.ModelSerializer):
                 return self._replace_on_move(instance, replace_target)
             FileService.move(instance, new_parent, acting_user=acting_user)
 
-        instance = super().update(instance, validated_data)
+        # DRF's update() ends in a bare save(), which writes every column back
+        # from an instance loaded when the request began. A PATCH that only
+        # renames or recolours would then revert a lock, or the content columns
+        # of a save, that landed while it was in flight - undoing from the side
+        # exactly what the conditional content write refuses head-on. Write the
+        # fields this request carries and leave the rest of the row alone.
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        touched = [attr for attr in validated_data if attr in _WRITABLE_COLUMNS]
+        if touched:
+            instance.save(update_fields=touched)
 
         if content_provided:
             if uploaded is None:

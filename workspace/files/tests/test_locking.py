@@ -878,6 +878,76 @@ class ConcurrentWriteTests(APITestCase):
             )
         self.assertEqual(self._content(), b"first")
 
+    def test_a_rename_does_not_revert_a_content_write(self):
+        """A rename writes the name, not a snapshot of the whole row.
+
+        The instance a request renames was loaded before it began. Writing
+        every column back from it would restore the hash and the size the file
+        had then - while the blob on storage holds the bytes the save that
+        landed in between put there. The row would describe content it no
+        longer has, which is the one thing the conditional write exists to
+        prevent, arrived at from the side.
+        """
+        renaming = File.objects.get(pk=self.file.pk)
+        self._rival_saves()
+        rival = File.objects.get(pk=self.file.pk)
+
+        FileService.rename(renaming, "renamed.md", acting_user=self.user)
+
+        stored = File.objects.get(pk=self.file.pk)
+        self.assertEqual(stored.name, "renamed.md")
+        self.assertEqual(stored.content_hash, rival.content_hash)
+        self.assertEqual(stored.size, rival.size)
+        with stored.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"the rival's paragraphs")
+
+    def test_a_move_does_not_revert_a_content_write(self):
+        target = FileService.create_folder(self.user, "elsewhere")
+        moving = File.objects.get(pk=self.file.pk)
+        self._rival_saves()
+        rival = File.objects.get(pk=self.file.pk)
+
+        FileService.move(moving, target, acting_user=self.user)
+
+        stored = File.objects.get(pk=self.file.pk)
+        self.assertEqual(stored.parent_id, target.pk)
+        self.assertEqual(stored.content_hash, rival.content_hash)
+        with stored.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"the rival's paragraphs")
+
+    def test_a_rename_does_not_revert_a_lock(self):
+        """Same snapshot, and the lock is a column on it like any other."""
+        renaming = File.objects.get(pk=self.file.pk)
+        self._lock_for_the_rival()
+
+        FileService.rename(renaming, "renamed.md", acting_user=self.user)
+
+        stored = File.objects.get(pk=self.file.pk)
+        self.assertEqual(stored.locked_by_id, self.rival.pk)
+        self.assertEqual(stored.name, "renamed.md")
+
+    def test_a_metadata_patch_does_not_revert_a_lock(self):
+        """The write that carries no content still must not undo one.
+
+        Both pre-write checks read the row before the rival locks it, so they
+        pass; what decides the outcome is whether the save that follows writes
+        the colour it was asked for or the whole row it remembers.
+        """
+
+        def guards_pass_then_the_rival_locks(user, target):
+            self._lock_for_the_rival()
+
+        with patch(
+            "workspace.files.serializers.ensure_unlocked",
+            guards_pass_then_the_rival_locks,
+        ):
+            resp = self.client.patch(self._url(), {"color": "red"}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.color, "red")
+        self.assertEqual(self.file.locked_by_id, self.rival.pk)
+
     def test_an_upload_replacing_a_same_name_file_meets_the_lock(self):
         """The upload path writes through the same conditional statement."""
         injector, fired = self._during_the_write(self._lock_for_the_rival)

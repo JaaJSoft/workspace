@@ -296,6 +296,34 @@ class TestUpdateContent(TestCase):
         with f.content.storage.open(f.content.name, "rb") as fh:
             self.assertEqual(fh.read(), b"fresh content")
 
+    def test_the_returned_instance_needs_no_refresh(self):
+        """The row write bypasses ``save()``, so the instance follows by hand.
+
+        Callers serialize what comes back without re-reading it - the
+        upload-replace response, WOPI's ``LastModifiedTime`` - so a field left
+        holding its pre-write value stays invisible until a user reads a stale
+        answer.
+        """
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"old", name="doc.txt"),
+        )
+        before = f.updated_at
+
+        FileService.update_content(
+            f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
+        )
+
+        self.assertEqual(f.size, 13)
+        self.assertFalse(f.has_thumbnail)
+        self.assertGreater(f.updated_at, before)
+        with f.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"the new bytes")
+        stored = File.objects.get(pk=f.pk)
+        self.assertEqual(f.content_hash, stored.content_hash)
+        self.assertEqual(f.content.name, stored.content.name)
+
     def test_mime_type_override_takes_precedence(self):
         """Passing `mime_type=` skips inference."""
         f = FileService.create_file(

@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from django.db import transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
@@ -6,7 +8,11 @@ from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FilePermission, FileService
-from workspace.files.services.locking import StaleContent, conflicting_lock
+from workspace.files.services.locking import (
+    LockConflict,
+    StaleContent,
+    conflicting_lock,
+)
 
 from .models import File, FileComment
 
@@ -23,10 +29,40 @@ class FileContentStale(APIException):
     default_code = "precondition_failed"
 
 
+def locked_payload(holder):
+    """The 423 body, holder included so the UI can name who is editing."""
+    body = {"detail": FileLocked.default_detail}
+    if holder is not None:
+        body["locked_by"] = {"id": holder.pk, "username": holder.username}
+    return body
+
+
 def ensure_unlocked(user, target):
     """Raise 423 unless *user* may write *target* right now."""
-    if conflicting_lock(target, user) is not None:
-        raise FileLocked()
+    holder = conflicting_lock(target, user)
+    if holder is not None:
+        raise FileLocked(locked_payload(holder))
+
+
+@contextmanager
+def content_write_refusals():
+    """Turn the service's refusals into the answers they owe the client.
+
+    A content write is decided inside the write itself, so both refusals reach
+    the caller as exceptions rather than as a return value - and every endpoint
+    that writes content owes them the same two status codes.
+    """
+    try:
+        yield
+    except LockConflict as exc:
+        raise FileLocked(locked_payload(exc.holder)) from exc
+    except StaleContent as exc:
+        raise FileContentStale(
+            {
+                "detail": FileContentStale.default_detail,
+                "content_hash": exc.current_hash,
+            }
+        ) from exc
 
 
 def ensure_replaceable(user, target):
@@ -447,13 +483,15 @@ class FileSerializer(serializers.ModelSerializer):
         instance = FileService.annotate_for_serializer(
             File.objects.filter(pk=target.pk), user
         ).first()
-        FileService.update_content(
-            instance,
-            validated_data["content"],
-            name=instance.name,
-            mime_type=validated_data.get("mime_type"),
-            acting_user=user,
-        )
+        with content_write_refusals():
+            FileService.update_content(
+                instance,
+                validated_data["content"],
+                name=instance.name,
+                mime_type=validated_data.get("mime_type"),
+                acting_user=user,
+                expected_hash=self.context.get("expected_content_hash"),
+            )
         self.replaced_existing = True
         return instance
 
@@ -470,7 +508,10 @@ class FileSerializer(serializers.ModelSerializer):
         instance = FileService.annotate_for_serializer(
             File.objects.filter(pk=target.pk), user
         ).first()
-        FileService.replace_content_from(instance, moved, acting_user=user)
+        # No expectation goes down: a precondition on this request describes
+        # the file being moved, not the one it is landing on.
+        with content_write_refusals():
+            FileService.replace_content_from(instance, moved, acting_user=user)
         FileService.soft_delete(moved, acting_user=user)
         self.replaced_existing = True
         return instance
@@ -514,22 +555,15 @@ class FileSerializer(serializers.ModelSerializer):
                 # already moved; this passes the same expectation down so the
                 # database decides it, which is the half that holds under two
                 # writers racing with the same expectation.
-                try:
+                with content_write_refusals():
                     FileService.update_content(
                         instance,
                         uploaded,
                         name=instance.name,
                         mime_type=explicit_mime_type,
                         acting_user=acting_user,
-                        expected_hash=self.context.get("expected_content_hash") or None,
+                        expected_hash=self.context.get("expected_content_hash"),
                     )
-                except StaleContent as exc:
-                    raise FileContentStale(
-                        {
-                            "detail": FileContentStale.default_detail,
-                            "content_hash": exc.current_hash,
-                        }
-                    ) from exc
             else:
                 instance.content = uploaded
                 instance.size = None

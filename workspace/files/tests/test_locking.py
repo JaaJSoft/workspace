@@ -642,12 +642,13 @@ class WriteGuardScopeTests(APITestCase):
 
 
 class ConcurrentWriteTests(APITestCase):
-    """Two writers holding the same precondition: exactly one may win.
+    """What lands on the row while a write is in flight, and who wins.
 
-    Checking the stored hash before the write cannot settle this on its own -
-    both callers read the same row and both conclude they are current. The
-    conditional UPDATE in ``FileService.update_content`` is what decides it,
-    so these tests drive a competing write into the window between the two.
+    Checking the stored hash and the lock before the write cannot settle this
+    on its own - both callers read the same row and both conclude they may
+    proceed. The conditional UPDATE that writes the row is what decides it, so
+    these tests drive a competitor into the window between the check and the
+    write and assert on the response rather than on timing.
     """
 
     def setUp(self):
@@ -685,12 +686,28 @@ class ConcurrentWriteTests(APITestCase):
             format="multipart",
         )
 
-    def _during_the_write(self, competitor):
-        """Run *competitor* once, after the guards passed and before the claim.
+    def _lock_for_the_rival(self):
+        now = timezone.now()
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.rival,
+            locked_at=now,
+            lock_expires_at=now + timedelta(minutes=5),
+        )
 
-        ``detect_from_stream`` is the first thing ``update_context`` touches
-        once the viewset has decided the precondition still holds, which puts
-        it exactly in the window the claim exists to close.
+    def _rival_saves(self, body=b"the rival's paragraphs"):
+        FileService.update_content(
+            File.objects.get(pk=self.file.pk),
+            ContentFile(body, name="race.md"),
+            name="race.md",
+            acting_user=self.rival,
+        )
+
+    def _during_the_write(self, competitor):
+        """Run *competitor* once, after the guards passed and before the write.
+
+        ``detect_from_stream`` is the first thing ``update_content`` touches
+        once the viewset has decided the guards still hold, which puts it
+        exactly in the window the conditional write exists to close.
         """
         from workspace.files.services import detection
 
@@ -708,15 +725,7 @@ class ConcurrentWriteTests(APITestCase):
         ), fired
 
     def test_the_second_writer_is_refused(self):
-        def rival_saves():
-            FileService.update_content(
-                File.objects.get(pk=self.file.pk),
-                ContentFile(b"the rival's paragraphs", name="race.md"),
-                name="race.md",
-                acting_user=self.rival,
-            )
-
-        injector, fired = self._during_the_write(rival_saves)
+        injector, fired = self._during_the_write(self._rival_saves)
         with injector:
             resp = self._save(b"mine", **{"base_hash": self.loaded_hash})
 
@@ -728,22 +737,19 @@ class ConcurrentWriteTests(APITestCase):
         self.assertNotEqual(resp.data["content_hash"], self.loaded_hash)
 
     def test_a_lock_taken_in_the_same_window_is_caught(self):
-        """The claim carries the lock predicate, not just the hash."""
+        """The write carries the lock predicate, not just the hash.
 
-        def rival_locks():
-            now = timezone.now()
-            File.objects.filter(pk=self.file.pk).update(
-                locked_by=self.rival,
-                locked_at=now,
-                lock_expires_at=now + timedelta(minutes=5),
-            )
-
-        injector, fired = self._during_the_write(rival_locks)
+        A lock is a lock whenever it arrives, so the answer is the 423 the
+        holder would have got a moment earlier - naming them, like every other
+        refusal on this file.
+        """
+        injector, fired = self._during_the_write(self._lock_for_the_rival)
         with injector:
             resp = self._save(b"mine", **{"base_hash": self.loaded_hash})
 
         self.assertTrue(fired, "the competing lock never ran")
-        self.assertEqual(resp.status_code, status.HTTP_412_PRECONDITION_FAILED)
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
+        self.assertEqual(resp.data["locked_by"]["username"], "rival")
         self.assertEqual(self._content(), b"first")
 
     def test_a_competing_write_that_changes_nothing_lets_us_through(self):
@@ -754,15 +760,7 @@ class ConcurrentWriteTests(APITestCase):
         and there is nothing of the other write left to lose.
         """
 
-        def rival_rewrites_the_same_bytes():
-            FileService.update_content(
-                File.objects.get(pk=self.file.pk),
-                ContentFile(b"first", name="race.md"),
-                name="race.md",
-                acting_user=self.rival,
-            )
-
-        injector, fired = self._during_the_write(rival_rewrites_the_same_bytes)
+        injector, fired = self._during_the_write(lambda: self._rival_saves(b"first"))
         with injector:
             resp = self._save(b"mine", **{"base_hash": self.loaded_hash})
 
@@ -770,20 +768,67 @@ class ConcurrentWriteTests(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(self._content(), b"mine")
 
-    def test_a_write_without_a_precondition_is_never_claimed(self):
-        """Uploads and WebDAV keep last-write-wins - no 412, no surprise."""
+    def test_a_write_without_a_precondition_still_wins_the_race(self):
+        """Uploads and API scripts keep last-write-wins - no 412, no surprise.
 
-        def rival_saves():
-            FileService.update_content(
-                File.objects.get(pk=self.file.pk),
-                ContentFile(b"the rival's paragraphs", name="race.md"),
-                name="race.md",
-                acting_user=self.rival,
-            )
-
-        injector, _ = self._during_the_write(rival_saves)
+        Sending no expectation is a caller saying it does not care what it is
+        overwriting, and the write carries no hash predicate for it.
+        """
+        injector, fired = self._during_the_write(self._rival_saves)
         with injector:
             resp = self._save(b"mine")
 
+        self.assertTrue(fired, "the competing write never ran")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(self._content(), b"mine")
+
+    def test_a_lock_in_the_window_catches_a_write_with_no_precondition(self):
+        """The lock is not the caller's to opt out of by sending no hash.
+
+        Last-write-wins is a choice about other writers; the lock says nobody
+        writes at all, and a write that sends no expectation still asks the
+        database that question inside the statement that writes the row.
+        """
+        injector, fired = self._during_the_write(self._lock_for_the_rival)
+        with injector:
+            resp = self._save(b"mine")
+
+        self.assertTrue(fired, "the competing lock never ran")
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
+        self.assertEqual(self._content(), b"first")
+
+    def test_an_empty_precondition_is_a_precondition(self):
+        """A row the hash backfill has not reached is at version ``""``.
+
+        The viewer loads it, sends the empty string back, and used to have that
+        read as "no precondition at all" - which left exactly the row with the
+        least protection with none.
+        """
+        File.objects.filter(pk=self.file.pk).update(content_hash="")
+
+        injector, fired = self._during_the_write(self._rival_saves)
+        with injector:
+            resp = self._save(b"mine", **{"base_hash": ""})
+
+        self.assertTrue(fired, "the competing write never ran")
+        self.assertEqual(resp.status_code, status.HTTP_412_PRECONDITION_FAILED)
+        self.assertEqual(self._content(), b"the rival's paragraphs")
+
+    def test_an_upload_replacing_a_same_name_file_meets_the_lock(self):
+        """The upload path writes through the same conditional statement."""
+        injector, fired = self._during_the_write(self._lock_for_the_rival)
+        with injector:
+            resp = self.client.post(
+                "/api/v1/files",
+                {
+                    "name": "race.md",
+                    "node_type": File.NodeType.FILE,
+                    "content": SimpleUploadedFile("race.md", b"mine"),
+                    "on_conflict": "replace",
+                },
+                format="multipart",
+            )
+
+        self.assertTrue(fired, "the competing lock never ran")
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
+        self.assertEqual(self._content(), b"first")

@@ -31,7 +31,7 @@ from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
 from ..models import File, FileShare
-from ..serializers import FileSerializer
+from ..serializers import FileSerializer, locked_payload
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
 from ..viewsets.content import ContentMixin
@@ -691,16 +691,7 @@ class FileViewSet(
         holder = conflicting_lock(self._write_target(request, uuid), request.user)
         if holder is None:
             return None
-        return Response(
-            {
-                "detail": "File is locked by another user.",
-                "locked_by": {
-                    "id": holder.pk,
-                    "username": holder.username,
-                },
-            },
-            status=423,
-        )
+        return Response(locked_payload(holder), status=423)
 
     def get_serializer_context(self):
         # The serializer re-asks the precondition inside the write, where the
@@ -708,7 +699,7 @@ class FileViewSet(
         # once here keeps the two answers from drifting apart.
         context = super().get_serializer_context()
         request = self.request
-        if request is not None and request.method in {"PATCH", "PUT"}:
+        if request is not None and request.method in {"POST", "PATCH", "PUT"}:
             context["expected_content_hash"] = precondition_hash(request)
         return context
 
@@ -724,15 +715,17 @@ class FileViewSet(
         This is the early-out, not the guarantee: it settles the sequential
         case before a byte of the upload is read, and it is the only check a
         write that carries no content (a rename under ``If-Match``) ever gets.
-        A content write is decided again by the conditional UPDATE inside
-        ``FileService.update_content``, which is what holds when two callers
-        race with the same expectation.
+        A content write is decided again by the conditional UPDATE that writes
+        the row in ``FileService``, which is what holds when two callers race
+        with the same expectation.
 
-        Optional by design: a caller that sends no precondition (WebDAV, the
-        upload paths, an API script) keeps the old last-write-wins behaviour.
+        Optional by design: a caller that sends no precondition (an upload, an
+        API script) keeps last-write-wins. An empty one is not absence - a row
+        the hash backfill has not reached is at version ``""``, and a caller
+        that loaded it there gets the same protection as everybody else.
         """
         expected = precondition_hash(request)
-        if not expected:
+        if expected is None:
             return None
 
         target = self._write_target(request, uuid)

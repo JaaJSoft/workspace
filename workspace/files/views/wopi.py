@@ -7,6 +7,12 @@ Routes (WOPI fixes the shape; the editor derives the /contents URL itself):
     GET  /api/wopi/files/<uuid>/contents   GetFile
     POST /api/wopi/files/<uuid>/contents   PutFile
 
+``X-WOPI-ItemVersion`` is the file's ``content_hash``, so an editor that sends
+the version it opened back as ``If-Match`` on PutFile gets its save refused
+with 409 rather than silently overwriting somebody else's - the same
+precondition the browser editors carry, spelled the way WOPI already spells
+versions.
+
 Authentication is the ``access_token`` query parameter mandated by the
 protocol - no session, no CSRF. The token pins a user and a file; the user's
 permission is re-checked against the live ACL on every request, so revoking a
@@ -25,6 +31,11 @@ from django.views.decorators.debug import sensitive_variables
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.locking import (
+    LockConflict,
+    StaleContent,
+    precondition_hash,
+)
 from workspace.files.services.quota import QuotaExceeded
 from workspace.files.services.wopi import locks
 from workspace.files.services.wopi.tokens import parse_access_token
@@ -178,13 +189,30 @@ class WopiFileContentsView(View):
 
         content = ContentFile(request.body, name=file_obj.name)
         try:
-            FileService.update_content(file_obj, content, acting_user=user)
+            FileService.update_content(
+                file_obj,
+                content,
+                acting_user=user,
+                expected_hash=precondition_hash(request),
+            )
         except QuotaExceeded as exc:
             # A plain Django view: nothing translates a DRF exception here, so
             # an escaping QuotaExceeded would reach the editor as a 500.
             return HttpResponse(
                 str(exc.detail), status=413, content_type="text/plain; charset=utf-8"
             )
+        except LockConflict:
+            # Somebody took the app lock while the editor was saving. The WOPI
+            # lock it holds is unrelated to that one, so there is no lock id to
+            # hand back - 409 with no X-WOPI-Lock is the protocol's "try again".
+            return HttpResponse(status=409)
+        except StaleContent as exc:
+            # The editor asked to be refused if the file moved, and it did. The
+            # version it is now up against goes back in the same header the
+            # editor reads everywhere else.
+            response = HttpResponse(status=409)
+            response["X-WOPI-ItemVersion"] = exc.current_hash
+            return response
         response = JsonResponse({"LastModifiedTime": file_obj.updated_at.isoformat()})
         response["X-WOPI-ItemVersion"] = _item_version(file_obj)
         return response

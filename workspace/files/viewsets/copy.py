@@ -7,7 +7,11 @@ from rest_framework.response import Response
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File
-from workspace.files.serializers import FileSerializer, ensure_replaceable
+from workspace.files.serializers import (
+    FileSerializer,
+    content_write_refusals,
+    ensure_replaceable,
+)
 from workspace.files.services import FilePermission, FileService
 
 
@@ -138,9 +142,10 @@ class CopyMixin:
                 annotated = FileService.annotate_for_serializer(
                     File.objects.filter(pk=existing.pk), request.user
                 ).first()
-                FileService.replace_content_from(
-                    annotated, file_obj, acting_user=request.user
-                )
+                with content_write_refusals():
+                    FileService.replace_content_from(
+                        annotated, file_obj, acting_user=request.user
+                    )
                 self._announce_replaced(annotated)
                 serializer = self.get_serializer(annotated)
                 return Response(serializer.data, status=status.HTTP_200_OK)

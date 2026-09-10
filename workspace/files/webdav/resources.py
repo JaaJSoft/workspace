@@ -14,6 +14,7 @@ from wsgidav.dav_error import (
     HTTP_FORBIDDEN,
     HTTP_INSUFFICIENT_STORAGE,
     HTTP_LOCKED,
+    HTTP_PRECONDITION_FAILED,
     DAVError,
 )
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
@@ -22,7 +23,11 @@ from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
-from workspace.files.services.locking import conflicting_lock
+from workspace.files.services.locking import (
+    LockConflict,
+    StaleContent,
+    conflicting_lock,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -454,6 +459,16 @@ class FileResource(DAVNonCollection):
             if declared > ceiling:
                 raise DAVError(HTTP_INSUFFICIENT_STORAGE, "Storage quota exceeded")
 
+        # A client that sent If-Match asked to be refused rather than to
+        # overwrite a newer version; wsgidav has already checked it against the
+        # ETag for this request. Carrying the version it matched into the write
+        # is what makes the promise survive an upload that takes minutes - the
+        # window an If-Match on its own leaves wide open.
+        if_match = (self.environ.get("HTTP_IF_MATCH") or "").strip()
+        self._expected_hash = (
+            self._file.content_hash if if_match and if_match != "*" else None
+        )
+
         storage = self._file.content.storage
         storage_path = file_upload_path(self._file, self._file.name)
         full_path = storage.path(storage_path)
@@ -525,11 +540,9 @@ class FileResource(DAVNonCollection):
             self._discard_placeholder()
             raise DAVError(HTTP_BAD_REQUEST, "Incomplete upload")
 
-        # Finalize the file on storage (flush remaining buffer + close).
-        buf.finalize()
-
-        # Update DB metadata only — the file is already written to its
-        # final storage path, so we just point content.name at it.
+        # The row goes first and the bytes follow: the blob still sits in its
+        # temp file, so a refused write leaves the previous content exactly
+        # where it was instead of having already replaced it.
         # The record may have been hard-deleted by a concurrent retry's
         # end_write(with_errors=True) during our (slow) upload.  If so,
         # recreate it so the file on disk is not orphaned.
@@ -548,13 +561,22 @@ class FileResource(DAVNonCollection):
                     parent=self._file.parent,
                     acting_user=self._user,
                 )
-            FileService.replace_content_storage(
-                self._file,
-                storage_path=self._storage_path,
-                size=buf.size,
-                content_hash=buf.content_hash,
-                acting_user=self._user,
-            )
+            try:
+                FileService.replace_content_storage(
+                    self._file,
+                    storage_path=self._storage_path,
+                    size=buf.size,
+                    content_hash=buf.content_hash,
+                    acting_user=self._user,
+                    expected_hash=getattr(self, "_expected_hash", None),
+                )
+            except (LockConflict, StaleContent) as exc:
+                buf.abort()
+                self._refusal_error(exc, username)
+            # Flush the remaining buffer and move the blob into place. Inside
+            # the transaction: a storage failure here has to take the row that
+            # already points at it down with it.
+            buf.finalize()
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",
@@ -563,6 +585,21 @@ class FileResource(DAVNonCollection):
             buf.size,
             time.monotonic() - self._write_started_at,
         )
+
+    def _refusal_error(self, exc, username):
+        """Raise the DAV answer a refused content write owes the client."""
+        logger.info(
+            "PUT refused for %s by %s: %s",
+            scrub(self.path),
+            username,
+            scrub(str(exc)),
+        )
+        if isinstance(exc, LockConflict):
+            holder = getattr(exc.holder, "username", "another user")
+            raise DAVError(HTTP_LOCKED, f"File is locked by {holder}") from exc
+        raise DAVError(
+            HTTP_PRECONDITION_FAILED, "The file changed since it was loaded."
+        ) from exc
 
     def delete(self):
         if getattr(self, "_moved", False):

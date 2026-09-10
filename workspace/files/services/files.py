@@ -10,6 +10,7 @@ import enum
 import logging
 
 from django.db import transaction
+from django.utils import timezone
 
 from workspace.common.logging import scrub
 
@@ -463,25 +464,28 @@ class FileService:
     ):
         """Replace a file's content, updating size, MIME type and hash.
 
-        ``expected_hash`` turns the write into a compare-and-swap: the row is
-        claimed with an UPDATE whose WHERE clause carries both the caller's
-        expectation and the lock predicate, and a claim that matches no row
-        raises ``StaleContent`` instead of writing. Checking those conditions
-        beforehand cannot serialise them with the write - two callers holding
-        the same expectation would both pass - whereas the claim is decided by
-        the database: the statement that verifies the expectation is the same
-        one that invalidates it, so the second caller finds nothing to match
-        and is refused. ``SELECT ... FOR UPDATE`` would be the obvious
-        alternative and is not available: SQLite backs dev and the whole test
-        suite, and has no row locks.
+        The row write is a conditional UPDATE, and that is the whole guarantee:
+        its WHERE clause carries the lock predicate, plus the caller's
+        ``expected_hash`` when there is one, and a statement that matches no
+        row raises instead of writing. Checking either condition beforehand
+        cannot serialise it with the write - two callers holding the same
+        expectation both pass the check, and a lock taken just after it is
+        never seen - whereas here the statement that verifies the conditions is
+        the same one that invalidates them, so the second caller finds nothing
+        to match. ``SELECT ... FOR UPDATE`` would be the obvious alternative
+        and is not available: SQLite backs dev and the whole test suite, and
+        has no row locks.
 
-        The claim runs before ``save()``, which is what commits the blob, so a
-        refused write leaves nothing behind in storage. It must run inside the
-        caller's transaction, or the claim can commit while the content that
-        justified it does not.
+        The row is written before the bytes, which is the opposite of what
+        ``save()`` does and is the point: the blob lives at a path derived from
+        the file's name and the storage overwrites in place, so bytes committed
+        ahead of a refused write would destroy the very content the refusal
+        exists to protect. It also means the UPDATE holds the row for the rest
+        of the transaction, so this must run inside the caller's, or the row
+        can commit while the content that justifies it does not.
 
-        Callers that pass nothing keep the unconditional last-write-wins
-        behaviour every upload path relies on.
+        Callers that pass no ``expected_hash`` keep last-write-wins against
+        other writers. The lock is not theirs to opt out of.
         """
         from workspace.files.services.content_hash import hash_stream
         from workspace.files.services.detection import (
@@ -497,24 +501,41 @@ class FileService:
         )
 
         detection = detect_from_stream(content)
-        file_obj.content_hash = hash_stream(content)
-        file_obj.size = content.size
-        file_obj.mime_type = mime_type or detection.mime_type
         # Honour the extension when Magika's content label is generic (a sparse
         # ".md" reads as txt) so an edited note keeps type=markdown.
-        file_obj.type = refine_with_name(detection.label, name or file_obj.name)
-        file_obj.category = detection.group or "unknown"
-        file_obj.viewer = pin_viewer_for_upload(
-            file_obj.type, mime_type or getattr(content, "content_type", None)
+        file_type = refine_with_name(detection.label, name or file_obj.name)
+        content_field = File._meta.get_field("content")
+        # What ``FileField.pre_save`` would resolve on the way to storage,
+        # resolved early because the row write has to name the path in the same
+        # statement that claims the row.
+        storage_path = content_field.storage.get_available_name(
+            content_field.generate_filename(file_obj, content.name),
+            max_length=content_field.max_length,
         )
-        file_obj.has_thumbnail = False
+        fields = {
+            "content": storage_path,
+            "content_hash": hash_stream(content),
+            "size": content.size,
+            "mime_type": mime_type or detection.mime_type,
+            "type": file_type,
+            "category": detection.group or "unknown",
+            "viewer": pin_viewer_for_upload(
+                file_type, mime_type or getattr(content, "content_type", None)
+            ),
+            "has_thumbnail": False,
+            "updated_at": timezone.now(),
+        }
+        FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
 
-        if expected_hash is not None:
-            FileService._claim_for_write(file_obj, acting_user, expected_hash)
-
-        file_obj.content = content
-        file_obj.save()
-        # Ordering is load-bearing: after the save (nothing here is atomic, so a
+        stored = content_field.storage.save(storage_path, content)
+        if stored != storage_path:
+            # A storage that renames around a collision moved the blob; the row
+            # is ours for the rest of the transaction, so it can follow.
+            File.objects.filter(pk=file_obj.pk).update(content=stored)
+            fields["content"] = stored
+        for field, value in fields.items():
+            setattr(file_obj, field, value)
+        # Ordering is load-bearing: after the write (nothing here is atomic, so a
         # fresh budget must not outlive a failed write) and before record_event,
         # whose dispatch re-runs generation and spends that budget on commit.
         # Unguarded on purpose, unlike the generator's ledger writes: on a request
@@ -527,40 +548,51 @@ class FileService:
         return file_obj
 
     @staticmethod
-    def _claim_for_write(file_obj, acting_user, expected_hash):
-        """Take the row for this write, or raise ``StaleContent``.
+    def _write_content_row(file_obj, acting_user, expected_hash, fields):
+        """Write the content fields onto the row, or refuse.
 
-        ``file_obj.content_hash`` already holds the hash of the incoming bytes,
-        so the claim swaps the expectation out for it in one statement and a
-        second writer holding the same expectation then matches no row.
+        The WHERE clause is the guard. The lock predicate is always in it; the
+        caller's expectation joins it when there is one, and ``""`` counts as
+        an expectation - a row the hash backfill has not reached stores exactly
+        that, and a caller that loaded it is entitled to say so.
 
-        The predicate is the version, not "has anyone touched this": a
-        competing write that stores the same bytes the caller started from
-        leaves the hash where it was, and the caller is right to proceed -
+        The expectation is the version being replaced, not "has anyone touched
+        this row": a competing write that stored the bytes the caller started
+        from leaves the hash where it was, and the caller is right to proceed -
         there is nothing of the other write left to lose.
         """
-        from workspace.files.services.locking import StaleContent, unlocked_for_q
+        from workspace.files.services.locking import (
+            LockConflict,
+            StaleContent,
+            conflicting_lock,
+            unlocked_for_q,
+        )
 
-        claimed = (
-            File.objects.filter(pk=file_obj.pk, content_hash=expected_hash)
-            .filter(unlocked_for_q(acting_user))
-            .update(content_hash=file_obj.content_hash)
-        )
-        if claimed:
+        claim = File.objects.filter(pk=file_obj.pk)
+        if expected_hash is not None:
+            claim = claim.filter(content_hash=expected_hash)
+        if claim.filter(unlocked_for_q(acting_user)).update(**fields):
             return
+        # Nothing matched: re-read to say which of the two conditions failed.
+        # The row can only move further from here, and either answer stays
+        # true - both of them mean this write is not landing.
         current = (
-            File.objects.filter(pk=file_obj.pk)
-            .values_list("content_hash", flat=True)
-            .first()
+            File.objects.select_related("locked_by").filter(pk=file_obj.pk).first()
         )
-        raise StaleContent(current or "")
+        if current is None:
+            raise StaleContent("")
+        holder = conflicting_lock(current, acting_user)
+        if holder is not None:
+            raise LockConflict(holder)
+        raise StaleContent(current.content_hash or "")
 
     @staticmethod
-    def replace_content_from(target, source, *, acting_user=None):
+    def replace_content_from(target, source, *, acting_user=None, expected_hash=None):
         """Give *target* the bytes of *source*, streamed into a fresh blob.
 
         Same contract as ``update_content``: size, type, hash and thumbnail
-        state follow the new content, the row keeps its identity.
+        state follow the new content, the row keeps its identity, and the write
+        is refused rather than landing when the row moved or is locked.
         """
         from django.core.files.base import File as DjangoFile
 
@@ -571,28 +603,47 @@ class FileService:
                 name=target.name,
                 mime_type=source.mime_type,
                 acting_user=acting_user,
+                expected_hash=expected_hash,
             )
 
     @staticmethod
     def replace_content_storage(
-        file_obj, *, storage_path, size, content_hash, acting_user=None
+        file_obj,
+        *,
+        storage_path,
+        size,
+        content_hash,
+        acting_user=None,
+        expected_hash=None,
     ):
         """Point *file_obj* at content already written to *storage_path*.
 
         The caller streamed the bytes and is the only one that saw them, so it
-        also supplies their *content_hash*.
+        also supplies their *content_hash* - and, when its own client asked to
+        be refused rather than to overwrite a newer version, the
+        ``expected_hash`` that write is replacing. That is what lets a mounted
+        client carry a precondition through an upload that takes minutes.
+
+        The ordering constraint is the caller's here: the bytes must not be
+        moved into place until this returns, or a refused write has already
+        overwritten the content it was refused for.
         """
         from workspace.files.services.detection import detect_from_name
 
         detection = detect_from_name(file_obj.name)
-        file_obj.size = size
-        file_obj.content_hash = content_hash
-        file_obj.mime_type = detection.mime_type
-        file_obj.type = detection.label
-        file_obj.category = detection.group or "unknown"
-        file_obj.has_thumbnail = False
-        file_obj.content.name = storage_path
-        file_obj.save()
+        fields = {
+            "content": storage_path,
+            "content_hash": content_hash,
+            "size": size,
+            "mime_type": detection.mime_type,
+            "type": detection.label,
+            "category": detection.group or "unknown",
+            "has_thumbnail": False,
+            "updated_at": timezone.now(),
+        }
+        FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+        for field, value in fields.items():
+            setattr(file_obj, field, value)
         # Same ordering constraint, and the same deliberate lack of a guard, as
         # update_content.
         clear_failure(file_obj)

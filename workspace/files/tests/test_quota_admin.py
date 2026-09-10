@@ -4,6 +4,7 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
@@ -32,6 +33,28 @@ class QuotaAdminTests(TestCase):
 
     def setUp(self):
         self.client.force_login(self.admin)
+        # LocMemCache is process-global and survives the rollback between test
+        # cases, so what an earlier test left in the settings and presence
+        # caches would otherwise decide what the first request below costs.
+        cache.clear()
+
+    def tearDown(self):
+        cache.clear()
+
+    def _query_count(self, url):
+        """Queries the admin spends serving *url*, warm-up excluded.
+
+        A user's first authenticated request in a process also fills their
+        settings cache and inserts their presence row - eight queries that say
+        nothing about the changelist. Paying them on a discarded request first
+        is what makes the count depend on the page instead of on which test
+        happened to run before.
+        """
+        self.client.get(url)
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        return len(queries)
 
     def test_user_quota_changelist_renders(self):
         UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
@@ -48,32 +71,24 @@ class QuotaAdminTests(TestCase):
     def test_the_user_changelist_costs_the_same_with_one_row_or_many(self):
         UserStorageQuota.objects.create(user=self.admin, quota_bytes=5 * KB)
         url = reverse("admin:files_userstoragequota_changelist")
-        with CaptureQueriesContext(connection) as one_row:
-            self.client.get(url)
+        one_row = self._query_count(url)
         for i in range(10):
             member = User.objects.create_user(username=f"m{i}", password="pw")
             FileService.create_file(
                 member, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
             )
             UserStorageQuota.objects.create(user=member, quota_bytes=5 * KB)
-        with CaptureQueriesContext(connection) as many_rows:
-            response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(many_rows), len(one_row))
+        self.assertEqual(self._query_count(url), one_row)
 
     def test_the_group_changelist_costs_the_same_with_one_row_or_many(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=5 * KB)
         url = reverse("admin:files_groupstoragequota_changelist")
-        with CaptureQueriesContext(connection) as one_row:
-            self.client.get(url)
+        one_row = self._query_count(url)
         for i in range(10):
             GroupStorageQuota.objects.create(
                 group=Group.objects.create(name=f"g{i}"), quota_bytes=5 * KB
             )
-        with CaptureQueriesContext(connection) as many_rows:
-            response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(many_rows), len(one_row))
+        self.assertEqual(self._query_count(url), one_row)
 
     def test_the_changelist_reports_the_same_usage_as_the_helper(self):
         FileService.create_file(

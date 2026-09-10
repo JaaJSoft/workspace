@@ -12,7 +12,7 @@ from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.test import APIClient, APIRequestFactory, APITestCase
 
-from workspace.core.sse_registry import drain_user_events
+from workspace.core.sse_registry import read_user_events
 from workspace.files.models import File, FileShare
 from workspace.files.serializers import FileLocked, FileSerializer
 from workspace.files.services import FileService
@@ -530,6 +530,15 @@ class GroupFileEventTests(TestCase):
     def tearDown(self):
         cache.clear()
 
+    def _event_types(self, user):
+        """Event types queued in *user*'s ``files`` mailbox, read from the start.
+
+        The read is non-destructive, so asserting on one user's mailbox leaves
+        the others intact and the order of the assertions carries no meaning.
+        """
+        entries, _cursor = read_user_events("files", user.pk, 0)
+        return [payload["type"] for _seq, payload in entries]
+
     def test_group_members_receive_the_event(self):
         push_file_event(
             self.file,
@@ -537,12 +546,9 @@ class GroupFileEventTests(TestCase):
             self.owner.username,
             exclude_user_id=self.owner.pk,
         )
-        self.assertEqual(
-            [e["type"] for e in drain_user_events("files", self.member.pk)],
-            ["lock_released"],
-        )
-        self.assertEqual(drain_user_events("files", self.stranger.pk), [])
-        self.assertEqual(drain_user_events("files", self.owner.pk), [])
+        self.assertEqual(self._event_types(self.member), ["lock_released"])
+        self.assertEqual(self._event_types(self.stranger), [])
+        self.assertEqual(self._event_types(self.owner), [])
 
     def test_release_notifies_group_members(self):
         """End to end: the DELETE on the lock endpoint reaches the group."""
@@ -551,10 +557,7 @@ class GroupFileEventTests(TestCase):
         client.post(f"/api/v1/files/{self.file.uuid}/lock")
         resp = client.delete(f"/api/v1/files/{self.file.uuid}/lock")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
-        self.assertEqual(
-            [e["type"] for e in drain_user_events("files", self.member.pk)],
-            ["lock_released"],
-        )
+        self.assertEqual(self._event_types(self.member), ["lock_released"])
 
 
 class WriteGuardScopeTests(APITestCase):

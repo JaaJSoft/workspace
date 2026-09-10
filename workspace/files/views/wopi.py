@@ -76,6 +76,21 @@ def _item_version(file_obj) -> str:
     return file_obj.content_hash or str(int(file_obj.updated_at.timestamp()))
 
 
+def _expected_version(request, file_obj):
+    """The ``content_hash`` an ``If-Match`` on PutFile is asking to overwrite.
+
+    ``_item_version`` falls back to a timestamp on a row the hash backfill has
+    not reached, so an editor that sends that version back is naming the row's
+    actual version - the empty hash - and not a hash of its own. Without the
+    translation the precondition could never be satisfied and every save on
+    such a file would answer 409.
+    """
+    supplied = precondition_hash(request)
+    if supplied is not None and not file_obj.content_hash:
+        return "" if supplied == _item_version(file_obj) else supplied
+    return supplied
+
+
 def _lock_conflict(outcome) -> HttpResponse:
     response = HttpResponse(status=409)
     response["X-WOPI-Lock"] = outcome.current_lock
@@ -193,7 +208,7 @@ class WopiFileContentsView(View):
                 file_obj,
                 content,
                 acting_user=user,
-                expected_hash=precondition_hash(request),
+                expected_hash=_expected_version(request, file_obj),
             )
         except QuotaExceeded as exc:
             # A plain Django view: nothing translates a DRF exception here, so
@@ -209,9 +224,15 @@ class WopiFileContentsView(View):
         except StaleContent as exc:
             # The editor asked to be refused if the file moved, and it did. The
             # version it is now up against goes back in the same header the
-            # editor reads everywhere else.
+            # editor reads everywhere else - which means re-reading the row when
+            # the stored hash is empty, since the header falls back to a
+            # timestamp there.
+            current = exc.current_hash
+            if not current:
+                moved = File.objects.filter(pk=file_obj.pk).first()
+                current = _item_version(moved) if moved else ""
             response = HttpResponse(status=409)
-            response["X-WOPI-ItemVersion"] = exc.current_hash
+            response["X-WOPI-ItemVersion"] = current
             return response
         response = JsonResponse({"LastModifiedTime": file_obj.updated_at.isoformat()})
         response["X-WOPI-ItemVersion"] = _item_version(file_obj)

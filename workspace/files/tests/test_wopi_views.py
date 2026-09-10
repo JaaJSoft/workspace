@@ -195,6 +195,33 @@ class PutFileTests(WopiViewTestBase):
         self.assertEqual(resp.headers["X-WOPI-ItemVersion"], self.file.content_hash)
         self.assertEqual(self._blob(), b"somebody else's revision")
 
+    def test_put_matches_the_fallback_version_of_an_unhashed_row(self):
+        """A row the hash backfill has not reached is still matchable.
+
+        ``X-WOPI-ItemVersion`` falls back to a timestamp when the stored hash
+        is empty, so the version the editor holds is that timestamp - and
+        comparing it against the empty hash would refuse every save the editor
+        ever makes on such a file.
+        """
+        File.objects.filter(pk=self.file.pk).update(content_hash="")
+        self.file.refresh_from_db()
+        version = self.client.get(self._file_url(self._token())).json()["Version"]
+
+        resp = self._put(b"updated body", if_match=f'"{version}"')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._blob(), b"updated body")
+
+    def test_put_refused_on_an_unhashed_row_names_the_fallback_version(self):
+        """The 409 carries a version the editor can compare against."""
+        File.objects.filter(pk=self.file.pk).update(content_hash="")
+        self.file.refresh_from_db()
+        version = self.client.get(self._file_url(self._token())).json()["Version"]
+        File.objects.filter(pk=self.file.pk).update(content_hash="deadbeef")
+
+        resp = self._put(b"my revision", if_match=f'"{version}"')
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.headers["X-WOPI-ItemVersion"], "deadbeef")
+
     def test_put_is_refused_by_a_lock_taken_while_it_saved(self):
         """The app lock is asked again inside the write, not only before it."""
 

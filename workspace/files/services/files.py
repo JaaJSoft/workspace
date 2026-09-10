@@ -480,9 +480,10 @@ class FileService:
         ``save()`` does and is the point: the blob lives at a path derived from
         the file's name and the storage overwrites in place, so bytes committed
         ahead of a refused write would destroy the very content the refusal
-        exists to protect. It also means the UPDATE holds the row for the rest
-        of the transaction, so this must run inside the caller's, or the row
-        can commit while the content that justifies it does not.
+        exists to protect. The two commit together, in a transaction this
+        method opens itself rather than borrowing from a caller: the UPDATE
+        holds the row until the bytes are down, and a storage failure takes the
+        row that already points at them with it.
 
         Callers that pass no ``expected_hash`` keep last-write-wins against
         other writers. The lock is not theirs to opt out of.
@@ -525,14 +526,14 @@ class FileService:
             "has_thumbnail": False,
             "updated_at": timezone.now(),
         }
-        FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
-
-        stored = content_field.storage.save(storage_path, content)
-        if stored != storage_path:
-            # A storage that renames around a collision moved the blob; the row
-            # is ours for the rest of the transaction, so it can follow.
-            File.objects.filter(pk=file_obj.pk).update(content=stored)
-            fields["content"] = stored
+        with transaction.atomic():
+            FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+            stored = content_field.storage.save(storage_path, content)
+            if stored != storage_path:
+                # A storage that renames around a collision moved the blob; the
+                # row is ours until this block commits, so it can follow.
+                File.objects.filter(pk=file_obj.pk).update(content=stored)
+                fields["content"] = stored
         for field, value in fields.items():
             setattr(file_obj, field, value)
         # Ordering is load-bearing: after the write (nothing here is atomic, so a
@@ -574,8 +575,11 @@ class FileService:
         if claim.filter(unlocked_for_q(acting_user)).update(**fields):
             return
         # Nothing matched: re-read to say which of the two conditions failed.
-        # The row can only move further from here, and either answer stays
-        # true - both of them mean this write is not landing.
+        # The read trails the write, so the lock may already be gone by the
+        # time it runs - which is why an expectation that still matches is the
+        # thing that settles it. Only a version that actually moved is
+        # staleness; anything else was the lock, whether or not the holder is
+        # still there to be named.
         current = (
             File.objects.select_related("locked_by").filter(pk=file_obj.pk).first()
         )
@@ -584,7 +588,33 @@ class FileService:
         holder = conflicting_lock(current, acting_user)
         if holder is not None:
             raise LockConflict(holder)
-        raise StaleContent(current.content_hash or "")
+        if expected_hash is not None and current.content_hash != expected_hash:
+            raise StaleContent(current.content_hash or "")
+        raise LockConflict(None)
+
+    @staticmethod
+    def clear_content(file_obj, *, acting_user=None, expected_hash=None):
+        """Empty a file's content row, or refuse.
+
+        A PATCH sending ``content: null`` destroys content as surely as one
+        sending bytes, so it is decided by the same conditional statement -
+        the lock predicate, plus the caller's expectation when there is one.
+
+        The blob is left where it is, as the plain ``save()`` this replaced
+        also did: the row stops pointing at it and the storage sweep collects
+        it, which is what keeps a refused write from touching storage at all.
+        """
+        fields = {
+            "content": "",
+            "content_hash": "",
+            "size": None,
+            "has_thumbnail": False,
+            "updated_at": timezone.now(),
+        }
+        FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+        for field, value in fields.items():
+            setattr(file_obj, field, value)
+        return file_obj
 
     @staticmethod
     def replace_content_from(target, source, *, acting_user=None, expected_hash=None):

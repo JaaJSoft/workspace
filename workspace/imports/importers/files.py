@@ -255,7 +255,27 @@ class FilesImporter(Importer):
                     ctx.stats.pop("in_flight", None)
                     ctx.flush(force=True)
                     raise JobFailed(str(exc.detail)) from exc
-                except (ProviderError, LockConflict, *_STORAGE_ERRORS) as exc:
+                except LockConflict as exc:
+                    # Somebody has the file open in an editor. That says
+                    # nothing about the remote's health, so it must not count
+                    # towards the consecutive-error threshold that gives up on
+                    # the whole job - a folder of files being edited would
+                    # otherwise abort the import blaming the remote server.
+                    ctx.stats.pop("in_flight", None)
+                    logger.info(
+                        "Import of %s skipped: %s",
+                        scrub(entry.id[:200]),
+                        scrub(str(exc)),
+                    )
+                    ctx.report_item(
+                        entry.id,
+                        ImportJobItem.Status.FAILED,
+                        error="Could not store the file: it is open in an editor.",
+                        fingerprint=entry.fingerprint,
+                    )
+                    ctx.stat("failed")
+                    continue
+                except (ProviderError, *_STORAGE_ERRORS) as exc:
                     ctx.stats.pop("in_flight", None)
                     message = getattr(exc, "user_message", None) or _storage_message(
                         exc
@@ -542,8 +562,6 @@ class FilesImporter(Importer):
 
 
 def _storage_message(exc):
-    if isinstance(exc, LockConflict):
-        return "Could not store the file: it is open in an editor."
     if isinstance(exc, IntegrityError):
         return "Could not store the file: it was imported concurrently."
     if isinstance(exc, DataError | ValidationError | ValueError):

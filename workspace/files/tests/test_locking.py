@@ -16,6 +16,7 @@ from workspace.core.sse_registry import read_user_events
 from workspace.files.models import File, FileShare
 from workspace.files.serializers import FileLocked, FileSerializer
 from workspace.files.services import FileService
+from workspace.files.services.locking import LockConflict
 from workspace.files.sse_provider import push_file_event
 
 User = get_user_model()
@@ -813,6 +814,69 @@ class ConcurrentWriteTests(APITestCase):
         self.assertTrue(fired, "the competing write never ran")
         self.assertEqual(resp.status_code, status.HTTP_412_PRECONDITION_FAILED)
         self.assertEqual(self._content(), b"the rival's paragraphs")
+
+    def test_clearing_the_content_meets_the_lock_in_the_window(self):
+        """``content: null`` destroys content, so it is a content write too.
+
+        This path reads no upload, so there is no stream to hook: the rival
+        locks as the WHERE clause is being built instead, the last instant
+        before the statement runs and long past both pre-write checks.
+        """
+        from workspace.files.services import locking
+
+        real = locking.unlocked_for_q
+
+        def lock_then_ask(user):
+            self._lock_for_the_rival()
+            return real(user)
+
+        with patch("workspace.files.services.locking.unlocked_for_q", lock_then_ask):
+            resp = self.client.patch(self._url(), {"content": None}, format="json")
+
+        self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
+        self.assertEqual(self._content(), b"first")
+
+    def test_clearing_the_content_is_refused_when_the_version_moved(self):
+        self._rival_saves()
+        resp = self.client.patch(
+            self._url(),
+            {"content": None, "base_hash": self.loaded_hash},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_412_PRECONDITION_FAILED)
+        self.assertEqual(self._content(), b"the rival's paragraphs")
+
+    def test_clearing_the_content_empties_the_row(self):
+        resp = self.client.patch(self._url(), {"content": None}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.content.name, "")
+        self.assertIsNone(self.file.size)
+        self.assertEqual(self.file.content_hash, "")
+
+    def test_a_lock_let_go_before_the_reread_is_still_a_lock(self):
+        """The read that classifies a refusal trails the write it explains.
+
+        A holder that releases in between leaves that read looking clean, and
+        answering "the file changed" there would tell a caller its version is
+        stale when the version never moved - or, worse, tell a caller that sent
+        no version at all that it did.
+        """
+        self._lock_for_the_rival()
+
+        with (
+            patch(
+                "workspace.files.services.locking.conflicting_lock", return_value=None
+            ),
+            self.assertRaises(LockConflict),
+        ):
+            FileService.update_content(
+                File.objects.get(pk=self.file.pk),
+                ContentFile(b"mine", name="race.md"),
+                name="race.md",
+                acting_user=self.user,
+            )
+        self.assertEqual(self._content(), b"first")
 
     def test_an_upload_replacing_a_same_name_file_meets_the_lock(self):
         """The upload path writes through the same conditional statement."""

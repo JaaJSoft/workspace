@@ -296,6 +296,34 @@ class TestUpdateContent(TestCase):
         with f.content.storage.open(f.content.name, "rb") as fh:
             self.assertEqual(fh.read(), b"fresh content")
 
+    def test_a_storage_failure_takes_the_row_with_it(self):
+        """The row and the bytes commit together or not at all.
+
+        The row is written first so a refused write never touches storage, and
+        that ordering only holds up if the reverse is true too - a row already
+        pointing at bytes that failed to land would leave the file claiming a
+        hash and a size its blob does not have.
+        """
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"old", name="doc.txt"),
+        )
+        original_hash, original_size = f.content_hash, f.size
+
+        storage = File._meta.get_field("content").storage
+        with (
+            patch.object(storage, "save", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
+        ):
+            FileService.update_content(
+                f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
+            )
+
+        stored = File.objects.get(pk=f.pk)
+        self.assertEqual(stored.content_hash, original_hash)
+        self.assertEqual(stored.size, original_size)
+
     def test_the_returned_instance_needs_no_refresh(self):
         """The row write bypasses ``save()``, so the instance follows by hand.
 

@@ -550,7 +550,17 @@ class FileSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
 
         if content_provided:
-            if instance.node_type == File.NodeType.FILE and uploaded is not None:
+            if uploaded is None:
+                # ``content: null`` destroys content as surely as bytes do, so
+                # it goes through the same conditional statement rather than a
+                # bare save() a lock taken meanwhile would never see.
+                with content_write_refusals():
+                    FileService.clear_content(
+                        instance,
+                        acting_user=acting_user,
+                        expected_hash=self.context.get("expected_content_hash"),
+                    )
+            elif instance.node_type == File.NodeType.FILE:
                 # The viewset answers 412 before a byte is read when the row has
                 # already moved; this passes the same expectation down so the
                 # database decides it, which is the half that holds under two

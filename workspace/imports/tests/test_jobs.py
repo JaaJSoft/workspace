@@ -7,7 +7,6 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from workspace.core.sse_registry import drain_user_events
 from workspace.files.models import File
 from workspace.imports.importers.base import Outcome
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
@@ -149,14 +148,14 @@ class RunJobTests(JobsTestCase):
 
     def test_progress_events_reach_the_owner_mailbox(self):
         job = self._pending()
-        svc.run_job(job.pk)
+        # The stream is open before the job runs, as a page watching it would be.
         provider = ImportsSSEProvider(self.user, None)
+        svc.run_job(job.pk)
         polled = provider.poll("dirty")
         self.assertEqual(len(polled), 1)  # newest payload supersedes the older ones
         self.assertEqual(polled[0][0], "imports.job")
         self.assertEqual(polled[0][1]["status"], "completed")
         self.assertEqual(provider.poll("dirty"), [])
-        self.assertEqual(drain_user_events("imports", self.user.id), [])
 
     def test_failed_job_records_the_reason(self):
         self.provider.fail_list.add("/")

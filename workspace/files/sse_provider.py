@@ -1,20 +1,10 @@
-import logging
-
-from workspace.core.sse_registry import SSEProvider, drain_user_events, push_user_event
-
-logger = logging.getLogger(__name__)
+from workspace.core.sse_registry import MailboxSSEProvider, push_user_event
 
 SLUG = "files"
 
 
-class FilesSSEProvider(SSEProvider):
-    def get_initial_events(self):
-        return []
-
-    def poll(self, cache_value):
-        if cache_value is None:
-            return []
-        return [(ev["type"], ev, None) for ev in drain_user_events(SLUG, self.user.id)]
+class FilesSSEProvider(MailboxSSEProvider):
+    slug = SLUG
 
 
 def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):

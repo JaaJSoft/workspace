@@ -28,12 +28,18 @@
   let es = null;
   let errorCount = 0;
   let retryTimer = null;
+  // Resume point for the next connect(). EventSource replays the last id on
+  // its own reconnects, but every stream we open ourselves (visibility
+  // change, bfcache restore) is a brand new EventSource with no id to replay -
+  // so we carry it in the URL and the server reads it from there.
+  let lastEventId = '';
   // Skip the first connect's reconnect event — initial state comes from the
   // server-rendered template, not from a missed SSE push, so listeners that
   // re-fetch on reconnect would cause an unnecessary round-trip on page load.
   let firstConnect = true;
 
   function onMessage(e) {
+    if (e.lastEventId) lastEventId = e.lastEventId;
     const payload = JSON.parse(e.data);
     window.dispatchEvent(new CustomEvent('sse:' + payload.event, { detail: payload.data }));
     if (payload.event.startsWith('chat.')) {
@@ -47,7 +53,10 @@
   function connect() {
     if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
     if (es) { es.close(); es = null; }
-    es = new EventSource('/api/v1/stream');
+    const url = lastEventId
+      ? '/api/v1/stream?last_event_id=' + encodeURIComponent(lastEventId)
+      : '/api/v1/stream';
+    es = new EventSource(url);
     errorCount = 0;
     es.addEventListener('sse', onMessage);
     es.onerror = function () {

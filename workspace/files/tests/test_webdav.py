@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from knox.models import AuthToken
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
@@ -28,6 +29,15 @@ from workspace.files.webdav.resources import (
 )
 
 User = get_user_model()
+
+_LOCK_BODY = (
+    b'<?xml version="1.0" encoding="utf-8"?>'
+    b'<lockinfo xmlns="DAV:">'
+    b"<lockscope><exclusive/></lockscope>"
+    b"<locktype><write/></locktype>"
+    b"<owner><href>test</href></owner>"
+    b"</lockinfo>"
+)
 
 
 def _make_environ(user=None, **extra):
@@ -1299,18 +1309,10 @@ class WebDAVIntegrationTests(TestCase):
         wsgidav with a middleware that rewrites the header; this
         test pins the contract from the wire.
         """
-        body = (
-            b'<?xml version="1.0" encoding="utf-8"?>'
-            b'<lockinfo xmlns="DAV:">'
-            b"<lockscope><exclusive/></lockscope>"
-            b"<locktype><write/></locktype>"
-            b"<owner><href>test</href></owner>"
-            b"</lockinfo>"
-        )
         code, headers, _ = self._request(
             "LOCK",
             "/locked.txt",
-            body=body,
+            body=_LOCK_BODY,
             headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
         )
         self.assertIn(code, (200, 201))
@@ -1814,3 +1816,137 @@ class WebDAVIntegrationTests(TestCase):
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "1"})
         self.assertEqual(code, 207)
         self.assertNotIn(b"secret.txt", body)
+
+    # ── app lock ──
+
+    def _hold_lock(self, file_obj, user, *, expires_in=timedelta(minutes=5)):
+        """Put the in-app editor's lock on *file_obj* for *user*."""
+        now = timezone.now()
+        File.objects.filter(pk=file_obj.pk).update(
+            locked_by=user,
+            locked_at=now,
+            lock_expires_at=now + expires_in,
+        )
+
+    def _locked_by_someone_else(self, name="held.txt", body=b"editor buffer"):
+        """A file this session can reach, locked by another user.
+
+        Refreshed before it is handed back: ``_hold_lock`` writes through a
+        queryset, which leaves the in-memory instance believing it is unlocked
+        - a caller reading ``file_obj.locked_by`` off a stale copy would get
+        None and quietly test nothing.
+        """
+        other = User.objects.create_user(
+            username="davholder", email="hold@test.com", password="p"
+        )
+        file_obj = FileService.create_file(
+            self.user,
+            name,
+            content=ContentFile(body, name=name),
+            mime_type="text/plain",
+        )
+        self._hold_lock(file_obj, other)
+        file_obj.refresh_from_db()
+        return file_obj
+
+    def test_put_refused_while_another_user_holds_the_app_lock(self):
+        """The whole point: a mounted client must not overwrite an open note."""
+        file_obj = self._locked_by_someone_else()
+        code, _, _ = self._request("PUT", "/held.txt", body=b"clobbered")
+        self.assertEqual(code, 423)
+        code, _, body = self._request("GET", "/held.txt")
+        self.assertEqual(body, b"editor buffer")
+        file_obj.refresh_from_db()
+        self.assertEqual(file_obj.size, len(b"editor buffer"))
+
+    def test_put_allowed_once_the_app_lock_expired(self):
+        file_obj = self._locked_by_someone_else(name="stale.txt")
+        self._hold_lock(file_obj, file_obj.locked_by, expires_in=-timedelta(seconds=1))
+        # The write has to get through an expired lock, not through no lock:
+        # without a holder on the row this asserts nothing at all.
+        file_obj.refresh_from_db()
+        self.assertIsNotNone(file_obj.locked_by_id)
+
+        code, _, _ = self._request("PUT", "/stale.txt", body=b"fresh")
+        self.assertIn(code, (201, 204))
+        code, _, body = self._request("GET", "/stale.txt")
+        self.assertEqual(body, b"fresh")
+
+    def test_put_allowed_for_the_lock_holder(self):
+        file_obj = FileService.create_file(
+            self.user,
+            "mine.txt",
+            content=ContentFile(b"old", name="mine.txt"),
+            mime_type="text/plain",
+        )
+        self._hold_lock(file_obj, self.user)
+        code, _, _ = self._request("PUT", "/mine.txt", body=b"new")
+        self.assertIn(code, (201, 204))
+
+    def test_delete_refused_while_another_user_holds_the_app_lock(self):
+        file_obj = self._locked_by_someone_else(name="keep.txt")
+        code, _, _ = self._request("DELETE", "/keep.txt")
+        self.assertEqual(code, 423)
+        file_obj.refresh_from_db()
+        self.assertIsNone(file_obj.deleted_at)
+
+    def test_move_refused_while_another_user_holds_the_app_lock(self):
+        file_obj = self._locked_by_someone_else(name="pinned.txt")
+        code, _, _ = self._request(
+            "MOVE",
+            "/pinned.txt",
+            headers={"Destination": "http://testserver/dav/moved.txt"},
+        )
+        self.assertEqual(code, 423)
+        file_obj.refresh_from_db()
+        self.assertEqual(file_obj.name, "pinned.txt")
+
+    def test_dav_lock_refused_while_another_user_holds_the_app_lock(self):
+        self._locked_by_someone_else(name="taken.txt")
+        code, _, _ = self._request(
+            "LOCK",
+            "/taken.txt",
+            body=_LOCK_BODY,
+            headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
+        )
+        self.assertGreaterEqual(code, 400)
+
+    def test_dav_lock_takes_the_app_lock(self):
+        """A DAV lock is the same lock the browser editor reads."""
+        file_obj = FileService.create_file(
+            self.user, "word.docx", mime_type="text/plain"
+        )
+        code, headers, _ = self._request(
+            "LOCK",
+            "/word.docx",
+            body=_LOCK_BODY,
+            headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
+        )
+        self.assertIn(code, (200, 201))
+        token = headers.get("Lock-Token")
+        file_obj.refresh_from_db()
+        self.assertEqual(file_obj.locked_by_id, self.user.pk)
+        self.assertEqual(file_obj.lock_token, token)
+        self.assertTrue(file_obj.is_locked())
+
+    def test_dav_unlock_releases_the_app_lock(self):
+        file_obj = FileService.create_file(
+            self.user, "word2.docx", mime_type="text/plain"
+        )
+        _, headers, _ = self._request(
+            "LOCK",
+            "/word2.docx",
+            body=_LOCK_BODY,
+            headers={"Content-Type": "application/xml", "Timeout": "Second-180"},
+        )
+        file_obj.refresh_from_db()
+        self.assertTrue(file_obj.is_locked())
+
+        code, _, _ = self._request(
+            "UNLOCK", "/word2.docx", headers={"Lock-Token": headers["Lock-Token"]}
+        )
+        self.assertEqual(code, 204)
+        file_obj.refresh_from_db()
+        self.assertIsNone(file_obj.locked_by_id)
+        self.assertEqual(file_obj.lock_token, "")
+        self.assertFalse(file_obj.is_locked())

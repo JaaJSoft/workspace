@@ -6,6 +6,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.locking import StaleContent, conflicting_lock
 
 from .models import File, FileComment
 
@@ -16,13 +17,24 @@ class FileLocked(APIException):
     default_code = "locked"
 
 
+class FileContentStale(APIException):
+    status_code = 412
+    default_detail = "The file changed since it was loaded."
+    default_code = "precondition_failed"
+
+
+def ensure_unlocked(user, target):
+    """Raise 423 unless *user* may write *target* right now."""
+    if conflicting_lock(target, user) is not None:
+        raise FileLocked()
+
+
 def ensure_replaceable(user, target):
     """Raise unless *user* may overwrite *target*'s content right now."""
     permission = FileService.get_permission(user, target)
     if permission is None or permission < FilePermission.WRITE:
         raise PermissionDenied("You cannot replace the existing file.")
-    if target.is_locked() and target.locked_by_id != user.pk:
-        raise FileLocked()
+    ensure_unlocked(user, target)
 
 
 def _require_annotation(obj, name):
@@ -472,6 +484,12 @@ class FileSerializer(serializers.ModelSerializer):
         explicit_mime_type = validated_data.pop("mime_type", None)
         acting_user = self.context["request"].user
 
+        # The 423 also lives on the viewset, which is where a PATCH/PUT gets
+        # its answer before any field is touched. Repeating it here is what
+        # makes the rule hold for every caller of the serializer - the
+        # shared-write fallback, a management command, a future endpoint.
+        ensure_unlocked(acting_user, instance)
+
         # Handle rename via FileService (storage moves)
         if "name" in validated_data:
             new_name = validated_data["name"]
@@ -492,13 +510,26 @@ class FileSerializer(serializers.ModelSerializer):
 
         if content_provided:
             if instance.node_type == File.NodeType.FILE and uploaded is not None:
-                FileService.update_content(
-                    instance,
-                    uploaded,
-                    name=instance.name,
-                    mime_type=explicit_mime_type,
-                    acting_user=acting_user,
-                )
+                # The viewset answers 412 before a byte is read when the row has
+                # already moved; this passes the same expectation down so the
+                # database decides it, which is the half that holds under two
+                # writers racing with the same expectation.
+                try:
+                    FileService.update_content(
+                        instance,
+                        uploaded,
+                        name=instance.name,
+                        mime_type=explicit_mime_type,
+                        acting_user=acting_user,
+                        expected_hash=self.context.get("expected_content_hash") or None,
+                    )
+                except StaleContent as exc:
+                    raise FileContentStale(
+                        {
+                            "detail": FileContentStale.default_detail,
+                            "content_hash": exc.current_hash,
+                        }
+                    ) from exc
             else:
                 instance.content = uploaded
                 instance.size = None

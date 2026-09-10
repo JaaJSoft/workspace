@@ -6,7 +6,6 @@ from django.contrib.auth import get_user_model
 from django.db.models import OuterRef, Q, Subquery
 from django.db.models.functions import Lower
 from django.http import Http404
-from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
@@ -28,6 +27,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
+from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
 from ..models import File, FileShare
@@ -650,38 +650,119 @@ class FileViewSet(
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
-    def partial_update(self, request, *args, **kwargs):
-        # Lock protection
-        uuid = kwargs.get("uuid")
-        locked_file = (
-            File.objects.filter(
-                uuid=uuid,
-                deleted_at__isnull=True,
+    def _write_target(self, request, uuid):
+        """The row this PUT/PATCH is about to write, fetched once per request.
+
+        Scoped to what the caller can reach, like the lock endpoint: the
+        answers built from this row - the holder's name on a 423, the stored
+        hash on a 412 - would otherwise let anyone holding a UUID probe a file
+        they have no rights to. Out of reach it yields None, and the write
+        falls through to ``get_object()``'s 404.
+        """
+        if not hasattr(request, "_files_write_target"):
+            request._files_write_target = (
+                File.objects.filter(
+                    FileService.accessible_files_q(request.user),
+                    uuid=uuid,
+                    deleted_at__isnull=True,
+                )
+                .select_related("locked_by")
+                .only(
+                    "locked_by",
+                    "lock_expires_at",
+                    "content_hash",
+                )
+                .first()
             )
-            .select_related("locked_by")
-            .only(
-                "locked_by",
-                "lock_expires_at",
-            )
-            .first()
-        )
-        if (
-            locked_file
-            and locked_file.locked_by_id is not None
-            and locked_file.locked_by_id != request.user.pk
-            and locked_file.lock_expires_at
-            and locked_file.lock_expires_at > timezone.now()
-        ):
-            return Response(
-                {
-                    "detail": "File is locked by another user.",
-                    "locked_by": {
-                        "id": locked_file.locked_by.pk,
-                        "username": locked_file.locked_by.username,
-                    },
+        return request._files_write_target
+
+    def _lock_conflict_response(self, request, uuid):
+        """423 when an active lock on *uuid* is held by someone else, else None.
+
+        Content reaches a file through both PATCH and PUT, so the check lives
+        on ``update()`` - the one method both go through. ``partial_update``
+        runs it earlier only to keep the lock's answer ahead of the rename
+        gate's, and memoizes it so ``update()`` doesn't repeat the query.
+        """
+        if getattr(request, "_files_lock_checked", False):
+            return None
+        request._files_lock_checked = True
+
+        holder = conflicting_lock(self._write_target(request, uuid), request.user)
+        if holder is None:
+            return None
+        return Response(
+            {
+                "detail": "File is locked by another user.",
+                "locked_by": {
+                    "id": holder.pk,
+                    "username": holder.username,
                 },
-                status=423,
-            )
+            },
+            status=423,
+        )
+
+    def get_serializer_context(self):
+        # The serializer re-asks the precondition inside the write, where the
+        # database can serialise it (FileService.update_content). Parsing it
+        # once here keeps the two answers from drifting apart.
+        context = super().get_serializer_context()
+        request = self.request
+        if request is not None and request.method in {"PATCH", "PUT"}:
+            context["expected_content_hash"] = precondition_hash(request)
+        return context
+
+    def _stale_write_response(self, request, uuid):
+        """412 when the caller's precondition already fails on a read.
+
+        A lock only covers writers who are still holding it: a tab that slept
+        past the 5-minute TTL wakes up with a buffer loaded before somebody
+        else's edits and no reason to think anything moved. Sending the
+        ``content_hash`` the buffer started from - as ``If-Match`` or a
+        ``base_hash`` part - is what lets the write be refused instead.
+
+        This is the early-out, not the guarantee: it settles the sequential
+        case before a byte of the upload is read, and it is the only check a
+        write that carries no content (a rename under ``If-Match``) ever gets.
+        A content write is decided again by the conditional UPDATE inside
+        ``FileService.update_content``, which is what holds when two callers
+        race with the same expectation.
+
+        Optional by design: a caller that sends no precondition (WebDAV, the
+        upload paths, an API script) keeps the old last-write-wins behaviour.
+        """
+        expected = precondition_hash(request)
+        if not expected:
+            return None
+
+        target = self._write_target(request, uuid)
+        if target is None or target.content_hash == expected:
+            return None
+        return Response(
+            {
+                "detail": "The file changed since it was loaded.",
+                "content_hash": target.content_hash,
+            },
+            status=status.HTTP_412_PRECONDITION_FAILED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        # Both PUT and PATCH land here (DRF's partial_update delegates to
+        # update), so this is the one place a write guard covers both.
+        uuid = kwargs.get("uuid")
+        locked = self._lock_conflict_response(request, uuid)
+        if locked is not None:
+            return locked
+        stale = self._stale_write_response(request, uuid)
+        if stale is not None:
+            return stale
+        return super().update(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        uuid = kwargs.get("uuid")
+        locked = self._lock_conflict_response(request, uuid)
+        if locked is not None:
+            return locked
 
         # Rename gate - consult the action registry so any future rule on
         # RenameAction.is_available (e.g., journal notes, shared files)

@@ -13,6 +13,7 @@ from wsgidav.dav_error import (
     HTTP_BAD_REQUEST,
     HTTP_FORBIDDEN,
     HTTP_INSUFFICIENT_STORAGE,
+    HTTP_LOCKED,
     DAVError,
 )
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
@@ -21,6 +22,7 @@ from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
+from workspace.files.services.locking import conflicting_lock
 
 logger = logging.getLogger(__name__)
 
@@ -413,7 +415,30 @@ class FileResource(DAVNonCollection):
         self._file.content.open("rb")
         return self._file.content
 
+    def _refuse_if_locked(self, verb):
+        """Raise 423 when someone else holds the app lock on this file.
+
+        wsgidav keeps its own lock table, and until ``webdav/locks.py`` mirrors
+        a DAV lock onto the File row the two tables describe the same file
+        independently. A mounted client that never issues LOCK bypasses both,
+        which is why the refusal sits on the write itself rather than on the
+        LOCK method alone.
+        """
+        holder = conflicting_lock(self._file, self._user)
+        if holder is None:
+            return
+        logger.info(
+            "WebDAV %s refused for %s by %s: locked by %s",
+            verb,
+            scrub(self.path),
+            scrub(getattr(self._user, "username", "?")),
+            scrub(holder.username),
+        )
+        raise DAVError(HTTP_LOCKED, f"File is locked by {holder.username}")
+
     def begin_write(self, content_type=None):
+        self._refuse_if_locked("PUT")
+
         # An overwrite frees the bytes it replaces, so credit them back before
         # deciding how much room is left.
         remaining = quota.remaining_bytes(
@@ -542,10 +567,15 @@ class FileResource(DAVNonCollection):
     def delete(self):
         if getattr(self, "_moved", False):
             return  # Already moved in copy_move_single; nothing to delete.
+        # A MOVE onto an existing file deletes the destination first, so this
+        # is also where "overwrite by rename" - how Windows and davfs2 save -
+        # meets the lock.
+        self._refuse_if_locked("DELETE")
         FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
+            self._refuse_if_locked("MOVE")
             with transaction.atomic(), _as_insufficient_storage():
                 _move_to(self._file, self._user, dest_path)
             self._moved = True
@@ -561,6 +591,15 @@ class FileResource(DAVNonCollection):
 
     def support_recursive_move(self, dest_path):
         return False
+
+    def prevent_locking(self):
+        """Refuse a DAV LOCK while another user holds the app lock.
+
+        wsgidav answers 403 rather than the 423 a lock conflict deserves, but
+        refusing is what matters: a client that took the DAV lock here would
+        believe it owns a file the browser editor is holding.
+        """
+        return conflicting_lock(self._file, self._user) is not None
 
     def support_etag(self):
         return True

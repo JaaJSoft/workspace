@@ -10,6 +10,7 @@ import logging
 import os
 import posixpath
 import shutil
+import uuid
 
 from django.core.files.base import ContentFile
 from django.core.files.base import File as DjangoFile
@@ -22,6 +23,40 @@ from . import _trash
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
+
+
+def replace_blob(storage, storage_path, content):
+    """Put *content* at *storage_path*, swapping the previous blob in one step.
+
+    The storage overwrites in place, which truncates the blob at the first byte
+    written: a transfer that dies halfway leaves neither the old bytes nor the
+    whole new ones, and the row - rolled back to the version it described
+    before - then points at content that no longer exists. Writing to a sibling
+    temp file and renaming over the target instead means the path only ever
+    holds one complete version or the other.
+
+    A backend without local paths cannot be renamed into, and saves directly;
+    it also cannot truncate a blob in place, so there is nothing to protect.
+    """
+    try:
+        final_path = storage.path(storage_path)
+    except NotImplementedError:
+        return storage.save(storage_path, content)
+
+    staged = f"{storage_path}.{uuid.uuid4().hex}.part"
+    try:
+        storage.save(staged, content)
+        os.makedirs(os.path.dirname(final_path), exist_ok=True)
+        os.replace(storage.path(staged), final_path)
+    except OSError:
+        # Including a save that died partway: the half-written bytes are in the
+        # staged file, and the target still holds the version before them.
+        try:
+            storage.delete(staged)
+        except OSError:
+            logger.warning("Could not remove staged blob %s", scrub(staged))
+        raise
+    return storage_path
 
 
 def folder_storage_path(folder):

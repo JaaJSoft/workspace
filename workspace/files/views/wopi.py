@@ -7,6 +7,12 @@ Routes (WOPI fixes the shape; the editor derives the /contents URL itself):
     GET  /api/wopi/files/<uuid>/contents   GetFile
     POST /api/wopi/files/<uuid>/contents   PutFile
 
+``X-WOPI-ItemVersion`` is the file's ``content_hash``, so an editor that sends
+the version it opened back as ``If-Match`` on PutFile gets its save refused
+with 409 rather than silently overwriting somebody else's - the same
+precondition the browser editors carry, spelled the way WOPI already spells
+versions.
+
 Authentication is the ``access_token`` query parameter mandated by the
 protocol - no session, no CSRF. The token pins a user and a file; the user's
 permission is re-checked against the live ACL on every request, so revoking a
@@ -25,6 +31,11 @@ from django.views.decorators.debug import sensitive_variables
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.locking import (
+    LockConflict,
+    StaleContent,
+    precondition_hash,
+)
 from workspace.files.services.quota import QuotaExceeded
 from workspace.files.services.wopi import locks
 from workspace.files.services.wopi.tokens import parse_access_token
@@ -63,6 +74,21 @@ def _authenticate(request, uuid):
 
 def _item_version(file_obj) -> str:
     return file_obj.content_hash or str(int(file_obj.updated_at.timestamp()))
+
+
+def _expected_version(request, file_obj):
+    """The ``content_hash`` an ``If-Match`` on PutFile is asking to overwrite.
+
+    ``_item_version`` falls back to a timestamp on a row the hash backfill has
+    not reached, so an editor that sends that version back is naming the row's
+    actual version - the empty hash - and not a hash of its own. Without the
+    translation the precondition could never be satisfied and every save on
+    such a file would answer 409.
+    """
+    supplied = precondition_hash(request)
+    if supplied is not None and not file_obj.content_hash:
+        return "" if supplied == _item_version(file_obj) else supplied
+    return supplied
 
 
 def _lock_conflict(outcome) -> HttpResponse:
@@ -178,13 +204,36 @@ class WopiFileContentsView(View):
 
         content = ContentFile(request.body, name=file_obj.name)
         try:
-            FileService.update_content(file_obj, content, acting_user=user)
+            FileService.update_content(
+                file_obj,
+                content,
+                acting_user=user,
+                expected_hash=_expected_version(request, file_obj),
+            )
         except QuotaExceeded as exc:
             # A plain Django view: nothing translates a DRF exception here, so
             # an escaping QuotaExceeded would reach the editor as a 500.
             return HttpResponse(
                 str(exc.detail), status=413, content_type="text/plain; charset=utf-8"
             )
+        except LockConflict:
+            # Somebody took the app lock while the editor was saving. The WOPI
+            # lock it holds is unrelated to that one, so there is no lock id to
+            # hand back - 409 with no X-WOPI-Lock is the protocol's "try again".
+            return HttpResponse(status=409)
+        except StaleContent as exc:
+            # The editor asked to be refused if the file moved, and it did. The
+            # version it is now up against goes back in the same header the
+            # editor reads everywhere else - which means re-reading the row when
+            # the stored hash is empty, since the header falls back to a
+            # timestamp there.
+            current = exc.current_hash
+            if not current:
+                moved = File.objects.filter(pk=file_obj.pk).first()
+                current = _item_version(moved) if moved else ""
+            response = HttpResponse(status=409)
+            response["X-WOPI-ItemVersion"] = current
+            return response
         response = JsonResponse({"LastModifiedTime": file_obj.updated_at.isoformat()})
         response["X-WOPI-ItemVersion"] = _item_version(file_obj)
         return response

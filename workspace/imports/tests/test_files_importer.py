@@ -222,6 +222,62 @@ class FilesImporterTests(ImporterTestCase):
             File.objects.filter(parent=root, node_type=File.NodeType.FILE).count(), 1
         )
 
+    def test_conflict_replace_leaves_a_locked_file_alone(self):
+        """An import never writes over a file somebody has open in an editor.
+
+        The row write carries the lock predicate, so the refusal costs the one
+        entry rather than the job - the next run picks it up again.
+        """
+        holder = User.objects.create_user(
+            username="holder", email="holder@test.com", password="pw"
+        )
+        root = FileService.create_folder(self.user, "Nextcloud import")
+        mine = FileService.create_file(
+            self.user, "readme.txt", root, content=ContentFile(b"mine")
+        )
+        now = timezone.now()
+        File.objects.filter(pk=mine.pk).update(
+            locked_by=holder, locked_at=now, lock_expires_at=now + timedelta(minutes=5)
+        )
+
+        job = self._job(on_conflict="replace")
+        self._run(job)
+
+        mine.refresh_from_db()
+        with mine.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"mine")
+        self.assertEqual(job.stats["files"]["failed"], 1)
+        item = ImportJobItem.objects.get(job=job, remote_id="/readme.txt")
+        self.assertEqual(item.status, ImportJobItem.Status.FAILED)
+        self.assertIn("editor", item.error)
+
+    @override_settings(IMPORTS_MAX_CONSECUTIVE_ERRORS=1)
+    def test_a_locked_file_does_not_count_against_the_error_threshold(self):
+        """A file being edited is not a sign the remote server is down.
+
+        The threshold exists to stop a job hammering an unreachable remote;
+        counting a lock towards it would abort a whole import over files that
+        happen to be open, and blame the remote for it.
+        """
+        holder = User.objects.create_user(
+            username="holder2", email="holder2@test.com", password="pw"
+        )
+        root = FileService.create_folder(self.user, "Nextcloud import")
+        mine = FileService.create_file(
+            self.user, "readme.txt", root, content=ContentFile(b"mine")
+        )
+        now = timezone.now()
+        File.objects.filter(pk=mine.pk).update(
+            locked_by=holder, locked_at=now, lock_expires_at=now + timedelta(minutes=5)
+        )
+
+        job = self._job(on_conflict="replace")
+        self.assertEqual(self._run(job), Outcome.DONE)
+
+        self.assertEqual(job.stats["files"]["failed"], 1)
+        # The rest of the import went through rather than dying with it.
+        self.assertEqual(job.stats["files"]["files"], 2)
+
     def test_second_run_only_imports_what_changed(self):
         self._run(self._job(on_conflict="replace"))
         self.provider.tree["/"].append(

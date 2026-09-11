@@ -12,6 +12,11 @@ from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
+from wsgidav.dav_error import (
+    HTTP_LOCKED,
+    HTTP_PRECONDITION_FAILED,
+    DAVError,
+)
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan
@@ -713,6 +718,79 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
 
         self.file.refresh_from_db()
         self.assertGreater(self.file.updated_at, original_updated_at)
+
+    def test_a_lock_taken_during_the_upload_refuses_the_put(self):
+        """The lock is asked again when the row is written, not only at PUT.
+
+        A mounted client uploading a large file holds the window open for as
+        long as the transfer takes; the browser editor that locks the file
+        halfway through has to win.
+        """
+        holder = User.objects.create_user(
+            username="davholder2", email="h2@test.com", password="pass"
+        )
+        buf = self.res.begin_write(content_type="text/plain")
+        buf.write(b"new content")
+        buf.close()
+        now = timezone.now()
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=holder, locked_at=now, lock_expires_at=now + timedelta(minutes=5)
+        )
+
+        with self.assertRaises(DAVError) as caught:
+            self.res.end_write(with_errors=False)
+        self.assertEqual(caught.exception.value, HTTP_LOCKED)
+
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 11)
+        with self.file.content.storage.open(self.file.content.name, "rb") as fh:
+            self.assertEqual(fh.read(), b"hello world")
+
+    def test_if_match_is_carried_through_the_upload(self):
+        """The precondition the request was admitted under decides the write.
+
+        WsgiDAV checks ``If-Match`` against the ETag when the request arrives,
+        which says nothing about the minutes the upload then takes. Carrying
+        the version it matched into the conditional write is what makes the
+        promise hold for the whole transfer.
+        """
+        res = FileResource(
+            "/test.txt",
+            _make_environ(user=self.user, HTTP_IF_MATCH=f'"{self.res.get_etag()}"'),
+            File.objects.get(pk=self.file.pk),
+        )
+        buf = res.begin_write(content_type="text/plain")
+        buf.write(b"my upload")
+        buf.close()
+        FileService.update_content(
+            File.objects.get(pk=self.file.pk),
+            ContentFile(b"somebody else's save", name="test.txt"),
+            name="test.txt",
+        )
+
+        with self.assertRaises(DAVError) as caught:
+            res.end_write(with_errors=False)
+        self.assertEqual(caught.exception.value, HTTP_PRECONDITION_FAILED)
+
+        self.file.refresh_from_db()
+        with self.file.content.storage.open(self.file.content.name, "rb") as fh:
+            self.assertEqual(fh.read(), b"somebody else's save")
+
+    def test_without_if_match_a_concurrent_save_is_overwritten(self):
+        """No precondition, no refusal: a plain PUT is still last-write-wins."""
+        buf = self.res.begin_write(content_type="text/plain")
+        buf.write(b"my upload")
+        buf.close()
+        FileService.update_content(
+            File.objects.get(pk=self.file.pk),
+            ContentFile(b"somebody else's save", name="test.txt"),
+            name="test.txt",
+        )
+        self.res.end_write(with_errors=False)
+
+        self.file.refresh_from_db()
+        with self.file.content.storage.open(self.file.content.name, "rb") as fh:
+            self.assertEqual(fh.read(), b"my upload")
 
     def test_end_write_with_errors_on_new_file(self):
         new = FileService.create_file(self.user, "fail.txt", mime_type="text/plain")

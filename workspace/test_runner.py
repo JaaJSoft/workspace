@@ -5,6 +5,10 @@ writes real blobs into the checkout, under ``files/users/<username>/``, and
 nothing removes them afterwards. The runner owns the media root for the whole
 session; a test class needs one of its own only when it reads the tree back
 (``workspace.common.tests.media``).
+
+It also arms the full-row-write guard over ``File``, the model the app mutates
+from the most places at once (``workspace.common.tests.row_writes`` explains
+what it catches and why nothing else can).
 """
 
 import os
@@ -48,6 +52,18 @@ class MediaRootTestRunner(DiscoverRunner):
 
     def setup_test_environment(self, **kwargs):
         super().setup_test_environment(**kwargs)
+        # Imported here rather than at module scope: the runner is built before
+        # the app registry is ready, and this reaches for a model.
+        from workspace.common.tests.row_writes import guard_full_row_writes
+        from workspace.files.models import File
+
+        guard_full_row_writes(
+            # File.save() forwards every caller's save to the signal;
+            # naming it here keeps the blame on whoever asked for one.
+            File,
+            forwarded_by=("workspace/files/models.py:save",),
+        )
+
         self._media_root = tempfile.mkdtemp(prefix="workspace-test-media-")
         # The settings module reads MEDIA_ROOT from the environment, and
         # --parallel workers re-import it from scratch (the default start

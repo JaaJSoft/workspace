@@ -1,6 +1,7 @@
 """WOPI host endpoints: CheckFileInfo, GetFile, PutFile and lock operations."""
 
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -94,16 +95,23 @@ class GetFileTests(WopiViewTestBase):
 
 
 class PutFileTests(WopiViewTestBase):
-    def _put(self, body=b"new bytes", token=None, lock=""):
+    def _put(self, body=b"new bytes", token=None, lock="", if_match=None):
         headers = {"X-WOPI-Override": "PUT"}
         if lock:
             headers["X-WOPI-Lock"] = lock
+        if if_match is not None:
+            headers["If-Match"] = if_match
         return self.client.post(
             self._contents_url(token or self._token()),
             data=body,
             content_type="application/octet-stream",
             headers=headers,
         )
+
+    def _blob(self):
+        self.file.refresh_from_db()
+        with self.file.content.open("rb") as fh:
+            return fh.read()
 
     def test_put_replaces_content_through_the_service(self):
         old_hash = self.file.content_hash
@@ -161,6 +169,81 @@ class PutFileTests(WopiViewTestBase):
         resp = self._put()
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.headers["X-WOPI-Lock"], "")
+
+    def test_put_under_a_matching_item_version_saves(self):
+        resp = self._put(b"updated body", if_match=f'"{self.file.content_hash}"')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._blob(), b"updated body")
+
+    def test_put_under_a_stale_item_version_is_refused(self):
+        """The editor gets the version it is up against, not a silent clobber.
+
+        ``X-WOPI-ItemVersion`` is the content hash, so an editor that sends the
+        version it opened back as ``If-Match`` can be told the file moved and
+        reload instead of overwriting whoever moved it.
+        """
+        opened_at = self.file.content_hash
+        FileService.update_content(
+            File.objects.get(pk=self.file.pk),
+            SimpleUploadedFile("report.docx", b"somebody else's revision"),
+            name="report.docx",
+        )
+
+        resp = self._put(b"my revision", if_match=f'"{opened_at}"')
+        self.assertEqual(resp.status_code, 409)
+        self.file.refresh_from_db()
+        self.assertEqual(resp.headers["X-WOPI-ItemVersion"], self.file.content_hash)
+        self.assertEqual(self._blob(), b"somebody else's revision")
+
+    def test_put_matches_the_fallback_version_of_an_unhashed_row(self):
+        """A row the hash backfill has not reached is still matchable.
+
+        ``X-WOPI-ItemVersion`` falls back to a timestamp when the stored hash
+        is empty, so the version the editor holds is that timestamp - and
+        comparing it against the empty hash would refuse every save the editor
+        ever makes on such a file.
+        """
+        File.objects.filter(pk=self.file.pk).update(content_hash="")
+        self.file.refresh_from_db()
+        version = self.client.get(self._file_url(self._token())).json()["Version"]
+
+        resp = self._put(b"updated body", if_match=f'"{version}"')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(self._blob(), b"updated body")
+
+    def test_put_refused_on_an_unhashed_row_names_the_fallback_version(self):
+        """The 409 carries a version the editor can compare against."""
+        File.objects.filter(pk=self.file.pk).update(content_hash="")
+        self.file.refresh_from_db()
+        version = self.client.get(self._file_url(self._token())).json()["Version"]
+        File.objects.filter(pk=self.file.pk).update(content_hash="deadbeef")
+
+        resp = self._put(b"my revision", if_match=f'"{version}"')
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.headers["X-WOPI-ItemVersion"], "deadbeef")
+
+    def test_put_is_refused_by_a_lock_taken_while_it_saved(self):
+        """The app lock is asked again inside the write, not only before it."""
+
+        def take_the_lock(stream):
+            now = timezone.now()
+            File.objects.filter(pk=self.file.pk).update(
+                locked_by=self.other,
+                locked_at=now,
+                lock_expires_at=now + timedelta(minutes=5),
+            )
+            return real(stream)
+
+        from workspace.files.services import detection
+
+        real = detection.detect_from_stream
+        with patch(
+            "workspace.files.services.detection.detect_from_stream", take_the_lock
+        ):
+            resp = self._put(b"my revision")
+
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(self._blob(), b"PK\x03\x04 fake docx bytes")
 
 
 class LockOperationTests(WopiViewTestBase):

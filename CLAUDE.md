@@ -375,6 +375,28 @@ Re-exporting a symbol (via `__all__`, a top-level `from .x import y` whose only 
 
 **Never introduce a new re-export - even to preserve a single test import, even to keep a constant reachable from where it used to live - without explicit user approval.** Default: update the call sites (including tests) to import from the definition module directly. When you genuinely think a re-export is warranted (e.g. a canonical class that defines the module's core entity), say so and ask before adding it.
 
+### Row writes - `save()` writes the columns you changed, never the whole row
+
+`Model.save()` writes **every** column from the instance in memory. A mutation that means to change one field therefore republishes the snapshot it was loaded from, and anything another writer landed on that row in between is silently reverted. The instance is loaded when a request begins and saved when it ends, so the window is the whole request.
+
+```python
+file_obj.name = new_name
+file_obj.save()                                   # ❌ also rewrites content_hash,
+                                                  #    size, locked_by, deleted_at...
+file_obj.save(update_fields=["name", "content"])  # ✅ the two columns a rename changes
+```
+
+We shipped this twice on the same model. A rename moves the blob and writes the row afterwards, so a save that landed in between kept its bytes on storage while the row went back to the previous version's hash and size - the row describing content it no longer had. The lock was the same story: both pre-write checks passed against the stale snapshot, then the save put `locked_by` back to `NULL`.
+
+**Rules:**
+
+- Any `save()` on a row that already exists names its `update_fields`. A freshly constructed row is exempt - an insert writes every column by definition.
+- List the columns the code actually assigned, the ones a helper assigned on its behalf included (`rename` writes `name` **and** `content`, because the storage move repointed `content.name`). `File.save()` adds `path` itself.
+- Prefer a queryset `.update()` when nothing needs the instance afterwards, and a **conditional** one whenever the write must not land on a row somebody else moved - see `FileService._write_content_row`, where the `UPDATE` carrying the lock predicate *is* the content write.
+- Never widen an `update_fields` list to "fix" a value that looks stale. A column that belongs to another writer is not yours to publish.
+
+`workspace/common/tests/row_writes.py` enforces this mechanically for `File`, armed for the whole suite by `workspace/test_runner.py`: a bare `save()` from application code fails the test at its own call site. Test code is exempt - a fixture setting `deleted_at` and saving is building state, not racing anybody. It exists because the mistake is invisible otherwise: under a single writer the row ends up identical either way, and only a race tells the two apart.
+
 ### Access Control Querysets
 
 Never duplicate access/permission querysets. Always use the centralized helpers listed below. Each module exposes its access control logic through its `services/` package or a `queries.py` module. This ensures permission logic is defined once per module and stays consistent across views, API endpoints, and background tasks.

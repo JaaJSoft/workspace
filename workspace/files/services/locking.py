@@ -14,8 +14,9 @@ than to overwrite somebody else's save.
 The helpers here answer both questions against a row already in hand, which
 makes them a *check*, not a guarantee - between the check and the write another
 transaction can still move the row. Closing that window is the job of the
-conditional UPDATE in ``FileService.update_content``, which re-asks the same
-questions inside the write itself.
+conditional UPDATE that *is* the row write in ``FileService``: every content
+write re-asks these questions in its own WHERE clause, so a lock or a save
+landing in the window changes the answer before the write can land.
 """
 
 
@@ -30,6 +31,19 @@ class StaleContent(Exception):
     def __init__(self, current_hash=""):
         self.current_hash = current_hash
         super().__init__("The file changed since it was loaded.")
+
+
+class LockConflict(Exception):
+    """A write was refused because somebody else holds the lock on the row.
+
+    Carries the holder, so a caller can name them exactly as the pre-write
+    check does - a lock that arrived while the write ran has to read the same
+    to the user as one that was already there.
+    """
+
+    def __init__(self, holder=None):
+        self.holder = holder
+        super().__init__("The file is locked by another user.")
 
 
 def conflicting_lock(file_obj, user):
@@ -63,15 +77,25 @@ def unlocked_for_q(user):
 
 
 def precondition_hash(request):
-    """The ``content_hash`` *request* expects to be overwriting, or ``""``.
+    """The ``content_hash`` *request* expects to be overwriting, or ``None``.
 
     Accepted as an ``If-Match`` header (quoted or bare) or a ``base_hash``
     part, so a browser save carrying multipart form data and a scripted PUT
-    can both express it. ``""`` means the caller sent no precondition and is
-    content with last-write-wins; ``*`` is the standard "any version".
+    can both express it. ``None`` means the caller sent no precondition and is
+    content with last-write-wins; ``*`` is the standard "any version" and says
+    the same.
+
+    ``""`` is a precondition like any other, and the reason absence is spelled
+    ``None`` rather than shared with it: a row the hash backfill has not
+    reached stores the empty string, the viewer that loaded it sends the empty
+    string back, and reading that as "no precondition" is what used to let a
+    write land on a legacy row with nothing checked at all.
     """
     supplied = request.headers.get("If-Match")
-    if not supplied and hasattr(request.data, "get"):
-        supplied = request.data.get("base_hash")
-    supplied = (supplied or "").strip().strip('"')
-    return "" if supplied == "*" else supplied
+    if supplied is None:
+        body = getattr(request, "data", None)
+        supplied = body.get("base_hash") if hasattr(body, "get") else None
+    if supplied is None:
+        return None
+    supplied = str(supplied).strip().strip('"')
+    return None if supplied == "*" else supplied

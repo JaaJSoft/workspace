@@ -296,6 +296,137 @@ class TestUpdateContent(TestCase):
         with f.content.storage.open(f.content.name, "rb") as fh:
             self.assertEqual(fh.read(), b"fresh content")
 
+    def test_a_storage_failure_takes_the_row_with_it(self):
+        """The row and the bytes commit together or not at all.
+
+        The row is written first so a refused write never touches storage, and
+        that ordering only holds up if the reverse is true too - a row already
+        pointing at bytes that failed to land would leave the file claiming a
+        hash and a size its blob does not have.
+        """
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"old", name="doc.txt"),
+        )
+        original_hash, original_size = f.content_hash, f.size
+
+        storage = File._meta.get_field("content").storage
+        with (
+            patch.object(storage, "save", side_effect=OSError("disk full")),
+            self.assertRaises(OSError),
+        ):
+            FileService.update_content(
+                f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
+            )
+
+        stored = File.objects.get(pk=f.pk)
+        self.assertEqual(stored.content_hash, original_hash)
+        self.assertEqual(stored.size, original_size)
+
+    def _dying_storage_write(self, partial):
+        """Patch the storage so a write lands *partial* bytes, then fails.
+
+        A transfer cut off mid-flight, which is the case the staged write
+        exists for: the storage truncates its target at the first byte, so
+        whichever path it was handed is left holding neither version.
+        """
+        storage = File._meta.get_field("content").storage
+
+        def write_then_die(name, content, max_length=None):
+            with open(storage.path(name), "wb") as handle:
+                handle.write(partial)
+            raise OSError("connection reset mid-transfer")
+
+        return patch.object(storage, "save", write_then_die)
+
+    def _blobs_in(self, directory):
+        return sorted(os.listdir(directory))
+
+    def test_a_write_that_dies_halfway_leaves_the_previous_bytes_whole(self):
+        """The path holds one complete version or the other, never a stump.
+
+        The row rolls back to the version it described before, so bytes that
+        are neither version leave it pointing at content that never existed -
+        a mismatch no backfill can repair, unlike a hash it can recompute.
+        """
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"the original bytes", name="doc.txt"),
+        )
+        original_hash = f.content_hash
+
+        with self._dying_storage_write(b"a new and lon"), self.assertRaises(OSError):
+            FileService.update_content(
+                f, ContentFile(b"a new and longer body", name="doc.txt"), name="doc.txt"
+            )
+
+        stored = File.objects.get(pk=f.pk)
+        self.assertEqual(stored.content_hash, original_hash)
+        with stored.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"the original bytes")
+
+    def test_a_failed_write_leaves_no_staging_file_behind(self):
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"the original bytes", name="doc.txt"),
+        )
+        directory = os.path.dirname(
+            File._meta.get_field("content").storage.path(f.content.name)
+        )
+
+        with self._dying_storage_write(b"half"), self.assertRaises(OSError):
+            FileService.update_content(
+                f, ContentFile(b"a new body", name="doc.txt"), name="doc.txt"
+            )
+
+        self.assertEqual(self._blobs_in(directory), ["doc.txt"])
+
+    def test_a_successful_write_leaves_no_staging_file_behind(self):
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"old", name="doc.txt"),
+        )
+        FileService.update_content(
+            f, ContentFile(b"new bytes", name="doc.txt"), name="doc.txt"
+        )
+
+        directory = os.path.dirname(
+            File._meta.get_field("content").storage.path(f.content.name)
+        )
+        self.assertEqual(self._blobs_in(directory), ["doc.txt"])
+
+    def test_the_returned_instance_needs_no_refresh(self):
+        """The row write bypasses ``save()``, so the instance follows by hand.
+
+        Callers serialize what comes back without re-reading it - the
+        upload-replace response, WOPI's ``LastModifiedTime`` - so a field left
+        holding its pre-write value stays invisible until a user reads a stale
+        answer.
+        """
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            content=ContentFile(b"old", name="doc.txt"),
+        )
+        before = f.updated_at
+
+        FileService.update_content(
+            f, ContentFile(b"the new bytes", name="doc.txt"), name="doc.txt"
+        )
+
+        self.assertEqual(f.size, 13)
+        self.assertFalse(f.has_thumbnail)
+        self.assertGreater(f.updated_at, before)
+        with f.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"the new bytes")
+        stored = File.objects.get(pk=f.pk)
+        self.assertEqual(f.content_hash, stored.content_hash)
+        self.assertEqual(f.content.name, stored.content.name)
+
     def test_mime_type_override_takes_precedence(self):
         """Passing `mime_type=` skips inference."""
         f = FileService.create_file(

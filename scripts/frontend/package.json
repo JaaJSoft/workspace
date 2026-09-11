@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@alpinejs/collapse": "3.16.3",
-    "@fullcalendar/luxon3": "6.1.15",
+    "@fullcalendar/luxon3": "6.1.21",
     "@hpke/core": "1.9.0",
     "@hpke/dhkem-x25519": "1.8.0",
     "@imacrayon/alpine-ajax": "0.12.7",

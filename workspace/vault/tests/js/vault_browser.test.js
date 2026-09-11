@@ -89,6 +89,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_export.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -389,6 +390,21 @@ test('a lock drops every draft holding typed-in plaintext', async () => {
   assert.equal(component.tagDraft, null);
   assert.equal(component.draft, null);
   assert.equal(component.folderDraft, null);
+});
+
+test('a lock drops the export dialog and the passphrase it holds', async () => {
+  // The export passphrase is plaintext too, and it is the one secret no draft
+  // holds. Left behind, the dialog also sits over a locked vault with an
+  // Export button whose first read of the session would fail.
+  const listeners = [];
+  const { component } = browser({ session: { onLock: (callback) => listeners.push(callback) } });
+  component.init();
+  component.openExportDialog();
+  component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit');
+  assert.equal(component.exportOpen, true);
+  listeners.forEach((callback) => callback());
+  assert.equal(component.exportOpen, false);
+  assert.equal(component.exportPassphrase, '');
 });
 
 test('the heading names the folder being looked at', async () => {

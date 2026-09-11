@@ -14,7 +14,9 @@ import {
   UnsupportedVersionError, encodeCiphertext, decodeCiphertext,
   encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
-import { ARGON2_PARAMS, deriveAmk, hkdf } from './src/vault/kdf.js';
+import {
+  ARGON2_PARAMS, deriveAmk, hkdf, ARCHIVE_ARGON2_BOUNDS, assertArchiveParams, deriveArchiveKey,
+} from './src/vault/kdf.js';
 import { seal, open, importAeadKey } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
 import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
@@ -56,6 +58,9 @@ window.vaultCrypto = {
   ARGON2_PARAMS,
   deriveAmk,
   hkdf,
+  ARCHIVE_ARGON2_BOUNDS,
+  assertArchiveParams,
+  deriveArchiveKey,
   seal,
   open,
   importAeadKey,

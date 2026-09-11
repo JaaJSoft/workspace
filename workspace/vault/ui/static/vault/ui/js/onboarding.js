@@ -488,22 +488,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         secretText: this.groupedSecret(),
         createdAt: new Date().toISOString().slice(0, 10),
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'vault-emergency-kit.pdf';
-      // In the document, not detached: Firefox ignores a click on an anchor
-      // that was never inserted, and the user is left with no kit and no
-      // error - on the one screen where the secret cannot be recovered later.
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      // Revoked on the next task, not this one: the browser may not have
-      // started reading the blob when click() returns, and a revoked URL
-      // cancels the download as quietly as a detached anchor does.
-      setTimeout(function() {
-        URL.revokeObjectURL(url);
-      }, 0);
+      window.downloadBlob(blob, 'vault-emergency-kit.pdf');
     },
 
     post(url, body) {

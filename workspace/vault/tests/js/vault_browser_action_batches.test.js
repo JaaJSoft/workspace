@@ -26,6 +26,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_export.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {

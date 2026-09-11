@@ -113,3 +113,21 @@ test('a copy that went through clears the message the last one left', () => {
     assert.equal(component.generatorError, '');
   });
 });
+
+test('a host can ask for its own label and clearing window', () => {
+  // The 30 seconds the clipboard defaults to answers an entry password: it is
+  // in the vault, so an early clear costs a second Copy. Not every value this
+  // mixin carries is recoverable, and the host is the only one that knows.
+  const { component, copied } = mixin();
+  component.copyGenerated('drawn', { label: 'Export passphrase', seconds: 180 });
+  assert.equal(copied[0].label, 'Export passphrase');
+  assert.equal(copied[0].options.seconds, 180);
+  assert.equal(copied[0].options.transient, true, 'a host window turned the clearing off');
+});
+
+test('a host that asks for nothing still gets the entry-password policy', () => {
+  const { component, copied } = mixin();
+  component.copyGenerated('drawn');
+  assert.equal(copied[0].label, 'Password');
+  assert.equal(copied[0].options.seconds, undefined);
+});

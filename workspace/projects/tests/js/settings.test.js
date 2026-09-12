@@ -645,7 +645,8 @@ test('projectMilestones.addMilestone posts name, date and description then syncs
   assert.equal(c.items.length, 1);
   assert.equal(c.adding, false);
   assert.deepStrictEqual({ ...c.milestones[0] }, {
-    uuid: 'm1', name: 'Beta', target_date: '2026-10-01', closed: false,
+    uuid: 'm1', name: 'Beta', target_date: '2026-10-01', display_date: 'Oct 01',
+    closed: false,
   });
 });
 

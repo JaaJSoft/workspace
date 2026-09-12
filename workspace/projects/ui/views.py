@@ -274,6 +274,7 @@ def _milestones_data(project):
             "uuid": str(m.uuid),
             "name": m.name,
             "target_date": m.target_date.isoformat(),
+            "display_date": m.target_date.strftime("%b %d"),
             "closed": m.is_closed,
         }
         for m in project.milestones.all()

@@ -917,6 +917,10 @@ function projectMilestones(config) {
           uuid: m.uuid,
           name: m.name,
           target_date: m.target_date,
+          display_date: new Date(m.target_date + 'T00:00:00').toLocaleDateString(
+            'en',
+            { month: 'short', day: '2-digit' }
+          ),
           closed: m.closed,
         };
       });

@@ -2,7 +2,7 @@
 Tags sidebar section
 ====================
 Favourite tags, rendered client-side from the tags mixin's `allTags`, and
-an "All tags" row that opens the tag manager dialog. Shared by the Files
+a header button that opens the tag manager dialog. Shared by the Files
 and Notes sidebars; the consuming component must spread `tagsMixin()` and
 provide `tagViewHref(tag)`, `openTagView(tag)` and `isTagViewActive(tag)`.
 
@@ -24,6 +24,15 @@ Parameters:
           Tags
         </span>
       </h3>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        @click="openTagManager()"
+        title="Manage tags"
+        aria-label="Manage tags"
+      >
+        <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+      </button>
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square"
@@ -56,21 +65,16 @@ Parameters:
           </a>
         </li>
       </template>
-      <li class="list-none" :class="{{ ce }} ? 'flex justify-center' : ''">
+      {# The header carries the manager button; the rail hides the header, so it keeps one. #}
+      <li class="list-none flex justify-center" x-show="{{ ce }}">
         <button
           type="button"
           @click="openTagManager()"
-          class="flex items-center hover:bg-base-300/50 text-base rounded-lg transition-colors text-base-content/70 w-full"
-          :class="{{ ce }} ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3'"
-          :title="{{ ce }} ? 'All tags' : ''"
+          class="flex items-center justify-center w-10 h-10 p-0 hover:bg-base-300/50 rounded-lg transition-colors text-base-content/70"
+          title="Manage tags"
+          aria-label="Manage tags"
         >
-          <i data-lucide="tags" class="w-5 h-5 flex-shrink-0"></i>
-          <span x-show="!({{ ce }})" class="truncate flex-1 text-left">All tags</span>
-          <span
-            x-show="!({{ ce }})"
-            class="text-xs text-base-content/40 tabular-nums"
-            x-text="allTags.length"
-          ></span>
+          <i data-lucide="settings-2" class="w-5 h-5 flex-shrink-0"></i>
         </button>
       </li>
     </ul>

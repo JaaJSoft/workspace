@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import patch
 
 from django.db import connection
@@ -5,7 +6,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from workspace.projects.models import Project, Sprint, TaskStatus
+from workspace.projects.models import Milestone, Project, Sprint, TaskStatus
 from workspace.projects.queries import project_users
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
@@ -110,10 +111,6 @@ class TimelineQueryCountTests(ProjectTestMixin, TestCase):
         super().setUp()
         self.url = reverse("projects_ui:timeline", args=[self.project.uuid])
         self.client.force_login(self.admin)
-        from datetime import date
-
-        from workspace.projects.models import Milestone
-
         self.milestones = [
             Milestone.objects.create(
                 project=self.project, name=f"M{i}", target_date=date(2026, 10, i + 1)
@@ -123,8 +120,6 @@ class TimelineQueryCountTests(ProjectTestMixin, TestCase):
         self.epic = self.project.epics.create(name="E")
 
     def _add_tasks(self, count):
-        from datetime import date
-
         for i in range(count):
             create_task(
                 self.project,

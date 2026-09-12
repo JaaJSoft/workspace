@@ -144,6 +144,19 @@ class MilestoneApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_member_cannot_patch_or_delete_milestone(self):
+        milestone = Milestone.objects.create(
+            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        )
+        detail = f"{self.url}/{milestone.uuid}"
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(detail, {"closed": True}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response = self.client.delete(detail)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        milestone.refresh_from_db()
+        self.assertIsNone(milestone.closed_at)
+
     def test_deleting_milestone_ungroups_tasks(self):
         milestone = Milestone.objects.create(
             project=self.project, name="Beta", target_date=date(2026, 10, 1)

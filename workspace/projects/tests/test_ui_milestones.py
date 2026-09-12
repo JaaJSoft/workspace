@@ -57,3 +57,12 @@ class MilestoneIslandTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(f"/projects/{self.project.uuid}/board")
         self.assertContains(resp, 'x-model="form.start_date"')
         self.assertContains(resp, "form.milestone")
+
+
+class SettingsMilestonesCardTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    def test_admin_sees_the_milestones_card(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(resp, 'id="settings-milestones"')
+        self.assertContains(resp, "projectMilestones(")
+        self.assertContains(resp, "Add milestone")

@@ -614,3 +614,105 @@ test('projectBoardModel.convertTo surfaces the API error and stays usable', asyn
   assert.equal(c.error, 'Personal projects cannot change type.');
   assert.equal(c.busy, false);
 });
+
+test('projectMilestones.init loads the list', async () => {
+  const c = settingsWith({
+    fetch: async () => ({ ok: true, json: async () => [{ uuid: 'm1', name: 'Beta' }] }),
+  }).projectMilestones({ apiBase: '/x' });
+  await c.init();
+  assert.equal(c.items.length, 1);
+});
+
+test('projectMilestones.addMilestone posts name, date and description then syncs', async () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  const calls = [];
+  c.request = async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return {
+      json: async () => ({
+        uuid: 'm1', name: 'Beta', target_date: '2026-10-01', description: 'Ship',
+        closed: false, task_count: 0, done_task_count: 0,
+      }),
+    };
+  };
+  c.milestones = [];
+  c.addForm = { name: ' Beta ', target_date: '2026-10-01', description: ' Ship ' };
+  await c.addMilestone();
+  assert.deepStrictEqual(calls[0], [
+    '/x/milestones',
+    { name: 'Beta', target_date: '2026-10-01', description: 'Ship' },
+  ]);
+  assert.equal(c.items.length, 1);
+  assert.equal(c.adding, false);
+  assert.deepStrictEqual({ ...c.milestones[0] }, {
+    uuid: 'm1', name: 'Beta', target_date: '2026-10-01', closed: false,
+  });
+});
+
+test('projectMilestones.setTargetDate patches and syncs, skipping no-ops', async () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  const calls = [];
+  c.request = async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return { json: async () => ({}) };
+  };
+  c.milestones = [];
+  const m = { uuid: 'm1', name: 'Beta', target_date: '2026-10-01', closed: false };
+  c.items = [m];
+  await c.setTargetDate(m, '2026-10-01');
+  assert.equal(calls.length, 0);
+  await c.setTargetDate(m, '2026-10-15');
+  assert.deepStrictEqual(calls[0], ['/x/milestones/m1', { target_date: '2026-10-15' }]);
+  assert.equal(m.target_date, '2026-10-15');
+  assert.equal(c.milestones[0].target_date, '2026-10-15');
+});
+
+test('projectMilestones.setTargetDate ignores an empty value', async () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  let called = false;
+  c.request = async () => { called = true; };
+  await c.setTargetDate({ uuid: 'm1', target_date: '2026-10-01' }, '');
+  assert.equal(called, false);
+});
+
+test('projectMilestones.toggleClosed flips the flag through the API', async () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  const calls = [];
+  c.request = async (url, options) => {
+    calls.push([url, JSON.parse(options.body)]);
+    return { json: async () => ({}) };
+  };
+  c.milestones = [];
+  const m = { uuid: 'm1', name: 'Beta', target_date: '2026-10-01', closed: false };
+  c.items = [m];
+  await c.toggleClosed(m);
+  assert.deepStrictEqual(calls[0], ['/x/milestones/m1', { closed: true }]);
+  assert.equal(m.closed, true);
+});
+
+test('projectMilestones.isOverdue is true only for open milestones past today', () => {
+  const c = ctx().projectMilestones({ apiBase: '/x', today: '2026-09-12' });
+  assert.equal(c.isOverdue({ target_date: '2026-09-01', closed: false }), true);
+  assert.equal(c.isOverdue({ target_date: '2026-09-01', closed: true }), false);
+  assert.equal(c.isOverdue({ target_date: '2026-09-12', closed: false }), false);
+  assert.equal(c.isOverdue({ target_date: '2026-10-01', closed: false }), false);
+});
+
+test('projectMilestones.visibleMilestones filters by search and open state', () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  c.items = [
+    { uuid: 'm1', name: 'Beta', closed: false },
+    { uuid: 'm2', name: 'GA', closed: true },
+  ];
+  c.openOnly = true;
+  assert.deepStrictEqual(Array.from(c.visibleMilestones()).map((m) => m.uuid), ['m1']);
+  c.openOnly = false;
+  c.query = 'ga';
+  assert.deepStrictEqual(Array.from(c.visibleMilestones()).map((m) => m.uuid), ['m2']);
+});
+
+test('projectMilestones.progressPercent divides safely', () => {
+  const c = ctx().projectMilestones({ apiBase: '/x' });
+  assert.equal(c.progressPercent({ task_count: 0, done_task_count: 0 }), 0);
+  assert.equal(c.progressPercent({ task_count: 4, done_task_count: 1 }), 25);
+});

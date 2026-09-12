@@ -59,9 +59,12 @@ window.tagChipClasses = function tagChipClasses(size, removable, compact) {
     'align-middle',
   ];
   if (compact) {
-    classes.push('justify-center', 'p-0', 'shrink-0', size === 'sm' ? 'w-5 h-5' : 'w-[26px] h-[26px]');
+    classes.push('justify-center', 'p-0', 'shrink-0');
+    classes.push(...(size === 'sm' ? ['w-5', 'h-5'] : ['w-[26px]', 'h-[26px]']));
     return classes;
   }
+  // A pill in a fixed-width cell shrinks and lets its label truncate.
+  classes.push('max-w-full', 'min-w-0');
   if (size === 'sm') {
     classes.push('py-0', 'min-h-[20px]', removable ? 'pl-2' : 'px-2');
   } else {
@@ -98,7 +101,7 @@ window.tagChipColor = function tagChipColor(value) {
   // height; browsers without it fall back to a whole-pixel nudge
   // (fractional offsets shimmer across zoom levels, so keep it integer).
   const LABEL_CLASSES =
-    'relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
+    'relative -top-px truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
 
   // Inline SVG on purpose: lucide.createIcons() does not process nodes
   // Alpine clones out of an x-for template.

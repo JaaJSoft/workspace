@@ -50,11 +50,22 @@ class ProjectsActivityProvider(ActivityProvider):
             .select_related("actor", "project")
             .order_by("-created_at")[offset : offset + limit]
         )
-        from workspace.projects.services.events import serialize_task_event
+        from django.contrib.auth import get_user_model
 
+        from workspace.projects.services.events import serialize_task_event
+        from workspace.projects.services.file_links import visible_file_refs
+
+        rows = list(qs)
+        # File events name their file only for a viewer who can open it;
+        # an anonymous feed (no viewer, no actor) names none.
+        reader_id = viewer_id if viewer_id is not None else user_id
+        file_refs = set()
+        if reader_id is not None:
+            reader = get_user_model().objects.get(pk=reader_id)
+            file_refs = visible_file_refs(reader, rows)
         events = []
-        for ev in qs:
-            event = serialize_task_event(ev)
+        for ev in rows:
+            event = serialize_task_event(ev, visible_file_refs=file_refs)
             # Project name gives cross-project feeds (dashboard, profile)
             # their context; the in-panel feed hides meta and doesn't need it.
             event["meta_icon"] = "square-kanban"

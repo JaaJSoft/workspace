@@ -1,11 +1,14 @@
 from datetime import timedelta
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
+from workspace.files.services import FileService
 from workspace.projects.activity import ProjectsActivityProvider
 from workspace.projects.models import TaskEvent
+from workspace.projects.services.file_links import link_files
 from workspace.projects.services.tasks import create_task
 from workspace.projects.tests.base import ProjectTestMixin
 
@@ -79,3 +82,17 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         stats = self.provider.get_stats(self.admin.pk)
         self.assertEqual(stats["total_tasks"], 1)
         self.assertEqual(stats["completed_tasks"], 0)
+
+    def test_file_event_names_the_file_only_for_viewers_who_can_open_it(self):
+        doc = FileService.create_file(
+            self.admin,
+            "spec.md",
+            content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),
+        )
+        link_files(self.admin, self.task, [doc])
+        own = self.provider.get_recent_events(self.admin.pk, limit=5)
+        self.assertEqual(own[0]["label"], "File linked: spec.md")
+        seen_by_member = self.provider.get_recent_events(
+            self.admin.pk, limit=5, viewer_id=self.member.pk
+        )
+        self.assertEqual(seen_by_member[0]["label"], "File linked")

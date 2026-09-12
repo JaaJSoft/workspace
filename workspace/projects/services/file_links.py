@@ -5,13 +5,16 @@ through. Each viewer only sees the links whose file they can already open;
 a link never widens file access.
 """
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
+from workspace.files.models import File
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon
 
-from ..models import TaskEvent, TaskFileLink
+from ..models import Task, TaskEvent, TaskFileLink
 from .events import record_task_event
+
+FILE_EVENT_TYPES = (TaskEvent.Type.FILE_LINKED, TaskEvent.Type.FILE_UNLINKED)
 
 
 def link_files(user, task, files):
@@ -19,20 +22,32 @@ def link_files(user, task, files):
 
     One FILE_LINKED event per new link, snapshotting the file name and
     uuid so the entry outlives a rename or a deletion of the file.
+
+    The task row is locked for the duration so two concurrent calls
+    serialize on the "already linked" check; the unique constraint is the
+    backstop on backends where the lock does not, and a duplicate is then
+    skipped rather than surfaced.
     """
-    already = set(
-        TaskFileLink.objects.filter(
-            task=task, file_id__in=[f.pk for f in files]
-        ).values_list("file_id", flat=True)
-    )
     created = []
     with transaction.atomic():
+        list(Task.objects.select_for_update().filter(pk=task.pk))
+        linked = set(
+            TaskFileLink.objects.filter(
+                task=task, file_id__in=[f.pk for f in files]
+            ).values_list("file_id", flat=True)
+        )
         for file_obj in files:
-            if file_obj.pk in already:
+            if file_obj.pk in linked:
                 continue
-            created.append(
-                TaskFileLink.objects.create(task=task, file=file_obj, created_by=user)
-            )
+            try:
+                with transaction.atomic():
+                    link = TaskFileLink.objects.create(
+                        task=task, file=file_obj, created_by=user
+                    )
+            except IntegrityError:
+                continue
+            linked.add(file_obj.pk)
+            created.append(link)
             record_task_event(
                 task,
                 type=TaskEvent.Type.FILE_LINKED,
@@ -93,3 +108,20 @@ def file_links_for_task(user, task):
             }
         )
     return items
+
+
+def visible_file_refs(user, events):
+    """The ``to_ref`` uuids of the file events in *events* whose file *user*
+    can open right now.
+
+    A file event names the file in its label; the name must not reach a
+    viewer the file itself is hidden from, so the caller passes this set to
+    the event serializer and it drops the name for every other ref. A
+    hard-deleted file has no row left to check and is never visible.
+    """
+    refs = {ev.to_ref for ev in events if ev.type in FILE_EVENT_TYPES and ev.to_ref}
+    if not refs:
+        return set()
+    files = list(File.objects.filter(uuid__in=refs))
+    permissions = FileService.get_permissions_bulk(user, files)
+    return {f.uuid for f in files if permissions.get(f.pk) is not None}

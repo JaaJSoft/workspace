@@ -10,6 +10,7 @@ from workspace.projects.services.file_links import (
     file_links_for_task,
     link_files,
     unlink_file,
+    visible_file_refs,
 )
 from workspace.projects.services.tasks import create_task
 
@@ -48,6 +49,14 @@ class LinkFilesTests(ProjectTestMixin, TestCase):
         link_files(self.admin, self.task, [self.doc])
         created = link_files(self.member, self.task, [self.doc])
         self.assertEqual(created, [])
+        self.assertEqual(self.task.file_links.count(), 1)
+        self.assertEqual(
+            self.task.events.filter(type=TaskEvent.Type.FILE_LINKED).count(), 1
+        )
+
+    def test_same_file_twice_in_one_call_creates_one_link(self):
+        created = link_files(self.admin, self.task, [self.doc, self.doc])
+        self.assertEqual(len(created), 1)
         self.assertEqual(self.task.file_links.count(), 1)
         self.assertEqual(
             self.task.events.filter(type=TaskEvent.Type.FILE_LINKED).count(), 1
@@ -116,3 +125,26 @@ class FileLinksForTaskTests(ProjectTestMixin, TestCase):
         (item,) = file_links_for_task(self.admin, self.task)
         self.assertTrue(item["in_trash"])
         self.assertEqual(file_links_for_task(self.member, self.task), [])
+
+
+class VisibleFileRefsTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Ship it")
+        self.doc = FileService.create_file(
+            self.admin,
+            "spec.md",
+            content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),
+        )
+        link_files(self.admin, self.task, [self.doc])
+        self.events = list(self.task.events.all())
+
+    def test_owner_can_see_the_file_behind_the_event(self):
+        self.assertEqual(visible_file_refs(self.admin, self.events), {self.doc.uuid})
+
+    def test_member_without_access_sees_no_ref(self):
+        self.assertEqual(visible_file_refs(self.member, self.events), set())
+
+    def test_hard_deleted_file_is_not_visible(self):
+        FileService.hard_delete(self.doc)
+        self.assertEqual(visible_file_refs(self.admin, self.events), set())

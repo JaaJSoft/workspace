@@ -359,12 +359,20 @@ class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def test_panel_hides_links_the_viewer_cannot_open(self):
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
-        # The list is empty; the activity feed still names the file, as a
-        # task link event names a task in a project the viewer cannot open.
         self.assertEqual(resp.context["panel_file_links"], [])
-        self.assertContains(
-            resp, '<script id="task-panel-file-links" type="application/json">[]'
-        )
+        self.assertNotContains(resp, "spec.md")
+
+    def test_activity_names_the_file_only_for_viewers_who_can_open_it(self):
+        self.client.force_login(self.admin)
+        labels = [e["label"] for e in self.client.get(self.url).context["panel_events"]]
+        self.assertIn("File linked: spec.md", labels)
+
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        labels = [e["label"] for e in resp.context["panel_events"]]
+        self.assertIn("File linked", labels)
+        self.assertNotIn("File linked: spec.md", labels)
+        self.assertNotContains(resp, "spec.md")
 
     def test_member_gets_the_link_file_action(self):
         self.client.force_login(self.member)

@@ -34,7 +34,10 @@ from workspace.projects.services.analytics import (
 )
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
-from workspace.projects.services.file_links import file_links_for_task
+from workspace.projects.services.file_links import (
+    file_links_for_task,
+    visible_file_refs,
+)
 from workspace.projects.services.history import (
     EventLog,
     cumulative_flow,
@@ -296,9 +299,10 @@ def _render_project_view(request, context):
 
 
 def _task_panel_context(user, project, role, task, *, members=None):
+    raw_events = list(task.events.select_related("actor", "project")[:20])
+    file_refs = visible_file_refs(user, raw_events)
     events = [
-        serialize_task_event(ev)
-        for ev in task.events.select_related("actor", "project")[:20]
+        serialize_task_event(ev, visible_file_refs=file_refs) for ev in raw_events
     ]
     for event in events:
         # Same color as the registered projects activity provider.

@@ -15,7 +15,7 @@ Parameters:
 {% with ce=collapse_expr|default:"collapsed" active=active_class|default:"bg-primary/10 text-primary hover:bg-primary/20" %}
   <div id="tag-sidebar-section">
     <hr class="my-2 border-base-300" x-show="!({{ ce }})" />
-    <div class="flex items-center mb-1" x-show="!({{ ce }})" x-transition>
+    <div class="flex items-center mb-1" x-show="!({{ ce }})">
       <h3
         class="{{ heading_class|default:'text-sm font-semibold text-base-content/60 uppercase tracking-wider' }} flex-1"
       >

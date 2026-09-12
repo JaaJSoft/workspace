@@ -70,6 +70,9 @@
           {% if timeline.clipped_count %}
             <span>{{ timeline.clipped_count }} task{{ timeline.clipped_count|pluralize }} fall{{ timeline.clipped_count|pluralize:"s," }} outside the visible range.</span>
           {% endif %}
+          {% if timeline.clipped_milestone_count %}
+            <span>{{ timeline.clipped_milestone_count }} milestone{{ timeline.clipped_milestone_count|pluralize }} fall{{ timeline.clipped_milestone_count|pluralize:"s," }} outside the visible range.</span>
+          {% endif %}
           {% if tasks_truncated %}
             <span>Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.</span>
           {% endif %}

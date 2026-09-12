@@ -40,7 +40,9 @@ def build_timeline(tasks, milestones, sprints, *, group, scale, today):
     ``milestone`` loaded; *milestones* come from milestones_with_progress;
     *sprints* are the project's sprints (empty for non-scrum projects).
     Returns the extent the caller hands to gantt_chart plus the counts of
-    tasks it could not place: undated ones, and ones outside the extent.
+    tasks it could not place (undated ones, and ones outside the extent) and
+    the count of milestones whose target date falls outside the extent -
+    they still ride along in ``markers``, but gantt_chart drops them.
     """
     rows_by_task = [(task, _row(task, today)) for task in tasks]
     undated_count = sum(1 for _, row in rows_by_task if row is None)
@@ -61,6 +63,9 @@ def build_timeline(tasks, milestones, sprints, *, group, scale, today):
 
     visible = [(task, row) for task, row in placed if _overlaps(row, start, end)]
     clipped_count = len(placed) - len(visible)
+    clipped_milestone_count = sum(
+        1 for m in milestones if not (start <= m.target_date <= end)
+    )
     visible.sort(
         key=lambda pair: (pair[1]["start"], pair[1]["end"] or pair[1]["start"])
     )
@@ -86,6 +91,7 @@ def build_timeline(tasks, milestones, sprints, *, group, scale, today):
         "bands": bands,
         "undated_count": undated_count,
         "clipped_count": clipped_count,
+        "clipped_milestone_count": clipped_milestone_count,
     }
 
 

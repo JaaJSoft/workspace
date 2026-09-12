@@ -165,6 +165,13 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
         self.assertEqual(result["clipped_count"], 1)
         self.assertEqual(len(result["groups"][-1]["rows"]), 1)
 
+    def test_far_milestone_is_counted_but_still_a_marker(self):
+        self.ga.target_date = date(2031, 1, 1)
+        self.ga.save(update_fields=["target_date"])
+        result = self._build(self._tasks())
+        self.assertEqual(result["clipped_milestone_count"], 1)
+        self.assertEqual([m["label"] for m in result["markers"]], ["Beta", "GA"])
+
     def test_extent_without_data_is_one_unit_around_today(self):
         self.beta.delete()
         self.ga.delete()

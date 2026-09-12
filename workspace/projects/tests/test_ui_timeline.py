@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import timedelta
 
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.projects.models import Milestone, Project, Sprint
 from workspace.projects.services.projects import create_project
@@ -15,13 +16,19 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.url = f"/projects/{self.project.uuid}/timeline"
+        self.today = timezone.localdate()
         self.beta = Milestone.objects.create(
-            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+            project=self.project,
+            name="Beta",
+            target_date=self.today + timedelta(days=19),
         )
 
     def test_member_gets_the_page_with_the_chart(self):
         task = create_task(
-            self.project, self.admin, title="Build", due_date=date(2026, 9, 20)
+            self.project,
+            self.admin,
+            title="Build",
+            due_date=self.today + timedelta(days=8),
         )
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
@@ -45,11 +52,14 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             self.project,
             self.admin,
             title="Kept",
-            due_date=date(2026, 9, 20),
+            due_date=self.today + timedelta(days=8),
             priority="high",
         )
         dropped = create_task(
-            self.project, self.admin, title="Dropped", due_date=date(2026, 9, 21)
+            self.project,
+            self.admin,
+            title="Dropped",
+            due_date=self.today + timedelta(days=9),
         )
         self.client.force_login(self.member)
         resp = self.client.get(self.url, {"priority": "high"})
@@ -79,16 +89,34 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
 
     def test_undated_and_clipped_counts_are_reported(self):
         create_task(self.project, self.admin, title="No dates")
-        create_task(self.project, self.admin, title="Far", due_date=date(2031, 1, 1))
+        create_task(
+            self.project,
+            self.admin,
+            title="Far",
+            due_date=self.today + timedelta(days=1600),
+        )
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertContains(resp, "1 task has no dates")
         self.assertContains(resp, "1 task falls outside")
 
+    def test_far_milestone_is_reported_as_clipped(self):
+        Milestone.objects.create(
+            project=self.project,
+            name="Far",
+            target_date=self.today + timedelta(days=1600),
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, "1 milestone falls outside")
+
     def test_render_cap_notice(self):
         for i in range(TASK_RENDER_LIMIT + 1):
             create_task(
-                self.project, self.admin, title=f"t{i}", due_date=date(2026, 9, 20)
+                self.project,
+                self.admin,
+                title=f"t{i}",
+                due_date=self.today + timedelta(days=8),
             )
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
@@ -105,8 +133,8 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         Sprint.objects.create(
             project=scrum,
             name="Sprint 1",
-            start_date=date(2026, 9, 7),
-            end_date=date(2026, 9, 20),
+            start_date=self.today - timedelta(days=5),
+            end_date=self.today + timedelta(days=8),
         )
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{scrum.uuid}/timeline")

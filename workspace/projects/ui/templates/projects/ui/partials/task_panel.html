@@ -663,14 +663,13 @@
       <div x-show="sectionsOpen.fileLinks">
         {% comment %}
         References to live workspace files, not copies: the row reads the
-        file's current name, and a trashed one is tinted rather than hidden
-        (its owner still sees it, everybody else is filtered server-side).
+        file's current name, and a trashed one is struck through rather than
+        hidden (its owner still sees it, everybody else is filtered server-side).
         {% endcomment %}
         <ul class="flex flex-col gap-1 mb-2" x-show="fileLinks.length" x-cloak>
           <template x-for="link in fileLinks" :key="link.uuid">
             <li
-              class="flex items-center gap-2 px-2 py-1.5 rounded-lg border text-sm"
-              :class="link.in_trash ? 'bg-warning/10 border-warning/30' : 'bg-base-200/50 border-base-300'"
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
             >
               <i
                 :data-lucide="link.type_icon || 'file'"
@@ -686,7 +685,7 @@
                 @click="openLinkedFile(link)"
               ></button>
               <span
-                class="flex-1 min-w-0 truncate text-base-content/60"
+                class="flex-1 min-w-0 truncate text-base-content/50 line-through"
                 x-show="link.in_trash"
                 x-cloak
                 x-text="link.name"

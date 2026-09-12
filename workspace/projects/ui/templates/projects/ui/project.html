@@ -3,6 +3,19 @@
 
 {% block title %}{{ project.name }} - Projects{% endblock %}
 
+{% block extra_head %}
+  {# The attachment/linked-file viewer mounts the files markdown viewer, #}
+  {# which needs the Milkdown styles the files and notes pages load too. #}
+  <link
+    rel="stylesheet"
+    href="{% static 'files/ui/css/vendor/milkdown/theme.css' %}"
+  />
+  <link
+    rel="stylesheet"
+    href="{% static 'files/ui/css/milkdown-overrides.css' %}"
+  />
+{% endblock %}
+
 {% block navbar %}
   {% include "core/partials/navbar.html" with navbar_full_width=True %}
 {% endblock %}

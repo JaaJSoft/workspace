@@ -15,6 +15,7 @@ from .views.viewsets import (
     SubtaskViewSet,
     TaskAttachmentViewSet,
     TaskCommentViewSet,
+    TaskFileLinkViewSet,
     TaskLinkViewSet,
     TaskViewSet,
     TaskWatchView,
@@ -57,6 +58,8 @@ task_attachment_detail = TaskAttachmentViewSet.as_view({"delete": "destroy"})
 task_attachment_download = TaskAttachmentViewSet.as_view({"get": "download"})
 task_links = TaskLinkViewSet.as_view({"get": "list", "post": "create"})
 task_link_detail = TaskLinkViewSet.as_view({"delete": "destroy"})
+task_file_links = TaskFileLinkViewSet.as_view({"get": "list", "post": "create"})
+task_file_link_detail = TaskFileLinkViewSet.as_view({"delete": "destroy"})
 
 urlpatterns = [
     path(
@@ -223,6 +226,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/links/<uuid:uuid>",
         task_link_detail,
         name="project-task-link-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/files",
+        task_file_links,
+        name="project-task-file-links",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>/files/<uuid:uuid>",
+        task_file_link_detail,
+        name="project-task-file-link-detail",
     ),
     path("api/v1/", include(router.urls)),
 ]

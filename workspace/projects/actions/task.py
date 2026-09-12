@@ -75,6 +75,15 @@ class LinkTaskAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class LinkFileAction(BaseProjectAction):
+    id = "link_file"
+    label = "Link file"
+    icon = "file-symlink"
+    category = ActionCategory.ORGANIZE
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class CommentTaskAction(BaseProjectAction):
     id = "comment"
     label = "Comment"

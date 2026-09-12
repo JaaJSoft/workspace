@@ -567,3 +567,9 @@ class TaskAttachmentCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+
+
+class TaskFileLinkCreateSerializer(serializers.Serializer):
+    file_uuids = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=False, max_length=50
+    )

@@ -169,6 +169,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Epics grouping tasks into larger initiatives, with progress rollup.",
         },
         {
+            "name": "Projects - Milestones",
+            "description": "Dated milestones with progress rollup, shown on the overview and the timeline.",
+        },
+        {
             "name": "Projects - Sprints",
             "description": "Timeboxed sprints of scrum projects: planning, start and completion.",
         },

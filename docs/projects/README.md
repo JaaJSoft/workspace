@@ -11,13 +11,15 @@ Kanban boards for tracking tasks, solo or as a team.
 - **Personal project** - Every user gets a private project out of the box, ready to use without any setup
 - **Shared projects** - Create additional projects and invite people as Admin or Member
 - **Groups** - Attach groups to a project so every group member gets access; admin rights always stay individual
-- **Four views** - Overview (counts and recent activity), Board (kanban columns), Backlog (unplanned work), and All tasks (flat list)
+- **Five views** - Overview (counts and recent activity), Board (kanban columns), Backlog (unplanned work), All tasks (flat list), and Timeline (date axis)
 - **Drag & drop** - Move cards between columns or reorder them within a column
 - **Custom columns** - Add, rename, recolor, and reorder columns; each one is a Backlog, Active, or Done column
-- **Task details** - Markdown description, status, priority, due date, assignees, labels, comments, and per-task activity in a side panel
+- **Task details** - Markdown description, status, priority, start date, due date, assignees, labels, comments, and per-task activity in a side panel
 - **Priorities** - Low, Medium, High, and Urgent, with urgency-aware sorting
 - **Labels** - A shared, color-coded label palette per project
 - **Epics** - Group tasks into larger initiatives with a name, color, description, and open/closed state; each epic shows its done-vs-total progress, and the hierarchy stays flat (epic → task → checklist)
+- **Milestones** - Dated targets with a name, description and open/closed state; each shows its done-vs-total progress on the overview and the timeline
+- **Timeline** - Tasks and milestones on a date axis, zoomable between week, month and quarter, grouped by milestone or epic; tasks with a start and due date draw as bars, single-dated ones as markers
 - **Task references** - Every task gets a stable reference like `WR-42`, usable to look the task up from search or to deep-link it with `?task=WR-42`
 - **Filters** - Narrow any view by text, assignee, priority, label, or epic
 - **Comments** - Discuss a task inline, with editing and deletion
@@ -31,7 +33,7 @@ Kanban boards for tracking tasks, solo or as a team.
 
 | Role | Granted by | Can do |
 |---|---|---|
-| Admin | An individual membership with the `admin` role | Everything a member can, plus project settings, columns, labels, epics, members, groups, archiving, and deletion |
+| Admin | An individual membership with the `admin` role | Everything a member can, plus project settings, columns, labels, epics, milestones, members, groups, archiving, and deletion |
 | Member | An individual membership, or membership of an attached group | View the project and create, edit, move, comment on, and delete tasks |
 
 Group access never grants admin rights - promote someone through a project membership instead. Access checks go through `workspace.projects.queries.user_project_ids`, and the available actions for a project or task are served by `POST /api/v1/projects/actions`.
@@ -51,6 +53,7 @@ All endpoints under `/api/v1/projects` - see the [Swagger UI](/schema/swagger-ui
 | `/api/v1/projects/<uuid>/members` | Manage members and roles |
 | `/api/v1/projects/<uuid>/labels` | Manage the label palette |
 | `/api/v1/projects/<uuid>/epics` | Manage epics, including close/reopen and progress rollup |
+| `/api/v1/projects/<uuid>/milestones` | Manage milestones, including close/reopen and progress rollup |
 | `/api/v1/projects/<uuid>/statuses` | Manage and reorder columns |
 | `/api/v1/projects/<uuid>/tasks` | List and create tasks; `reorder` and `move` for board operations |
 | `/api/v1/projects/<uuid>/tasks/<uuid>/comments` | Task comments |

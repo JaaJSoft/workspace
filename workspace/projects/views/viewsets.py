@@ -19,6 +19,7 @@ from workspace.files.services import FileService
 from ..models import (
     Epic,
     Label,
+    Milestone,
     Project,
     ProjectMember,
     ProjectNotificationLevel,
@@ -38,6 +39,7 @@ from ..serializers import (
     MemberRoleSerializer,
     MemberSerializer,
     MemberWriteSerializer,
+    MilestoneSerializer,
     ProjectConvertSerializer,
     ProjectNotificationLevelSerializer,
     ProjectSerializer,
@@ -75,6 +77,7 @@ from ..services.members import (
     change_member_role,
     remove_member,
 )
+from ..services.milestones import milestones_with_progress
 from ..services.projects import create_project
 from ..services.sprints import (
     assign_tasks_to_sprint,
@@ -464,6 +467,59 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         except IntegrityError:
             return Response(
                 {"name": ["An epic with this name already exists in this project."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        return super().destroy(request, *args, **kwargs)
+
+
+@extend_schema(tags=["Projects - Milestones"])
+class MilestoneViewSet(ProjectContextMixin, viewsets.ModelViewSet):
+    serializer_class = MilestoneSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Milestone.objects.none()
+        return milestones_with_progress(self.project)
+
+    def perform_create(self, serializer):
+        serializer.save(project=self.project)
+
+    def create(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().create(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {
+                    "name": [
+                        "A milestone with this name already exists in this project."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    def partial_update(self, request, *args, **kwargs):
+        self._require_admin()
+        self._require_writable()
+        try:
+            with transaction.atomic():
+                return super().partial_update(request, *args, **kwargs)
+        except IntegrityError:
+            return Response(
+                {
+                    "name": [
+                        "A milestone with this name already exists in this project."
+                    ]
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

@@ -8,6 +8,7 @@ from .views.viewsets import (
     EpicViewSet,
     LabelViewSet,
     MemberViewSet,
+    MilestoneViewSet,
     ProjectNotificationLevelView,
     ProjectViewSet,
     SprintViewSet,
@@ -29,6 +30,10 @@ label_list = LabelViewSet.as_view({"get": "list", "post": "create"})
 label_detail = LabelViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 epic_list = EpicViewSet.as_view({"get": "list", "post": "create"})
 epic_detail = EpicViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
+milestone_list = MilestoneViewSet.as_view({"get": "list", "post": "create"})
+milestone_detail = MilestoneViewSet.as_view(
+    {"patch": "partial_update", "delete": "destroy"}
+)
 sprint_list = SprintViewSet.as_view({"get": "list", "post": "create"})
 sprint_detail = SprintViewSet.as_view({"patch": "partial_update", "delete": "destroy"})
 sprint_start = SprintViewSet.as_view({"post": "start"})
@@ -113,6 +118,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/epics/<uuid:uuid>",
         epic_detail,
         name="project-epic-detail",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/milestones",
+        milestone_list,
+        name="project-milestones",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/milestones/<uuid:uuid>",
+        milestone_detail,
+        name="project-milestone-detail",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/sprints",

@@ -496,18 +496,22 @@
                     </td>
                   {% endif %}
                   <td class="hidden lg:table-cell" data-col="tags">
-                    <div class="flex flex-wrap items-center gap-1">
-                      {% for ft in node.file_tags.all %}
-                        <a
-                          href="/files?tag={{ ft.tag.uuid }}"
-                          x-target.push="folder-browser"
-                          @click.stop
-                          title="Show files tagged {{ ft.tag.name }}"
-                        >
-                          <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
-                        </a>
-                      {% endfor %}
-                    </div>
+                    {# One line whatever the count: past three tags the chips drop to their icon. #}
+                    {% with row_tags=node.file_tags.all %}
+                      <div class="flex flex-nowrap items-center gap-1 overflow-hidden">
+                        {% for ft in row_tags %}
+                          <a
+                            href="/files?tag={{ ft.tag.uuid }}"
+                            x-target.push="folder-browser"
+                            @click.stop
+                            class="shrink-0"
+                            title="Show files tagged {{ ft.tag.name }}"
+                          >
+                            <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm" {% if row_tags|length > 3 %}compact{% endif %}></tag-chip>
+                          </a>
+                        {% endfor %}
+                      </div>
+                    {% endwith %}
                   </td>
                   <td
                     class="hidden sm:table-cell text-sm text-base-content/70"
@@ -669,21 +673,24 @@
                         </p>
                         {% if node.file_tags.all %}
                           <div
-                            class="flex flex-wrap items-center gap-1 mt-1"
+                            class="flex flex-nowrap items-center gap-1 mt-1 overflow-hidden"
                             :class="mosaicTileSize <= 1 ? 'hidden' : ''"
                             x-cloak
                           >
-                            {% for ft in node.file_tags.all %}
-                              <a
-                                href="/files?tag={{ ft.tag.uuid }}"
-                                x-target.push="folder-browser"
-                                @click.stop
-                                @dblclick.stop
-                                title="Show files tagged {{ ft.tag.name }}"
-                              >
-                                <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
-                              </a>
-                            {% endfor %}
+                            {% with row_tags=node.file_tags.all %}
+                              {% for ft in row_tags %}
+                                <a
+                                  href="/files?tag={{ ft.tag.uuid }}"
+                                  x-target.push="folder-browser"
+                                  @click.stop
+                                  @dblclick.stop
+                                  class="shrink-0"
+                                  title="Show files tagged {{ ft.tag.name }}"
+                                >
+                                  <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm" {% if row_tags|length > 3 %}compact{% endif %}></tag-chip>
+                                </a>
+                              {% endfor %}
+                            {% endwith %}
                           </div>
                         {% endif %}
                       </div>

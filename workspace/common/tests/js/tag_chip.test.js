@@ -50,6 +50,17 @@ test('a removable pill tightens its right padding for the control', () => {
   assert.ok(!classes.includes('px-2.5'));
 });
 
+test('a compact pill is a fixed square with no padding, in both sizes', () => {
+  const chip = load();
+  const plain = chip.tagChipClasses('sm', false, true);
+  const large = chip.tagChipClasses(undefined, false, true);
+
+  assert.ok(plain.includes('w-5 h-5'));
+  assert.ok(plain.includes('p-0'));
+  assert.ok(!plain.some((c) => c.startsWith('px-') || c.startsWith('min-h-')));
+  assert.ok(large.includes('w-[26px] h-[26px]'));
+});
+
 test('the sm pill is shorter, in both variants', () => {
   const chip = load();
   const plain = chip.tagChipClasses('sm', false);

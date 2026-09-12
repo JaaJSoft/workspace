@@ -1,3 +1,5 @@
+from datetime import date
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -111,6 +113,48 @@ class EpicApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         task.refresh_from_db()
         self.assertIsNone(task.epic)
+
+    def test_admin_sets_and_clears_target_date(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f"/api/v1/projects/{self.project.uuid}/epics",
+            {"name": "Launch", "target_date": "2026-10-01"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["target_date"], "2026-10-01")
+        epic = self.project.epics.get()
+        self.assertEqual(epic.target_date, date(2026, 10, 1))
+
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
+            {"target_date": "2026-11-15"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["target_date"], "2026-11-15")
+
+        response = self.client.patch(
+            f"/api/v1/projects/{self.project.uuid}/epics/{epic.uuid}",
+            {"target_date": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["target_date"])
+        epic.refresh_from_db()
+        self.assertIsNone(epic.target_date)
+
+    def test_list_orders_dated_epics_first(self):
+        undated = self.project.epics.create(name="Aardvark")
+        later = self.project.epics.create(name="GA", target_date=date(2026, 12, 1))
+        earlier = self.project.epics.create(name="Beta", target_date=date(2026, 10, 1))
+        self.client.force_authenticate(self.member)
+        response = self.client.get(f"/api/v1/projects/{self.project.uuid}/epics")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [e["uuid"] for e in response.data],
+            [str(earlier.uuid), str(later.uuid), str(undated.uuid)],
+        )
 
 
 class TaskEpicApiTests(ProjectTestMixin, APITestCase):

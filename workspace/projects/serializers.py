@@ -10,7 +10,6 @@ from workspace.common.services.mentions import render_comment_body
 from .models import (
     Epic,
     Label,
-    Milestone,
     Project,
     ProjectMember,
     ProjectNotificationLevel,
@@ -186,6 +185,7 @@ class EpicSerializer(serializers.ModelSerializer):
             "name",
             "color",
             "description",
+            "target_date",
             "closed",
             "task_count",
             "done_task_count",
@@ -199,37 +199,6 @@ class EpicSerializer(serializers.ModelSerializer):
         if existing.exists():
             raise serializers.ValidationError(
                 "An epic with this name already exists in this project."
-            )
-        return value
-
-
-class MilestoneSerializer(serializers.ModelSerializer):
-    closed = serializers.BooleanField(source="is_closed", required=False)
-    # Progress rollup, annotated by the viewset; absent on unannotated
-    # instances (create/update responses return 0s there).
-    task_count = serializers.IntegerField(read_only=True, default=0)
-    done_task_count = serializers.IntegerField(read_only=True, default=0)
-
-    class Meta:
-        model = Milestone
-        fields = [
-            "uuid",
-            "name",
-            "description",
-            "target_date",
-            "closed",
-            "task_count",
-            "done_task_count",
-        ]
-
-    def validate_name(self, value):
-        project = self.context["project"]
-        existing = project.milestones.filter(name=value)
-        if self.instance is not None:
-            existing = existing.exclude(pk=self.instance.pk)
-        if existing.exists():
-            raise serializers.ValidationError(
-                "A milestone with this name already exists in this project."
             )
         return value
 
@@ -319,9 +288,6 @@ class TaskSerializer(serializers.ModelSerializer):
     sprint = serializers.PrimaryKeyRelatedField(
         queryset=Sprint.objects.none(), required=False, allow_null=True
     )
-    milestone = serializers.PrimaryKeyRelatedField(
-        queryset=Milestone.objects.none(), required=False, allow_null=True
-    )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     reference = serializers.SerializerMethodField()
     estimate = serializers.DecimalField(
@@ -344,7 +310,6 @@ class TaskSerializer(serializers.ModelSerializer):
             "labels",
             "epic",
             "sprint",
-            "milestone",
             "position",
             "number",
             "reference",
@@ -377,7 +342,6 @@ class TaskSerializer(serializers.ModelSerializer):
             self.fields["sprint"].queryset = project.sprints.exclude(
                 state=Sprint.State.CLOSED
             )
-            self.fields["milestone"].queryset = project.milestones.all()
 
     def validate_assignees(self, users):
         project = self.context["project"]

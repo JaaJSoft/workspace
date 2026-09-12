@@ -226,6 +226,9 @@ class Epic(models.Model):
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=20, blank=True, default="")
     description = models.TextField(blank=True, default="")
+    # Optional target date; the timeline draws a dated epic as a marker and
+    # groups it ahead of the undated ones.
+    target_date = models.DateField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -235,52 +238,6 @@ class Epic(models.Model):
             models.UniqueConstraint(
                 fields=["project", "name"],
                 name="unique_epic_name_per_project",
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.project}: {self.name}"
-
-    @property
-    def is_closed(self):
-        return self.closed_at is not None
-
-    @is_closed.setter
-    def is_closed(self, value):
-        # Settable so serializers can write the boolean; reopening always
-        # clears the timestamp, re-closing keeps the original one.
-        if value and self.closed_at is None:
-            self.closed_at = timezone.now()
-        elif not value:
-            self.closed_at = None
-
-
-class Milestone(models.Model):
-    """A dated target a project works towards: milestone -> task.
-
-    Flat like epics - a task belongs to at most one milestone, and closing
-    a milestone hides it from the pickers while the tasks that carry it
-    keep it. ``target_date`` is the date the timeline draws the marker on.
-    """
-
-    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    project = models.ForeignKey(
-        Project,
-        on_delete=models.CASCADE,
-        related_name="milestones",
-    )
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True, default="")
-    target_date = models.DateField()
-    closed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        ordering = ["target_date", "name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["project", "name"],
-                name="unique_milestone_name_per_project",
             ),
         ]
 
@@ -414,14 +371,6 @@ class Task(models.Model):
         blank=True,
         related_name="tasks",
     )
-    # SET_NULL: deleting a milestone ungroups its tasks, it never deletes them.
-    milestone = models.ForeignKey(
-        Milestone,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="tasks",
-    )
     position = models.IntegerField(default=0)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -458,10 +407,6 @@ class Task(models.Model):
             raise ValidationError({"epic": "Epic belongs to another project."})
         if self.sprint_id and self.sprint.project_id != self.project_id:
             raise ValidationError({"sprint": "Sprint belongs to another project."})
-        if self.milestone_id and self.milestone.project_id != self.project_id:
-            raise ValidationError(
-                {"milestone": "Milestone belongs to another project."}
-            )
 
     @property
     def reference(self):
@@ -634,7 +579,6 @@ class TaskEvent(models.Model):
         ESTIMATED = "estimate", "Estimated"
         EPIC = "epic", "Epic"
         SPRINT = "sprint", "Sprint"
-        MILESTONE = "milestone", "Milestone"
         ATTACHED = "attached", "Attached"
         DETACHED = "detached", "Detached"
         LINKED = "linked", "Linked"
@@ -651,7 +595,6 @@ class TaskEvent(models.Model):
         Type.ESTIMATED: "ruler",
         Type.EPIC: "layers",
         Type.SPRINT: "timer",
-        Type.MILESTONE: "milestone",
         Type.ATTACHED: "paperclip",
         Type.DETACHED: "paperclip",
         Type.LINKED: "link",
@@ -668,7 +611,6 @@ class TaskEvent(models.Model):
         Type.ESTIMATED: "Estimate changed",
         Type.EPIC: "Epic changed",
         Type.SPRINT: "Sprint changed",
-        Type.MILESTONE: "Milestone changed",
         Type.ATTACHED: "File attached",
         Type.DETACHED: "File removed",
         Type.LINKED: "Link added",

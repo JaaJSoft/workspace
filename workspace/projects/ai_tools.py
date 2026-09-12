@@ -178,7 +178,6 @@ def _task_entry(task):
         "priority": task.priority,
         "due_date": task.due_date.isoformat() if task.due_date else "",
         "start_date": task.start_date.isoformat() if task.start_date else "",
-        "milestone": task.milestone.name if task.milestone else "",
         "assignees": [u.username for u in task.assignees.all()],
     }
 
@@ -249,7 +248,7 @@ by project or due window. For tasks assigned to other people use search_tasks.""
             today = timezone.localdate(timezone=get_user_timezone(user))
             qs = qs.filter(due_date__lte=today + timedelta(days=args.due_within_days))
         limit = max(1, min(args.limit, 50))
-        tasks = qs.select_related("milestone").prefetch_related("assignees")[:limit]
+        tasks = qs.prefetch_related("assignees")[:limit]
         results = [_task_entry(t) for t in tasks]
         if not results:
             return "No open tasks assigned to you match these filters."
@@ -294,7 +293,7 @@ or wants an overview like the overdue tasks of a project."""
             extra &= Q(due_date__lte=due_before)
 
         tasks, _ = combined_task_search(user, query, limit=20, extra_filter=extra)
-        prefetch_related_objects(tasks, "assignees", "milestone")
+        prefetch_related_objects(tasks, "assignees")
         results = [_task_entry(t) for t in tasks]
         if not results:
             return f'No tasks found matching "{query}".'

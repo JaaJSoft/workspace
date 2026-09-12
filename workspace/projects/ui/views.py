@@ -32,6 +32,7 @@ from workspace.projects.services.analytics import (
     open_task_distribution,
     weekly_flow,
 )
+from workspace.projects.services.epics import epics_with_progress
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.history import (
@@ -45,7 +46,6 @@ from workspace.projects.services.history import (
     velocity_summary,
 )
 from workspace.projects.services.links import annotate_blocked, links_for_task
-from workspace.projects.services.milestones import milestones_with_progress
 from workspace.projects.services.notification_levels import module_level
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
@@ -55,11 +55,7 @@ from workspace.projects.services.task_filters import (
     apply_task_filters,
     task_filters_active,
 )
-from workspace.projects.services.timeline import (
-    build_timeline,
-    coerce_grouping,
-    coerce_scale,
-)
+from workspace.projects.services.timeline import build_timeline, coerce_scale
 from workspace.projects.tasks import reminder_hour
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -124,10 +120,10 @@ def overview(request, project_uuid):
         done_count=Count("uuid", filter=Q(status__category=TaskStatus.Category.DONE)),
     )
     context.update(counts)
-    milestones = list(milestones_with_progress(project))
-    context["open_milestones"] = [m for m in milestones if not m.is_closed]
-    context["closed_milestone_count"] = len(milestones) - len(
-        context["open_milestones"]
+    epics = list(epics_with_progress(project))
+    context["open_milestones"] = [e for e in epics if e.target_date and not e.is_closed]
+    context["closed_milestone_count"] = len(
+        [e for e in epics if e.target_date and e.is_closed]
     )
     context["recent_events"] = events_for_project(project)
     return _render_project_view(request, context)
@@ -681,21 +677,20 @@ def timeline(request, project_uuid):
         status__category=TaskStatus.Category.BACKLOG
     ).count()
     scale = coerce_scale(request.GET.get("scale"))
-    grouping = coerce_grouping(request.GET.get("group"))
+    grouping = "epic"
     try:
         tasks, truncated = _filtered_tasks(
             request,
-            project.tasks.select_related("project", "status", "epic", "milestone"),
+            project.tasks.select_related("project", "status", "epic"),
         )
     except TaskFilterError as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
-    milestones = list(milestones_with_progress(project))
+    milestones = list(epics_with_progress(project))
     sprints = list(project.sprints.all()) if project.type == Project.Type.SCRUM else []
     result = build_timeline(
         tasks,
         milestones,
         sprints,
-        group=grouping,
         scale=scale,
         today=context["today"],
     )

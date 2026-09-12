@@ -2,15 +2,13 @@ from datetime import date, timedelta
 
 from django.test import TestCase
 
-from workspace.projects.models import Milestone, Project, Sprint
-from workspace.projects.services.milestones import milestones_with_progress
+from workspace.projects.models import Project, Sprint
+from workspace.projects.services.epics import epics_with_progress
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 from workspace.projects.services.timeline import (
-    DEFAULT_GROUPING,
     DEFAULT_SCALE,
     build_timeline,
-    coerce_grouping,
     coerce_scale,
 )
 
@@ -24,8 +22,6 @@ class CoerceTests(TestCase):
         self.assertEqual(coerce_scale("quarter"), "quarter")
         self.assertEqual(coerce_scale("decade"), DEFAULT_SCALE)
         self.assertEqual(coerce_scale(None), DEFAULT_SCALE)
-        self.assertEqual(coerce_grouping("epic"), "epic")
-        self.assertEqual(coerce_grouping(""), DEFAULT_GROUPING)
 
 
 class BuildTimelineTests(ProjectTestMixin, TestCase):
@@ -33,70 +29,59 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
         super().setUp()
         self.done = self.project.statuses.get(name="Done")
         self.todo = self.project.statuses.get(name="To do")
-        self.beta = Milestone.objects.create(
-            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        self.beta = self.project.epics.create(
+            name="Beta", target_date=date(2026, 10, 1)
         )
-        self.ga = Milestone.objects.create(
-            project=self.project, name="GA", target_date=date(2026, 12, 1)
-        )
+        self.ga = self.project.epics.create(name="GA", target_date=date(2026, 12, 1))
 
-    def _task(
-        self, title, *, start=None, due=None, milestone=None, status=None, epic=None
-    ):
+    def _task(self, title, *, start=None, due=None, status=None, epic=None):
         task = create_task(
             self.project,
             self.admin,
             title=title,
             start_date=start,
             due_date=due,
-            milestone=milestone,
             status=status,
             epic=epic,
         )
         return task
 
-    def _build(self, tasks, *, group="milestone", scale="week", sprints=()):
+    def _build(self, tasks, *, scale="week", sprints=()):
         return build_timeline(
             tasks,
-            list(milestones_with_progress(self.project)),
+            list(epics_with_progress(self.project)),
             list(sprints),
-            group=group,
             scale=scale,
             today=TODAY,
         )
 
     def _tasks(self):
-        return list(self.project.tasks.select_related("status", "epic", "milestone"))
+        return list(self.project.tasks.select_related("status", "epic"))
 
-    def test_groups_milestones_by_date_then_no_milestone(self):
-        self._task("late", due=date(2026, 11, 20), milestone=self.ga)
-        self._task("early", due=date(2026, 9, 20), milestone=self.beta)
+    def test_groups_epics_by_date_then_no_epic(self):
+        self._task("late", due=date(2026, 11, 20), epic=self.ga)
+        self._task("early", due=date(2026, 9, 20), epic=self.beta)
         self._task("loose", due=date(2026, 9, 25))
         result = self._build(self._tasks())
         self.assertEqual(
-            [g["label"] for g in result["groups"]], ["Beta", "GA", "No milestone"]
+            [g["label"] for g in result["groups"]], ["Beta", "GA", "No epic"]
         )
         self.assertEqual(result["groups"][0]["progress"], "0/1")
         self.assertEqual(result["groups"][0]["sublabel"], "Oct 01")
         self.assertEqual(result["groups"][2]["progress"], "")
 
-    def test_empty_milestone_keeps_its_group_but_empty_no_milestone_is_dropped(self):
-        self._task("early", due=date(2026, 9, 20), milestone=self.beta)
+    def test_empty_epic_keeps_its_group_but_empty_no_epic_is_dropped(self):
+        self._task("early", due=date(2026, 9, 20), epic=self.beta)
         result = self._build(self._tasks())
         self.assertEqual([g["label"] for g in result["groups"]], ["Beta", "GA"])
         self.assertEqual(result["groups"][1]["rows"], [])
 
-    def test_groups_by_epic_in_name_order(self):
+    def test_undated_epic_sorts_after_dated_ones(self):
         zed = self.project.epics.create(name="Zed")
-        alpha = self.project.epics.create(name="Alpha")
         self._task("z", due=date(2026, 9, 20), epic=zed)
-        self._task("a", due=date(2026, 9, 21), epic=alpha)
-        self._task("none", due=date(2026, 9, 22))
-        result = self._build(self._tasks(), group="epic")
-        self.assertEqual(
-            [g["label"] for g in result["groups"]], ["Alpha", "Zed", "No epic"]
-        )
-        self.assertTrue(all(g["progress"] == "" for g in result["groups"]))
+        result = self._build(self._tasks())
+        self.assertEqual([g["label"] for g in result["groups"]], ["Beta", "GA", "Zed"])
+        self.assertEqual(result["groups"][2]["progress"], "0/1")
 
     def test_placement_kinds(self):
         self._task("bar", start=date(2026, 9, 1), due=date(2026, 9, 5))
@@ -104,7 +89,7 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
         self._task("start", start=date(2026, 9, 21))
         self._task("undated")
         # Beta and GA come first (empty); the loose tasks sit in the trailing
-        # "No milestone" group.
+        # "No epic" group.
         result = self._build(self._tasks())
         rows = {r["label"].split(" ", 1)[1]: r for r in result["groups"][-1]["rows"]}
         self.assertEqual(rows["bar"]["kind"], "bar")
@@ -165,11 +150,11 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
         self.assertEqual(result["clipped_count"], 1)
         self.assertEqual(len(result["groups"][-1]["rows"]), 1)
 
-    def test_far_milestone_is_counted_but_still_a_marker(self):
+    def test_far_epic_is_counted_but_still_a_marker(self):
         self.ga.target_date = date(2031, 1, 1)
         self.ga.save(update_fields=["target_date"])
         result = self._build(self._tasks())
-        self.assertEqual(result["clipped_milestone_count"], 1)
+        self.assertEqual(result["clipped_epic_count"], 1)
         self.assertEqual([m["label"] for m in result["markers"]], ["Beta", "GA"])
 
     def test_extent_without_data_is_one_unit_around_today(self):
@@ -181,11 +166,13 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
             (TODAY - timedelta(days=7), TODAY + timedelta(days=7)),
         )
 
-    def test_markers_list_every_milestone_regardless_of_grouping(self):
+    def test_markers_list_every_dated_epic(self):
+        undated = self.project.epics.create(name="Zed")
         self.ga.is_closed = True
         self.ga.save(update_fields=["closed_at"])
-        result = self._build([], group="epic")
+        result = self._build([])
         self.assertEqual([m["label"] for m in result["markers"]], ["Beta", "GA"])
+        self.assertNotIn(undated.name, [m["label"] for m in result["markers"]])
         self.assertEqual(result["markers"][0]["css_class"], "fill-warning")
         self.assertEqual(result["markers"][1]["css_class"], "fill-base-content/30")
 
@@ -202,7 +189,6 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
             [],
             [],
             list(scrum.sprints.all()),
-            group="milestone",
             scale="week",
             today=TODAY,
         )

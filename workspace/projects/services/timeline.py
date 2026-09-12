@@ -5,8 +5,6 @@ from ..models import TaskStatus
 
 SCALES = ("week", "month", "quarter")
 DEFAULT_SCALE = "week"
-GROUPINGS = ("milestone", "epic")
-DEFAULT_GROUPING = "milestone"
 
 # One axis unit per scale: the padding on each side of the data extent.
 _UNIT_DAYS = {"week": 7, "month": 30, "quarter": 90}
@@ -20,8 +18,8 @@ _CATEGORY_CSS = {
     TaskStatus.Category.BACKLOG: "fill-neutral",
 }
 _OVERDUE_CSS = "fill-error"
-_MILESTONE_CSS = "fill-warning"
-_CLOSED_MILESTONE_CSS = "fill-base-content/30"
+_EPIC_MARKER_CSS = "fill-warning"
+_CLOSED_EPIC_MARKER_CSS = "fill-base-content/30"
 _SPRINT_BAND_CSS = "fill-info/10"
 
 
@@ -29,31 +27,30 @@ def coerce_scale(value):
     return value if value in SCALES else DEFAULT_SCALE
 
 
-def coerce_grouping(value):
-    return value if value in GROUPINGS else DEFAULT_GROUPING
-
-
-def build_timeline(tasks, milestones, sprints, *, group, scale, today):
+def build_timeline(tasks, epics, sprints, *, scale, today):
     """Chart-ready groups, markers and bands for a project's timeline.
 
-    *tasks* are already filtered and capped, with ``status``, ``epic`` and
-    ``milestone`` loaded; *milestones* come from milestones_with_progress;
-    *sprints* are the project's sprints (empty for non-scrum projects).
-    Returns the extent the caller hands to gantt_chart plus the counts of
-    tasks it could not place (undated ones, and ones outside the extent) and
-    the count of milestones whose target date falls outside the extent -
-    they still ride along in ``markers``, but gantt_chart drops them.
+    *tasks* are already filtered and capped, with ``status`` and ``epic``
+    loaded; *epics* come from epics_with_progress; *sprints* are the
+    project's sprints (empty for non-scrum projects). Returns the extent
+    the caller hands to gantt_chart plus the counts of tasks it could not
+    place (undated ones, and ones outside the extent) and the count of
+    dated epics whose target date falls outside the extent - they still
+    ride along in ``markers``, but gantt_chart drops them. Dating an epic
+    additionally draws it as a marker on top of grouping the tasks
+    underneath it.
     """
     rows_by_task = [(task, _row(task, today)) for task in tasks]
     undated_count = sum(1 for _, row in rows_by_task if row is None)
     placed = [(task, row) for task, row in rows_by_task if row is not None]
 
+    dated_epics = [epic for epic in epics if epic.target_date is not None]
     dates = [today]
     for _, row in placed:
         dates.append(row["start"])
         if row["end"] is not None:
             dates.append(row["end"])
-    dates.extend(m.target_date for m in milestones)
+    dates.extend(epic.target_date for epic in dated_epics)
     bands = _bands(sprints)
     for band in bands:
         dates.extend((band["start"], band["end"]))
@@ -63,25 +60,24 @@ def build_timeline(tasks, milestones, sprints, *, group, scale, today):
 
     visible = [(task, row) for task, row in placed if _overlaps(row, start, end)]
     clipped_count = len(placed) - len(visible)
-    clipped_milestone_count = sum(
-        1 for m in milestones if not (start <= m.target_date <= end)
+    clipped_epic_count = sum(
+        1 for epic in dated_epics if not (start <= epic.target_date <= end)
     )
     visible.sort(
         key=lambda pair: (pair[1]["start"], pair[1]["end"] or pair[1]["start"])
     )
 
-    if group == "epic":
-        groups = _epic_groups(visible)
-    else:
-        groups = _milestone_groups(visible, milestones)
+    groups = _epic_groups(visible, epics)
 
     markers = [
         {
-            "label": m.name,
-            "date": m.target_date,
-            "css_class": _CLOSED_MILESTONE_CSS if m.is_closed else _MILESTONE_CSS,
+            "label": epic.name,
+            "date": epic.target_date,
+            "css_class": _CLOSED_EPIC_MARKER_CSS
+            if epic.is_closed
+            else _EPIC_MARKER_CSS,
         }
-        for m in milestones
+        for epic in dated_epics
     ]
     return {
         "start": start,
@@ -91,7 +87,7 @@ def build_timeline(tasks, milestones, sprints, *, group, scale, today):
         "bands": bands,
         "undated_count": undated_count,
         "clipped_count": clipped_count,
-        "clipped_milestone_count": clipped_milestone_count,
+        "clipped_epic_count": clipped_epic_count,
     }
 
 
@@ -140,49 +136,31 @@ def _bands(sprints):
     ]
 
 
-def _milestone_groups(visible, milestones):
-    """One group per milestone in date order, then "No milestone".
+def _epic_groups(visible, epics):
+    """One group per epic in the given order, then "No epic".
 
-    A milestone with no visible task keeps its (empty) group so its header
+    An epic with no visible task keeps its (empty) group so its header
     still reads on the chart; the trailing group only appears when needed.
     """
-    by_milestone = defaultdict(list)
-    for task, row in visible:
-        by_milestone[task.milestone_id].append(row)
-    groups = [
-        {
-            "label": m.name,
-            "sublabel": m.target_date.strftime("%b %d"),
-            "progress": f"{m.done_task_count}/{m.task_count}",
-            "rows": by_milestone.get(m.pk, []),
-        }
-        for m in milestones
-    ]
-    if by_milestone.get(None):
-        groups.append(
-            {
-                "label": "No milestone",
-                "sublabel": "",
-                "progress": "",
-                "rows": by_milestone[None],
-            }
-        )
-    return groups
-
-
-def _epic_groups(visible):
     by_epic = defaultdict(list)
-    epics = {}
     for task, row in visible:
         by_epic[task.epic_id].append(row)
-        if task.epic_id is not None:
-            epics[task.epic_id] = task.epic
     groups = [
-        {"label": epic.name, "sublabel": "", "progress": "", "rows": by_epic[pk]}
-        for pk, epic in sorted(epics.items(), key=lambda item: item[1].name.lower())
+        {
+            "label": epic.name,
+            "sublabel": epic.target_date.strftime("%b %d") if epic.target_date else "",
+            "progress": f"{epic.done_task_count}/{epic.task_count}",
+            "rows": by_epic.get(epic.pk, []),
+        }
+        for epic in epics
     ]
     if by_epic.get(None):
         groups.append(
-            {"label": "No epic", "sublabel": "", "progress": "", "rows": by_epic[None]}
+            {
+                "label": "No epic",
+                "sublabel": "",
+                "progress": "",
+                "rows": by_epic[None],
+            }
         )
     return groups

@@ -57,15 +57,6 @@ class SetEpicAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
-class SetMilestoneAction(BaseProjectAction):
-    id = "set_milestone"
-    label = "Set milestone"
-    icon = "milestone"
-    category = ActionCategory.EDIT
-    target_types = ("task",)
-
-
-@ProjectActionRegistry.register
 class AttachFileAction(BaseProjectAction):
     id = "attach"
     label = "Attach files"

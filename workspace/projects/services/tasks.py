@@ -74,22 +74,19 @@ def create_task(
     labels=(),
     epic=None,
     sprint=None,
-    milestone=None,
 ):
     """Create a task; defaults to the end of the project's backlog column.
 
     On a scrum project, a task created straight on a board column joins
     the running sprint unless a sprint is passed explicitly.
     """
-    # The API serializer scopes the epic, sprint and milestone per project;
-    # this guards the direct callers (seeds, future tools) against
-    # cross-project grouping.
+    # The API serializer scopes the epic and sprint per project; this
+    # guards the direct callers (seeds, future tools) against cross-project
+    # grouping.
     if epic is not None and epic.project_id != project.pk:
         raise ValueError("Epic belongs to another project.")
     if sprint is not None and sprint.project_id != project.pk:
         raise ValueError("Sprint belongs to another project.")
-    if milestone is not None and milestone.project_id != project.pk:
-        raise ValueError("Milestone belongs to another project.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)
@@ -112,7 +109,6 @@ def create_task(
             estimate=estimate,
             epic=epic,
             sprint=sprint,
-            milestone=milestone,
             created_by=user,
             position=_locked_tail_position(project, status),
         )

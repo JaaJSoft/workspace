@@ -19,7 +19,6 @@ from workspace.files.services import FileService
 from ..models import (
     Epic,
     Label,
-    Milestone,
     Project,
     ProjectMember,
     ProjectNotificationLevel,
@@ -39,7 +38,6 @@ from ..serializers import (
     MemberRoleSerializer,
     MemberSerializer,
     MemberWriteSerializer,
-    MilestoneSerializer,
     ProjectConvertSerializer,
     ProjectNotificationLevelSerializer,
     ProjectSerializer,
@@ -68,6 +66,7 @@ from ..services.attachments import (
 )
 from ..services.comments import add_comment, notify_comment_edited
 from ..services.conversion import convert_project_type
+from ..services.epics import epics_with_progress
 from ..services.estimates import format_estimate
 from ..services.events import record_task_event
 from ..services.links import create_link, delete_link, links_for_task
@@ -77,7 +76,6 @@ from ..services.members import (
     change_member_role,
     remove_member,
 )
-from ..services.milestones import milestones_with_progress
 from ..services.projects import create_project
 from ..services.sprints import (
     assign_tasks_to_sprint,
@@ -434,14 +432,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Epic.objects.none()
-        # One reverse-FK join serves both rollup counts; no distinct needed
-        # since no other multi-valued relation is joined here.
-        return self.project.epics.annotate(
-            task_count=Count("tasks"),
-            done_task_count=Count(
-                "tasks", filter=Q(tasks__status__category=TaskStatus.Category.DONE)
-            ),
-        ).order_by("name")
+        return epics_with_progress(self.project)
 
     def perform_create(self, serializer):
         serializer.save(project=self.project)
@@ -467,59 +458,6 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         except IntegrityError:
             return Response(
                 {"name": ["An epic with this name already exists in this project."]},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def destroy(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
-        return super().destroy(request, *args, **kwargs)
-
-
-@extend_schema(tags=["Projects - Milestones"])
-class MilestoneViewSet(ProjectContextMixin, viewsets.ModelViewSet):
-    serializer_class = MilestoneSerializer
-    lookup_field = "uuid"
-    pagination_class = None
-    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
-
-    def get_queryset(self):
-        if getattr(self, "swagger_fake_view", False):
-            return Milestone.objects.none()
-        return milestones_with_progress(self.project)
-
-    def perform_create(self, serializer):
-        serializer.save(project=self.project)
-
-    def create(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
-        try:
-            with transaction.atomic():
-                return super().create(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        "A milestone with this name already exists in this project."
-                    ]
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-    def partial_update(self, request, *args, **kwargs):
-        self._require_admin()
-        self._require_writable()
-        try:
-            with transaction.atomic():
-                return super().partial_update(request, *args, **kwargs)
-        except IntegrityError:
-            return Response(
-                {
-                    "name": [
-                        "A milestone with this name already exists in this project."
-                    ]
-                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -818,7 +756,6 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         old_estimate = serializer.instance.estimate
         old_epic = serializer.instance.epic
         old_sprint = serializer.instance.sprint
-        old_milestone = serializer.instance.milestone
         old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
@@ -871,17 +808,6 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 to_value=task.sprint.name if task.sprint else "",
                 from_ref=old_sprint.pk if old_sprint else None,
                 to_ref=task.sprint_id,
-            )
-        if task.milestone_id != (old_milestone.pk if old_milestone else None):
-            # Milestone names snapshotted, same rationale as the sprint names.
-            record_task_event(
-                task,
-                type=TaskEvent.Type.MILESTONE,
-                actor=self.request.user,
-                from_value=old_milestone.name if old_milestone else "",
-                to_value=task.milestone.name if task.milestone else "",
-                from_ref=old_milestone.pk if old_milestone else None,
-                to_ref=task.milestone_id,
             )
         if task.due_date != old_due_date and (
             task.due_date is None or task.due_date > timezone.localdate()

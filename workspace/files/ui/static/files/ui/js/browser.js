@@ -2,7 +2,7 @@ window.fileBrowser = function fileBrowser() {
   const tags = window.tagsMixin();
 
   return {
-    // Tag CRUD + assignment (tag_manager.html / tag_dialog.html bindings).
+    // Tag CRUD + assignment (tag_dropdown.html / tag_dialog.html bindings).
     // The mixin reads/writes `selectedFile`, seeded by the properties partial.
     ...tags,
 
@@ -1411,6 +1411,19 @@ window.fileBrowser = function fileBrowser() {
 
     refreshFolderBrowser() {
       this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
+    },
+
+    // --- Tag navigation (the contract the shared tag partials call) ---
+    tagViewHref(tag) {
+      return '/files?tag=' + tag.uuid;
+    },
+
+    openTagView(tag) {
+      window.folderNav.navigateTo(this.tagViewHref(tag));
+    },
+
+    isTagViewActive(tag) {
+      return this.activeView === 'tag:' + tag.uuid;
     },
 
     // --- Tag picker (context menu "Tags" action) ---

@@ -498,7 +498,14 @@
                   <td class="hidden lg:table-cell" data-col="tags">
                     <div class="flex flex-wrap items-center gap-1">
                       {% for ft in node.file_tags.all %}
-                        <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                        <a
+                          href="/files?tag={{ ft.tag.uuid }}"
+                          x-target.push="folder-browser"
+                          @click.stop
+                          title="Show files tagged {{ ft.tag.name }}"
+                        >
+                          <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                        </a>
                       {% endfor %}
                     </div>
                   </td>
@@ -667,7 +674,15 @@
                             x-cloak
                           >
                             {% for ft in node.file_tags.all %}
-                              <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                              <a
+                                href="/files?tag={{ ft.tag.uuid }}"
+                                x-target.push="folder-browser"
+                                @click.stop
+                                @dblclick.stop
+                                title="Show files tagged {{ ft.tag.name }}"
+                              >
+                                <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+                              </a>
                             {% endfor %}
                           </div>
                         {% endif %}

@@ -149,7 +149,7 @@
                 :class="selectedNote?.is_favorite ? 'text-warning fill-warning' : ''"
               ></i>
             </button>
-            {% include "files/ui/partials/tag_manager.html" %}
+            {% include "files/ui/partials/tag_dropdown.html" %}
             <button
               type="button"
               class="btn btn-ghost btn-sm btn-square"
@@ -239,6 +239,7 @@
     </button>
   </div>
   {% include "files/ui/partials/tag_dialog.html" %}
+  {% include "files/ui/partials/tag_manager_dialog.html" %}
   {% include "files/ui/partials/folder_dialog.html" %}
   {% include "files/ui/partials/rename_dialog.html" %}
   {% include "ui/partials/context_menu_panel.html" with items="notes/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" width="w-52" %}

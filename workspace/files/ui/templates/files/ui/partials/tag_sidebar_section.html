@@ -1,0 +1,78 @@
+{% comment %}
+Tags sidebar section
+====================
+Favourite tags, rendered client-side from the tags mixin's `allTags`, and
+an "All tags" row that opens the tag manager dialog. Shared by the Files
+and Notes sidebars; the consuming component must spread `tagsMixin()` and
+provide `tagViewHref(tag)`, `openTagView(tag)` and `isTagViewActive(tag)`.
+
+Parameters:
+- collapse_expr: Alpine expression for the collapsed state (default "collapsed")
+- active_class: classes of the active row, written out in full so Tailwind
+  sees them (default: the Files sidebar's primary tint)
+- heading_class: classes of the section heading (default matches the Files sidebar)
+{% endcomment %}
+{% with ce=collapse_expr|default:"collapsed" active=active_class|default:"bg-primary/10 text-primary hover:bg-primary/20" %}
+  <div id="tag-sidebar-section">
+    <hr class="my-2 border-base-300" x-show="!({{ ce }})" />
+    <div class="flex items-center mb-1" x-show="!({{ ce }})" x-transition>
+      <h3
+        class="{{ heading_class|default:'text-sm font-semibold text-base-content/60 uppercase tracking-wider' }} flex-1"
+      >
+        <span class="flex items-center gap-2">
+          <i data-lucide="tag" class="w-3 h-3"></i>
+          Tags
+        </span>
+      </h3>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        @click="showTagModal()"
+        title="New tag"
+      >
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+    <hr class="my-1 border-base-300" x-show="{{ ce }}" />
+    <ul class="space-y-0.5">
+      <template x-for="tag in favoriteTags()" :key="tag.uuid">
+        <li class="list-none" :class="{{ ce }} ? 'flex justify-center' : ''">
+          <a
+            :href="tagViewHref(tag)"
+            @click.prevent="openTagView(tag)"
+            class="group flex items-center hover:bg-base-300/50 text-base rounded-lg transition-colors"
+            :class="[
+              {{ ce }} ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
+              isTagViewActive(tag) ? '{{ active }}' : 'text-base-content/70'
+            ]"
+            :title="{{ ce }} ? tag.name : ''"
+          >
+            <i
+              :data-lucide="tag.icon || 'tag'"
+              class="w-5 h-5 flex-shrink-0"
+              :style="{ color: tag.color || '' }"
+            ></i>
+            <span x-show="!({{ ce }})" class="truncate flex-1" x-text="tag.name"></span>
+          </a>
+        </li>
+      </template>
+      <li class="list-none" :class="{{ ce }} ? 'flex justify-center' : ''">
+        <button
+          type="button"
+          @click="openTagManager()"
+          class="flex items-center hover:bg-base-300/50 text-base rounded-lg transition-colors text-base-content/70 w-full"
+          :class="{{ ce }} ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3'"
+          :title="{{ ce }} ? 'All tags' : ''"
+        >
+          <i data-lucide="tags" class="w-5 h-5 flex-shrink-0"></i>
+          <span x-show="!({{ ce }})" class="truncate flex-1 text-left">All tags</span>
+          <span
+            x-show="!({{ ce }})"
+            class="text-xs text-base-content/40 tabular-nums"
+            x-text="allTags.length"
+          ></span>
+        </button>
+      </li>
+    </ul>
+  </div>
+{% endwith %}

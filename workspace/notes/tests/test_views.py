@@ -36,6 +36,18 @@ class NotesIndexViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="notes-sidebar"')
 
+    def test_sidebar_uses_the_shared_tag_section_instead_of_a_flat_list(self):
+        from workspace.files.models import Tag
+
+        Tag.objects.create(owner=self.user, name="research")
+
+        resp = self.client.get("/notes")
+
+        self.assertContains(resp, 'id="tag-sidebar-section"')
+        self.assertContains(resp, 'id="tag-manager-dialog"')
+        self.assertNotContains(resp, "data-tag-uuid")
+        self.assertNotIn("tags", resp.context)
+
     def test_full_page_renders_the_sidebar_wrapper_once(self):
         # The wrapper lives in the partial; a second copy in the parent
         # template would produce duplicate ids and break the swap targeting.

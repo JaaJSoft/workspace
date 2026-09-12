@@ -818,6 +818,7 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         old_estimate = serializer.instance.estimate
         old_epic = serializer.instance.epic
         old_sprint = serializer.instance.sprint
+        old_milestone = serializer.instance.milestone
         old_assignee_ids = {u.pk for u in serializer.instance.assignees.all()}
         # Compared before save: afterwards the instance already carries the
         # new values and every edit would look like a no-op.
@@ -870,6 +871,17 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
                 to_value=task.sprint.name if task.sprint else "",
                 from_ref=old_sprint.pk if old_sprint else None,
                 to_ref=task.sprint_id,
+            )
+        if task.milestone_id != (old_milestone.pk if old_milestone else None):
+            # Milestone names snapshotted, same rationale as the sprint names.
+            record_task_event(
+                task,
+                type=TaskEvent.Type.MILESTONE,
+                actor=self.request.user,
+                from_value=old_milestone.name if old_milestone else "",
+                to_value=task.milestone.name if task.milestone else "",
+                from_ref=old_milestone.pk if old_milestone else None,
+                to_ref=task.milestone_id,
             )
         if task.due_date != old_due_date and (
             task.due_date is None or task.due_date > timezone.localdate()

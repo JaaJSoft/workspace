@@ -319,6 +319,9 @@ class TaskSerializer(serializers.ModelSerializer):
     sprint = serializers.PrimaryKeyRelatedField(
         queryset=Sprint.objects.none(), required=False, allow_null=True
     )
+    milestone = serializers.PrimaryKeyRelatedField(
+        queryset=Milestone.objects.none(), required=False, allow_null=True
+    )
     created_by = serializers.PrimaryKeyRelatedField(read_only=True)
     reference = serializers.SerializerMethodField()
     estimate = serializers.DecimalField(
@@ -335,11 +338,13 @@ class TaskSerializer(serializers.ModelSerializer):
             "status_category",
             "priority",
             "due_date",
+            "start_date",
             "estimate",
             "assignees",
             "labels",
             "epic",
             "sprint",
+            "milestone",
             "position",
             "number",
             "reference",
@@ -372,6 +377,7 @@ class TaskSerializer(serializers.ModelSerializer):
             self.fields["sprint"].queryset = project.sprints.exclude(
                 state=Sprint.State.CLOSED
             )
+            self.fields["milestone"].queryset = project.milestones.all()
 
     def validate_assignees(self, users):
         project = self.context["project"]
@@ -381,6 +387,17 @@ class TaskSerializer(serializers.ModelSerializer):
                     f"{user.username} is not a member of this project."
                 )
         return users
+
+    def validate(self, attrs):
+        start = attrs.get(
+            "start_date", self.instance.start_date if self.instance else None
+        )
+        due = attrs.get("due_date", self.instance.due_date if self.instance else None)
+        if start is not None and due is not None and start > due:
+            raise serializers.ValidationError(
+                {"start_date": "Start date cannot be after the due date."}
+            )
+        return attrs
 
 
 class TaskCalendarSerializer(serializers.ModelSerializer):

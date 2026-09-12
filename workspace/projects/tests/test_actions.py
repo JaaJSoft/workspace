@@ -81,6 +81,7 @@ class TaskActionTests(ProjectTestMixin, TestCase):
                 "set_due",
                 "set_labels",
                 "set_epic",
+                "set_milestone",
                 "attach",
                 "link",
                 "comment",

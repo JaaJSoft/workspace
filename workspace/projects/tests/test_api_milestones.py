@@ -156,3 +156,94 @@ class MilestoneApiTests(ProjectTestMixin, APITestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         task.refresh_from_db()
         self.assertIsNone(task.milestone)
+
+
+class TaskMilestoneApiTests(ProjectTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.milestone = Milestone.objects.create(
+            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        )
+
+    @property
+    def tasks_url(self):
+        return f"/api/v1/projects/{self.project.uuid}/tasks"
+
+    def test_create_task_with_milestone_and_dates(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.tasks_url,
+            {
+                "title": "a",
+                "milestone": str(self.milestone.uuid),
+                "start_date": "2026-09-01",
+                "due_date": "2026-09-10",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["milestone"], self.milestone.uuid)
+        self.assertEqual(response.data["start_date"], "2026-09-01")
+        task = self.project.tasks.get()
+        self.assertEqual(task.milestone, self.milestone)
+        self.assertEqual(task.start_date, date(2026, 9, 1))
+
+    def test_start_after_due_is_rejected(self):
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.tasks_url,
+            {"title": "a", "start_date": "2026-09-20", "due_date": "2026-09-10"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("start_date", response.data)
+
+    def test_patch_start_after_existing_due_is_rejected(self):
+        task = create_task(
+            self.project, self.admin, title="a", due_date=date(2026, 9, 10)
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}", {"start_date": "2026-09-20"}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_milestone_from_another_project_is_rejected(self):
+        from workspace.projects.services.projects import create_project
+
+        other = create_project(self.admin, name="Other")
+        foreign = Milestone.objects.create(
+            project=other, name="Elsewhere", target_date=date(2026, 10, 1)
+        )
+        self.client.force_authenticate(self.member)
+        response = self.client.post(
+            self.tasks_url,
+            {"title": "a", "milestone": str(foreign.uuid)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_milestone_change_records_event_with_names_and_refs(self):
+        from workspace.projects.models import TaskEvent
+
+        task = create_task(self.project, self.admin, title="a")
+        self.client.force_authenticate(self.member)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}",
+            {"milestone": str(self.milestone.uuid)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        event = task.events.get(type=TaskEvent.Type.MILESTONE)
+        self.assertEqual(event.from_value, "")
+        self.assertEqual(event.to_value, "Beta")
+        self.assertIsNone(event.from_ref)
+        self.assertEqual(event.to_ref, self.milestone.uuid)
+        response = self.client.patch(
+            f"{self.tasks_url}/{task.uuid}", {"milestone": None}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        latest = task.events.filter(type=TaskEvent.Type.MILESTONE).first()
+        self.assertEqual(latest.from_value, "Beta")
+        self.assertEqual(latest.to_value, "")
+        self.assertEqual(latest.from_ref, self.milestone.uuid)

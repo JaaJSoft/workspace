@@ -188,6 +188,24 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         )
         self.assertIn("No tasks found", result)
 
+    def test_task_entry_carries_start_date_and_milestone_name(self):
+        from datetime import date
+
+        from workspace.projects.ai_tools import _task_entry
+        from workspace.projects.models import Milestone
+
+        milestone = Milestone.objects.create(
+            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        )
+        task = create_task(
+            self.project, self.admin, title="t", start_date=date(2026, 9, 1)
+        )
+        task.milestone = milestone
+        task.save(update_fields=["milestone"])
+        entry = _task_entry(task)
+        self.assertEqual(entry["start_date"], "2026-09-01")
+        self.assertEqual(entry["milestone"], "Beta")
+
     # -- create_task ---------------------------------------------------------
 
     def test_create_task_in_named_project_with_assignee(self):

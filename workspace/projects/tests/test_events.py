@@ -342,3 +342,33 @@ class EpicEventTests(ProjectTestMixin, TestCase):
         for from_value, to_value, label in cases:
             event = self._event(from_value=from_value, to_value=to_value)
             self.assertEqual(serialize_task_event(event)["label"], label)
+
+
+class MilestoneEventTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="t")
+
+    def _event(self, from_value="", to_value=""):
+        return record_task_event(
+            self.task,
+            type=TaskEvent.Type.MILESTONE,
+            actor=self.admin,
+            from_value=from_value,
+            to_value=to_value,
+        )
+
+    def test_labels_for_change_set_and_removal(self):
+        self.assertEqual(
+            serialize_task_event(self._event("Alpha", "Beta"))["label"],
+            "Milestone changed: Alpha → Beta",
+        )
+        self.assertEqual(
+            serialize_task_event(self._event("", "Beta"))["label"],
+            "Milestone set to Beta",
+        )
+        self.assertEqual(
+            serialize_task_event(self._event("Alpha", ""))["label"],
+            "Milestone removed",
+        )
+        self.assertEqual(self._event().icon, "milestone")

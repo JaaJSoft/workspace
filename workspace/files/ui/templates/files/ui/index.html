@@ -127,6 +127,9 @@
 
         <!-- Group Folders -->
         <div x-show="showGroups" x-transition>{% include "files/ui/partials/group_folders_section.html" %}</div>
+
+        <!-- Tags: favourites, plus the manager for the rest -->
+        <div x-data="tagSidebar()">{% include "files/ui/partials/tag_sidebar_section.html" %}</div>
       </div>
 
       <!-- Storage & Help -->
@@ -350,6 +353,7 @@
     {# Inside the fileBrowser() scope: binds tagModal state from tagsMixin #}
     {% include "files/ui/partials/tag_dialog.html" %}
     {% include "files/ui/partials/tag_picker_dialog.html" %}
+    {% include "files/ui/partials/tag_manager_dialog.html" %}
   </div>
 
   {% include "files/ui/partials/dialogs.html" %}
@@ -396,6 +400,7 @@
   <script src="{% static 'files/ui/js/core.js' %}"></script>
   <script src="{% static 'files/ui/js/preferences.js' %}"></script>
   <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  <script src="{% static 'files/ui/js/tag_sidebar.js' %}"></script>
   <script src="{% static 'files/ui/js/browser.js' %}"></script>
   <script src="{% static 'files/ui/js/table.js' %}"></script>
   <script src="{% static 'files/ui/js/pinned.js' %}"></script>

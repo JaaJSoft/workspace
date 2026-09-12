@@ -6,7 +6,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.files.models import File, Tag
+from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -38,8 +38,6 @@ def _sidebar_context(user):
     )
     group_folders = _get_root_folders(group_qs)
 
-    tags = Tag.objects.filter(owner=user)
-
     # Groups without a root folder yet (for create dialog)
     group_root_ids = File.objects.filter(
         group__in=user.groups.all(),
@@ -54,7 +52,6 @@ def _sidebar_context(user):
     return {
         "folders": folders,
         "group_folders": group_folders,
-        "tags": tags,
         "available_groups": available_groups,
     }
 

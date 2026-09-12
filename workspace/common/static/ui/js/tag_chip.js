@@ -17,6 +17,9 @@
  *   - removable  the chip carries a trailing control, so the pill gets the
  *                tighter right padding. In attribute mode the element also
  *                renders the cross and dispatches a bubbling `remove` event.
+ *   - compact    icon only, in the tag's color, the name on hover: a row
+ *                carrying many tags keeps its height. A tag without an
+ *                icon shows the generic tag glyph.
  *
  * Slot mode: a chip written with children and no `name` keeps its own
  * content as the label and only gets the pill styling. That is what the
@@ -43,7 +46,7 @@ window.TAG_CHIP_COLORS = [
 
 // Pill geometry. Split out of the element so it can be unit-tested without
 // a DOM, and applied with add/remove so a caller's own classes survive.
-window.tagChipClasses = function tagChipClasses(size, removable) {
+window.tagChipClasses = function tagChipClasses(size, removable, compact) {
   const classes = [
     'inline-flex',
     'items-center',
@@ -55,6 +58,13 @@ window.tagChipClasses = function tagChipClasses(size, removable) {
     'text-xs',
     'align-middle',
   ];
+  if (compact) {
+    classes.push('justify-center', 'p-0', 'shrink-0');
+    classes.push(...(size === 'sm' ? ['w-5', 'h-5'] : ['w-[26px]', 'h-[26px]']));
+    return classes;
+  }
+  // A pill in a fixed-width cell shrinks and lets its label truncate.
+  classes.push('max-w-full', 'min-w-0');
   if (size === 'sm') {
     classes.push('py-0', 'min-h-[20px]', removable ? 'pl-2' : 'px-2');
   } else {
@@ -91,7 +101,7 @@ window.tagChipColor = function tagChipColor(value) {
   // height; browsers without it fall back to a whole-pixel nudge
   // (fractional offsets shimmer across zoom levels, so keep it integer).
   const LABEL_CLASSES =
-    'relative -top-px [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
+    'relative -top-px truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
 
   // Inline SVG on purpose: lucide.createIcons() does not process nodes
   // Alpine clones out of an x-for template.
@@ -102,7 +112,7 @@ window.tagChipColor = function tagChipColor(value) {
 
   class TagChip extends HTMLElement {
     static get observedAttributes() {
-      return ['name', 'color', 'icon', 'size', 'removable'];
+      return ['name', 'color', 'icon', 'size', 'removable', 'compact'];
     }
 
     connectedCallback() {
@@ -123,9 +133,10 @@ window.tagChipColor = function tagChipColor(value) {
 
     render() {
       const removable = this.hasAttribute('removable');
+      const compact = this.hasAttribute('compact');
 
       this.classList.remove(...this._appliedClasses);
-      this._appliedClasses = window.tagChipClasses(this.getAttribute('size'), removable);
+      this._appliedClasses = window.tagChipClasses(this.getAttribute('size'), removable, compact);
       this.classList.add(...this._appliedClasses);
 
       const color = window.tagChipColor(this.getAttribute('color'));
@@ -142,6 +153,19 @@ window.tagChipColor = function tagChipColor(value) {
         this._label.className = LABEL_CLASSES;
       }
       this._label.textContent = name;
+
+      if (compact) {
+        const iconEl = document.createElement('i');
+        iconEl.setAttribute('data-lucide', this.getAttribute('icon') || 'tag');
+        iconEl.className = 'w-3 h-3';
+        this.title = name;
+        this.setAttribute('aria-label', name);
+        this.replaceChildren(iconEl);
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+          lucide.createIcons({ nodes: [this] });
+        }
+        return;
+      }
 
       const children = [];
       const icon = this.getAttribute('icon');

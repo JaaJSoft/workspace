@@ -2,7 +2,7 @@ window.fileBrowser = function fileBrowser() {
   const tags = window.tagsMixin();
 
   return {
-    // Tag CRUD + assignment (tag_manager.html / tag_dialog.html bindings).
+    // Tag CRUD + assignment (tag_dropdown.html / tag_dialog.html bindings).
     // The mixin reads/writes `selectedFile`, seeded by the properties partial.
     ...tags,
 
@@ -1413,6 +1413,19 @@ window.fileBrowser = function fileBrowser() {
       this.$ajax(window.location.pathname + window.location.search, { target: 'folder-browser' });
     },
 
+    // --- Tag navigation (the contract the shared tag partials call) ---
+    tagViewHref(tag) {
+      return '/files?tag=' + tag.uuid;
+    },
+
+    openTagView(tag) {
+      window.folderNav.navigateTo(this.tagViewHref(tag));
+    },
+
+    isTagViewActive(tag) {
+      return this.activeView === 'tag:' + tag.uuid;
+    },
+
     // --- Tag picker (context menu "Tags" action) ---
     // The tags mixin operates on `selectedFile`, which the properties panel
     // also owns. The picker borrows it while open and hands it back on close.
@@ -1485,6 +1498,11 @@ window.fileBrowser = function fileBrowser() {
           .then(() => window.dispatchEvent(new CustomEvent('group-folders-changed')))
           .catch((err) => window.AppAlert.error(err.message || 'Failed to create group folder'));
       });
+
+      // The sidebar's Tags section lives outside this component and asks
+      // for the dialogs it cannot open itself.
+      window.addEventListener('open-tag-manager', () => this.openTagManager());
+      window.addEventListener('open-tag-dialog', () => this.showTagModal());
 
       // Tag chips are rendered server-side in the listing, so any tag edit
       // or assignment needs a re-render. Debounced: ticking several

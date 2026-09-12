@@ -110,6 +110,18 @@ class ListingTagsTests(TestCase):
 
         self.assertContains(response, '<tag-chip name="invoices" color="#eab308"')
 
+    def test_chip_links_to_the_tag_view(self):
+        response = self.client.get(reverse("files_ui:index"))
+
+        self.assertContains(response, f'href="/files?tag={self.tag.uuid}"')
+
+    def test_page_carries_the_tag_sidebar_section_and_the_manager(self):
+        response = self.client.get(reverse("files_ui:index"))
+
+        self.assertContains(response, 'id="tag-sidebar-section"')
+        self.assertContains(response, 'id="tag-manager-dialog"')
+        self.assertContains(response, 'id="tag-merge-dialog"')
+
     def test_listing_tags_offers_only_tags_present_in_the_listing(self):
         Tag.objects.create(owner=self.user, name="unused", color="#3b82f6")
 

@@ -50,6 +50,19 @@ test('a removable pill tightens its right padding for the control', () => {
   assert.ok(!classes.includes('px-2.5'));
 });
 
+test('a compact pill is a fixed square with no padding, in both sizes', () => {
+  const chip = load();
+  const plain = chip.tagChipClasses('sm', false, true);
+  const large = chip.tagChipClasses(undefined, false, true);
+
+  assert.ok(plain.includes('w-5') && plain.includes('h-5'));
+  assert.ok(plain.includes('p-0'));
+  assert.ok(!plain.some((c) => c.startsWith('px-') || c.startsWith('min-h-')));
+  assert.ok(large.includes('w-[26px]') && large.includes('h-[26px]'));
+  // classList.add refuses a token with a space in it, so every class is its own entry.
+  assert.ok([...plain, ...large].every((c) => !c.includes(' ')));
+});
+
 test('the sm pill is shorter, in both variants', () => {
   const chip = load();
   const plain = chip.tagChipClasses('sm', false);

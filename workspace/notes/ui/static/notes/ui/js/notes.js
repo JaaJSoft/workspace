@@ -206,8 +206,7 @@ window.notesApp = function notesApp(config) {
             // Load folder data from embedded JSON
             this._loadFolderData();
 
-            // Listen for sidebar refresh events
-            window.addEventListener('tags-changed', this.refreshSidebar.bind(this));
+            window.addEventListener('tags-changed', this._onTagsChanged.bind(this));
 
             // Catch up on notes changed elsewhere while the stream was down
             // (resumed tab, or a bfcache restore after a mobile back).
@@ -497,8 +496,8 @@ window.notesApp = function notesApp(config) {
                 this.viewTitle = 'Recent';
             } else if (view === 'tag') {
                 if (!name && id) {
-                    const tagEl = document.querySelector('[data-tag-uuid="' + id + '"]');
-                    if (tagEl) name = tagEl.dataset.tagName;
+                    const tag = this.allTags.find((t) => t.uuid === id);
+                    if (tag) name = tag.name;
                 }
                 this.viewTitle = name || 'Tag';
             } else if (view === 'folder' || view === 'group_folder') {
@@ -1106,24 +1105,6 @@ window.notesApp = function notesApp(config) {
             this.closeCtxMenu();
             if (!m.data) return;
 
-            if (m.type === 'tag') {
-                if (action === 'edit') {
-                    this.showTagModal(m.data);
-                } else if (action === 'delete') {
-                    if (!confirm('Delete tag "' + m.data.name + '"?')) return;
-                    const self = this;
-                    fetch('/api/v1/tags/' + m.data.uuid, {
-                        method: 'DELETE',
-                        headers: { 'X-CSRFToken': getCSRFToken() },
-                    }).then(function(resp) {
-                        if (resp.ok || resp.status === 204) {
-                            self.allTags = self.allTags.filter(function(t) { return t.uuid !== m.data.uuid; });
-                            self.refreshSidebar();
-                        }
-                    });
-                }
-            }
-
             if (action === 'hide') {
                 this.toggleHidden(m.data.uuid);
             }
@@ -1266,6 +1247,37 @@ window.notesApp = function notesApp(config) {
                 window.history.pushState({}, '', url);
             } else {
                 window.history.replaceState({}, '', url);
+            }
+        },
+
+        // ── Tag navigation (the contract the shared tag partials call) ──
+
+        tagViewHref(tag) {
+            return '/notes?view=tag&tag=' + tag.uuid;
+        },
+
+        openTagView(tag) {
+            this.setView('tag', tag.uuid, tag.name);
+        },
+
+        isTagViewActive(tag) {
+            return this.activeView === 'tag' && this.activeId === tag.uuid;
+        },
+
+        // The sidebar draws tags from `allTags`, which the mixin keeps
+        // current; what a change can leave behind is the open view (a
+        // deleted tag, a renamed title) and the chips on the listed notes.
+        async _onTagsChanged() {
+            if (this.activeView === 'tag') {
+                const tag = this.allTags.find((t) => t.uuid === this.activeId);
+                if (!tag) {
+                    await this.setView('all', null, 'My Notes');
+                    return;
+                }
+                this.viewTitle = tag.name;
+            }
+            if (this.activeView !== 'graph' && this.activeView !== 'journal') {
+                await this.loadNotes(this._buildNotesUrl());
             }
         },
 

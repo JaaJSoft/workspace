@@ -1,0 +1,176 @@
+{% comment %}
+Tag manager: every tag of the user with its usage count, searchable, with
+favourite, edit, merge, delete and purge. Requires tagsMixin() plus the
+navigation contract (`tagViewHref`, `openTagView`) in the Alpine component,
+and the tag_dialog partial on the same page for create/edit.
+{% endcomment %}
+<dialog id="tag-manager-dialog" class="modal">
+  <div class="modal-box max-w-lg flex flex-col max-h-[85vh]">
+    <div class="flex items-center gap-2 mb-3">
+      <i data-lucide="tags" class="w-5 h-5 text-primary flex-shrink-0"></i>
+      <h3 class="font-bold text-lg flex-1">Tags</h3>
+      <span
+        class="text-sm text-base-content/50 tabular-nums"
+        x-text="allTags.length + (allTags.length === 1 ? ' tag' : ' tags')"
+      ></span>
+    </div>
+    <label class="input input-bordered input-sm flex items-center gap-2 mb-2">
+      <i data-lucide="search" class="w-4 h-4 text-base-content/40"></i>
+      <input
+        type="search"
+        class="grow"
+        placeholder="Search tags"
+        x-model="tagManager.query"
+        @keydown.escape.stop="tagManager.query ? tagManager.query = '' : closeTagManager()"
+      />
+    </label>
+    <div x-show="tagManager.error" x-cloak class="mb-2">
+      <inline-alert type="error"><span x-text="tagManager.error"></span></inline-alert>
+    </div>
+    <ul class="flex-1 overflow-y-auto min-h-0 -mx-2 px-2 space-y-0.5">
+      <template x-for="tag in filteredManagedTags()" :key="tag.uuid">
+        <li
+          class="group flex items-center gap-1 px-1 py-1 rounded hover:bg-base-200"
+        >
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square flex-shrink-0"
+            :class="tag.is_favorite ? 'text-warning' : 'text-base-content/30 hover:text-warning'"
+            @click="toggleTagFavorite(tag)"
+            :title="tag.is_favorite ? 'Remove from sidebar' : 'Show in sidebar'"
+            :aria-pressed="tag.is_favorite"
+          >
+            <i
+              data-lucide="star"
+              class="w-4 h-4"
+              :class="tag.is_favorite ? 'fill-current' : ''"
+            ></i>
+          </button>
+          <a
+            :href="tagViewHref(tag)"
+            @click.prevent="openTagViewFromManager(tag)"
+            class="flex-1 min-w-0 flex items-center gap-2 px-1"
+            :title="'Show files tagged ' + tag.name"
+          >
+            <tag-chip :name="tag.name" :color="tag.color" :icon="tag.icon" size="sm"></tag-chip>
+          </a>
+          <span
+            class="text-xs text-base-content/50 tabular-nums w-8 text-right flex-shrink-0"
+            x-text="tag.file_count"
+            :title="tag.file_count + (tag.file_count === 1 ? ' file' : ' files')"
+          ></span>
+          <div
+            class="flex items-center flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              @click="showTagModal(tag)"
+              title="Edit"
+            >
+              <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square"
+              @click="startTagMerge(tag)"
+              title="Merge into another tag"
+              :disabled="allTags.length < 2"
+            >
+              <i data-lucide="git-merge" class="w-3.5 h-3.5"></i>
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs btn-square text-error"
+              @click="deleteTag(tag)"
+              title="Delete"
+            >
+              <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </li>
+      </template>
+      <li
+        x-show="allTags.length === 0"
+        class="px-2 py-8 text-center text-sm text-base-content/40"
+      >
+        No tags yet
+      </li>
+      <li
+        x-show="allTags.length > 0 && filteredManagedTags().length === 0"
+        class="px-2 py-8 text-center text-sm text-base-content/40"
+      >
+        No tag matches
+      </li>
+    </ul>
+    <div class="modal-action mt-3">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm gap-1"
+        @click="showTagModal()"
+      >
+        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+        New tag
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm gap-1 text-error mr-auto"
+        x-show="unusedTagCount() > 0"
+        @click="purgeUnusedTags()"
+      >
+        <i data-lucide="eraser" class="w-3.5 h-3.5"></i>
+        <span x-text="'Delete ' + unusedTagCount() + ' unused'"></span>
+      </button>
+      <button type="button" class="btn btn-sm" @click="closeTagManager()">Close</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>
+
+<dialog id="tag-merge-dialog" class="modal" @close="cancelTagMerge()">
+  <div class="modal-box max-w-sm">
+    <h3 class="font-bold text-lg flex items-center gap-2 mb-1">
+      <i data-lucide="git-merge" class="w-5 h-5 text-primary flex-shrink-0"></i>
+      Merge tag
+    </h3>
+    <p class="text-sm text-base-content/70 mb-3">
+      Every file tagged
+      <strong x-text="tagManager.mergeSource ? tagManager.mergeSource.name : ''"></strong>
+      gets the tag you pick instead, and the original is deleted.
+    </p>
+    <form @submit.prevent="confirmTagMerge()">
+      <label class="form-control w-full mb-3">
+        <div class="label"><span class="label-text">Merge into</span></div>
+        <select
+          class="select select-bordered select-sm w-full"
+          x-model="tagManager.mergeTarget"
+          required
+        >
+          <option value="" disabled>Choose a tag</option>
+          <template x-for="tag in tagMergeTargets()" :key="tag.uuid">
+            <option :value="tag.uuid" x-text="tag.name + ' (' + tag.file_count + ')'"></option>
+          </template>
+        </select>
+      </label>
+      <div x-show="tagManager.error" x-cloak class="mb-3">
+        <div class="text-sm text-error" x-text="tagManager.error"></div>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost btn-sm" @click="cancelTagMerge()">Cancel</button>
+        <button
+          type="submit"
+          class="btn btn-primary btn-sm"
+          :disabled="!tagManager.mergeTarget || tagManager.busy"
+        >
+          <span x-show="!tagManager.busy">Merge</span>
+          <span x-show="tagManager.busy" class="loading loading-spinner loading-xs"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

@@ -165,7 +165,7 @@
         x-show="!notePrefs.compactList && note.tags && note.tags.length"
       >
         <template x-for="t in note.tags" :key="t.uuid">
-          <tag-chip :name="t.name" :color="t.color" size="sm"></tag-chip>
+          <tag-chip :name="t.name" :color="t.color" size="sm" class="cursor-pointer" @click.stop="setView('tag', t.uuid, t.name)" :title="'Show notes tagged ' + t.name"></tag-chip>
         </template>
       </div>
     </button>

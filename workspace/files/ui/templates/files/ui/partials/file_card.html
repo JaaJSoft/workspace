@@ -10,7 +10,12 @@
         {% if tags %}
           <div class="flex flex-wrap gap-1 mt-1">
             {% for ft in tags %}
-              <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+              <a
+                href="/files?tag={{ ft.tag.uuid }}"
+                title="Show files tagged {{ ft.tag.name }}"
+              >
+                <tag-chip name="{{ ft.tag.name }}" color="{{ ft.tag.color }}" icon="{{ ft.tag.icon }}" size="sm"></tag-chip>
+              </a>
             {% endfor %}
           </div>
         {% endif %}

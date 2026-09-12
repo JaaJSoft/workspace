@@ -117,7 +117,7 @@ Context:
 
     {% if can_tag %}
       <!-- Tags (chips are client-rendered from `selectedFile.tags` so the
-       tag_manager dropdown checkboxes update them live; the initial
+       tag_dropdown checkboxes update them live; the initial
        state is seeded server-side via json_script) -->
       {{ file_tags|json_script:"properties-tags-data" }}
       <div class="divider my-0 text-xs text-base-content/40">Tags</div>
@@ -132,7 +132,7 @@ Context:
           class="text-sm text-base-content/40"
           x-show="!selectedFile || selectedFile.tags.length === 0"
         >No tags</span>
-        <div class="ml-auto">{% include "files/ui/partials/tag_manager.html" %}</div>
+        <div class="ml-auto">{% include "files/ui/partials/tag_dropdown.html" %}</div>
       </div>
     {% endif %}
 

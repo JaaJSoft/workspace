@@ -730,6 +730,8 @@ class Tag(models.Model):
     # A CSS color (the picker offers a fixed hex palette, shared with
     # projects labels). Empty renders the neutral chip.
     color = models.CharField(max_length=20, blank=True, default="")
+    # Pinned to the Files and Notes sidebars; the other tags live in the manager.
+    is_favorite = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

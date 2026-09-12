@@ -1,11 +1,18 @@
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.services import FileService
+from workspace.files.services.tags import (
+    TagMergeError,
+    merge_tags,
+    purge_unused_tags,
+    tags_with_usage,
+)
 
 from ..models import FileTag, Tag
 from ..serializers_tags import TagSerializer
@@ -25,7 +32,49 @@ class TagViewSet(viewsets.ModelViewSet):
     pagination_class = None
 
     def get_queryset(self):
-        return Tag.objects.filter(owner=self.request.user)
+        return tags_with_usage(self.request.user)
+
+    @extend_schema(
+        summary="Merge a tag into another one",
+        description="Moves every assignment onto the target tag and deletes "
+        "this one. A file carrying both keeps a single assignment.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {"into": {"type": "string", "format": "uuid"}},
+            }
+        },
+        responses={200: TagSerializer},
+    )
+    @action(detail=True, methods=["post"])
+    def merge(self, request, uuid=None):
+        source = self.get_object()
+        target_uuid = parse_uuid_or_none(request.data.get("into"))
+        if target_uuid is None:
+            return Response(
+                {"into": "A target tag is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        target = get_object_or_404(self.get_queryset(), uuid=target_uuid)
+        try:
+            merge_tags(source, target)
+        except TagMergeError:
+            return Response(
+                {"into": "A tag cannot be merged into itself."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        target = self.get_queryset().get(pk=target.pk)
+        return Response(self.get_serializer(target).data)
+
+    @extend_schema(
+        summary="Delete every tag with no file",
+        responses={
+            200: {"type": "object", "properties": {"deleted": {"type": "integer"}}}
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="purge-unused")
+    def purge_unused(self, request):
+        return Response({"deleted": purge_unused_tags(request.user)})
 
 
 class FileTagView(APIView):

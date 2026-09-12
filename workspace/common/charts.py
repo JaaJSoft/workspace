@@ -290,8 +290,12 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
     ``bar`` (``start``..``end`` inclusive) or a ``marker`` on ``start``;
     *markers* are diamonds on the header row with a full-height guide,
     *bands* shaded ranges behind everything. Rows and bands are clamped to
-    the extent; markers and a *today* outside it are dropped. Coordinates
-    are fixed-precision strings, see :func:`column_chart`.
+    the extent; markers and a *today* outside it are dropped. A row whose
+    dates fall entirely outside the extent keeps its label but draws no
+    glyph: its ``x``, ``width``, ``cx`` and ``points`` come back ``None``
+    rather than an empty string, so a template guard (``{% if row.width %}``)
+    reads as "nothing to draw" instead of silently rendering a zero-sized
+    shape. Coordinates are fixed-precision strings, see :func:`column_chart`.
     """
     if scale not in _GANTT_PX_PER_DAY:
         raise ValueError(f"Unknown gantt scale {scale!r}")
@@ -331,16 +335,7 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
             )
 
     drawn_markers = [
-        {
-            "x": _n(centre_of(m["date"])),
-            "y": _n(_GANTT_HEADER - _GANTT_MARKER - 2),
-            "label": m["label"],
-            "css_class": m["css_class"],
-            "guide_y1": _n(_GANTT_HEADER),
-            "guide_y2": _n(body_bottom),
-        }
-        for m in markers
-        if inside(m["date"])
+        _header_marker(m, centre_of, body_bottom) for m in markers if inside(m["date"])
     ]
 
     drawn_groups = []
@@ -349,6 +344,7 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
         rows = []
         row_y = y + _GANTT_GROUP_ROW
         for row in group["rows"]:
+            cy = row_y + _GANTT_ROW / 2
             drawn = {
                 "id": row["id"],
                 "y": _n(row_y),
@@ -356,17 +352,20 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
                 "tooltip": row["tooltip"],
                 "css_class": row["css_class"],
                 "kind": row["kind"],
-                "x": "",
-                "width": "",
-                "cx": "",
-                "cy": _n(row_y + _GANTT_ROW / 2),
+                "x": None,
+                "width": None,
+                "cx": None,
+                "cy": _n(cy),
+                "points": None,
             }
             if row["kind"] == "bar":
                 span = clamp_range(row["start"], row["end"])
                 if span is not None:
                     drawn["x"], drawn["width"] = span
             elif inside(row["start"]):
-                drawn["cx"] = _n(centre_of(row["start"]))
+                cx = centre_of(row["start"])
+                drawn["cx"] = _n(cx)
+                drawn["points"] = _diamond_points(cx, cy, _GANTT_MARKER / 2)
             rows.append(drawn)
             row_y += _GANTT_ROW
         drawn_groups.append(
@@ -389,13 +388,34 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
         "row_height": _n(_GANTT_ROW),
         "bar_y_offset": _n(_GANTT_BAR_INSET),
         "bar_height": _n(_GANTT_ROW - 2 * _GANTT_BAR_INSET),
-        "marker_size": _n(_GANTT_MARKER),
         "axis": _gantt_axis(start, end, scale, px, x_of),
         "bands": drawn_bands,
         "today": {"x": _n(centre_of(today))} if inside(today) else None,
         "markers": drawn_markers,
         "groups": drawn_groups,
     }
+
+
+def _header_marker(marker, centre_of, body_bottom):
+    cx = centre_of(marker["date"])
+    cy = _GANTT_HEADER - _GANTT_MARKER / 2 - 2
+    return {
+        "x": _n(cx),
+        "cy": _n(cy),
+        "points": _diamond_points(cx, cy, _GANTT_MARKER / 2),
+        "label": marker["label"],
+        "css_class": marker["css_class"],
+        "guide_y1": _n(_GANTT_HEADER),
+        "guide_y2": _n(body_bottom),
+    }
+
+
+def _diamond_points(cx, cy, half):
+    """SVG polygon points for a diamond centred on (cx, cy), corner to corner."""
+    return (
+        f"{_n(cx)},{_n(cy - half)} {_n(cx + half)},{_n(cy)} "
+        f"{_n(cx)},{_n(cy + half)} {_n(cx - half)},{_n(cy)}"
+    )
 
 
 def _gantt_axis(start, end, scale, px, x_of):

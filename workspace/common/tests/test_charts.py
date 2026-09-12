@@ -324,6 +324,42 @@ class GanttChartTests(SimpleTestCase):
         self.assertEqual(float(row["cx"]), gutter + 8 * 28 + 14)
         self.assertEqual(row["kind"], "marker")
 
+    def test_row_marker_diamond_is_centred_on_cx_and_cy(self):
+        row = _gantt()["groups"][0]["rows"][1]
+        cx, cy = float(row["cx"]), float(row["cy"])
+        points = [tuple(map(float, p.split(","))) for p in row["points"].split()]
+        xs, ys = zip(*points, strict=True)
+        self.assertEqual((min(xs), max(xs)), (cx - 3, cx + 3))
+        self.assertEqual((min(ys), max(ys)), (cy - 3, cy + 3))
+
+    def test_row_entirely_outside_the_extent_keeps_its_label_but_draws_nothing(self):
+        chart = _gantt(
+            groups=[
+                {
+                    "label": "g",
+                    "sublabel": "",
+                    "progress": "",
+                    "rows": [
+                        {
+                            "id": "t",
+                            "label": "gone",
+                            "start": date(2027, 1, 1),
+                            "end": date(2027, 1, 2),
+                            "kind": "bar",
+                            "css_class": "fill-accent",
+                            "tooltip": "gone",
+                        }
+                    ],
+                }
+            ]
+        )
+        row = chart["groups"][0]["rows"][0]
+        self.assertEqual(row["label"], "gone")
+        self.assertIsNone(row["x"])
+        self.assertIsNone(row["width"])
+        self.assertIsNone(row["cx"])
+        self.assertIsNone(row["points"])
+
     def test_bar_is_clamped_to_the_extent(self):
         chart = _gantt(
             groups=[
@@ -362,6 +398,15 @@ class GanttChartTests(SimpleTestCase):
         self.assertEqual(float(marker["x"]), float(chart["gutter"]) + 11 * 28 + 14)
         self.assertEqual(float(marker["guide_y2"]), chart["height"] - 8)
         self.assertEqual(marker["label"], "Beta")
+
+    def test_header_marker_diamond_is_centred_on_its_x_and_cy(self):
+        chart = _gantt()
+        marker = chart["markers"][0]
+        x, cy = float(marker["x"]), float(marker["cy"])
+        points = [tuple(map(float, p.split(","))) for p in marker["points"].split()]
+        xs, ys = zip(*points, strict=True)
+        self.assertEqual((min(xs), max(xs)), (x - 3, x + 3))
+        self.assertEqual((min(ys), max(ys)), (cy - 3, cy + 3))
 
     def test_marker_outside_the_extent_is_dropped(self):
         chart = _gantt(

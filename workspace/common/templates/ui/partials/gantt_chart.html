@@ -64,18 +64,17 @@ no arithmetic on purpose - see the docstring in charts.py.
         <text x="8" y="{{ row.y }}" dy="18" class="fill-base-content/80" font-size="11">{{ row.label }}</text>
         {% if row.kind == "bar" and row.width %}
           <rect x="{{ row.x }}" y="{{ row.y }}" width="{{ row.width }}" height="{{ chart.bar_height }}" rx="3" class="{{ row.css_class }}" transform="translate(0 {{ chart.bar_y_offset }})" />
-        {% elif row.cx %}
-          <rect x="{{ row.cx }}" y="{{ row.cy }}" width="{{ chart.marker_size }}" height="{{ chart.marker_size }}" rx="1" class="{{ row.css_class }}" transform="translate(-3 -3) rotate(45 {{ row.cx }} {{ row.cy }})" />
+        {% elif row.points %}
+          <polygon points="{{ row.points }}" class="{{ row.css_class }}" />
         {% endif %}
       </g>
     {% endfor %}
   {% endfor %}
-  {# The translate offsets are half of the marker size in charts.py; change both together. #}
   {% for marker in chart.markers %}
     <line x1="{{ marker.x }}" y1="{{ marker.guide_y1 }}" x2="{{ marker.x }}" y2="{{ marker.guide_y2 }}" class="stroke-warning" stroke-width="1" stroke-dasharray="3 3" />
-    <rect x="{{ marker.x }}" y="{{ marker.y }}" width="{{ chart.marker_size }}" height="{{ chart.marker_size }}" rx="1" class="{{ marker.css_class }}" transform="translate(-3 0) rotate(45 {{ marker.x }} {{ marker.y }})">
+    <polygon points="{{ marker.points }}" class="{{ marker.css_class }}">
       <title>{{ marker.label }}</title>
-    </rect>
+    </polygon>
   {% endfor %}
   {% if chart.today %}
     <line x1="{{ chart.today.x }}" y1="0" x2="{{ chart.today.x }}" y2="{{ chart.height }}" class="stroke-error" stroke-width="2" />

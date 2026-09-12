@@ -17,6 +17,7 @@
   {{ panel_action_ids|json_script:"task-panel-actions" }}
   {{ panel_attachments|json_script:"task-panel-attachments" }}
   {{ panel_links|json_script:"task-panel-links" }}
+  {{ panel_file_links|json_script:"task-panel-file-links" }}
   {{ panel_watchers|json_script:"task-watchers-data" }}
 
   <div
@@ -634,6 +635,113 @@
               </div>
             </div>
           </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section>
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.fileLinks"
+          @click="toggleSection('fileLinks')"
+        >
+          <i
+            :data-lucide="sectionsOpen.fileLinks ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Linked files</span>
+          <span
+            class="font-mono normal-case"
+            x-show="fileLinks.length"
+            x-cloak
+            x-text="fileLinks.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.fileLinks">
+        {% comment %}
+        References to live workspace files, not copies: the row reads the
+        file's current name, and a trashed one is tinted rather than hidden
+        (its owner still sees it, everybody else is filtered server-side).
+        {% endcomment %}
+        <ul class="flex flex-col gap-1 mb-2" x-show="fileLinks.length" x-cloak>
+          <template x-for="link in fileLinks" :key="link.uuid">
+            <li
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg border text-sm"
+              :class="link.in_trash ? 'bg-warning/10 border-warning/30' : 'bg-base-200/50 border-base-300'"
+            >
+              <i
+                :data-lucide="link.type_icon || 'file'"
+                class="w-4 h-4 flex-shrink-0"
+                :class="link.type_color || 'text-base-content/60'"
+              ></i>
+              <button
+                type="button"
+                class="flex-1 min-w-0 text-left truncate hover:underline"
+                x-show="!link.in_trash"
+                x-text="link.name"
+                :title="link.name"
+                @click="openLinkedFile(link)"
+              ></button>
+              <span
+                class="flex-1 min-w-0 truncate text-base-content/60"
+                x-show="link.in_trash"
+                x-cloak
+                x-text="link.name"
+                :title="link.name"
+              ></span>
+              <i
+                x-show="link.in_trash"
+                x-cloak
+                data-lucide="trash-2"
+                class="w-3.5 h-3.5 flex-shrink-0 text-warning"
+                title="In trash"
+              ></i>
+              <span
+                class="text-xs text-base-content/50 flex-shrink-0"
+                x-text="formatFileSize(link.size)"
+              ></span>
+              <a
+                x-show="!link.in_trash"
+                :href="link.download_url"
+                download
+                class="btn btn-ghost btn-xs btn-square"
+                title="Download"
+              >
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              </a>
+              {% if "link_file" in panel_action_ids %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
+                  title="Unlink file"
+                  @click="unlinkFile(link)"
+                >
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
+            </li>
+          </template>
+        </ul>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!fileLinks.length"
+          x-cloak
+        >
+          No linked files.
+        </p>
+        {% if "link_file" in panel_action_ids %}
+          <button
+            type="button"
+            class="btn btn-outline btn-xs gap-1.5"
+            :disabled="fileLinkSaving"
+            @click="linkWorkspaceFiles()"
+          >
+            <i data-lucide="file-symlink" class="w-3.5 h-3.5"></i>
+            <span>Link file</span>
+          </button>
         {% endif %}
       </div>
     </section>

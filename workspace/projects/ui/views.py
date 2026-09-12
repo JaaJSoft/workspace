@@ -34,6 +34,7 @@ from workspace.projects.services.analytics import (
 )
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
+from workspace.projects.services.file_links import file_links_for_task
 from workspace.projects.services.history import (
     EventLog,
     cumulative_flow,
@@ -337,11 +338,16 @@ def _task_panel_context(user, project, role, task, *, members=None):
         ).data,
         "panel_description_html": render_task_description(task.description),
         "panel_links": links_for_task(user, task),
+        "panel_file_links": file_links_for_task(user, task),
         "panel_task_data": {
             "uuid": str(task.uuid),
             "project": str(project.uuid),
             "links_url": reverse(
                 "project-task-links",
+                kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
+            ),
+            "file_links_url": reverse(
+                "project-task-file-links",
                 kwargs={"project_uuid": project.uuid, "task_uuid": task.uuid},
             ),
             "link_search_url": reverse("project-tasks-search"),

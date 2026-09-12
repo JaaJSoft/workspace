@@ -101,6 +101,10 @@ def serialize_task_event(ev):
         # to_value the other end's reference, both snapshotted at link time.
         if ev.from_value and ev.to_value:
             label = f"{ev.short_label}: {ev.from_value} {ev.to_value}"
+    elif ev.type in (TaskEvent.Type.FILE_LINKED, TaskEvent.Type.FILE_UNLINKED):
+        # to_value holds the file name snapshotted at link time.
+        if ev.to_value:
+            label = f"{ev.short_label}: {ev.to_value}"
     return {
         "icon": ev.icon,
         "label": label,

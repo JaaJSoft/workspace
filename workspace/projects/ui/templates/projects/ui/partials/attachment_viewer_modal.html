@@ -39,7 +39,8 @@
       </div>
 
       <!-- Viewer Container: #viewer-panel is the alpine-ajax merge anchor
-           every /projects/view-attachment/ response replaces (see viewer_panel.js). -->
+           every viewer response (/projects/view-attachment/ for copies,
+           /files/view/ for linked files) replaces (see viewer_panel.js). -->
       <div
         class="flex-1 overflow-auto bg-base-200"
         x-show="!viewerLoading && !viewerError"
@@ -84,6 +85,9 @@
         mimeType: '',
         downloadUrl: '',
 
+        // detail: { name, mime_type, download_url, viewer_url } - the
+        // caller picks the viewer endpoint, so task copies and linked
+        // workspace files share one modal.
         async openAttachment(att) {
           this.fileName = att.name || 'File';
           this.mimeType = att.mime_type || '';
@@ -93,7 +97,7 @@
           if (!this.$refs.dialog.open) {
             this.$refs.dialog.showModal();
           }
-          await this.loadViewerPanel('/projects/view-attachment/' + att.uuid);
+          await this.loadViewerPanel(att.viewer_url);
         },
 
         // Every close path funnels here through the dialog's close event -

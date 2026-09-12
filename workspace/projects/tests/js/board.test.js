@@ -563,6 +563,7 @@ test('sectionDefaults opens filled sections and collapses empty ones', () => {
   panel.data = { assignees: [], labels: ['l1'], description: '   ' };
   panel.subtasks = [{ uuid: 's1', title: 'a', done: false }];
   panel.links = [];
+  panel.fileLinks = [{ uuid: 'f1', name: 'spec.md' }];
   panel.attachments = [];
   panel._commentCount = 2;
   panel._activityCount = 0;
@@ -574,6 +575,7 @@ test('sectionDefaults opens filled sections and collapses empty ones', () => {
       description: false,
       checklist: true,
       links: false,
+      fileLinks: true,
       attachments: false,
       comments: true,
       activity: false,

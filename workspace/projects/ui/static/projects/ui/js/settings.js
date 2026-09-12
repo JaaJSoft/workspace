@@ -696,7 +696,7 @@ function projectEpics(config) {
     query: '',
     openOnly: false,
     adding: false,
-    addForm: { name: '', color: '', description: '' },
+    addForm: { name: '', color: '', target_date: '', description: '' },
     editing: null,
     editName: '',
     editingDesc: null,
@@ -717,7 +717,19 @@ function projectEpics(config) {
       // this.epics is the parent projectBoard's array via Alpine's scope
       // chain (same shape as the epics-data payload).
       this.epics = this.items.map(function (e) {
-        return { uuid: e.uuid, name: e.name, color: e.color, closed: e.closed };
+        return {
+          uuid: e.uuid,
+          name: e.name,
+          color: e.color,
+          closed: e.closed,
+          target_date: e.target_date || null,
+          display_date: e.target_date
+            ? new Date(e.target_date + 'T00:00:00').toLocaleDateString('en', {
+                month: 'short',
+                day: '2-digit',
+              })
+            : '',
+        };
       });
     },
 
@@ -731,7 +743,10 @@ function projectEpics(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.name && data.name[0]) || 'Request failed.'
+            data.detail ||
+              (data.name && data.name[0]) ||
+              (data.target_date && data.target_date[0]) ||
+              'Request failed.'
           );
         }
         return resp;
@@ -743,6 +758,13 @@ function projectEpics(config) {
     progressPercent(epic) {
       if (!epic.task_count) return 0;
       return Math.round((epic.done_task_count / epic.task_count) * 100);
+    },
+
+    // ISO dates compare as strings; config.today is injected for tests and
+    // defaults to the browser's local date.
+    isOverdue(epic) {
+      const today = config.today || new Date().toLocaleDateString('sv');
+      return !epic.closed && !!epic.target_date && epic.target_date < today;
     },
 
     // List filter: quick name search + "open only" switch. Purely visual -
@@ -764,12 +786,13 @@ function projectEpics(config) {
           body: JSON.stringify({
             name: this.addForm.name.trim(),
             color: this.addForm.color,
+            target_date: this.addForm.target_date || null,
             description: this.addForm.description.trim(),
           }),
         });
         this.items.push(await resp.json());
         this.adding = false;
-        this.addForm = { name: '', color: '', description: '' };
+        this.addForm = { name: '', color: '', target_date: '', description: '' };
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;
@@ -851,6 +874,24 @@ function projectEpics(config) {
           body: JSON.stringify({ closed: !epic.closed }),
         });
         epic.closed = !epic.closed;
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    // Empty string clears the date (PATCH null); the value is unchanged
+    // for the browser's own no-op change event.
+    async setTargetDate(epic, value) {
+      const targetDate = value || null;
+      if (targetDate === epic.target_date) return;
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ target_date: targetDate }),
+        });
+        epic.target_date = targetDate;
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;

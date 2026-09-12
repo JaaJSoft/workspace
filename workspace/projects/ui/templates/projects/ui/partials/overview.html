@@ -98,6 +98,42 @@
         </ul>
       </section>
 
+      {% if open_epics or closed_epic_count %}
+        <section id="overview-epics" class="rounded-box bg-base-200 p-4">
+          <h2 class="font-semibold mb-2 flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-accent"></i>
+            Epics
+          </h2>
+          <ul class="flex flex-col gap-3">
+            {% for e in open_epics %}
+              <li class="flex flex-col gap-1">
+                <div class="flex items-center gap-2 text-sm min-w-0">
+                  <span
+                    class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"
+                    style="{% if e.color %}background: {{ e.color }}{% endif %}"
+                  ></span>
+                  <span class="font-medium truncate">{{ e.name }}</span>
+                  {% if e.target_date %}
+                    <span class="ml-auto shrink-0 text-xs font-mono {% if e.target_date < today %}text-error{% else %}text-base-content/60{% endif %}">{{ e.target_date|date:"M d" }}</span>
+                  {% endif %}
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="h-1.5 flex-1 rounded-full bg-base-300 overflow-hidden">
+                    <div class="h-full rounded-full bg-accent" style="width: {% widthratio e.done_task_count e.task_count|default:1 100 %}%"></div>
+                  </div>
+                  <span class="text-xs text-base-content/60 font-mono shrink-0">{{ e.done_task_count }}/{{ e.task_count }} done</span>
+                </div>
+              </li>
+            {% empty %}
+              <li class="text-sm text-base-content/50 italic">No open epics.</li>
+            {% endfor %}
+          </ul>
+          {% if closed_epic_count %}
+            <p class="text-xs text-base-content/50 mt-3">{{ closed_epic_count }} completed epic{{ closed_epic_count|pluralize }}</p>
+          {% endif %}
+        </section>
+      {% endif %}
+
       {% if labels_data %}
         <section class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">

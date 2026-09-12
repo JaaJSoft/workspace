@@ -177,6 +177,7 @@ def _task_entry(task):
         "status": task.status.name,
         "priority": task.priority,
         "due_date": task.due_date.isoformat() if task.due_date else "",
+        "start_date": task.start_date.isoformat() if task.start_date else "",
         "assignees": [u.username for u in task.assignees.all()],
     }
 

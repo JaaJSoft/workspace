@@ -1,0 +1,74 @@
+<div id="timeline" class="w-full flex flex-col gap-3" @gantt-row.window="openTask($event.detail.id)">
+  {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
+
+  {# Filter changes swap this wrapper only (see applyFilters in board.js), so the filter bar above - and its open popover - keep their DOM. #}
+  <div class="relative">
+    <div
+      id="task-collection"
+      class="flex flex-col gap-3"
+      x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
+    >
+      {% if timeline_is_empty and not filters_active %}
+        <div
+          class="rounded-box border border-base-300 bg-base-100 p-8 flex flex-col items-center gap-3 text-center"
+        >
+          <i data-lucide="chart-gantt" class="w-10 h-10 text-base-content/30"></i>
+          <p class="font-medium">Nothing to place on the timeline yet</p>
+          <p class="text-sm text-base-content/60 max-w-md">
+            Give tasks a start or due date to draw them here{% if role == "admin" %}, and give an epic a target date from the project settings to mark what lands when{% endif %}.
+          </p>
+        </div>
+      {% else %}
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="join" role="group" aria-label="Zoom">
+            {% for value, label, url in scale_options %}
+              <a
+                href="{{ url }}"
+                x-target.replace="task-collection"
+                class="btn btn-xs join-item{% if value == scale %} btn-active{% endif %}"
+                {% if value == scale %}aria-current="true"{% endif %}
+              >{{ label }}</a>
+            {% endfor %}
+          </div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 ml-auto text-xs text-base-content/70">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-sm bg-accent"></span>Active</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-sm bg-neutral"></span>Backlog</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-sm bg-success"></span>Done</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-sm bg-error"></span>Overdue</span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rotate-45 bg-warning"></span>Epic target</span>
+            <span class="flex items-center gap-1.5"><span class="w-0.5 h-3 bg-error"></span>Today</span>
+            {% if project.type == "scrum" %}
+              <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded-sm bg-info/20"></span>Sprint band</span>
+            {% endif %}
+          </div>
+        </div>
+        {% comment %}
+          The chart is as wide as its span at the chosen zoom and scrolls
+          inside this box; on mount the box is scrolled so today sits a
+          third of the way in, which is where the eye expects "now".
+        {% endcomment %}
+        <div
+          class="rounded-box border border-base-300 bg-base-100 overflow-x-auto"
+          x-init="$nextTick(() => { const svg = $el.querySelector('svg[data-today-x]'); const x = svg && Number(svg.dataset.todayX); if (x) $el.scrollLeft = Math.max(0, x - $el.clientWidth / 3) })"
+        >
+          {% include "ui/partials/gantt_chart.html" with chart=timeline_chart aria_label="Tasks and epic target dates of the project on a date axis" %}
+        </div>
+        <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/60">
+          {% if timeline.undated_count %}
+            <span>{{ timeline.undated_count }} task{{ timeline.undated_count|pluralize }} {{ timeline.undated_count|pluralize:"has,have" }} no dates and {{ timeline.undated_count|pluralize:"is,are" }} not shown.</span>
+          {% endif %}
+          {% if timeline.clipped_count %}
+            <span>{{ timeline.clipped_count }} task{{ timeline.clipped_count|pluralize }} fall{{ timeline.clipped_count|pluralize:"s," }} outside the visible range.</span>
+          {% endif %}
+          {% if timeline.clipped_epic_count %}
+            <span>{{ timeline.clipped_epic_count }} epic{{ timeline.clipped_epic_count|pluralize }} fall{{ timeline.clipped_epic_count|pluralize:"s," }} outside the visible range.</span>
+          {% endif %}
+          {% if tasks_truncated %}
+            <span>Only the first {{ task_render_limit }} tasks are shown - narrow the filters to see the rest.</span>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+    {% include "projects/ui/partials/_collection_loading.html" %}
+  </div>
+</div>

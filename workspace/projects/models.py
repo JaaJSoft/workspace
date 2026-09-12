@@ -226,6 +226,9 @@ class Epic(models.Model):
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=20, blank=True, default="")
     description = models.TextField(blank=True, default="")
+    # Optional target date; the timeline draws a dated epic as a marker and
+    # groups it ahead of the undated ones.
+    target_date = models.DateField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -332,6 +335,10 @@ class Task(models.Model):
         max_length=6, choices=Priority.choices, default=Priority.MEDIUM
     )
     due_date = models.DateField(null=True, blank=True)
+    # Optional planned start; with due_date it makes the task a bar on the
+    # timeline, alone it is a marker. Ordering against due_date is enforced
+    # by the API serializer, not here, so the admin and tools stay lenient.
+    start_date = models.DateField(null=True, blank=True)
     # Effort in the project's estimate_unit (points or hours); null = not
     # estimated. One decimal covers half-points and half-hours.
     estimate = models.DecimalField(

@@ -30,7 +30,11 @@ module.exports = {
       // literal string for the scanner to see. Other prefixes
       // (focus-within, group-hover, etc.) are only used with LITERAL
       // color names in the codebase, so the scanner already covers them.
-      pattern: /^(bg|text|border|ring)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content)\/\d+$/,
+      // `fill`/`stroke` cover the gantt chart's SVG classes, which are
+      // built as plain strings in workspace/projects/services/timeline.py
+      // (and any other chart service) - the scanner never reads .py files,
+      // so those classes only exist in the bundle because of this entry.
+      pattern: /^(bg|text|border|ring|fill|stroke)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content)\/\d+$/,
       variants: ['hover'],
     },
   ],

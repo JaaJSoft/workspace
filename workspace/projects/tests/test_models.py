@@ -1,9 +1,17 @@
+from datetime import date
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
 from django.test import TestCase
 
-from workspace.projects.models import Label, Project, Task, TaskStatus
+from workspace.projects.models import (
+    Label,
+    Project,
+    Task,
+    TaskStatus,
+)
+from workspace.projects.services.tasks import create_task
 
 User = get_user_model()
 
@@ -126,3 +134,17 @@ class TaskModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Label.objects.create(project=self.project, name="bug", color="#00ff00")
+
+    def test_epic_target_date_is_optional(self):
+        from workspace.projects.models import Epic
+
+        epic = Epic.objects.create(project=self.project, name="Launch")
+        self.assertIsNone(epic.target_date)
+        dated = Epic.objects.create(
+            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        )
+        self.assertEqual(dated.target_date, date(2026, 10, 1))
+
+    def test_task_start_date_defaults_to_none(self):
+        task = create_task(self.project, self.user, title="t")
+        self.assertIsNone(task.start_date)

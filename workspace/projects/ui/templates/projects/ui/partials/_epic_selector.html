@@ -105,6 +105,11 @@ Params:
               :style="epic.color ? 'background-color: ' + epic.color : ''"
             ></span>
             <span class="text-sm min-w-0 truncate" x-text="epic.name"></span>
+            <span
+              class="text-xs opacity-60 shrink-0"
+              x-show="epic.display_date"
+              x-text="epic.display_date"
+            ></span>
           </button>
         </li>
       </template>

@@ -1,0 +1,83 @@
+{% comment %}
+Gantt Chart
+===========
+Renders the geometry produced by workspace.common.charts.gantt_chart as an
+inline SVG with a real pixel width: the caller wraps it in an
+overflow-x-auto container so long spans scroll instead of shrinking.
+
+Parameters:
+-----------
+- chart: the dict returned by gantt_chart()
+- aria_label: accessible description of what the chart shows
+
+Activating a row (click or Enter) dispatches a bubbling `gantt-row` event
+whose detail carries `{ id }`; the caller listens for it and decides what
+opening a row means. The partial itself never names a module.
+
+Every coordinate in `chart` is a pre-formatted string and the template does
+no arithmetic on purpose - see the docstring in charts.py.
+{% endcomment %}
+<svg
+  width="{{ chart.width }}"
+  height="{{ chart.height }}"
+  viewBox="0 0 {{ chart.width }} {{ chart.height }}"
+  class="block select-none"
+  role="img"
+  aria-label="{{ aria_label }}"
+  data-today-x="{% if chart.today %}{{ chart.today.x }}{% endif %}"
+>
+  {% for band in chart.bands %}
+    <rect x="{{ band.x }}" y="{{ chart.header }}" width="{{ band.width }}" height="{{ chart.height }}" class="{{ band.css_class }}">
+      <title>{{ band.label }}</title>
+    </rect>
+  {% endfor %}
+  {% for w in chart.axis.weekends %}
+    <rect x="{{ w.x }}" y="{{ chart.header }}" width="{{ w.width }}" height="{{ chart.height }}" class="fill-base-content/5" />
+  {% endfor %}
+  {% for tick in chart.axis.minors %}
+    <line x1="{{ tick.x }}" y1="{{ chart.header }}" x2="{{ tick.x }}" y2="{{ chart.height }}" class="stroke-base-content/10" stroke-width="1" />
+  {% endfor %}
+  {% for major in chart.axis.majors %}
+    <line x1="{{ major.x }}" y1="0" x2="{{ major.x }}" y2="{{ chart.height }}" class="stroke-base-content/20" stroke-width="1" />
+    <text x="{{ major.x }}" y="14" dx="4" class="fill-base-content/70" font-size="11" font-weight="500">{{ major.label }}</text>
+  {% endfor %}
+  {% for group in chart.groups %}
+    <rect x="0" y="{{ group.y }}" width="{{ chart.width }}" height="{{ group.height }}" class="fill-base-content/5" />
+    <text x="8" y="{{ group.y }}" dy="19" class="fill-base-content" font-size="12" font-weight="600">{{ group.label }}</text>
+    {% if group.sublabel %}
+      <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="6" class="fill-base-content/60" font-size="11">{{ group.sublabel }}</text>
+    {% endif %}
+    {% if group.progress %}
+      <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="-8" text-anchor="end" class="fill-base-content/60" font-size="11" font-family="ui-monospace, monospace">{{ group.progress }}</text>
+    {% endif %}
+    {% for row in group.rows %}
+      <g
+        class="cursor-pointer hover:opacity-80 focus:outline-none"
+        role="button"
+        tabindex="0"
+        data-row-id="{{ row.id }}"
+        @click="$dispatch('gantt-row', { id: $el.dataset.rowId })"
+        @keydown.enter.prevent="$dispatch('gantt-row', { id: $el.dataset.rowId })"
+      >
+        <title>{{ row.tooltip }}</title>
+        <rect x="0" y="{{ row.y }}" width="{{ chart.width }}" height="{{ chart.row_height }}" class="fill-transparent" />
+        <text x="8" y="{{ row.y }}" dy="18" class="fill-base-content/80" font-size="11">{{ row.label }}</text>
+        {% if row.kind == "bar" and row.width %}
+          <rect x="{{ row.x }}" y="{{ row.y }}" width="{{ row.width }}" height="{{ chart.bar_height }}" rx="3" class="{{ row.css_class }}" transform="translate(0 {{ chart.bar_y_offset }})" />
+        {% elif row.cx %}
+          <rect x="{{ row.cx }}" y="{{ row.cy }}" width="{{ chart.marker_size }}" height="{{ chart.marker_size }}" rx="1" class="{{ row.css_class }}" transform="translate(-3 -3) rotate(45 {{ row.cx }} {{ row.cy }})" />
+        {% endif %}
+      </g>
+    {% endfor %}
+  {% endfor %}
+  {# The translate offsets are half of the marker size in charts.py; change both together. #}
+  {% for marker in chart.markers %}
+    <line x1="{{ marker.x }}" y1="{{ marker.guide_y1 }}" x2="{{ marker.x }}" y2="{{ marker.guide_y2 }}" class="stroke-warning" stroke-width="1" stroke-dasharray="3 3" />
+    <rect x="{{ marker.x }}" y="{{ marker.y }}" width="{{ chart.marker_size }}" height="{{ chart.marker_size }}" rx="1" class="{{ marker.css_class }}" transform="translate(-3 0) rotate(45 {{ marker.x }} {{ marker.y }})">
+      <title>{{ marker.label }}</title>
+    </rect>
+  {% endfor %}
+  {% if chart.today %}
+    <line x1="{{ chart.today.x }}" y1="0" x2="{{ chart.today.x }}" y2="{{ chart.height }}" class="stroke-error" stroke-width="2" />
+  {% endif %}
+</svg>

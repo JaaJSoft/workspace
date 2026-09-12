@@ -1,4 +1,5 @@
 import math
+from datetime import timedelta
 
 # Fixed viewBox units, not pixels: the SVG scales to fill its container.
 _WIDTH = 720
@@ -264,3 +265,173 @@ def _fmt(value):
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value)
+
+
+# Gantt: unlike the charts above, the SVG has a real pixel width so a long
+# span scrolls instead of shrinking - the caller wraps it in overflow-x-auto.
+GANTT_SCALES = ("week", "month", "quarter")
+_GANTT_PX_PER_DAY = {"week": 28, "month": 9, "quarter": 3}
+_GANTT_GUTTER = 200
+_GANTT_HEADER = 40
+_GANTT_GROUP_ROW = 30
+_GANTT_ROW = 28
+_GANTT_PAD_BOTTOM = 8
+_GANTT_BAR_INSET = 7
+_GANTT_MARKER = 6
+_GANTT_LABEL_CHARS = 30
+_QUARTER_START_MONTHS = (1, 4, 7, 10)
+
+
+def gantt_chart(start, end, scale, groups, markers, bands, today):
+    """Pre-compute the SVG geometry of a grouped gantt chart.
+
+    *start*/*end* bound the axis (inclusive days), *scale* picks the pixel
+    density and the axis labelling. *groups* hold rows that are either a
+    ``bar`` (``start``..``end`` inclusive) or a ``marker`` on ``start``;
+    *markers* are diamonds on the header row with a full-height guide,
+    *bands* shaded ranges behind everything. Rows and bands are clamped to
+    the extent; markers and a *today* outside it are dropped. Coordinates
+    are fixed-precision strings, see :func:`column_chart`.
+    """
+    if scale not in _GANTT_PX_PER_DAY:
+        raise ValueError(f"Unknown gantt scale {scale!r}")
+    px = _GANTT_PX_PER_DAY[scale]
+    days = (end - start).days + 1
+    width = _GANTT_GUTTER + days * px
+    body_h = sum(_GANTT_GROUP_ROW + len(g["rows"]) * _GANTT_ROW for g in groups)
+    height = _GANTT_HEADER + body_h + _GANTT_PAD_BOTTOM
+    body_bottom = _GANTT_HEADER + body_h
+
+    def x_of(day):
+        return _GANTT_GUTTER + (day - start).days * px
+
+    def centre_of(day):
+        return x_of(day) + px / 2
+
+    def inside(day):
+        return start <= day <= end
+
+    def clamp_range(lo, hi):
+        lo, hi = max(lo, start), min(hi, end)
+        if hi < lo:
+            return None
+        return _n(x_of(lo)), _n((hi - lo).days * px + px)
+
+    drawn_bands = []
+    for band in bands:
+        span = clamp_range(band["start"], band["end"])
+        if span is not None:
+            drawn_bands.append(
+                {
+                    "x": span[0],
+                    "width": span[1],
+                    "label": band["label"],
+                    "css_class": band["css_class"],
+                }
+            )
+
+    drawn_markers = [
+        {
+            "x": _n(centre_of(m["date"])),
+            "y": _n(_GANTT_HEADER - _GANTT_MARKER - 2),
+            "label": m["label"],
+            "css_class": m["css_class"],
+            "guide_y1": _n(_GANTT_HEADER),
+            "guide_y2": _n(body_bottom),
+        }
+        for m in markers
+        if inside(m["date"])
+    ]
+
+    drawn_groups = []
+    y = _GANTT_HEADER
+    for group in groups:
+        rows = []
+        row_y = y + _GANTT_GROUP_ROW
+        for row in group["rows"]:
+            drawn = {
+                "id": row["id"],
+                "y": _n(row_y),
+                "label": _truncate(row["label"]),
+                "tooltip": row["tooltip"],
+                "css_class": row["css_class"],
+                "kind": row["kind"],
+                "x": "",
+                "width": "",
+                "cx": "",
+                "cy": _n(row_y + _GANTT_ROW / 2),
+            }
+            if row["kind"] == "bar":
+                span = clamp_range(row["start"], row["end"])
+                if span is not None:
+                    drawn["x"], drawn["width"] = span
+            elif inside(row["start"]):
+                drawn["cx"] = _n(centre_of(row["start"]))
+            rows.append(drawn)
+            row_y += _GANTT_ROW
+        drawn_groups.append(
+            {
+                "y": _n(y),
+                "height": _n(_GANTT_GROUP_ROW),
+                "label": _truncate(group["label"]),
+                "sublabel": group["sublabel"],
+                "progress": group["progress"],
+                "rows": rows,
+            }
+        )
+        y = row_y
+
+    return {
+        "width": width,
+        "height": height,
+        "gutter": _n(_GANTT_GUTTER),
+        "header": _n(_GANTT_HEADER),
+        "row_height": _n(_GANTT_ROW),
+        "bar_y_offset": _n(_GANTT_BAR_INSET),
+        "bar_height": _n(_GANTT_ROW - 2 * _GANTT_BAR_INSET),
+        "marker_size": _n(_GANTT_MARKER),
+        "axis": _gantt_axis(start, end, scale, px, x_of),
+        "bands": drawn_bands,
+        "today": {"x": _n(centre_of(today))} if inside(today) else None,
+        "markers": drawn_markers,
+        "groups": drawn_groups,
+    }
+
+
+def _gantt_axis(start, end, scale, px, x_of):
+    """Major labels, minor ticks and weekend shading for one scale.
+
+    The first day always gets a major label so a span starting mid-period
+    is still readable; after that, week scale labels Mondays and ticks
+    days, month scale labels the 1st and ticks Mondays, quarter scale
+    labels quarter starts and ticks the 1st of each month.
+    """
+    majors, minors, weekends = [], [], []
+    day = start
+    while day <= end:
+        first = day == start
+        if scale == "week":
+            minors.append({"x": _n(x_of(day))})
+            if first or day.weekday() == 0:
+                majors.append({"x": _n(x_of(day)), "label": day.strftime("%b %d")})
+            if day.weekday() >= 5:
+                weekends.append({"x": _n(x_of(day)), "width": _n(px)})
+        elif scale == "month":
+            if day.weekday() == 0:
+                minors.append({"x": _n(x_of(day))})
+            if first or day.day == 1:
+                majors.append({"x": _n(x_of(day)), "label": day.strftime("%b %Y")})
+        else:
+            if day.day == 1:
+                minors.append({"x": _n(x_of(day))})
+            if first or (day.day == 1 and day.month in _QUARTER_START_MONTHS):
+                quarter = (day.month - 1) // 3 + 1
+                majors.append({"x": _n(x_of(day)), "label": f"Q{quarter} {day.year}"})
+        day += timedelta(days=1)
+    return {"majors": majors, "minors": minors, "weekends": weekends}
+
+
+def _truncate(label):
+    if len(label) <= _GANTT_LABEL_CHARS:
+        return label
+    return label[: _GANTT_LABEL_CHARS - 1] + "…"

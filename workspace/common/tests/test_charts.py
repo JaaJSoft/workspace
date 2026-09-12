@@ -1,6 +1,8 @@
+from datetime import date
+
 from django.test import SimpleTestCase
 
-from workspace.common.charts import column_chart, line_chart
+from workspace.common.charts import column_chart, gantt_chart, line_chart
 
 
 def _series(name="Done", css_class="fill-success", values=(1, 2)):
@@ -246,3 +248,207 @@ class LineChartTests(SimpleTestCase):
         chart = line_chart(["D1"], [_line(values=(2,))])
         self.assertEqual(len(chart["series"][0]["markers"]), 1)
         self.assertEqual(chart["categories"][0]["label"], "D1")
+
+
+def _gantt(**overrides):
+    kwargs = {
+        "start": date(2026, 9, 7),
+        "end": date(2026, 9, 20),
+        "scale": "week",
+        "groups": [
+            {
+                "label": "Beta",
+                "sublabel": "Oct 1",
+                "progress": "1/2",
+                "rows": [
+                    {
+                        "id": "t1",
+                        "label": "WR-1 Build",
+                        "start": date(2026, 9, 8),
+                        "end": date(2026, 9, 10),
+                        "kind": "bar",
+                        "css_class": "fill-accent",
+                        "tooltip": "WR-1 Build",
+                    },
+                    {
+                        "id": "t2",
+                        "label": "WR-2 Ship",
+                        "start": date(2026, 9, 15),
+                        "end": None,
+                        "kind": "marker",
+                        "css_class": "fill-success",
+                        "tooltip": "WR-2 Ship",
+                    },
+                ],
+            }
+        ],
+        "markers": [
+            {"label": "Beta", "date": date(2026, 9, 18), "css_class": "fill-warning"}
+        ],
+        "bands": [
+            {
+                "label": "Sprint 1",
+                "start": date(2026, 9, 7),
+                "end": date(2026, 9, 13),
+                "css_class": "fill-info/10",
+            }
+        ],
+        "today": date(2026, 9, 9),
+    }
+    kwargs.update(overrides)
+    return gantt_chart(**kwargs)
+
+
+class GanttChartTests(SimpleTestCase):
+    def test_width_grows_with_the_span_and_the_scale(self):
+        week = _gantt()
+        quarter = _gantt(scale="quarter")
+        self.assertEqual(week["width"], int(float(week["gutter"])) + 14 * 28)
+        self.assertEqual(quarter["width"], int(float(quarter["gutter"])) + 14 * 3)
+
+    def test_height_counts_the_header_the_group_row_and_each_task_row(self):
+        chart = _gantt()
+        expected = 40 + 30 + 2 * 28 + 8
+        self.assertEqual(chart["height"], expected)
+
+    def test_bar_spans_its_days_inclusive(self):
+        row = _gantt()["groups"][0]["rows"][0]
+        gutter = float(_gantt()["gutter"])
+        self.assertEqual(float(row["x"]), gutter + 1 * 28)
+        self.assertEqual(float(row["width"]), 3 * 28)
+        self.assertEqual(row["kind"], "bar")
+
+    def test_marker_sits_in_the_middle_of_its_day(self):
+        row = _gantt()["groups"][0]["rows"][1]
+        gutter = float(_gantt()["gutter"])
+        self.assertEqual(float(row["cx"]), gutter + 8 * 28 + 14)
+        self.assertEqual(row["kind"], "marker")
+
+    def test_bar_is_clamped_to_the_extent(self):
+        chart = _gantt(
+            groups=[
+                {
+                    "label": "g",
+                    "sublabel": "",
+                    "progress": "",
+                    "rows": [
+                        {
+                            "id": "t",
+                            "label": "l",
+                            "start": date(2026, 9, 1),
+                            "end": date(2026, 9, 30),
+                            "kind": "bar",
+                            "css_class": "fill-accent",
+                            "tooltip": "l",
+                        }
+                    ],
+                }
+            ]
+        )
+        row = chart["groups"][0]["rows"][0]
+        self.assertEqual(float(row["x"]), float(chart["gutter"]))
+        self.assertEqual(float(row["width"]), 14 * 28)
+
+    def test_today_line_inside_and_outside_the_extent(self):
+        inside = _gantt()
+        self.assertEqual(
+            float(inside["today"]["x"]), float(inside["gutter"]) + 2 * 28 + 14
+        )
+        self.assertIsNone(_gantt(today=date(2027, 1, 1))["today"])
+
+    def test_milestone_marker_is_centred_on_its_day_with_a_full_height_guide(self):
+        chart = _gantt()
+        marker = chart["markers"][0]
+        self.assertEqual(float(marker["x"]), float(chart["gutter"]) + 11 * 28 + 14)
+        self.assertEqual(float(marker["guide_y2"]), chart["height"] - 8)
+        self.assertEqual(marker["label"], "Beta")
+
+    def test_marker_outside_the_extent_is_dropped(self):
+        chart = _gantt(
+            markers=[{"label": "Far", "date": date(2027, 1, 1), "css_class": "x"}]
+        )
+        self.assertEqual(chart["markers"], [])
+
+    def test_band_covers_its_days_and_is_clamped(self):
+        chart = _gantt(
+            bands=[
+                {
+                    "label": "S",
+                    "start": date(2026, 9, 1),
+                    "end": date(2026, 9, 13),
+                    "css_class": "fill-info/10",
+                }
+            ]
+        )
+        band = chart["bands"][0]
+        self.assertEqual(float(band["x"]), float(chart["gutter"]))
+        self.assertEqual(float(band["width"]), 7 * 28)
+
+    def test_week_scale_labels_every_monday_and_ticks_every_day(self):
+        axis = _gantt()["axis"]
+        self.assertEqual([m["label"] for m in axis["majors"]], ["Sep 07", "Sep 14"])
+        self.assertEqual(len(axis["minors"]), 14)
+        self.assertEqual(len(axis["weekends"]), 4)
+
+    def test_month_scale_labels_months_and_ticks_mondays(self):
+        axis = _gantt(scale="month", start=date(2026, 9, 1), end=date(2026, 10, 31))[
+            "axis"
+        ]
+        self.assertEqual([m["label"] for m in axis["majors"]], ["Sep 2026", "Oct 2026"])
+        self.assertEqual(len(axis["minors"]), 8)
+        self.assertEqual(axis["weekends"], [])
+
+    def test_quarter_scale_labels_quarters_and_ticks_months(self):
+        axis = _gantt(scale="quarter", start=date(2026, 9, 1), end=date(2027, 1, 31))[
+            "axis"
+        ]
+        self.assertEqual(
+            [m["label"] for m in axis["majors"]], ["Q3 2026", "Q4 2026", "Q1 2027"]
+        )
+        self.assertEqual(len(axis["minors"]), 5)
+
+    def test_first_partial_period_still_gets_a_major_label(self):
+        axis = _gantt(start=date(2026, 9, 9), end=date(2026, 9, 20))["axis"]
+        self.assertEqual(axis["majors"][0]["label"], "Sep 09")
+
+    def test_long_labels_are_truncated_with_an_ellipsis(self):
+        chart = _gantt(
+            groups=[
+                {
+                    "label": "g",
+                    "sublabel": "",
+                    "progress": "",
+                    "rows": [
+                        {
+                            "id": "t",
+                            "label": "x" * 60,
+                            "start": date(2026, 9, 8),
+                            "end": None,
+                            "kind": "marker",
+                            "css_class": "fill-accent",
+                            "tooltip": "long",
+                        }
+                    ],
+                }
+            ]
+        )
+        label = chart["groups"][0]["rows"][0]["label"]
+        self.assertEqual(len(label), 30)
+        self.assertTrue(label.endswith("…"))
+
+    def test_unknown_scale_raises(self):
+        with self.assertRaises(ValueError):
+            _gantt(scale="decade")
+
+    def test_coordinates_are_strings_so_templates_cannot_localize_them(self):
+        chart = _gantt()
+        row = chart["groups"][0]["rows"][0]
+        for value in (
+            row["x"],
+            row["y"],
+            row["width"],
+            chart["today"]["x"],
+            chart["gutter"],
+        ):
+            self.assertIsInstance(value, str)
+            self.assertNotIn(",", value)

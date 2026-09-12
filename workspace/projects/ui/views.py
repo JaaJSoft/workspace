@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.common.charts import column_chart, line_chart
+from workspace.common.charts import column_chart, gantt_chart, line_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
@@ -45,6 +45,7 @@ from workspace.projects.services.history import (
     velocity_summary,
 )
 from workspace.projects.services.links import annotate_blocked, links_for_task
+from workspace.projects.services.milestones import milestones_with_progress
 from workspace.projects.services.notification_levels import module_level
 from workspace.projects.services.projects import get_or_create_personal_project
 from workspace.projects.services.references import REFERENCE_RE
@@ -53,6 +54,11 @@ from workspace.projects.services.task_filters import (
     TaskFilterError,
     apply_task_filters,
     task_filters_active,
+)
+from workspace.projects.services.timeline import (
+    build_timeline,
+    coerce_grouping,
+    coerce_scale,
 )
 from workspace.projects.tasks import reminder_hour
 from workspace.users.services.settings import get_setting, set_setting
@@ -67,6 +73,7 @@ VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
 VIEW_TASKS = "tasks"
+VIEW_TIMELINE = "timeline"
 VIEW_ANALYTICS = "analytics"
 VIEW_SETTINGS = "settings"
 
@@ -634,6 +641,80 @@ def all_tasks(request, project_uuid):
     context["tasks_truncated"] = truncated
     context["task_render_limit"] = TASK_RENDER_LIMIT
     return _render_project_view(request, context)
+
+
+SCALE_OPTIONS = [("week", "Week"), ("month", "Month"), ("quarter", "Quarter")]
+GROUP_OPTIONS = [("milestone", "Milestone"), ("epic", "Epic")]
+
+
+@login_required
+@ensure_csrf_cookie
+def timeline(request, project_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_TIMELINE)
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
+    scale = coerce_scale(request.GET.get("scale"))
+    grouping = coerce_grouping(request.GET.get("group"))
+    try:
+        tasks, truncated = _filtered_tasks(
+            request,
+            project.tasks.select_related("project", "status", "epic", "milestone"),
+        )
+    except TaskFilterError as exc:
+        return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
+    milestones = list(milestones_with_progress(project))
+    sprints = list(project.sprints.all()) if project.type == Project.Type.SCRUM else []
+    result = build_timeline(
+        tasks,
+        milestones,
+        sprints,
+        group=grouping,
+        scale=scale,
+        today=context["today"],
+    )
+    has_rows = any(group["rows"] for group in result["groups"])
+    context.update(
+        {
+            "scale": scale,
+            "grouping": grouping,
+            "scale_options": [
+                (value, label, _with_param(request, "scale", value))
+                for value, label in SCALE_OPTIONS
+            ],
+            "group_options": [
+                (value, label, _with_param(request, "group", value))
+                for value, label in GROUP_OPTIONS
+            ],
+            "timeline": result,
+            "timeline_is_empty": not has_rows
+            and not milestones
+            and not result["bands"],
+            "timeline_chart": gantt_chart(
+                result["start"],
+                result["end"],
+                scale,
+                result["groups"],
+                result["markers"],
+                result["bands"],
+                context["today"],
+            ),
+            "filters_active": task_filters_active(request.GET),
+            "tasks_truncated": truncated,
+            "task_render_limit": TASK_RENDER_LIMIT,
+        }
+    )
+    return _render_project_view(request, context)
+
+
+def _with_param(request, key, value):
+    """The current URL with one query parameter replaced, every other one
+    kept, so a zoom or grouping change never drops the active filters."""
+    params = request.GET.copy()
+    params[key] = value
+    return f"{request.path}?{params.urlencode()}"
 
 
 @login_required

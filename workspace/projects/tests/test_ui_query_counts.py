@@ -103,3 +103,44 @@ class TaskDeepLinkQueryCountTests(ProjectTestMixin, TestCase):
             1,
             f"project_users costs two queries; it ran {spy.call_count} times",
         )
+
+
+class TimelineQueryCountTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("projects_ui:timeline", args=[self.project.uuid])
+        self.client.force_login(self.admin)
+        from datetime import date
+
+        from workspace.projects.models import Milestone
+
+        self.milestones = [
+            Milestone.objects.create(
+                project=self.project, name=f"M{i}", target_date=date(2026, 10, i + 1)
+            )
+            for i in range(3)
+        ]
+        self.epic = self.project.epics.create(name="E")
+
+    def _add_tasks(self, count):
+        from datetime import date
+
+        for i in range(count):
+            create_task(
+                self.project,
+                self.admin,
+                title=f"T{i}",
+                due_date=date(2026, 9, 20),
+                milestone=self.milestones[i % 3],
+                epic=self.epic,
+            )
+
+    def test_query_count_does_not_scale_with_task_count(self):
+        self._add_tasks(2)
+        self.client.get(self.url)  # warm the per-user settings cache
+        with CaptureQueriesContext(connection) as small:
+            self.client.get(self.url)
+        self._add_tasks(6)
+        with CaptureQueriesContext(connection) as large:
+            self.client.get(self.url)
+        self.assertEqual(len(small.captured_queries), len(large.captured_queries))

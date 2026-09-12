@@ -14,7 +14,12 @@ const ctx = loadScripts(
     'workspace/common/static/ui/js/attachment_input.js',
     'workspace/projects/ui/static/projects/ui/js/board.js',
   ],
-  { ...CUSTOM_ELEMENT_STUBS, URL, sidebarPreference: { initial: () => false, save: () => {} } }
+  {
+    ...CUSTOM_ELEMENT_STUBS,
+    URL,
+    URLSearchParams,
+    sidebarPreference: { initial: () => false, save: () => {} },
+  }
 );
 
 function fakeList(uuids) {
@@ -1133,6 +1138,42 @@ test('onPopState recognizes the analytics view', () => {
   });
   board.onPopState();
   assert.equal(board.currentView, 'analytics');
+});
+
+test('onPopState recognizes the timeline view', () => {
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.location = {
+    pathname: '/projects/p/timeline',
+    href: 'http://x.test/projects/p/timeline',
+  };
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.onPopState();
+  assert.equal(board.currentView, 'timeline');
+});
+
+test('refresh targets the timeline partial with scale and group when viewing timeline', () => {
+  ctx.sidebarPreference = { initial: () => false, save: () => {} };
+  ctx.location = {
+    origin: 'http://x.test',
+    href: 'http://x.test/projects/p/timeline?scale=quarter&group=epic',
+  };
+  const calls = [];
+  const board = ctx.projectBoard({
+    apiBase: '/api',
+    projectBase: '/projects/p',
+    writable: true,
+  });
+  board.currentView = 'timeline';
+  board.$ajax = (url) => calls.push(url);
+  board.refresh();
+  assert.deepStrictEqual(
+    Array.from(calls),
+    ['/projects/p/timeline?scale=quarter&group=epic']
+  );
 });
 
 function keydownBoard() {

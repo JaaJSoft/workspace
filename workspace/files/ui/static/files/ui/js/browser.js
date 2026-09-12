@@ -1499,6 +1499,11 @@ window.fileBrowser = function fileBrowser() {
           .catch((err) => window.AppAlert.error(err.message || 'Failed to create group folder'));
       });
 
+      // The sidebar's Tags section lives outside this component and asks
+      // for the dialogs it cannot open itself.
+      window.addEventListener('open-tag-manager', () => this.openTagManager());
+      window.addEventListener('open-tag-dialog', () => this.showTagModal());
+
       // Tag chips are rendered server-side in the listing, so any tag edit
       // or assignment needs a re-render. Debounced: ticking several
       // checkboxes in a row should cost one swap, not one per click.

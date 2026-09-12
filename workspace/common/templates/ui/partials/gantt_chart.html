@@ -23,8 +23,13 @@ Every coordinate in `chart` is a pre-formatted string and the template does
 no arithmetic on purpose - see the docstring in charts.py. Row/band/marker
 coordinates already include the gutter offset, so they draw correctly
 unmodified in the plot SVG's viewBox (which starts at x=gutter).
+
+The outer row is `w-max` and the plot SVG is `shrink-0`: without both, a flex
+child's `width` attribute is treated as a flex-basis, so a wide plot gets
+squeezed down to fit the scroll box instead of overflowing it, which is the
+one thing this layout exists to prevent.
 {% endcomment %}
-<div class="flex items-stretch" role="group" aria-label="{{ aria_label }}">
+<div class="flex items-stretch w-max" role="group" aria-label="{{ aria_label }}">
   <div class="sticky left-0 z-10 shrink-0 bg-base-100 border-r border-base-300">
     <svg
       width="{{ chart.gutter }}"
@@ -59,7 +64,7 @@ unmodified in the plot SVG's viewBox (which starts at x=gutter).
     width="{{ chart.plot_width }}"
     height="{{ chart.height }}"
     viewBox="{{ chart.gutter }} 0 {{ chart.plot_width }} {{ chart.height }}"
-    class="block select-none"
+    class="block select-none shrink-0"
     data-today-x="{% if chart.today %}{{ chart.today.plot_x }}{% endif %}"
   >
     {% for band in chart.bands %}

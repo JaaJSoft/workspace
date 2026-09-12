@@ -6,7 +6,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from workspace.projects.models import Milestone, Project, Sprint, TaskStatus
+from workspace.projects.models import Project, Sprint, TaskStatus
 from workspace.projects.queries import project_users
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
@@ -111,13 +111,10 @@ class TimelineQueryCountTests(ProjectTestMixin, TestCase):
         super().setUp()
         self.url = reverse("projects_ui:timeline", args=[self.project.uuid])
         self.client.force_login(self.admin)
-        self.milestones = [
-            Milestone.objects.create(
-                project=self.project, name=f"M{i}", target_date=date(2026, 10, i + 1)
-            )
+        self.epics = [
+            self.project.epics.create(name=f"E{i}", target_date=date(2026, 10, i + 1))
             for i in range(3)
         ]
-        self.epic = self.project.epics.create(name="E")
 
     def _add_tasks(self, count):
         for i in range(count):
@@ -126,8 +123,7 @@ class TimelineQueryCountTests(ProjectTestMixin, TestCase):
                 self.admin,
                 title=f"T{i}",
                 due_date=date(2026, 9, 20),
-                milestone=self.milestones[i % 3],
-                epic=self.epic,
+                epic=self.epics[i % 3],
             )
 
     def test_query_count_does_not_scale_with_task_count(self):

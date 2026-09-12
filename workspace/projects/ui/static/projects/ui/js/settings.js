@@ -696,7 +696,7 @@ function projectEpics(config) {
     query: '',
     openOnly: false,
     adding: false,
-    addForm: { name: '', color: '', description: '' },
+    addForm: { name: '', color: '', target_date: '', description: '' },
     editing: null,
     editName: '',
     editingDesc: null,
@@ -717,7 +717,19 @@ function projectEpics(config) {
       // this.epics is the parent projectBoard's array via Alpine's scope
       // chain (same shape as the epics-data payload).
       this.epics = this.items.map(function (e) {
-        return { uuid: e.uuid, name: e.name, color: e.color, closed: e.closed };
+        return {
+          uuid: e.uuid,
+          name: e.name,
+          color: e.color,
+          closed: e.closed,
+          target_date: e.target_date || null,
+          display_date: e.target_date
+            ? new Date(e.target_date + 'T00:00:00').toLocaleDateString('en', {
+                month: 'short',
+                day: '2-digit',
+              })
+            : '',
+        };
       });
     },
 
@@ -731,7 +743,10 @@ function projectEpics(config) {
             return {};
           });
           throw new Error(
-            data.detail || (data.name && data.name[0]) || 'Request failed.'
+            data.detail ||
+              (data.name && data.name[0]) ||
+              (data.target_date && data.target_date[0]) ||
+              'Request failed.'
           );
         }
         return resp;
@@ -743,6 +758,13 @@ function projectEpics(config) {
     progressPercent(epic) {
       if (!epic.task_count) return 0;
       return Math.round((epic.done_task_count / epic.task_count) * 100);
+    },
+
+    // ISO dates compare as strings; config.today is injected for tests and
+    // defaults to the browser's local date.
+    isOverdue(epic) {
+      const today = config.today || new Date().toLocaleDateString('sv');
+      return !epic.closed && !!epic.target_date && epic.target_date < today;
     },
 
     // List filter: quick name search + "open only" switch. Purely visual -
@@ -764,12 +786,13 @@ function projectEpics(config) {
           body: JSON.stringify({
             name: this.addForm.name.trim(),
             color: this.addForm.color,
+            target_date: this.addForm.target_date || null,
             description: this.addForm.description.trim(),
           }),
         });
         this.items.push(await resp.json());
         this.adding = false;
-        this.addForm = { name: '', color: '', description: '' };
+        this.addForm = { name: '', color: '', target_date: '', description: '' };
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;
@@ -857,6 +880,24 @@ function projectEpics(config) {
       }
     },
 
+    // Empty string clears the date (PATCH null); the value is unchanged
+    // for the browser's own no-op change event.
+    async setTargetDate(epic, value) {
+      const targetDate = value || null;
+      if (targetDate === epic.target_date) return;
+      try {
+        await this.request(config.apiBase + '/epics/' + epic.uuid, {
+          method: 'PATCH',
+          headers: settingsHeaders(),
+          body: JSON.stringify({ target_date: targetDate }),
+        });
+        epic.target_date = targetDate;
+        this.syncBoardEpics();
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
     async removeEpic(epic) {
       const ok = await AppDialog.confirm({
         title: 'Delete epic',
@@ -879,225 +920,6 @@ function projectEpics(config) {
           return e.uuid !== epic.uuid;
         });
         this.syncBoardEpics();
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-  };
-}
-
-function projectMilestones(config) {
-  return {
-    items: [],
-    query: '',
-    openOnly: false,
-    adding: false,
-    addForm: { name: '', target_date: '', description: '' },
-    editing: null,
-    editName: '',
-    editingDesc: null,
-    descDraft: '',
-    busy: false,
-    error: '',
-
-    async init() {
-      try {
-        const resp = await fetch(config.apiBase + '/milestones');
-        if (resp.ok) this.items = await resp.json();
-      } catch (e) {
-        this.error = 'Could not load milestones.';
-      }
-    },
-
-    syncBoardMilestones() {
-      // this.milestones is the parent projectBoard's array via Alpine's
-      // scope chain (same shape as the milestones-data payload).
-      this.milestones = this.items.map(function (m) {
-        return {
-          uuid: m.uuid,
-          name: m.name,
-          target_date: m.target_date,
-          display_date: new Date(m.target_date + 'T00:00:00').toLocaleDateString(
-            'en',
-            { month: 'short', day: '2-digit' }
-          ),
-          closed: m.closed,
-        };
-      });
-    },
-
-    async request(url, options) {
-      this.busy = true;
-      this.error = '';
-      try {
-        const resp = await fetch(url, options);
-        if (!resp.ok) {
-          const data = await resp.json().catch(function () {
-            return {};
-          });
-          throw new Error(
-            data.detail ||
-              (data.name && data.name[0]) ||
-              (data.target_date && data.target_date[0]) ||
-              'Request failed.'
-          );
-        }
-        return resp;
-      } finally {
-        this.busy = false;
-      }
-    },
-
-    progressPercent(milestone) {
-      if (!milestone.task_count) return 0;
-      return Math.round((milestone.done_task_count / milestone.task_count) * 100);
-    },
-
-    // ISO dates compare as strings; config.today is injected for tests and
-    // defaults to the browser's local date.
-    isOverdue(milestone) {
-      const today = config.today || new Date().toLocaleDateString('sv');
-      return !milestone.closed && milestone.target_date < today;
-    },
-
-    visibleMilestones() {
-      const needle = this.query.trim().toLowerCase();
-      return this.items.filter(
-        (m) =>
-          (!this.openOnly || !m.closed) &&
-          (!needle || m.name.toLowerCase().includes(needle))
-      );
-    },
-
-    async addMilestone() {
-      try {
-        const resp = await this.request(config.apiBase + '/milestones', {
-          method: 'POST',
-          headers: settingsHeaders(),
-          body: JSON.stringify({
-            name: this.addForm.name.trim(),
-            target_date: this.addForm.target_date,
-            description: this.addForm.description.trim(),
-          }),
-        });
-        this.items.push(await resp.json());
-        this.items.sort((a, b) =>
-          a.target_date === b.target_date
-            ? a.name.localeCompare(b.name)
-            : a.target_date.localeCompare(b.target_date)
-        );
-        this.adding = false;
-        this.addForm = { name: '', target_date: '', description: '' };
-        this.syncBoardMilestones();
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-
-    startEdit(milestone) {
-      this.editing = milestone.uuid;
-      this.editName = milestone.name;
-    },
-
-    async saveEdit(milestone) {
-      if (this.editing !== milestone.uuid) return;
-      const name = this.editName.trim();
-      if (!name || name === milestone.name) {
-        this.editing = null;
-        return;
-      }
-      try {
-        await this.request(config.apiBase + '/milestones/' + milestone.uuid, {
-          method: 'PATCH',
-          headers: settingsHeaders(),
-          body: JSON.stringify({ name: name }),
-        });
-        milestone.name = name;
-        this.editing = null;
-        this.syncBoardMilestones();
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-
-    async setTargetDate(milestone, value) {
-      if (!value || value === milestone.target_date) return;
-      try {
-        await this.request(config.apiBase + '/milestones/' + milestone.uuid, {
-          method: 'PATCH',
-          headers: settingsHeaders(),
-          body: JSON.stringify({ target_date: value }),
-        });
-        milestone.target_date = value;
-        this.syncBoardMilestones();
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-
-    startDescEdit(milestone) {
-      this.editingDesc = milestone.uuid;
-      this.descDraft = milestone.description || '';
-    },
-
-    async saveDescEdit(milestone) {
-      if (this.editingDesc !== milestone.uuid) return;
-      const description = this.descDraft.trim();
-      if (description === (milestone.description || '')) {
-        this.editingDesc = null;
-        return;
-      }
-      try {
-        await this.request(config.apiBase + '/milestones/' + milestone.uuid, {
-          method: 'PATCH',
-          headers: settingsHeaders(),
-          body: JSON.stringify({ description: description }),
-        });
-        milestone.description = description;
-        // Only a successful save closes the editor: on failure the open
-        // textarea is what keeps the user's draft from being lost.
-        this.editingDesc = null;
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-
-    async toggleClosed(milestone) {
-      try {
-        await this.request(config.apiBase + '/milestones/' + milestone.uuid, {
-          method: 'PATCH',
-          headers: settingsHeaders(),
-          body: JSON.stringify({ closed: !milestone.closed }),
-        });
-        milestone.closed = !milestone.closed;
-        this.syncBoardMilestones();
-      } catch (e) {
-        this.error = e.message;
-      }
-    },
-
-    async removeMilestone(milestone) {
-      const ok = await AppDialog.confirm({
-        title: 'Delete milestone',
-        message:
-          '"' +
-          milestone.name +
-          '" will be deleted; its tasks are kept and ungrouped.',
-        okLabel: 'Delete',
-        okClass: 'btn-error',
-        icon: 'trash-2',
-        iconClass: 'bg-error/10 text-error',
-      });
-      if (!ok) return;
-      try {
-        await this.request(config.apiBase + '/milestones/' + milestone.uuid, {
-          method: 'DELETE',
-          headers: settingsHeaders(),
-        });
-        this.items = this.items.filter(function (m) {
-          return m.uuid !== milestone.uuid;
-        });
-        this.syncBoardMilestones();
       } catch (e) {
         this.error = e.message;
       }
@@ -1460,7 +1282,6 @@ window.projectSettingsDanger = projectSettingsDanger;
 window.projectColumns = projectColumns;
 window.projectLabels = projectLabels;
 window.projectEpics = projectEpics;
-window.projectMilestones = projectMilestones;
 window.projectSprints = projectSprints;
 window.projectMembers = projectMembers;
 window.projectSettingsHelpers = {

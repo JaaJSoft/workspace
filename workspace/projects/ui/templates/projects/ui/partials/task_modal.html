@@ -94,13 +94,6 @@
           <div class="label"><span class="label-text">Epic</span></div>
           {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
         </div>
-        <div
-          class="form-control col-span-2"
-          {% if role != "admin" %}x-show="openMilestones().length" x-cloak{% endif %}
-        >
-          <div class="label"><span class="label-text">Milestone</span></div>
-          {% include "projects/ui/partials/_milestone_selector.html" with model_expr="form.milestone" label="Milestone" %}
-        </div>
       </div>
       <div
         class="mt-2"

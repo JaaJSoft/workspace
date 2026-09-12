@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.projects.models import Milestone, Project, Sprint
+from workspace.projects.models import Project, Sprint
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 from workspace.projects.ui.views import TASK_RENDER_LIMIT
@@ -17,8 +17,7 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         super().setUp()
         self.url = f"/projects/{self.project.uuid}/timeline"
         self.today = timezone.localdate()
-        self.beta = Milestone.objects.create(
-            project=self.project,
+        self.beta = self.project.epics.create(
             name="Beta",
             target_date=self.today + timedelta(days=19),
         )
@@ -70,12 +69,11 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.member)
         self.assertEqual(self.client.get(self.url, {"epic": "nope"}).status_code, 400)
 
-    def test_unknown_scale_and_group_fall_back_to_defaults(self):
+    def test_unknown_scale_falls_back_to_the_default(self):
         self.client.force_login(self.member)
-        resp = self.client.get(self.url, {"scale": "decade", "group": "colour"})
+        resp = self.client.get(self.url, {"scale": "decade"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["scale"], "week")
-        self.assertEqual(resp.context["grouping"], "milestone")
 
     def test_scale_links_keep_the_filters(self):
         self.client.force_login(self.member)
@@ -100,15 +98,14 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, "1 task has no dates")
         self.assertContains(resp, "1 task falls outside")
 
-    def test_far_milestone_is_reported_as_clipped(self):
-        Milestone.objects.create(
-            project=self.project,
+    def test_far_epic_is_reported_as_clipped(self):
+        self.project.epics.create(
             name="Far",
             target_date=self.today + timedelta(days=1600),
         )
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
-        self.assertContains(resp, "1 milestone falls outside")
+        self.assertContains(resp, "1 epic falls outside")
 
     def test_render_cap_notice(self):
         for i in range(TASK_RENDER_LIMIT + 1):
@@ -122,11 +119,16 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(self.url)
         self.assertContains(resp, f"Only the first {TASK_RENDER_LIMIT} tasks")
 
-    def test_empty_state_without_dated_tasks_or_milestones(self):
+    def test_empty_state_without_dated_tasks_or_epics(self):
         self.beta.delete()
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertContains(resp, "Nothing to place on the timeline yet")
+
+    def test_group_toggle_is_gone(self):
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertNotContains(resp, 'aria-label="Group by"')
 
     def test_sprint_bands_only_on_scrum(self):
         scrum = create_project(self.admin, name="S", project_type=Project.Type.SCRUM)

@@ -466,29 +466,13 @@ test('fieldAction maps each editable field to its action id', () => {
   }
 });
 
-test('fieldAction maps the milestone and start date to their actions', () => {
-  assert.equal(ctx.projectBoardHelpers.fieldAction('milestone'), 'set_milestone');
+test('fieldAction maps start date to its action', () => {
   assert.equal(ctx.projectBoardHelpers.fieldAction('start_date'), 'set_due');
 });
 
-test('emptyTaskForm carries start_date and milestone', () => {
+test('emptyTaskForm carries start_date', () => {
   const form = { ...ctx.projectBoardHelpers.emptyTaskForm() };
   assert.equal(form.start_date, '');
-  assert.equal(form.milestone, '');
-});
-
-test('openMilestones hides closed milestones but milestoneName resolves them', () => {
-  const board = ctx.projectBoard({ apiBase: '/x', projectBase: '/p' });
-  board.milestones = [
-    { uuid: 'm1', name: 'Beta', target_date: '2026-10-01', closed: false },
-    { uuid: 'm2', name: 'Old', target_date: '2026-01-01', closed: true },
-  ];
-  assert.deepStrictEqual(
-    Array.from(board.openMilestones()).map((m) => m.uuid),
-    ['m1']
-  );
-  assert.equal(board.milestoneName('m2'), 'Old');
-  assert.equal(board.milestoneName('nope'), 'Unknown milestone');
 });
 
 function panelWithActions(actions, calls) {

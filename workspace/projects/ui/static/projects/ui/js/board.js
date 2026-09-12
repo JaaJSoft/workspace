@@ -31,7 +31,6 @@ function fieldAction(field) {
     assignees: 'assign',
     labels: 'set_labels',
     epic: 'set_epic',
-    milestone: 'set_milestone',
   };
   return map[field] || 'edit';
 }
@@ -92,7 +91,6 @@ function emptyTaskForm() {
     assignees: [],
     labels: [],
     epic: '',
-    milestone: '',
   };
 }
 
@@ -288,7 +286,6 @@ function projectBoard(config) {
     members: [],
     labels: [],
     epics: [],
-    milestones: [],
     form: emptyTaskForm(),
     formError: '',
     panelTaskUuid: config.initialTask || null,
@@ -323,9 +320,6 @@ function projectBoard(config) {
       );
       this.epics = JSON.parse(
         document.getElementById('epics-data').textContent
-      );
-      this.milestones = JSON.parse(
-        document.getElementById('milestones-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
 
@@ -1040,21 +1034,6 @@ function projectBoard(config) {
       return this.epics.filter((e) => !e.closed);
     },
 
-    milestoneById(uuid) {
-      return this.milestones.find((m) => m.uuid === uuid) || null;
-    },
-
-    milestoneName(uuid) {
-      const milestone = this.milestoneById(uuid);
-      return milestone ? milestone.name : 'Unknown milestone';
-    },
-
-    // Feeds the milestone dropdown rows; closed milestones still resolve
-    // by uuid so a task keeps showing the one it carries.
-    openMilestones() {
-      return this.milestones.filter((m) => !m.closed);
-    },
-
     // Inline create from the epic dropdown (admins; the server enforces it).
     // Pushing into the shared list is what makes the new epic show up in
     // every picker and filter without a reload.
@@ -1105,7 +1084,6 @@ function projectBoard(config) {
             assignees: this.form.assignees,
             labels: this.form.labels,
             epic: this.form.epic || null,
-            milestone: this.form.milestone || null,
           }),
         });
         if (!resp.ok) {
@@ -1142,7 +1120,6 @@ function taskPanel() {
       assignees: [],
       labels: [],
       epic: '',
-      milestone: '',
     },
     editing: null,
     draft: '',
@@ -1212,12 +1189,6 @@ function taskPanel() {
       if (epicsEl && Array.isArray(this.epics)) {
         const freshEpics = JSON.parse(epicsEl.textContent);
         this.epics.splice(0, this.epics.length, ...freshEpics);
-      }
-      // Same shell-refresh dance for the milestones list.
-      const milestonesEl = document.getElementById('panel-milestones-data');
-      if (milestonesEl && Array.isArray(this.milestones)) {
-        const freshMilestones = JSON.parse(milestonesEl.textContent);
-        this.milestones.splice(0, this.milestones.length, ...freshMilestones);
       }
       this._commentCount = Number(this.$el.dataset.commentCount || 0);
       this._activityCount = Number(this.$el.dataset.activityCount || 0);

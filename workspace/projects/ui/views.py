@@ -121,10 +121,8 @@ def overview(request, project_uuid):
     )
     context.update(counts)
     epics = list(epics_with_progress(project))
-    context["open_milestones"] = [e for e in epics if e.target_date and not e.is_closed]
-    context["closed_milestone_count"] = len(
-        [e for e in epics if e.target_date and e.is_closed]
-    )
+    context["open_epics"] = [e for e in epics if not e.is_closed]
+    context["closed_epic_count"] = len([e for e in epics if e.is_closed])
     context["recent_events"] = events_for_project(project)
     return _render_project_view(request, context)
 
@@ -212,7 +210,6 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
-        "milestones_data": _milestones_data(project),
         "members_data": [
             {
                 "id": str(u.pk),
@@ -257,23 +254,12 @@ def _epics_data(project):
             "name": epic.name,
             "color": epic.color,
             "closed": epic.is_closed,
+            "target_date": epic.target_date.isoformat() if epic.target_date else "",
+            "display_date": epic.target_date.strftime("%b %d")
+            if epic.target_date
+            else "",
         }
         for epic in project.epics.all()
-    ]
-
-
-def _milestones_data(project):
-    # closed rides along so the pickers can offer open milestones only
-    # while closed ones still resolve to a name on the panel trigger.
-    return [
-        {
-            "uuid": str(m.uuid),
-            "name": m.name,
-            "target_date": m.target_date.isoformat(),
-            "display_date": m.target_date.strftime("%b %d"),
-            "closed": m.is_closed,
-        }
-        for m in project.milestones.all()
     ]
 
 
@@ -382,7 +368,6 @@ def _task_panel_context(user, project, role, task, *, members=None):
             ],
             "labels": [str(label.uuid) for label in task.labels.all()],
             "epic": str(task.epic_id) if task.epic_id else "",
-            "milestone": str(task.milestone_id) if task.milestone_id else "",
             "subtasks": [
                 {"uuid": str(s.uuid), "title": s.title, "done": s.done}
                 for s in task.subtasks.all()
@@ -413,7 +398,6 @@ def task_panel(request, project_uuid, task_uuid):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
-        "milestones_data": _milestones_data(project),
     }
     context.update(_task_panel_context(request.user, project, role, task))
     return render(request, "projects/ui/partials/task_panel.html", context)
@@ -664,7 +648,6 @@ def all_tasks(request, project_uuid):
 
 
 SCALE_OPTIONS = [("week", "Week"), ("month", "Month"), ("quarter", "Quarter")]
-GROUP_OPTIONS = [("milestone", "Milestone"), ("epic", "Epic")]
 
 
 @login_required
@@ -677,7 +660,6 @@ def timeline(request, project_uuid):
         status__category=TaskStatus.Category.BACKLOG
     ).count()
     scale = coerce_scale(request.GET.get("scale"))
-    grouping = "epic"
     try:
         tasks, truncated = _filtered_tasks(
             request,
@@ -685,11 +667,11 @@ def timeline(request, project_uuid):
         )
     except TaskFilterError as exc:
         return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
-    milestones = list(epics_with_progress(project))
+    epics = list(epics_with_progress(project))
     sprints = list(project.sprints.all()) if project.type == Project.Type.SCRUM else []
     result = build_timeline(
         tasks,
-        milestones,
+        epics,
         sprints,
         scale=scale,
         today=context["today"],
@@ -698,19 +680,12 @@ def timeline(request, project_uuid):
     context.update(
         {
             "scale": scale,
-            "grouping": grouping,
             "scale_options": [
                 (value, label, _with_param(request, "scale", value))
                 for value, label in SCALE_OPTIONS
             ],
-            "group_options": [
-                (value, label, _with_param(request, "group", value))
-                for value, label in GROUP_OPTIONS
-            ],
             "timeline": result,
-            "timeline_is_empty": not has_rows
-            and not milestones
-            and not result["bands"],
+            "timeline_is_empty": not has_rows and not epics and not result["bands"],
             "timeline_chart": gantt_chart(
                 result["start"],
                 result["end"],

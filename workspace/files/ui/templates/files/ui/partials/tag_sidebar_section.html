@@ -52,8 +52,10 @@ Parameters:
             class="group flex items-center hover:bg-base-300/50 text-base rounded-lg transition-colors"
             :class="[
               {{ ce }} ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
-              isTagViewActive(tag) ? '{{ active }}' : 'text-base-content/70'
+              isTagViewActive(tag) ? (tag.color ? '' : '{{ active }}') : 'text-base-content/70'
             ]"
+            {# The active row wears the tag's own color; the palette is 6-digit hex, so '1a' is a 10% alpha. #}
+            :style="isTagViewActive(tag) && tag.color ? { backgroundColor: tag.color + '1a', color: tag.color } : {}"
             :title="{{ ce }} ? tag.name : ''"
           >
             <i

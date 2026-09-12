@@ -66,3 +66,45 @@ class SettingsMilestonesCardTests(SettingsCleanupMixin, ProjectTestMixin, TestCa
         self.assertContains(resp, 'id="settings-milestones"')
         self.assertContains(resp, "projectMilestones(")
         self.assertContains(resp, "Add milestone")
+
+
+class OverviewMilestonesTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    @property
+    def url(self):
+        return f"/projects/{self.project.uuid}"
+
+    def test_section_hidden_without_milestones(self):
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.url), 'id="overview-milestones"')
+
+    def test_open_milestones_listed_with_progress_and_closed_count(self):
+        beta = Milestone.objects.create(
+            project=self.project, name="Beta", target_date=date(2026, 10, 1)
+        )
+        old = Milestone.objects.create(
+            project=self.project, name="Alpha", target_date=date(2026, 1, 1)
+        )
+        old.is_closed = True
+        old.save(update_fields=["closed_at"])
+        done = self.project.statuses.get(name="Done")
+        for status_ in (None, done):
+            task = create_task(self.project, self.admin, title="t", status=status_)
+            task.milestone = beta
+            task.save(update_fields=["milestone"])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'id="overview-milestones"')
+        self.assertContains(resp, "Beta")
+        self.assertContains(resp, "1/2 done")
+        self.assertContains(resp, "1 completed milestone")
+        self.assertNotContains(resp, ">Alpha<")
+
+    def test_overdue_open_milestone_is_tinted(self):
+        Milestone.objects.create(
+            project=self.project, name="Late", target_date=date(2000, 1, 1)
+        )
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        html = resp.content.decode()
+        section = html.split('id="overview-milestones"')[1].split("</section>")[0]
+        self.assertIn("text-error", section)

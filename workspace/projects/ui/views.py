@@ -124,6 +124,11 @@ def overview(request, project_uuid):
         done_count=Count("uuid", filter=Q(status__category=TaskStatus.Category.DONE)),
     )
     context.update(counts)
+    milestones = list(milestones_with_progress(project))
+    context["open_milestones"] = [m for m in milestones if not m.is_closed]
+    context["closed_milestone_count"] = len(milestones) - len(
+        context["open_milestones"]
+    )
     context["recent_events"] = events_for_project(project)
     return _render_project_view(request, context)
 

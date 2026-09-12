@@ -98,6 +98,36 @@
         </ul>
       </section>
 
+      {% if open_milestones or closed_milestone_count %}
+        <section id="overview-milestones" class="rounded-box bg-base-200 p-4">
+          <h2 class="font-semibold mb-2 flex items-center gap-2">
+            <i data-lucide="milestone" class="w-4 h-4 text-accent"></i>
+            Milestones
+          </h2>
+          <ul class="flex flex-col gap-3">
+            {% for m in open_milestones %}
+              <li class="flex flex-col gap-1">
+                <div class="flex items-center gap-2 text-sm min-w-0">
+                  <span class="font-medium truncate">{{ m.name }}</span>
+                  <span class="ml-auto shrink-0 text-xs font-mono {% if m.target_date < today %}text-error{% else %}text-base-content/60{% endif %}">{{ m.target_date|date:"M d" }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="h-1.5 flex-1 rounded-full bg-base-300 overflow-hidden">
+                    <div class="h-full rounded-full bg-accent" style="width: {% widthratio m.done_task_count m.task_count|default:1 100 %}%"></div>
+                  </div>
+                  <span class="text-xs text-base-content/60 font-mono shrink-0">{{ m.done_task_count }}/{{ m.task_count }} done</span>
+                </div>
+              </li>
+            {% empty %}
+              <li class="text-sm text-base-content/50 italic">No open milestones.</li>
+            {% endfor %}
+          </ul>
+          {% if closed_milestone_count %}
+            <p class="text-xs text-base-content/50 mt-3">{{ closed_milestone_count }} completed milestone{{ closed_milestone_count|pluralize }}</p>
+          {% endif %}
+        </section>
+      {% endif %}
+
       {% if labels_data %}
         <section class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">

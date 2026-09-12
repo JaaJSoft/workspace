@@ -392,6 +392,25 @@ class GanttChartTests(SimpleTestCase):
         )
         self.assertIsNone(_gantt(today=date(2027, 1, 1))["today"])
 
+    def test_today_plot_x_is_relative_to_the_plot_viewbox(self):
+        chart = _gantt()
+        self.assertEqual(
+            float(chart["today"]["plot_x"]),
+            float(chart["today"]["x"]) - float(chart["gutter"]),
+        )
+
+    def test_plot_width_is_the_chart_width_without_the_gutter(self):
+        chart = _gantt()
+        self.assertEqual(
+            chart["plot_width"], chart["width"] - int(float(chart["gutter"]))
+        )
+
+    def test_body_height_is_the_chart_height_without_header_and_padding(self):
+        chart = _gantt()
+        self.assertEqual(
+            float(chart["body_height"]), chart["height"] - float(chart["header"]) - 8
+        )
+
     def test_milestone_marker_is_centred_on_its_day_with_a_full_height_guide(self):
         chart = _gantt()
         marker = chart["markers"][0]

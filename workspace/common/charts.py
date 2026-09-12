@@ -296,6 +296,12 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
     rather than an empty string, so a template guard (``{% if row.width %}``)
     reads as "nothing to draw" instead of silently rendering a zero-sized
     shape. Coordinates are fixed-precision strings, see :func:`column_chart`.
+
+    The template renders the gutter and the plot as two separate SVGs so the
+    row labels stay put while only the plot scrolls; ``plot_width`` (the
+    body width without the gutter) and ``today.plot_x`` (the today line's x
+    relative to the plot's own viewBox) support that split. Every other
+    coordinate stays relative to the full chart, gutter included.
     """
     if scale not in _GANTT_PX_PER_DAY:
         raise ValueError(f"Unknown gantt scale {scale!r}")
@@ -380,9 +386,16 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
         )
         y = row_y
 
+    if inside(today):
+        today_x = centre_of(today)
+        today_geom = {"x": _n(today_x), "plot_x": _n(today_x - _GANTT_GUTTER)}
+    else:
+        today_geom = None
     return {
         "width": width,
         "height": height,
+        "plot_width": width - _GANTT_GUTTER,
+        "body_height": _n(body_h),
         "gutter": _n(_GANTT_GUTTER),
         "header": _n(_GANTT_HEADER),
         "row_height": _n(_GANTT_ROW),
@@ -390,7 +403,7 @@ def gantt_chart(start, end, scale, groups, markers, bands, today):
         "bar_height": _n(_GANTT_ROW - 2 * _GANTT_BAR_INSET),
         "axis": _gantt_axis(start, end, scale, px, x_of),
         "bands": drawn_bands,
-        "today": {"x": _n(centre_of(today))} if inside(today) else None,
+        "today": today_geom,
         "markers": drawn_markers,
         "groups": drawn_groups,
     }

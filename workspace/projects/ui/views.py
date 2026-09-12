@@ -211,6 +211,7 @@ def _base_context(request, project, role, view):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "milestones_data": _milestones_data(project),
         "members_data": [
             {
                 "id": str(u.pk),
@@ -257,6 +258,20 @@ def _epics_data(project):
             "closed": epic.is_closed,
         }
         for epic in project.epics.all()
+    ]
+
+
+def _milestones_data(project):
+    # closed rides along so the pickers can offer open milestones only
+    # while closed ones still resolve to a name on the panel trigger.
+    return [
+        {
+            "uuid": str(m.uuid),
+            "name": m.name,
+            "target_date": m.target_date.isoformat(),
+            "closed": m.is_closed,
+        }
+        for m in project.milestones.all()
     ]
 
 
@@ -357,6 +372,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
             "status": str(task.status_id),
             "priority": task.priority,
             "due_date": task.due_date.isoformat() if task.due_date else "",
+            "start_date": task.start_date.isoformat() if task.start_date else "",
             "estimate": format_estimate(task.estimate),
             "assignees": [str(u.pk) for u in task.assignees.all()],
             "assignee_users": [
@@ -364,6 +380,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
             ],
             "labels": [str(label.uuid) for label in task.labels.all()],
             "epic": str(task.epic_id) if task.epic_id else "",
+            "milestone": str(task.milestone_id) if task.milestone_id else "",
             "subtasks": [
                 {"uuid": str(s.uuid), "title": s.title, "done": s.done}
                 for s in task.subtasks.all()
@@ -394,6 +411,7 @@ def task_panel(request, project_uuid, task_uuid):
             for label in project.labels.all()
         ],
         "epics_data": _epics_data(project),
+        "milestones_data": _milestones_data(project),
     }
     context.update(_task_panel_context(request.user, project, role, task))
     return render(request, "projects/ui/partials/task_panel.html", context)

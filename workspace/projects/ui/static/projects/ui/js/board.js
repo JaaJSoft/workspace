@@ -27,9 +27,11 @@ function fieldAction(field) {
     estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
+    start_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
     epic: 'set_epic',
+    milestone: 'set_milestone',
   };
   return map[field] || 'edit';
 }
@@ -84,11 +86,13 @@ function emptyTaskForm() {
     description: '',
     status: '',
     priority: 'medium',
+    start_date: '',
     due_date: '',
     estimate: '',
     assignees: [],
     labels: [],
     epic: '',
+    milestone: '',
   };
 }
 
@@ -284,6 +288,7 @@ function projectBoard(config) {
     members: [],
     labels: [],
     epics: [],
+    milestones: [],
     form: emptyTaskForm(),
     formError: '',
     panelTaskUuid: config.initialTask || null,
@@ -318,6 +323,9 @@ function projectBoard(config) {
       );
       this.epics = JSON.parse(
         document.getElementById('epics-data').textContent
+      );
+      this.milestones = JSON.parse(
+        document.getElementById('milestones-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
 
@@ -923,9 +931,15 @@ function projectBoard(config) {
           headers: this.headers(),
           body: JSON.stringify(patch),
         });
-        if (!resp.ok) throw new Error('Save failed');
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          const detail = data.start_date && data.start_date[0];
+          throw new Error(detail || 'Save failed');
+        }
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not save the task.');
+        if (window.AppAlert) {
+          AppAlert.error(e.message === 'Save failed' ? 'Could not save the task.' : e.message);
+        }
       } finally {
         // Success or failure, re-render server truth: refresh swaps the
         // board cards and reloads whatever panel is open now (nothing if
@@ -1026,6 +1040,21 @@ function projectBoard(config) {
       return this.epics.filter((e) => !e.closed);
     },
 
+    milestoneById(uuid) {
+      return this.milestones.find((m) => m.uuid === uuid) || null;
+    },
+
+    milestoneName(uuid) {
+      const milestone = this.milestoneById(uuid);
+      return milestone ? milestone.name : 'Unknown milestone';
+    },
+
+    // Feeds the milestone dropdown rows; closed milestones still resolve
+    // by uuid so a task keeps showing the one it carries.
+    openMilestones() {
+      return this.milestones.filter((m) => !m.closed);
+    },
+
     // Inline create from the epic dropdown (admins; the server enforces it).
     // Pushing into the shared list is what makes the new epic show up in
     // every picker and filter without a reload.
@@ -1069,16 +1098,20 @@ function projectBoard(config) {
             description: this.form.description,
             status: this.form.status,
             priority: this.form.priority,
+            start_date: this.form.start_date || null,
             due_date: this.form.due_date || null,
             // '' means unestimated; '0' is a real estimate, hence no ||.
             estimate: this.form.estimate === '' ? null : this.form.estimate,
             assignees: this.form.assignees,
             labels: this.form.labels,
             epic: this.form.epic || null,
+            milestone: this.form.milestone || null,
           }),
         });
         if (!resp.ok) {
-          this.formError = 'Could not save the task.';
+          const data = await resp.json().catch(() => ({}));
+          const detail = data.start_date && data.start_date[0];
+          this.formError = detail || 'Could not save the task.';
           return;
         }
         this.$refs.taskDialog.close();
@@ -1103,11 +1136,13 @@ function taskPanel() {
       description: '',
       status: '',
       priority: 'medium',
+      start_date: '',
       due_date: '',
       estimate: '',
       assignees: [],
       labels: [],
       epic: '',
+      milestone: '',
     },
     editing: null,
     draft: '',
@@ -1177,6 +1212,12 @@ function taskPanel() {
       if (epicsEl && Array.isArray(this.epics)) {
         const freshEpics = JSON.parse(epicsEl.textContent);
         this.epics.splice(0, this.epics.length, ...freshEpics);
+      }
+      // Same shell-refresh dance for the milestones list.
+      const milestonesEl = document.getElementById('panel-milestones-data');
+      if (milestonesEl && Array.isArray(this.milestones)) {
+        const freshMilestones = JSON.parse(milestonesEl.textContent);
+        this.milestones.splice(0, this.milestones.length, ...freshMilestones);
       }
       this._commentCount = Number(this.$el.dataset.commentCount || 0);
       this._activityCount = Number(this.$el.dataset.activityCount || 0);
@@ -1609,6 +1650,7 @@ window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
+  emptyTaskForm: emptyTaskForm,
   taskFiltersFromUrl: taskFiltersFromUrl,
   taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,

@@ -54,11 +54,21 @@
           {% include "projects/ui/partials/_priority_selector.html" with model_expr="form.priority" label="Priority" %}
         </div>
         <label class="form-control">
+          <div class="label"><span class="label-text">Start date</span></div>
+          <input
+            type="date"
+            class="input input-bordered input-sm"
+            x-model="form.start_date"
+            :max="form.due_date || null"
+          />
+        </label>
+        <label class="form-control">
           <div class="label"><span class="label-text">Due date</span></div>
           <input
             type="date"
             class="input input-bordered input-sm"
             x-model="form.due_date"
+            :min="form.start_date || null"
           />
         </label>
         {% if project.estimate_unit %}
@@ -83,6 +93,13 @@
         >
           <div class="label"><span class="label-text">Epic</span></div>
           {% include "projects/ui/partials/_epic_selector.html" with model_expr="form.epic" label="Epic" %}
+        </div>
+        <div
+          class="form-control col-span-2"
+          {% if role != "admin" %}x-show="openMilestones().length" x-cloak{% endif %}
+        >
+          <div class="label"><span class="label-text">Milestone</span></div>
+          {% include "projects/ui/partials/_milestone_selector.html" with model_expr="form.milestone" label="Milestone" %}
         </div>
       </div>
       <div

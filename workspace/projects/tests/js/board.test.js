@@ -761,6 +761,37 @@ test('patchTask re-renders server truth through refresh', async () => {
   assert.deepStrictEqual(Array.from(calls), ['PATCH /api/tasks/u1', 'refresh']);
 });
 
+test('patchTask surfaces the start_date detail on a 400 and still refreshes', async () => {
+  const calls = [];
+  const alerts = [];
+  ctx.fetch = async () => ({
+    ok: false,
+    json: async () => ({ start_date: ['Start date must be before the due date.'] }),
+  });
+  ctx.AppAlert = { error: (message) => alerts.push(message) };
+  const board = panelBoard();
+  board.refresh = () => calls.push('refresh');
+  await board.patchTask('u1', { start_date: '2026-10-01' });
+  assert.deepStrictEqual(Array.from(alerts), [
+    'Start date must be before the due date.',
+  ]);
+  assert.deepStrictEqual(Array.from(calls), ['refresh']);
+});
+
+test('patchTask keeps the toast generic and never leaks the exception on a network error', async () => {
+  const calls = [];
+  const alerts = [];
+  ctx.fetch = async () => {
+    throw new Error('Failed to fetch');
+  };
+  ctx.AppAlert = { error: (message) => alerts.push(message) };
+  const board = panelBoard();
+  board.refresh = () => calls.push('refresh');
+  await board.patchTask('u1', { title: 'Renamed' });
+  assert.deepStrictEqual(Array.from(alerts), ['Could not save the task.']);
+  assert.deepStrictEqual(Array.from(calls), ['refresh']);
+});
+
 test('refresh reloads the open panel alongside the board', () => {
   const calls = [];
   const board = panelBoard();

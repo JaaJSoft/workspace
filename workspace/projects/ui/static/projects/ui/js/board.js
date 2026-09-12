@@ -932,14 +932,14 @@ function projectBoard(config) {
           body: JSON.stringify(patch),
         });
         if (!resp.ok) {
+          // A start/due ordering rejection carries the reason; anything
+          // else stays generic so a 500 body never reaches the toast.
           const data = await resp.json().catch(() => ({}));
           const detail = data.start_date && data.start_date[0];
-          throw new Error(detail || 'Save failed');
+          if (window.AppAlert) AppAlert.error(detail || 'Could not save the task.');
         }
       } catch (e) {
-        if (window.AppAlert) {
-          AppAlert.error(e.message === 'Save failed' ? 'Could not save the task.' : e.message);
-        }
+        if (window.AppAlert) AppAlert.error('Could not save the task.');
       } finally {
         // Success or failure, re-render server truth: refresh swaps the
         // board cards and reloads whatever panel is open now (nothing if

@@ -10,7 +10,7 @@ from enum import Enum
 
 from workspace.ai.services.llm import build_tool_content
 
-from .model import ModelResponse
+from .model import ModelResponse, RunUsage
 from .observers import notify
 
 
@@ -33,6 +33,7 @@ class RunResult:
     rounds: list
     tool_data: list | None
     stop: StopReason
+    usage: RunUsage
 
 
 class AgentRunner:
@@ -123,7 +124,7 @@ class AgentRunner:
         """
         response = self._model.complete(messages)
         self._record.reply(response)
-        return replace(run, response=response)
+        return replace(run, response=response, usage=self._record.usage)
 
     def _cancelled(self):
         return bool(self._is_cancelled and self._is_cancelled())
@@ -135,6 +136,7 @@ class AgentRunner:
             rounds=self._record.rounds,
             tool_data=self._record.tool_data or None,
             stop=stop,
+            usage=self._record.usage,
         )
         notify(self._observers, "on_stop", run)
         return run

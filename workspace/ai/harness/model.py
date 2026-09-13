@@ -52,6 +52,8 @@ class ModelResponse:
     model: str = ""
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    # Seconds spent waiting for the backend on this one call.
+    duration: float | None = None
 
     @classmethod
     def from_call_llm(cls, result: dict) -> ModelResponse:
@@ -66,6 +68,7 @@ class ModelResponse:
             model=result.get("model") or "",
             prompt_tokens=result.get("prompt_tokens"),
             completion_tokens=result.get("completion_tokens"),
+            duration=result.get("duration"),
         )
 
     def as_assistant_message(self) -> dict:
@@ -89,7 +92,34 @@ class ModelResponse:
             "model": self.model,
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
+            "duration": self.duration,
         }
+
+
+def _add(total, value):
+    if value is None:
+        return total
+    return (total or 0) + value
+
+
+@dataclass
+class RunUsage:
+    """Tokens and model time summed over every reply of one run.
+
+    A total stays ``None`` until a reply reports the figure: a backend that
+    sends no usage leaves the whole run unknown rather than at zero.
+    """
+
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    seconds: float | None = None
+
+    def add(self, response: ModelResponse) -> None:
+        self.prompt_tokens = _add(self.prompt_tokens, response.prompt_tokens)
+        self.completion_tokens = _add(
+            self.completion_tokens, response.completion_tokens
+        )
+        self.seconds = _add(self.seconds, response.duration)
 
 
 def _with_text_tool_calls(response: ModelResponse) -> ModelResponse:

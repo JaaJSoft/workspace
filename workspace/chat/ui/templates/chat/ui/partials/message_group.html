@@ -44,8 +44,14 @@
           {# Capped here, not on the bubble: attachments sit in it too #}
           <div class="msg-body prose prose-sm max-w-[36rem] break-words">{{ msg.body_html|safe }}</div>
         {% endif %}
-        {% if msg.tool_data %}
-          {% render_ai_steps msg %}
+        {% if is_bot %}
+          {# One line under the text: the reasoning summary on the left, what the reply cost on the right #}
+          <div class="flex items-start justify-between gap-2">
+            {% if msg.tool_data %}
+              {% render_ai_steps msg %}
+            {% endif %}
+            {% render_ai_usage msg %}
+          </div>
         {% endif %}
         {% if msg.interaction %}
           {% include "chat/ui/partials/_message_interaction.html" with msg=msg %}

@@ -147,6 +147,60 @@ class AnsweredTests(TestCase):
         self.assertIs(retried.rounds, run.rounds)
 
 
+class UsageTests(TestCase):
+    def test_usage_sums_every_reply_of_the_run(self):
+        model = ScriptedModel(
+            [
+                tool_reply(
+                    call("c1"), prompt_tokens=100, completion_tokens=10, duration=1.0
+                ),
+                tool_reply(
+                    call("c2"), prompt_tokens=150, completion_tokens=20, duration=2.0
+                ),
+                reply("done", prompt_tokens=200, completion_tokens=30, duration=1.5),
+            ]
+        )
+
+        run, _ = _run(model)
+
+        self.assertEqual(run.usage.prompt_tokens, 450)
+        self.assertEqual(run.usage.completion_tokens, 60)
+        self.assertEqual(run.usage.seconds, 4.5)
+
+    def test_the_forced_answer_after_the_round_cap_counts(self):
+        looping = tool_reply(
+            call("c1"), prompt_tokens=10, completion_tokens=1, duration=1.0
+        )
+        model = ScriptedModel([looping], repeat=True)
+
+        run, _ = _run(model, max_rounds=1)
+
+        # initial call + one allowed round + the tool-less call after the cap
+        self.assertEqual(len(model.requests), 3)
+        self.assertEqual(run.usage.prompt_tokens, 30)
+        self.assertEqual(run.usage.seconds, 3.0)
+
+    def test_retry_final_adds_the_extra_call(self):
+        model = ScriptedModel(
+            [
+                tool_reply(
+                    call("c1"), prompt_tokens=10, completion_tokens=1, duration=1.0
+                ),
+                reply("", prompt_tokens=20, completion_tokens=0, duration=0.5),
+                reply("done", prompt_tokens=30, completion_tokens=5, duration=2.0),
+            ]
+        )
+        messages = [{"role": "user", "content": "go"}]
+        runner = build_runner(model, StubToolset(handler=lambda tc, ctx: "ok"))
+        run = runner.run(messages)
+
+        retried = runner.retry_final(messages, run)
+
+        self.assertEqual(retried.usage.prompt_tokens, 60)
+        self.assertEqual(retried.usage.completion_tokens, 6)
+        self.assertEqual(retried.usage.seconds, 3.5)
+
+
 class ThinkingPersistenceTests(TestCase):
     def test_round_thinking_is_stored_in_tool_data(self):
         model = ScriptedModel(

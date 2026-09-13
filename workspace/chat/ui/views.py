@@ -363,6 +363,28 @@ def group_messages(messages, current_user):
     return groups
 
 
+def _ai_usage_prefetch():
+    """The completed AI task behind each bot message, without its JSON payloads."""
+    from workspace.ai.models import AITask
+
+    return Prefetch(
+        "ai_tasks",
+        queryset=AITask.objects.filter(status=AITask.Status.COMPLETED)
+        .only(
+            "uuid",
+            "chat_message_id",
+            "status",
+            "model_used",
+            "prompt_tokens",
+            "completion_tokens",
+            "generation_seconds",
+            "answer_tokens",
+            "answer_seconds",
+        )
+        .order_by("created_at"),
+    )
+
+
 @login_required
 def conversation_messages_view(request, conversation_uuid):
     """Partial: server-rendered grouped messages for a conversation."""
@@ -381,7 +403,12 @@ def conversation_messages_view(request, conversation_uuid):
             "interaction",
             "interaction__interacted_by",
         )
-        .prefetch_related("reactions__user", "attachments", "link_previews__preview")
+        .prefetch_related(
+            "reactions__user",
+            "attachments",
+            "link_previews__preview",
+            _ai_usage_prefetch(),
+        )
         .order_by("-created_at")
     )
 
@@ -483,6 +510,7 @@ def thread_messages_view(request, root_uuid):
     root = (
         Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
         .select_related("author", "author__bot_profile", "conversation")
+        .prefetch_related(_ai_usage_prefetch())
         .first()
     )
     if root is None:
@@ -503,7 +531,12 @@ def thread_messages_view(request, root_uuid):
             "interaction",
             "interaction__interacted_by",
         )
-        .prefetch_related("reactions__user", "attachments", "link_previews__preview")
+        .prefetch_related(
+            "reactions__user",
+            "attachments",
+            "link_previews__preview",
+            _ai_usage_prefetch(),
+        )
         .order_by("-created_at")
     )
 

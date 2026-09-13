@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from workspace.ai.harness.model import ModelResponse
+from workspace.ai.harness.model import ModelResponse, RunUsage
 from workspace.ai.harness.runner import RunResult, StopReason
 from workspace.ai.models import AgentGoal, AITask, BotProfile
 from workspace.ai.tools import (
@@ -225,6 +225,7 @@ class RunAgentGoalCheckTests(TestCase):
             rounds=[],
             tool_data=None,
             stop=StopReason.ANSWERED,
+            usage=RunUsage(prompt_tokens=10, completion_tokens=5),
         )
 
     @staticmethod

@@ -210,8 +210,14 @@ class AITask(models.Model):
     error = models.TextField(blank=True)
 
     model_used = models.CharField(max_length=100, blank=True)
+    # Summed over every model call of the run; raw_messages keeps the per-call figures.
     prompt_tokens = models.IntegerField(null=True, blank=True)
     completion_tokens = models.IntegerField(null=True, blank=True)
+    # Seconds spent waiting for the backend, tool execution and queueing excluded.
+    generation_seconds = models.FloatField(null=True, blank=True)
+    # The final call alone: what the user reads, and the output speed's basis.
+    answer_tokens = models.IntegerField(null=True, blank=True)
+    answer_seconds = models.FloatField(null=True, blank=True)
     raw_messages = models.JSONField(null=True, blank=True)
 
     chat_message = models.ForeignKey(

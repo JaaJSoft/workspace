@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.test import SimpleTestCase
 
-from workspace.ai.harness.model import LLMModel, ModelResponse, ToolCall
+from workspace.ai.harness.model import LLMModel, ModelResponse, RunUsage, ToolCall
 
 
 def _sdk_call(call_id, name, arguments):
@@ -27,6 +27,7 @@ def _result(content, *, message_content=None, tool_calls=None, thinking=""):
         "model": "m",
         "prompt_tokens": 3,
         "completion_tokens": 4,
+        "duration": 1.5,
     }
 
 
@@ -40,6 +41,7 @@ class ModelResponseTests(SimpleTestCase):
         self.assertEqual(response.tool_calls, [ToolCall("c1", "search", '{"q": 1}')])
         self.assertEqual(response.model, "m")
         self.assertEqual((response.prompt_tokens, response.completion_tokens), (3, 4))
+        self.assertEqual(response.duration, 1.5)
 
     def test_inline_reasoning_is_not_echoed_back_to_the_model(self):
         # call_llm has already split the reasoning out of the text; the
@@ -80,6 +82,7 @@ class ModelResponseTests(SimpleTestCase):
             model="m",
             prompt_tokens=1,
             completion_tokens=2,
+            duration=0.25,
         )
 
         self.assertEqual(
@@ -91,6 +94,7 @@ class ModelResponseTests(SimpleTestCase):
                 "model": "m",
                 "prompt_tokens": 1,
                 "completion_tokens": 2,
+                "duration": 0.25,
             },
         )
         self.assertIsNone(ModelResponse(content="hi").as_record()["tool_calls"])
@@ -162,3 +166,34 @@ class LLMModelTests(SimpleTestCase):
         response = LLMModel("m").complete([], tools=_TOOLS)
 
         self.assertEqual([tc.name for tc in response.tool_calls], ["search"])
+
+
+class RunUsageTests(SimpleTestCase):
+    def test_sums_tokens_and_time_over_every_reply(self):
+        usage = RunUsage()
+        usage.add(ModelResponse(prompt_tokens=10, completion_tokens=5, duration=1.0))
+        usage.add(ModelResponse(prompt_tokens=30, completion_tokens=7, duration=0.5))
+
+        self.assertEqual(
+            (usage.prompt_tokens, usage.completion_tokens, usage.seconds),
+            (40, 12, 1.5),
+        )
+
+    def test_a_backend_reporting_nothing_leaves_the_total_unknown(self):
+        usage = RunUsage()
+        usage.add(ModelResponse(content="hi"))
+
+        self.assertEqual(
+            (usage.prompt_tokens, usage.completion_tokens, usage.seconds),
+            (None, None, None),
+        )
+
+    def test_a_reply_without_usage_does_not_erase_a_known_total(self):
+        usage = RunUsage()
+        usage.add(ModelResponse(prompt_tokens=10, completion_tokens=5, duration=1.0))
+        usage.add(ModelResponse(content="hi"))
+
+        self.assertEqual(
+            (usage.prompt_tokens, usage.completion_tokens, usage.seconds),
+            (10, 5, 1.0),
+        )

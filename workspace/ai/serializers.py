@@ -54,6 +54,9 @@ class AITaskSerializer(serializers.ModelSerializer):
             "model_used",
             "prompt_tokens",
             "completion_tokens",
+            "generation_seconds",
+            "answer_tokens",
+            "answer_seconds",
             "created_at",
             "completed_at",
         ]

@@ -1,8 +1,9 @@
 """Reading an export archive, in Python, from the format alone.
 
 Test-only, like the rest of this package, and deliberately written from the
-spec's byte offsets rather than from a helper the writer also uses: the point
-is to prove the file opens for something that has never run the browser's code.
+byte offsets in docs/vault/CRYPTO.md ("The export archive") rather than from a
+helper the writer also uses: the point is to prove the file opens for something
+that has never run the browser's code.
 
 There is no archive reader in production - import is v2 - so this file is what
 the round-trip test opens with.
@@ -21,8 +22,9 @@ HEADER_LENGTH = 50
 SALT_OFFSET = 18
 ARCHIVE_KEY_INFO = b"v1|archive-key"
 
-# Verbatim from the spec. Widening later accepts more archives; narrowing would
-# reject one already written.
+# Verbatim from docs/vault/CRYPTO.md, which the writer's table follows too.
+# Widening later accepts more archives; narrowing would reject one already
+# written.
 BOUNDS = {"m": (8192, 1048576), "t": (1, 10), "p": (1, 4)}
 
 

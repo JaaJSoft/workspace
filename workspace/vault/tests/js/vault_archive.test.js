@@ -1,5 +1,6 @@
 // The container's public header is the only thing a reader has before it can
-// derive anything, so its layout is the format. These offsets are the spec's.
+// derive anything, so its layout is the format. These offsets are the ones
+// docs/vault/CRYPTO.md publishes.
 const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');

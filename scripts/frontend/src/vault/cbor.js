@@ -118,6 +118,94 @@ export function canonicalCbor(payload) {
   return encoded;
 }
 
+// The archive is sealed, not signed: nothing ever compares its bytes, so it
+// takes no part of the canonical form. Normalising would change what it
+// stores - a password saved in NFD would come back in NFC, a different
+// credential - and two custom field ids that fold to one under NFC would
+// refuse the export outright. Keys keep their insertion order.
+function plainValue(value) {
+  if (typeof value === 'string' || typeof value === 'boolean' || value === null) return value;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') {
+    // Same hole as the canonical path: outside 32 bits cbor-x writes a float.
+    return Number.isInteger(value) && (value > UINT32_MAX || value < INT32_MIN)
+      ? BigInt(value)
+      : value;
+  }
+  // Rebuilt with this realm's constructors, for the reason normalise() gives.
+  switch (kindOf(value)) {
+    case '[object Array]':
+      return Array.from(value, plainValue);
+    case '[object Uint8Array]':
+      return Uint8Array.from(value);
+    case '[object Map]':
+    case '[object Object]': {
+      const entries = kindOf(value) === '[object Map]' ? [...value] : Object.entries(value);
+      return new Map(entries.map(([key, item]) => [key, plainValue(item)]));
+    }
+    default:
+      throw new Error(`unsupported type in an archive payload: ${kindOf(value)}`);
+  }
+}
+
+// cbor-x reserves room before it writes rather than after, and a string
+// reserves three bytes per UTF-16 unit whatever it ends up encoding to. The
+// bound follows those reservations, not the final size: an arena sized to the
+// final size would still be outgrown halfway through a long string.
+const ITEM_HEAD = 9;
+// encode() refuses to start within 0x800 bytes of the end of its buffer and
+// stops 10 bytes short of it.
+const ARENA_SLACK = 0x800 + 64;
+// What cbor-x gets back once an arena is done with: small enough to keep.
+const RELEASED_BUFFER_SIZE = 8192;
+
+function sizeBound(value) {
+  if (typeof value === 'string') return ITEM_HEAD + value.length * 3;
+  if (typeof value !== 'object' || value === null) return ITEM_HEAD;
+  switch (kindOf(value)) {
+    case '[object Array]':
+      return value.reduce((sum, item) => sum + sizeBound(item), ITEM_HEAD);
+    case '[object Uint8Array]':
+      return ITEM_HEAD + value.length;
+    default: {
+      const entries = kindOf(value) === '[object Map]' ? [...value] : Object.entries(value);
+      return entries.reduce(
+        (sum, [key, item]) => sum + sizeBound(key) + sizeBound(item), ITEM_HEAD
+      );
+    }
+  }
+}
+
+export function cborSizeBound(payload) {
+  return sizeBound(payload) + ARENA_SLACK;
+}
+
+// Encodes into an arena the caller allocated with cborSizeBound and wipes
+// itself. Left to its own buffer, cbor-x grows it by allocating a larger one
+// and copying across, and every buffer it grows past keeps a prefix of the
+// plaintext - header, first vault, first passwords - that nothing can reach
+// to wipe.
+export function encodeCbor(payload, arena) {
+  const value = plainValue(payload);
+  encoder.useBuffer(arena);
+  let view;
+  try {
+    view = encoder.encode(value);
+  } finally {
+    // cbor-x's buffer is shared by every encoder in the realm. Left on the
+    // arena, the next signature payload would be written into the caller's
+    // memory, and the arena would never be released.
+    encoder.useBuffer(new Uint8Array(RELEASED_BUFFER_SIZE));
+  }
+  if (view.buffer !== arena.buffer) {
+    // Grown after all, so a copy the arena does not hold already exists. The
+    // bound is there so this cannot happen; if it does, nothing is sealed.
+    view.fill(0);
+    throw new Error('the payload outgrew the arena sized for it');
+  }
+  return view;
+}
+
 export function decodeCbor(bytes) {
   const decoded = decode(bytes);
   return decoded instanceof Map ? Object.fromEntries(decoded) : decoded;

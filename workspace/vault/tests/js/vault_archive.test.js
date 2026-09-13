@@ -12,7 +12,8 @@ function withCrypto(overrides = {}) {
     KDF_HKDF_SHA256: 0x01,
     randomBytes: (count) => new Uint8Array(count).fill(0xab),
     deriveArchiveKey: async () => new Uint8Array(32).fill(1),
-    canonicalCbor: () => new Uint8Array([0xa0]),
+    cborSizeBound: () => 8,
+    encodeCbor: (tree, arena) => { arena[0] = 0xa0; return arena.subarray(0, 1); },
     seal: async () => new Uint8Array([9, 9, 9]),
   }, overrides);
   return loadScript(SCRIPT, { vaultCrypto: V });
@@ -84,10 +85,11 @@ test('the encoded tree is wiped once it has been sealed', async () => {
   // The whole account in one contiguous buffer, and the largest single copy
   // of it that exists. The strings inside the tree cannot be wiped - a JS
   // string is immutable - so this buffer is the part that can be.
-  const plaintext = new Uint8Array([1, 2, 3, 4]);
+  let arena = null;
   let seenDuringSeal = null;
   const ctx = withCrypto({
-    canonicalCbor: () => plaintext,
+    cborSizeBound: () => 4,
+    encodeCbor: (tree, buffer) => { arena = buffer; buffer.set([1, 2, 3, 4]); return buffer; },
     seal: async (key, bytes) => {
       seenDuringSeal = Array.from(bytes);
       return new Uint8Array([9]);
@@ -97,27 +99,51 @@ test('the encoded tree is wiped once it has been sealed', async () => {
   // Read during the seal, or the assertion below would also pass on a writer
   // that sealed four zero bytes.
   assert.deepStrictEqual(seenDuringSeal, [1, 2, 3, 4]);
-  assert.deepStrictEqual(Array.from(plaintext), [0, 0, 0, 0]);
+  assert.deepStrictEqual(Array.from(arena), [0, 0, 0, 0]);
+});
+
+test('the tree is encoded into an arena sized by the bound, not into cbor-x', async () => {
+  // cbor-x grows its own buffer by copying into a larger one and abandoning
+  // the old: every buffer it grows past keeps a prefix of the account nobody
+  // can wipe. The arena is what keeps the encoding in one place.
+  let sizedFor = null;
+  let handed = null;
+  const tree = { vaults: [] };
+  const ctx = withCrypto({
+    cborSizeBound: (value) => { sizedFor = value; return 16; },
+    encodeCbor: (value, buffer) => { handed = buffer; return buffer.subarray(0, 1); },
+  });
+  await ctx.vaultArchive.buildArchive({ tree: tree, passphrase: 'x' });
+  assert.equal(sizedFor, tree, 'the bound was not computed from the tree');
+  assert.equal(handed.length, 16, 'the encoder was not handed the arena the bound sized');
 });
 
 test('a seal that throws still wipes the encoded tree', async () => {
-  const plaintext = new Uint8Array([1, 2, 3, 4]);
+  let arena = null;
   const ctx = withCrypto({
-    canonicalCbor: () => plaintext,
+    cborSizeBound: () => 4,
+    encodeCbor: (tree, buffer) => { arena = buffer; buffer.set([1, 2, 3, 4]); return buffer; },
     seal: async () => { throw new Error('nope'); },
   });
   await assert.rejects(() => ctx.vaultArchive.buildArchive({ tree: {}, passphrase: 'x' }));
-  assert.deepStrictEqual(Array.from(plaintext), [0, 0, 0, 0]);
+  assert.deepStrictEqual(Array.from(arena), [0, 0, 0, 0]);
 });
 
-test('a canonicalCbor that throws still wipes the derived key', async () => {
+test('an encoder that throws still wipes the derived key and the arena', async () => {
   const key = new Uint8Array(32).fill(7);
+  let arena = null;
   const ctx = withCrypto({
     deriveArchiveKey: async () => key,
-    canonicalCbor: () => { throw new Error('unencodable'); },
+    cborSizeBound: () => 4,
+    encodeCbor: (tree, buffer) => {
+      arena = buffer;
+      buffer.set([1, 2]);
+      throw new Error('unencodable');
+    },
   });
   await assert.rejects(() => ctx.vaultArchive.buildArchive({ tree: {}, passphrase: 'x' }));
   assert.deepStrictEqual(Array.from(key), new Array(32).fill(0));
+  assert.deepStrictEqual(Array.from(arena), [0, 0, 0, 0]);
 });
 
 test('the filename carries the export date', () => {

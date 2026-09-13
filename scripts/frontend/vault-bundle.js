@@ -19,7 +19,7 @@ import {
 } from './src/vault/kdf.js';
 import { seal, open, importAeadKey } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
-import { canonicalCbor, decodeCbor } from './src/vault/cbor.js';
+import { canonicalCbor, cborSizeBound, decodeCbor, encodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 import {
@@ -69,7 +69,9 @@ window.vaultCrypto = {
   hpkeOpen,
   hpkeRecipient,
   canonicalCbor,
+  cborSizeBound,
   decodeCbor,
+  encodeCbor,
   SIG_ALG_ED25519,
   sign,
   verify,

@@ -38,13 +38,15 @@ window.vaultArchive = (function () {
     const drawnSalt = salt || V.randomBytes(SALT_LENGTH);
     const header = encodeHeader({ salt: drawnSalt, params: cost });
     const key = await V.deriveArchiveKey({ passphrase, salt: drawnSalt, params: cost });
-    // Held in a binding so it can be wiped: this is the whole account in one
-    // contiguous buffer, and the largest single copy of it that exists. The
-    // strings inside `tree` cannot be wiped - a JS string is immutable - so
-    // the win is partial, which is a reason to take it rather than to skip it.
-    let plaintext;
+    // The whole account in one contiguous buffer, and the largest single copy
+    // of it that exists: allocated here, sized so the encoder writes into it
+    // and nowhere else, and wiped here. The strings inside `tree` cannot be
+    // wiped - a JS string is immutable - so the win is partial, which is a
+    // reason to take it rather than to skip it.
+    let arena;
     try {
-      plaintext = V.canonicalCbor(tree);
+      arena = new Uint8Array(V.cborSizeBound(tree));
+      const plaintext = V.encodeCbor(tree, arena);
       const payload = await V.seal(key, plaintext, header, {
         iv: iv || V.randomBytes(IV_LENGTH),
         // The archive key is an HKDF output. Left to the default this byte
@@ -58,7 +60,7 @@ window.vaultArchive = (function () {
       return out;
     } finally {
       key.fill(0);
-      if (plaintext) plaintext.fill(0);
+      if (arena) arena.fill(0);
     }
   }
 

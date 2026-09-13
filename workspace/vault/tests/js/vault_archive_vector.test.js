@@ -40,7 +40,15 @@ const TREE_JSON = JSON.stringify({
       favorite: true, trashed: false, folder: 0, tags: [0],
       created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z',
       last_used_at: null,
-      fields: { username: 'jc', password: 's3cret', uri: 'https://b.example' },
+      // NFD on purpose, next to two custom ids that fold to one under NFC: the
+      // archive stores what it was given, and the reader has to get it back.
+      fields: {
+        username: 'jc',
+        password: 'café-s3cret',
+        uri: 'https://b.example',
+        'custom:é': 'nfc',
+        'custom:é': 'nfd',
+      },
     }],
   }],
 });

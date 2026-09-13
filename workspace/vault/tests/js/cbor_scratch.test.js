@@ -73,3 +73,85 @@ test('the probe would see the plaintext if it were left there', async (t) => {
     'the probe cannot see a plaintext even when nothing wiped it - it proves nothing'
   );
 });
+
+// The archive's encoding. Sealed rather than signed, so it must store exactly
+// what it was given, and it must stay inside the arena the caller wipes.
+async function archiveEncoding(t) {
+  if (!fs.existsSync(CBOR_X)) {
+    t.skip('scripts/frontend dependencies are not installed');
+    return null;
+  }
+  const cbor = await import(pathToFileURL(CBOR_SOURCE).href);
+  const cborX = await import(pathToFileURL(CBOR_X).href);
+  // A Buffer here and a Uint8Array in the browser: under Node, cbor-x writes
+  // strings of 64 units and more through Buffer#utf8Write, which a bare
+  // Uint8Array does not have. The browser build writes through
+  // TextEncoder#encodeInto, which takes the Uint8Array the archive allocates.
+  const arenaFor = (payload) => Buffer.alloc(cbor.cborSizeBound(payload));
+  return { ...cbor, cborX, arenaFor };
+}
+
+test('an archive payload keeps its strings exactly as they were given', async (t) => {
+  // A password typed in NFD that came back in NFC would be a different
+  // credential, and two custom field ids that fold to one under NFC would
+  // refuse the export outright.
+  const encoding = await archiveEncoding(t);
+  if (!encoding) return;
+  const nfdPassword = 'café-s3cret';
+  const payload = { password: nfdPassword, fields: { 'custom:é': 'nfc', 'custom:é': 'nfd' } };
+  const decoded = encoding.cborX.decode(encoding.encodeCbor(payload, encoding.arenaFor(payload)));
+  assert.equal(decoded.password, nfdPassword);
+  assert.equal(decoded.fields['custom:é'], 'nfc');
+  assert.equal(decoded.fields['custom:é'], 'nfd');
+});
+
+test('an archive larger than cbor-x starts with is encoded without growing a buffer', async (t) => {
+  // Growing allocates a larger buffer, copies into it and abandons the old one
+  // with a prefix of the plaintext still in it. The arena coming back is the
+  // proof nothing grew: a grown encoding is a view into some other buffer.
+  const encoding = await archiveEncoding(t);
+  if (!encoding) return;
+  const entries = Array.from({ length: 2000 }, (_, i) => ({
+    name: `entry ${i} éè中🔑`,
+    fields: { username: `user${i}@example.com`, password: `${CANARY}-${i}-ééé` },
+    // Past 64 units, the length at which cbor-x switches to its bulk UTF-8
+    // writer - and reserves three bytes per unit for it.
+    notes: `${'é'.repeat(80)} ${i} ${'🔑'.repeat(40)}`,
+  }));
+  const payload = { vaults: [{ name: 'Perso', entries }] };
+  const arena = encoding.arenaFor(payload);
+  const view = encoding.encodeCbor(payload, arena);
+  assert.ok(view.length > 64 * 1024, `the payload is only ${view.length} bytes`);
+  assert.equal(view.buffer, arena.buffer, 'the encoding left the arena');
+  assert.equal(encoding.cborX.decode(view).vaults[0].entries.length, entries.length);
+});
+
+test('cbor-x is handed back a buffer of its own once an archive is encoded', async (t) => {
+  // Its buffer is shared by every encoder in the realm. Left on the arena,
+  // the next signed payload would be written into the caller's memory, and
+  // the arena would outlive the export.
+  const encoding = await archiveEncoding(t);
+  if (!encoding) return;
+  const payload = { secret: CANARY };
+  const arena = encoding.arenaFor(payload);
+  encoding.encodeCbor(payload, arena);
+  const probe = new encoding.cborX.Encoder({ useRecords: false, mapsAsObjects: false });
+  const shared = probe.encode({ v: 1 });
+  assert.notEqual(shared.buffer, arena.buffer, 'cbor-x still writes into the arena');
+  assert.equal(
+    Buffer.from(new Uint8Array(shared.buffer)).toString('latin1').includes(CANARY), false,
+    'the plaintext is readable through the buffer cbor-x kept'
+  );
+});
+
+test('a long plain-ASCII value does not outgrow its arena either', async (t) => {
+  // It encodes to one byte per unit, but cbor-x reserves three before it
+  // writes. In a payload made mostly of such a value, an arena sized to the
+  // final bytes is outgrown by that reservation alone.
+  const encoding = await archiveEncoding(t);
+  if (!encoding) return;
+  const payload = { notes: 'x'.repeat(100000) };
+  const arena = encoding.arenaFor(payload);
+  const view = encoding.encodeCbor(payload, arena);
+  assert.equal(view.buffer, arena.buffer, 'the encoding left the arena');
+});

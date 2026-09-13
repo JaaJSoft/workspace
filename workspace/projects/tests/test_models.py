@@ -148,3 +148,51 @@ class TaskModelTests(TestCase):
     def test_task_start_date_defaults_to_none(self):
         task = create_task(self.project, self.user, title="t")
         self.assertIsNone(task.start_date)
+
+    def test_start_date_after_due_date_violates_constraint(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Task.objects.create(
+                    project=self.project,
+                    number=1,
+                    title="t",
+                    status=self.status,
+                    start_date=date(2026, 10, 5),
+                    due_date=date(2026, 10, 1),
+                )
+
+    def test_clean_rejects_start_date_after_due_date(self):
+        from django.core.exceptions import ValidationError
+
+        task = Task(
+            project=self.project,
+            number=1,
+            title="t",
+            status=self.status,
+            start_date=date(2026, 10, 5),
+            due_date=date(2026, 10, 1),
+        )
+        with self.assertRaises(ValidationError) as caught:
+            task.full_clean()
+        self.assertIn("start_date", caught.exception.message_dict)
+
+    def test_equal_start_and_due_date_allowed(self):
+        task = Task.objects.create(
+            project=self.project,
+            number=1,
+            title="t",
+            status=self.status,
+            start_date=date(2026, 10, 1),
+            due_date=date(2026, 10, 1),
+        )
+        self.assertEqual(task.start_date, task.due_date)
+
+    def test_lone_start_date_allowed(self):
+        task = Task.objects.create(
+            project=self.project,
+            number=1,
+            title="t",
+            status=self.status,
+            start_date=date(2026, 10, 5),
+        )
+        self.assertIsNone(task.due_date)

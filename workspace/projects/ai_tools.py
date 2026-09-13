@@ -455,6 +455,15 @@ first."""
                 due_date, error = _parse_date(raw_due, "due_date")
                 if error:
                     return error
+            if (
+                due_date is not None
+                and task.start_date is not None
+                and due_date < task.start_date
+            ):
+                return (
+                    "Error: due date cannot be before the task's start date "
+                    f"({task.start_date.isoformat()})."
+                )
             if task.due_date != due_date:
                 task.due_date = due_date
                 task.save(update_fields=["due_date", "updated_at"])

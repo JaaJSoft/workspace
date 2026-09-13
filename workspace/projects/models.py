@@ -336,8 +336,7 @@ class Task(models.Model):
     )
     due_date = models.DateField(null=True, blank=True)
     # Optional planned start; with due_date it makes the task a bar on the
-    # timeline, alone it is a marker. Ordering against due_date is enforced
-    # by the API serializer, not here, so the admin and tools stay lenient.
+    # timeline, alone it is a marker.
     start_date = models.DateField(null=True, blank=True)
     # Effort in the project's estimate_unit (points or hours); null = not
     # estimated. One decimal covers half-points and half-hours.
@@ -395,6 +394,13 @@ class Task(models.Model):
                 fields=["project", "number"],
                 name="unique_task_number_per_project",
             ),
+            # A start date, when both are set, may not fall after the due date.
+            models.CheckConstraint(
+                condition=Q(start_date__isnull=True)
+                | Q(due_date__isnull=True)
+                | Q(start_date__lte=F("due_date")),
+                name="task_start_not_after_due",
+            ),
         ]
 
     def __str__(self):
@@ -407,6 +413,14 @@ class Task(models.Model):
             raise ValidationError({"epic": "Epic belongs to another project."})
         if self.sprint_id and self.sprint.project_id != self.project_id:
             raise ValidationError({"sprint": "Sprint belongs to another project."})
+        if (
+            self.start_date is not None
+            and self.due_date is not None
+            and self.start_date > self.due_date
+        ):
+            raise ValidationError(
+                {"start_date": "Start date cannot be after the due date."}
+            )
 
     @property
     def reference(self):

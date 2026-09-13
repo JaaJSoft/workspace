@@ -87,6 +87,8 @@ def create_task(
         raise ValueError("Epic belongs to another project.")
     if sprint is not None and sprint.project_id != project.pk:
         raise ValueError("Sprint belongs to another project.")
+    if start_date is not None and due_date is not None and start_date > due_date:
+        raise ValueError("Start date cannot be after the due date.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)

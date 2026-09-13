@@ -377,6 +377,25 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         )
         self.assertEqual(result, "Error: task not found.")
 
+    def test_update_task_rejects_due_date_before_start_date(self):
+        task = create_task(
+            self.project,
+            self.admin,
+            title="T",
+            start_date=date(2026, 9, 20),
+        )
+        result = self._call(
+            "update_task",
+            UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
+            self.member,
+        )
+        self.assertEqual(
+            result,
+            "Error: due date cannot be before the task's start date (2026-09-20).",
+        )
+        task.refresh_from_db()
+        self.assertIsNone(task.due_date)
+
     # -- comment_on_task -----------------------------------------------------
 
     def test_comment_on_task_creates_comment_event_and_notification(self):

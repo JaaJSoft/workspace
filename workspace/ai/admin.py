@@ -167,6 +167,7 @@ class AITaskAdmin(ModelAdmin):
         "model_used",
         "prompt_tokens",
         "completion_tokens",
+        "generation_seconds",
         "created_at",
         "completed_at",
     ]

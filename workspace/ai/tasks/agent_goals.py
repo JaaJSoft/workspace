@@ -14,7 +14,11 @@ from workspace.ai.services.conversation_history import (
     unprompted_run_note,
 )
 from workspace.ai.services.llm import sanitize_messages_for_storage
-from workspace.ai.services.responses import post_bot_message, produced_media
+from workspace.ai.services.responses import (
+    post_bot_message,
+    produced_media,
+    record_run_usage,
+)
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
 
@@ -255,9 +259,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         if not queued and not produced_media(run.context):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SILENT]"
-            ai_task.model_used = run.response.model
-            ai_task.prompt_tokens = run.response.prompt_tokens
-            ai_task.completion_tokens = run.response.completion_tokens
+            record_run_usage(ai_task, run.response.model, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -280,9 +282,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         ):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SUPPRESSED]"
-            ai_task.model_used = run.response.model
-            ai_task.prompt_tokens = run.response.prompt_tokens
-            ai_task.completion_tokens = run.response.completion_tokens
+            record_run_usage(ai_task, run.response.model, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -303,6 +303,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             ai_task,
             raw_messages,
             tool_data=run.tool_data,
+            usage=run.usage,
         )
 
         maybe_dispatch_summary_update(str(conversation.pk), history.summary)
@@ -312,8 +313,8 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
             "Agent check-in posted a message: goal=%s conversation=%s tokens=%s+%s",
             scrub(goal_id),
             scrub(conversation.pk),
-            run.response.prompt_tokens,
-            run.response.completion_tokens,
+            run.usage.prompt_tokens,
+            run.usage.completion_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

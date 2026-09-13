@@ -144,6 +144,7 @@ def generate_chat_response(
             ai_task,
             raw_messages,
             tool_data=run.tool_data,
+            usage=run.usage,
         )
 
         # Auto-generate title if the conversation doesn't have one yet.
@@ -159,8 +160,8 @@ def generate_chat_response(
         logger.info(
             "Bot response generated: conversation=%s tokens=%s+%s",
             scrub(conversation_id),
-            run.response.prompt_tokens,
-            run.response.completion_tokens,
+            run.usage.prompt_tokens,
+            run.usage.completion_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

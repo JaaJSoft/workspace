@@ -1,0 +1,62 @@
+{% load ui_filters %}
+{% comment %}
+What a bot reply cost, behind an info icon. Context: usage from
+render_ai_usage (None when the message has no completed AI task). A daisyUI
+focus-driven dropdown on purpose: the messages container is fully replaced on
+SSE refresh, so Alpine state would not survive the swap.
+{% endcomment %}
+{% if usage %}
+  <span
+    class="dropdown dropdown-top ml-1 align-middle not-italic"
+  >
+    <button
+      type="button"
+      tabindex="0"
+      class="inline-flex items-center align-middle text-base-content/40 hover:text-base-content/70 transition-colors"
+      title="Generation details"
+      aria-label="Generation details"
+    >
+      <i data-lucide="info" class="w-3 h-3"></i>
+    </button>
+    <div
+      tabindex="0"
+      class="dropdown-content z-50 mb-1.5 w-52 rounded-lg border border-base-300 bg-base-100 p-2.5 text-[0.7rem] leading-snug text-base-content shadow-lg"
+    >
+      {% if usage.model %}
+        <div class="font-medium truncate mb-1.5" title="{{ usage.model }}">{{ usage.model }}</div>
+      {% endif %}
+      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
+        {% if usage.prompt_tokens is not None %}
+          <dt class="text-base-content/60">Input</dt>
+          <dd class="text-right" title="{{ usage.prompt_tokens }} tokens">
+            {{ usage.prompt_tokens|compact_number }}
+          </dd>
+        {% endif %}
+        {% if usage.completion_tokens is not None %}
+          <dt class="text-base-content/60">Output</dt>
+          <dd class="text-right" title="{{ usage.completion_tokens }} tokens">
+            {{ usage.completion_tokens|compact_number }}
+          </dd>
+        {% endif %}
+        {% if usage.total_tokens is not None %}
+          <dt class="text-base-content/60">Total</dt>
+          <dd class="text-right" title="{{ usage.total_tokens }} tokens">
+            {{ usage.total_tokens|compact_number }}
+          </dd>
+        {% endif %}
+        {% if usage.seconds is not None %}
+          <dt class="text-base-content/60">Time</dt>
+          <dd class="text-right">
+            {{ usage.seconds|floatformat:1 }}s
+          </dd>
+        {% endif %}
+        {% if usage.tokens_per_second is not None %}
+          <dt class="text-base-content/60">Speed</dt>
+          <dd class="text-right">
+            {{ usage.tokens_per_second|floatformat:"-1" }} tok/s
+          </dd>
+        {% endif %}
+      </dl>
+    </div>
+  </span>
+{% endif %}

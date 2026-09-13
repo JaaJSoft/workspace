@@ -9,6 +9,8 @@ its results keep far more.
 
 from workspace.ai.services.llm import truncate_tool_result
 
+from .model import RunUsage
+
 
 class RunRecord:
     def __init__(self, toolset, *, task_max_chars, store_max_chars):
@@ -17,9 +19,11 @@ class RunRecord:
         self._store_max_chars = store_max_chars
         self.rounds = []
         self.tool_data = []
+        self.usage = RunUsage()
 
     def assistant_turn(self, response):
         """Open a round on a reply that asked for tools."""
+        self.usage.add(response)
         self.rounds.append({"response": response.as_record(), "tool_executions": []})
         self.tool_data.append(
             {
@@ -69,6 +73,7 @@ class RunRecord:
 
     def reply(self, response, **flags):
         """Add a reply that opened no round: the answer, or a call never run."""
+        self.usage.add(response)
         self.rounds.append({"response": response.as_record(), **flags})
 
     def flag(self, **flags):

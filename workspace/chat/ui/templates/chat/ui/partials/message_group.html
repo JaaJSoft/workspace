@@ -121,6 +121,7 @@
         {% if msg.edited_at %}
           <span class="text-[0.65rem] opacity-50 italic ml-1">(edited)</span>
         {% endif %}
+        {% render_ai_usage msg %}
         {% if msg.uuid in pinned_message_ids %}
           <span
             class="inline-flex items-center gap-0.5 text-[0.65rem] opacity-50 ml-1"

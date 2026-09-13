@@ -246,10 +246,11 @@ def call_llm(
             status="error",
         ).observe(time.monotonic() - started)
         raise
+    duration = time.monotonic() - started
     AI_REQUEST_DURATION.labels(
         model=response.model or effective_model,
         status="ok",
-    ).observe(time.monotonic() - started)
+    ).observe(duration)
 
     if response.usage:
         if response.usage.prompt_tokens:
@@ -298,6 +299,7 @@ def call_llm(
         "completion_tokens": response.usage.completion_tokens
         if response.usage
         else None,
+        "duration": duration,
     }
 
 

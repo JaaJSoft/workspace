@@ -6,7 +6,7 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from PIL import Image
 
-from workspace.ai.harness.model import ModelResponse
+from workspace.ai.harness.model import ModelResponse, RunUsage
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.responses import handle_generation_error, post_bot_message
 from workspace.chat.models import (
@@ -75,6 +75,59 @@ class PostBotMessageInteractionTests(TestCase):
             ai_task=self.ai_task,
         )
         self.assertFalse(MessageInteraction.objects.filter(message=msg).exists())
+
+
+class PostBotMessageUsageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.bot = User.objects.create_user(username="bot", password="pw")
+        self.conv = Conversation.objects.create(
+            kind=Conversation.Kind.DM, created_by=self.user
+        )
+        ConversationMember.objects.create(conversation=self.conv, user=self.user)
+        ConversationMember.objects.create(conversation=self.conv, user=self.bot)
+        self.ai_task = AITask.objects.create(
+            owner=self.user, task_type=AITask.TaskType.CHAT
+        )
+
+    def test_the_run_total_lands_on_the_task_not_the_final_call(self):
+        response = ModelResponse(
+            content="hi", model="m", prompt_tokens=30, completion_tokens=8, duration=1.0
+        )
+        usage = RunUsage(prompt_tokens=50, completion_tokens=18, seconds=3.5)
+
+        post_bot_message(
+            conversation=self.conv,
+            bot_user=self.bot,
+            response=response,
+            tool_context={},
+            ai_task=self.ai_task,
+            usage=usage,
+        )
+
+        self.ai_task.refresh_from_db()
+        self.assertEqual(self.ai_task.model_used, "m")
+        self.assertEqual(self.ai_task.prompt_tokens, 50)
+        self.assertEqual(self.ai_task.completion_tokens, 18)
+        self.assertEqual(self.ai_task.generation_seconds, 3.5)
+
+    def test_without_a_run_the_response_is_the_whole_usage(self):
+        response = ModelResponse(
+            content="hi", model="m", prompt_tokens=30, completion_tokens=8, duration=1.0
+        )
+
+        post_bot_message(
+            conversation=self.conv,
+            bot_user=self.bot,
+            response=response,
+            tool_context={},
+            ai_task=self.ai_task,
+        )
+
+        self.ai_task.refresh_from_db()
+        self.assertEqual(self.ai_task.prompt_tokens, 30)
+        self.assertEqual(self.ai_task.completion_tokens, 8)
+        self.assertEqual(self.ai_task.generation_seconds, 1.0)
 
 
 @patch("workspace.notifications.services.notifications.notify_sse")

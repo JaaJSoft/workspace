@@ -278,6 +278,11 @@ class GenerateChatResponseWithToolsTests(TestCase):
 
         # Tool usage is persisted on tool_data, not baked into body_html
         self.assertNotIn("Retained:", bot_msg.body_html)
+
+        # The task carries the whole run, not the final call alone
+        ai_task = AITask.objects.get(chat_message=bot_msg)
+        self.assertEqual(ai_task.prompt_tokens, 50)
+        self.assertEqual(ai_task.completion_tokens, 18)
         self.assertIsInstance(bot_msg.tool_data, list)
         tool_names = [
             tc["function"]["name"]

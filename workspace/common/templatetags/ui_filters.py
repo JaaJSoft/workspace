@@ -22,6 +22,23 @@ def gt(value, arg):
 
 
 @register.filter
+def compact_number(value):
+    """Shorten a count for a badge: 1200 -> "1.2k", 12345 -> "12k", 1500000 -> "1.5M"."""
+    try:
+        number = int(value)
+    except ValueError, TypeError:
+        return ""
+    for suffix, size in (("M", 1_000_000), ("k", 1_000)):
+        if abs(number) < size:
+            continue
+        one_decimal = f"{number / size:.1f}"
+        if float(one_decimal) < 10:
+            return one_decimal.removesuffix(".0") + suffix
+        return f"{number / size:.0f}{suffix}"
+    return str(number)
+
+
+@register.filter
 def localtime_tag(value, fmt="time"):
     """Render a ``<time>`` element that JS converts to the user's local timezone.
 

@@ -186,6 +186,14 @@ class CallLlmThinkingTests(SimpleTestCase):
         self.assertEqual(result["thinking"], "let me see")
         self.assertEqual(result["content"], "Hello")
 
+    def test_result_carries_the_time_spent_waiting_for_the_backend(self):
+        msg = SimpleNamespace(content="Hello", tool_calls=None)
+        with patch(
+            "workspace.ai.services.llm.time.monotonic", side_effect=[10.0, 12.5]
+        ):
+            result = self._call(msg)
+        self.assertEqual(result["duration"], 2.5)
+
     def test_native_reasoning_content_wins_over_tags(self):
         msg = SimpleNamespace(
             content="<think>tag</think>Hello",

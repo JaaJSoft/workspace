@@ -19,6 +19,7 @@ from workspace.ai.services.responses import (
     handle_generation_error,
     post_bot_message,
     produced_media,
+    record_run_usage,
 )
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
@@ -187,9 +188,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             if not body_preview and not produced_media(run.context):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = "[EMPTY]"
-                ai_task.model_used = run.response.model
-                ai_task.prompt_tokens = run.response.prompt_tokens
-                ai_task.completion_tokens = run.response.completion_tokens
+                record_run_usage(ai_task, run.response.model, run.usage)
                 ai_task.completed_at = timezone.now()
                 ai_task.save()
                 logger.warning(
@@ -205,9 +204,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         if body == "[SKIP]":
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SKIP]"
-            ai_task.model_used = run.response.model
-            ai_task.prompt_tokens = run.response.prompt_tokens
-            ai_task.completion_tokens = run.response.completion_tokens
+            record_run_usage(ai_task, run.response.model, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -225,6 +222,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             ai_task,
             raw_messages,
             tool_data=run.tool_data,
+            usage=run.usage,
         )
 
         maybe_dispatch_summary_update(str(conversation.pk), history.summary)
@@ -233,8 +231,8 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             "Scheduled response generated: schedule=%s conversation=%s tokens=%s+%s",
             scrub(schedule_id),
             scrub(conversation.pk),
-            run.response.prompt_tokens,
-            run.response.completion_tokens,
+            run.usage.prompt_tokens,
+            run.usage.completion_tokens,
         )
         return {"status": "ok", "message_id": str(bot_message.uuid)}
 

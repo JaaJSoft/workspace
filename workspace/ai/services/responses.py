@@ -3,6 +3,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
+from workspace.ai.harness.model import RunUsage
 from workspace.ai.services.llm import clean_llm_content
 from workspace.ai.services.speech import audio_duration_seconds
 
@@ -48,6 +49,14 @@ def produced_media(tool_context) -> bool:
     return bool(tool_context.get("images") or tool_context.get("voices"))
 
 
+def record_run_usage(ai_task, model, usage):
+    """Write what a run cost onto its task: the model, and the totals of every call."""
+    ai_task.model_used = model
+    ai_task.prompt_tokens = usage.prompt_tokens
+    ai_task.completion_tokens = usage.completion_tokens
+    ai_task.generation_seconds = usage.seconds
+
+
 @transaction.atomic
 def post_bot_message(
     conversation,
@@ -57,11 +66,14 @@ def post_bot_message(
     ai_task,
     raw_messages=None,
     tool_data=None,
+    usage=None,
 ):
     """Create the bot message, attach its media, update unread counts, notify, and complete AITask.
 
     *response* is the :class:`~workspace.ai.harness.model.ModelResponse` the
-    run ended on. Returns (body, bot_message).
+    run ended on and *usage* the :class:`~workspace.ai.harness.model.RunUsage`
+    of the whole run; a single-call reply passes no usage and the response is
+    the whole run. Returns (body, bot_message).
     """
     from django.core.files.base import ContentFile
 
@@ -168,12 +180,13 @@ def post_bot_message(
 
     deliver_message(conversation, bot_message)
 
+    if usage is None:
+        usage = RunUsage()
+        usage.add(response)
     ai_task.status = ai_task.Status.COMPLETED
     ai_task.result = body
     ai_task.chat_message = bot_message
-    ai_task.model_used = response.model
-    ai_task.prompt_tokens = response.prompt_tokens
-    ai_task.completion_tokens = response.completion_tokens
+    record_run_usage(ai_task, response.model, usage)
     ai_task.raw_messages = raw_messages
     ai_task.completed_at = timezone.now()
     ai_task.save()

@@ -152,6 +152,43 @@ def _pretty_result(content):
     return content
 
 
+@register.inclusion_tag("chat/ui/partials/_ai_usage.html")
+def render_ai_usage(message):
+    """What the run behind a bot message cost, from its completed AI task.
+
+    Reads ``message.ai_tasks``, which the message views prefetch; the figures
+    are the run's totals, so one row is the whole reply.
+    """
+    from workspace.ai.models import AITask
+
+    task = next(
+        (t for t in message.ai_tasks.all() if t.status == AITask.Status.COMPLETED),
+        None,
+    )
+    if task is None:
+        return {"usage": None}
+    prompt, completion = task.prompt_tokens, task.completion_tokens
+    total = (
+        None
+        if prompt is None and completion is None
+        else (prompt or 0) + (completion or 0)
+    )
+    seconds = task.generation_seconds
+    speed = None
+    if completion is not None and seconds:
+        speed = round(completion / seconds, 1)
+    return {
+        "usage": {
+            "model": task.model_used,
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": total,
+            "seconds": seconds,
+            "tokens_per_second": speed,
+        }
+    }
+
+
 @register.inclusion_tag("chat/ui/partials/_ai_steps.html")
 def render_ai_steps(message):
     """Flatten Message.tool_data rounds into a chronological step timeline.

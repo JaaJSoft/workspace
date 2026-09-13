@@ -20,26 +20,44 @@ def call(call_id, name="search", arguments="{}"):
     return ToolCall(id=call_id, name=name, arguments=arguments)
 
 
-def reply(content="", *, thinking="", model="x"):
+def reply(
+    content="",
+    *,
+    thinking="",
+    model="x",
+    prompt_tokens=0,
+    completion_tokens=0,
+    duration=None,
+):
     """A reply that asks for nothing."""
     return ModelResponse(
         content=content,
         thinking=thinking,
         model=model,
-        prompt_tokens=0,
-        completion_tokens=0,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        duration=duration,
     )
 
 
-def tool_reply(*calls, content="", thinking="", model="x"):
+def tool_reply(
+    *calls,
+    content="",
+    thinking="",
+    model="x",
+    prompt_tokens=0,
+    completion_tokens=0,
+    duration=None,
+):
     """A reply that asks for *calls*."""
     return ModelResponse(
         content=content,
         thinking=thinking,
         tool_calls=list(calls),
         model=model,
-        prompt_tokens=0,
-        completion_tokens=0,
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        duration=duration,
     )
 
 

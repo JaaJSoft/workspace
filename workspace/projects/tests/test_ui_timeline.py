@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 from django.test import TestCase
@@ -35,6 +36,10 @@ class TimelineViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'id="task-collection"')
         self.assertContains(resp, f'data-row-id="{task.uuid}"')
         self.assertContains(resp, "<title>Beta</title>", html=False)
+        # One placed row (the "Build" task) - each row is a tab stop once,
+        # on its gutter copy only, never on its plot copy.
+        button_rows = re.findall(r'<g[^>]*role="button"', resp.content.decode())
+        self.assertEqual(len(button_rows), 1)
 
     def test_outsider_gets_404(self):
         self.client.force_login(self.outsider)

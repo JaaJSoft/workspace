@@ -16,8 +16,11 @@ Parameters:
 
 Activating a row (click or Enter) dispatches a bubbling `gantt-row` event
 whose detail carries `{ id }`; the caller listens for it and decides what
-opening a row means. Both SVGs carry the same per-row `<g>` so either half
-of a row is clickable. The partial itself never names a module.
+opening a row means. Both SVGs carry the same per-row `<g data-row-id>` so
+either half of a row is clickable, but only the gutter copy is a tab stop -
+`role="button"`, `tabindex`, and the keydown handler live there alone, so a
+keyboard user reaches each row once. The plot copy is `aria-hidden` and
+click-only. The partial itself never names a module.
 
 Every coordinate in `chart` is a pre-formatted string and the template does
 no arithmetic on purpose - see the docstring in charts.py. Row/band/marker
@@ -50,7 +53,7 @@ one thing this layout exists to prevent.
           <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="-8" text-anchor="end" class="fill-base-content/60" font-size="11" font-family="ui-monospace, monospace">{{ group.progress }}</text>
         {% endif %}
         {% for row in group.rows %}
-          <g class="cursor-pointer hover:opacity-80 focus:outline-none" role="button" tabindex="0" data-row-id="{{ row.id }}" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })" @keydown.enter.prevent="$dispatch('gantt-row', { id: $el.dataset.rowId })">
+          <g class="cursor-pointer hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" role="button" tabindex="0" data-row-id="{{ row.id }}" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })" @keydown.enter.prevent="$dispatch('gantt-row', { id: $el.dataset.rowId })">
           <title>{{ row.tooltip }}</title>
           <rect x="0" y="{{ row.y }}" width="{{ chart.gutter }}" height="{{ chart.row_height }}" class="fill-transparent" />
           <text x="8" y="{{ row.y }}" dy="18" class="fill-base-content/80" font-size="11">{{ row.label }}</text>
@@ -87,7 +90,7 @@ one thing this layout exists to prevent.
         <text x="{{ chart.gutter }}" y="{{ group.y }}" dy="19" dx="6" class="fill-base-content/60" font-size="11">{{ group.sublabel }}</text>
       {% endif %}
       {% for row in group.rows %}
-        <g class="cursor-pointer hover:opacity-80 focus:outline-none" role="button" tabindex="0" data-row-id="{{ row.id }}" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })" @keydown.enter.prevent="$dispatch('gantt-row', { id: $el.dataset.rowId })">
+        <g class="cursor-pointer hover:opacity-80" data-row-id="{{ row.id }}" aria-hidden="true" @click="$dispatch('gantt-row', { id: $el.dataset.rowId })">
         <title>{{ row.tooltip }}</title>
         <rect x="{{ chart.gutter }}" y="{{ row.y }}" width="{{ chart.plot_width }}" height="{{ chart.row_height }}" class="fill-transparent" />
         {% if row.kind == "bar" and row.width %}

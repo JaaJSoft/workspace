@@ -4,7 +4,7 @@ import json
 import logging
 
 from django.conf import settings
-from django.db.models import Exists, OuterRef, Subquery
+from django.db.models import Exists, OuterRef
 from django.http import Http404
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -146,26 +146,17 @@ class ActionsMixin:
     @action(detail=False, methods=["get"], url_path="shared-with-me")
     def shared_with_me(self, request):
         """List files shared with the current user."""
-        shared_file_ids = FileShare.objects.filter(
-            shared_with=request.user,
-        ).values_list("file_id", flat=True)
+        shared_file_ids = FileShare.objects.reaching(request.user).values_list(
+            "file_id", flat=True
+        )
         queryset = File.objects.filter(
             pk__in=shared_file_ids,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
         )
-        queryset = (
-            FileService.annotate_for_serializer(queryset, request.user)
-            .annotate(
-                user_share_permission=Subquery(
-                    FileShare.objects.filter(
-                        file_id=OuterRef("pk"),
-                        shared_with=request.user,
-                    ).values("permission")[:1]
-                ),
-            )
-            .name_ordered()
-        )
+        queryset = FileService.annotate_for_serializer(
+            queryset, request.user
+        ).name_ordered()
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 

@@ -2,7 +2,7 @@ from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Exists, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Exists, OuterRef, Prefetch, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -181,9 +181,9 @@ def _build_context(request, folder=None, is_trash_view=False):
             .name_ordered("-node_type")
         )
     elif is_shared_view:
-        shared_file_ids = FileShare.objects.filter(
-            shared_with=request.user,
-        ).values_list("file_id", flat=True)
+        shared_file_ids = FileShare.objects.reaching(request.user).values_list(
+            "file_id", flat=True
+        )
         nodes = File.objects.filter(
             pk__in=shared_file_ids,
             node_type=File.NodeType.FILE,
@@ -248,16 +248,11 @@ def _build_context(request, folder=None, is_trash_view=False):
     is_shared_subquery = FileShare.objects.filter(
         file_id=OuterRef("pk"),
     )
-    user_share_subquery = FileShare.objects.filter(
-        file_id=OuterRef("pk"),
-        shared_with=request.user,
-    ).values("permission")[:1]
     nodes = with_scan(
         nodes.annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
-            user_share_permission=Subquery(user_share_subquery),
         ).prefetch_related(
             # Scoped to the viewer's own tags: the shared-with-me listing shows
             # other people's files, and their tags must never leak into it.
@@ -526,7 +521,7 @@ def properties(request, uuid):
     if is_owner and file_obj.node_type == File.NodeType.FILE:
         shares = list(
             FileShare.objects.filter(file=file_obj)
-            .select_related("shared_with")
+            .select_related("shared_with", "shared_with_group")
             .order_by("created_at")
         )
 

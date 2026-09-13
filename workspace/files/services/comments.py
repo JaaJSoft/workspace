@@ -13,14 +13,22 @@ User = get_user_model()
 def mentionable_users(file_obj):
     """Users who can see *file_obj*: owner, group members, share targets.
 
-    Mirrors the access branches of ``FileService`` (owned / group / shared);
-    keep the two in sync. Sorted by username for stable autocomplete lists.
+    Mirrors the access branches of ``FileService`` (owned / group folder /
+    shared with a user / shared with a group); keep the two in sync. Sorted
+    by username for stable autocomplete lists.
     """
     users = {}
     if file_obj.owner.is_active:
         users[file_obj.owner_id] = file_obj.owner
+    group_ids = set(
+        file_obj.shares.filter(shared_with_group__isnull=False).values_list(
+            "shared_with_group_id", flat=True
+        )
+    )
     if file_obj.group_id:
-        for user in User.objects.filter(groups=file_obj.group_id, is_active=True):
+        group_ids.add(file_obj.group_id)
+    if group_ids:
+        for user in User.objects.filter(groups__in=group_ids, is_active=True):
             users.setdefault(user.pk, user)
     for share in file_obj.shares.filter(shared_with__is_active=True).select_related(
         "shared_with"

@@ -22,6 +22,12 @@
         {% include "users/ui/partials/user_selector.html" with on_select_event="share-user-selected" placeholder="Search by username or name..." %}
       </div>
 
+      <!-- Group search -->
+      <div class="mb-4" x-show="canShareWithPeople()">
+        <label class="text-sm font-medium mb-1 block">Add a group</label>
+        {% include "ui/partials/group_selector.html" with on_select_event="share-group-selected" local_source="selectableGroups()" placeholder="Search groups..." %}
+      </div>
+
       <!-- Current shares list -->
       <div class="mb-4" x-show="canShareWithPeople()">
         <label class="text-sm font-medium mb-2 block">Shared with</label>
@@ -40,29 +46,38 @@
           </div>
 
           <!-- Share entries -->
-          <template x-for="entry in displayList" :key="entry.id">
+          <template x-for="entry in displayList" :key="entry.key">
             <div
               class="flex items-center gap-2 p-2 rounded-lg group"
               :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'"
             >
-              <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
+              <template x-if="entry.type === 'group'">
+                <span
+                  class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                >
+                  <i data-lucide="users" class="w-4 h-4 opacity-70"></i>
+                </span>
+              </template>
+              <template x-if="entry.type === 'user'">
+                <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
+              </template>
               <div class="flex-1 min-w-0">
                 <div
                   class="font-medium text-sm truncate"
                   :class="entry._removed ? 'line-through' : ''"
-                  x-text="entry.username"
+                  x-text="entry.type === 'group' ? entry.name : entry.username"
                 ></div>
                 <div
                   class="text-xs text-base-content/60 truncate"
-                  x-show="entry.first_name || entry.last_name"
-                  x-text="((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()"
+                  x-show="entry.type === 'group' || entry.first_name || entry.last_name"
+                  x-text="entry.type === 'group' ? 'Group' : ((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()"
                 ></div>
               </div>
               <template x-if="!entry._removed">
                 <select
                   class="select select-xs select-bordered w-24"
                   :value="entry.permission || 'ro'"
-                  @change="stagePermissionChange(entry.id, $event.target.value, entry._pending)"
+                  @change="stagePermissionChange(entry.key, $event.target.value, entry._pending)"
                 >
                   <option value="ro">Read only</option>
                   <option value="rw">Read & write</option>
@@ -76,7 +91,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs"
                   title="Undo removal"
-                  @click="undoRemove(entry.id)"
+                  @click="undoRemove(entry.key)"
                 >
                   Undo
                 </button>
@@ -86,7 +101,7 @@
                   type="button"
                   class="btn btn-ghost btn-xs btn-square text-error"
                   title="Remove access"
-                  @click="stageRemove(entry.id)"
+                  @click="stageRemove(entry.key)"
                 >
                   &times;
                 </button>

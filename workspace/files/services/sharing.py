@@ -33,8 +33,33 @@ class ShareLinkRuleError(APIException):
     default_detail = "Invalid share link parameters."
 
 
-def share_file(file_obj, *, target_user, permission, acting_user):
-    """Share a file with a user, or update the permission if already shared.
+def _share_target(target_user, target_group):
+    """Validate that exactly one target was given; return its row filter and
+    the event payload naming it."""
+    if (target_user is None) == (target_group is None):
+        raise ValueError("share_file needs exactly one of target_user, target_group")
+    if target_user is not None:
+        return (
+            {"shared_with": target_user},
+            {
+                "shared_with_id": target_user.pk,
+                "shared_with_username": target_user.username,
+            },
+        )
+    return (
+        {"shared_with_group": target_group},
+        {
+            "shared_with_group_id": target_group.pk,
+            "shared_with_group_name": target_group.name,
+        },
+    )
+
+
+def share_file(
+    file_obj, *, target_user=None, target_group=None, permission, acting_user
+):
+    """Share a file with a user or a group, or update an existing share's
+    permission.
 
     Returns ``(share, created, permission_changed)``:
       - ``share`` is the FileShare row (created or updated).
@@ -42,9 +67,10 @@ def share_file(file_obj, *, target_user, permission, acting_user):
       - ``permission_changed`` is True when an existing share's permission
         was updated; False otherwise (including when ``created`` is True).
     """
+    target, payload = _share_target(target_user, target_group)
     share, created = FileShare.objects.get_or_create(
         file=file_obj,
-        shared_with=target_user,
+        **target,
         defaults={"shared_by": acting_user, "permission": permission},
     )
     if created:
@@ -52,11 +78,7 @@ def share_file(file_obj, *, target_user, permission, acting_user):
             file_obj,
             acting_user,
             FileEvent.Action.SHARED,
-            {
-                "shared_with_id": target_user.pk,
-                "shared_with_username": target_user.username,
-                "permission": permission,
-            },
+            {**payload, "permission": permission},
         )
         return share, True, False
 
@@ -69,8 +91,7 @@ def share_file(file_obj, *, target_user, permission, acting_user):
             acting_user,
             FileEvent.Action.SHARE_PERMISSION_CHANGED,
             {
-                "shared_with_id": target_user.pk,
-                "shared_with_username": target_user.username,
+                **payload,
                 "old_permission": old_permission,
                 "new_permission": permission,
             },
@@ -80,22 +101,12 @@ def share_file(file_obj, *, target_user, permission, acting_user):
     return share, False, False
 
 
-def unshare_file(file_obj, *, target_user, acting_user):
-    """Remove a share. Returns the number of rows deleted (0 or 1)."""
-    deleted, _ = FileShare.objects.filter(
-        file=file_obj,
-        shared_with=target_user,
-    ).delete()
+def unshare_file(file_obj, *, target_user=None, target_group=None, acting_user):
+    """Remove a user or group share. Returns the number of rows deleted (0 or 1)."""
+    target, payload = _share_target(target_user, target_group)
+    deleted, _ = FileShare.objects.filter(file=file_obj, **target).delete()
     if deleted:
-        record_event(
-            file_obj,
-            acting_user,
-            FileEvent.Action.UNSHARED,
-            {
-                "shared_with_id": target_user.pk,
-                "shared_with_username": target_user.username,
-            },
-        )
+        record_event(file_obj, acting_user, FileEvent.Action.UNSHARED, payload)
     return deleted
 
 

@@ -727,3 +727,15 @@ test('a run folds the generator, so no Use can land a phrase under it', async ()
   tree.gates[0].release();
   await run;
 });
+
+test('an empty draw does not stop the field following the generator', () => {
+  // A draw that fails - every character class unticked - announces itself
+  // with an empty value. The next valid draw is still the panel's, and the
+  // field has to take it rather than stay empty under a panel showing one.
+  const { component } = load();
+  component.applyGeneratedPassphrase(PHRASE);
+  component.trackGeneratedPassphrase('');
+  component.trackGeneratedPassphrase('a fresh draw from the panel');
+  assert.equal(component.exportPassphrase, 'a fresh draw from the panel');
+  assert.equal(component.passphraseAccepted(), true);
+});

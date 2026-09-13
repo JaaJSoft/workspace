@@ -29,6 +29,11 @@ window.vaultExportMixin = function vaultExportMixin() {
     // Folded until the dice asks for it, as in the entry dialog.
     exportGeneratorOpen: false,
     exportRevealed: false,
+    // Whether the field still belongs to the panel: set by Use, dropped the
+    // moment a human types or the dialog closes. Not "the field is non-empty" -
+    // a failed draw empties the field and would then end the following for
+    // good, leaving it empty under a panel that shows a phrase.
+    exportFollowsPanel: false,
 
     // What the generator panel opens at inside this dialog, pinned rather than
     // left to the panel's own defaults or to what the device last remembered.
@@ -103,6 +108,7 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportPassphrase = value;
       this.exportConfirm = value;
       this.exportSource = 'generated';
+      this.exportFollowsPanel = true;
       this.exportGeneratorOpen = false;
     },
 
@@ -115,11 +121,10 @@ window.vaultExportMixin = function vaultExportMixin() {
     // archive is lost exactly as the warning above the field says it would be.
     //
     // Only while the phrase is still the panel's: one the user typed is
-    // theirs, and an empty field means they never pressed Use - tracking into
-    // it would arm Export with a phrase they never took.
+    // theirs, and a field Use never filled would be armed with a phrase the
+    // user never took.
     trackGeneratedPassphrase(value) {
-      if (this.exportSource !== 'generated') return;
-      if (!this.exportPassphrase) return;
+      if (!this.exportFollowsPanel) return;
       this.exportPassphrase = value;
       this.exportConfirm = value;
     },
@@ -170,6 +175,7 @@ window.vaultExportMixin = function vaultExportMixin() {
         this.exportOwnPhraseAck = false;
       }
       this.exportSource = 'typed';
+      this.exportFollowsPanel = false;
     },
 
     // A count, not a secret: it outlives the download so the dialog can say
@@ -313,6 +319,7 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportPassphrase = '';
       this.exportConfirm = '';
       this.exportSource = 'generated';
+      this.exportFollowsPanel = false;
       this.exportOwnPhraseAck = false;
       this.exportProgress = 0;
       this.exportError = '';

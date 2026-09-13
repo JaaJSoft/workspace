@@ -11,7 +11,7 @@ Kanban boards for tracking tasks, solo or as a team.
 - **Personal project** - Every user gets a private project out of the box, ready to use without any setup
 - **Shared projects** - Create additional projects and invite people as Admin or Member
 - **Groups** - Attach groups to a project so every group member gets access; admin rights always stay individual
-- **Five views** - Overview (counts and recent activity), Board (kanban columns), Backlog (unplanned work), All tasks (flat list), and Timeline (date axis)
+- **Six views** - Overview (counts and recent activity), Board (kanban columns), Backlog (unplanned work), All tasks (flat list), Timeline (date axis), and Analytics (flow and sprint reports)
 - **Drag & drop** - Move cards between columns or reorder them within a column
 - **Custom columns** - Add, rename, recolor, and reorder columns; each one is a Backlog, Active, or Done column
 - **Task details** - Markdown description, status, priority, start date, due date, assignees, labels, comments, and per-task activity in a side panel

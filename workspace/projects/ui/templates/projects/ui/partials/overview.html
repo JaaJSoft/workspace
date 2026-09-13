@@ -114,14 +114,21 @@
                   ></span>
                   <span class="font-medium truncate">{{ e.name }}</span>
                   {% if e.target_date %}
-                    <span class="ml-auto shrink-0 text-xs font-mono {% if e.target_date < today %}text-error{% else %}text-base-content/60{% endif %}">{{ e.target_date|date:"M d" }}</span>
+                    <span
+                      class="ml-auto shrink-0 text-xs font-mono {% if e.target_date < today %}text-error{% else %}text-base-content/60{% endif %}"
+                    >{{ e.target_date|date:"M d" }}</span>
                   {% endif %}
                 </div>
                 <div class="flex items-center gap-2">
                   <div class="h-1.5 flex-1 rounded-full bg-base-300 overflow-hidden">
-                    <div class="h-full rounded-full bg-accent" style="width: {% widthratio e.done_task_count e.task_count|default:1 100 %}%"></div>
+                    <div
+                      class="h-full rounded-full bg-accent"
+                      style="width: {% widthratio e.done_task_count e.task_count|default:1 100 %}%"
+                    ></div>
                   </div>
-                  <span class="text-xs text-base-content/60 font-mono shrink-0">{{ e.done_task_count }}/{{ e.task_count }} done</span>
+                  <span
+                    class="text-xs text-base-content/60 font-mono shrink-0"
+                  >{{ e.done_task_count }}/{{ e.task_count }} done</span>
                 </div>
               </li>
             {% empty %}
@@ -129,7 +136,9 @@
             {% endfor %}
           </ul>
           {% if closed_epic_count %}
-            <p class="text-xs text-base-content/50 mt-3">{{ closed_epic_count }} completed epic{{ closed_epic_count|pluralize }}</p>
+            <p
+              class="text-xs text-base-content/50 mt-3"
+            >{{ closed_epic_count }} completed epic{{ closed_epic_count|pluralize }}</p>
           {% endif %}
         </section>
       {% endif %}

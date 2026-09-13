@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.urls import reverse
@@ -25,6 +27,20 @@ from .services.links import RELATIONS
 from .services.references import KEY_RE
 
 User = get_user_model()
+
+_HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _validate_hex_color(value):
+    """Raise unless *value* is empty or a #rrggbb hex string.
+
+    Shared by every serializer whose color is interpolated into an inline
+    style, so no caller can slip through a CSS value (url(), a keyword)
+    the picker never offers.
+    """
+    if value and not _HEX_COLOR.match(value):
+        raise serializers.ValidationError("Color must be a #rrggbb value.")
+    return value
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -170,6 +186,9 @@ class LabelSerializer(serializers.ModelSerializer):
             )
         return value
 
+    def validate_color(self, value):
+        return _validate_hex_color(value)
+
 
 class EpicSerializer(serializers.ModelSerializer):
     closed = serializers.BooleanField(source="is_closed", required=False)
@@ -201,6 +220,9 @@ class EpicSerializer(serializers.ModelSerializer):
                 "An epic with this name already exists in this project."
             )
         return value
+
+    def validate_color(self, value):
+        return _validate_hex_color(value)
 
 
 class SprintSerializer(serializers.ModelSerializer):
@@ -269,6 +291,9 @@ class TaskStatusSerializer(serializers.ModelSerializer):
         if self.instance is not None and value != self.instance.category:
             raise serializers.ValidationError("Category cannot be changed.")
         return value
+
+    def validate_color(self, value):
+        return _validate_hex_color(value)
 
 
 class TaskSerializer(serializers.ModelSerializer):

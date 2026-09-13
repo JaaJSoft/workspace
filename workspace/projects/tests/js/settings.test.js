@@ -637,3 +637,37 @@ test('projectEpics.setTargetDate patches and syncs, clears on empty', async () =
   assert.deepStrictEqual(calls[1], ['/x/epics/e1', { target_date: null }]);
   assert.equal(epic.target_date, null);
 });
+
+test('projectEpics.sortEpics puts dated epics first by date then name', () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.items = [
+    { uuid: 'e1', name: 'Zeta', target_date: null },
+    { uuid: 'e2', name: 'Beta', target_date: '2026-11-01' },
+    { uuid: 'e3', name: 'Alpha', target_date: '2026-11-01' },
+    { uuid: 'e4', name: 'Alpha undated', target_date: null },
+    { uuid: 'e5', name: 'Gamma', target_date: '2026-10-01' },
+  ];
+  c.sortEpics();
+  assert.deepStrictEqual(
+    c.items.map((e) => e.uuid),
+    ['e5', 'e3', 'e2', 'e4', 'e1']
+  );
+});
+
+test('projectEpics.setTargetDate re-sorts the list', async () => {
+  const c = ctx().projectEpics({ apiBase: '/x' });
+  c.request = async () => ({ json: async () => ({}) });
+  c.epics = [];
+  const alpha = { uuid: 'e1', name: 'Alpha', target_date: null, closed: false };
+  const beta = { uuid: 'e2', name: 'Beta', target_date: '2026-11-01', closed: false };
+  // Deliberately out of sort order before the change: alpha is undated so
+  // it belongs after beta, and dating it earlier than beta should move it
+  // back to the front - proving setTargetDate actually re-sorts rather
+  // than leaving the array's insertion order alone.
+  c.items = [beta, alpha];
+  await c.setTargetDate(alpha, '2026-10-01');
+  assert.deepStrictEqual(
+    c.items.map((e) => e.uuid),
+    ['e1', 'e2']
+  );
+});

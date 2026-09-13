@@ -713,6 +713,20 @@ function projectEpics(config) {
       }
     },
 
+    // Mirrors the API ordering (target_date, then name) so a rename or a
+    // date change doesn't leave the list out of sync with a fresh load.
+    sortEpics() {
+      this.items.sort(function (a, b) {
+        if (!!a.target_date !== !!b.target_date) {
+          return a.target_date ? -1 : 1;
+        }
+        if (a.target_date && b.target_date && a.target_date !== b.target_date) {
+          return a.target_date < b.target_date ? -1 : 1;
+        }
+        return a.name.localeCompare(b.name);
+      });
+    },
+
     syncBoardEpics() {
       // this.epics is the parent projectBoard's array via Alpine's scope
       // chain (same shape as the epics-data payload).
@@ -793,6 +807,7 @@ function projectEpics(config) {
         this.items.push(await resp.json());
         this.adding = false;
         this.addForm = { name: '', color: '', target_date: '', description: '' };
+        this.sortEpics();
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;
@@ -819,6 +834,7 @@ function projectEpics(config) {
         });
         epic.name = name;
         this.editing = null;
+        this.sortEpics();
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;
@@ -892,6 +908,7 @@ function projectEpics(config) {
           body: JSON.stringify({ target_date: targetDate }),
         });
         epic.target_date = targetDate;
+        this.sortEpics();
         this.syncBoardEpics();
       } catch (e) {
         this.error = e.message;

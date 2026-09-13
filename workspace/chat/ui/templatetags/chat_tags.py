@@ -173,17 +173,18 @@ def render_ai_usage(message):
         if prompt is None and completion is None
         else (prompt or 0) + (completion or 0)
     )
-    seconds = task.generation_seconds
+    # The final call alone: a tool round reads a long prompt for a few tokens
+    # of call, and would drag a whole-run figure well under the real speed.
     speed = None
-    if completion is not None and seconds:
-        speed = round(completion / seconds, 1)
+    if task.answer_tokens is not None and task.answer_seconds:
+        speed = round(task.answer_tokens / task.answer_seconds, 1)
     return {
         "usage": {
             "model": task.model_used,
             "prompt_tokens": prompt,
             "completion_tokens": completion,
             "total_tokens": total,
-            "seconds": seconds,
+            "seconds": task.generation_seconds,
             "tokens_per_second": speed,
         }
     }

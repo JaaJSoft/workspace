@@ -110,6 +110,9 @@ class PostBotMessageUsageTests(TestCase):
         self.assertEqual(self.ai_task.prompt_tokens, 50)
         self.assertEqual(self.ai_task.completion_tokens, 18)
         self.assertEqual(self.ai_task.generation_seconds, 3.5)
+        # The answer's own figures ride along, for the output speed
+        self.assertEqual(self.ai_task.answer_tokens, 8)
+        self.assertEqual(self.ai_task.answer_seconds, 1.0)
 
     def test_without_a_run_the_response_is_the_whole_usage(self):
         response = ModelResponse(

@@ -188,7 +188,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
             if not body_preview and not produced_media(run.context):
                 ai_task.status = ai_task.Status.COMPLETED
                 ai_task.result = "[EMPTY]"
-                record_run_usage(ai_task, run.response.model, run.usage)
+                record_run_usage(ai_task, run.response, run.usage)
                 ai_task.completed_at = timezone.now()
                 ai_task.save()
                 logger.warning(
@@ -204,7 +204,7 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         if body == "[SKIP]":
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SKIP]"
-            record_run_usage(ai_task, run.response.model, run.usage)
+            record_run_usage(ai_task, run.response, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()

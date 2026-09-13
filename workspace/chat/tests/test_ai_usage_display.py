@@ -33,6 +33,8 @@ class RenderAiUsageTagTests(TestCase):
             "prompt_tokens": 1200,
             "completion_tokens": 340,
             "generation_seconds": 8.5,
+            "answer_tokens": 300,
+            "answer_seconds": 6.0,
         }
         return AITask.objects.create(**{**defaults, **fields})
 
@@ -49,7 +51,15 @@ class RenderAiUsageTagTests(TestCase):
         self.assertEqual(usage["completion_tokens"], 340)
         self.assertEqual(usage["total_tokens"], 1540)
         self.assertEqual(usage["seconds"], 8.5)
-        self.assertEqual(usage["tokens_per_second"], 40.0)
+
+    def test_speed_is_the_answer_call_not_the_whole_run(self):
+        # 300 tokens in 6s for the answer; the run total (340 in 8.5s) also
+        # carries the tool round, which read a long prompt for a few tokens.
+        self._task()
+
+        self.assertEqual(
+            render_ai_usage(self.message)["usage"]["tokens_per_second"], 50.0
+        )
 
     def test_pending_task_is_not_shown(self):
         self._task(status=AITask.Status.PROCESSING)
@@ -57,7 +67,7 @@ class RenderAiUsageTagTests(TestCase):
         self.assertIsNone(render_ai_usage(self.message)["usage"])
 
     def test_speed_needs_a_measured_duration(self):
-        self._task(generation_seconds=None)
+        self._task(generation_seconds=None, answer_seconds=None)
 
         usage = render_ai_usage(self.message)["usage"]
 
@@ -65,7 +75,13 @@ class RenderAiUsageTagTests(TestCase):
         self.assertIsNone(usage["tokens_per_second"])
 
     def test_backend_reporting_no_usage_still_shows_the_model(self):
-        self._task(prompt_tokens=None, completion_tokens=None, generation_seconds=None)
+        self._task(
+            prompt_tokens=None,
+            completion_tokens=None,
+            generation_seconds=None,
+            answer_tokens=None,
+            answer_seconds=None,
+        )
 
         usage = render_ai_usage(self.message)["usage"]
 
@@ -86,7 +102,7 @@ class RenderAiUsageTagTests(TestCase):
         self.assertIn('title="1200 tokens"', html)
         self.assertIn("340", html)
         self.assertIn("8.5s", html)
-        self.assertIn("40 tok/s", html)
+        self.assertIn("50 tok/s", html)
 
 
 class ConversationMessagesUsageTests(TestCase):
@@ -116,6 +132,8 @@ class ConversationMessagesUsageTests(TestCase):
             prompt_tokens=1200,
             completion_tokens=340,
             generation_seconds=8.5,
+            answer_tokens=300,
+            answer_seconds=6.0,
         )
         return message
 
@@ -125,7 +143,7 @@ class ConversationMessagesUsageTests(TestCase):
         html = self.client.get(self.url).content.decode()
 
         self.assertIn('data-lucide="info"', html)
-        self.assertIn("40 tok/s", html)
+        self.assertIn("50 tok/s", html)
 
     def test_human_message_carries_none(self):
         Message.objects.create(

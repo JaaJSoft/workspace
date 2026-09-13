@@ -259,7 +259,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         if not queued and not produced_media(run.context):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SILENT]"
-            record_run_usage(ai_task, run.response.model, run.usage)
+            record_run_usage(ai_task, run.response, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()
@@ -282,7 +282,7 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         ):
             ai_task.status = ai_task.Status.COMPLETED
             ai_task.result = "[SUPPRESSED]"
-            record_run_usage(ai_task, run.response.model, run.usage)
+            record_run_usage(ai_task, run.response, run.usage)
             ai_task.raw_messages = raw_messages
             ai_task.completed_at = timezone.now()
             ai_task.save()

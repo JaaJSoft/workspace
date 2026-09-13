@@ -378,6 +378,8 @@ def _ai_usage_prefetch():
             "prompt_tokens",
             "completion_tokens",
             "generation_seconds",
+            "answer_tokens",
+            "answer_seconds",
         )
         .order_by("created_at"),
     )

@@ -215,6 +215,9 @@ class AITask(models.Model):
     completion_tokens = models.IntegerField(null=True, blank=True)
     # Seconds spent waiting for the backend, tool execution and queueing excluded.
     generation_seconds = models.FloatField(null=True, blank=True)
+    # The final call alone: what the user reads, and the output speed's basis.
+    answer_tokens = models.IntegerField(null=True, blank=True)
+    answer_seconds = models.FloatField(null=True, blank=True)
     raw_messages = models.JSONField(null=True, blank=True)
 
     chat_message = models.ForeignKey(

@@ -49,12 +49,18 @@ def produced_media(tool_context) -> bool:
     return bool(tool_context.get("images") or tool_context.get("voices"))
 
 
-def record_run_usage(ai_task, model, usage):
-    """Write what a run cost onto its task: the model, and the totals of every call."""
-    ai_task.model_used = model
+def record_run_usage(ai_task, response, usage):
+    """Write what a run cost onto its task.
+
+    *usage* is the total of every call; *response* the call the run ended on,
+    whose own figures give the speed at which the answer itself was written.
+    """
+    ai_task.model_used = response.model
     ai_task.prompt_tokens = usage.prompt_tokens
     ai_task.completion_tokens = usage.completion_tokens
     ai_task.generation_seconds = usage.seconds
+    ai_task.answer_tokens = response.completion_tokens
+    ai_task.answer_seconds = response.duration
 
 
 @transaction.atomic
@@ -186,7 +192,7 @@ def post_bot_message(
     ai_task.status = ai_task.Status.COMPLETED
     ai_task.result = body
     ai_task.chat_message = bot_message
-    record_run_usage(ai_task, response.model, usage)
+    record_run_usage(ai_task, response, usage)
     ai_task.raw_messages = raw_messages
     ai_task.completed_at = timezone.now()
     ai_task.save()

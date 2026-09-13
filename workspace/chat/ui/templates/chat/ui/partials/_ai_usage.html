@@ -12,7 +12,7 @@ bubble's left edge instead and overflows to the right, where there is always
 room. Anchored on the icon alone, a short reply sent it under the sidebar.
 {% endcomment %}
 {% if usage %}
-  <span class="dropdown dropdown-top static ml-auto mt-2 shrink-0">
+  <span class="dropdown dropdown-top static ml-auto shrink-0">
     <button
       type="button"
       tabindex="0"
@@ -24,7 +24,7 @@ room. Anchored on the icon alone, a short reply sent it under the sidebar.
     </button>
     <div
       tabindex="0"
-      class="dropdown-content end-[min(0px,100%_-_13rem)] z-50 mb-1.5 w-52 rounded-lg border border-base-300 bg-base-100 p-2.5 text-[0.7rem] leading-snug text-base-content shadow-lg"
+      class="dropdown-content end-[min(0px,100%_-_13rem)] z-50 mb-1 w-52 rounded-lg border border-base-300 bg-base-100 p-2.5 text-[0.7rem] leading-snug text-base-content shadow-lg"
     >
       {% if usage.model %}
         <div class="font-medium truncate mb-1.5" title="{{ usage.model }}">{{ usage.model }}</div>

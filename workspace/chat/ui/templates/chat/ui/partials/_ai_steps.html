@@ -6,7 +6,7 @@ Alpine state would not survive the swap.
 {% endcomment %}
 {% if steps %}
   {% if collapsed %}
-    <details class="group/tools mt-2 text-xs text-base-content/40 min-w-0">
+    <details class="group/tools text-xs text-base-content/40 min-w-0">
       <summary
         class="flex items-center gap-1 cursor-pointer list-none select-none hover:text-base-content/60 transition-colors"
       >
@@ -29,9 +29,7 @@ Alpine state would not survive the swap.
       </div>
     </details>
   {% else %}
-    <div
-      class="mt-2 text-xs text-base-content/40 flex flex-col gap-0.5 min-w-0"
-    >
+    <div class="text-xs text-base-content/40 flex flex-col gap-0.5 min-w-0">
       {% for step in steps %}
         {% include "chat/ui/partials/_ai_step.html" %}
       {% endfor %}

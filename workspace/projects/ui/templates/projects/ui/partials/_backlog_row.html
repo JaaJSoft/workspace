@@ -63,7 +63,7 @@
     {% include "projects/ui/partials/_priority_badge.html" %}
   </span>
   <span
-    class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today %}text-error font-medium{% else %}text-base-content/60{% endif %}"
+    class="w-24 hidden md:flex items-center gap-1 shrink-0 text-xs {% if task.due_date and task.due_date < today and task.status.category != "done" %}text-error font-medium{% else %}text-base-content/60{% endif %}"
   >
     {% if task.due_date %}
       <i data-lucide="calendar" class="w-3 h-3"></i>{{ task.due_date|date:"M j" }}

@@ -4,9 +4,15 @@ What a bot reply cost, behind an info icon. Context: usage from
 render_ai_usage (None when the message has no completed AI task). A daisyUI
 focus-driven dropdown on purpose: the messages container is fully replaced on
 SSE refresh, so Alpine state would not survive the swap.
+
+The panel is anchored on the bubble's left edge (the positioned row that
+includes this span, hence the static dropdown), not on the icon: the icon sits
+at the bubble's right edge, and on a short reply that edge is a few pixels from
+the left one, so a panel growing leftwards from it ended under the sidebar.
+There is always room to the right of a bubble's left edge.
 {% endcomment %}
 {% if usage %}
-  <span class="dropdown dropdown-top dropdown-end ml-auto mt-2 shrink-0">
+  <span class="dropdown dropdown-top static ml-auto mt-2 shrink-0">
     <button
       type="button"
       tabindex="0"
@@ -18,7 +24,7 @@ SSE refresh, so Alpine state would not survive the swap.
     </button>
     <div
       tabindex="0"
-      class="dropdown-content z-50 mb-1.5 w-52 rounded-lg border border-base-300 bg-base-100 p-2.5 text-[0.7rem] leading-snug text-base-content shadow-lg"
+      class="dropdown-content start-0 z-50 mb-1.5 w-52 rounded-lg border border-base-300 bg-base-100 p-2.5 text-[0.7rem] leading-snug text-base-content shadow-lg"
     >
       {% if usage.model %}
         <div class="font-medium truncate mb-1.5" title="{{ usage.model }}">{{ usage.model }}</div>

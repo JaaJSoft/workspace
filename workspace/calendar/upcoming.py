@@ -218,11 +218,22 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
     # ("2026-04-08T14:00:00Z") and plain isoformat strings from virtual
     # occurrences ("2026-04-08T14:00:00+00:00") compare correctly at the
     # same instant. String comparison would be wrong.
+    # An all-day event serializes its start as the bare UTC date, which
+    # parses naive and cannot be compared with the aware instants of timed
+    # events; UTC midnight is the instant that date stands for.
     from dateutil.parser import parse as _parse_dt
 
+    def _instant(value):
+        dt = _parse_dt(value)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
     merged = one_off_data + recurring_data
-    merged.sort(key=lambda e: (_parse_dt(e["start"]), e["uuid"]))
+    merged.sort(key=lambda e: (_instant(e["start"]), e["uuid"]))
 
     page = merged[:limit]
-    next_after = merged[limit]["start"] if len(merged) > limit else None
+    # Re-emitted as an aware instant: a bare date would be re-read in the
+    # server timezone on the next page and could skip the event itself.
+    next_after = (
+        _instant(merged[limit]["start"]).isoformat() if len(merged) > limit else None
+    )
     return page, next_after

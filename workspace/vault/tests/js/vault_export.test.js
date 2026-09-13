@@ -365,20 +365,25 @@ function wirePanel(entries = new Map()) {
   });
   const component = ctx.vaultExportMixin();
   const copied = [];
-  const panel = ctx.passwordGeneratorPanel({}, component.exportGeneratorOptions());
-  panel.$watch = () => {};
-  // The template's handlers, by name. A dispatch the mixin has no handler for
-  // is left alone rather than throwing, so a missing handler fails on the
-  // state it should have produced instead of on a TypeError.
-  panel.$dispatch = (name, detail) => {
-    if (name === 'password-apply') component.applyGeneratedPassphrase(detail.value);
-    if (name === 'password-copy') copied.push(detail.value);
-    if (name === 'password-regenerate' && component.trackGeneratedPassphrase) {
-      component.trackGeneratedPassphrase(detail.value);
-    }
+  // A fresh panel per call, the way x-if constructs one each time the dice
+  // opens it.
+  const mount = () => {
+    const panel = ctx.passwordGeneratorPanel({}, component.exportGeneratorOptions());
+    panel.$watch = () => {};
+    // The template's handlers, by name. A dispatch the mixin has no handler for
+    // is left alone rather than throwing, so a missing handler fails on the
+    // state it should have produced instead of on a TypeError.
+    panel.$dispatch = (name, detail) => {
+      if (name === 'password-apply') component.applyGeneratedPassphrase(detail.value);
+      if (name === 'password-copy') copied.push(detail.value);
+      if (name === 'password-regenerate' && component.trackGeneratedPassphrase) {
+        component.trackGeneratedPassphrase(detail.value);
+      }
+    };
+    panel.init();
+    return panel;
   };
-  panel.init();
-  return { component, panel, copied };
+  return { component, panel: mount(), copied, mount };
 }
 
 test('a redraw does not leave the field holding the phrase before it', () => {
@@ -571,4 +576,76 @@ test('the archive passphrase outlives the clipboard window an entry password get
           assert.equal(ctx.vaultClipboard.state().label, 'Export passphrase');
         });
     });
+});
+
+test('the generator stays folded until the dice asks for it', () => {
+  const { component } = load();
+  component.openExportDialog();
+  assert.equal(component.exportGeneratorOpen, false, 'the dialog opened on the generator');
+  component.toggleExportGenerator();
+  assert.equal(component.exportGeneratorOpen, true);
+  component.toggleExportGenerator();
+  assert.equal(component.exportGeneratorOpen, false);
+});
+
+test('Use fills the field and folds the generator away', () => {
+  const { component, panel } = wirePanel();
+  component.exportGeneratorOpen = true;
+  panel.apply();
+  assert.equal(component.exportPassphrase, panel.value);
+  assert.equal(component.exportGeneratorOpen, false, 'the panel stayed open after Use');
+});
+
+test('reopening the generator over an applied phrase puts the field on the new draw', () => {
+  // The dice constructs a fresh panel, and its first draw is not the phrase
+  // the field holds. Left there, the panel would show and copy one phrase
+  // while the archive is sealed with another nobody can see.
+  const { component, panel, copied, mount } = wirePanel();
+  panel.apply();
+  const reopened = mount();
+  assert.equal(component.exportPassphrase, reopened.value);
+  reopened.copy();
+  assert.deepStrictEqual(copied, [component.exportPassphrase]);
+});
+
+test("the field's own Copy hands over the phrase that seals the file", () => {
+  const { component } = load();
+  const calls = [];
+  component.copyGenerated = (value, policy) => { calls.push([value, policy.label]); };
+  component.copyExportPassphrase();
+  assert.deepStrictEqual(calls, [], 'an empty field was copied');
+  component.applyGeneratedPassphrase(PHRASE);
+  component.copyExportPassphrase();
+  assert.deepStrictEqual(calls, [[PHRASE, 'Export passphrase']]);
+});
+
+test('the hint under the field follows where the phrase came from', () => {
+  const { component } = load();
+  assert.equal(component.passphraseState(), 'empty');
+  component.applyGeneratedPassphrase(PHRASE);
+  assert.equal(component.passphraseState(), 'generated');
+  component.exportPassphrase = 'ma phrase a moi';
+  component.noteTypedPassphrase();
+  assert.equal(component.passphraseState(), 'typed');
+  component.exportPassphrase = '';
+  assert.equal(component.passphraseState(), 'empty', 'an emptied field still claimed a phrase');
+});
+
+test('closing or locking folds the generator and masks the phrase again', () => {
+  // A dialog reopened after a lock must not come back revealing a phrase, nor
+  // with a panel already drawing one.
+  const { component } = load();
+  component.openExportDialog();
+  component.applyGeneratedPassphrase(PHRASE);
+  component.exportGeneratorOpen = true;
+  component.exportRevealed = true;
+  component.clearExport();
+  assert.equal(component.exportGeneratorOpen, false);
+  assert.equal(component.exportRevealed, false);
+
+  component.exportGeneratorOpen = true;
+  component.exportRevealed = true;
+  component.openExportDialog();
+  assert.equal(component.exportGeneratorOpen, false);
+  assert.equal(component.exportRevealed, false);
 });

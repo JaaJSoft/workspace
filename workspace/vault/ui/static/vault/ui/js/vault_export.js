@@ -26,6 +26,9 @@ window.vaultExportMixin = function vaultExportMixin() {
     // machine whose vault is closed. This counter is what that continuation
     // reads to know the run it belongs to is over.
     exportGeneration: 0,
+    // Folded until the dice asks for it, as in the entry dialog.
+    exportGeneratorOpen: false,
+    exportRevealed: false,
 
     // What the generator panel opens at inside this dialog, pinned rather than
     // left to the panel's own defaults or to what the device last remembered.
@@ -63,6 +66,8 @@ window.vaultExportMixin = function vaultExportMixin() {
       // left over from the standalone generator would open here as if it had
       // just happened.
       this.generatorError = '';
+      this.exportGeneratorOpen = false;
+      this.exportRevealed = false;
       this.exportOpen = true;
     },
 
@@ -93,18 +98,21 @@ window.vaultExportMixin = function vaultExportMixin() {
     // Methods, never getters: this object is spread into the component, and
     // object spread copies values - a getter would be evaluated once, at
     // spread time, and frozen at whatever the state was then.
+    // Use fills the field and folds the panel away, as in the entry dialog.
     applyGeneratedPassphrase(value) {
       this.exportPassphrase = value;
       this.exportConfirm = value;
       this.exportSource = 'generated';
+      this.exportGeneratorOpen = false;
     },
 
     // The panel redraws on every option change and on Regenerate, and it
-    // announces each draw. A phrase it drew and this field still holds is one
-    // the user no longer sees anywhere: the field is masked, so what is on
-    // screen is the panel's new draw, and Copy sends that one. Left to drift,
-    // the user files away a phrase that opens nothing and the archive is lost
-    // exactly as the warning above the field says it would be.
+    // announces each draw - including the one it makes when the dice reopens
+    // it over a phrase already applied. A phrase it drew and this field still
+    // holds is one the user no longer sees anywhere: the field is masked, so
+    // what is on screen is the panel's new draw, and Copy sends that one. Left
+    // to drift, the user files away a phrase that opens nothing and the
+    // archive is lost exactly as the warning above the field says it would be.
     //
     // Only while the phrase is still the panel's: one the user typed is
     // theirs, and an empty field means they never pressed Use - tracking into
@@ -114,6 +122,28 @@ window.vaultExportMixin = function vaultExportMixin() {
       if (!this.exportPassphrase) return;
       this.exportPassphrase = value;
       this.exportConfirm = value;
+    },
+
+    toggleExportGenerator() {
+      this.generatorError = '';
+      this.exportGeneratorOpen = !this.exportGeneratorOpen;
+    },
+
+    toggleExportReveal() {
+      this.exportRevealed = !this.exportRevealed;
+    },
+
+    // The field's value, never the panel's: with the panel folded away the
+    // field is the only copy of the phrase that will seal the archive.
+    copyExportPassphrase() {
+      if (!this.exportPassphrase) return undefined;
+      return this.copyGenerated(this.exportPassphrase, this.exportClipboardPolicy());
+    },
+
+    // What the hint under the field describes: 'empty', 'generated' or 'typed'.
+    passphraseState() {
+      if (!this.exportPassphrase) return 'empty';
+      return this.exportSource;
     },
 
     // Bound to the field's own input: the moment a human edits it, the panel's
@@ -263,6 +293,8 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportError = '';
       this.exportBusy = false;
       this.exportConfirming = false;
+      this.exportGeneratorOpen = false;
+      this.exportRevealed = false;
     },
   };
 };

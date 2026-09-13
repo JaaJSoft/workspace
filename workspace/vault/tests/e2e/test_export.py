@@ -120,7 +120,8 @@ class ExportWalkTests(VaultBrowserCase):
         the dialog knows rather than one it would have to invent.
         """
         box = self.page.locator(self.EXPORT_BOX)
-        box.get_by_role("button", name="Passphrase").click()
+        box.get_by_test_id("export-generate").click()
+        box.get_by_role("button", name="Passphrase", exact=True).click()
         preview = box.locator(".font-mono.break-all")
         preview.wait_for(timeout=15000)
         drawn = preview.inner_text()
@@ -207,7 +208,11 @@ class ExportWalkTests(VaultBrowserCase):
         self._open_export()
         box = self.page.locator(self.EXPORT_BOX)
 
+        # Folded until asked for, as in the entry dialog - so the opening draw
+        # is the one the dice produces, not one made at page load.
         preview = box.locator(".font-mono.break-all")
+        self.assertEqual(preview.count(), 0, "the generator opened without the dice")
+        box.get_by_test_id("export-generate").click()
         preview.wait_for(timeout=15000)
         drawn = preview.inner_text()
         self.assertEqual(
@@ -218,6 +223,34 @@ class ExportWalkTests(VaultBrowserCase):
         bits = int(reported.split()[0])
         self.assertGreaterEqual(
             bits, 72, f"the dialog opens at {bits} bits, under what an archive needs"
+        )
+
+    def test_the_applied_phrase_can_be_shown_and_copied_from_the_field(self):
+        """Use folds the generator away, and the field is then the only place
+        the phrase that seals the archive still exists.
+
+        In a browser, because both halves live in bindings no unit test
+        renders: the field's type flips through ``:type``, and Copy has to
+        reach the real clipboard with the field's value rather than a draw.
+        """
+        self._seeded_vault()
+        self._open_export()
+        drawn = self._generate_passphrase()
+        box = self.page.locator(self.EXPORT_BOX)
+        box.locator(".font-mono.break-all").wait_for(state="detached", timeout=10000)
+
+        field = self.page.locator("#export-passphrase")
+        self.assertEqual(field.get_attribute("type"), "password")
+        box.get_by_test_id("export-passphrase-reveal").click()
+        self.page.wait_for_selector("#export-passphrase[type='text']", timeout=10000)
+        self.assertEqual(field.input_value(), drawn)
+
+        box.get_by_test_id("export-passphrase-copy").click()
+        self.page.wait_for_function(
+            "() => window.vaultClipboard.state().active", timeout=10000
+        )
+        self.assertEqual(
+            self.page.evaluate("() => navigator.clipboard.readText()"), drawn
         )
 
     def test_no_request_carries_a_decrypted_value(self):

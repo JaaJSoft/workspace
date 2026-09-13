@@ -192,7 +192,7 @@ class ProjectsToolProvider(ToolProvider):
     def list_projects(self, args, user, bot, conversation_id, context):
         """List the user's projects with their board statuses (column names). \
 Call this before create_task, move_task or search_tasks when you need a real \
-project name or status name — statuses are per-project, never guess them."""
+project name or status name - statuses are per-project, never guess them."""
         from .models import Project
         from .queries import user_project_ids
 
@@ -264,7 +264,7 @@ by project or due window. For tasks assigned to other people use search_tasks.""
     )
     def search_tasks(self, args, user, bot, conversation_id, context):
         """Search tasks by keyword or by reference (e.g. WR-42) across every \
-project the user can access — not just their own tasks. Returns up to 20 \
+project the user can access - not just their own tasks. Returns up to 20 \
 matches with reference, title, project, status, priority, due date and \
 assignees. Call this when the user asks about a task by topic or reference, \
 or wants an overview like the overdue tasks of a project."""
@@ -445,7 +445,7 @@ first."""
         assignee = args.assignee.strip()
         raw_due = args.due_date.strip()
         if not assignee and not raw_due:
-            return "Error: nothing to update — pass an assignee and/or a due_date."
+            return "Error: nothing to update - pass an assignee and/or a due_date."
 
         changes = []
         if raw_due:

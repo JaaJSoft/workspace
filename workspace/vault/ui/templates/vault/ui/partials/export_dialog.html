@@ -99,45 +99,18 @@
               </inline-alert>
 
               {% comment %}
-                show_apply is what renders the panel's "Use" button; without it
-                the password-apply event below never fires and the field stays
-                empty.
-
-                All three events, never a subset. The panel owns no clipboard: a
-                host that listens to password-apply alone leaves its Copy button
-                doing nothing at all, silently, on the one string that opens the
-                archive. And the panel goes on drawing after Use, so without
-                password-regenerate this field keeps a phrase nothing on screen
-                shows any more while Copy hands over the newer one - and the
-                archive is sealed with neither. copyGenerated comes from the
-                generator mixin, spread into this same component; the policy it
-                is handed is what buys this phrase a longer clipboard window
-                than an entry password, which the vault can always give back.
+                The field comes first and the generator is offered under it: the
+                field is what seals the archive, the panel is one way to fill it.
+                Named "Archive passphrase" because the panel has a tab called
+                Passphrase, and under that bare label the field read as part of
+                that tab - as if the Password tab allowed no phrase of your own.
               {% endcomment %}
-              {% comment %}
-                copyGenerated reports a refused write through the generator
-                mixin's own field, and the backdrop covers the page-level
-                alert - so the panel's host has to render it or a failed copy
-                says nothing.
-              {% endcomment %}
-              <inline-alert type="error" x-show="generatorError" x-cloak>
-              <span x-text="generatorError"></span>
-              </inline-alert>
-
-              <div
-                @password-apply="applyGeneratedPassphrase($event.detail.value)"
-                @password-regenerate="trackGeneratedPassphrase($event.detail.value)"
-                @password-copy="copyGenerated($event.detail.value, exportClipboardPolicy())"
-              >
-                {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" pinned_expr="exportGeneratorOptions()" show_apply=True %}
-              </div>
-
               <div>
                 <label
                   class="text-sm text-base-content/60 block mb-1"
                   for="export-passphrase"
                 >
-                  Passphrase
+                  Archive passphrase
                 </label>
                 {% comment %}
                   @input, not a watcher: the moment a human edits this field the
@@ -151,9 +124,31 @@
                   autocomplete="new-password"
                   spellcheck="false"
                   class="input input-bordered input-sm w-full"
+                  aria-describedby="export-passphrase-hint"
                   x-model="exportPassphrase"
                   @input="noteTypedPassphrase()"
                 />
+                {% comment %}
+                  The field is masked, so after Use nothing on screen says a value
+                  landed in it. The generated line holds for as long as the source
+                  stays generated: trackGeneratedPassphrase keeps the field on the
+                  panel's current draw, so "shown below" stays true across redraws.
+                {% endcomment %}
+                <p id="export-passphrase-hint" class="mt-1 text-xs" aria-live="polite">
+                  <span
+                    class="text-base-content/60"
+                    x-show="!exportPassphrase"
+                  >Type your own, or draw one with the generator below and press Use.</span>
+                  <span
+                    class="text-success"
+                    data-testid="export-passphrase-generated"
+                    x-show="exportPassphrase && exportSource === 'generated'"
+                  >The passphrase shown in the generator below is the one that will seal the archive.</span>
+                  <span
+                    class="text-base-content/60"
+                    x-show="exportPassphrase && exportSource === 'typed'"
+                  >You typed this passphrase yourself: confirm it and acknowledge below.</span>
+                </p>
               </div>
 
               <template x-if="exportSource === 'typed'">
@@ -184,6 +179,42 @@
                   </label>
                 </div>
               </template>
+
+              {% comment %}
+                show_apply is what renders the panel's "Use" button; without it
+                the password-apply event below never fires and the field stays
+                empty.
+
+                All three events, never a subset. The panel owns no clipboard: a
+                host that listens to password-apply alone leaves its Copy button
+                doing nothing at all, silently, on the one string that opens the
+                archive. And the panel goes on drawing after Use, so without
+                password-regenerate this field keeps a phrase nothing on screen
+                shows any more while Copy hands over the newer one - and the
+                archive is sealed with neither. copyGenerated comes from the
+                generator mixin, spread into this same component; the policy it
+                is handed is what buys this phrase a longer clipboard window
+                than an entry password, which the vault can always give back.
+              {% endcomment %}
+              {% comment %}
+                copyGenerated reports a refused write through the generator
+                mixin's own field, and the backdrop covers the page-level
+                alert - so the panel's host has to render it or a failed copy
+                says nothing.
+              {% endcomment %}
+              <div>
+                <p class="text-sm text-base-content/60 mb-1">Generator</p>
+                <inline-alert type="error" class="mb-2" x-show="generatorError" x-cloak>
+                <span x-text="generatorError"></span>
+                </inline-alert>
+                <div
+                  @password-apply="applyGeneratedPassphrase($event.detail.value)"
+                  @password-regenerate="trackGeneratedPassphrase($event.detail.value)"
+                  @password-copy="copyGenerated($event.detail.value, exportClipboardPolicy())"
+                >
+                  {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" pinned_expr="exportGeneratorOptions()" show_apply=True %}
+                </div>
+              </div>
             </div>
           </template>
         </div>

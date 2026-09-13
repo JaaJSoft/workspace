@@ -626,7 +626,7 @@ class VaultBrowserTests(VaultBrowserCase):
         # a secret here, not recalling one.
         result = self._audit_autofill(self.EXPORT_BOX, declined=["off", "new-password"])
         audited, offenders = result["audited"], result["offenders"]
-        for expected in ("Passphrase", "Confirm"):
+        for expected in ("Archive passphrase", "Confirm"):
             self.assertTrue(
                 any(expected in identifier for identifier in audited),
                 f"expected the audit to see the {expected!r} field, saw {audited!r}",

@@ -32,12 +32,16 @@ function load() {
   return { ctx, events, runDeferred: () => deferred && deferred() };
 }
 
-test('the anchor is inserted before it is clicked', () => {
-  // Firefox ignores a click on an anchor that was never inserted, and the
-  // user is left with no file and no error.
+test('the anchor is inserted, clicked, then removed', () => {
+  // Firefox ignores a click on an anchor that is not in the document, and the
+  // user is left with no file and no error. Removing it before the click is
+  // the same failure as never inserting it.
   const { ctx, events } = load();
   ctx.downloadBlob({}, 'f.txt');
-  assert.ok(events.indexOf('append') < events.indexOf('click'), events.join(','));
+  assert.deepStrictEqual(
+    events.filter((event) => ['append', 'click', 'remove'].includes(event)),
+    ['append', 'click', 'remove']
+  );
 });
 
 test('the object url is not revoked in the same tick as the click', () => {

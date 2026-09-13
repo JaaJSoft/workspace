@@ -681,161 +681,153 @@ def _seed_projects(alex, sam, jordan, now):
     # created, completed) - start/due/created/completed are day offsets from
     # now. Start+due draws a bar on the timeline, a due date alone a marker;
     # created/completed spread the flow chart over the past weeks.
-    tasks = [
-        (
-            "Design new landing page hero",
-            "In progress",
-            "high",
-            -4,
-            3,
-            5,
-            [sam],
-            ["Design"],
-            "Launch",
-            -18,
-            None,
-        ),
-        (
-            "Migrate blog articles",
-            "In progress",
-            "medium",
-            -6,
-            9,
-            3,
-            [jordan],
-            ["Content"],
-            "Content refresh",
-            -12,
-            None,
-        ),
-        (
-            "Fix mobile navigation overlap",
-            "To do",
-            "urgent",
-            None,
-            1,
-            2,
-            [alex],
-            ["Bug"],
-            "Launch",
-            -2,
-            None,
-        ),
-        (
-            "Set up newsletter signup API",
-            "To do",
-            "medium",
-            2,
-            8,
-            3,
-            [sam],
-            ["Backend"],
-            "Launch",
-            -9,
-            None,
-        ),
-        (
-            "Write pricing page copy",
-            "To do",
-            "low",
-            6,
-            13,
-            1,
-            [],
-            ["Content"],
-            "Content refresh",
-            -5,
-            None,
-        ),
-        (
-            "Audit current site performance",
-            "Done",
-            "medium",
-            -20,
-            -13,
-            8,
-            [alex],
-            [],
-            "Launch",
-            -27,
-            -13,
-        ),
-        (
-            "Pick a new color palette",
-            "Done",
-            "low",
-            -15,
-            -8,
-            2,
-            [sam],
-            ["Design"],
-            "Launch",
-            -20,
-            -8,
-        ),
-        (
-            "Dark mode support",
-            "Backlog",
-            "low",
-            None,
-            None,
-            5,
-            [],
-            ["Design"],
-            None,
-            -33,
-            None,
-        ),
-        (
-            "Customer testimonials section",
-            "Backlog",
-            "medium",
-            None,
-            None,
-            None,
-            [],
-            ["Content"],
-            "Content refresh",
-            -40,
-            None,
-        ),
-    ]
-    hero = None
-    for (
+    def spec(
         title,
         status,
         priority,
-        start_days,
-        due_days,
-        estimate,
-        assignees,
-        task_labels,
-        epic_name,
-        created_days,
-        completed_days,
-    ) in tasks:
+        *,
+        start=None,
+        due=None,
+        estimate=None,
+        assignees=(),
+        labels=(),
+        epic=None,
+        created,
+        completed=None,
+    ):
+        """One task; start/due/created/completed are day offsets from now.
+
+        Start+due draws a bar on the timeline, a due date alone a marker;
+        created/completed spread the analytics flow chart over past weeks.
+        """
+        return locals()
+
+    tasks = [
+        spec(
+            "Design new landing page hero",
+            "In progress",
+            "high",
+            start=-4,
+            due=3,
+            estimate=5,
+            assignees=[sam],
+            labels=["Design"],
+            epic="Launch",
+            created=-18,
+        ),
+        spec(
+            "Migrate blog articles",
+            "In progress",
+            "medium",
+            start=-6,
+            due=9,
+            estimate=3,
+            assignees=[jordan],
+            labels=["Content"],
+            epic="Content refresh",
+            created=-12,
+        ),
+        spec(
+            "Fix mobile navigation overlap",
+            "To do",
+            "urgent",
+            due=1,
+            estimate=2,
+            assignees=[alex],
+            labels=["Bug"],
+            epic="Launch",
+            created=-2,
+        ),
+        spec(
+            "Set up newsletter signup API",
+            "To do",
+            "medium",
+            start=2,
+            due=8,
+            estimate=3,
+            assignees=[sam],
+            labels=["Backend"],
+            epic="Launch",
+            created=-9,
+        ),
+        spec(
+            "Write pricing page copy",
+            "To do",
+            "low",
+            start=6,
+            due=13,
+            estimate=1,
+            labels=["Content"],
+            epic="Content refresh",
+            created=-5,
+        ),
+        spec(
+            "Audit current site performance",
+            "Done",
+            "medium",
+            start=-20,
+            due=-13,
+            estimate=8,
+            assignees=[alex],
+            epic="Launch",
+            created=-27,
+            completed=-13,
+        ),
+        spec(
+            "Pick a new color palette",
+            "Done",
+            "low",
+            start=-15,
+            due=-8,
+            estimate=2,
+            assignees=[sam],
+            labels=["Design"],
+            epic="Launch",
+            created=-20,
+            completed=-8,
+        ),
+        spec(
+            "Dark mode support",
+            "Backlog",
+            "low",
+            estimate=5,
+            labels=["Design"],
+            created=-33,
+        ),
+        spec(
+            "Customer testimonials section",
+            "Backlog",
+            "medium",
+            labels=["Content"],
+            epic="Content refresh",
+            created=-40,
+        ),
+    ]
+    hero = None
+    for t in tasks:
+        title, assignees = t["title"], t["assignees"]
         task = create_task(
             project,
             alex,
             title=title,
             description=hero_description if title.startswith("Design new") else "",
-            status=statuses[status],
-            priority=priority,
-            start_date=_offset_date(now, start_days),
-            due_date=_offset_date(now, due_days),
-            estimate=estimate,
+            status=statuses[t["status"]],
+            priority=t["priority"],
+            start_date=_offset_date(now, t["start"]),
+            due_date=_offset_date(now, t["due"]),
+            estimate=t["estimate"],
             assignees=assignees,
-            labels=[labels[name] for name in task_labels],
-            epic=epics[epic_name] if epic_name else None,
+            labels=[labels[name] for name in t["labels"]],
+            epic=epics[t["epic"]] if t["epic"] else None,
         )
         if hero is None:
             hero = task
-        created_at = now + timedelta(days=created_days, hours=-2)
+        created_at = now + timedelta(days=t["created"], hours=-2)
         _backdate(task, created_at)
         task.events.filter(type=TaskEvent.Type.CREATED).update(created_at=created_at)
-        if completed_days is not None:
+        if t["completed"] is not None:
             # The move onto the board is what cycle time is measured from.
-            started_at = now + timedelta(days=start_days, hours=-1)
+            started_at = now + timedelta(days=t["start"], hours=-1)
             moved_event = record_task_event(
                 task,
                 type=TaskEvent.Type.MOVED,
@@ -844,7 +836,7 @@ def _seed_projects(alex, sam, jordan, now):
                 to_status=statuses["In progress"],
             )
             _backdate(moved_event, started_at)
-            completed_at = now + timedelta(days=completed_days, hours=-1)
+            completed_at = now + timedelta(days=t["completed"], hours=-1)
             Task.objects.filter(pk=task.pk).update(completed_at=completed_at)
             done_event = record_task_event(
                 task,

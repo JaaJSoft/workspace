@@ -69,6 +69,35 @@ class CalendarAiToolsTests(TestCase):
         self.assertIn("Soon", result)
         self.assertNotIn("Later", result)
 
+    def test_list_upcoming_events_handles_all_day_events(self):
+        """An all-day event serializes its start as a bare date. The tool must
+        still compare it with the window cutoff and report it on its day."""
+        cal = Calendar.objects.create(name="Work", owner=self.user)
+        now = timezone.now().replace(microsecond=0)
+        Event.objects.create(
+            calendar=cal, owner=self.user, title="Timed", start=now + timedelta(days=1)
+        )
+        day = (now + timedelta(days=2)).replace(hour=0, minute=0, second=0)
+        Event.objects.create(
+            calendar=cal,
+            owner=self.user,
+            title="Holiday",
+            start=day,
+            end=day + timedelta(days=1),
+            all_day=True,
+        )
+        args = ListUpcomingEventsParams(days_ahead=7, limit=20)
+        result = json.loads(
+            self.provider.list_upcoming_events(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        )
+        self.assertEqual([e["title"] for e in result], ["Timed", "Holiday"])
+        holiday = result[1]
+        self.assertTrue(holiday["all_day"])
+        self.assertEqual(holiday["start"], day.date().isoformat())
+        self.assertEqual(holiday["end"], (day + timedelta(days=1)).date().isoformat())
+
     def test_list_upcoming_events_exposes_ids_the_edit_tools_accept(self):
         cal = Calendar.objects.create(name="Work", owner=self.user)
         now = timezone.now()

@@ -5,6 +5,7 @@ Used by the dashboard event list and the today's-events notification cron.
 
 from datetime import UTC, datetime, time, timedelta
 
+from dateutil.parser import parse as _parse_dt
 from django.db.models import Q
 from django.utils import timezone
 
@@ -17,6 +18,18 @@ from workspace.calendar.recurrence import (
     occurrences_in_range,
 )
 from workspace.calendar.services.recurrence_rule import describe, to_simple_json
+
+
+def event_instant(value):
+    """Return the aware instant a serialized event ``start``/``end`` stands for.
+
+    Timed events serialize as aware ISO strings, in either the DRF Z-suffix
+    form or the ``+00:00`` isoformat of a virtual occurrence. An all-day
+    event serializes as the bare UTC date of its day label, which parses
+    naive; UTC midnight is the instant that date stands for.
+    """
+    dt = _parse_dt(value)
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 class VirtualOccurrence:
@@ -214,26 +227,17 @@ def get_upcoming_page(user, after, limit, calendar_ids=None, show_declined=False
             collected += 1
 
     # ---- Merge, sort, slice ----
-    # Sort by parsed datetime so that DRF's Z-suffix UTC strings
-    # ("2026-04-08T14:00:00Z") and plain isoformat strings from virtual
-    # occurrences ("2026-04-08T14:00:00+00:00") compare correctly at the
-    # same instant. String comparison would be wrong.
-    # An all-day event serializes its start as the bare UTC date, which
-    # parses naive and cannot be compared with the aware instants of timed
-    # events; UTC midnight is the instant that date stands for.
-    from dateutil.parser import parse as _parse_dt
-
-    def _instant(value):
-        dt = _parse_dt(value)
-        return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
-
+    # Sort by instant, not by string: the two start formats do not sort
+    # lexically at the same instant.
     merged = one_off_data + recurring_data
-    merged.sort(key=lambda e: (_instant(e["start"]), e["uuid"]))
+    merged.sort(key=lambda e: (event_instant(e["start"]), e["uuid"]))
 
     page = merged[:limit]
     # Re-emitted as an aware instant: a bare date would be re-read in the
     # server timezone on the next page and could skip the event itself.
     next_after = (
-        _instant(merged[limit]["start"]).isoformat() if len(merged) > limit else None
+        event_instant(merged[limit]["start"]).isoformat()
+        if len(merged) > limit
+        else None
     )
     return page, next_after

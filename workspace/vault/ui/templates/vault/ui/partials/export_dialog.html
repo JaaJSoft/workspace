@@ -189,7 +189,7 @@
                   <span
                     class="text-base-content/60"
                     x-show="passphraseState() === 'typed'"
-                  >You typed this passphrase yourself: confirm it and acknowledge below.</span>
+                  >Your own passphrase: confirm it below.</span>
                 </p>
 
                 {% comment %}
@@ -241,8 +241,33 @@
                       autocomplete="new-password"
                       spellcheck="false"
                       class="input input-bordered input-sm w-full"
+                      aria-describedby="export-confirm-status"
                       x-model="exportConfirm"
                     />
+                    {% comment %}
+                      Silent while the confirmation is still a prefix of the
+                      phrase: flagging every keystroke as a mismatch would shout
+                      at someone who is simply not done typing. Icon and colour
+                      together, as on the onboarding checklist.
+                    {% endcomment %}
+                    <p id="export-confirm-status" class="mt-1 text-xs" aria-live="polite">
+                      <span
+                        class="flex items-center gap-1.5 text-success"
+                        data-testid="export-confirm-match"
+                        x-show="confirmationState() === 'match'"
+                      >
+                        <i data-lucide="circle-check" class="w-3.5 h-3.5"></i>
+                        Passphrases match
+                      </span>
+                      <span
+                        class="flex items-center gap-1.5 text-error"
+                        data-testid="export-confirm-mismatch"
+                        x-show="confirmationState() === 'mismatch'"
+                      >
+                        <i data-lucide="circle-x" class="w-3.5 h-3.5"></i>
+                        Passphrases don't match
+                      </span>
+                    </p>
                   </div>
                   <label class="flex items-start gap-3 cursor-pointer">
                     <input
@@ -251,10 +276,9 @@
                       data-testid="export-own-phrase-ack"
                       x-model="exportOwnPhraseAck"
                     />
-                    <span class="text-sm text-base-content/70">
-                      I chose this passphrase myself. Its strength cannot be measured here,
-                      and it is all that stands between this file and whoever finds it.
-                    </span>
+                    <span
+                      class="text-sm text-base-content/70"
+                    >I chose this passphrase and understand it alone protects the file.</span>
                   </label>
                 </div>
               </template>

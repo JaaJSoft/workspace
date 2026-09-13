@@ -146,6 +146,15 @@ window.vaultExportMixin = function vaultExportMixin() {
       return this.exportSource;
     },
 
+    // 'pending' while the confirmation is empty or still a prefix of the
+    // phrase - the user may simply not be done - then 'match' or 'mismatch'.
+    confirmationState() {
+      if (!this.exportConfirm) return 'pending';
+      if (this.exportConfirm === this.exportPassphrase) return 'match';
+      if (this.exportPassphrase.startsWith(this.exportConfirm)) return 'pending';
+      return 'mismatch';
+    },
+
     // Bound to the field's own input: the moment a human edits it, the panel's
     // measurement stops describing what is in there.
     noteTypedPassphrase() {

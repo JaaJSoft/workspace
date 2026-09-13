@@ -369,7 +369,18 @@ class ExportWalkTests(VaultBrowserCase):
         self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
         self.assertTrue(run.is_disabled(), "a typed phrase alone enabled Export")
 
+        # The masked field hides a typo, so the dialog has to say so in words:
+        # a greyed-out button alone does not tell the user which step is wrong.
+        self.page.fill("#export-confirm", KNOWN_PASSPHRASE + "-typo")
+        self.page.get_by_test_id("export-confirm-mismatch").wait_for(timeout=10000)
+        self.assertTrue(run.is_disabled(), "a mismatched confirmation enabled Export")
+
         self.page.fill("#export-confirm", KNOWN_PASSPHRASE)
+        self.page.get_by_test_id("export-confirm-match").wait_for(timeout=10000)
+        self.assertFalse(
+            self.page.get_by_test_id("export-confirm-mismatch").is_visible(),
+            "the mismatch stayed on screen once the phrases matched",
+        )
         self.assertTrue(
             run.is_disabled(), "a confirmed phrase enabled Export without the tick"
         )

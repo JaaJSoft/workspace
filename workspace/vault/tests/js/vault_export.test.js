@@ -631,6 +631,24 @@ test('the hint under the field follows where the phrase came from', () => {
   assert.equal(component.passphraseState(), 'empty', 'an emptied field still claimed a phrase');
 });
 
+test('the confirmation says it does not match only once it cannot', () => {
+  // A masked field gives no other sign of a typo, but a confirmation that is
+  // still a prefix of the phrase is one the user is typing, not one they got
+  // wrong.
+  const { component } = load();
+  component.exportPassphrase = 'ma phrase a moi';
+  component.noteTypedPassphrase();
+  assert.equal(component.confirmationState(), 'pending', 'an empty confirmation was judged');
+  component.exportConfirm = 'ma phr';
+  assert.equal(component.confirmationState(), 'pending', 'a prefix was called a mismatch');
+  component.exportConfirm = 'ma phrase a moi';
+  assert.equal(component.confirmationState(), 'match');
+  component.exportConfirm = 'ma phrase a toi';
+  assert.equal(component.confirmationState(), 'mismatch');
+  component.exportConfirm = 'ma phrase a moi!';
+  assert.equal(component.confirmationState(), 'mismatch', 'a longer confirmation passed as pending');
+});
+
 test('closing or locking folds the generator and masks the phrase again', () => {
   // A dialog reopened after a lock must not come back revealing a phrase, nor
   // with a panel already drawing one.

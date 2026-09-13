@@ -305,9 +305,13 @@ test('the export dialog opens its generator past the archive bar', () => {
     `the export dialog opens at ${panel.bits.toFixed(1)} bits, under ${ARCHIVE_BAR_BITS}`
   );
   // The value on screen is the one that was measured: a request of eight words
-  // that drew six would report a strength the file does not have.
+  // that drew six would report a strength the file does not have. Counted on a
+  // space, which no word contains - the list has 'yo-yo', so splitting a
+  // hyphenated phrase finds nine words in one draw out of about 160.
   assert.equal(panel.mode, 'passphrase');
-  assert.equal(panel.value.split(panel.separator).length, panel.words);
+  panel.separator = ' ';
+  panel.regenerate();
+  assert.equal(panel.value.split(' ').length, panel.words);
 });
 
 test('a lock between the tree and the sealing withholds the file', async () => {

@@ -214,9 +214,9 @@ window.vaultExportMixin = function vaultExportMixin() {
       // writes a plaintext file whose warning was never on screen.
       const format = this.exportFormat;
       if (format === 'archive' && !this.passphraseAccepted()) return;
-      // Each attempt reports its own outcome and nothing else. The dialog no
-      // longer closes on every success, so a count left by a previous run
-      // survives into the next one - and an archive run, which skips nothing
+      // Each attempt reports its own outcome and nothing else. The dialog stays
+      // open over a skipped count, so a count left by a previous run would
+      // survive into the next one - and an archive run, which skips nothing
       // and has no notion of skipping, would end up displaying it.
       this.exportSkipped = 0;
       // Checked before anything is decrypted, so a warning that was never

@@ -169,7 +169,7 @@ test('entries the format cannot carry are named, and the dialog stays to say so'
 });
 
 test('a run reports its own outcome, never the one before it', async () => {
-  // The dialog now stays open over a skipped count, so a second run happens on
+  // The dialog stays open over a skipped count, so a second run happens on
   // a component the first one left state on. An archive skips nothing and has
   // no notion of skipping: inheriting the count would hold the dialog open on
   // a sentence about a file that was never written that way.

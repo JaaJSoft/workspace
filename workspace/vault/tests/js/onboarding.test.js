@@ -468,7 +468,7 @@ test('a corpus answer about a replaced password is discarded', async () => {
 
 test('the kit is built from the account state and handed to the shared download helper', () => {
   // The anchor/object-URL mechanics (insertion order, deferred revocation)
-  // moved to the shared downloadBlob helper and are pinned there; this only
+  // belong to the shared downloadBlob helper and are pinned there; this only
   // has to prove downloadKit builds the right pdf and calls that helper.
   let builtWith = null;
   let handedOff = null;

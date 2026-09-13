@@ -407,9 +407,8 @@ class ExportWalkTests(VaultBrowserCase):
         self.page.click("[data-testid='export-run']")
         self.page.wait_for_selector(WARNING_HEADING, timeout=15000)
 
-        # One box, not two. The warning used to be a second modal opened over
-        # this one, which darkened the page twice and left Escape closing
-        # whichever of them was listening.
+        # One box, not two. A second modal opened over this one darkens the
+        # page twice and leaves Escape closing whichever of them is listening.
         self.assertEqual(
             self.page.locator(".modal.modal-open").count(),
             1,
@@ -442,11 +441,10 @@ class ExportWalkTests(VaultBrowserCase):
     def test_the_warning_does_not_depend_on_the_shared_dialog_script(self):
         """The gate is this dialog's own state, so nothing can fail to load it.
 
-        It used to be a call into dialogs.js, whose wrapper answers true when
-        the script is missing - the right default for a destructive action the
-        user already asked for, and the wrong one for the warning that a file
-        holding every password in the clear is about to be written. Served
-        empty, the script now changes nothing here.
+        dialogs.js answers true when the script is missing - the right default
+        for a destructive action the user already asked for, and the wrong one
+        for the warning that a file holding every password in the clear is
+        about to be written. Served empty, the script changes nothing here.
         """
         self.page.route(
             DIALOGS_SCRIPT,

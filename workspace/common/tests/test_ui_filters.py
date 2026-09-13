@@ -22,6 +22,11 @@ class CompactNumberTests(SimpleTestCase):
         self.assertEqual(compact_number(1_500_000), "1.5M")
         self.assertEqual(compact_number(12_000_000), "12M")
 
+    def test_a_value_that_would_print_as_1000k_is_promoted(self):
+        self.assertEqual(compact_number(999_499), "999k")
+        self.assertEqual(compact_number(999_500), "1M")
+        self.assertEqual(compact_number(999_999), "1M")
+
     def test_non_numbers_render_empty(self):
         self.assertEqual(compact_number(None), "")
         self.assertEqual(compact_number("abc"), "")

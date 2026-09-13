@@ -29,7 +29,8 @@ def compact_number(value):
     except ValueError, TypeError:
         return ""
     for suffix, size in (("M", 1_000_000), ("k", 1_000)):
-        if abs(number) < size:
+        # From 999,500 the smaller unit already prints "1000": promote.
+        if abs(number) < size - size / 2000:
             continue
         one_decimal = f"{number / size:.1f}"
         if float(one_decimal) < 10:

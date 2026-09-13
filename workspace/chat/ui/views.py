@@ -381,7 +381,7 @@ def _ai_usage_prefetch():
             "answer_tokens",
             "answer_seconds",
         )
-        .order_by("created_at"),
+        .order_by("-created_at"),
     )
 
 

@@ -146,6 +146,23 @@ class ConversationMessagesUsageTests(TestCase):
         self.assertIn('data-lucide="info"', html)
         self.assertIn("50 tok/s", html)
 
+    def test_the_newest_completed_task_is_the_one_shown(self):
+        message = self._bot_reply()
+        AITask.objects.create(
+            owner=self.user,
+            task_type=AITask.TaskType.CHAT,
+            status=AITask.Status.COMPLETED,
+            chat_message=message,
+            model_used="gpt-newer",
+            prompt_tokens=10,
+            completion_tokens=5,
+        )
+
+        html = self.client.get(self.url).content.decode()
+
+        self.assertIn("gpt-newer", html)
+        self.assertNotIn("gpt-x", html)
+
     def test_human_message_carries_none(self):
         Message.objects.create(
             conversation=self.conv, author=self.user, body="hello", body_html="hello"

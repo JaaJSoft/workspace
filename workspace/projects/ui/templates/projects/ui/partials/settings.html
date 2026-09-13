@@ -542,6 +542,14 @@
                 </template>
               </div>
             </div>
+            <label class="form-control">
+              <div class="label py-0"><span class="label-text-alt">Target date (optional)</span></div>
+              <input
+                type="date"
+                class="input input-bordered input-sm"
+                x-model="addForm.target_date"
+              />
+            </label>
           </div>
           <label class="form-control">
             <div class="label py-0"><span class="label-text-alt">Description (optional)</span></div>
@@ -627,6 +635,22 @@
                   x-init="$el.focus()"
                 />
               </template>
+              {% if writable %}
+                <input
+                  type="date"
+                  class="input input-ghost input-xs h-6 min-h-0 px-1 font-mono shrink-0"
+                  :class="isOverdue(epic) ? 'text-error' : ''"
+                  :value="epic.target_date"
+                  @change="setTargetDate(epic, $event.target.value)"
+                  aria-label="Target date"
+                />
+              {% else %}
+                <span
+                  class="text-xs font-mono shrink-0 text-base-content/60"
+                  x-show="epic.display_date"
+                  x-text="epic.display_date"
+                ></span>
+              {% endif %}
               <span class="badge badge-ghost badge-sm shrink-0" x-show="epic.closed">Closed</span>
               <span
                 class="ml-auto text-xs text-base-content/60 font-mono shrink-0"

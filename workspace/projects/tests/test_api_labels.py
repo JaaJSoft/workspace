@@ -41,6 +41,31 @@ class LabelApiTests(ProjectTestMixin, APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_invalid_color_is_400(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f"/api/v1/projects/{self.project.uuid}/labels",
+            {"name": "bug", "color": "url(//evil)"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.project.labels.count(), 0)
+
+    def test_hex_and_empty_colors_are_accepted(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            f"/api/v1/projects/{self.project.uuid}/labels",
+            {"name": "bug", "color": "#3b82f6"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response = self.client.post(
+            f"/api/v1/projects/{self.project.uuid}/labels",
+            {"name": "feature", "color": ""},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
     def test_duplicate_name_race_returns_400(self):
         from unittest.mock import patch
 

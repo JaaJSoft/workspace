@@ -66,6 +66,7 @@ from ..services.attachments import (
 )
 from ..services.comments import add_comment, notify_comment_edited
 from ..services.conversion import convert_project_type
+from ..services.epics import epics_with_progress
 from ..services.estimates import format_estimate
 from ..services.events import record_task_event
 from ..services.links import create_link, delete_link, links_for_task
@@ -431,14 +432,7 @@ class EpicViewSet(ProjectContextMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
             return Epic.objects.none()
-        # One reverse-FK join serves both rollup counts; no distinct needed
-        # since no other multi-valued relation is joined here.
-        return self.project.epics.annotate(
-            task_count=Count("tasks"),
-            done_task_count=Count(
-                "tasks", filter=Q(tasks__status__category=TaskStatus.Category.DONE)
-            ),
-        ).order_by("name")
+        return epics_with_progress(self.project)
 
     def perform_create(self, serializer):
         serializer.save(project=self.project)

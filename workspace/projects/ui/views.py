@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from workspace.common.charts import column_chart, line_chart
+from workspace.common.charts import column_chart, gantt_chart, line_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
@@ -32,6 +32,7 @@ from workspace.projects.services.analytics import (
     open_task_distribution,
     weekly_flow,
 )
+from workspace.projects.services.epics import epics_with_progress
 from workspace.projects.services.estimates import format_estimate
 from workspace.projects.services.events import events_for_project, serialize_task_event
 from workspace.projects.services.history import (
@@ -54,6 +55,7 @@ from workspace.projects.services.task_filters import (
     apply_task_filters,
     task_filters_active,
 )
+from workspace.projects.services.timeline import build_timeline, coerce_scale
 from workspace.projects.tasks import reminder_hour
 from workspace.users.services.settings import get_setting, set_setting
 
@@ -67,6 +69,7 @@ VIEW_OVERVIEW = "overview"
 VIEW_BOARD = "board"
 VIEW_BACKLOG = "backlog"
 VIEW_TASKS = "tasks"
+VIEW_TIMELINE = "timeline"
 VIEW_ANALYTICS = "analytics"
 VIEW_SETTINGS = "settings"
 
@@ -117,6 +120,9 @@ def overview(request, project_uuid):
         done_count=Count("uuid", filter=Q(status__category=TaskStatus.Category.DONE)),
     )
     context.update(counts)
+    epics = list(epics_with_progress(project))
+    context["open_epics"] = [e for e in epics if not e.is_closed]
+    context["closed_epic_count"] = len([e for e in epics if e.is_closed])
     context["recent_events"] = events_for_project(project)
     return _render_project_view(request, context)
 
@@ -248,6 +254,10 @@ def _epics_data(project):
             "name": epic.name,
             "color": epic.color,
             "closed": epic.is_closed,
+            "target_date": epic.target_date.isoformat() if epic.target_date else "",
+            "display_date": epic.target_date.strftime("%b %d")
+            if epic.target_date
+            else "",
         }
         for epic in project.epics.all()
     ]
@@ -350,6 +360,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
             "status": str(task.status_id),
             "priority": task.priority,
             "due_date": task.due_date.isoformat() if task.due_date else "",
+            "start_date": task.start_date.isoformat() if task.start_date else "",
             "estimate": format_estimate(task.estimate),
             "assignees": [str(u.pk) for u in task.assignees.all()],
             "assignee_users": [
@@ -634,6 +645,70 @@ def all_tasks(request, project_uuid):
     context["tasks_truncated"] = truncated
     context["task_render_limit"] = TASK_RENDER_LIMIT
     return _render_project_view(request, context)
+
+
+SCALE_OPTIONS = [("week", "Week"), ("month", "Month"), ("quarter", "Quarter")]
+
+
+@login_required
+@ensure_csrf_cookie
+def timeline(request, project_uuid):
+    project, role = _get_project_or_404(request.user, project_uuid)
+    _record_visit(request.user, project_uuid)
+    context = _base_context(request, project, role, VIEW_TIMELINE)
+    context["backlog_count"] = project.tasks.filter(
+        status__category=TaskStatus.Category.BACKLOG
+    ).count()
+    scale = coerce_scale(request.GET.get("scale"))
+    try:
+        tasks, truncated = _filtered_tasks(
+            request,
+            project.tasks.select_related("project", "status", "epic"),
+        )
+    except TaskFilterError as exc:
+        return HttpResponseBadRequest(f"Invalid {exc.field} parameter.")
+    epics = list(epics_with_progress(project))
+    sprints = list(project.sprints.all()) if project.type == Project.Type.SCRUM else []
+    result = build_timeline(
+        tasks,
+        epics,
+        sprints,
+        scale=scale,
+        today=context["today"],
+    )
+    has_rows = any(group["rows"] for group in result["groups"])
+    context.update(
+        {
+            "scale": scale,
+            "scale_options": [
+                (value, label, _with_param(request, "scale", value))
+                for value, label in SCALE_OPTIONS
+            ],
+            "timeline": result,
+            "timeline_is_empty": not has_rows and not epics and not result["bands"],
+            "timeline_chart": gantt_chart(
+                result["start"],
+                result["end"],
+                scale,
+                result["groups"],
+                result["markers"],
+                result["bands"],
+                context["today"],
+            ),
+            "filters_active": task_filters_active(request.GET),
+            "tasks_truncated": truncated,
+            "task_render_limit": TASK_RENDER_LIMIT,
+        }
+    )
+    return _render_project_view(request, context)
+
+
+def _with_param(request, key, value):
+    """The current URL with one query parameter replaced, every other one
+    kept, so a zoom or grouping change never drops the active filters."""
+    params = request.GET.copy()
+    params[key] = value
+    return f"{request.path}?{params.urlencode()}"
 
 
 @login_required

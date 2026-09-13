@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.test import TestCase
 
 from workspace.projects.models import TaskEvent
@@ -58,6 +60,17 @@ class CreateTaskTests(TaskServiceMixin, TestCase):
         )
         self.assertEqual(list(task.assignees.all()), [self.member])
         self.assertEqual(list(task.labels.all()), [label])
+
+    def test_rejects_start_date_after_due_date(self):
+        with self.assertRaises(ValueError):
+            create_task(
+                self.project,
+                self.admin,
+                title="t",
+                start_date=date(2026, 10, 5),
+                due_date=date(2026, 10, 1),
+            )
+        self.assertEqual(self.project.tasks.count(), 0)
 
 
 class ApplyStatusChangeTests(TaskServiceMixin, TestCase):

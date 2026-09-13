@@ -27,6 +27,7 @@ function fieldAction(field) {
     estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
+    start_date: 'set_due',
     assignees: 'assign',
     labels: 'set_labels',
     epic: 'set_epic',
@@ -84,6 +85,7 @@ function emptyTaskForm() {
     description: '',
     status: '',
     priority: 'medium',
+    start_date: '',
     due_date: '',
     estimate: '',
     assignees: [],
@@ -465,15 +467,25 @@ function projectBoard(config) {
       if (this.currentView === 'backlog') url += '/backlog';
       else if (this.currentView === 'tasks') url += '/tasks';
       else if (this.currentView === 'settings') url += '/settings';
+      else if (this.currentView === 'timeline') url += '/timeline';
       else if (this.currentView === 'analytics') url += '/analytics';
       else if (this.currentView !== 'overview') url += '/board';
       let full = window.location.origin + url;
+      const current = new URL(window.location.href).searchParams;
+      const keep = new URLSearchParams();
       if (this.currentView === 'board' || this.currentView === 'backlog') {
         // The sprint selection (board switcher, backlog scope) lives in the
         // URL like the filters; a refresh must keep pointing at it.
-        const sprint = new URL(window.location.href).searchParams.get('sprint');
-        if (sprint) full += '?sprint=' + encodeURIComponent(sprint);
+        const sprint = current.get('sprint');
+        if (sprint) keep.set('sprint', sprint);
+      } else if (this.currentView === 'timeline') {
+        // Zoom and grouping live in the URL the same way.
+        for (const key of ['scale', 'group']) {
+          const value = current.get(key);
+          if (value) keep.set(key, value);
+        }
       }
+      if ([...keep].length) full += '?' + keep.toString();
       // The active filters ride along so a refresh keeps the filtered view.
       this.$ajax(taskFilterUrl(full, this.filters), {
         target: 'project-content',
@@ -884,9 +896,11 @@ function projectBoard(config) {
             ? 'board'
             : path.endsWith('/settings')
               ? 'settings'
-              : path.endsWith('/analytics')
-                ? 'analytics'
-                : 'overview';
+              : path.endsWith('/timeline')
+                ? 'timeline'
+                : path.endsWith('/analytics')
+                  ? 'analytics'
+                  : 'overview';
       const task = new URL(window.location.href).searchParams.get('task');
       if (task && task !== this.panelTaskUuid) {
         this.panelTaskUuid = task;
@@ -911,7 +925,13 @@ function projectBoard(config) {
           headers: this.headers(),
           body: JSON.stringify(patch),
         });
-        if (!resp.ok) throw new Error('Save failed');
+        if (!resp.ok) {
+          // A start/due ordering rejection carries the reason; anything
+          // else stays generic so a 500 body never reaches the toast.
+          const data = await resp.json().catch(() => ({}));
+          const detail = data.start_date && data.start_date[0];
+          if (window.AppAlert) AppAlert.error(detail || 'Could not save the task.');
+        }
       } catch (e) {
         if (window.AppAlert) AppAlert.error('Could not save the task.');
       } finally {
@@ -1057,6 +1077,7 @@ function projectBoard(config) {
             description: this.form.description,
             status: this.form.status,
             priority: this.form.priority,
+            start_date: this.form.start_date || null,
             due_date: this.form.due_date || null,
             // '' means unestimated; '0' is a real estimate, hence no ||.
             estimate: this.form.estimate === '' ? null : this.form.estimate,
@@ -1066,7 +1087,9 @@ function projectBoard(config) {
           }),
         });
         if (!resp.ok) {
-          this.formError = 'Could not save the task.';
+          const data = await resp.json().catch(() => ({}));
+          const detail = data.start_date && data.start_date[0];
+          this.formError = detail || 'Could not save the task.';
           return;
         }
         this.$refs.taskDialog.close();
@@ -1091,6 +1114,7 @@ function taskPanel() {
       description: '',
       status: '',
       priority: 'medium',
+      start_date: '',
       due_date: '',
       estimate: '',
       assignees: [],
@@ -1597,6 +1621,7 @@ window.projectBoardHelpers = {
   listOrder: listOrder,
   taskParamUrl: taskParamUrl,
   fieldAction: fieldAction,
+  emptyTaskForm: emptyTaskForm,
   taskFiltersFromUrl: taskFiltersFromUrl,
   taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,

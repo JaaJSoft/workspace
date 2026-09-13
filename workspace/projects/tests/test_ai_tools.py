@@ -188,6 +188,17 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         )
         self.assertIn("No tasks found", result)
 
+    def test_task_entry_carries_start_date(self):
+        from datetime import date
+
+        from workspace.projects.ai_tools import _task_entry
+
+        task = create_task(
+            self.project, self.admin, title="t", start_date=date(2026, 9, 1)
+        )
+        entry = _task_entry(task)
+        self.assertEqual(entry["start_date"], "2026-09-01")
+
     # -- create_task ---------------------------------------------------------
 
     def test_create_task_in_named_project_with_assignee(self):
@@ -365,6 +376,25 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
             self.outsider,
         )
         self.assertEqual(result, "Error: task not found.")
+
+    def test_update_task_rejects_due_date_before_start_date(self):
+        task = create_task(
+            self.project,
+            self.admin,
+            title="T",
+            start_date=date(2026, 9, 20),
+        )
+        result = self._call(
+            "update_task",
+            UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
+            self.member,
+        )
+        self.assertEqual(
+            result,
+            "Error: due date cannot be before the task's start date (2026-09-20).",
+        )
+        task.refresh_from_db()
+        self.assertIsNone(task.due_date)
 
     # -- comment_on_task -----------------------------------------------------
 

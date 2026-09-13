@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.test import TestCase
 
 from workspace.projects.services.tasks import create_task
@@ -20,6 +22,14 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.board()
         self.assertContains(resp, 'id="epics-data"')
         self.assertContains(resp, str(self.epic.uuid))
+
+    def test_epics_payload_carries_target_and_display_date(self):
+        self.epic.target_date = date(2026, 10, 3)
+        self.epic.save(update_fields=["target_date"])
+        self.client.force_login(self.member)
+        resp = self.board()
+        self.assertContains(resp, '"target_date": "2026-10-03"')
+        self.assertContains(resp, '"display_date": "Oct 03"')
 
     def test_card_shows_the_epic_badge(self):
         create_task(
@@ -149,3 +159,45 @@ class SettingsEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'placeholder="Search epics"')
         self.assertContains(resp, 'x-model="openOnly"')
         self.assertContains(resp, 'x-for="epic in visibleEpics()"')
+
+    def test_settings_epics_card_has_a_target_date_input(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertContains(resp, 'aria-label="Target date"')
+
+
+class OverviewEpicsTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    @property
+    def url(self):
+        return f"/projects/{self.project.uuid}"
+
+    def test_section_hidden_without_epics(self):
+        self.client.force_login(self.member)
+        self.assertNotContains(self.client.get(self.url), 'id="overview-epics"')
+
+    def test_overview_lists_open_epics_dated_first_with_progress(self):
+        beta = self.project.epics.create(name="Beta", target_date=date(2026, 10, 3))
+        old = self.project.epics.create(name="Alpha", target_date=date(2026, 1, 1))
+        old.is_closed = True
+        old.save(update_fields=["closed_at"])
+        done = self.project.statuses.get(name="Done")
+        for status_ in (None, done):
+            task = create_task(self.project, self.admin, title="t", status=status_)
+            task.epic = beta
+            task.save(update_fields=["epic"])
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        self.assertContains(resp, 'id="overview-epics"')
+        self.assertContains(resp, "Beta")
+        self.assertContains(resp, "1/2 done")
+        self.assertContains(resp, "Oct 03")
+        self.assertContains(resp, "1 completed epic")
+        self.assertNotContains(resp, ">Alpha<")
+
+    def test_overdue_open_epic_is_tinted(self):
+        self.project.epics.create(name="Late", target_date=date(2000, 1, 1))
+        self.client.force_login(self.member)
+        resp = self.client.get(self.url)
+        html = resp.content.decode()
+        section = html.split('id="overview-epics"')[1].split("</section>")[0]
+        self.assertIn("text-error", section)

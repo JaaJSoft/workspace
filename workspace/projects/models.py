@@ -226,6 +226,9 @@ class Epic(models.Model):
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=20, blank=True, default="")
     description = models.TextField(blank=True, default="")
+    # Optional target date; the timeline draws a dated epic as a marker and
+    # groups it ahead of the undated ones.
+    target_date = models.DateField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -332,6 +335,9 @@ class Task(models.Model):
         max_length=6, choices=Priority.choices, default=Priority.MEDIUM
     )
     due_date = models.DateField(null=True, blank=True)
+    # Optional planned start; with due_date it makes the task a bar on the
+    # timeline, alone it is a marker.
+    start_date = models.DateField(null=True, blank=True)
     # Effort in the project's estimate_unit (points or hours); null = not
     # estimated. One decimal covers half-points and half-hours.
     estimate = models.DecimalField(
@@ -388,6 +394,13 @@ class Task(models.Model):
                 fields=["project", "number"],
                 name="unique_task_number_per_project",
             ),
+            # A start date, when both are set, may not fall after the due date.
+            models.CheckConstraint(
+                condition=Q(start_date__isnull=True)
+                | Q(due_date__isnull=True)
+                | Q(start_date__lte=F("due_date")),
+                name="task_start_not_after_due",
+            ),
         ]
 
     def __str__(self):
@@ -400,6 +413,14 @@ class Task(models.Model):
             raise ValidationError({"epic": "Epic belongs to another project."})
         if self.sprint_id and self.sprint.project_id != self.project_id:
             raise ValidationError({"sprint": "Sprint belongs to another project."})
+        if (
+            self.start_date is not None
+            and self.due_date is not None
+            and self.start_date > self.due_date
+        ):
+            raise ValidationError(
+                {"start_date": "Start date cannot be after the due date."}
+            )
 
     @property
     def reference(self):

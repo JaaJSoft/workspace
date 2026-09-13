@@ -68,6 +68,7 @@ def create_task(
     status=None,
     priority=Task.Priority.MEDIUM,
     due_date=None,
+    start_date=None,
     estimate=None,
     assignees=(),
     labels=(),
@@ -80,12 +81,14 @@ def create_task(
     the running sprint unless a sprint is passed explicitly.
     """
     # The API serializer scopes the epic and sprint per project; this
-    # guards the direct callers (seeds, future tools) against
-    # cross-project grouping.
+    # guards the direct callers (seeds, future tools) against cross-project
+    # grouping.
     if epic is not None and epic.project_id != project.pk:
         raise ValueError("Epic belongs to another project.")
     if sprint is not None and sprint.project_id != project.pk:
         raise ValueError("Sprint belongs to another project.")
+    if start_date is not None and due_date is not None and start_date > due_date:
+        raise ValueError("Start date cannot be after the due date.")
     if status is None:
         status = (
             project.statuses.filter(category=TaskStatus.Category.BACKLOG)
@@ -104,6 +107,7 @@ def create_task(
             status=status,
             priority=priority,
             due_date=due_date,
+            start_date=start_date,
             estimate=estimate,
             epic=epic,
             sprint=sprint,

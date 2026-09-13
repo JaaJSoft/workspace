@@ -422,8 +422,9 @@ window.vaultSession = (function () {
       // to close.
       sessionGuard();
       // Every input to the derivation, not just the entry: a memo keyed on
-      // less would answer for a wrapped key it never saw.
-      const memo = [vaultUuid, wrappedKeyB64, info].join(' ');
+      // less would answer for a wrapped key it never saw. The entry uuid
+      // stands in for the info derived from it.
+      const memo = [vaultUuid, wrappedKeyB64, entryUuid].join(' ');
       if (entryKeyCache.has(memo)) return entryKeyCache.get(memo);
       const derived = await this._openDerivedKey(vaultUuid, wrappedKeyB64, info);
       // Re-read: the cache can have been dropped by a lock across that await,

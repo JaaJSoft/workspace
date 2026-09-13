@@ -20,7 +20,7 @@ window.vaultExportInterchange = (function () {
   // login block already carries.
   const CUSTOM_PREFIX = 'custom:';
 
-  function folderPath(vault, folder) {
+  function folderPath(vault, folder, foldersById) {
     const parts = [escapeName(folder.name)];
     // The server is not trusted to send a well-formed tree. `seen` bounds the
     // walk by the number of folders in the vault: every hop adds one more id
@@ -30,7 +30,7 @@ window.vaultExportInterchange = (function () {
     const seen = new Set([folder.id]);
     let current = folder;
     while (current.parent !== null && current.parent !== undefined && !seen.has(current.parent)) {
-      current = vault.folders.find((candidate) => candidate.id === current.parent);
+      current = foldersById.get(current.parent);
       if (!current) break;
       seen.add(current.id);
       parts.unshift(escapeName(current.name));
@@ -50,8 +50,9 @@ window.vaultExportInterchange = (function () {
       // The vault itself, so an entry filed nowhere still lands under it.
       const vaultFolder = { id: V.uuidV7(), name: escapeName(vault.name) };
       folders.push(vaultFolder);
+      const foldersById = new Map(vault.folders.map((folder) => [folder.id, folder]));
       vault.folders.forEach((folder) => {
-        const row = { id: V.uuidV7(), name: folderPath(vault, folder) };
+        const row = { id: V.uuidV7(), name: folderPath(vault, folder, foldersById) };
         folderIds.set(folder.id, row.id);
         folders.push(row);
       });

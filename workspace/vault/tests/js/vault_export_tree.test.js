@@ -59,6 +59,24 @@ function load(overrides = {}) {
         rows: rows.map((r) => Object.assign({}, r, { name: 'Banque' })),
         tamperedCount: readerCounts.folders,
       }),
+      // Every ciphertext in the fixtures is its own plaintext, uppercased.
+      openField: async (s, v, row, fieldId) => {
+        if (overrides.lockedField === fieldId) {
+          const error = new Error('locked');
+          error.reason = 'locked';
+          throw error;
+        }
+        const column = { name: row.encrypted_name, notes: row.encrypted_notes };
+        const field = (row.entry_fields || []).find((candidate) => candidate.field_id === fieldId);
+        const ciphertext = fieldId in column ? column[fieldId] : field && field.encrypted_value;
+        if (!ciphertext) return '';
+        if (overrides.unopenableField === fieldId) {
+          // What a real AEAD rejection looks like from here: bare, and
+          // carrying no reason of its own.
+          throw new Error('tag mismatch');
+        }
+        return String(ciphertext).toLowerCase();
+      },
       readTags: async (s, v, rows) => ({
         rows: rows.map((r) => Object.assign({}, r, { name: 'perso' })),
         tamperedCount: readerCounts.tags,
@@ -190,4 +208,12 @@ test('a walk its run has abandoned stops at the next entry', async () => {
     (err) => err.reason === 'cancelled'
   );
   assert.equal(opened, 1, 'the abandoned walk kept opening entries');
+});
+
+test('a lock while a field opens is reported as a lock, not as tampering', async () => {
+  const ctx = load({ lockedField: 'password' });
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {}),
+    (err) => err.reason === 'locked'
+  );
 });

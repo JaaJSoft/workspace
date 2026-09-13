@@ -10,38 +10,36 @@ function VaultExportError(message, reason) {
 }
 
 window.vaultExportTree = (function () {
-  // One entry key per entry, then every field opened with it. openField would
-  // re-derive the key for each field, which is an HPKE open and an HKDF per
-  // password on an account with thousands of them.
+  // Every field is opened through the reader, which owns how an entry field is
+  // opened and under which slot; buildTree holds the entry-key cache, so the
+  // key is derived once per entry, not once per field. What this adds is the
+  // refusal. vaultReader verifies `name` and `username` only, so a corrupted
+  // password, totp, uri or note reaches this pass with the tamper count still
+  // clean. Left bare, that failure surfaces as an AEAD rejection carrying no
+  // reason and the dialog says "the export failed" - for the likeliest
+  // tampering target of all. No retry with other associated data, and no
+  // skipping: the field id is not named either, since a custom one is a
+  // string the user wrote.
   async function openEntryContent(session, vault, row) {
-    const V = window.vaultCrypto;
-    const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
-    // vaultReader opens `name` and `username` only, so refuseIfUnreadable has
-    // already answered clean by the time a corrupted password, totp, uri or
-    // note reaches this pass. Left bare, that failure surfaces as an AEAD
-    // rejection carrying no reason and the dialog says "the export failed" -
-    // for the likeliest tampering target of all. No retry with other
-    // associated data, and no skipping: the field id is not named either,
-    // since a custom one is a string the user wrote.
-    const decode = async (ciphertext, fieldId) => {
+    const open = async (fieldId) => {
       try {
-        return new TextDecoder().decode(
-          await V.open(key, V.fromBase64Url(ciphertext), V.AD.entryFieldAd(row.uuid, fieldId))
-        );
-      } catch {
+        return await window.vaultReader.openField(session, vault, row, fieldId);
+      } catch (err) {
+        // A lock is not tampering, and the dialog says so in its own words.
+        if (err && err.reason === 'locked') throw err;
         throw VaultExportError('a field could not be opened', 'unreadable');
       }
     };
     const fields = {};
     for (const field of row.entry_fields || []) {
-      fields[field.field_id] = await decode(field.encrypted_value, field.field_id);
+      fields[field.field_id] = await open(field.field_id);
     }
     return {
       type: row.type,
-      name: await decode(row.encrypted_name, 'name'),
-      // Written as an empty string by every entry created without one, and
-      // opening that would throw where nothing is wrong.
-      notes: row.encrypted_notes ? await decode(row.encrypted_notes, 'notes') : '',
+      name: await open('name'),
+      // An entry created without notes stores an empty column, which the
+      // reader answers with '' without opening anything.
+      notes: await open('notes'),
       favorite: !!row.is_favorite,
       trashed: !!row.deleted_at,
       created_at: row.created_at,

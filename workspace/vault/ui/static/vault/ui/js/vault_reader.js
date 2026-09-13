@@ -17,6 +17,7 @@
 //    vault locks: never on a timer, and never past those three points.
 window.vaultReader = (function () {
   const NAME_FIELD = 'name';
+  const NOTES_FIELD = 'notes';
   const DESCRIPTION_FIELD = 'description';
   // What the listing is allowed to open. Deliberately a list rather than a
   // "not secret" test: adding a field to a type must not silently widen what
@@ -29,6 +30,14 @@ window.vaultReader = (function () {
       fields[field.field_id] = field.encrypted_value;
     });
     return fields;
+  }
+
+  // The name and the notes live in columns of their own rather than among the
+  // entry's fields, and open under the same entry key and slot naming.
+  function fieldCiphertext(row, fieldId) {
+    if (fieldId === NAME_FIELD) return row.encrypted_name;
+    if (fieldId === NOTES_FIELD) return row.encrypted_notes;
+    return fieldMap(row)[fieldId];
   }
 
   async function openText(V, key, ciphertext, associatedData) {
@@ -201,7 +210,7 @@ window.vaultReader = (function () {
     // for, handed straight to the caller. Nothing here stores it.
     openField: async function (session, vault, row, fieldId) {
       const V = window.vaultCrypto;
-      const ciphertext = fieldMap(row)[fieldId];
+      const ciphertext = fieldCiphertext(row, fieldId);
       if (!ciphertext) return '';
       const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
       return openText(V, key, ciphertext, V.AD.entryFieldAd(row.uuid, fieldId));

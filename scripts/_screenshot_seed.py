@@ -148,7 +148,7 @@ def seed(username, password):
 def _seed_files(alex, sam, group, now):
     from django.core.files.base import ContentFile
 
-    from workspace.files.models import FileEvent, FileFavorite, PinnedFolder
+    from workspace.files.models import FileEvent, FileFavorite, FileTag, PinnedFolder
     from workspace.files.services import FileService
     from workspace.users.services.settings import set_setting
 
@@ -203,18 +203,39 @@ def _seed_files(alex, sam, group, now):
         (photos, name, _photo_png(start, end), "image/png", days_ago)
         for name, start, end, days_ago in pictures
     ]
-    report = None
+    created = {}
     for parent, name, data, mime, days_ago in files:
         f = FileService.create_file(
             alex, name, parent, content=ContentFile(data, name=name), mime_type=mime
         )
         backdate_file(f, now - timedelta(days=days_ago, hours=3))
-        if name == "Quarterly report.pdf":
-            report = f
+        created[name] = f
+    report = created["Quarterly report.pdf"]
 
     FileFavorite.objects.create(owner=alex, file=report)
     FileFavorite.objects.create(owner=alex, file=photos)
     PinnedFolder.objects.create(owner=alex, folder=photos, position=0)
+
+    # Tags fill the list view's Tags column and the sidebar's pinned
+    # tags; the same tags show up on notes, which are files too.
+    tags = _seed_tags(
+        alex,
+        [
+            ("client", "#3b82f6", True),
+            ("2026", "#22c55e", False),
+            ("draft", "#f97316", True),
+        ],
+    )
+    for name, tag_names in [
+        ("Quarterly report.pdf", ["client", "2026"]),
+        ("budget-2026.csv", ["2026"]),
+        ("Roadmap.md", ["draft"]),
+        ("logo.svg", ["client"]),
+        ("hero-banner.png", ["draft"]),
+        ("product-shot.png", ["client"]),
+    ]:
+        for tag_name in tag_names:
+            FileTag.objects.create(file=created[name], tag=tags[tag_name])
 
     # Activity from another user, on a group drive the demo user can see:
     # the dashboard feed excludes the viewer's own actions.
@@ -241,12 +262,26 @@ def _seed_files(alex, sam, group, now):
     return str(photos.uuid)
 
 
+def _seed_tags(owner, specs):
+    """Create (name, color, pinned) tags for *owner*; returns them by name."""
+    from workspace.files.models import Tag
+
+    return {
+        name: Tag.objects.create(
+            owner=owner, name=name, color=color, is_favorite=pinned
+        )
+        for name, color, pinned in specs
+    }
+
+
 def _seed_notes(alex, now):
     from django.core.files.base import ContentFile
 
-    from workspace.files.models import File
+    from workspace.files.models import File, FileTag
     from workspace.files.services import FileService
     from workspace.notes.ui.views import _ensure_default_folders
+
+    meeting = _seed_tags(alex, [("meeting", "#a855f7", True)])["meeting"]
 
     prefs, _ = _ensure_default_folders(alex)
     notes_folder = File.objects.get(uuid=prefs["defaultFolderUuid"])
@@ -284,6 +319,8 @@ def _seed_notes(alex, now):
             mime_type="text/markdown",
         )
         _backdate(f, now - timedelta(hours=hours_ago))
+        if name == "Project kickoff.md":
+            FileTag.objects.create(file=f, tag=meeting)
 
 
 def _seed_chat(alex, sam, jordan, now):
@@ -404,6 +441,11 @@ def _seed_calendar(alex, sam, jordan, now):
 
     today = now.replace(minute=0, second=0, microsecond=0)
     monday = today.replace(hour=0) - timedelta(days=today.weekday())
+    # From Friday on, most of the week's meetings would already be behind
+    # us and the agenda view would show nothing but the recurring yoga;
+    # place them in the coming week instead.
+    if today.weekday() >= 4:
+        monday += timedelta(days=7)
 
     def event(cal, title, start, hours=1, rule="", **kwargs):
         ev = Event(
@@ -577,8 +619,21 @@ def _seed_mail(alex, now):
     inbox.save(update_fields=["message_count", "unread_count"])
 
 
+def _offset_date(now, days):
+    return (now + timedelta(days=days)).date() if days is not None else None
+
+
 def _seed_projects(alex, sam, jordan, now):
-    from workspace.projects.models import Label, Project, ProjectMember, TaskComment
+    from workspace.projects.models import (
+        Epic,
+        Label,
+        Project,
+        ProjectMember,
+        Task,
+        TaskComment,
+        TaskEvent,
+    )
+    from workspace.projects.services.events import record_task_event
     from workspace.projects.services.projects import create_project
     from workspace.projects.services.tasks import create_task
 
@@ -609,51 +664,156 @@ def _seed_projects(alex, sam, jordan, now):
         "- LCP stays under 2s on mobile\n"
         "- Light and dark theme variants\n"
     )
+    epics = {
+        name: Epic.objects.create(
+            project=project,
+            name=name,
+            color=color,
+            target_date=(now + timedelta(days=target_days)).date(),
+        )
+        for name, color, target_days in [
+            ("Launch", "#6366f1", 12),
+            ("Content refresh", "#06b6d4", 26),
+        ]
+    }
+
+    # (title, status, priority, start, due, estimate, assignees, labels, epic,
+    # created, completed) - start/due/created/completed are day offsets from
+    # now. Start+due draws a bar on the timeline, a due date alone a marker;
+    # created/completed spread the flow chart over the past weeks.
     tasks = [
         (
             "Design new landing page hero",
             "In progress",
             "high",
+            -4,
             3,
             5,
             [sam],
             ["Design"],
+            "Launch",
+            -18,
+            None,
         ),
         (
             "Migrate blog articles",
             "In progress",
             "medium",
-            None,
+            -6,
+            9,
             3,
             [jordan],
             ["Content"],
+            "Content refresh",
+            -12,
+            None,
         ),
-        ("Fix mobile navigation overlap", "To do", "urgent", 1, 2, [alex], ["Bug"]),
+        (
+            "Fix mobile navigation overlap",
+            "To do",
+            "urgent",
+            None,
+            1,
+            2,
+            [alex],
+            ["Bug"],
+            "Launch",
+            -2,
+            None,
+        ),
         (
             "Set up newsletter signup API",
             "To do",
             "medium",
-            None,
+            2,
+            8,
             3,
             [sam],
             ["Backend"],
+            "Launch",
+            -9,
+            None,
         ),
-        ("Write pricing page copy", "To do", "low", None, 1, [], ["Content"]),
-        ("Audit current site performance", "Done", "medium", None, 8, [alex], []),
-        ("Pick a new color palette", "Done", "low", None, 2, [sam], ["Design"]),
-        ("Dark mode support", "Backlog", "low", None, 5, [], ["Design"]),
+        (
+            "Write pricing page copy",
+            "To do",
+            "low",
+            6,
+            13,
+            1,
+            [],
+            ["Content"],
+            "Content refresh",
+            -5,
+            None,
+        ),
+        (
+            "Audit current site performance",
+            "Done",
+            "medium",
+            -20,
+            -13,
+            8,
+            [alex],
+            [],
+            "Launch",
+            -27,
+            -13,
+        ),
+        (
+            "Pick a new color palette",
+            "Done",
+            "low",
+            -15,
+            -8,
+            2,
+            [sam],
+            ["Design"],
+            "Launch",
+            -20,
+            -8,
+        ),
+        (
+            "Dark mode support",
+            "Backlog",
+            "low",
+            None,
+            None,
+            5,
+            [],
+            ["Design"],
+            None,
+            -33,
+            None,
+        ),
         (
             "Customer testimonials section",
             "Backlog",
             "medium",
             None,
             None,
+            None,
             [],
             ["Content"],
+            "Content refresh",
+            -40,
+            None,
         ),
     ]
     hero = None
-    for title, status, priority, due_days, estimate, assignees, task_labels in tasks:
+    for (
+        title,
+        status,
+        priority,
+        start_days,
+        due_days,
+        estimate,
+        assignees,
+        task_labels,
+        epic_name,
+        created_days,
+        completed_days,
+    ) in tasks:
         task = create_task(
             project,
             alex,
@@ -661,13 +821,39 @@ def _seed_projects(alex, sam, jordan, now):
             description=hero_description if title.startswith("Design new") else "",
             status=statuses[status],
             priority=priority,
-            due_date=(now + timedelta(days=due_days)).date() if due_days else None,
+            start_date=_offset_date(now, start_days),
+            due_date=_offset_date(now, due_days),
             estimate=estimate,
             assignees=assignees,
             labels=[labels[name] for name in task_labels],
+            epic=epics[epic_name] if epic_name else None,
         )
         if hero is None:
             hero = task
+        created_at = now + timedelta(days=created_days, hours=-2)
+        _backdate(task, created_at)
+        task.events.filter(type=TaskEvent.Type.CREATED).update(created_at=created_at)
+        if completed_days is not None:
+            # The move onto the board is what cycle time is measured from.
+            started_at = now + timedelta(days=start_days, hours=-1)
+            moved_event = record_task_event(
+                task,
+                type=TaskEvent.Type.MOVED,
+                actor=assignees[0] if assignees else alex,
+                from_status=statuses["To do"],
+                to_status=statuses["In progress"],
+            )
+            _backdate(moved_event, started_at)
+            completed_at = now + timedelta(days=completed_days, hours=-1)
+            Task.objects.filter(pk=task.pk).update(completed_at=completed_at)
+            done_event = record_task_event(
+                task,
+                type=TaskEvent.Type.COMPLETED,
+                actor=assignees[0] if assignees else alex,
+                from_status=statuses["In progress"],
+                to_status=statuses["Done"],
+            )
+            _backdate(done_event, completed_at)
 
     # Comment thread for the task-panel capture.
     for author, body, hours_ago in [
@@ -764,6 +950,12 @@ def _files_view(mode):
         # otherwise be captured hovered (selection ring, row menu).
         page.mouse.move(5, 5)
         page.wait_for_timeout(600)
+        # Thumbnails are lazy images fetched one request each; on a slow
+        # host the fixed settle leaves half the grid still grey.
+        page.wait_for_function(
+            "[...document.images].every(img => img.complete && img.naturalWidth > 0)",
+            timeout=15000,
+        )
 
     return prep
 
@@ -822,6 +1014,12 @@ SHOTS = [
         "path": "/projects/{project_uuid}/board?task={task_uuid}",
         "settle_ms": 2500,
     },
+    {
+        "name": "projects_3",
+        "path": "/projects/{project_uuid}/timeline?scale=month",
+        "settle_ms": 2500,
+    },
+    {"name": "projects_4", "path": "/projects/{project_uuid}/analytics"},
     {"name": "ai_1", "path": "/chat/{bot_conversation_uuid}"},
     {"name": "notifications_1", "path": "/", "prep": _open_notifications},
 ]

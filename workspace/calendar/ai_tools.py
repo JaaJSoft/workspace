@@ -265,6 +265,12 @@ def _describe_scope(event, scope):
     }[scope]
 
 
+def _local_clock(value, tz):
+    from workspace.calendar.upcoming import event_instant
+
+    return event_instant(value).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
 class CalendarToolProvider(ToolProvider):
     @tool(
         badge_icon="🔍",
@@ -506,11 +512,10 @@ carries the event_id (and, for a recurring occurrence, its original_start) \
 that update_event and cancel_event take."""
         from datetime import timedelta
 
-        from dateutil.parser import parse as parse_dt
         from django.utils import timezone
 
         from workspace.calendar.queries import visible_calendars
-        from workspace.calendar.upcoming import get_upcoming_page
+        from workspace.calendar.upcoming import event_instant, get_upcoming_page
         from workspace.users.services.settings import get_user_timezone
 
         now = timezone.now()
@@ -526,19 +531,23 @@ that update_event and cancel_event take."""
         user_tz = get_user_timezone(user)
         results = []
         for e in events:
-            start_dt = parse_dt(e["start"])
-            if start_dt > cutoff:
+            if event_instant(e["start"]) > cutoff:
                 continue
-            start_local = start_dt.astimezone(user_tz)
-            end_local = parse_dt(e["end"]).astimezone(user_tz) if e.get("end") else None
+            if e["all_day"]:
+                # Already the bare day label; a clock time would be UTC
+                # midnight shifted into the user's zone, not the event's day.
+                start_text, end_text = e["start"], e.get("end") or ""
+            else:
+                start_text = _local_clock(e["start"], user_tz)
+                end_text = _local_clock(e["end"], user_tz) if e.get("end") else ""
             entry = {
                 # A virtual occurrence's own uuid is a synthetic
                 # "<master>:<start>" pair no endpoint accepts; the master is
                 # what the edit tools address.
                 "event_id": e.get("master_event_id") or e["uuid"],
                 "title": e["title"],
-                "start": start_local.strftime("%Y-%m-%d %H:%M"),
-                "end": end_local.strftime("%Y-%m-%d %H:%M") if end_local else "",
+                "start": start_text,
+                "end": end_text,
                 "all_day": e["all_day"],
                 "location": e.get("location", ""),
                 "calendar": cal_names.get(e.get("calendar_id"), ""),

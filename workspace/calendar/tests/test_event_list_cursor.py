@@ -362,6 +362,26 @@ class CursorModeRecurringTests(CursorModeMixin, APITestCase):
         starts = [_p(e["start"]) for e in resp.data["events"]]
         self.assertEqual(starts, sorted(starts))
 
+    def test_all_day_event_sorts_with_timed_events(self):
+        """An all-day event serializes its start as a bare date, which parses
+        naive; merging it with a timed (aware) event must not blow up."""
+        now = timezone.now().replace(microsecond=0)
+        self._make_event("Timed", now + timedelta(days=1))
+        day = (now + timedelta(days=2)).replace(hour=0, minute=0, second=0)
+        Event.objects.create(
+            calendar=self.cal,
+            owner=self.owner,
+            title="All day",
+            start=day,
+            end=day + timedelta(days=1),
+            all_day=True,
+        )
+        resp = self._get_cursor(after=now)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [e["title"] for e in resp.data["events"]], ["Timed", "All day"]
+        )
+
     def test_cancelled_at_sentinel_position_preserves_next_after(self):
         """Regression: if a cancelled exception falls at position limit+1
         (the sentinel slot), `next_after` must still be set because the

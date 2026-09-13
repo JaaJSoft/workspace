@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from workspace.ai.models import AITask
+from workspace.ai.models import AITask, BotProfile
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.chat.ui.templatetags.chat_tags import render_ai_usage
 
@@ -112,6 +112,7 @@ class ConversationMessagesUsageTests(TestCase):
         self.conv = Conversation.objects.create(
             kind=Conversation.Kind.DM, created_by=self.user
         )
+        BotProfile.objects.create(user=self.bot)
         ConversationMember.objects.create(conversation=self.conv, user=self.user)
         ConversationMember.objects.create(conversation=self.conv, user=self.bot)
         self.client.force_login(self.user)

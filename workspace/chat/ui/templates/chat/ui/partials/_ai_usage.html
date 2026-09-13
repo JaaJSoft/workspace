@@ -6,13 +6,11 @@ focus-driven dropdown on purpose: the messages container is fully replaced on
 SSE refresh, so Alpine state would not survive the swap.
 {% endcomment %}
 {% if usage %}
-  <span
-    class="dropdown dropdown-top ml-1 align-middle not-italic"
-  >
+  <span class="dropdown dropdown-top dropdown-end ml-auto mt-2 shrink-0">
     <button
       type="button"
       tabindex="0"
-      class="inline-flex items-center align-middle text-base-content/40 hover:text-base-content/70 transition-colors"
+      class="inline-flex h-4 items-center text-base-content/40 hover:text-base-content/70 transition-colors"
       title="Generation details"
       aria-label="Generation details"
     >

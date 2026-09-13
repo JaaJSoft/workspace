@@ -440,14 +440,17 @@ window.vaultSession = (function () {
     // Scoped rather than a begin/end pair: a walk that throws must not leave
     // the memo standing, and there is no second half to forget.
     withEntryKeyCache: async function (run) {
-      const outer = entryKeyCache;
-      entryKeyCache = new Map();
+      const own = new Map();
+      entryKeyCache = own;
       try {
         return await run();
       } finally {
-        // A lock during the walk nulls this, and that must stick: restoring
-        // `outer` would hand back the very references lock() let go of.
-        entryKeyCache = entryKeyCache === null ? null : outer;
+        // Dropped only while it is still this scope's. A cancelled export can
+        // finish after the next one opened its own scope, and clearing then
+        // would empty the live walk's memo; restoring an earlier map instead
+        // would bring back keys a finished walk let go of. A lock during the
+        // walk nulls the binding, and that sticks too.
+        if (entryKeyCache === own) entryKeyCache = null;
       }
     },
 

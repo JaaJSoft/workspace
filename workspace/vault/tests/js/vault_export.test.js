@@ -739,3 +739,22 @@ test('an empty draw does not stop the field following the generator', () => {
   assert.equal(component.exportPassphrase, 'a fresh draw from the panel');
   assert.equal(component.passphraseAccepted(), true);
 });
+
+test('a run tells its walk when it has been abandoned', async () => {
+  // Without this the walk a closed dialog started keeps decrypting the whole
+  // account; with it, the walk stops at its next entry.
+  const tree = gatedTree();
+  const { component } = load({ vaultExportTree: tree });
+  component.exportOpen = true;
+  component.exportFormat = 'archive';
+  component.applyGeneratedPassphrase(PHRASE);
+  const run = component.runExport();
+  await tick();
+  const { stillCurrent } = tree.gates[0].options;
+  assert.equal(typeof stillCurrent, 'function', 'the walk was given no way to know');
+  assert.equal(stillCurrent(), true);
+  component.clearExport();
+  assert.equal(stillCurrent(), false, 'the walk still thinks its run is live');
+  tree.gates[0].release();
+  await run;
+});

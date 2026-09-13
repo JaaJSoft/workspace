@@ -63,7 +63,16 @@ window.vaultExportTree = (function () {
     }
   }
 
-  async function buildVault(session, vaultRow, onProgress) {
+  // Checked once per vault and once per entry. Cancelling a run cannot unwind
+  // the walk it started, and without this the walk reads the rest of the
+  // account into a tree nobody will look at.
+  function stopIfAbandoned(stillCurrent) {
+    if (stillCurrent && !stillCurrent()) {
+      throw VaultExportError('the export was abandoned', 'cancelled');
+    }
+  }
+
+  async function buildVault(session, vaultRow, { onProgress, stillCurrent }) {
     const api = window.vaultApi;
     const reader = window.vaultReader;
     const vault = await reader.readVault(session, vaultRow);
@@ -89,6 +98,7 @@ window.vaultExportTree = (function () {
 
     const built = [];
     for (const row of rows) {
+      stopIfAbandoned(stillCurrent);
       const content = await openEntryContent(session, vaultRow, row);
       built.push(Object.assign(content, {
         folder: row.folder === null || row.folder === undefined
@@ -121,7 +131,7 @@ window.vaultExportTree = (function () {
   }
 
   return {
-    buildTree: async function (session, { onProgress } = {}) {
+    buildTree: async function (session, { onProgress, stillCurrent } = {}) {
       const vaultRows = await window.vaultApi.listVaults();
       if (!vaultRows.length) {
         throw VaultExportError('this account holds no vault', 'empty');
@@ -133,7 +143,8 @@ window.vaultExportTree = (function () {
       return session.withEntryKeyCache(async () => {
         const vaults = [];
         for (const vaultRow of vaultRows) {
-          vaults.push(await buildVault(session, vaultRow, onProgress));
+          stopIfAbandoned(stillCurrent);
+          vaults.push(await buildVault(session, vaultRow, { onProgress, stillCurrent }));
         }
         return {
           format: 'vault-archive',

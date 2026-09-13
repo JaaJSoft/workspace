@@ -174,3 +174,20 @@ test('an account with no vault refuses rather than producing an empty file', asy
     (err) => err.reason === 'empty'
   );
 });
+
+test('a walk its run has abandoned stops at the next entry', async () => {
+  // Cancelling a run does not unwind the walk it started. Left alone, that
+  // walk goes on listing and decrypting the whole account into a tree nobody
+  // will read, behind a dialog that has already closed.
+  const ctx = load();
+  let opened = 0;
+  let current = true;
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {
+      onProgress: () => { opened += 1; current = false; },
+      stillCurrent: () => current,
+    }),
+    (err) => err.reason === 'cancelled'
+  );
+  assert.equal(opened, 1, 'the abandoned walk kept opening entries');
+});

@@ -874,3 +874,37 @@ test('the cache does not outlive a read that threw', async () => {
     'a cache survived the read that threw'
   );
 });
+
+test('an export scope that ends under a newer one leaves the newer memo alone', async () => {
+  // A cancelled export can still be finishing when the next one opens its own
+  // scope. Ending the old scope must not empty the live walk's memo, and no
+  // memo may outlive every walk that held it - that would keep derived entry
+  // keys reachable after the export is over.
+  const h = harness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  h.ctx.vaultCrypto.AD.entryKeyInfo = (uuid) => `entry:${uuid}`;
+  h.ctx.vaultCrypto.importAeadKey = async () => ({ handle: 'entry-key' });
+  const derivations = () => h.calls.filter((call) => call === 'hkdf').length;
+  const open = () => h.session.openEntryKey(
+    '0192f3a4-2222-7d8e-9f01-23456789abcd', 'd3JhcHBlZA', '0192f3a4-3333-7d8e-9f01-23456789abcd'
+  );
+
+  let releaseOlder;
+  const older = h.session.withEntryKeyCache(
+    () => new Promise((resolve) => { releaseOlder = resolve; })
+  );
+  const newer = h.session.withEntryKeyCache(async () => {
+    await open();
+    const before = derivations();
+    releaseOlder();
+    await older;
+    await open();
+    return derivations() - before;
+  });
+  assert.equal(await newer, 0, 'the live walk lost its memo when the older scope ended');
+
+  const after = derivations();
+  await open();
+  await open();
+  assert.equal(derivations() - after, 2, 'a memo outlived every walk that held it');
+});

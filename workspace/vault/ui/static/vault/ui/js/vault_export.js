@@ -241,6 +241,7 @@ window.vaultExportMixin = function vaultExportMixin() {
           onProgress: () => {
             if (generation === this.exportGeneration) this.exportProgress += 1;
           },
+          stillCurrent: () => generation === this.exportGeneration,
         });
         // The passphrase is read on the far side of this check and never
         // captured before it: holding a copy across the awaits would keep the

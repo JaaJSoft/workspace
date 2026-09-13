@@ -203,7 +203,11 @@ window.vaultExportMixin = function vaultExportMixin() {
 
     async runExport() {
       if (this.exportBusy) return;
-      if (this.exportFormat === 'archive' && !this.passphraseAccepted()) return;
+      // Read once, here. The form is disabled while a run is busy, but the run
+      // must not rely on it: re-read after the walk, a radio flipped in between
+      // writes a plaintext file whose warning was never on screen.
+      const format = this.exportFormat;
+      if (format === 'archive' && !this.passphraseAccepted()) return;
       // Each attempt reports its own outcome and nothing else. The dialog no
       // longer closes on every success, so a count left by a previous run
       // survives into the next one - and an archive run, which skips nothing
@@ -214,9 +218,12 @@ window.vaultExportMixin = function vaultExportMixin() {
       // promise: there is no script that might not have loaded and no window
       // for a lock to land in between the question and the work, and a caller
       // that reached here without the step writes nothing.
-      if (this.exportFormat === 'interchange' && !this.exportConfirming) return;
+      if (format === 'interchange' && !this.exportConfirming) return;
       const generation = this.exportGeneration;
       this.exportBusy = true;
+      // Folded for the length of the run: a Use inside the panel would land a
+      // phrase in the field that the gate above never saw.
+      this.exportGeneratorOpen = false;
       this.exportError = '';
       this.exportProgress = 0;
       try {
@@ -233,7 +240,16 @@ window.vaultExportMixin = function vaultExportMixin() {
         // captured before it: holding a copy across the awaits would keep the
         // phrase alive exactly as long as the lock says it must not be.
         if (generation !== this.exportGeneration) return;
-        if (this.exportFormat === 'archive') {
+        if (format === 'archive') {
+          // Asked again on the far side of the walk. The field is disabled
+          // while busy; this is what holds if it ever is not, because the copy
+          // the user kept would open nothing and an emptied field would seal
+          // the account under no passphrase at all.
+          if (!this.passphraseAccepted()) {
+            this.exportError =
+              'The passphrase changed during the export, so no file was written.';
+            return;
+          }
           const bytes = await window.vaultArchive.buildArchive({
             tree: tree,
             passphrase: this.exportPassphrase,

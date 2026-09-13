@@ -65,6 +65,7 @@
                 class="radio radio-sm mt-1"
                 value="archive"
                 x-model="exportFormat"
+                :disabled="exportBusy"
                 name="export-format"
               />
               <span>
@@ -80,6 +81,7 @@
                 class="radio radio-sm mt-1"
                 value="interchange"
                 x-model="exportFormat"
+                :disabled="exportBusy"
                 name="export-format"
               />
               <span>
@@ -126,6 +128,7 @@
                     class="input input-bordered input-sm flex-1 font-mono"
                     aria-describedby="export-passphrase-hint"
                     x-model="exportPassphrase"
+                    :disabled="exportBusy"
                     @input="noteTypedPassphrase()"
                   />
                   {% comment %}
@@ -140,7 +143,7 @@
                     data-testid="export-passphrase-reveal"
                     :title="exportRevealed ? 'Hide the archive passphrase' : 'Show the archive passphrase'"
                     :aria-label="exportRevealed ? 'Hide the archive passphrase' : 'Show the archive passphrase'"
-                    :disabled="!exportPassphrase"
+                    :disabled="exportBusy || !exportPassphrase"
                     @click="toggleExportReveal()"
                   >
                     <i :data-lucide="exportRevealed ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
@@ -151,7 +154,7 @@
                     data-testid="export-passphrase-copy"
                     title="Copy the archive passphrase"
                     aria-label="Copy the archive passphrase"
-                    :disabled="!exportPassphrase"
+                    :disabled="exportBusy || !exportPassphrase"
                     @click="copyExportPassphrase()"
                   >
                     <i data-lucide="copy" class="w-4 h-4"></i>
@@ -161,6 +164,7 @@
                     class="btn btn-sm btn-square"
                     data-testid="export-generate"
                     :class="exportGeneratorOpen ? 'btn-primary' : 'btn-ghost'"
+                    :disabled="exportBusy"
                     title="Generate a passphrase"
                     aria-label="Generate a passphrase"
                     @click="toggleExportGenerator()"
@@ -243,6 +247,7 @@
                       class="input input-bordered input-sm w-full"
                       aria-describedby="export-confirm-status"
                       x-model="exportConfirm"
+                      :disabled="exportBusy"
                     />
                     {% comment %}
                       Silent while the confirmation is still a prefix of the
@@ -275,6 +280,7 @@
                       class="checkbox checkbox-sm mt-0.5"
                       data-testid="export-own-phrase-ack"
                       x-model="exportOwnPhraseAck"
+                      :disabled="exportBusy"
                     />
                     <span
                       class="text-sm text-base-content/70"

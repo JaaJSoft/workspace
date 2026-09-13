@@ -667,3 +667,63 @@ test('closing or locking folds the generator and masks the phrase again', () => 
   assert.equal(component.exportGeneratorOpen, false);
   assert.equal(component.exportRevealed, false);
 });
+
+// A run whose walk is parked, armed the way the dialog arms an archive export.
+function parkedArchiveRun() {
+  const tree = gatedTree();
+  const sealed = [];
+  const { component, downloads } = load({
+    vaultExportTree: tree,
+    vaultArchive: {
+      buildArchive: async (args) => { sealed.push(args.passphrase); return new Uint8Array([1]); },
+      archiveFilename: () => 'vault-export-2026-09-06.vaultarchive',
+    },
+  });
+  component.exportOpen = true;
+  component.exportFormat = 'archive';
+  component.applyGeneratedPassphrase(PHRASE);
+  return { tree, sealed, component, downloads };
+}
+
+test('the format a run started with is the format it writes', async () => {
+  // Flipping the radio while the walk runs must not turn an archive into a
+  // plaintext file whose warning was never on screen.
+  const { tree, sealed, component, downloads } = parkedArchiveRun();
+  const run = component.runExport();
+  await tick();
+  component.exportFormat = 'interchange';
+  tree.gates[0].release();
+  await run;
+  assert.deepStrictEqual(downloads, ['vault-export-2026-09-06.vaultarchive']);
+  assert.deepStrictEqual(sealed, [PHRASE]);
+});
+
+test('a passphrase changed during the walk seals nothing', async () => {
+  // The copy the user kept would open nothing, and an emptied field would
+  // leave the archive protected by no passphrase at all.
+  const edits = {
+    typed: (c) => { c.exportPassphrase = `${PHRASE}x`; c.noteTypedPassphrase(); },
+    emptied: (c) => { c.exportPassphrase = ''; },
+  };
+  for (const [name, edit] of Object.entries(edits)) {
+    const { tree, sealed, component, downloads } = parkedArchiveRun();
+    const run = component.runExport();
+    await tick();
+    edit(component);
+    tree.gates[0].release();
+    await run;
+    assert.deepStrictEqual(sealed, [], `${name}: the archive was sealed`);
+    assert.equal(downloads.length, 0, `${name}: a file was written`);
+    assert.match(component.exportError, /passphrase/i, `${name}: nothing said why`);
+  }
+});
+
+test('a run folds the generator, so no Use can land a phrase under it', async () => {
+  const { tree, component } = parkedArchiveRun();
+  component.exportGeneratorOpen = true;
+  const run = component.runExport();
+  await tick();
+  assert.equal(component.exportGeneratorOpen, false);
+  tree.gates[0].release();
+  await run;
+});

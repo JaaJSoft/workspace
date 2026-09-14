@@ -243,11 +243,11 @@ class SharedLinkPageTests(TestCase):
         self.assertEqual(full_page.status_code, 200)
         self.assertContains(full_page, 'data-testid="drop-zone"')
 
-    def test_the_dropzone_names_the_share_root_while_browsing_a_subfolder(self):
-        """Uploads always land in the share root (SharedFolderUploadView
-        never takes a target folder), so the dropzone must keep naming that
-        root - not the subfolder currently on screen - or the interface
-        misleads the visitor about where their files are going."""
+    def test_the_dropzone_names_the_browsed_subfolder(self):
+        """Uploads land in the folder on screen, so the dropzone names that
+        folder and the swap target publishes it for the zone to send along;
+        naming the root here would mislead the visitor about where their
+        files are going."""
         folder = File.objects.create(
             owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
         )
@@ -265,7 +265,9 @@ class SharedLinkPageTests(TestCase):
 
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'data-testid="drop-zone"')
-        self.assertContains(resp, "Send files to Docs")
+        self.assertContains(resp, 'x-text="targetName">Sub</span>')
+        self.assertNotContains(resp, 'x-text="targetName">Docs</span>')
+        self.assertContains(resp, f'data-node="{sub.uuid}"')
         self.assertNotContains(resp, "Send files to Sub")
 
     def test_a_drop_mode_folder_link_renders_the_drop_page_with_no_listing(self):

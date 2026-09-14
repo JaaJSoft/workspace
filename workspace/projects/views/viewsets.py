@@ -1220,10 +1220,10 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
 
 @extend_schema(tags=["Projects - Tasks"])
 class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
-    """Workspace files referenced from one task: list, link, unlink.
+    """Workspace files linked to one task: list, link, unlink.
 
-    The list is filtered per viewer through the file permissions; a link
-    whose file the caller cannot open is hidden, never surfaced as a 403.
+    Linking shares the file with the project, so the list needs no
+    per-viewer filtering: every member can open every linked file.
     """
 
     serializer_class = TaskFileLinkCreateSerializer
@@ -1242,7 +1242,7 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             raise Http404 from None
 
     def list(self, request, *args, **kwargs):
-        return Response({"files": file_links_for_task(request.user, self.task)})
+        return Response({"files": file_links_for_task(self.task)})
 
     def create(self, request, *args, **kwargs):
         self._require_writable()
@@ -1256,16 +1256,26 @@ class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
                 {"detail": "One or more files not found or not accessible."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        link_files(request.user, self.task, files)
+        try:
+            link_files(
+                request.user,
+                self.task,
+                files,
+                permission=serializer.validated_data["permission"],
+            )
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
         return Response(
-            {"files": file_links_for_task(request.user, self.task)},
+            {"files": file_links_for_task(self.task)},
             status=status.HTTP_201_CREATED,
         )
 
     def destroy(self, request, *args, **kwargs):
         self._require_writable()
         link = (
-            self.task.file_links.select_related("file")
+            self.task.file_links.select_related(
+                "task", "share__file", "share__shared_with_project"
+            )
             .filter(uuid=kwargs["uuid"])
             .first()
         )

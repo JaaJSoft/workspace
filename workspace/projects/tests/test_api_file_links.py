@@ -1,4 +1,5 @@
-"""Task file links API: link workspace files, list per viewer, unlink."""
+"""Task file links API: link workspace files (sharing them with the
+project), list, unlink."""
 
 import uuid
 
@@ -7,6 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.files.models import FileShare
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
@@ -28,25 +30,29 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
             content=SimpleUploadedFile(name, content, content_type="text/plain"),
         )
 
-    def _link(self, user, *files):
+    def _link(self, user, *files, **extra):
         self.client.force_authenticate(user)
         return self.client.post(
             self.url,
-            data={"file_uuids": [str(f.uuid) for f in files]},
+            data={"file_uuids": [str(f.uuid) for f in files], **extra},
             format="json",
         )
 
     # ── Create ────────────────────────────────────────────
 
-    def test_member_links_an_accessible_file_and_gets_the_list(self):
+    def test_member_links_their_file_and_gets_the_list(self):
         src = self._make_file(self.member)
-        resp = self._link(self.member, src)
+        resp = self._link(self.member, src, permission="rw")
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         (item,) = resp.data["files"]
         self.assertEqual(item["file_uuid"], str(src.uuid))
         self.assertEqual(item["name"], "doc.txt")
+        self.assertEqual(item["permission"], "rw")
+        share = FileShare.objects.get(shared_with_project=self.project)
+        self.assertEqual(share.file, src)
+        self.assertEqual(share.permission, "rw")
         link = TaskFileLink.objects.get()
-        self.assertEqual(link.file, src)
+        self.assertEqual(link.share, share)
         self.assertEqual(link.created_by, self.member)
         self.assertTrue(
             self.task.events.filter(
@@ -54,11 +60,31 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
             ).exists()
         )
 
+    def test_permission_defaults_to_read_only(self):
+        src = self._make_file(self.member)
+        resp = self._link(self.member, src)
+        self.assertEqual(resp.data["files"][0]["permission"], "ro")
+
+    def test_unknown_permission_is_rejected(self):
+        src = self._make_file(self.member)
+        resp = self._link(self.member, src, permission="admin")
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_linking_an_inaccessible_file_is_rejected_whole(self):
         mine = self._make_file(self.member, "mine.txt")
         theirs = self._make_file(self.admin, "theirs.txt")
         resp = self._link(self.member, mine, theirs)
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(TaskFileLink.objects.exists())
+
+    def test_linking_a_file_the_member_can_only_read_is_rejected(self):
+        theirs = self._make_file(self.admin, "theirs.txt")
+        share_file(
+            theirs, target_user=self.member, permission="ro", acting_user=self.admin
+        )
+        resp = self._link(self.member, theirs)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("cannot be shared", resp.data["detail"])
         self.assertFalse(TaskFileLink.objects.exists())
 
     def test_unknown_uuid_is_rejected(self):
@@ -79,6 +105,7 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
         resp = self._link(self.member, src)
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(TaskFileLink.objects.count(), 1)
+        self.assertEqual(FileShare.objects.count(), 1)
 
     def test_outsider_gets_404(self):
         src = self._make_file(self.outsider)
@@ -94,23 +121,15 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
 
     # ── List ──────────────────────────────────────────────
 
-    def test_list_is_filtered_by_the_viewer_file_permission(self):
+    def test_every_member_sees_every_linked_file(self):
         private = self._make_file(self.admin, "private.txt")
-        shared = self._make_file(self.admin, "shared.txt")
-        share_file(
-            shared, target_user=self.member, permission="r", acting_user=self.admin
-        )
-        link_files(self.admin, self.task, [private, shared])
-
-        self.client.force_authenticate(self.admin)
-        resp = self.client.get(self.url)
-        self.assertEqual(
-            [f["name"] for f in resp.data["files"]], ["private.txt", "shared.txt"]
-        )
-
+        link_files(self.admin, self.task, [private])
         self.client.force_authenticate(self.member)
         resp = self.client.get(self.url)
-        self.assertEqual([f["name"] for f in resp.data["files"]], ["shared.txt"])
+        self.assertEqual([f["name"] for f in resp.data["files"]], ["private.txt"])
+        # And the member can actually read it through the project share.
+        resp = self.client.get(f"/api/v1/files/{private.uuid}/content")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
     def test_list_outsider_gets_404(self):
         self.client.force_authenticate(self.outsider)
@@ -119,27 +138,19 @@ class TaskFileLinkApiTests(ProjectTestMixin, APITestCase):
 
     # ── Destroy ───────────────────────────────────────────
 
-    def test_member_unlinks_a_file(self):
+    def test_member_unlinks_a_file_and_the_share_goes_with_it(self):
         src = self._make_file(self.admin)
         (link,) = link_files(self.admin, self.task, [src])
         self.client.force_authenticate(self.member)
         resp = self.client.delete(f"{self.url}/{link.uuid}")
         self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(FileShare.objects.exists())
         self.assertTrue(
             self.task.events.filter(
                 type=TaskEvent.Type.FILE_UNLINKED, actor=self.member
             ).exists()
         )
-
-    def test_unlinking_a_file_the_viewer_cannot_see_is_still_allowed(self):
-        # The link is task data: any project member may drop it, whether or
-        # not they can open the file behind it.
-        src = self._make_file(self.admin)
-        (link,) = link_files(self.admin, self.task, [src])
-        self.client.force_authenticate(self.member)
-        resp = self.client.delete(f"{self.url}/{link.uuid}")
-        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
 
     def test_unlink_unknown_link_is_404(self):
         self.client.force_authenticate(self.member)

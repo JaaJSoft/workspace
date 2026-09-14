@@ -344,8 +344,8 @@ class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         link_files(self.admin, self.task, [self.doc])
         self.url = f"/projects/{self.project.uuid}/tasks/{self.task.uuid}/panel"
 
-    def test_panel_embeds_the_links_the_viewer_can_open(self):
-        self.client.force_login(self.admin)
+    def test_panel_embeds_the_linked_files_for_every_member(self):
+        self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'id="task-panel-file-links"')
@@ -355,27 +355,12 @@ class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
             resp.context["panel_task_data"]["file_links_url"],
             f"/api/v1/projects/{self.project.uuid}/tasks/{self.task.uuid}/files",
         )
-
-    def test_panel_hides_links_the_viewer_cannot_open(self):
-        self.client.force_login(self.member)
-        resp = self.client.get(self.url)
-        self.assertEqual(resp.context["panel_file_links"], [])
-        self.assertNotContains(resp, "spec.md")
-
-    def test_activity_names_the_file_only_for_viewers_who_can_open_it(self):
-        self.client.force_login(self.admin)
-        labels = [e["label"] for e in self.client.get(self.url).context["panel_events"]]
+        labels = [e["label"] for e in resp.context["panel_events"]]
         self.assertIn("File linked: spec.md", labels)
 
-        self.client.force_login(self.member)
-        resp = self.client.get(self.url)
-        labels = [e["label"] for e in resp.context["panel_events"]]
-        self.assertIn("File linked", labels)
-        self.assertNotIn("File linked: spec.md", labels)
-        self.assertNotContains(resp, "spec.md")
-
-    def test_member_gets_the_link_file_action(self):
+    def test_member_gets_the_link_file_action_and_dialog(self):
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertIn("link_file", resp.context["panel_action_ids"])
         self.assertContains(resp, "Link file")
+        self.assertContains(resp, 'x-ref="linkFileDialog"')

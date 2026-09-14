@@ -672,9 +672,9 @@
       </h3>
       <div x-show="sectionsOpen.fileLinks">
         {% comment %}
-        References to live workspace files, not copies: the row reads the
-        file's current name, and a trashed one is struck through rather than
-        hidden (its owner still sees it, everybody else is filtered server-side).
+        Workspace files shared with the project and pinned here, not copies:
+        the row reads the file's current name, and a trashed one is struck
+        through rather than hidden.
         {% endcomment %}
         <ul class="flex flex-col gap-1 mb-2" x-show="fileLinks.length" x-cloak>
           <template x-for="link in fileLinks" :key="link.uuid">
@@ -707,6 +707,13 @@
                 data-lucide="trash-2"
                 class="w-3.5 h-3.5 flex-shrink-0 text-warning"
                 title="In trash"
+              ></i>
+              <i
+                x-show="!link.in_trash && link.permission === 'rw'"
+                x-cloak
+                data-lucide="pencil"
+                class="w-3.5 h-3.5 flex-shrink-0 text-base-content/40"
+                title="Members can edit"
               ></i>
               <span
                 class="text-xs text-base-content/50 flex-shrink-0"
@@ -751,6 +758,82 @@
             <i data-lucide="file-symlink" class="w-3.5 h-3.5"></i>
             <span>Link file</span>
           </button>
+          {# Second step after the workspace picker: linking shares the files #}
+          {# with the project, so the member picks the share permission here. #}
+          <dialog x-ref="linkFileDialog" class="modal" @close="cancelLinkFiles()">
+            <div class="modal-box max-w-sm">
+              <div class="flex items-start gap-3 mb-4">
+                <div class="bg-info/10 rounded-lg p-2 shrink-0">
+                  <i data-lucide="file-symlink" class="w-5 h-5 text-info"></i>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="font-bold text-lg">Link to the task</h3>
+                  <p class="text-sm text-base-content/60">
+                    Linking shares the files with every member of the project.
+                    The share shows up on each file and can be revoked there.
+                  </p>
+                </div>
+              </div>
+              <ul class="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto text-sm">
+                <template x-for="f in pendingFileLinks" :key="f.uuid">
+                  <li class="flex items-center gap-2 min-w-0">
+                    <i data-lucide="file" class="w-4 h-4 shrink-0 text-base-content/60"></i>
+                    <span class="truncate" x-text="f.name" :title="f.name"></span>
+                  </li>
+                </template>
+              </ul>
+              <fieldset class="flex flex-col gap-2 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    class="radio radio-sm"
+                    value="ro"
+                    x-model="fileLinkPermission"
+                  />
+                  <span class="text-sm">Members can view</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    class="radio radio-sm"
+                    value="rw"
+                    x-model="fileLinkPermission"
+                  />
+                  <span class="text-sm">Members can edit</span>
+                </label>
+              </fieldset>
+              <template x-if="fileLinkError">
+                <inline-alert type="error" class="mb-4">
+                  <span x-text="fileLinkError"></span>
+                </inline-alert>
+              </template>
+              <div class="modal-action mt-0">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-ghost"
+                  @click="$refs.linkFileDialog.close()"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  :disabled="fileLinkSaving"
+                  @click="confirmLinkFiles()"
+                >
+                  <span
+                    x-show="fileLinkSaving"
+                    x-cloak
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  Link
+                </button>
+              </div>
+            </div>
+            <form method="dialog" class="modal-backdrop">
+              <button type="submit">close</button>
+            </form>
+          </dialog>
         {% endif %}
       </div>
     </section>

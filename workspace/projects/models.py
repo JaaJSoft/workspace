@@ -582,12 +582,12 @@ class TaskAttachment(models.Model):
 
 
 class TaskFileLink(models.Model):
-    """A reference from a task to a live workspace file.
+    """A workspace file pinned on a task through its project share.
 
-    Unlike TaskAttachment, nothing is copied: the row points at the file
-    itself, so renames, edits and trashing follow through, and each viewer
-    only sees the links whose file they can already open. A link never
-    widens file access.
+    Unlike TaskAttachment, nothing is copied. The row points at the
+    ``FileShare`` addressing the task's project, not at the file: linking a
+    file shares it with the project, every member sees it, and revoking the
+    share (or deleting the file) takes the link with it.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -596,8 +596,8 @@ class TaskFileLink(models.Model):
         on_delete=models.CASCADE,
         related_name="file_links",
     )
-    file = models.ForeignKey(
-        "files.File",
+    share = models.ForeignKey(
+        "files.FileShare",
         on_delete=models.CASCADE,
         related_name="task_links",
     )
@@ -614,12 +614,12 @@ class TaskFileLink(models.Model):
         ordering = ["created_at", "uuid"]
         constraints = [
             models.UniqueConstraint(
-                fields=("task", "file"), name="unique_task_file_link"
+                fields=("task", "share"), name="unique_task_file_link"
             ),
         ]
 
     def __str__(self):
-        return f"{self.file_id} on {self.task_id}"
+        return f"{self.share_id} on {self.task_id}"
 
 
 class TaskEvent(models.Model):

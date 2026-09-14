@@ -1,84 +1,147 @@
-"""Task-to-file links: creation, removal, per-viewer serialization."""
+"""Task-to-file links: sharing with the project, pinning, unlinking."""
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from workspace.files.services import FileService
+from workspace.files.models import FileShare
+from workspace.files.services import FilePermission, FileService
 from workspace.files.services.sharing import share_file
 from workspace.projects.models import TaskEvent, TaskFileLink
 from workspace.projects.services.file_links import (
     file_links_for_task,
     link_files,
     unlink_file,
-    visible_file_refs,
 )
+from workspace.projects.services.members import ProjectRuleError
 from workspace.projects.services.tasks import create_task
 
 from .base import ProjectTestMixin
+
+
+def make_file(owner, name, content=b"hello"):
+    return FileService.create_file(
+        owner,
+        name,
+        content=SimpleUploadedFile(name, content, content_type="text/plain"),
+    )
 
 
 class LinkFilesTests(ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship it")
-        self.doc = self._make_file(self.admin, "spec.md")
+        self.doc = make_file(self.admin, "spec.md")
 
-    def _make_file(self, owner, name, content=b"hello"):
-        return FileService.create_file(
-            owner,
-            name,
-            content=SimpleUploadedFile(name, content, content_type="text/plain"),
+    def test_link_shares_the_file_with_the_project_and_pins_it(self):
+        (link,) = link_files(self.admin, self.task, [self.doc])
+        share = FileShare.objects.get()
+        self.assertEqual(share.file, self.doc)
+        self.assertEqual(share.shared_with_project, self.project)
+        self.assertEqual(share.permission, "ro")
+        self.assertEqual(share.shared_by, self.admin)
+        self.assertEqual(link.share, share)
+        self.assertEqual(link.created_by, self.admin)
+        # The member never had a share of their own: the project share is
+        # what lets them open it.
+        self.assertEqual(
+            FileService.get_permission(self.member, self.doc), FilePermission.VIEW
         )
 
-    def test_link_creates_a_row_and_an_event_per_file(self):
-        other = self._make_file(self.admin, "notes.txt")
-        created = link_files(self.admin, self.task, [self.doc, other])
-        self.assertEqual(len(created), 2)
-        self.assertEqual(self.task.file_links.count(), 2)
+    def test_link_with_write_permission(self):
+        link_files(self.admin, self.task, [self.doc], permission="rw")
+        self.assertEqual(
+            FileService.get_permission(self.member, self.doc), FilePermission.WRITE
+        )
+
+    def test_link_records_an_event_per_file(self):
+        other = make_file(self.admin, "notes.txt")
+        link_files(self.admin, self.task, [self.doc, other])
         events = self.task.events.filter(type=TaskEvent.Type.FILE_LINKED)
-        self.assertEqual(events.count(), 2)
         self.assertEqual(
             set(events.values_list("to_value", flat=True)), {"spec.md", "notes.txt"}
         )
         self.assertEqual(
             set(events.values_list("to_ref", flat=True)), {self.doc.uuid, other.uuid}
         )
-        self.assertTrue(all(ev.actor == self.admin for ev in events))
+
+    def test_existing_project_share_is_reused_with_its_own_permission(self):
+        share_file(
+            self.doc,
+            target_project=self.project,
+            permission="rw",
+            acting_user=self.admin,
+        )
+        (link,) = link_files(self.admin, self.task, [self.doc], permission="ro")
+        self.assertEqual(FileShare.objects.count(), 1)
+        self.assertEqual(link.share.permission, "rw")
+
+    def test_two_tasks_share_one_project_share(self):
+        other_task = create_task(self.project, self.admin, title="Review it")
+        link_files(self.admin, self.task, [self.doc])
+        link_files(self.admin, other_task, [self.doc])
+        self.assertEqual(FileShare.objects.count(), 1)
+        self.assertEqual(TaskFileLink.objects.count(), 2)
 
     def test_linking_the_same_file_twice_is_a_no_op(self):
         link_files(self.admin, self.task, [self.doc])
-        created = link_files(self.member, self.task, [self.doc])
+        created = link_files(self.admin, self.task, [self.doc])
         self.assertEqual(created, [])
         self.assertEqual(self.task.file_links.count(), 1)
-        self.assertEqual(
-            self.task.events.filter(type=TaskEvent.Type.FILE_LINKED).count(), 1
-        )
 
     def test_same_file_twice_in_one_call_creates_one_link(self):
         created = link_files(self.admin, self.task, [self.doc, self.doc])
         self.assertEqual(len(created), 1)
-        self.assertEqual(self.task.file_links.count(), 1)
-        self.assertEqual(
-            self.task.events.filter(type=TaskEvent.Type.FILE_LINKED).count(), 1
+
+    def test_a_file_the_user_cannot_share_is_refused_whole(self):
+        # A read-only share lets the member open the file, not share it on.
+        share_file(
+            self.doc, target_user=self.member, permission="ro", acting_user=self.admin
+        )
+        mine = make_file(self.member, "mine.txt")
+        with self.assertRaises(ProjectRuleError):
+            link_files(self.member, self.task, [mine, self.doc])
+        self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(
+            FileShare.objects.filter(shared_with_project=self.project).exists()
         )
 
-    def test_unlink_removes_the_row_and_records_an_event(self):
-        (link,) = link_files(self.admin, self.task, [self.doc])
-        unlink_file(link, actor=self.member)
+    def test_a_write_share_is_not_enough_to_link(self):
+        # Sharing on needs the files "share" action, which a share never grants.
+        share_file(
+            self.doc, target_user=self.member, permission="rw", acting_user=self.admin
+        )
+        with self.assertRaises(ProjectRuleError):
+            link_files(self.member, self.task, [self.doc])
+
+
+class UnlinkFileTests(ProjectTestMixin, TestCase):
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Ship it")
+        self.doc = make_file(self.admin, "spec.md")
+        (self.link,) = link_files(self.admin, self.task, [self.doc])
+
+    def test_unlinking_the_last_link_revokes_the_project_share(self):
+        unlink_file(self.link, actor=self.member)
         self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(FileShare.objects.exists())
+        self.assertIsNone(FileService.get_permission(self.member, self.doc))
         event = self.task.events.get(type=TaskEvent.Type.FILE_UNLINKED)
         self.assertEqual(event.actor, self.member)
         self.assertEqual(event.to_value, "spec.md")
-        self.assertEqual(event.to_ref, self.doc.uuid)
 
-    def test_link_survives_a_rename_and_reads_the_live_name(self):
-        link_files(self.admin, self.task, [self.doc])
-        FileService.rename(self.doc, "renamed.md")
-        (item,) = file_links_for_task(self.admin, self.task)
-        self.assertEqual(item["name"], "renamed.md")
+    def test_unlinking_keeps_the_share_while_another_task_links_it(self):
+        other_task = create_task(self.project, self.admin, title="Review it")
+        link_files(self.admin, other_task, [self.doc])
+        unlink_file(self.link, actor=self.admin)
+        self.assertEqual(TaskFileLink.objects.count(), 1)
+        self.assertEqual(FileShare.objects.count(), 1)
+
+    def test_revoking_the_share_drops_the_link(self):
+        FileShare.objects.get().delete()
+        self.assertFalse(TaskFileLink.objects.exists())
 
     def test_hard_deleting_the_file_drops_the_link(self):
-        link_files(self.admin, self.task, [self.doc])
         FileService.hard_delete(self.doc)
         self.assertFalse(TaskFileLink.objects.exists())
 
@@ -87,64 +150,28 @@ class FileLinksForTaskTests(ProjectTestMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.task = create_task(self.project, self.admin, title="Ship it")
-        self.doc = FileService.create_file(
-            self.admin,
-            "spec.md",
-            content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),
-        )
-        link_files(self.admin, self.task, [self.doc])
+        self.doc = make_file(self.admin, "spec.md", b"# spec")
+        link_files(self.admin, self.task, [self.doc], permission="rw")
 
-    def test_owner_sees_the_link_with_the_file_summary(self):
-        (item,) = file_links_for_task(self.admin, self.task)
+    def test_item_summarizes_the_live_file(self):
+        (item,) = file_links_for_task(self.task)
         self.assertEqual(item["file_uuid"], str(self.doc.uuid))
         self.assertEqual(item["name"], "spec.md")
         self.assertEqual(item["size"], 6)
+        self.assertEqual(item["permission"], "rw")
         self.assertEqual(item["added_by"], "admin1")
         self.assertFalse(item["in_trash"])
         self.assertEqual(
             item["download_url"], f"/api/v1/files/{self.doc.uuid}/download"
         )
         self.assertIn("type_icon", item)
-        self.assertIn("type_color", item)
 
-    def test_member_without_file_access_does_not_see_the_link(self):
-        self.assertEqual(file_links_for_task(self.member, self.task), [])
+    def test_rename_follows_through(self):
+        FileService.rename(self.doc, "renamed.md")
+        (item,) = file_links_for_task(self.task)
+        self.assertEqual(item["name"], "renamed.md")
 
-    def test_member_with_a_share_sees_the_link(self):
-        share_file(
-            self.doc, target_user=self.member, permission="r", acting_user=self.admin
-        )
-        (item,) = file_links_for_task(self.member, self.task)
-        self.assertEqual(item["file_uuid"], str(self.doc.uuid))
-
-    def test_trashed_file_stays_visible_to_its_owner_only(self):
-        share_file(
-            self.doc, target_user=self.member, permission="rw", acting_user=self.admin
-        )
+    def test_trashed_file_stays_listed_and_flagged(self):
         FileService.soft_delete(self.doc)
-        (item,) = file_links_for_task(self.admin, self.task)
+        (item,) = file_links_for_task(self.task)
         self.assertTrue(item["in_trash"])
-        self.assertEqual(file_links_for_task(self.member, self.task), [])
-
-
-class VisibleFileRefsTests(ProjectTestMixin, TestCase):
-    def setUp(self):
-        super().setUp()
-        self.task = create_task(self.project, self.admin, title="Ship it")
-        self.doc = FileService.create_file(
-            self.admin,
-            "spec.md",
-            content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),
-        )
-        link_files(self.admin, self.task, [self.doc])
-        self.events = list(self.task.events.all())
-
-    def test_owner_can_see_the_file_behind_the_event(self):
-        self.assertEqual(visible_file_refs(self.admin, self.events), {self.doc.uuid})
-
-    def test_member_without_access_sees_no_ref(self):
-        self.assertEqual(visible_file_refs(self.member, self.events), set())
-
-    def test_hard_deleted_file_is_not_visible(self):
-        FileService.hard_delete(self.doc)
-        self.assertEqual(visible_file_refs(self.admin, self.events), set())

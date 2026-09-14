@@ -47,14 +47,11 @@ def events_for_project(project, limit=15):
     return project.task_events.select_related("actor", "project")[:limit]
 
 
-def serialize_task_event(ev, *, visible_file_refs=frozenset()):
+def serialize_task_event(ev):
     """Normalize a TaskEvent into the activity-feed event dict shape.
 
     Shared between the activity provider and the task detail panel so both
-    render through core/partials/activity_item.html. A file event names its
-    file only when its ``to_ref`` is in *visible_file_refs* (see
-    ``file_links.visible_file_refs``): the name is hidden from viewers who
-    cannot open the file, like the link itself.
+    render through core/partials/activity_item.html.
     """
     if ev.actor is not None:
         actor = {
@@ -106,7 +103,7 @@ def serialize_task_event(ev, *, visible_file_refs=frozenset()):
             label = f"{ev.short_label}: {ev.from_value} {ev.to_value}"
     elif ev.type in (TaskEvent.Type.FILE_LINKED, TaskEvent.Type.FILE_UNLINKED):
         # to_value holds the file name snapshotted at link time.
-        if ev.to_value and ev.to_ref in visible_file_refs:
+        if ev.to_value:
             label = f"{ev.short_label}: {ev.to_value}"
     return {
         "icon": ev.icon,

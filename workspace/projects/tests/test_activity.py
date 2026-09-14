@@ -83,16 +83,14 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertEqual(stats["total_tasks"], 1)
         self.assertEqual(stats["completed_tasks"], 0)
 
-    def test_file_event_names_the_file_only_for_viewers_who_can_open_it(self):
+    def test_file_event_names_the_file(self):
         doc = FileService.create_file(
             self.admin,
             "spec.md",
             content=SimpleUploadedFile("spec.md", b"# spec", content_type="text/plain"),
         )
         link_files(self.admin, self.task, [doc])
-        own = self.provider.get_recent_events(self.admin.pk, limit=5)
-        self.assertEqual(own[0]["label"], "File linked: spec.md")
         seen_by_member = self.provider.get_recent_events(
             self.admin.pk, limit=5, viewer_id=self.member.pk
         )
-        self.assertEqual(seen_by_member[0]["label"], "File linked")
+        self.assertEqual(seen_by_member[0]["label"], "File linked: spec.md")

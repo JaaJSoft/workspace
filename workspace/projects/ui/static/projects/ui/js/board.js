@@ -1139,6 +1139,9 @@ function taskPanel() {
     links: [],
     fileLinks: [],
     fileLinkSaving: false,
+    pendingFileLinks: [],
+    fileLinkPermission: 'ro',
+    fileLinkError: '',
     linkRel: 'blocks',
     linkQuery: '',
     linkResults: [],
@@ -1523,33 +1526,54 @@ function taskPanel() {
     },
 
     // ── Linked files ─────────────────────────────────────────
-    // References to workspace files, no copy: the server lists only the
-    // links whose file this viewer can open, so the list is per user.
+    // Workspace files shared with the project and pinned on the task, no
+    // copy. Two steps: the workspace picker, then the share permission.
     async linkWorkspaceFiles() {
       if (!this.can('link_file') || this.fileLinkSaving) return;
       const files = await AppDialog.filePicker({
         title: 'Link from Workspace',
-        message:
-          'Select files to link to the task. The task references them, nothing is copied.',
-        okLabel: 'Link',
+        message: 'Select files to link to the task. Nothing is copied.',
+        okLabel: 'Continue',
         okClass: 'btn-info',
         icon: 'file-symlink',
         iconClass: 'bg-info/10 text-info',
         multiple: true,
       });
       if (!files || files.length === 0) return;
+      this.pendingFileLinks = files;
+      this.fileLinkPermission = 'ro';
+      this.fileLinkError = '';
+      this.$refs.linkFileDialog.showModal();
+    },
+
+    cancelLinkFiles() {
+      this.pendingFileLinks = [];
+      this.fileLinkError = '';
+    },
+
+    async confirmLinkFiles() {
+      if (!this.pendingFileLinks.length || this.fileLinkSaving) return;
       this.fileLinkSaving = true;
+      this.fileLinkError = '';
       try {
         const resp = await fetch(this.data.file_links_url, {
           method: 'POST',
           headers: this.headers(),
-          body: JSON.stringify({ file_uuids: files.map((f) => f.uuid) }),
+          body: JSON.stringify({
+            file_uuids: this.pendingFileLinks.map((f) => f.uuid),
+            permission: this.fileLinkPermission,
+          }),
         });
-        if (!resp.ok) throw new Error('link failed');
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          this.fileLinkError = data.detail || 'Could not link the files.';
+          return;
+        }
         const data = await resp.json();
         this.fileLinks = data.files;
+        this.$refs.linkFileDialog.close();
       } catch (e) {
-        if (window.AppAlert) AppAlert.error('Could not link the files.');
+        this.fileLinkError = 'Could not link the files.';
       } finally {
         this.fileLinkSaving = false;
       }
@@ -1557,6 +1581,15 @@ function taskPanel() {
 
     async unlinkFile(link) {
       if (!this.can('link_file')) return;
+      const confirmed = await AppDialog.confirm({
+        title: 'Unlink file',
+        message: `Remove "${link.name}" from this task? If no other task links it, the project stops seeing it.`,
+        okLabel: 'Unlink',
+        okClass: 'btn-error',
+        icon: 'unlink',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!confirmed) return;
       try {
         const resp = await fetch(`${this.data.file_links_url}/${link.uuid}`, {
           method: 'DELETE',

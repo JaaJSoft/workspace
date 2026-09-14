@@ -49,17 +49,21 @@ class FileService:
         """Return the per-branch filter kwargs for *user*'s accessible files.
 
         Single source of truth for the access branches (owned, group folder,
-        shared with the user, shared with one of their groups), consumed by
+        shared with the user, shared with one of their groups, shared with a
+        project they can open), consumed by
         both ``accessible_files_q`` (ORed into one Q across a join) and
         ``accessible_file_ids`` (each branch a separately indexed UNION arm). Defining the branches once keeps the two
         permission paths from drifting - a divergence would mean a leak or a
         hole in one of them.
         """
+        from workspace.projects.queries import user_project_ids
+
         return (
             {"owner": user},
             {"group__in": user.groups.all()},
             {"shares__shared_with": user},
             {"shares__shared_with_group__in": user.groups.all()},
+            {"shares__shared_with_project__in": user_project_ids(user)},
         )
 
     @staticmethod

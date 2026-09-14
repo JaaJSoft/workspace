@@ -58,6 +58,13 @@
                   <i data-lucide="users" class="w-4 h-4 opacity-70"></i>
                 </span>
               </template>
+              <template x-if="entry.type === 'project'">
+                <span
+                  class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                >
+                  <i data-lucide="square-kanban" class="w-4 h-4 opacity-70"></i>
+                </span>
+              </template>
               <template x-if="entry.type === 'user'">
                 <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
               </template>
@@ -65,12 +72,12 @@
                 <div
                   class="font-medium text-sm truncate"
                   :class="entry._removed ? 'line-through' : ''"
-                  x-text="entry.type === 'group' ? entry.name : entry.username"
+                  x-text="entryName(entry)"
                 ></div>
                 <div
                   class="text-xs text-base-content/60 truncate"
-                  x-show="entry.type === 'group' || entry.first_name || entry.last_name"
-                  x-text="entry.type === 'group' ? 'Group' : ((entry.first_name || '') + ' ' + (entry.last_name || '')).trim()"
+                  x-show="entrySubtitle(entry)"
+                  x-text="entrySubtitle(entry)"
                 ></div>
               </div>
               <template x-if="!entry._removed">

@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File, FileShare, FileShareLink
 from workspace.files.services import FileService
 from workspace.files.services.sharing import (
@@ -23,6 +24,8 @@ from workspace.files.services.sharing import (
     unshare_file as service_unshare_file,
 )
 from workspace.notifications.services.notifications import notify, notify_many
+from workspace.projects.models import Project
+from workspace.projects.queries import project_users, user_project_ids
 
 User = get_user_model()
 
@@ -48,9 +51,9 @@ class ShareMixin:
     @extend_schema(
         summary="Share or unshare a file",
         description=(
-            "POST to share a file with a user or a group, DELETE to remove the "
-            "share. Exactly one of shared_with and group is required. Only files "
-            "can be shared (not folders)."
+            "POST to share a file with a user, a group or a project, DELETE to "
+            "remove the share. Exactly one of shared_with, group and project is "
+            "required. Only files can be shared (not folders)."
         ),
         request={
             "application/json": {
@@ -81,7 +84,8 @@ class ShareMixin:
     )
     @action(detail=True, methods=["post", "delete"], url_path="share")
     def share(self, request, uuid=None):
-        """Share or unshare a file with a user or a group (files only)."""
+        """Share or unshare a file with a user, a group or a project (files
+        only). A project target must be one the caller can open."""
         from workspace.files.actions import ActionRegistry
 
         file_obj = self.get_object()
@@ -106,14 +110,32 @@ class ShareMixin:
 
         shared_with_id = request.data.get("shared_with")
         group_id = request.data.get("group")
-        if bool(shared_with_id) == bool(group_id):
+        project_id = request.data.get("project")
+        if sum(bool(v) for v in (shared_with_id, group_id, project_id)) != 1:
             return Response(
-                {"detail": "Exactly one of shared_with and group is required."},
+                {
+                    "detail": "Exactly one of shared_with, group and project is "
+                    "required."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        target_user = target_group = None
-        if shared_with_id:
+        target_user = target_group = target_project = None
+        if project_id:
+            project_uuid = parse_uuid_or_none(project_id)
+            target_project = (
+                Project.objects.filter(
+                    uuid=project_uuid, uuid__in=user_project_ids(request.user)
+                ).first()
+                if project_uuid is not None
+                else None
+            )
+            if target_project is None:
+                return Response(
+                    {"detail": "Project not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        elif shared_with_id:
             shared_with_id, error = _parse_id(shared_with_id, "shared_with")
             if error:
                 return error
@@ -155,6 +177,7 @@ class ShareMixin:
                 file_obj,
                 target_user=target_user,
                 target_group=target_group,
+                target_project=target_project,
                 permission=permission,
                 acting_user=request.user,
             )
@@ -164,6 +187,7 @@ class ShareMixin:
                     file_obj,
                     target_user,
                     target_group,
+                    target_project,
                     f'{request.user.username} shared "{file_obj.name}" with you',
                 )
             if permission_changed:
@@ -177,6 +201,7 @@ class ShareMixin:
                     file_obj,
                     target_user,
                     target_group,
+                    target_project,
                     f'Permission updated to {perm_label} on "{file_obj.name}"',
                 )
             return Response(
@@ -189,6 +214,7 @@ class ShareMixin:
             file_obj,
             target_user=target_user,
             target_group=target_group,
+            target_project=target_project,
             acting_user=request.user,
         )
         if not deleted:
@@ -201,6 +227,7 @@ class ShareMixin:
             file_obj,
             target_user,
             target_group,
+            target_project,
             f'{request.user.username} revoked your access to "{file_obj.name}"',
             url="",
         )
@@ -208,9 +235,10 @@ class ShareMixin:
 
     @staticmethod
     def _notify_share_targets(
-        request, file_obj, target_user, target_group, title, *, url=None
+        request, file_obj, target_user, target_group, target_project, title, *, url=None
     ):
-        """Notify the user, or every active member of the group but the actor."""
+        """Notify the user, or every active member of the group or project
+        but the actor."""
         if url is None:
             url = _file_url(file_obj)
         if target_user is not None:
@@ -223,11 +251,18 @@ class ShareMixin:
                 source=file_obj,
             )
             return
-        recipients = list(
-            User.objects.filter(groups=target_group, is_active=True).exclude(
-                pk=request.user.pk
+        if target_project is not None:
+            recipients = [
+                u
+                for u in project_users(target_project)
+                if u.is_active and u.pk != request.user.pk
+            ]
+        else:
+            recipients = list(
+                User.objects.filter(groups=target_group, is_active=True).exclude(
+                    pk=request.user.pk
+                )
             )
-        )
         if recipients:
             notify_many(
                 recipients=recipients,
@@ -251,16 +286,26 @@ class ShareMixin:
     )
     @action(detail=True, methods=["get"], url_path="shares")
     def shares(self, request, uuid=None):
-        """List the users and groups a file is shared with."""
+        """List the users, groups and projects a file is shared with."""
         file_obj = self.get_object()
         share_qs = (
             FileShare.objects.filter(file=file_obj)
-            .select_related("shared_with", "shared_with_group")
+            .select_related("shared_with", "shared_with_group", "shared_with_project")
             .order_by("created_at")
         )
         results = []
         for s in share_qs:
-            if s.shared_with_group_id:
+            if s.shared_with_project_id:
+                results.append(
+                    {
+                        "type": "project",
+                        "id": str(s.shared_with_project.pk),
+                        "name": s.shared_with_project.name,
+                        "permission": s.permission,
+                        "shared_at": s.created_at,
+                    }
+                )
+            elif s.shared_with_group_id:
                 results.append(
                     {
                         "type": "group",

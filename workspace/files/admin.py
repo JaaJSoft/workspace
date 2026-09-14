@@ -46,11 +46,22 @@ class FileCommentAdmin(ModelAdmin):
 
 @admin.register(FileShare)
 class FileShareAdmin(ModelAdmin):
-    list_display = ("file", "shared_by", "shared_with", "created_at")
+    list_display = (
+        "file",
+        "shared_by",
+        "shared_with",
+        "shared_with_group",
+        "created_at",
+    )
     list_filter = ("created_at",)
-    list_select_related = ("file", "shared_by", "shared_with")
-    search_fields = ("file__name", "shared_by__username", "shared_with__username")
-    autocomplete_fields = ("file", "shared_by", "shared_with")
+    list_select_related = ("file", "shared_by", "shared_with", "shared_with_group")
+    search_fields = (
+        "file__name",
+        "shared_by__username",
+        "shared_with__username",
+        "shared_with_group__name",
+    )
+    autocomplete_fields = ("file", "shared_by", "shared_with", "shared_with_group")
 
 
 @admin.register(File)

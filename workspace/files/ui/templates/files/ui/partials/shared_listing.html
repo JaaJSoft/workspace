@@ -13,7 +13,11 @@
 {% endcomment %}
 <div id="shared-listing" class="bg-base-200 min-h-48">
   {% if not entries %}
-    <div class="p-12 text-center text-base-content/50">This folder is empty.</div>
+    {% if link.allows_upload %}
+      {% include "files/ui/partials/empty_folder.html" with message="Send files below to fill it." %}
+    {% else %}
+      {% include "files/ui/partials/empty_folder.html" with message="Nothing has been shared here yet." %}
+    {% endif %}
   {% elif view_mode == "grid" %}
     <div
       class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4"

@@ -1,24 +1,25 @@
 {% comment %}
   The anonymous drop zone on shared_page.html, shown page-wide whenever the
   link accepts uploads (drop or both mode). Lives outside the shared-content
-  swap region on purpose: uploads always land in the link's own root
-  (SharedFolderUploadView never takes a target folder), never in whatever
-  subfolder is currently browsed, so the zone - and its in-flight upload
-  queue - must survive navigating into one. Needs share_token, access_token
-  and max_file_bytes in context.
+  swap region so the zone - and its in-flight upload queue - survives
+  navigating into a subfolder; it follows the browsed folder through the
+  data-node attributes on #shared-content, re-read on every swap. Needs
+  share_token, access_token, max_file_bytes and link in context.
 {% endcomment %}
 <div
   data-testid="drop-zone"
   data-share-token="{{ share_token }}"
   data-access-token="{{ access_token }}"
   data-max-file-bytes="{{ max_file_bytes|default:0 }}"
-  x-data="sharedDrop($el.dataset.shareToken, $el.dataset.accessToken, Number($el.dataset.maxFileBytes))"
+  data-root-name="{{ link.file.name }}"
+  x-data="sharedDrop($el.dataset.shareToken, $el.dataset.accessToken, Number($el.dataset.maxFileBytes), $el.dataset.rootName)"
+  @nav-state-changed.window="syncTarget()"
   class="card bg-base-100 shadow-lg"
 >
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
       <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-      Send files to {{ link.file.name }}
+      <span>Send files to <span x-text="targetName">{{ target.name }}</span></span>
     </h2>
 
     <label
@@ -31,24 +32,45 @@
       <input type="file" multiple class="hidden" @change="pick($event)" />
     </label>
 
-    <ul x-show="queue.length > 0" x-cloak class="mt-4 space-y-2">
-      <template x-for="(item, index) in queue" :key="index">
-        <li class="flex items-center justify-between gap-2 text-sm">
-          <span class="truncate" x-text="item.name"></span>
-          <span
-            class="badge badge-sm"
-            :class="{
-              'badge-ghost': item.state === 'pending',
-              'badge-info': item.state === 'sending',
-              'badge-success': item.state === 'done',
-              'badge-error': item.state === 'failed',
-              'badge-warning': item.state === 'too-large',
-            }"
-            x-text="stateLabel(item.state)"
-          ></span>
-        </li>
-      </template>
-    </ul>
+    <div x-show="queue.length > 0" x-cloak class="mt-4">
+      <p
+        x-show="sendingCount() > 0"
+        class="text-xs text-base-content/60 mb-2"
+        x-text="'Sending ' + (doneCount() + 1) + ' of ' + queue.length"
+      ></p>
+      <ul class="space-y-2">
+        <template x-for="(item, index) in queue" :key="index">
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <span class="truncate" x-text="item.name"></span>
+            <template x-if="item.state === 'sending'">
+              <span class="flex items-center gap-2 shrink-0">
+                <progress
+                  class="progress progress-primary w-32 h-1.5"
+                  :value="item.percent"
+                  max="100"
+                ></progress>
+                <span
+                  class="text-xs tabular-nums w-9 text-right"
+                  x-text="item.percent + '%'"
+                ></span>
+              </span>
+            </template>
+            <template x-if="item.state !== 'sending'">
+              <span
+                class="badge badge-sm"
+                :class="{
+                  'badge-ghost': item.state === 'pending',
+                  'badge-success': item.state === 'done',
+                  'badge-error': item.state === 'failed',
+                  'badge-warning': item.state === 'too-large',
+                }"
+                x-text="stateLabel(item.state)"
+              ></span>
+            </template>
+          </li>
+        </template>
+      </ul>
+    </div>
 
     <div data-testid="drop-done" x-show="doneCount() > 0" x-cloak class="mt-4">
       <inline-alert type="success" message="Files uploaded successfully."></inline-alert>

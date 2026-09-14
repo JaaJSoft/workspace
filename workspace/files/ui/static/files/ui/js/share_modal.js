@@ -1,13 +1,22 @@
+// A share entry is addressed to a user or to a group; the two share one
+// list, one permission toggle and one save loop, and are told apart by
+// `type` ('user' | 'group'). Ids overlap across the two tables, so every
+// map and set below is keyed by shareKey(), never by the bare id.
+function shareKey(type, id) {
+  return type + ':' + id;
+}
+
 window.shareModal = function shareModal() {
   return {
     open: false,
     fileUuid: null,
     fileName: '',
     nodeType: 'file',
-    shares: [],        // existing shares from server
-    pendingAdds: [],   // users to add (staged), each has { ...user, permission: 'ro' }
-    pendingRemovals: new Set(), // user IDs to remove (staged)
-    pendingPermissionChanges: new Map(), // userId → newPermission for existing shares
+    shares: [],        // existing shares from server, each { type, id, ... }
+    groups: [],        // every group, for the group picker
+    pendingAdds: [],   // targets to add (staged), each { type, id, ..., permission }
+    pendingRemovals: new Set(), // entry keys to remove (staged)
+    pendingPermissionChanges: new Map(), // entry key -> newPermission for existing shares
     loading: false,
     saving: false,
     // Share links state
@@ -21,20 +30,28 @@ window.shareModal = function shareModal() {
     newLinkMaxBytes: '',
     newLinkMaxCount: '',
 
+    // A share is addressed to a user or a group, and the two id spaces
+    // overlap, so every entry is keyed by both.
+    entryKey(type, id) {
+      return type + ':' + id;
+    },
+
     get displayList() {
       const permChanges = this.pendingPermissionChanges;
-      const existing = this.shares.map(s => ({
-        ...s,
-        permission: permChanges.has(s.id) ? permChanges.get(s.id) : s.permission,
-        _pending: false,
-        _removed: this.pendingRemovals.has(s.id),
-      }));
-      const added = this.pendingAdds.map(u => ({
-        id: u.id,
-        username: u.username,
-        first_name: u.first_name,
-        last_name: u.last_name,
-        permission: u.permission || 'ro',
+      const existing = this.shares.map(s => {
+        const key = this.entryKey(s.type, s.id);
+        return {
+          ...s,
+          key,
+          permission: permChanges.has(key) ? permChanges.get(key) : s.permission,
+          _pending: false,
+          _removed: this.pendingRemovals.has(key),
+        };
+      });
+      const added = this.pendingAdds.map(t => ({
+        ...t,
+        key: this.entryKey(t.type, t.id),
+        permission: t.permission || 'ro',
         _pending: true,
         _removed: false,
       }));
@@ -55,6 +72,7 @@ window.shareModal = function shareModal() {
         this.pendingRemovals = new Set();
         this.pendingPermissionChanges = new Map();
         this.loadShares();
+        this.loadGroups();
         this.loadShareLinks();
         this.$nextTick(() => {
           const dlg = this.$refs.shareDialog;
@@ -63,7 +81,10 @@ window.shareModal = function shareModal() {
       });
 
       window.addEventListener('share-user-selected', (e) => {
-        this.stageAdd(e.detail.user);
+        this.stageAdd({ type: 'user', ...e.detail.user });
+      });
+      window.addEventListener('share-group-selected', (e) => {
+        this.stageAdd({ type: 'group', ...e.detail.group });
       });
     },
 
@@ -84,55 +105,85 @@ window.shareModal = function shareModal() {
       }
     },
 
-    stageAdd(user) {
-      if (!user) return;
+    async loadGroups() {
+      try {
+        const resp = await fetch('/api/v1/groups', { credentials: 'same-origin' });
+        this.groups = resp.ok ? await resp.json() : [];
+      } catch (e) {
+        this.groups = [];
+      }
+    },
+
+    // Groups not already shared with or staged, for the group picker.
+    selectableGroups() {
+      const taken = new Set(
+        this.displayList
+          .filter(entry => entry.type === 'group' && !entry._removed)
+          .map(entry => String(entry.id))
+      );
+      return this.groups.filter(g => !taken.has(String(g.id)));
+    },
+
+    stageAdd(target) {
+      if (!target || !target.type) return;
+      const key = this.entryKey(target.type, target.id);
       // Already in existing shares?
-      if (this.shares.some(s => s.id === user.id)) {
+      if (this.shares.some(s => this.entryKey(s.type, s.id) === key)) {
         // If it was marked for removal, undo that
-        if (this.pendingRemovals.has(user.id)) {
-          this.pendingRemovals.delete(user.id);
+        if (this.pendingRemovals.has(key)) {
+          this.pendingRemovals.delete(key);
           this.pendingRemovals = new Set(this.pendingRemovals);
         }
         return;
       }
       // Already in pending adds?
-      if (this.pendingAdds.some(u => u.id === user.id)) return;
-      this.pendingAdds = [...this.pendingAdds, { ...user, permission: 'ro' }];
+      if (this.pendingAdds.some(t => this.entryKey(t.type, t.id) === key)) return;
+      this.pendingAdds = [...this.pendingAdds, { ...target, permission: 'ro' }];
     },
 
-    stageRemove(userId) {
+    stageRemove(key) {
       // If it's a pending add, just remove from the list
-      const idx = this.pendingAdds.findIndex(u => u.id === userId);
+      const idx = this.pendingAdds.findIndex(t => this.entryKey(t.type, t.id) === key);
       if (idx !== -1) {
-        this.pendingAdds = this.pendingAdds.filter(u => u.id !== userId);
+        this.pendingAdds = this.pendingAdds.filter(t => this.entryKey(t.type, t.id) !== key);
         return;
       }
       // Otherwise mark existing share for removal
-      this.pendingRemovals.add(userId);
+      this.pendingRemovals.add(key);
       this.pendingRemovals = new Set(this.pendingRemovals);
     },
 
-    undoRemove(userId) {
-      this.pendingRemovals.delete(userId);
+    undoRemove(key) {
+      this.pendingRemovals.delete(key);
       this.pendingRemovals = new Set(this.pendingRemovals);
     },
 
-    stagePermissionChange(userId, permission, isPending) {
+    stagePermissionChange(key, permission, isPending) {
       if (isPending) {
         // Update permission on pending add
-        this.pendingAdds = this.pendingAdds.map(u =>
-          u.id === userId ? { ...u, permission } : u
+        this.pendingAdds = this.pendingAdds.map(t =>
+          this.entryKey(t.type, t.id) === key ? { ...t, permission } : t
         );
         return;
       }
       // For existing shares, check if it differs from original
-      const original = this.shares.find(s => s.id === userId);
+      const original = this.shares.find(s => this.entryKey(s.type, s.id) === key);
       if (original && original.permission === permission) {
-        this.pendingPermissionChanges.delete(userId);
+        this.pendingPermissionChanges.delete(key);
       } else {
-        this.pendingPermissionChanges.set(userId, permission);
+        this.pendingPermissionChanges.set(key, permission);
       }
       this.pendingPermissionChanges = new Map(this.pendingPermissionChanges);
+    },
+
+    // The request body naming a share target: { shared_with } or { group }.
+    targetBody(type, id) {
+      return type === 'group' ? { group: id } : { shared_with: id };
+    },
+
+    splitKey(key) {
+      const sep = key.indexOf(':');
+      return { type: key.slice(0, sep), id: key.slice(sep + 1) };
     },
 
     async save() {
@@ -146,33 +197,35 @@ window.shareModal = function shareModal() {
       let errors = 0;
 
       // Process additions
-      for (const user of this.pendingAdds) {
+      for (const target of this.pendingAdds) {
         try {
           const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
             method: 'POST', headers,
-            body: JSON.stringify({ shared_with: user.id, permission: user.permission || 'ro' }),
+            body: JSON.stringify({ ...this.targetBody(target.type, target.id), permission: target.permission || 'ro' }),
           });
           if (!resp.ok) errors++;
         } catch (e) { errors++; }
       }
 
       // Process permission changes for existing shares
-      for (const [userId, permission] of this.pendingPermissionChanges) {
+      for (const [key, permission] of this.pendingPermissionChanges) {
+        const { type, id } = this.splitKey(key);
         try {
           const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
             method: 'POST', headers,
-            body: JSON.stringify({ shared_with: userId, permission }),
+            body: JSON.stringify({ ...this.targetBody(type, id), permission }),
           });
           if (!resp.ok) errors++;
         } catch (e) { errors++; }
       }
 
       // Process removals
-      for (const userId of this.pendingRemovals) {
+      for (const key of this.pendingRemovals) {
+        const { type, id } = this.splitKey(key);
         try {
           const resp = await fetch(`/api/v1/files/${this.fileUuid}/share`, {
             method: 'DELETE', headers,
-            body: JSON.stringify({ shared_with: userId }),
+            body: JSON.stringify(this.targetBody(type, id)),
           });
           if (!resp.ok) errors++;
         } catch (e) { errors++; }

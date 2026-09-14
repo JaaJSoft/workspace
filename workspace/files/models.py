@@ -489,8 +489,23 @@ class FileFavorite(models.Model):
         return f"{self.owner} -> {self.file}"
 
 
+class FileShareQuerySet(models.QuerySet):
+    def reaching(self, user):
+        """Shares that grant *user* access: addressed to them or to a group
+        they belong to. A new target kind adds one more disjunct here."""
+        return self.filter(
+            models.Q(shared_with=user)
+            | models.Q(shared_with_group__in=user.groups.all())
+        )
+
+
 class FileShare(models.Model):
-    """Share a file or folder with another user."""
+    """Share a file with a user or with an ``auth.Group``.
+
+    Exactly one target column is set. A group share is resolved at read time
+    through the viewer's group membership, so joining or leaving the group
+    needs no row change.
+    """
 
     class Permission(models.TextChoices):
         READ_ONLY = "ro", "Read only"
@@ -513,6 +528,15 @@ class FileShare(models.Model):
         User,
         on_delete=models.CASCADE,
         related_name="received_shares",
+        null=True,
+        blank=True,
+    )
+    shared_with_group = models.ForeignKey(
+        "auth.Group",
+        on_delete=models.CASCADE,
+        related_name="received_file_shares",
+        null=True,
+        blank=True,
     )
     permission = models.CharField(
         max_length=2,
@@ -521,11 +545,28 @@ class FileShare(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
+    objects = FileShareQuerySet.as_manager()
+
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(shared_with__isnull=False, shared_with_group__isnull=True)
+                    | models.Q(
+                        shared_with__isnull=True, shared_with_group__isnull=False
+                    )
+                ),
+                name="file_share_one_target",
+            ),
             models.UniqueConstraint(
                 fields=["file", "shared_with"],
-                name="unique_file_share",
+                condition=models.Q(shared_with__isnull=False),
+                name="unique_file_share_user",
+            ),
+            models.UniqueConstraint(
+                fields=["file", "shared_with_group"],
+                condition=models.Q(shared_with_group__isnull=False),
+                name="unique_file_share_group",
             ),
         ]
         indexes = [
@@ -533,12 +574,21 @@ class FileShare(models.Model):
                 fields=["shared_with", "created_at"], name="file_share_recv_idx"
             ),
             models.Index(
+                fields=["shared_with_group", "created_at"],
+                name="file_share_recv_group_idx",
+            ),
+            models.Index(
                 fields=["shared_by", "created_at"], name="file_share_sent_idx"
             ),
         ]
 
     def __str__(self):
-        return f"{self.shared_by} -> {self.shared_with}: {self.file}"
+        return f"{self.shared_by} -> {self.target}: {self.file}"
+
+    @property
+    def target(self):
+        """The user or group this share is addressed to."""
+        return self.shared_with or self.shared_with_group
 
 
 class FileComment(models.Model):

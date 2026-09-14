@@ -39,6 +39,7 @@ urlpatterns = [
         name="user-password-rules",
     ),
     path("api/v1/users/groups", views.UserGroupsView.as_view(), name="user-groups"),
+    path("api/v1/groups", views.GroupListView.as_view(), name="group-list"),
     # Settings
     path("api/v1/settings", views.SettingsListView.as_view(), name="settings-list"),
     path(

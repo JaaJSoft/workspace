@@ -1,6 +1,7 @@
 """Share-related actions for FileViewSet."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
@@ -21,9 +22,24 @@ from workspace.files.services.sharing import (
 from workspace.files.services.sharing import (
     unshare_file as service_unshare_file,
 )
-from workspace.notifications.services.notifications import notify
+from workspace.notifications.services.notifications import notify, notify_many
 
 User = get_user_model()
+
+
+def _file_url(file_obj):
+    return f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files"
+
+
+def _parse_id(value, field):
+    """Integer id from a request value, or a 400 response."""
+    try:
+        return int(value), None
+    except TypeError, ValueError:
+        return None, Response(
+            {"detail": f"{field} must be a valid id."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
 
 class ShareMixin:
@@ -31,7 +47,11 @@ class ShareMixin:
 
     @extend_schema(
         summary="Share or unshare a file",
-        description="POST to share a file with a user, DELETE to remove the share. Only files can be shared (not folders).",
+        description=(
+            "POST to share a file with a user or a group, DELETE to remove the "
+            "share. Exactly one of shared_with and group is required. Only files "
+            "can be shared (not folders)."
+        ),
         request={
             "application/json": {
                 "type": "object",
@@ -40,20 +60,28 @@ class ShareMixin:
                         "type": "integer",
                         "description": "User ID to share with / unshare from",
                     },
+                    "group": {
+                        "type": "integer",
+                        "description": "Group ID to share with / unshare from",
+                    },
+                    "permission": {
+                        "type": "string",
+                        "enum": ["ro", "rw"],
+                        "description": "POST only, defaults to ro",
+                    },
                 },
-                "required": ["shared_with"],
             },
         },
         responses={
             201: OpenApiResponse(description="Share created."),
             200: OpenApiResponse(description="Share removed or already exists."),
             400: OpenApiResponse(description="Bad request."),
-            404: OpenApiResponse(description="File or user not found."),
+            404: OpenApiResponse(description="File, user or group not found."),
         },
     )
     @action(detail=True, methods=["post", "delete"], url_path="share")
     def share(self, request, uuid=None):
-        """Share or unshare a file with another user (files only)."""
+        """Share or unshare a file with a user or a group (files only)."""
         from workspace.files.actions import ActionRegistry
 
         file_obj = self.get_object()
@@ -77,33 +105,41 @@ class ShareMixin:
             )
 
         shared_with_id = request.data.get("shared_with")
-        if not shared_with_id:
+        group_id = request.data.get("group")
+        if bool(shared_with_id) == bool(group_id):
             return Response(
-                {"detail": "shared_with is required."},
+                {"detail": "Exactly one of shared_with and group is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            shared_with_id = int(shared_with_id)
-        except TypeError, ValueError:
-            return Response(
-                {"detail": "shared_with must be a valid user id."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if shared_with_id == request.user.pk:
-            return Response(
-                {"detail": "Cannot share with yourself."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            target_user = User.objects.get(pk=shared_with_id, is_active=True)
-        except User.DoesNotExist:
-            return Response(
-                {"detail": "User not found."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        target_user = target_group = None
+        if shared_with_id:
+            shared_with_id, error = _parse_id(shared_with_id, "shared_with")
+            if error:
+                return error
+            if shared_with_id == request.user.pk:
+                return Response(
+                    {"detail": "Cannot share with yourself."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            try:
+                target_user = User.objects.get(pk=shared_with_id, is_active=True)
+            except User.DoesNotExist:
+                return Response(
+                    {"detail": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            group_id, error = _parse_id(group_id, "group")
+            if error:
+                return error
+            try:
+                target_group = Group.objects.get(pk=group_id)
+            except Group.DoesNotExist:
+                return Response(
+                    {"detail": "Group not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
         if request.method == "POST":
             permission = request.data.get("permission", FileShare.Permission.READ_ONLY)
@@ -118,19 +154,17 @@ class ShareMixin:
             share, created, permission_changed = service_share_file(
                 file_obj,
                 target_user=target_user,
+                target_group=target_group,
                 permission=permission,
                 acting_user=request.user,
             )
             if created:
-                notify(
-                    recipient=target_user,
-                    origin="files",
-                    title=f'{request.user.username} shared "{file_obj.name}" with you',
-                    url=f"/files/{file_obj.parent_id}"
-                    if file_obj.parent_id
-                    else "/files",
-                    actor=request.user,
-                    source=file_obj,
+                self._notify_share_targets(
+                    request,
+                    file_obj,
+                    target_user,
+                    target_group,
+                    f'{request.user.username} shared "{file_obj.name}" with you',
                 )
             if permission_changed:
                 perm_label = (
@@ -138,15 +172,12 @@ class ShareMixin:
                     if permission == FileShare.Permission.READ_WRITE
                     else "read only"
                 )
-                notify(
-                    recipient=target_user,
-                    origin="files",
-                    title=f'Permission updated to {perm_label} on "{file_obj.name}"',
-                    url=f"/files/{file_obj.parent_id}"
-                    if file_obj.parent_id
-                    else "/files",
-                    actor=request.user,
-                    source=file_obj,
+                self._notify_share_targets(
+                    request,
+                    file_obj,
+                    target_user,
+                    target_group,
+                    f'Permission updated to {perm_label} on "{file_obj.name}"',
                 )
             return Response(
                 {"shared": True, "permission": share.permission},
@@ -157,45 +188,100 @@ class ShareMixin:
         deleted = service_unshare_file(
             file_obj,
             target_user=target_user,
+            target_group=target_group,
             acting_user=request.user,
         )
-        if deleted:
-            notify(
-                recipient=target_user,
-                origin="files",
-                title=f'{request.user.username} revoked your access to "{file_obj.name}"',
-                actor=request.user,
-            )
         if not deleted:
             return Response(
                 {"detail": "Share not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        self._notify_share_targets(
+            request,
+            file_obj,
+            target_user,
+            target_group,
+            f'{request.user.username} revoked your access to "{file_obj.name}"',
+            url="",
+        )
         return Response({"shared": False}, status=status.HTTP_200_OK)
+
+    @staticmethod
+    def _notify_share_targets(
+        request, file_obj, target_user, target_group, title, *, url=None
+    ):
+        """Notify the user, or every active member of the group but the actor."""
+        if url is None:
+            url = _file_url(file_obj)
+        if target_user is not None:
+            notify(
+                recipient=target_user,
+                origin="files",
+                title=title,
+                url=url,
+                actor=request.user,
+                source=file_obj,
+            )
+            return
+        recipients = list(
+            User.objects.filter(groups=target_group, is_active=True).exclude(
+                pk=request.user.pk
+            )
+        )
+        if recipients:
+            notify_many(
+                recipients=recipients,
+                origin="files",
+                title=title,
+                url=url,
+                actor=request.user,
+                source=file_obj,
+            )
 
     @extend_schema(
         summary="List shares for a file",
-        description="Return users who have access to this file via sharing.",
+        description=(
+            "Return the users and groups this file is shared with. Each entry "
+            "carries a type discriminator: user entries have username, "
+            "first_name and last_name; group entries have name."
+        ),
         responses={
             200: OpenApiResponse(description="List of shares."),
         },
     )
     @action(detail=True, methods=["get"], url_path="shares")
     def shares(self, request, uuid=None):
-        """List users a file is shared with."""
+        """List the users and groups a file is shared with."""
         file_obj = self.get_object()
-        share_qs = FileShare.objects.filter(file=file_obj).select_related("shared_with")
-        results = [
-            {
-                "id": s.shared_with.pk,
-                "username": s.shared_with.username,
-                "first_name": s.shared_with.first_name,
-                "last_name": s.shared_with.last_name,
-                "permission": s.permission,
-                "shared_at": s.created_at,
-            }
-            for s in share_qs
-        ]
+        share_qs = (
+            FileShare.objects.filter(file=file_obj)
+            .select_related("shared_with", "shared_with_group")
+            .order_by("created_at")
+        )
+        results = []
+        for s in share_qs:
+            if s.shared_with_group_id:
+                results.append(
+                    {
+                        "type": "group",
+                        "id": s.shared_with_group.pk,
+                        "name": s.shared_with_group.name,
+                        "permission": s.permission,
+                        "shared_at": s.created_at,
+                    }
+                )
+            else:
+                results.append(
+                    {
+                        "type": "user",
+                        "id": s.shared_with.pk,
+                        "username": s.shared_with.username,
+                        "first_name": s.shared_with.first_name,
+                        "last_name": s.shared_with.last_name,
+                        "permission": s.permission,
+                        "shared_at": s.created_at,
+                    }
+                )
         return Response(results)
 
     @action(detail=True, methods=["get", "post"], url_path="share-links")

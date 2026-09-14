@@ -48,10 +48,10 @@ class FileService:
     def _access_branches(user):
         """Return the per-branch filter kwargs for *user*'s accessible files.
 
-        Single source of truth for the three access branches (owned, group,
-        shared), consumed by both ``accessible_files_q`` (ORed into one Q
-        across a join) and ``accessible_file_ids`` (each branch a separately
-        indexed UNION arm). Defining the branches once keeps the two
+        Single source of truth for the access branches (owned, group folder,
+        shared with the user, shared with one of their groups), consumed by
+        both ``accessible_files_q`` (ORed into one Q across a join) and
+        ``accessible_file_ids`` (each branch a separately indexed UNION arm). Defining the branches once keeps the two
         permission paths from drifting - a divergence would mean a leak or a
         hole in one of them.
         """
@@ -59,6 +59,7 @@ class FileService:
             {"owner": user},
             {"group__in": user.groups.all()},
             {"shares__shared_with": user},
+            {"shares__shared_with_group__in": user.groups.all()},
         )
 
     @staticmethod
@@ -80,8 +81,9 @@ class FileService:
 
         Same semantics as ``accessible_files_q`` (owned + group + shared,
         ``deleted_at`` not filtered by default), but built as a UNION of
-        three independently indexed queries. The Q form ORs across a join
-        (``shares__shared_with``), which defeats per-branch index use and
+        independently indexed queries, one per access branch. The Q form ORs
+        across a join (``shares__shared_with``), which defeats per-branch
+        index use and
         forces a full scan of the files table - O(total files) on every
         call. The UNION stays proportional to what the user can actually
         see, so hot paths (activity feed) should prefer this helper as a
@@ -758,7 +760,8 @@ class FileService:
 
         Same semantics as :meth:`get_permission`, but the group and share
         lookups are batched: at most two queries for the whole set instead
-        of up to two per file.
+        of up to two per file. A file reached through both a user share and
+        a group share gets the higher of the two permissions.
         """
         from workspace.files.models import FileShare
 
@@ -784,20 +787,18 @@ class FileService:
                     share_candidates.append(file_obj)
 
         if share_candidates:
-            shares = dict(
-                FileShare.objects.filter(
-                    file_id__in=[f.pk for f in share_candidates],
-                    shared_with=user,
-                ).values_list("file_id", "permission")
-            )
+            shares = {}
+            for file_id, permission in (
+                FileShare.objects.reaching(user)
+                .filter(file_id__in=[f.pk for f in share_candidates])
+                .values_list("file_id", "permission")
+            ):
+                granted = (
+                    FilePermission.WRITE if permission == "rw" else FilePermission.VIEW
+                )
+                shares[file_id] = max(shares.get(file_id, granted), granted)
             for file_obj in share_candidates:
-                share = shares.get(file_obj.pk)
-                if share is None:
-                    permissions[file_obj.pk] = None
-                else:
-                    permissions[file_obj.pk] = (
-                        FilePermission.WRITE if share == "rw" else FilePermission.VIEW
-                    )
+                permissions[file_obj.pk] = shares.get(file_obj.pk)
 
         return permissions
 

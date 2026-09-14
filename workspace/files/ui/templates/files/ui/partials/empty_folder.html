@@ -1,0 +1,17 @@
+{% comment %}
+  Empty-folder state shared by the authenticated browser and the public
+  share listing: centred in whatever box includes it.
+
+  Optional context:
+    - title: str (default: "This folder is empty")
+    - message: str (default: "Create a folder or upload files to get started.")
+{% endcomment %}
+<div
+  class="flex h-full min-h-48 items-center justify-center text-base-content/60"
+>
+  <div class="text-center">
+    <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
+    <p class="text-lg font-medium mb-1">{{ title|default:"This folder is empty" }}</p>
+    <p class="text-sm">{{ message|default:"Create a folder or upload files to get started." }}</p>
+  </div>
+</div>

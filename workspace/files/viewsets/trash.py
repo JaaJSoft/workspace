@@ -3,7 +3,6 @@
 from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import OuterRef, Subquery
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -11,7 +10,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from workspace.files.models import File, FileShare
+from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
 
@@ -110,14 +109,7 @@ class TrashMixin:
     def trash(self, request):
         """List trashed files and folders."""
         queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
-        queryset = FileService.annotate_for_serializer(queryset, request.user).annotate(
-            user_share_permission=Subquery(
-                FileShare.objects.filter(
-                    file_id=OuterRef("pk"),
-                    shared_with=request.user,
-                ).values("permission")[:1]
-            ),
-        )
+        queryset = FileService.annotate_for_serializer(queryset, request.user)
         queryset = self.filter_queryset(queryset)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)

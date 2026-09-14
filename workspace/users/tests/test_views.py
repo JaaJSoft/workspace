@@ -870,3 +870,32 @@ class UserGroupsTests(UserTestMixin, APITestCase):
         other.groups.add(group)
         resp = self.client.get(self.URL)
         self.assertEqual(resp.data, [])
+
+
+# ── GroupListView ───────────────────────────────────────────────
+
+
+class GroupListTests(UserTestMixin, APITestCase):
+    """Every group, not only the caller's: a file is shared with any team."""
+
+    URL = "/api/v1/groups"
+
+    def test_unauthenticated_rejected(self):
+        self.client.force_authenticate(None)
+        resp = self.client.get(self.URL)
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lists_every_group_sorted_by_name(self):
+        Group.objects.create(name="Zulu")
+        Group.objects.create(name="alpha")
+        resp = self.client.get(self.URL)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual([g["name"] for g in resp.data], ["alpha", "Zulu"])
+        self.assertEqual(set(resp.data[0]), {"id", "name"})
+
+    def test_includes_groups_the_caller_is_not_in(self):
+        other = User.objects.create_user(username="other", password="pass")
+        group = Group.objects.create(name="Secret")
+        other.groups.add(group)
+        resp = self.client.get(self.URL)
+        self.assertEqual([g["id"] for g in resp.data], [group.pk])

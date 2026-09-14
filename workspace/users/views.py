@@ -4,10 +4,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.conf import settings as django_settings
 from django.contrib.auth import password_validation, update_session_auth_hash
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import Exists, OuterRef, Q
+from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import (
     OpenApiParameter,
@@ -815,6 +816,31 @@ class APITokenDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class GroupListView(APIView):
+    """Every group on the instance, for pickers that address a team the
+    caller may not belong to (sharing a file with a group)."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="List all groups",
+        tags=["Users"],
+        responses={
+            200: inline_serializer(
+                name="GroupListItem",
+                fields={
+                    "id": serializers.IntegerField(),
+                    "name": serializers.CharField(),
+                },
+                many=True,
+            ),
+        },
+    )
+    def get(self, request):
+        groups = Group.objects.order_by(Lower("name")).values("id", "name")
+        return Response(list(groups))
 
 
 class UserGroupsView(APIView):

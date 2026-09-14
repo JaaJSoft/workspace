@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db.models import OuterRef, Q, Subquery
+from django.db.models import Q
 from django.db.models.functions import Lower
 from django.http import Http404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -30,7 +30,7 @@ from workspace.files.services.content_hash import find_duplicates
 from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
-from ..models import File, FileShare
+from ..models import File
 from ..serializers import FileSerializer, locked_payload
 from ..viewsets.actions import ActionsMixin
 from ..viewsets.comments import CommentsMixin
@@ -433,27 +433,16 @@ class FileViewSet(
 
     def get_queryset(self):
         """Filter by current user's files."""
-        user_share_subquery = FileShare.objects.filter(
-            file_id=OuterRef("pk"),
-            shared_with=self.request.user,
-        ).values("permission")[:1]
-
         # Favorites: include owned, shared-with-me, and group files
         if self.action == "list" and self._is_favorites_query():
-            return (
-                FileService.annotate_for_serializer(
-                    File.objects.filter(
-                        FileService.accessible_files_q(self.request.user),
-                        deleted_at__isnull=True,
-                        favorites__owner=self.request.user,
-                    ),
-                    self.request.user,
-                )
-                .annotate(
-                    user_share_permission=Subquery(user_share_subquery),
-                )
-                .distinct()
-            )
+            return FileService.annotate_for_serializer(
+                File.objects.filter(
+                    FileService.accessible_files_q(self.request.user),
+                    deleted_at__isnull=True,
+                    favorites__owner=self.request.user,
+                ),
+                self.request.user,
+            ).distinct()
 
         if self.action == "list" and self._is_groups_query():
             return FileService.annotate_for_serializer(
@@ -462,7 +451,7 @@ class FileViewSet(
                     node_type=File.NodeType.FOLDER,
                 ),
                 self.request.user,
-            ).annotate(user_share_permission=Subquery(user_share_subquery))
+            )
 
         # Resolve parent context: detect group from parent, resolve descendants
         parent_uuid = self.request.query_params.get("parent")
@@ -494,17 +483,10 @@ class FileViewSet(
             )
             if ancestor_path:
                 qs = qs.filter(path__startswith=ancestor_path + "/")
-            qs = FileService.annotate_for_serializer(qs, self.request.user).annotate(
-                user_share_permission=Subquery(user_share_subquery),
-            )
-            return qs
+            return FileService.annotate_for_serializer(qs, self.request.user)
 
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
-        queryset = FileService.annotate_for_serializer(
-            queryset, self.request.user
-        ).annotate(
-            user_share_permission=Subquery(user_share_subquery),
-        )
+        queryset = FileService.annotate_for_serializer(queryset, self.request.user)
         if self.action in {"trash"} or self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
         if self.action in {"restore", "purge"}:
@@ -849,8 +831,9 @@ class FileViewSet(
 
     def perform_destroy(self, instance):
         shared_users = User.objects.filter(
-            received_shares__file=instance,
-        )
+            Q(received_shares__file=instance)
+            | Q(groups__received_file_shares__file=instance)
+        ).distinct()
         if shared_users.exists():
             recipients = list(shared_users)
             notify_many(

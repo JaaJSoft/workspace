@@ -67,6 +67,14 @@ class ShareMixin:
                         "type": "integer",
                         "description": "Group ID to share with / unshare from",
                     },
+                    "project": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": (
+                            "Project UUID to share with / unshare from; the "
+                            "caller must be able to open the project"
+                        ),
+                    },
                     "permission": {
                         "type": "string",
                         "enum": ["ro", "rw"],
@@ -79,7 +87,7 @@ class ShareMixin:
             201: OpenApiResponse(description="Share created."),
             200: OpenApiResponse(description="Share removed or already exists."),
             400: OpenApiResponse(description="Bad request."),
-            404: OpenApiResponse(description="File, user or group not found."),
+            404: OpenApiResponse(description="File, user, group or project not found."),
         },
     )
     @action(detail=True, methods=["post", "delete"], url_path="share")

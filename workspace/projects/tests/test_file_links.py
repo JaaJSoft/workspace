@@ -137,6 +137,33 @@ class UnlinkFileTests(ProjectTestMixin, TestCase):
         self.assertEqual(TaskFileLink.objects.count(), 1)
         self.assertEqual(FileShare.objects.count(), 1)
 
+    def test_a_share_that_predates_the_link_survives_the_last_unlink(self):
+        other = make_file(self.admin, "brief.txt")
+        share_file(
+            other, target_project=self.project, permission="ro", acting_user=self.admin
+        )
+        (link,) = link_files(self.admin, self.task, [other])
+        self.assertFalse(link.owns_share)
+        unlink_file(link, actor=self.admin)
+        self.assertTrue(
+            FileShare.objects.filter(
+                file=other, shared_with_project=self.project
+            ).exists()
+        )
+
+    def test_share_ownership_follows_the_remaining_link(self):
+        # The first link created the share; once it goes, the surviving link
+        # takes the revocation over so the share never outlives every link.
+        other_task = create_task(self.project, self.admin, title="Review it")
+        (second,) = link_files(self.admin, other_task, [self.doc])
+        self.assertTrue(self.link.owns_share)
+        self.assertFalse(second.owns_share)
+        unlink_file(self.link, actor=self.admin)
+        second.refresh_from_db()
+        self.assertTrue(second.owns_share)
+        unlink_file(second, actor=self.admin)
+        self.assertFalse(FileShare.objects.exists())
+
     def test_revoking_the_share_drops_the_link(self):
         FileShare.objects.get().delete()
         self.assertFalse(TaskFileLink.objects.exists())

@@ -28,15 +28,16 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
 
     *user* must be allowed to share every file (the files ``share`` action
     decides), or ProjectRuleError is raised and nothing is written. A file
-    already shared with the project keeps its share and permission; a file
-    already linked to the task is skipped. One FILE_LINKED event per new
-    link, snapshotting the file name and uuid so the entry outlives the
-    file.
+    already shared with the project keeps its share and permission, and no
+    link owns that share; a file already linked to the task is skipped. One
+    FILE_LINKED event per new link, snapshotting the file name and uuid so
+    the entry outlives the file.
 
     The task row is locked for the duration so two concurrent calls
-    serialize on the "already linked" check; the unique constraint is the
-    backstop on backends where the lock does not, and a duplicate is then
-    skipped rather than surfaced.
+    serialize on the "already linked" check, and an existing share row is
+    locked so a concurrent last unlink cannot revoke it underneath. The
+    unique constraint is the backstop on backends where the locks do not
+    serialize, and a duplicate is then skipped rather than surfaced.
     """
     permissions = FileService.get_permissions_bulk(user, files)
     for file_obj in files:
@@ -56,10 +57,13 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
         for file_obj in files:
             if file_obj.pk in linked:
                 continue
-            share = FileShare.objects.filter(
-                file=file_obj, shared_with_project=project
-            ).first()
-            if share is None:
+            share = (
+                FileShare.objects.select_for_update()
+                .filter(file=file_obj, shared_with_project=project)
+                .first()
+            )
+            owns_share = share is None
+            if owns_share:
                 share, _, _ = share_file(
                     file_obj,
                     target_project=project,
@@ -69,7 +73,7 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
             try:
                 with transaction.atomic():
                     link = TaskFileLink.objects.create(
-                        task=task, share=share, created_by=user
+                        task=task, share=share, owns_share=owns_share, created_by=user
                     )
             except IntegrityError:
                 continue
@@ -88,11 +92,18 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
 def unlink_file(link, *, actor=None):
     """Remove *link*, leaving a FILE_UNLINKED event on the task.
 
-    The project share goes with it when no other task in the project still
-    links the file: the share only ever existed for the links.
+    A share the link flow created (``owns_share``) is revoked once its last
+    link goes: while other links remain, the flag moves to the oldest of
+    them. A share that predates every link is left alone. The share row is
+    locked first so two concurrent last unlinks cannot both see the other's
+    link and leave the share behind.
     """
     with transaction.atomic():
-        share = link.share
+        share = (
+            FileShare.objects.select_for_update()
+            .select_related("file", "shared_with_project")
+            .get(pk=link.share_id)
+        )
         file_obj = share.file
         record_task_event(
             link.task,
@@ -102,10 +113,20 @@ def unlink_file(link, *, actor=None):
             to_ref=file_obj.uuid,
         )
         link.delete()
-        if not TaskFileLink.objects.filter(share=share).exists():
-            unshare_file(
-                file_obj, target_project=share.shared_with_project, acting_user=actor
-            )
+        if not link.owns_share:
+            return
+        heir = (
+            TaskFileLink.objects.filter(share=share)
+            .order_by("created_at", "uuid")
+            .first()
+        )
+        if heir is not None:
+            heir.owns_share = True
+            heir.save(update_fields=["owns_share"])
+            return
+        unshare_file(
+            file_obj, target_project=share.shared_with_project, acting_user=actor
+        )
 
 
 def file_links_for_task(task):

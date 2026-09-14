@@ -601,6 +601,10 @@ class TaskFileLink(models.Model):
         on_delete=models.CASCADE,
         related_name="task_links",
     )
+    # True on the one link whose creation shared the file with the project;
+    # unlinking it revokes the share (or hands the flag to a surviving link).
+    # A share that predates every link is never owned and never revoked here.
+    owns_share = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

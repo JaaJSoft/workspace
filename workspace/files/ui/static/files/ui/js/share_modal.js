@@ -108,7 +108,7 @@ window.shareModal = function shareModal() {
     async loadGroups() {
       try {
         const resp = await fetch('/api/v1/groups', { credentials: 'same-origin' });
-        if (resp.ok) this.groups = await resp.json();
+        this.groups = resp.ok ? await resp.json() : [];
       } catch (e) {
         this.groups = [];
       }

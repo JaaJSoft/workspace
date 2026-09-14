@@ -78,3 +78,13 @@ test('a share target maps to its request body', () => {
   assert.deepStrictEqual({ ...app.targetBody('user', 7) }, { shared_with: 7 });
   assert.deepStrictEqual({ ...app.splitKey('group:7') }, { type: 'group', id: '7' });
 });
+
+test('a failed group listing clears the groups from the previous open', async () => {
+  const ctx = loadScript('workspace/files/ui/static/files/ui/js/share_modal.js', {
+    fetch: async () => ({ ok: false, status: 500 }),
+  });
+  const app = ctx.shareModal();
+  app.groups = [{ id: 1, name: 'Stale' }];
+  await app.loadGroups();
+  assert.deepStrictEqual(Array.from(app.groups), []);
+});

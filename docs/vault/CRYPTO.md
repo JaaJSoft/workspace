@@ -78,6 +78,46 @@ knowing before writing another implementation:
   sides agree on and are refused rather than guessed: negative integers between
   -2^31-1 and -2^32, and map keys that become one key once NFC-normalised.
 
+## The export archive
+
+`vault_archive.js` writes an archive and `tests/reference/archive.py` reads one.
+Neither is the other's source: both follow this section, and a change to the
+format changes all three together.
+
+An archive is a 50-byte public header followed by a single sealed payload.
+
+| Offset | Length | Field | Value |
+|---:|---:|---|---|
+| 0 | 7 | magic | `VLTARCH` |
+| 7 | 1 | container version | `0x01` |
+| 8 | 1 | KDF id | `0x01`, Argon2id |
+| 9 | 4 | `m` | big-endian uint32, in KiB |
+| 13 | 4 | `t` | big-endian uint32 |
+| 17 | 1 | `p` | |
+| 18 | 32 | salt | drawn for each export |
+| 50 | - | payload | the wire format: a 6-byte header (format version, AEAD id, KDF id, two-byte key version, IV length), the 12-byte IV, then the AES-256-GCM ciphertext |
+
+- **The key.** Argon2id over the NFC-normalised passphrase, with the header's
+  salt and parameters and no `secret` - an export has no `secret_key` - then
+  HKDF-SHA256 with info `v1|archive-key`. The payload declares that last step:
+  KDF id `0x01` (HKDF-SHA256) and key version `0`.
+- **The associated data** is the whole 50-byte header, so an edited header
+  byte fails as tampering rather than as a wrong passphrase. The payload's own
+  header is not covered by it, so a reader treats that KDF id as untrusted.
+- **The parameter bounds** are checked before anything is derived: `m` in
+  [8192, 1048576], `t` in [1, 10], `p` in [1, 4]. A file declaring 4 GiB is
+  refused rather than tried. The bounds may widen and must never narrow:
+  narrowing rejects archives already written.
+- **One seal per key.** Each export draws a fresh salt, hence a fresh key, so
+  the 96-bit IV is used once. An incremental archive that sealed twice under
+  one key would leave that bound.
+- **The plaintext** is CBOR, and not the canonical form the signed payloads
+  use: nothing ever compares an archive's bytes, so strings are stored exactly
+  as given, without NFC, and map keys keep their insertion order. Vaults,
+  folders, tags and entries carry file-local ids rather than account UUIDs, and
+  trashed entries are kept and marked. It is encoded into a buffer the writer
+  allocates and wipes, sized so the encoder never grows a buffer of its own.
+
 ## The reference implementation
 
 `workspace/vault/tests/reference/` is a second, independent implementation of

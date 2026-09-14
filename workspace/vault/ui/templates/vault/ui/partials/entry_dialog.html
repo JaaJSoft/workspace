@@ -58,6 +58,7 @@
                 autocomplete="off"
                 spellcheck="false"
                 x-model="draft.values[field.field_id]"
+                @input="noteEditedField(field.field_id)"
               />
               {# x-if, not x-show: a hidden button is still a button in the DOM, on every field the type declares. #}
               <template x-if="field.generator">
@@ -83,6 +84,7 @@
               <div
                 class="mt-2"
                 @password-apply="applyGenerated(field.field_id, $event.detail.value)"
+                @password-regenerate="trackGenerated(field.field_id, $event.detail.value)"
                 @password-copy="copyGenerated($event.detail.value)"
               >
                 {% comment %}

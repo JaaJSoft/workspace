@@ -113,3 +113,59 @@ test('a copy that went through clears the message the last one left', () => {
     assert.equal(component.generatorError, '');
   });
 });
+
+test('a host can ask for its own label and clearing window', () => {
+  // The 30 seconds the clipboard defaults to answers an entry password: it is
+  // in the vault, so an early clear costs a second Copy. Not every value this
+  // mixin carries is recoverable, and the host is the only one that knows.
+  const { component, copied } = mixin();
+  component.copyGenerated('drawn', { label: 'Export passphrase', seconds: 180 });
+  assert.equal(copied[0].label, 'Export passphrase');
+  assert.equal(copied[0].options.seconds, 180);
+  assert.equal(copied[0].options.transient, true, 'a host window turned the clearing off');
+});
+
+test('a host that asks for nothing still gets the entry-password policy', () => {
+  const { component, copied } = mixin();
+  component.copyGenerated('drawn');
+  assert.equal(copied[0].label, 'Password');
+  assert.equal(copied[0].options.seconds, undefined);
+});
+
+test('reopening the generator over an applied value keeps the field on what the panel shows', () => {
+  // Use folds the panel; the dice reopens it on a fresh draw. A field left on
+  // the first draw is saved with it while the panel shows and copies the
+  // second - the copy the user pastes elsewhere then opens nothing here.
+  const { component } = mixin();
+  component.draft = { values: { password: '' } };
+  component.openGenerator('password');
+  component.applyGenerated('password', 'first draw');
+  component.openGenerator('password');
+  component.trackGenerated('password', 'second draw');
+  assert.equal(component.draft.values.password, 'second draw');
+});
+
+test('a draw fills nothing before Use, after an edit, or in another field', () => {
+  const { component } = mixin();
+  component.draft = { values: { password: 'mine', other: 'kept' } };
+  component.trackGenerated('password', 'unasked');
+  assert.equal(component.draft.values.password, 'mine', 'a draw before Use filled the field');
+  component.applyGenerated('password', 'drawn');
+  component.noteEditedField('password');
+  component.trackGenerated('password', 'redrawn');
+  assert.equal(component.draft.values.password, 'drawn', 'a draw overwrote an edited field');
+  component.applyGenerated('password', 'drawn again');
+  component.trackGenerated('other', 'elsewhere');
+  assert.equal(component.draft.values.other, 'kept', 'a draw reached a field Use never filled');
+});
+
+test('a failed draw leaves an applied value alone, and closing stops the following', () => {
+  const { component } = mixin();
+  component.draft = { values: { password: '' } };
+  component.applyGenerated('password', 'drawn');
+  component.trackGenerated('password', '');
+  assert.equal(component.draft.values.password, 'drawn', 'a failed draw emptied the field');
+  component.clearGenerators();
+  component.trackGenerated('password', 'after close');
+  assert.equal(component.draft.values.password, 'drawn', 'the following outlived the dialog');
+});

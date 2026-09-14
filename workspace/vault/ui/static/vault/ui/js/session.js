@@ -76,6 +76,10 @@ window.vaultSession = (function () {
   // preference; setIdleTimeout is how it arrives, and it moves the deadline
   // rather than waiting for the next unlock to take effect.
   const DEFAULT_IDLE_LOCK_MS = 5 * 60 * 1000;
+  // Set only for the length of one full read of the account (the export), and
+  // null the rest of the time: entry keys are memoised while a walk needs them
+  // twice and dropped as soon as it is over.
+  let entryKeyCache = null;
   let idleLockMs = DEFAULT_IDLE_LOCK_MS;
   let expiresAt = 0;
   let ticker = null;
@@ -299,6 +303,9 @@ window.vaultSession = (function () {
       if (!unlocked) return;
       unlocked = false;
       generation += 1;
+      // Dropped, not merely made unreachable: the point of a lock is to stop
+      // holding the keys, and these are keys.
+      entryKeyCache = null;
       signer = null;
       recipient = null;
       sigPublicRaw = null;
@@ -405,9 +412,47 @@ window.vaultSession = (function () {
     // other entry.
     openEntryKey: async function (vaultUuid, wrappedKeyB64, entryUuid) {
       const V = window.vaultCrypto;
-      return this._openDerivedKey(
-        vaultUuid, wrappedKeyB64, V.AD.entryKeyInfo(entryUuid)
-      );
+      const info = V.AD.entryKeyInfo(entryUuid);
+      if (!entryKeyCache) {
+        return this._openDerivedKey(vaultUuid, wrappedKeyB64, info);
+      }
+      // The guard runs on the cached path too. _openDerivedKey opens with it,
+      // so skipping it here would make a hit the one way to get a key out of a
+      // session that has since locked - the exact hole the generation exists
+      // to close.
+      sessionGuard();
+      // Every input to the derivation, not just the entry: a memo keyed on
+      // less would answer for a wrapped key it never saw. The entry uuid
+      // stands in for the info derived from it.
+      const memo = [vaultUuid, wrappedKeyB64, entryUuid].join(' ');
+      if (entryKeyCache.has(memo)) return entryKeyCache.get(memo);
+      const derived = await this._openDerivedKey(vaultUuid, wrappedKeyB64, info);
+      // Re-read: the cache can have been dropped by a lock across that await,
+      // and putting the key back would undo what the lock just did.
+      if (entryKeyCache) entryKeyCache.set(memo, derived);
+      return derived;
+    },
+
+    // One full read of the account, with each entry key derived once. Both
+    // passes the export makes over an entry ask for the same key, and deriving
+    // one is an X25519 open plus an HKDF - the slowest thing in this module,
+    // paid twice per entry without this.
+    //
+    // Scoped rather than a begin/end pair: a walk that throws must not leave
+    // the memo standing, and there is no second half to forget.
+    withEntryKeyCache: async function (run) {
+      const own = new Map();
+      entryKeyCache = own;
+      try {
+        return await run();
+      } finally {
+        // Dropped only while it is still this scope's. A cancelled export can
+        // finish after the next one opened its own scope, and clearing then
+        // would empty the live walk's memo; restoring an earlier map instead
+        // would bring back keys a finished walk let go of. A lock during the
+        // walk nulls the binding, and that sticks too.
+        if (entryKeyCache === own) entryKeyCache = null;
+      }
     },
 
     // The expected type is a parameter, not a constant: verify() checks it

@@ -130,6 +130,7 @@ window.vaultBrowser = (function () {
       ...window.vaultViewPrefsMixin(),
       ...window.vaultSwitcherMixin(),
       ...window.vaultGeneratorMixin(),
+      ...window.vaultExportMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -261,6 +262,9 @@ window.vaultBrowser = (function () {
         // The drafts hold typed-in plaintext, so they go with the keys - and
         // so does the password a generator panel drew, which no draft holds.
         this.clearGenerators();
+        // Same reason, one step further out: the export dialog holds a
+        // passphrase and, while it runs, a tree of decrypted entries.
+        this.clearExport();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
@@ -1130,6 +1134,7 @@ window.vaultBrowser = (function () {
         // With the draft, or the next dialog opens with a panel already
         // mounted and draws a password for an entry nobody asked one for.
         this.generatorField = null;
+        this.generatorFollows = null;
         this.draft = null;
       },
 
@@ -1183,6 +1188,7 @@ window.vaultBrowser = (function () {
             await window.vaultApi.updateEntry(draft.uuid, body);
           }
           this.generatorField = null;
+          this.generatorFollows = null;
           this.draft = null;
           await this.load();
         } catch (err) {

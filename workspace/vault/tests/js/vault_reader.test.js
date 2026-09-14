@@ -246,3 +246,17 @@ test('a vault with no key wrap is unopenable and says nothing about itself', asy
   assert.equal(vault.name, '');
   assert.equal(vault.description, '');
 });
+
+test('the name and the notes open from their own columns, under their own slots', async () => {
+  const { ctx, session, opened } = reader();
+  const row = { ...ROW, encrypted_notes: 'ct:notes' };
+  assert.equal(await ctx.vaultReader.openField(session, VAULT, row, 'notes'), 'open:e-1|notes');
+  assert.equal(await ctx.vaultReader.openField(session, VAULT, row, 'name'), 'open:e-1|name');
+  assert.deepStrictEqual(Array.from(opened), ['e-1|notes', 'e-1|name']);
+});
+
+test('an entry saved without notes opens nothing for them', async () => {
+  const { ctx, session, opened } = reader();
+  assert.equal(await ctx.vaultReader.openField(session, VAULT, ROW, 'notes'), '');
+  assert.deepStrictEqual(Array.from(opened), []);
+});

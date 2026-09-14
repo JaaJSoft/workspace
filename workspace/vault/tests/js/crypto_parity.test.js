@@ -521,6 +521,47 @@ test('one-time codes match the reference on the shared vectors', async () => {
   }
 });
 
+test('deriveArchiveKey refuses a salt of the wrong length', async () => {
+  await assert.rejects(
+    () => V.deriveArchiveKey({ passphrase: 'x', salt: new Uint8Array(31) }),
+    /salt is 31 bytes/
+  );
+});
+
+test('deriveArchiveKey refuses Argon2 parameters outside the bounds', () => {
+  // 4 GiB in a hand-crafted file kills the tab before any error is raised.
+  assert.throws(
+    () => V.assertArchiveParams({ m: 4194304, t: 3, p: 2 }),
+    /archive m is 4194304, outside \[8192, 1048576\]/
+  );
+  assert.throws(() => V.assertArchiveParams({ m: 65536, t: 0, p: 2 }), /archive t is 0/);
+  assert.throws(() => V.assertArchiveParams({ m: 65536, t: 3, p: 9 }), /archive p is 9/);
+  assert.doesNotThrow(() => V.assertArchiveParams({ m: 65536, t: 3, p: 2 }));
+});
+
+test('the same phrase typed on two keyboards derives the same key', async () => {
+  const salt = new Uint8Array(32).fill(7);
+  // Escapes, not literals: 'café' and 'café' render identically, so a reader
+  // cannot tell this test from one comparing a string to itself - and a
+  // reviewer already misread it once. NFC applies to the KDF input, not
+  // only to a length check, or the archive opens on one keyboard and not
+  // the other.
+  const composed = await V.deriveArchiveKey({ passphrase: 'caf\u00e9', salt });
+  const decomposed = await V.deriveArchiveKey({ passphrase: 'cafe\u0301', salt });
+  assert.deepStrictEqual(Array.from(composed), Array.from(decomposed));
+});
+
+test('deriveArchiveKey itself refuses out-of-bounds parameters', async () => {
+  // The bounds have to be enforced where the derivation happens, not only in
+  // the helper: the reader hands whatever the file declared straight in.
+  await assert.rejects(
+    () => V.deriveArchiveKey({
+      passphrase: 'x', salt: new Uint8Array(32), params: { m: 4194304, t: 3, p: 2 },
+    }),
+    /archive m is 4194304/
+  );
+});
+
 test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', async () => {
   // Imported outside importAeadKey, which is the only path that could produce
   // one: sealing under it would write an AES-256-GCM header over AES-128-GCM.

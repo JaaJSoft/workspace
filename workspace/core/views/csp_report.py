@@ -14,6 +14,8 @@ from workspace.vault.throttling import IpRateThrottle
 logger = logging.getLogger("workspace.core.csp_report")
 
 MAX_REPORT_BYTES = 8192
+MAX_LOGGED_DIRECTIVE = 128
+MAX_LOGGED_URI = 512
 
 REPORT_CONTENT_TYPES = {"application/csp-report", "application/json"}
 
@@ -41,7 +43,10 @@ def _without_query(uri):
         return ""
     if uri in URI_KEYWORDS:
         return uri
-    parts = urlsplit(uri)
+    try:
+        parts = urlsplit(uri)
+    except ValueError:
+        return ""
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
@@ -58,8 +63,10 @@ class CspReportView(APIView):
         if content_type not in REPORT_CONTENT_TYPES:
             return Response(status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
 
-        # The declared length bounds what request.body will read, so checking
-        # it refuses an oversized report without buffering it.
+        # Under WSGI (gunicorn), request.body reads at most Content-Length
+        # bytes from the socket, so this check refuses an oversized report
+        # before it is buffered. ASGI buffers the whole body earlier, ahead
+        # of this check.
         try:
             length = int(request.META.get("CONTENT_LENGTH") or 0)
         except ValueError:
@@ -74,13 +81,15 @@ class CspReportView(APIView):
         if not isinstance(report, dict):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
-        directive = (
+        directive = str(
             report.get("effective-directive") or report.get("violated-directive") or ""
         )
+        blocked_uri = _without_query(report.get("blocked-uri"))
+        document_uri = _without_query(report.get("document-uri"))
         logger.warning(
             "CSP violation: %s refused %s on %s",
-            scrub(directive),
-            scrub(_without_query(report.get("blocked-uri"))),
-            scrub(_without_query(report.get("document-uri"))),
+            scrub(directive[:MAX_LOGGED_DIRECTIVE]),
+            scrub(blocked_uri[:MAX_LOGGED_URI]),
+            scrub(document_uri[:MAX_LOGGED_URI]),
         )
         return Response(status=status.HTTP_204_NO_CONTENT)

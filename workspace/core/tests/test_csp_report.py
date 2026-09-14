@@ -11,11 +11,15 @@ from unittest.mock import patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client, TestCase
+from django.test import Client, RequestFactory, TestCase
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework.throttling import SimpleRateThrottle
 
-from workspace.core.views.csp_report import MAX_REPORT_BYTES, CspReportIpThrottle
+from workspace.core.views.csp_report import (
+    MAX_REPORT_BYTES,
+    CspReportIpThrottle,
+    CspReportView,
+)
 
 User = get_user_model()
 
@@ -105,7 +109,7 @@ class CspReportViewTests(TestCase):
         response = self.post(csp_report(), content_type="application/json")
         self.assertEqual(response.status_code, 204)
 
-    def test_an_oversized_report_is_refused_before_it_is_read(self):
+    def test_an_oversized_report_is_refused(self):
         body = csp_report(**{"script-sample": "x" * MAX_REPORT_BYTES})
         with self.assertNoLogs(LOGGER):
             response = self.post(body)
@@ -143,3 +147,53 @@ class CspReportViewTests(TestCase):
         self.assertFalse(
             [path for path in schema["paths"] if path.endswith("csp-report")]
         )
+
+    def test_a_malformed_bracketed_host_does_not_crash_the_view(self):
+        line = self.logged_line(csp_report(**{"blocked-uri": "http://["}))
+        self.assertIn("refused", line)
+
+    def test_a_missing_blocked_uri_logs_an_empty_field(self):
+        body = json.loads(csp_report())
+        del body["csp-report"]["blocked-uri"]
+        line = self.logged_line(json.dumps(body))
+        self.assertIn("refused  on", line)
+
+    def test_a_non_string_blocked_uri_logs_an_empty_field(self):
+        line = self.logged_line(csp_report(**{"blocked-uri": 42}))
+        self.assertIn("refused  on", line)
+
+    def test_a_non_numeric_content_length_is_refused(self):
+        """Dispatches straight to the view rather than through self.client:
+        django_prometheus's own request middleware parses Content-Length
+        unguarded and would raise first, masking the view's own guard."""
+        request = RequestFactory().generic(
+            "POST",
+            URL,
+            data=csp_report(),
+            content_type="application/csp-report",
+            CONTENT_LENGTH="abc",
+        )
+        self.assertEqual(request.META.get("CONTENT_LENGTH"), "abc")
+        with self.assertNoLogs(LOGGER):
+            response = CspReportView.as_view()(request)
+        self.assertEqual(response.status_code, 400)
+
+    def test_long_fields_are_truncated_before_logging(self):
+        directive = "d" * 1000
+        # No scheme/host: urlsplit keeps it as a bare path, so the logged
+        # value is this string verbatim (until truncation), with no prefix
+        # to account for.
+        blocked_uri = "u" * 2000
+        line = self.logged_line(
+            csp_report(
+                **{
+                    "effective-directive": directive,
+                    "violated-directive": directive,
+                    "blocked-uri": blocked_uri,
+                }
+            )
+        )
+        self.assertIn("d" * 128, line)
+        self.assertNotIn("d" * 129, line)
+        self.assertIn("u" * 512, line)
+        self.assertNotIn("u" * 513, line)

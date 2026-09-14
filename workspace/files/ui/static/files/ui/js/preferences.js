@@ -1,5 +1,5 @@
 // --- File browser preferences ---
-window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true, compactList: false, nameCollision: 'ask' };
+window._filePrefsDefaults = { showHiddenFiles: false, confirmBeforeDelete: true, defaultSort: 'default', defaultSortDir: 'asc', breadcrumbCollapse: 4, defaultViewMode: 'list', mosaicTileSize: 3, showPinned: true, showGroups: true, showTags: true, compactList: false, nameCollision: 'ask' };
 
 // Initial prefs are embedded server-side via |json_script (see index.html).
 // Reading from the DOM avoids a redundant fetch and the 404 a fresh user
@@ -102,6 +102,7 @@ window.sidebarCollapse = function sidebarCollapse() {
     activeView: null,
     showPinned: window._filePrefsCache.showPinned !== false,
     showGroups: window._filePrefsCache.showGroups !== false,
+    showTags: window._filePrefsCache.showTags !== false,
 
     isMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;
@@ -114,6 +115,7 @@ window.sidebarCollapse = function sidebarCollapse() {
       window.addEventListener('preferences-changed', (e) => {
         this.showPinned = e.detail.showPinned !== false;
         this.showGroups = e.detail.showGroups !== false;
+        this.showTags = e.detail.showTags !== false;
       });
       window.matchMedia('(max-width: 1023px)').addEventListener('change', (event) => {
         if (event.matches) {

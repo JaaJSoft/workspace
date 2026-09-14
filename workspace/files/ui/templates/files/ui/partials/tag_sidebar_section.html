@@ -67,6 +67,15 @@ Parameters:
           </a>
         </li>
       </template>
+      <li
+        class="list-none px-2 py-2 text-sm text-base-content/40"
+        x-show="!({{ ce }}) && favoriteTags().length === 0"
+      >
+        <span class="flex items-center gap-2 justify-center">
+          <i data-lucide="star-off" class="w-4 h-4"></i>
+          No favorite tags
+        </span>
+      </li>
       {# The header carries the manager button; the rail hides the header, so it keeps one. #}
       <li class="list-none flex justify-center" x-show="{{ ce }}">
         <button

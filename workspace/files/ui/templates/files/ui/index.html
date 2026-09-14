@@ -129,7 +129,9 @@
         <div x-show="showGroups" x-transition>{% include "files/ui/partials/group_folders_section.html" %}</div>
 
         <!-- Tags: favourites, plus the manager for the rest -->
-        <div x-data="tagSidebar()">{% include "files/ui/partials/tag_sidebar_section.html" %}</div>
+        <div x-show="showTags" x-transition x-data="tagSidebar()">
+          {% include "files/ui/partials/tag_sidebar_section.html" %}
+        </div>
       </div>
 
       <!-- Storage & Help -->

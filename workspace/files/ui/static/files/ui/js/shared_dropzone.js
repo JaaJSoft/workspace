@@ -28,16 +28,23 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
       this.targetName = (content && content.dataset.nodeName) || this.rootName;
     },
 
+    // The target is fixed when the file enters the queue: uploads run one
+    // at a time and the zone survives navigation, so a later click into
+    // another folder must not redirect what was dropped into this one.
+    queued(file) {
+      return { file, name: file.name, state: 'pending', node: this.targetNode };
+    },
+
     pick(event) {
       const picked = Array.from(event.target.files || []);
-      picked.forEach(file => this.queue.push({ file, name: file.name, state: 'pending' }));
+      picked.forEach(file => this.queue.push(this.queued(file)));
       event.target.value = '';
       this.sendAll();
     },
 
     drop(event) {
       const dropped = Array.from(event.dataTransfer.files || []);
-      dropped.forEach(file => this.queue.push({ file, name: file.name, state: 'pending' }));
+      dropped.forEach(file => this.queue.push(this.queued(file)));
       this.sendAll();
     },
 
@@ -67,7 +74,7 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
       item.state = 'sending';
       const body = new FormData();
       body.append('file', item.file);
-      if (this.targetNode) body.append('node', this.targetNode);
+      if (item.node) body.append('node', item.node);
       const headers = {};
       if (this.accessToken) headers['X-Share-Access'] = this.accessToken;
       try {

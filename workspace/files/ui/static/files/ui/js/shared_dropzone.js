@@ -32,11 +32,15 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes) {
     async sendAll() {
       if (this.sending) return;
       this.sending = true;
+      const doneBefore = this.doneCount();
       for (const item of this.queue) {
         if (item.state !== 'pending') continue;
         await this.send(item);
       }
       this.sending = false;
+      // The listing above lives in the #shared-content swap region, which
+      // this zone sits outside of: nothing else re-fetches it.
+      if (this.doneCount() > doneBefore) window.folderNav.reload();
     },
 
     async send(item) {

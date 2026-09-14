@@ -60,3 +60,46 @@ class ShareDropLinkTests(PlaywrightTestCase):
         self.assertTrue(
             File.objects.filter(parent=self.folder, name="from-outside.txt").exists()
         )
+
+
+class ShareBothLinkTests(PlaywrightTestCase):
+    """A read-and-upload link lists the folder above the drop zone; a file
+    the visitor just sent has to show up there without a manual refresh."""
+
+    def setUp(self):
+        super().setUp()
+        self.owner = self.create_user(username="both-owner")
+        self.folder = File.objects.create(
+            owner=self.owner, name="Inbox", node_type=File.NodeType.FOLDER
+        )
+        File.objects.create(
+            owner=self.owner,
+            name="existing.txt",
+            node_type=File.NodeType.FILE,
+            parent=self.folder,
+        )
+        self.link = FileShareLink.objects.create(
+            file=self.folder,
+            created_by=self.owner,
+            mode=FileShareLink.Mode.BOTH,
+        )
+
+    def test_an_uploaded_file_appears_in_the_listing(self):
+        self.page.goto(f"{self.live_server_url}/files/shared/{self.link.token}")
+        listing = self.page.locator("#shared-content")
+        expect(listing).to_contain_text("existing.txt")
+        self.assertNotIn("from-outside.txt", listing.inner_text())
+
+        self.page.set_input_files(
+            "input[type=file]",
+            files=[
+                {
+                    "name": "from-outside.txt",
+                    "mimeType": "text/plain",
+                    "buffer": b"hello",
+                }
+            ],
+        )
+        expect(self.page.get_by_test_id("drop-done")).to_be_visible()
+
+        expect(self.page.locator("#shared-content")).to_contain_text("from-outside.txt")

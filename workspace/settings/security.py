@@ -88,4 +88,9 @@ VAULT_CSP = {
     "base-uri": [NONE],
     "form-action": [SELF],
     "frame-ancestors": [NONE],
+    # report-uri alone, on purpose. A browser that understands report-to
+    # ignores report-uri when both are present, and report-to only works with
+    # a Reporting-Endpoints header that django-csp does not emit - adding it
+    # would silence Chromium's reports rather than add to them.
+    "report-uri": ["/api/v1/csp-report"],
 }

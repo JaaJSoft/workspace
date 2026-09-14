@@ -6,10 +6,28 @@ const { loadScript } = require('../../../common/tests/js/loader');
 
 // The public drop zone lives outside the #shared-content swap region, so a
 // finished batch has to ask folderNav to re-fetch the listing above it.
+// One request per queued file: reports half the bytes, then answers with the
+// next status in the list.
+class FakeXhr {
+  constructor() {
+    this.upload = {};
+  }
+  open() {}
+  setRequestHeader() {}
+  send() {
+    setTimeout(() => {
+      this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
+      this.status = FakeXhr.statuses.shift();
+      this.onload();
+    }, 0);
+  }
+}
+
 function makeDrop(statuses, dataset) {
   const reloads = [];
   const fields = [];
   const nodes = [];
+  FakeXhr.statuses = statuses;
   const ctx = loadScript('workspace/files/ui/static/files/ui/js/shared_dropzone.js', {
     URLSearchParams,
     FormData: class {
@@ -18,7 +36,8 @@ function makeDrop(statuses, dataset) {
         if (key === 'node') nodes.push(value);
       }
     },
-    fetch: async () => ({ status: statuses.shift() }),
+    XMLHttpRequest: FakeXhr,
+    setTimeout,
     folderNav: { reload: () => reloads.push(1) },
     document: { getElementById: () => (dataset ? { dataset } : null) },
   });
@@ -71,4 +90,28 @@ test('without a browsed folder the zone names the root and sends no node', async
   drop.queue.push(drop.queued({ size: 1, name: 'a.txt' }));
   await drop.sendAll();
   assert.deepStrictEqual(fields, ['file']);
+});
+
+test('a file shows the bytes sent while it is on the wire', async () => {
+  const { drop } = makeDrop([204]);
+  const item = drop.queued({ size: 1, name: 'a.txt' });
+  drop.queue.push(item);
+  let seen = null;
+  const original = FakeXhr.prototype.send;
+  FakeXhr.prototype.send = function () {
+    setTimeout(() => {
+      this.upload.onprogress({ lengthComputable: true, loaded: 50, total: 100 });
+      seen = { state: item.state, percent: item.percent };
+      this.status = 204;
+      this.onload();
+    }, 0);
+  };
+  try {
+    await drop.sendAll();
+  } finally {
+    FakeXhr.prototype.send = original;
+  }
+  assert.deepStrictEqual(seen, { state: 'sending', percent: 50 });
+  assert.equal(item.state, 'done');
+  assert.equal(drop.sendingCount(), 0);
 });

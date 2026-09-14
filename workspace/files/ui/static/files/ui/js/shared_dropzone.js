@@ -32,7 +32,7 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
     // at a time and the zone survives navigation, so a later click into
     // another folder must not redirect what was dropped into this one.
     queued(file) {
-      return { file, name: file.name, state: 'pending', node: this.targetNode };
+      return { file, name: file.name, state: 'pending', percent: 0, node: this.targetNode };
     },
 
     pick(event) {
@@ -72,23 +72,38 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
         return;
       }
       item.state = 'sending';
+      item.percent = 0;
       const body = new FormData();
       body.append('file', item.file);
       if (item.node) body.append('node', item.node);
-      const headers = {};
-      if (this.accessToken) headers['X-Share-Access'] = this.accessToken;
       try {
-        const resp = await fetch(window.sharedLinkUrl(this.token, '/upload', {}), {
-          method: 'POST',
-          headers,
-          body,
-        });
         // 204 is the only success, and it carries no body on purpose: the
         // response must not reveal whether the name collided.
-        item.state = resp.status === 204 ? 'done' : 'failed';
+        const status = await this.post(body, (percent) => { item.percent = percent; });
+        item.state = status === 204 ? 'done' : 'failed';
       } catch (e) {
         item.state = 'failed';
       }
+    },
+
+    // XMLHttpRequest rather than fetch: it is the only way to see the bytes
+    // leave, which is what the per-file bar shows.
+    post(body, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload = () => resolve(xhr.status);
+        xhr.onerror = () => reject(new Error('Network error'));
+        xhr.open('POST', window.sharedLinkUrl(this.token, '/upload', {}));
+        if (this.accessToken) xhr.setRequestHeader('X-Share-Access', this.accessToken);
+        xhr.send(body);
+      });
+    },
+
+    sendingCount() {
+      return this.queue.filter(item => item.state === 'pending' || item.state === 'sending').length;
     },
 
     doneCount() {

@@ -32,24 +32,45 @@
       <input type="file" multiple class="hidden" @change="pick($event)" />
     </label>
 
-    <ul x-show="queue.length > 0" x-cloak class="mt-4 space-y-2">
-      <template x-for="(item, index) in queue" :key="index">
-        <li class="flex items-center justify-between gap-2 text-sm">
-          <span class="truncate" x-text="item.name"></span>
-          <span
-            class="badge badge-sm"
-            :class="{
-              'badge-ghost': item.state === 'pending',
-              'badge-info': item.state === 'sending',
-              'badge-success': item.state === 'done',
-              'badge-error': item.state === 'failed',
-              'badge-warning': item.state === 'too-large',
-            }"
-            x-text="stateLabel(item.state)"
-          ></span>
-        </li>
-      </template>
-    </ul>
+    <div x-show="queue.length > 0" x-cloak class="mt-4">
+      <p
+        x-show="sendingCount() > 0"
+        class="text-xs text-base-content/60 mb-2"
+        x-text="'Sending ' + (doneCount() + 1) + ' of ' + queue.length"
+      ></p>
+      <ul class="space-y-2">
+        <template x-for="(item, index) in queue" :key="index">
+          <li class="flex items-center justify-between gap-3 text-sm">
+            <span class="truncate" x-text="item.name"></span>
+            <template x-if="item.state === 'sending'">
+              <span class="flex items-center gap-2 shrink-0">
+                <progress
+                  class="progress progress-primary w-32 h-1.5"
+                  :value="item.percent"
+                  max="100"
+                ></progress>
+                <span
+                  class="text-xs tabular-nums w-9 text-right"
+                  x-text="item.percent + '%'"
+                ></span>
+              </span>
+            </template>
+            <template x-if="item.state !== 'sending'">
+              <span
+                class="badge badge-sm"
+                :class="{
+                  'badge-ghost': item.state === 'pending',
+                  'badge-success': item.state === 'done',
+                  'badge-error': item.state === 'failed',
+                  'badge-warning': item.state === 'too-large',
+                }"
+                x-text="stateLabel(item.state)"
+              ></span>
+            </template>
+          </li>
+        </template>
+      </ul>
+    </div>
 
     <div data-testid="drop-done" x-show="doneCount() > 0" x-cloak class="mt-4">
       <inline-alert type="success" message="Files uploaded successfully."></inline-alert>

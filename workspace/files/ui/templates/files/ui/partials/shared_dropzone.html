@@ -1,24 +1,25 @@
 {% comment %}
   The anonymous drop zone on shared_page.html, shown page-wide whenever the
   link accepts uploads (drop or both mode). Lives outside the shared-content
-  swap region on purpose: uploads always land in the link's own root
-  (SharedFolderUploadView never takes a target folder), never in whatever
-  subfolder is currently browsed, so the zone - and its in-flight upload
-  queue - must survive navigating into one. Needs share_token, access_token
-  and max_file_bytes in context.
+  swap region so the zone - and its in-flight upload queue - survives
+  navigating into a subfolder; it follows the browsed folder through the
+  data-node attributes on #shared-content, re-read on every swap. Needs
+  share_token, access_token, max_file_bytes and link in context.
 {% endcomment %}
 <div
   data-testid="drop-zone"
   data-share-token="{{ share_token }}"
   data-access-token="{{ access_token }}"
   data-max-file-bytes="{{ max_file_bytes|default:0 }}"
-  x-data="sharedDrop($el.dataset.shareToken, $el.dataset.accessToken, Number($el.dataset.maxFileBytes))"
+  data-root-name="{{ link.file.name }}"
+  x-data="sharedDrop($el.dataset.shareToken, $el.dataset.accessToken, Number($el.dataset.maxFileBytes), $el.dataset.rootName)"
+  @nav-state-changed.window="syncTarget()"
   class="card bg-base-100 shadow-lg"
 >
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
       <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-      Send files to {{ link.file.name }}
+      Send files to <span x-text="targetName"></span>
     </h2>
 
     <label

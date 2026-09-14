@@ -270,3 +270,149 @@ class ShareLinkUploadTests(APITestCase):
         self.post(name="b.txt")
         resp = self.post(name="c.txt")
         self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class ShareLinkUploadTargetTests(APITestCase):
+    """``node`` names the folder the visitor is browsing; the file lands there.
+
+    Only a link that lets the visitor see the tree honours it. A drop-only
+    link writes to its root whatever the parameter says: answering 204 or
+    404 on a guessed uuid would tell a stranger which folders exist.
+    """
+
+    def setUp(self):
+        cache.clear()
+        self.owner = User.objects.create_user(
+            username="owner", email="owner@example.com", password="pass123"
+        )
+        self.root = File.objects.create(
+            owner=self.owner, name="Inbox", node_type=File.NodeType.FOLDER
+        )
+        self.sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=self.root,
+        )
+        self.deep = File.objects.create(
+            owner=self.owner,
+            name="Deep",
+            node_type=File.NodeType.FOLDER,
+            parent=self.sub,
+        )
+        self.elsewhere = File.objects.create(
+            owner=self.owner, name="Elsewhere", node_type=File.NodeType.FOLDER
+        )
+        self.link = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def post(self, node, link=None):
+        link = link or self.link
+        data = {"file": part()}
+        if node is not None:
+            data["node"] = node
+        return self.client.post(
+            f"/api/v1/files/shared/{link.token}/upload", data, format="multipart"
+        )
+
+    def test_without_a_node_the_file_lands_in_the_root(self):
+        self.assertEqual(self.post(None).status_code, status.HTTP_204_NO_CONTENT)
+        self.assertTrue(
+            File.objects.filter(parent=self.root, name="report.pdf").exists()
+        )
+
+    def test_a_subfolder_node_receives_the_file(self):
+        self.assertEqual(
+            self.post(str(self.sub.uuid)).status_code, status.HTTP_204_NO_CONTENT
+        )
+        self.assertTrue(
+            File.objects.filter(parent=self.sub, name="report.pdf").exists()
+        )
+        self.assertFalse(
+            File.objects.filter(parent=self.root, name="report.pdf").exists()
+        )
+
+    def test_a_nested_node_receives_the_file(self):
+        self.assertEqual(
+            self.post(str(self.deep.uuid)).status_code, status.HTTP_204_NO_CONTENT
+        )
+        self.assertTrue(
+            File.objects.filter(parent=self.deep, name="report.pdf").exists()
+        )
+
+    def test_the_root_itself_is_a_valid_node(self):
+        self.assertEqual(
+            self.post(str(self.root.uuid)).status_code, status.HTTP_204_NO_CONTENT
+        )
+        self.assertTrue(
+            File.objects.filter(parent=self.root, name="report.pdf").exists()
+        )
+
+    def test_a_folder_outside_the_link_is_a_404_and_creates_nothing(self):
+        resp = self.post(str(self.elsewhere.uuid))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(File.objects.filter(name="report.pdf").exists())
+
+    def test_a_trashed_subfolder_is_a_404(self):
+        self.sub.deleted_at = timezone.now()
+        self.sub.save(update_fields=["deleted_at"])
+        self.assertEqual(
+            self.post(str(self.sub.uuid)).status_code, status.HTTP_404_NOT_FOUND
+        )
+        self.assertFalse(File.objects.filter(name="report.pdf").exists())
+
+    def test_a_file_node_is_a_404(self):
+        doc = File.objects.create(
+            owner=self.owner,
+            name="doc.txt",
+            node_type=File.NodeType.FILE,
+            parent=self.root,
+        )
+        self.assertEqual(
+            self.post(str(doc.uuid)).status_code, status.HTTP_404_NOT_FOUND
+        )
+
+    def test_a_malformed_node_is_a_404(self):
+        self.assertEqual(self.post("not-a-uuid").status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(File.objects.filter(name="report.pdf").exists())
+
+    def test_a_refused_node_does_not_consume_the_count_cap(self):
+        self.link.max_file_count = 1
+        self.link.save(update_fields=["max_file_count"])
+        self.assertEqual(
+            self.post(str(self.elsewhere.uuid)).status_code, status.HTTP_404_NOT_FOUND
+        )
+        self.assertEqual(
+            self.post(str(self.sub.uuid)).status_code, status.HTTP_204_NO_CONTENT
+        )
+
+    def test_a_drop_only_link_ignores_the_node(self):
+        drop = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+        self.assertEqual(
+            self.post(str(self.sub.uuid), link=drop).status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+        self.assertTrue(
+            File.objects.filter(parent=self.root, name="report.pdf").exists()
+        )
+        self.assertFalse(
+            File.objects.filter(parent=self.sub, name="report.pdf").exists()
+        )
+
+    def test_a_drop_only_link_answers_the_same_for_a_foreign_node(self):
+        drop = FileShareLink.objects.create(
+            file=self.root, created_by=self.owner, mode=FileShareLink.Mode.DROP
+        )
+        self.assertEqual(
+            self.post(str(self.elsewhere.uuid), link=drop).status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+        self.assertTrue(
+            File.objects.filter(parent=self.root, name="report.pdf").exists()
+        )

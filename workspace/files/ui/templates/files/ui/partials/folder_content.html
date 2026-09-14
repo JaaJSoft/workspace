@@ -717,13 +717,7 @@
           </div>
         {% endif %}
       {% else %}
-        <div class="flex h-full items-center justify-center text-base-content/60">
-          <div class="text-center">
-            <i data-lucide="folder-open" class="w-12 h-12 mb-4 opacity-40 mx-auto"></i>
-            <p class="text-lg font-medium mb-1">{{ empty_title|default:"This folder is empty" }}</p>
-            <p class="text-sm">{{ empty_message|default:"Create a folder or upload files to get started." }}</p>
-          </div>
-        </div>
+        {% include "files/ui/partials/empty_folder.html" with title=empty_title message=empty_message %}
       {% endif %}
     </div>
 

@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from django.urls import reverse
+from django.urls import resolve, reverse
 
 from workspace.vault.models import AccountIdentity
 
@@ -72,3 +72,13 @@ class VaultCspTests(TestCase):
         separate piece of work."""
         response = self.client.get("/")
         self.assertNotIn("Content-Security-Policy", response.headers)
+
+    def test_violations_are_reported_to_an_endpoint_that_exists(self):
+        """Asserted by resolving the path the header names, not by comparing
+        it with the setting: a renamed route would leave both sides agreeing
+        on a URL that answers 404, and every report would vanish."""
+        directives = dict(
+            part.strip().split(" ", 1)
+            for part in self._policy("vault_ui:onboarding").split(";")
+        )
+        self.assertEqual(resolve(directives["report-uri"]).url_name, "csp-report")

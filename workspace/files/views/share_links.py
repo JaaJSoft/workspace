@@ -442,6 +442,10 @@ class SharedFolderUploadView(APIView):
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
+        target = self._resolve_target(link, request)
+        if target is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
         if not self._reserve_slot(link):
             return Response(
                 {"detail": "This link is no longer accepting files."},
@@ -449,7 +453,7 @@ class SharedFolderUploadView(APIView):
             )
 
         try:
-            self._store(link, upload, request)
+            self._store(link, upload, request, target)
         except Exception:
             self._release_slot(link)
             raise
@@ -501,10 +505,27 @@ class SharedFolderUploadView(APIView):
         )
 
     @staticmethod
-    def _store(link, upload, request):
+    def _resolve_target(link, request):
+        """The folder the upload lands in: ``node`` on a link that shows the
+        tree, the link's root otherwise. ``None`` is the uniform 404.
+
+        A drop-only visitor never sees the tree, so ``node`` is ignored there
+        rather than refused: a 204/404 split would tell a stranger which
+        folder uuids exist under the root.
+        """
+        node_param = request.data.get("node")
+        if not link.allows_read or not node_param:
+            return link.file
+        node = resolve_within(link, node_param)
+        if node is None or node.node_type != File.NodeType.FOLDER:
+            return None
+        return node
+
+    @staticmethod
+    def _store(link, upload, request, target):
         root = link.file
         name = FileService.available_file_name(
-            root.owner, root, sanitize_upload_name(upload.name)
+            root.owner, target, sanitize_upload_name(upload.name)
         )
         # acting_user is the anonymous request user on purpose: record_event
         # normalises it to NULL, so the audit trail never claims the owner
@@ -512,7 +533,7 @@ class SharedFolderUploadView(APIView):
         node = FileService.create_file(
             root.owner,
             name,
-            parent=root,
+            parent=target,
             content=upload,
             group=root.group,
             acting_user=request.user,

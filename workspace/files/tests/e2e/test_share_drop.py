@@ -103,3 +103,35 @@ class ShareBothLinkTests(PlaywrightTestCase):
         expect(self.page.get_by_test_id("drop-done")).to_be_visible()
 
         expect(self.page.locator("#shared-content")).to_contain_text("from-outside.txt")
+
+    def test_an_upload_from_a_subfolder_lands_in_that_subfolder(self):
+        sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=self.folder,
+        )
+        self.page.goto(f"{self.live_server_url}/files/shared/{self.link.token}")
+        self.page.get_by_role("link", name="Sub").click()
+        expect(self.page.locator("#shared-content")).not_to_contain_text("existing.txt")
+        expect(self.page.get_by_test_id("drop-zone")).to_contain_text(
+            "Send files to Sub"
+        )
+
+        self.page.set_input_files(
+            "input[type=file]",
+            files=[
+                {
+                    "name": "into-sub.txt",
+                    "mimeType": "text/plain",
+                    "buffer": b"hello",
+                }
+            ],
+        )
+        expect(self.page.get_by_test_id("drop-done")).to_be_visible()
+
+        expect(self.page.locator("#shared-content")).to_contain_text("into-sub.txt")
+        self.assertTrue(File.objects.filter(parent=sub, name="into-sub.txt").exists())
+        self.assertFalse(
+            File.objects.filter(parent=self.folder, name="into-sub.txt").exists()
+        )

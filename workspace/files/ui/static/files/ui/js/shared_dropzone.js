@@ -4,13 +4,29 @@ window.sharedLinkUrl = function sharedLinkUrl(token, suffix, params) {
   return `/api/v1/files/shared/${encodeURIComponent(token)}${suffix}${tail ? '?' + tail : ''}`;
 };
 
-window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes) {
+window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootName) {
   return {
     token,
     accessToken: accessToken || '',
     maxFileBytes: Number(maxFileBytes) || 0,
+    rootName: rootName || '',
+    targetNode: '',
+    targetName: '',
     queue: [],
     sending: false,
+
+    init() {
+      this.syncTarget();
+    },
+
+    // The browsed folder, published by #shared-content on every swap. The
+    // zone sits outside that region, so it reads the attributes rather than
+    // being re-rendered with them.
+    syncTarget() {
+      const content = document.getElementById('shared-content');
+      this.targetNode = (content && content.dataset.node) || '';
+      this.targetName = (content && content.dataset.nodeName) || this.rootName;
+    },
 
     pick(event) {
       const picked = Array.from(event.target.files || []);
@@ -51,6 +67,7 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes) {
       item.state = 'sending';
       const body = new FormData();
       body.append('file', item.file);
+      if (this.targetNode) body.append('node', this.targetNode);
       const headers = {};
       if (this.accessToken) headers['X-Share-Access'] = this.accessToken;
       try {

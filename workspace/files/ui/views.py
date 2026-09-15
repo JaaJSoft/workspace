@@ -525,9 +525,9 @@ def properties(request, uuid):
             .order_by("created_at")
         )
 
-    # Share links (files only, owner sees stats)
+    # Share links exist for folders too (drop boxes), owner sees stats
     share_links = []
-    if is_owner and file_obj.node_type == File.NodeType.FILE:
+    if is_owner:
         share_links = list(
             FileShareLink.objects.filter(file=file_obj).order_by("-created_at")
         )

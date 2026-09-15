@@ -201,19 +201,27 @@ Context:
         {% endif %}
       </div>
 
-      {% if is_owner and share_links %}
-        <!-- Share Links -->
-        <div class="divider my-0 text-xs text-base-content/40">
-          Public links
-          <span class="badge badge-ghost badge-xs">{{ share_links|length }}</span>
-        </div>
+    {% endif %}
 
-        <div class="space-y-2">
+    {% if is_owner %}
+      <!-- Share Links -->
+      <div class="divider my-0 text-xs text-base-content/40">
+        Public links
+        {% if share_links %}
+          <span class="badge badge-ghost badge-xs">{{ share_links|length }}</span>
+        {% endif %}
+      </div>
+
+      <div class="space-y-2">
+        {% if share_links %}
           {% for link in share_links %}
             <div class="p-2 rounded-lg bg-base-200/50 text-sm">
               <div class="flex items-center gap-2 mb-1">
                 <i data-lucide="link" class="w-3.5 h-3.5 text-primary flex-shrink-0"></i>
                 <span class="font-mono text-xs truncate flex-1">…{{ link.token|truncatechars:24 }}</span>
+                {% if file.node_type == "folder" %}
+                  <span class="badge badge-ghost badge-xs">{{ link.get_mode_display }}</span>
+                {% endif %}
                 {% if link.has_password %}
                   <i
                     data-lucide="lock"
@@ -244,18 +252,18 @@ Context:
               </div>
             </div>
           {% endfor %}
-
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs gap-1"
-            onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
-          >
-            <i data-lucide="settings" class="w-3 h-3"></i>
-            Manage links
-          </button>
-        </div>
-      {% endif %}
-
+        {% else %}
+          <p class="text-sm text-base-content/40">No public links</p>
+        {% endif %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs gap-1"
+          onclick="window.dispatchEvent(new CustomEvent('open-share-modal', { detail: { uuid: '{{ file.uuid }}', name: '{{ file.name|escapejs }}', nodeType: '{{ file.node_type }}' } }))"
+        >
+          <i data-lucide="settings" class="w-3 h-3"></i>
+          Manage links
+        </button>
+      </div>
     {% endif %}
 
     <!-- Comments -->

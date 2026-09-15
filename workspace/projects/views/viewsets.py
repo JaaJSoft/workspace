@@ -28,6 +28,7 @@ from ..models import (
     TaskAttachment,
     TaskComment,
     TaskEvent,
+    TaskFileLink,
     TaskLink,
     TaskStatus,
 )
@@ -49,6 +50,7 @@ from ..serializers import (
     TaskAttachmentSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
+    TaskFileLinkCreateSerializer,
     TaskLinkCreateSerializer,
     TaskMoveSerializer,
     TaskReorderSerializer,
@@ -69,6 +71,7 @@ from ..services.conversion import convert_project_type
 from ..services.epics import epics_with_progress
 from ..services.estimates import format_estimate
 from ..services.events import record_task_event
+from ..services.file_links import file_links_for_task, link_files, unlink_file
 from ..services.links import create_link, delete_link, links_for_task
 from ..services.members import (
     ProjectRuleError,
@@ -1213,3 +1216,70 @@ class TaskAttachmentViewSet(ProjectContextMixin, viewsets.GenericViewSet):
             inline_filename=attachment.original_name,
             cache_control="private, max-age=604800, immutable",
         )
+
+
+@extend_schema(tags=["Projects - Tasks"])
+class TaskFileLinkViewSet(ProjectContextMixin, viewsets.GenericViewSet):
+    """Workspace files linked to one task: list, link, unlink.
+
+    Linking shares the file with the project, so the list needs no
+    per-viewer filtering: every member can open every linked file.
+    """
+
+    serializer_class = TaskFileLinkCreateSerializer
+    lookup_field = "uuid"
+    pagination_class = None
+    # Schema generation only; list/destroy build their own querysets.
+    queryset = TaskFileLink.objects.none()
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        try:
+            self.task = self.project.tasks.select_related("project").get(
+                uuid=kwargs["task_uuid"]
+            )
+        except Task.DoesNotExist:
+            raise Http404 from None
+
+    def list(self, request, *args, **kwargs):
+        return Response({"files": file_links_for_task(self.task)})
+
+    def create(self, request, *args, **kwargs):
+        self._require_writable()
+        serializer = TaskFileLinkCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        files = FileService.resolve_accessible_files(
+            request.user, serializer.validated_data["file_uuids"]
+        )
+        if files is None:
+            return Response(
+                {"detail": "One or more files not found or not accessible."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            link_files(
+                request.user,
+                self.task,
+                files,
+                permission=serializer.validated_data["permission"],
+            )
+        except ProjectRuleError as exc:
+            return _rule_error_response(exc)
+        return Response(
+            {"files": file_links_for_task(self.task)},
+            status=status.HTTP_201_CREATED,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        self._require_writable()
+        link = (
+            self.task.file_links.select_related(
+                "task", "share__file", "share__shared_with_project"
+            )
+            .filter(uuid=kwargs["uuid"])
+            .first()
+        )
+        if link is None:
+            raise Http404
+        unlink_file(link, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)

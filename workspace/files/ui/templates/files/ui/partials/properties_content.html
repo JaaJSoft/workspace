@@ -160,7 +160,16 @@ Context:
                 <li
                   class="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
                 >
-                  {% if share.shared_with_group_id %}
+                  {% if share.shared_with_project_id %}
+                    <span class="flex-1 flex items-center gap-2 min-w-0">
+                      <span
+                        class="w-6 h-6 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                      >
+                        <i data-lucide="square-kanban" class="w-3.5 h-3.5 opacity-70"></i>
+                      </span>
+                      <span class="text-sm font-medium truncate">{{ share.shared_with_project.name }}</span>
+                    </span>
+                  {% elif share.shared_with_group_id %}
                     <span class="flex-1 flex items-center gap-2 min-w-0">
                       <span
                         class="w-6 h-6 rounded-full bg-base-300 flex items-center justify-center shrink-0"

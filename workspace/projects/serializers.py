@@ -605,3 +605,14 @@ class TaskAttachmentCreateSerializer(serializers.Serializer):
         required=False,
         default=list,
     )
+
+
+class TaskFileLinkCreateSerializer(serializers.Serializer):
+    file_uuids = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=False, max_length=50
+    )
+    # Permission of the project share created for a file not yet shared
+    # with the project; an existing share keeps its own.
+    permission = serializers.ChoiceField(
+        choices=[("ro", "Read only"), ("rw", "Read & write")], default="ro"
+    )

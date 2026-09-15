@@ -521,7 +521,7 @@ def properties(request, uuid):
     if is_owner and file_obj.node_type == File.NodeType.FILE:
         shares = list(
             FileShare.objects.filter(file=file_obj)
-            .select_related("shared_with", "shared_with_group")
+            .select_related("shared_with", "shared_with_group", "shared_with_project")
             .order_by("created_at")
         )
 

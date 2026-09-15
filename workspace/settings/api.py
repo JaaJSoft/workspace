@@ -45,6 +45,11 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        # Browser-posted Content-Security-Policy reports. A page stuck in a
+        # violation loop reports on every attempt; the limit keeps one address
+        # from turning the log into noise. Behind a reverse proxy, NUM_PROXIES
+        # must be set or every browser shares this one bucket.
+        "core.csp_report.ip": "30/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

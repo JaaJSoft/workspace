@@ -11,6 +11,8 @@ attribute or a CDN tag added to the navbar tomorrow lands here as a blank
 banner - and this test names the offender instead.
 """
 
+import time
+
 from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -30,6 +32,15 @@ document.addEventListener('securitypolicyviolation', (e) => {
     source: e.sourceFile || '',
   });
 });
+"""
+
+# An external image is the smallest violation that needs no network: img-src
+# refuses it before any request leaves the browser. The query string must not
+# survive into the log.
+PROVOKE_VIOLATION = """
+const img = document.createElement('img');
+img.src = 'https://blocked.example/pixel.png?leak=1';
+document.body.appendChild(img);
 """
 
 
@@ -72,6 +83,30 @@ class VaultCspEnforcementTests(PlaywrightTestCase):
             user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
         )
         self._assert_clean("/vault")
+
+    def test_a_refusal_reaches_the_report_endpoint(self):
+        """The header and the endpoint are each tested on their own; only a
+        browser proves they meet. It also proves the request survives what a
+        real one carries - the signed-in page's cookies, and no CSRF token."""
+        with self.assertLogs("workspace.core.csp_report", "WARNING") as logs:
+            self.page.goto(f"{self.live_server_url}/vault/onboarding")
+            self.page.wait_for_load_state("networkidle")
+            self.page.evaluate(PROVOKE_VIOLATION)
+            # The report is posted by the browser on its own schedule and
+            # handled on the live server's thread.
+            deadline = time.monotonic() + 10
+            while not logs.records and time.monotonic() < deadline:
+                time.sleep(0.1)
+
+        lines = [record.getMessage() for record in logs.records]
+        self.assertTrue(
+            any(
+                "img-src" in line and "https://blocked.example/pixel.png" in line
+                for line in lines
+            ),
+            lines,
+        )
+        self.assertFalse([line for line in lines if "leak=1" in line], lines)
 
     def test_the_shared_navbar_is_on_the_page(self):
         """The whole point of the layout change: the module is not a walled

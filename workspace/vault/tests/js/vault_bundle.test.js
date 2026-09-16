@@ -90,6 +90,14 @@ test('the PDF generator and the strength estimator stay off the main bundle', ()
   assert.doesNotMatch(src, /jspdf/i, 'the PDF generator leaked into the main bundle');
 });
 
+test('the strength estimator stays off the on-demand bundle too', () => {
+  // It lives in the shared password-strength bundle under common, which the
+  // account password form fetches as well. Bundling it here again would ship
+  // zxcvbn twice to the onboarding page and let the two copies drift.
+  const src = fs.readFileSync(ONBOARDING, 'utf8');
+  assert.doesNotMatch(src, /zxcvbn/i, 'the strength estimator is bundled twice');
+});
+
 test('randomBytes names an insecure context, which is what a browser produces', () => {
   // The realistic shape: getRandomValues is NOT restricted to secure contexts,
   // so on a plain-HTTP origin it works and only crypto.subtle is missing. A

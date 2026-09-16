@@ -1,16 +1,8 @@
 // Second bundle, loaded on demand. Everything here serves onboarding and
 // password rotation only; none of it may ever land on the unlock path, where
-// the main bundle has a 75 KB gzipped budget.
-import { ZxcvbnFactory } from '@zxcvbn-ts/core';
-import * as common from '@zxcvbn-ts/language-common';
+// the main bundle has a 75 KB gzipped budget. The strength estimator those
+// screens also need is the shared password-strength bundle under common.
 import { jsPDF } from 'jspdf';
-
-const zxcvbn = new ZxcvbnFactory({ dictionary: common.dictionary, graphs: common.adjacencyGraphs });
-
-export async function estimateStrength(password) {
-  const result = await zxcvbn.checkAsync(password);
-  return { score: result.score, feedback: result.feedback };
-}
 
 // What the kit prints, as text. Exported so the contents can be asserted
 // without parsing a PDF - and used by the builder below, so the two cannot
@@ -55,4 +47,4 @@ export function buildEmergencyKitPdf(kit) {
   return doc.output('blob');
 }
 
-window.vaultOnboardingTools = { estimateStrength, emergencyKitFields, buildEmergencyKitPdf };
+window.vaultOnboardingTools = { emergencyKitFields, buildEmergencyKitPdf };

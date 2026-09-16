@@ -18,8 +18,8 @@ uv run celery -A workspace beat -l info
 
 # Vendored frontend assets - Alpine bundle, Lucide icons, Milkdown editor
 # bundle + theme CSS, Monaco editor + workers + CSS, emoji picker + data,
-# force-graph, FullCalendar and Cropper builds, vault crypto bundles, Tailwind
-# stylesheet
+# force-graph, FullCalendar and Cropper builds, vault crypto bundles, password
+# strength estimator, Tailwind stylesheet
 # (rebuild after bumping any dependency in scripts/frontend/package.json;
 # templates load the built artifacts, never a CDN - core.tests.test_asset_origins
 # fails on any CDN host in a template)

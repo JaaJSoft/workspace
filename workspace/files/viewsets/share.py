@@ -284,9 +284,10 @@ class ShareMixin:
     @extend_schema(
         summary="List shares for a file",
         description=(
-            "Return the users and groups this file is shared with. Each entry "
-            "carries a type discriminator: user entries have username, "
-            "first_name and last_name; group entries have name."
+            "Return the users, groups and projects this file is shared with. "
+            "Each entry carries a type discriminator: user entries have an "
+            "integer id, username, first_name and last_name; group entries an "
+            "integer id and name; project entries a uuid id and name."
         ),
         responses={
             200: OpenApiResponse(description="List of shares."),

@@ -62,9 +62,9 @@ def link_files(user, task, files, *, permission=FileShare.Permission.READ_ONLY):
                 .filter(file=file_obj, shared_with_project=project)
                 .first()
             )
-            owns_share = share is None
-            if owns_share:
-                share, _, _ = share_file(
+            owns_share = False
+            if share is None:
+                share, owns_share, _ = share_file(
                     file_obj,
                     target_project=project,
                     permission=permission,

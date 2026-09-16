@@ -13,7 +13,7 @@ from workspace.projects.services.file_links import (
     unlink_file,
 )
 from workspace.projects.services.members import ProjectRuleError
-from workspace.projects.services.tasks import create_task
+from workspace.projects.services.tasks import create_task, delete_task
 
 from .base import ProjectTestMixin
 
@@ -163,6 +163,24 @@ class UnlinkFileTests(ProjectTestMixin, TestCase):
         self.assertTrue(second.owns_share)
         unlink_file(second, actor=self.admin)
         self.assertFalse(FileShare.objects.exists())
+
+    def test_deleting_the_task_revokes_the_share_its_link_created(self):
+        delete_task(self.task, actor=self.admin)
+        self.assertFalse(TaskFileLink.objects.exists())
+        self.assertFalse(FileShare.objects.exists())
+
+    def test_deleting_the_task_keeps_a_share_that_predates_the_link(self):
+        other = make_file(self.admin, "brief.txt")
+        share_file(
+            other, target_project=self.project, permission="ro", acting_user=self.admin
+        )
+        link_files(self.admin, self.task, [other])
+        delete_task(self.task, actor=self.admin)
+        self.assertTrue(
+            FileShare.objects.filter(
+                file=other, shared_with_project=self.project
+            ).exists()
+        )
 
     def test_revoking_the_share_drops_the_link(self):
         FileShare.objects.get().delete()

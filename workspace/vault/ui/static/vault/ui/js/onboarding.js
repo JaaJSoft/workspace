@@ -109,10 +109,10 @@ window.vaultOnboarding = function vaultOnboarding() {
         return;
       }
       try {
-        const result = await window.vaultOnboardingTools.estimateStrength(this.password);
+        const result = await window.passwordStrengthTools.estimateStrength(this.password);
         if (generation !== this.generation) return;
         this.score = result.score;
-        this.feedback = (result.feedback && result.feedback.warning) || '';
+        this.feedback = result.warning || '';
       } catch (err) {
         // The floor stays closed - an unmeasured password is not a strong one
         // - but silence would leave a button that refuses to enable and no

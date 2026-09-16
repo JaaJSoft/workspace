@@ -105,6 +105,14 @@
                 ></i>
               </button>
             </label>
+            {% comment %}
+              The ticks below only know two of the server's rules, so on their
+              own they let "password123" look nearly done. The meter says what
+              the ticks cannot; it blocks nothing, the validators still decide.
+              The tab condition keeps the estimator off the page until the
+              section is opened.
+            {% endcomment %}
+            {% include "ui/partials/password_strength.html" with password_expr="newPassword" visible_expr="tab === 'security'" %}
             <!-- Password rules (inline) -->
             <template x-if="rules.length > 0">
               <ul class="mt-2 space-y-0.5 text-xs">

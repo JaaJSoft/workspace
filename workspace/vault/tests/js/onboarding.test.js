@@ -531,7 +531,7 @@ test('a strength estimate that throws says so instead of hanging', async () => {
   // The button is gated on the score, so a rejected estimate left it disabled
   // for good with nothing on screen to explain it.
   const app = component({
-    vaultOnboardingTools: {
+    passwordStrengthTools: {
       estimateStrength: async () => {
         throw new Error('zxcvbn dictionaries missing');
       },

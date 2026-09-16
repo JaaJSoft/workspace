@@ -136,13 +136,17 @@ one fewer request at the most sensitive moment of the flow.
 
 The PDF generator and the password strength estimator would each break that
 budget on their own. They serve onboarding and password rotation only, never
-unlocking and never the entry pages, so they ship as a second bundle,
-`vault-onboarding.js`, for the screens that need them to load on demand. The
-integrity test asserts they have not leaked back into the main one.
+unlocking and never the entry pages. The PDF generator ships as a second
+bundle, `vault-onboarding.js`, for the screens that need it to load on demand.
+The strength estimator is not the vault's alone - the account password form
+shows the same meter - so it lives in the shared `password-strength.js` bundle
+under `common`, which the onboarding page loads next to its own. The integrity
+test asserts neither has leaked back into the main bundle, and that zxcvbn is
+not bundled a second time into the onboarding one.
 
-Both artifacts are built by the shared frontend project and committed to
+All three artifacts are built by the shared frontend project and committed to
 statics:
 
 ```bash
-cd scripts/frontend && npm run build:vault && npm run build:vault-onboarding
+cd scripts/frontend && npm run build:vault && npm run build:vault-onboarding && npm run build:password-strength
 ```

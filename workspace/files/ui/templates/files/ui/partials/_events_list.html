@@ -74,17 +74,17 @@ Loaded by:
                   restored this from the trash
                 {% elif event.action == "shared" %}
                   shared with
-                  {% if event.metadata.shared_with_group_name %}the group{% endif %}
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>
+                  {% if event.metadata.shared_with_project_name %}the project{% elif event.metadata.shared_with_group_name %}the group{% endif %}
+                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>
                   {% if event.metadata.permission == "rw" %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
                 {% elif event.action == "share_permission_changed" %}
                   changed
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s
+                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s
                   permission
                   {% if event.metadata.new_permission == "rw" %}<span class="badge badge-xs badge-primary">rw</span>{% else %}<span class="badge badge-xs badge-ghost">r</span>{% endif %}
                 {% elif event.action == "unshared" %}
                   revoked
-                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s access
+                  <span class="text-base-content/60">{% firstof event.metadata.shared_with_project_name event.metadata.shared_with_group_name event.metadata.shared_with_username 'a user' %}</span>'s access
                 {% elif event.action == "link_created" %}
                   created a public link
                   {% if event.metadata.has_password %}

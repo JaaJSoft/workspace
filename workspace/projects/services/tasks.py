@@ -229,9 +229,15 @@ def delete_task(task, actor=None):
     """Delete *task*, leaving a DELETED event whose title snapshot survives.
 
     The event is written first: the task FK on the event is then nulled by
-    the delete (SET_NULL), which is exactly the wanted end state.
+    the delete (SET_NULL), which is exactly the wanted end state. File links
+    are unlinked one by one rather than left to the cascade, so a project
+    share a link created is revoked or handed over instead of orphaned.
     """
+    from .file_links import unlink_file
+
     with transaction.atomic():
+        for link in task.file_links.select_related("task", "share"):
+            unlink_file(link, actor=actor)
         record_task_event(task, type=TaskEvent.Type.DELETED, actor=actor)
         task.delete()
 

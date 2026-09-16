@@ -51,17 +51,31 @@ class FileShareAdmin(ModelAdmin):
         "shared_by",
         "shared_with",
         "shared_with_group",
+        "shared_with_project",
         "created_at",
     )
     list_filter = ("created_at",)
-    list_select_related = ("file", "shared_by", "shared_with", "shared_with_group")
+    list_select_related = (
+        "file",
+        "shared_by",
+        "shared_with",
+        "shared_with_group",
+        "shared_with_project",
+    )
     search_fields = (
         "file__name",
         "shared_by__username",
         "shared_with__username",
         "shared_with_group__name",
+        "shared_with_project__name",
     )
-    autocomplete_fields = ("file", "shared_by", "shared_with", "shared_with_group")
+    autocomplete_fields = (
+        "file",
+        "shared_by",
+        "shared_with",
+        "shared_with_group",
+        "shared_with_project",
+    )
 
 
 @admin.register(File)

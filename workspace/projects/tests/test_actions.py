@@ -83,6 +83,7 @@ class TaskActionTests(ProjectTestMixin, TestCase):
                 "set_epic",
                 "attach",
                 "link",
+                "link_file",
                 "comment",
                 "delete",
             },

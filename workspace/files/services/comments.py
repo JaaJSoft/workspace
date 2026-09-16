@@ -14,9 +14,11 @@ def mentionable_users(file_obj):
     """Users who can see *file_obj*: owner, group members, share targets.
 
     Mirrors the access branches of ``FileService`` (owned / group folder /
-    shared with a user / shared with a group); keep the two in sync. Sorted
-    by username for stable autocomplete lists.
+    shared with a user / shared with a group / shared with a project); keep
+    the two in sync. Sorted by username for stable autocomplete lists.
     """
+    from workspace.projects.queries import project_users
+
     users = {}
     if file_obj.owner.is_active:
         users[file_obj.owner_id] = file_obj.owner
@@ -34,6 +36,12 @@ def mentionable_users(file_obj):
         "shared_with"
     ):
         users.setdefault(share.shared_with_id, share.shared_with)
+    for share in file_obj.shares.filter(
+        shared_with_project__isnull=False
+    ).select_related("shared_with_project"):
+        for user in project_users(share.shared_with_project):
+            if user.is_active:
+                users.setdefault(user.pk, user)
     return sorted(users.values(), key=lambda u: u.username.lower())
 
 

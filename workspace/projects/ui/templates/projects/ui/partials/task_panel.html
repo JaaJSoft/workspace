@@ -17,6 +17,7 @@
   {{ panel_action_ids|json_script:"task-panel-actions" }}
   {{ panel_attachments|json_script:"task-panel-attachments" }}
   {{ panel_links|json_script:"task-panel-links" }}
+  {{ panel_file_links|json_script:"task-panel-file-links" }}
   {{ panel_watchers|json_script:"task-watchers-data" }}
 
   <div
@@ -644,6 +645,195 @@
               </div>
             </div>
           </div>
+        {% endif %}
+      </div>
+    </section>
+
+    <section>
+      <h3 class="mb-1">
+        <button
+          type="button"
+          class="flex w-full items-center gap-1.5 text-xs font-semibold uppercase text-base-content/50 hover:text-base-content/70"
+          :aria-expanded="sectionsOpen.fileLinks"
+          @click="toggleSection('fileLinks')"
+        >
+          <i
+            :data-lucide="sectionsOpen.fileLinks ? 'chevron-down' : 'chevron-right'"
+            class="w-3.5 h-3.5 shrink-0"
+          ></i>
+          <span>Linked files</span>
+          <span
+            class="font-mono normal-case"
+            x-show="fileLinks.length"
+            x-cloak
+            x-text="fileLinks.length"
+          ></span>
+        </button>
+      </h3>
+      <div x-show="sectionsOpen.fileLinks">
+        {% comment %}
+        Workspace files shared with the project and pinned here, not copies:
+        the row reads the file's current name, and a trashed one is struck
+        through rather than hidden.
+        {% endcomment %}
+        <ul class="flex flex-col gap-1 mb-2" x-show="fileLinks.length" x-cloak>
+          <template x-for="link in fileLinks" :key="link.uuid">
+            <li
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg border border-base-300 bg-base-200/50 text-sm"
+            >
+              <i
+                :data-lucide="link.type_icon || 'file'"
+                class="w-4 h-4 flex-shrink-0"
+                :class="link.type_color || 'text-base-content/60'"
+              ></i>
+              <button
+                type="button"
+                class="flex-1 min-w-0 text-left truncate hover:underline"
+                x-show="!link.in_trash"
+                x-text="link.name"
+                :title="link.name"
+                @click="openLinkedFile(link)"
+              ></button>
+              <span
+                class="flex-1 min-w-0 truncate text-base-content/50 line-through"
+                x-show="link.in_trash"
+                x-cloak
+                x-text="link.name"
+                :title="link.name"
+              ></span>
+              <i
+                x-show="link.in_trash"
+                x-cloak
+                data-lucide="trash-2"
+                class="w-3.5 h-3.5 flex-shrink-0 text-warning"
+                title="In trash"
+              ></i>
+              <i
+                x-show="!link.in_trash && link.permission === 'rw'"
+                x-cloak
+                data-lucide="pencil"
+                class="w-3.5 h-3.5 flex-shrink-0 text-base-content/40"
+                title="Members can edit"
+              ></i>
+              <span
+                class="text-xs text-base-content/50 flex-shrink-0"
+                x-text="formatFileSize(link.size)"
+              ></span>
+              <a
+                x-show="!link.in_trash"
+                :href="link.download_url"
+                download
+                class="btn btn-ghost btn-xs btn-square"
+                title="Download"
+              >
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              </a>
+              {% if "link_file" in panel_action_ids %}
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square text-error/70 hover:text-error"
+                  title="Unlink file"
+                  @click="unlinkFile(link)"
+                >
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              {% endif %}
+            </li>
+          </template>
+        </ul>
+        <p
+          class="text-sm text-base-content/50 italic mb-2"
+          x-show="!fileLinks.length"
+          x-cloak
+        >
+          No linked files.
+        </p>
+        {% if "link_file" in panel_action_ids %}
+          <button
+            type="button"
+            class="btn btn-outline btn-xs gap-1.5"
+            :disabled="fileLinkSaving"
+            @click="linkWorkspaceFiles()"
+          >
+            <i data-lucide="file-symlink" class="w-3.5 h-3.5"></i>
+            <span>Link file</span>
+          </button>
+          {# Second step after the workspace picker: linking shares the files #}
+          {# with the project, so the member picks the share permission here. #}
+          <dialog x-ref="linkFileDialog" class="modal" @close="cancelLinkFiles()">
+            <div class="modal-box max-w-sm">
+              <div class="flex items-start gap-3 mb-4">
+                <div class="bg-info/10 rounded-lg p-2 shrink-0">
+                  <i data-lucide="file-symlink" class="w-5 h-5 text-info"></i>
+                </div>
+                <div class="min-w-0">
+                  <h3 class="font-bold text-lg">Link to the task</h3>
+                  <p class="text-sm text-base-content/60">
+                    Linking shares the files with every member of the project.
+                    The share shows up on each file and can be revoked there.
+                  </p>
+                </div>
+              </div>
+              <ul class="flex flex-col gap-1 mb-4 max-h-40 overflow-y-auto text-sm">
+                <template x-for="f in pendingFileLinks" :key="f.uuid">
+                  <li class="flex items-center gap-2 min-w-0">
+                    <i data-lucide="file" class="w-4 h-4 shrink-0 text-base-content/60"></i>
+                    <span class="truncate" x-text="f.name" :title="f.name"></span>
+                  </li>
+                </template>
+              </ul>
+              <fieldset class="flex flex-col gap-2 mb-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    class="radio radio-sm"
+                    value="ro"
+                    x-model="fileLinkPermission"
+                  />
+                  <span class="text-sm">Members can view</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    class="radio radio-sm"
+                    value="rw"
+                    x-model="fileLinkPermission"
+                  />
+                  <span class="text-sm">Members can edit</span>
+                </label>
+              </fieldset>
+              <template x-if="fileLinkError">
+                <inline-alert type="error" class="mb-4">
+                <span x-text="fileLinkError"></span>
+                </inline-alert>
+              </template>
+              <div class="modal-action mt-0">
+                <button
+                  type="button"
+                  class="btn btn-sm btn-ghost"
+                  @click="$refs.linkFileDialog.close()"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  :disabled="fileLinkSaving"
+                  @click="confirmLinkFiles()"
+                >
+                  <span
+                    x-show="fileLinkSaving"
+                    x-cloak
+                    class="loading loading-spinner loading-xs"
+                  ></span>
+                  Link
+                </button>
+              </div>
+            </div>
+            <form method="dialog" class="modal-backdrop">
+              <button type="submit">close</button>
+            </form>
+          </dialog>
         {% endif %}
       </div>
     </section>

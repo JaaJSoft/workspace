@@ -1137,6 +1137,11 @@ function taskPanel() {
     _attachmentsUrl: '',
     _attachmentsSaving: false,
     links: [],
+    fileLinks: [],
+    fileLinkSaving: false,
+    pendingFileLinks: [],
+    fileLinkPermission: 'ro',
+    fileLinkError: '',
     linkRel: 'blocks',
     linkQuery: '',
     linkResults: [],
@@ -1162,6 +1167,8 @@ function taskPanel() {
         : [];
       const linksEl = document.getElementById('task-panel-links');
       this.links = linksEl ? JSON.parse(linksEl.textContent) : [];
+      const fileLinksEl = document.getElementById('task-panel-file-links');
+      this.fileLinks = fileLinksEl ? JSON.parse(fileLinksEl.textContent) : [];
       // members-data lives on the page shell, not in the swapped panel, so
       // it survives alpine-ajax panel reloads.
       const membersEl = document.getElementById('members-data');
@@ -1213,6 +1220,7 @@ function taskPanel() {
         description: !!(this.data.description || '').trim(),
         checklist: this.subtasks.length > 0,
         links: this.links.length > 0,
+        fileLinks: this.fileLinks.length > 0,
         attachments: this.attachments.length > 0,
         comments: this._commentCount > 0,
         activity: this._activityCount > 0,
@@ -1506,7 +1514,107 @@ function taskPanel() {
 
     openAttachment(att) {
       window.dispatchEvent(
-        new CustomEvent('open-task-attachment-viewer', { detail: att })
+        new CustomEvent('open-task-attachment-viewer', {
+          detail: {
+            name: att.name,
+            mime_type: att.mime_type,
+            download_url: att.download_url,
+            viewer_url: '/projects/view-attachment/' + att.uuid,
+          },
+        })
+      );
+    },
+
+    // ── Linked files ─────────────────────────────────────────
+    // Workspace files shared with the project and pinned on the task, no
+    // copy. Two steps: the workspace picker, then the share permission.
+    async linkWorkspaceFiles() {
+      if (!this.can('link_file') || this.fileLinkSaving) return;
+      const files = await AppDialog.filePicker({
+        title: 'Link from Workspace',
+        message: 'Select files to link to the task. Nothing is copied.',
+        okLabel: 'Continue',
+        okClass: 'btn-info',
+        icon: 'file-symlink',
+        iconClass: 'bg-info/10 text-info',
+        multiple: true,
+      });
+      if (!files || files.length === 0) return;
+      this.pendingFileLinks = files;
+      this.fileLinkPermission = 'ro';
+      this.fileLinkError = '';
+      this.$refs.linkFileDialog.showModal();
+    },
+
+    cancelLinkFiles() {
+      this.pendingFileLinks = [];
+      this.fileLinkError = '';
+    },
+
+    async confirmLinkFiles() {
+      if (!this.pendingFileLinks.length || this.fileLinkSaving) return;
+      this.fileLinkSaving = true;
+      this.fileLinkError = '';
+      try {
+        const resp = await fetch(this.data.file_links_url, {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({
+            file_uuids: this.pendingFileLinks.map((f) => f.uuid),
+            permission: this.fileLinkPermission,
+          }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          this.fileLinkError = data.detail || 'Could not link the files.';
+          return;
+        }
+        const data = await resp.json();
+        this.fileLinks = data.files;
+        this.$refs.linkFileDialog.close();
+      } catch (e) {
+        this.fileLinkError = 'Could not link the files.';
+      } finally {
+        this.fileLinkSaving = false;
+      }
+    },
+
+    async unlinkFile(link) {
+      if (!this.can('link_file')) return;
+      const confirmed = await AppDialog.confirm({
+        title: 'Unlink file',
+        message: `Remove "${link.name}" from this task? If no other task links it, the project stops seeing it.`,
+        okLabel: 'Unlink',
+        okClass: 'btn-error',
+        icon: 'unlink',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!confirmed) return;
+      try {
+        const resp = await fetch(`${this.data.file_links_url}/${link.uuid}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          credentials: 'same-origin',
+        });
+        if (!resp.ok && resp.status !== 404) throw new Error('unlink failed');
+        this.fileLinks = this.fileLinks.filter((l) => l.uuid !== link.uuid);
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not unlink the file.');
+      }
+    },
+
+    // Opens through the files viewer (/files/view/...), which re-checks the
+    // file permission itself, in the same modal the attachments use.
+    openLinkedFile(link) {
+      window.dispatchEvent(
+        new CustomEvent('open-task-attachment-viewer', {
+          detail: {
+            name: link.name,
+            mime_type: '',
+            download_url: link.download_url,
+            viewer_url: '/files/view/' + link.file_uuid,
+          },
+        })
       );
     },
 

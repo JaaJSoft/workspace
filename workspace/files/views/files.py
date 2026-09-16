@@ -833,6 +833,11 @@ class FileViewSet(
         shared_users = User.objects.filter(
             Q(received_shares__file=instance)
             | Q(groups__received_file_shares__file=instance)
+            | Q(
+                project_memberships__left_at__isnull=True,
+                project_memberships__project__received_file_shares__file=instance,
+            )
+            | Q(groups__projects__received_file_shares__file=instance)
         ).distinct()
         if shared_users.exists():
             recipients = list(shared_users)

@@ -176,9 +176,23 @@ window.shareModal = function shareModal() {
       this.pendingPermissionChanges = new Map(this.pendingPermissionChanges);
     },
 
-    // The request body naming a share target: { shared_with } or { group }.
+    // The request body naming a share target: { shared_with }, { group } or
+    // { project }.
     targetBody(type, id) {
-      return type === 'group' ? { group: id } : { shared_with: id };
+      if (type === 'group') return { group: id };
+      if (type === 'project') return { project: id };
+      return { shared_with: id };
+    },
+
+    // Display name and kind label of an entry, whatever its target type.
+    entryName(entry) {
+      return entry.type === 'user' ? entry.username : entry.name;
+    },
+
+    entrySubtitle(entry) {
+      if (entry.type === 'project') return 'Project';
+      if (entry.type === 'group') return 'Group';
+      return ((entry.first_name || '') + ' ' + (entry.last_name || '')).trim();
     },
 
     splitKey(key) {

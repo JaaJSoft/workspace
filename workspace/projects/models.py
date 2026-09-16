@@ -581,6 +581,51 @@ class TaskAttachment(models.Model):
         return f"{self.original_name} on {self.task_id}"
 
 
+class TaskFileLink(models.Model):
+    """A workspace file pinned on a task through its project share.
+
+    Unlike TaskAttachment, nothing is copied. The row points at the
+    ``FileShare`` addressing the task's project, not at the file: linking a
+    file shares it with the project, every member sees it, and revoking the
+    share (or deleting the file) takes the link with it.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name="file_links",
+    )
+    share = models.ForeignKey(
+        "files.FileShare",
+        on_delete=models.CASCADE,
+        related_name="task_links",
+    )
+    # True on the one link whose creation shared the file with the project;
+    # unlinking it revokes the share (or hands the flag to a surviving link).
+    # A share that predates every link is never owned and never revoked here.
+    owns_share = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "uuid"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=("task", "share"), name="unique_task_file_link"
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.share_id} on {self.task_id}"
+
+
 class TaskEvent(models.Model):
     class Type(models.TextChoices):
         CREATED = "created", "Created"
@@ -597,6 +642,8 @@ class TaskEvent(models.Model):
         DETACHED = "detached", "Detached"
         LINKED = "linked", "Linked"
         UNLINKED = "unlinked", "Unlinked"
+        FILE_LINKED = "file_linked", "File linked"
+        FILE_UNLINKED = "file_unlinked", "File unlinked"
 
     _ICONS = {
         Type.CREATED: "plus",
@@ -613,6 +660,8 @@ class TaskEvent(models.Model):
         Type.DETACHED: "paperclip",
         Type.LINKED: "link",
         Type.UNLINKED: "unlink",
+        Type.FILE_LINKED: "file-symlink",
+        Type.FILE_UNLINKED: "unlink",
     }
     _LABELS = {
         Type.CREATED: "Task created",
@@ -629,6 +678,8 @@ class TaskEvent(models.Model):
         Type.DETACHED: "File removed",
         Type.LINKED: "Link added",
         Type.UNLINKED: "Link removed",
+        Type.FILE_LINKED: "File linked",
+        Type.FILE_UNLINKED: "File unlinked",
     }
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -656,7 +707,7 @@ class TaskEvent(models.Model):
         blank=True,
         related_name="+",
     )
-    type = models.CharField(max_length=9, choices=Type.choices)
+    type = models.CharField(max_length=13, choices=Type.choices)
     # Status *names* snapshotted at write time: statuses are renamable and
     # deletable, a FK would rewrite history.
     from_status = models.CharField(max_length=100, blank=True, default="")

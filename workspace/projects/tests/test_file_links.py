@@ -1,5 +1,7 @@
 """Task-to-file links: sharing with the project, pinning, unlinking."""
 
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
@@ -104,6 +106,26 @@ class LinkFilesTests(ProjectTestMixin, TestCase):
         self.assertFalse(
             FileShare.objects.filter(shared_with_project=self.project).exists()
         )
+
+    def test_ownership_follows_what_the_share_service_created(self):
+        # A share landing between the pre-check and share_file (a concurrent
+        # link on SQLite, where the row lock is a no-op) must not be owned:
+        # the service reports it as not created.
+        share = FileShare.objects.create(
+            file=self.doc, shared_by=self.admin, shared_with_project=self.project
+        )
+        with (
+            patch(
+                "workspace.projects.services.file_links.FileShare.objects.select_for_update"
+            ) as locked,
+            patch(
+                "workspace.projects.services.file_links.share_file",
+                return_value=(share, False, False),
+            ),
+        ):
+            locked.return_value.filter.return_value.first.return_value = None
+            (link,) = link_files(self.admin, self.task, [self.doc])
+        self.assertFalse(link.owns_share)
 
     def test_a_write_share_is_not_enough_to_link(self):
         # Sharing on needs the files "share" action, which a share never grants.

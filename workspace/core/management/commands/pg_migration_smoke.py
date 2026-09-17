@@ -101,13 +101,14 @@ class Command(BaseCommand):
             body_text=SEED_MAIL_BODY,
         )
 
-        from workspace.chat.models import Conversation, ConversationMember, Message
+        from workspace.chat.models import Conversation, ConversationMember
+        from workspace.chat.services.posting import post_message
 
         conv = Conversation.objects.create(
             kind="group", title="Smoke Chat", created_by=alice
         )
         ConversationMember.objects.create(conversation=conv, user=alice)
-        Message.objects.create(conversation=conv, author=alice, body=SEED_CHAT_BODY)
+        post_message(conv, alice, SEED_CHAT_BODY)
 
         from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
 

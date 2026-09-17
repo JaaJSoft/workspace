@@ -21,6 +21,7 @@ from workspace.chat.models import (
     Message,
     MessageInteraction,
 )
+from workspace.chat.services.posting import post_message
 from workspace.notifications.models import Notification
 
 User = get_user_model()
@@ -69,6 +70,74 @@ class MessagePostingMixin:
                 "recipient_id", flat=True
             )
         )
+
+
+@patch("workspace.chat.services.notifications.notify_sse")
+@patch("workspace.notifications.tasks.send_push_notification.delay")
+class PostMessageTests(MessagePostingMixin, TestCase):
+    """workspace.chat.services.posting.post_message
+
+    The helper every entry point goes through: it owns the row as well as
+    the side effects, so a caller cannot create one without the other.
+    """
+
+    def test_creates_the_row_with_the_given_fields(self, _push, _sse):
+        root = Message.objects.create(
+            conversation=self.conv, author=self.alice, body="root"
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            message = post_message(
+                self.conv,
+                self.author,
+                "hello",
+                body_html="<p>hello</p>",
+                reply_to=root,
+                thread_root=root,
+            )
+
+        message.refresh_from_db()
+        self.assertEqual(message.conversation_id, self.conv.pk)
+        self.assertEqual(message.author_id, self.author.id)
+        self.assertEqual(message.body, "hello")
+        self.assertEqual(message.body_html, "<p>hello</p>")
+        self.assertEqual(message.reply_to_id, root.pk)
+        self.assertEqual(message.thread_root_id, root.pk)
+        self.assertEqual(message.kind, Message.Kind.USER)
+
+    def test_delivers_without_an_enclosing_transaction(self, mock_push, mock_sse):
+        before = self._updated_at()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            post_message(self.conv, self.author, "hello")
+
+        self.assertEqual(self._unread(self.alice), 1)
+        self.assertEqual(self._unread(self.author), 0)
+        self.assertGreater(self._updated_at(), before)
+        self.assertIn(self.alice.id, self._sse_targets(mock_sse))
+        self.assertEqual(self._notified(), {self.alice.id, self.bob.id})
+        self.assertEqual(mock_push.call_count, 2)
+
+    def test_opting_out_creates_the_row_and_nothing_else(self, mock_push, mock_sse):
+        before = self._updated_at()
+
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            message = post_message(
+                self.conv,
+                self.author,
+                "Call started",
+                deliver=False,
+                kind=Message.Kind.SYSTEM,
+            )
+
+        self.assertEqual(message.kind, Message.Kind.SYSTEM)
+        self.assertEqual(callbacks, [])
+        for user in (self.author, self.alice, self.bob, self.bot):
+            self.assertEqual(self._unread(user), 0)
+        self.assertEqual(self._updated_at(), before)
+        mock_sse.assert_not_called()
+        self.assertEqual(self._notified(), set())
+        mock_push.assert_not_called()
 
 
 @patch("workspace.chat.services.notifications.notify_sse")
@@ -273,3 +342,52 @@ class InteractionAnswerTests(MessagePostingMixin, APITestCase):
 
         self.assertEqual(self._notified(), {self.alice.id, self.bob.id})
         self.assertEqual(mock_push.call_count, 2)
+
+
+@patch("workspace.notifications.tasks.send_push_notification.delay")
+class CallSystemMessageTests(MessagePostingMixin, TestCase):
+    """workspace.chat.services.calls.start_or_join_call
+
+    Starting a call posts a system message, and that message deliberately
+    skips most of the set: nobody's unread counter moves and nobody is
+    notified. Its live delivery is the call's own SSE event, which every
+    member receives - the starter included, unlike a regular message.
+    """
+
+    def _start(self):
+        from workspace.chat.services.calls import start_or_join_call
+
+        with self.captureOnCommitCallbacks(execute=True):
+            session, _, created = start_or_join_call(self.author, self.conv.uuid)
+        self.assertTrue(created)
+        return session
+
+    def test_posts_a_system_message(self, _push):
+        session = self._start()
+
+        message = session.system_message
+        self.assertEqual(message.kind, Message.Kind.SYSTEM)
+        self.assertEqual(message.conversation_id, self.conv.pk)
+        self.assertEqual(message.author_id, self.author.id)
+        self.assertEqual(message.tool_data["session_id"], str(session.uuid))
+
+    def test_moves_no_unread_counter(self, _push):
+        self._start()
+
+        for user in (self.author, self.alice, self.bob, self.bot):
+            self.assertEqual(self._unread(user), 0)
+
+    def test_notifies_nobody(self, mock_push):
+        self._start()
+
+        self.assertEqual(self._notified(), set())
+        mock_push.assert_not_called()
+
+    def test_announces_the_call_to_every_member(self, _push):
+        from workspace.chat.services.call_signaling import drain_events
+
+        self._start()
+
+        for user in (self.author, self.alice, self.bob, self.bot):
+            events = [e["event"] for e in drain_events(user.id)]
+            self.assertIn("call_started", events, user.username)

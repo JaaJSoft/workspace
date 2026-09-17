@@ -159,7 +159,8 @@ def _active_session_for_update(conversation_id):
 
 @transaction.atomic
 def _start_or_join_once(user, conversation_id):
-    from ..models import CallParticipant, CallSession, Message
+    from ..models import CallParticipant, CallSession, Conversation, Message
+    from .posting import post_message
 
     session = _active_session_for_update(conversation_id)
     created_session = False
@@ -167,11 +168,14 @@ def _start_or_join_once(user, conversation_id):
         session = CallSession.objects.create(
             conversation_id=conversation_id, started_by=user
         )
-        msg = Message.objects.create(
-            conversation_id=conversation_id,
-            author=user,
+        # The call_started broadcast below is the message's live delivery;
+        # a call moves no unread counter and rings no bell.
+        msg = post_message(
+            Conversation.objects.get(pk=conversation_id),
+            user,
+            _render_system_call_body("active"),
+            deliver=False,
             kind=Message.Kind.SYSTEM,
-            body=_render_system_call_body("active"),
             tool_data={
                 "type": "call",
                 "session_id": str(session.uuid),

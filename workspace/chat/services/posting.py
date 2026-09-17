@@ -1,10 +1,12 @@
-"""The side effects a message owes its conversation once it exists.
+"""Posting a message: the row, and the side effects it owes its conversation.
 
 A posted message is more than its row: the other members' unread counters
 move, the conversation rises in the list, open tabs are told to refresh, and
-the bell and push pipeline runs. Every entry point used to wire that set by
-hand, and each one that got it wrong got it wrong silently — the author's own
-client rendered fine either way.
+the bell and push pipeline runs. Every entry point used to create the row and
+wire that set by hand, and each one that got it wrong got it wrong silently —
+the author's own client rendered fine either way. ``post_message`` is the one
+way to create a message, so the correct path is also the shortest one;
+``chat.tests.test_message_creation_sites`` refuses any other.
 """
 
 from django.db import transaction
@@ -53,7 +55,48 @@ def _thread_delivery(message, author, mentioned_user_ids):
     return recipient_ids
 
 
-def deliver_message(
+def post_message(
+    conversation,
+    author,
+    body,
+    *,
+    mentioned_user_ids=None,
+    mention_everyone=False,
+    deliver=True,
+    **fields,
+):
+    """Create *author*'s message in *conversation* and deliver it.
+
+    *fields* are the remaining ``Message`` columns (``body_html``,
+    ``reply_to``, ``thread_root``, ``tool_data``, ``kind``...). Rows that
+    depend on the message - attachments, an interaction - are created by the
+    caller afterwards, inside the same transaction: the fan-out only runs at
+    commit, so nothing observes the message before they exist.
+
+    ``deliver=False`` is for a message that carries its own live channel and
+    owes the conversation nothing else - today only the call system message,
+    announced by the call's SSE event with no unread bump and no notification.
+    Every other message is delivered; the flag is not a shortcut for a caller
+    that would rather wire the side effects itself.
+    """
+    with transaction.atomic():
+        message = Message.objects.create(
+            conversation=conversation,
+            author=author,
+            body=body,
+            **fields,
+        )
+        if deliver:
+            _deliver_message(
+                conversation,
+                message,
+                mentioned_user_ids=mentioned_user_ids,
+                mention_everyone=mention_everyone,
+            )
+    return message
+
+
+def _deliver_message(
     conversation,
     message,
     *,
@@ -62,9 +105,9 @@ def deliver_message(
 ):
     """Apply every side effect of *message* landing in *conversation*.
 
-    Call this from inside the transaction that created the message. The
-    counters then land with the row, and the fan-out is deferred to commit so
-    no client is ever told about a message it cannot read yet.
+    Runs inside the transaction that created the message. The counters then
+    land with the row, and the fan-out is deferred to commit so no client is
+    ever told about a message it cannot read yet.
 
     Both callbacks are robust, and both halves need it: a non-robust callback
     that raises propagates out of Django's commit loop, which drops every

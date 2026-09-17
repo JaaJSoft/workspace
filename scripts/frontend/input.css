@@ -33,6 +33,32 @@
   .thin-scrollbar::-webkit-scrollbar-thumb:hover {
     background: oklch(var(--bc) / 0.25);
   }
+
+  /* Drag & drop move (files/ui/js/drag_move.js toggles both classes): the
+     folder under the pointer and the items being carried. A table row takes
+     the ring on its cells - box-shadow does not paint on the row itself. */
+  .file-drop-target {
+    @apply bg-primary/15 outline outline-2 -outline-offset-2 outline-primary rounded-lg;
+  }
+  tr.file-drop-target {
+    @apply outline-0 rounded-none;
+  }
+  /* A breadcrumb link: give the outline some air without moving the trail. */
+  .bc-sep a.file-drop-target {
+    @apply px-1.5 py-0.5 -mx-1.5 -my-0.5;
+  }
+  tr.file-drop-target > td {
+    @apply bg-primary/15 shadow-[inset_0_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+  }
+  tr.file-drop-target > td:first-child {
+    @apply shadow-[inset_2px_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+  }
+  tr.file-drop-target > td:last-child {
+    @apply shadow-[inset_-2px_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+  }
+  .file-drag-source {
+    @apply opacity-40;
+  }
 }
 
 /* Toast slide animations. ui/js/toast.js assigns the enter one inline and

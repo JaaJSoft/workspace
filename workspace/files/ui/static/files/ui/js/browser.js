@@ -129,6 +129,11 @@ window.fileBrowser = function fileBrowser() {
         }
       });
 
+      // A drop on a folder, from the listing, the breadcrumbs or the sidebar
+      window.addEventListener('file-move-request', (e) => {
+        this.moveItemsTo(e.detail.items, e.detail.targetFolderId);
+      });
+
       // Listen for folder icon changes (from properties panel)
       window.addEventListener('folder-icons-changed', () => {
         this.refreshFolderBrowser();
@@ -467,14 +472,16 @@ window.fileBrowser = function fileBrowser() {
     // ('replace' | 'rename' | 'skip' | undefined = let the server reject).
     // Only the "ask" and "skip" preferences need to know about a collision
     // before the bytes go up; the other two are decided server-side.
-    async _decideNameCollisions(files, { replaceLabel = 'Replace the existing file' } = {}) {
+    async _decideNameCollisions(files, { replaceLabel = 'Replace the existing file', targetFolderId } = {}) {
       const mode = window.getFilePrefs().nameCollision || 'ask';
       const decisions = new Map();
       if (mode === 'replace' || mode === 'keep_both') {
         for (const file of files) decisions.set(file, mode === 'replace' ? 'replace' : 'rename');
         return decisions;
       }
-      const taken = await this._siblingFileNames();
+      const taken = await this._siblingFileNames(
+        targetFolderId === undefined ? this.currentFolder || null : targetFolderId
+      );
       for (const file of files) {
         if (!taken.has(file.name.toLowerCase())) continue;
         if (mode === 'skip') {
@@ -500,9 +507,9 @@ window.fileBrowser = function fileBrowser() {
       return decisions;
     },
 
-    async _siblingFileNames() {
+    async _siblingFileNames(folderId) {
       const params = new URLSearchParams({ node_type: 'file' });
-      if (this.currentFolder) params.set('parent', this.currentFolder);
+      if (folderId) params.set('parent', folderId);
       try {
         const response = await fetch(`/api/v1/files?${params}`, { headers: { Accept: 'application/json' } });
         if (!response.ok) return new Set();
@@ -1224,10 +1231,10 @@ window.fileBrowser = function fileBrowser() {
 
     _getItemsFromUuids(uuids) {
       return uuids.map(uuid => {
-        const row = document.querySelector(`tr[data-uuid="${uuid}"]`);
+        const row = document.querySelector(`[data-uuid="${uuid}"]`);
         return {
           uuid,
-          name: row?.dataset.name || '',
+          name: row?.dataset.displayName || '',
           nodeType: row?.dataset.nodeType || 'file'
         };
       });
@@ -1241,8 +1248,27 @@ window.fileBrowser = function fileBrowser() {
       }
 
       const isCopy = window.fileClipboard.isCopy();
-      const targetFolderId = this.currentFolder || null;
+      await this._transferItems(items, this.currentFolder || null, { isCopy });
 
+      // Only clear clipboard on cut (move), keep it for copy
+      if (!isCopy) {
+        window.fileClipboard.clear();
+      }
+    },
+
+    // A drop on a folder (listing, breadcrumb or sidebar entry) - see
+    // drag_move.js for the gesture, this is where the move happens.
+    async moveItemsTo(items, targetFolderId) {
+      if (!items || items.length === 0) return;
+      await this._transferItems(items, targetFolderId, { isCopy: false });
+      window.dispatchEvent(new CustomEvent('clear-file-selection'));
+    },
+
+    // Moves (or copies) every item into targetFolderId, resolving name
+    // collisions the way the user's preference says, and announces the
+    // outcome. Items carry {uuid, name, nodeType} and optionally the
+    // sourceFolder they were taken from.
+    async _transferItems(items, targetFolderId, { isCopy }) {
       // Only a file landing in another folder can collide with a sibling:
       // folders are never unique-checked, and a copy into its own folder is
       // just a duplicate the server suffixes on its own.
@@ -1253,6 +1279,7 @@ window.fileBrowser = function fileBrowser() {
         replaceLabel: isCopy
           ? 'Replace the existing file'
           : 'Replace the existing file (the moved one goes to the trash)',
+        targetFolderId,
       });
 
       const itemUuids = items.map(i => i.uuid);
@@ -1309,10 +1336,6 @@ window.fileBrowser = function fileBrowser() {
         window.AppAlert.success(summary);
       }
 
-      // Only clear clipboard on cut (move), keep it for copy
-      if (!isCopy) {
-        window.fileClipboard.clear();
-      }
       window.dispatchEvent(new CustomEvent('pinned-folders-changed'));
       this.refreshFolderBrowser();
       this._stopLoading(...itemUuids);

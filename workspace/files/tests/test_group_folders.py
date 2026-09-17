@@ -1029,3 +1029,36 @@ class FileNameSlashValidationTests(TestCase):
             node_type=File.NodeType.FOLDER,
         )
         self.assertEqual(f.name, "R&D (2026) — final")
+
+
+class BreadcrumbDropTargetTests(TestCase):
+    """Every folder crumb, and the root, is a drop target for the listing's
+    drag & drop move: the id rides a ``data-drop-folder`` attribute, empty
+    for the root."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+
+    def test_folder_crumbs_carry_their_uuid(self):
+        parent = File.objects.create(
+            owner=self.alice, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        child = File.objects.create(
+            owner=self.alice, name="2026", node_type=File.NodeType.FOLDER, parent=parent
+        )
+        crumbs = build_breadcrumbs(child, user=self.alice)
+        self.assertEqual(
+            [c.get("data", {}).get("drop-folder") for c in crumbs],
+            ["", str(parent.uuid), str(child.uuid)],
+        )
+        self.assertEqual(crumbs[-1]["data"]["drop-folder-name"], "2026")
+
+    def test_group_header_is_not_a_target(self):
+        group = Group.objects.create(name="Team")
+        self.alice.groups.add(group)
+        root = File.objects.create(
+            owner=self.alice, name="Team", node_type=File.NodeType.FOLDER, group=group
+        )
+        crumbs = build_breadcrumbs(root, user=self.alice)
+        self.assertNotIn("data", crumbs[0])
+        self.assertEqual(crumbs[1]["data"]["drop-folder"], str(root.uuid))

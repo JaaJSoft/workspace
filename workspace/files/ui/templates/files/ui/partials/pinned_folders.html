@@ -17,6 +17,8 @@ Context variables:
       class="list-none pinned-folder-item"
       draggable="true"
       data-pinned-uuid="{{ pin.folder.uuid }}"
+      data-drop-folder="{{ pin.folder.uuid }}"
+      data-drop-folder-name="{{ pin.folder.name }}"
       :class="[
       collapsed ? 'flex justify-center' : '',
       draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',

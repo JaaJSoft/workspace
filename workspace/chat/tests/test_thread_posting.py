@@ -285,7 +285,7 @@ class ThreadReplyDeletionAccountingTests(TestCase):
 
 
 class ThreadNotificationWiringTests(TestCase):
-    """deliver_message must hand the thread anchor to the notification."""
+    """post_message must hand the thread anchor to the notification."""
 
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="x")

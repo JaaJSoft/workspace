@@ -1,0 +1,242 @@
+{% comment %}
+Selection toolbar shared by the backlog and the all-tasks list: the bulk
+edits on the checked tasks. The including view wraps it in a `relative`
+row shown while `selected` (root projectBoard state) is non-empty, and
+may append its own controls after it (the backlog's send to board /
+sprint menus).
+
+Every control is gated on bulkCan(<action id>): the action ids every
+selected task offers with bulk support, answered by
+POST /api/v1/projects/actions for the whole selection. Nothing is offered
+until that answer lands, and the handlers check the same list again.
+
+The assignee and label popovers are positioned against the row rather
+than their trigger so they never overflow the viewport on a phone; they
+reuse the task form pickers, with an add/remove toggle because the
+selection's tasks carry different values and "put Alice on these" must
+not strip whoever else was on them.
+{% endcomment %}
+<span class="text-sm text-base-content/70 shrink-0 px-1">
+  <span x-text="selected.length"></span> selected
+</span>
+<button
+  type="button"
+  class="btn btn-ghost btn-sm px-2 sm:px-3"
+  title="Clear selection"
+  aria-label="Clear selection"
+  @click="clearSelection()"
+>
+  <i data-lucide="x" class="w-4 h-4 sm:hidden"></i>
+  <span class="hidden sm:inline">Clear</span>
+</button>
+<span class="w-px h-5 bg-base-300 mx-1 hidden sm:block" aria-hidden="true"></span>
+
+{# Assign / unassign #}
+<div
+  x-data="{ open: false, mode: 'add' }"
+  @click.outside="open = false"
+  @keydown.escape="if (open) { $event.stopPropagation(); open = false }"
+  @bulk-assignee-selected.window="bulkAssign($event.detail.user.id, mode === 'add'); open = false"
+>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm px-2 sm:px-3"
+    title="Assign or unassign"
+    aria-haspopup="true"
+    :aria-expanded="open"
+    :disabled="!bulkCan('assign')"
+    @click="open = !open"
+  >
+    <i data-lucide="user-plus" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">Assign</span>
+  </button>
+  <div
+    x-show="open"
+    x-cloak
+    class="absolute left-0 top-full mt-1 z-50 w-full max-w-xs bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 flex flex-col gap-2"
+  >
+    <div class="join w-full">
+      <button
+        type="button"
+        class="btn btn-xs join-item flex-1"
+        :class="mode === 'add' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        @click="mode = 'add'"
+      >
+        Assign
+      </button>
+      <button
+        type="button"
+        class="btn btn-xs join-item flex-1"
+        :class="mode === 'remove' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        @click="mode = 'remove'"
+      >
+        Unassign
+      </button>
+    </div>
+    {% include "users/ui/partials/user_selector.html" with on_select_event="bulk-assignee-selected" placeholder="Search members" local_source="members" icon="users" %}
+  </div>
+</div>
+
+{# Add / remove a label #}
+<div
+  x-data="{ open: false, mode: 'add' }"
+  @click.outside="open = false"
+  @keydown.escape="if (open) { $event.stopPropagation(); open = false }"
+  @bulk-label-selected.window="bulkLabel($event.detail.label.uuid, mode === 'add'); open = false"
+>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm px-2 sm:px-3"
+    title="Add or remove a label"
+    aria-haspopup="true"
+    :aria-expanded="open"
+    :disabled="!bulkCan('set_labels')"
+    @click="open = !open"
+  >
+    <i data-lucide="tag" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">Label</span>
+  </button>
+  <div
+    x-show="open"
+    x-cloak
+    class="absolute left-0 top-full mt-1 z-50 w-full max-w-xs bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 flex flex-col gap-2"
+  >
+    <div class="join w-full">
+      <button
+        type="button"
+        class="btn btn-xs join-item flex-1"
+        :class="mode === 'add' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        @click="mode = 'add'"
+      >
+        Add label
+      </button>
+      <button
+        type="button"
+        class="btn btn-xs join-item flex-1"
+        :class="mode === 'remove' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        @click="mode = 'remove'"
+      >
+        Remove label
+      </button>
+    </div>
+    {% include "projects/ui/partials/_label_selector.html" with on_select_event="bulk-label-selected" all_source="labels" selected_source="[]" placeholder="Search labels" %}
+  </div>
+</div>
+
+{# Priority #}
+<div class="dropdown">
+  <button
+    type="button"
+    tabindex="0"
+    class="btn btn-ghost btn-sm px-2 sm:px-3"
+    title="Set priority"
+    :disabled="!bulkCan('set_priority')"
+  >
+    <i data-lucide="flag" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">Priority</span>
+    <i data-lucide="chevron-down" class="w-4 h-4"></i>
+  </button>
+  <ul
+    tabindex="0"
+    class="dropdown-content menu z-50 mt-1 w-44 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-2"
+  >
+    <li>
+      <button
+        type="button"
+        @click="bulkPriority('urgent'); document.activeElement.blur()"
+      >
+        <i data-lucide="flame" class="w-4 h-4 text-error"></i>
+        Urgent
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        @click="bulkPriority('high'); document.activeElement.blur()"
+      >
+        <i data-lucide="arrow-up" class="w-4 h-4 text-warning"></i>
+        High
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        @click="bulkPriority('medium'); document.activeElement.blur()"
+      >
+        <i data-lucide="equal" class="w-4 h-4 text-info"></i>
+        Medium
+      </button>
+    </li>
+    <li>
+      <button
+        type="button"
+        @click="bulkPriority('low'); document.activeElement.blur()"
+      >
+        <i data-lucide="arrow-down" class="w-4 h-4 opacity-60"></i>
+        Low
+      </button>
+    </li>
+  </ul>
+</div>
+
+{# Due date #}
+<div
+  x-data="{ open: false, date: '' }"
+  @click.outside="open = false"
+  @keydown.escape="if (open) { $event.stopPropagation(); open = false }"
+>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm px-2 sm:px-3"
+    title="Set due date"
+    aria-haspopup="true"
+    :aria-expanded="open"
+    :disabled="!bulkCan('set_due')"
+    @click="open = !open"
+  >
+    <i data-lucide="calendar" class="w-4 h-4"></i>
+    <span class="hidden sm:inline">Due date</span>
+  </button>
+  <div
+    x-show="open"
+    x-cloak
+    class="absolute left-0 top-full mt-1 z-50 w-full max-w-xs bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 flex flex-col gap-2"
+  >
+    <input
+      type="date"
+      class="input input-sm input-bordered w-full"
+      aria-label="Due date"
+      x-model="date"
+      @keydown.enter.prevent="if (date) { bulkDueDate(date); open = false }"
+    />
+    <div class="flex items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-accent btn-sm flex-1"
+        :disabled="!date"
+        @click="bulkDueDate(date); open = false"
+      >
+        Apply
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        @click="bulkDueDate(null); open = false"
+      >
+        Clear due date
+      </button>
+    </div>
+  </div>
+</div>
+
+{# Delete #}
+<button
+  type="button"
+  class="btn btn-ghost btn-sm px-2 sm:px-3 text-error"
+  title="Delete the selected tasks"
+  :disabled="!bulkCan('delete')"
+  @click="bulkDeleteSelected()"
+>
+  <i data-lucide="trash-2" class="w-4 h-4"></i>
+  <span class="hidden sm:inline">Delete</span>
+</button>

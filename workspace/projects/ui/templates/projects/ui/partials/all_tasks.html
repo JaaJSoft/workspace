@@ -1,6 +1,18 @@
 <div id="all-tasks" class="w-full flex flex-col gap-3">
   {% include "projects/ui/partials/_task_filters.html" with show_status_filter=True %}
 
+  {% if writable %}
+    {# The selection row is the anchor of the toolbar's popovers (absolute, left-0), so it stays `relative`. #}
+    <div
+      class="relative flex flex-wrap items-center gap-1 rounded-box border border-base-300 bg-base-200/60 px-2 py-1.5"
+      x-show="selected.length"
+      x-cloak
+      data-bulk-toolbar
+    >
+      {% include "projects/ui/partials/_bulk_toolbar.html" %}
+    </div>
+  {% endif %}
+
   {# Filter changes swap this wrapper only (see applyFilters in board.js), so the filter bar above - and its open popover - keep their DOM. #}
   <div class="relative">
     <div
@@ -15,6 +27,15 @@
           <div
             class="flex items-center gap-3 px-3 py-2 border-b border-base-300 bg-base-200/60 text-xs font-medium uppercase tracking-wide text-base-content/60"
           >
+            {% if writable %}
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm shrink-0"
+                aria-label="Select all tasks"
+                :checked="allVisibleSelected()"
+                @change="toggleSelectAll()"
+              />
+            {% endif %}
             <span class="flex-1">Task</span>
             <span class="w-28 hidden sm:block shrink-0">Status</span>
             {% if project.estimate_unit %}
@@ -26,7 +47,7 @@
           </div>
           <ul class="divide-y divide-base-200 min-h-8">
             {% for task in all_tasks %}
-              {% include "projects/ui/partials/_backlog_row.html" with row_readonly=True show_status=True %}
+              {% include "projects/ui/partials/_backlog_row.html" with row_readonly=True show_status=True selectable=writable %}
             {% endfor %}
           </ul>
           {% if tasks_truncated %}

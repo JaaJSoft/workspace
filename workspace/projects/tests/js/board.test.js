@@ -315,7 +315,7 @@ test('toggleSelect adds then removes a uuid', () => {
 function backlogDom(uuids) {
   return {
     querySelectorAll: (selector) => {
-      assert.equal(selector, '#backlog [data-task-uuid]');
+      assert.equal(selector, '#task-collection [data-task-uuid]');
       return uuids.map((uuid) => ({ dataset: { taskUuid: uuid } }));
     },
   };
@@ -453,7 +453,7 @@ test('fieldAction maps each editable field to its action id', () => {
   const cases = {
     title: 'edit',
     description: 'edit',
-    priority: 'edit',
+    priority: 'set_priority',
     estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
@@ -613,7 +613,7 @@ test('addAssignee and removeAssignee patch through toggleMulti', () => {
 
 test('commitField is gated on the matching action', () => {
   const calls = [];
-  const panel = panelWithActions(['edit'], calls);
+  const panel = panelWithActions(['set_priority'], calls);
   panel.commitField('status', 's2');
   assert.equal(calls.length, 0);
   panel.commitField('priority', 'high');
@@ -1535,4 +1535,145 @@ test('refreshContent keeps the sprint scope on backlog refreshes', () => {
   assert.deepStrictEqual(Array.from(calls), [
     '/projects/p/backlog?sprint=none -> project-content',
   ]);
+});
+
+test('bulkActionIntersection keeps only bulk-capable ids every task offers', () => {
+  const map = {
+    u1: [
+      { id: 'edit', bulk: false },
+      { id: 'assign', bulk: true },
+      { id: 'delete', bulk: true },
+    ],
+    u2: [
+      { id: 'assign', bulk: true },
+      { id: 'delete', bulk: true },
+      { id: 'set_due', bulk: true },
+    ],
+  };
+  const ids = Array.from(
+    ctx.projectBoardHelpers.bulkActionIntersection(['u1', 'u2'], map)
+  ).sort();
+  assert.deepStrictEqual(ids, ['assign', 'delete']);
+});
+
+test('bulkActionIntersection offers nothing when a task is unanswered', () => {
+  const map = { u1: [{ id: 'delete', bulk: true }] };
+  assert.deepStrictEqual(
+    Array.from(ctx.projectBoardHelpers.bulkActionIntersection(['u1', 'u2'], map)),
+    []
+  );
+  assert.deepStrictEqual(
+    Array.from(ctx.projectBoardHelpers.bulkActionIntersection([], map)),
+    []
+  );
+});
+
+function bulkBoard(calls, actionIds) {
+  const board = panelBoard();
+  board.selected = ['u1', 'u2'];
+  board.bulkActionIds = actionIds;
+  board.refresh = () => calls.push('refresh');
+  return board;
+}
+
+test('bulkCan is false while the action answer is pending', () => {
+  const board = bulkBoard([], null);
+  assert.equal(board.bulkCan('assign'), false);
+  board.bulkActionIds = ['assign'];
+  assert.equal(board.bulkCan('assign'), true);
+  assert.equal(board.bulkCan('delete'), false);
+});
+
+test('bulkAssign posts an add or a remove set for the whole selection', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push([opts.method + ' ' + url, JSON.parse(opts.body)]);
+    return { ok: true, json: async () => ({ success: true, updated: 2, skipped: 0 }) };
+  };
+  const board = bulkBoard(calls, ['assign', 'set_labels', 'set_priority', 'set_due']);
+  await board.bulkAssign('7', true);
+  await board.bulkAssign('7', false);
+  await board.bulkLabel('l1', true);
+  await board.bulkLabel('l1', false);
+  await board.bulkPriority('high');
+  await board.bulkDueDate('');
+  const requests = calls.filter((c) => Array.isArray(c));
+  assert.deepStrictEqual(
+    requests.map((c) => c[0]),
+    Array(6).fill('POST /api/tasks/bulk')
+  );
+  assert.deepStrictEqual({ ...requests[0][1] }, { tasks: ['u1', 'u2'], assign: ['7'] });
+  assert.deepStrictEqual({ ...requests[1][1] }, { tasks: ['u1', 'u2'], unassign: ['7'] });
+  assert.deepStrictEqual({ ...requests[2][1] }, { tasks: ['u1', 'u2'], add_labels: ['l1'] });
+  assert.deepStrictEqual({ ...requests[3][1] }, { tasks: ['u1', 'u2'], remove_labels: ['l1'] });
+  assert.deepStrictEqual({ ...requests[4][1] }, { tasks: ['u1', 'u2'], priority: 'high' });
+  assert.deepStrictEqual({ ...requests[5][1] }, { tasks: ['u1', 'u2'], due_date: null });
+  // The selection survives an edit so the next one applies to the same tasks.
+  assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u2']);
+  assert.equal(calls.filter((c) => c === 'refresh').length, 6);
+});
+
+test('bulkEdit is gated on the fetched action list', async () => {
+  const calls = [];
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true, json: async () => ({}) };
+  };
+  const board = bulkBoard(calls, ['assign']);
+  await board.bulkPriority('high');
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
+test('bulkEdit warns about tasks skipped for a start/due conflict', async () => {
+  const warnings = [];
+  ctx.AppAlert = { warning: (m) => warnings.push(m), error: () => {} };
+  ctx.fetch = async () => ({
+    ok: true,
+    json: async () => ({ success: true, updated: 1, skipped: 1 }),
+  });
+  const board = bulkBoard([], ['set_due']);
+  await board.bulkDueDate('2030-01-01');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /1 task starts after that due date/);
+});
+
+test('bulkDeleteSelected aborts without a request when declined', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    confirm: async () => {
+      calls.push('confirm');
+      return false;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push(opts.method + ' ' + url);
+    return { ok: true };
+  };
+  const board = bulkBoard(calls, ['delete']);
+  await board.bulkDeleteSelected();
+  assert.deepStrictEqual(Array.from(calls), ['confirm']);
+  assert.deepStrictEqual(Array.from(board.selected), ['u1', 'u2']);
+});
+
+test('bulkDeleteSelected deletes, prunes the selection and closes a deleted panel', async () => {
+  const calls = [];
+  ctx.AppDialog = {
+    confirm: async (opts) => {
+      calls.push('confirm:' + opts.title);
+      return true;
+    },
+  };
+  ctx.fetch = async (url, opts) => {
+    calls.push([opts.method + ' ' + url, JSON.parse(opts.body)]);
+    return { ok: true, json: async () => ({ success: true, deleted: 2 }) };
+  };
+  const board = bulkBoard(calls, ['delete']);
+  board.panelTaskUuid = 'u2';
+  await board.bulkDeleteSelected();
+  assert.equal(calls[0], 'confirm:Delete 2 tasks');
+  assert.equal(calls[1][0], 'POST /api/tasks/bulk-delete');
+  assert.deepStrictEqual({ ...calls[1][1] }, { tasks: ['u1', 'u2'] });
+  assert.equal(calls[2], 'refresh');
+  assert.deepStrictEqual(Array.from(board.selected), []);
+  assert.equal(board.panelTaskUuid, null);
 });

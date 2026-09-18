@@ -144,3 +144,17 @@ test('dropping onto the root sends a null parent', async () => {
     ['PATCH', '/api/v1/files/b', { parent: null }],
   ]);
 });
+
+test('a dropped file whose origin is unknown is still checked against the root', async () => {
+  // Items dragged from a listing that is not a folder carry no sourceFolder:
+  // the paste routine must not mistake that for "already at the root".
+  const items = [{ uuid: 'a', name: 'report.pdf', nodeType: 'file' }];
+  const { browser, requests } = makeBrowser({
+    currentFolder: '',
+    respond: () => jsonResponse(200, { uuid: 'a', name: 'report.pdf' }),
+  });
+  await browser.moveItemsTo(items, null);
+  assert.deepEqual(Array.from(requests, (r) => [r.method, r.url, { ...r.body }]), [
+    ['PATCH', '/api/v1/files/a', { parent: null, on_conflict: 'rename' }],
+  ]);
+});

@@ -1271,9 +1271,11 @@ window.fileBrowser = function fileBrowser() {
     async _transferItems(items, targetFolderId, { isCopy }) {
       // Only a file landing in another folder can collide with a sibling:
       // folders are never unique-checked, and a copy into its own folder is
-      // just a duplicate the server suffixes on its own.
+      // just a duplicate the server suffixes on its own. An item whose origin
+      // is unknown (dragged from favorites, recent, a tag) is checked too.
       const collidable = items.filter(
-        item => item.nodeType === 'file' && (item.sourceFolder || null) !== targetFolderId
+        item => item.nodeType === 'file'
+          && (item.sourceFolder === undefined || (item.sourceFolder || null) !== targetFolderId)
       );
       const decisions = await this._decideNameCollisions(collidable, {
         replaceLabel: isCopy

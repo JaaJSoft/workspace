@@ -181,7 +181,8 @@ test('the drop hands the items and the destination to the browser component', ()
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, dnd.EVENT);
   assert.deepEqual({ ...dispatched[0].detail, items: dispatched[0].detail.items.map((i) => ({ ...i })) }, {
-    items,
+    // Each item carries where it came from, as the clipboard's items do.
+    items: items.map((item) => ({ ...item, sourceFolder: 'src' })),
     targetFolderId: 'dest',
     targetName: 'Reports',
   });

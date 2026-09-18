@@ -134,10 +134,12 @@ window.fileDragMove = (function () {
     const folderId = folderIdOf(target);
     if (!canDrop(drag, folderId) || !isWritable(folderId)) return;
     event.preventDefault();
+    // Each item says where it came from, as the clipboard's items do: the
+    // transfer only pre-checks name collisions for a file changing folder.
     window.dispatchEvent(
       new CustomEvent(EVENT, {
         detail: {
-          items: drag.items,
+          items: drag.items.map((item) => ({ ...item, sourceFolder: drag.sourceFolder })),
           targetFolderId: folderId,
           targetName: target.dataset.dropFolderName || '',
         },

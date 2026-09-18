@@ -20,6 +20,7 @@ static classes would have been left behind.
 
 from __future__ import annotations
 
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from playwright.sync_api import expect
 
@@ -78,11 +79,28 @@ MEASURE_NOW = """() => {
   return window.__rail;
 }"""
 
+# Clicks the sidebar toggle and measures the aside in the same task: Alpine
+# applies the `:class` bindings in a microtask, and `x-show` hides on the next
+# animation frame, so this is the state that a paint or a Playwright call can
+# catch between the aside narrowing and a row hidden by `x-show` alone
+# following it. Everything that leaves with the rail must leave here.
+TOGGLE_AND_MEASURE = """async (label) => {
+  document.querySelector('.drawer-side aside [aria-label="' + label + '"]').click();
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+  window.__rail = { overflow: 0, offenders: [], measured: 0, text: '' };
+  window.__railMeasure();
+  return window.__rail;
+}"""
+
 
 class SidebarRailFirstPaintTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="alice")
+        # A group without a folder yet makes the files sidebar render its
+        # group folders header, a heading and a button that cannot shrink
+        # into the rail.
+        self.user.groups.add(Group.objects.create(name="Team"))
         project = create_project(self.user, name="Roadmap")
         self.urls = {
             "files": "/files",
@@ -139,15 +157,20 @@ class SidebarRailFirstPaintTests(PlaywrightTestCase):
     def test_expanded_sidebar_still_shows_its_labels_and_collapses(self):
         # The static classes are a first-paint aid only: once Alpine binds,
         # the expanded sidebar must show its labels and the toggle must hide
-        # them, both on a rail drawer and on an off-canvas one.
+        # them, both on a rail drawer and on an off-canvas one. The rail must
+        # be clean the moment the aside narrows, not a frame later: a section
+        # header hidden by `x-show` alone used to stick out of the files rail
+        # for that frame, which is where a measurement lands often enough.
         self.page.set_viewport_size(DESKTOP)
         for module in ("files", "mail"):
             with self.subTest(module=module):
                 self._load(module)
                 expect(self._help_label()).to_be_visible()
-                self.page.get_by_role("button", name="Collapse sidebar").click()
+                same_task = self.page.evaluate(TOGGLE_AND_MEASURE, "Collapse sidebar")
+                self.assertLessEqual(same_task["overflow"], 1, same_task)
                 expect(self._help_label()).to_be_hidden()
-                self.assertLessEqual(self.page.evaluate(MEASURE_NOW)["overflow"], 1)
+                settled = self.page.evaluate(MEASURE_NOW)
+                self.assertLessEqual(settled["overflow"], 1, settled)
 
     def test_collapsed_sidebar_expands_and_shows_its_labels(self):
         # The inverse: the server-rendered `hidden` must go away on expand,

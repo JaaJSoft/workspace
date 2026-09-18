@@ -226,6 +226,21 @@ class BulkEditTests(BulkTestsBase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_repeated_ids_are_400(self):
+        response = self._post(
+            {"tasks": self._uuids(self.t1), "assign": [self.member.pk, self.member.pk]}
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.t1.assignees.exists())
+        response = self._post(
+            {
+                "tasks": self._uuids(self.t1),
+                "add_labels": [str(self.bug.uuid), str(self.bug.uuid)],
+            }
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(self.t1.labels.exists())
+
     def test_non_member_assignee_is_400(self):
         response = self._post(
             {"tasks": self._uuids(self.t1), "assign": [self.outsider.pk]}

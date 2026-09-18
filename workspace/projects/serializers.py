@@ -540,6 +540,12 @@ class TaskBulkEditSerializer(serializers.Serializer):
     def validate(self, attrs):
         if not any(field in attrs for field in self.OPERATIONS):
             raise serializers.ValidationError("No change requested.")
+        # A repeated id would insert the same relation row twice and trip
+        # the through table's unique constraint into a 500.
+        for field in ("assign", "unassign", "add_labels", "remove_labels"):
+            pks = [obj.pk for obj in attrs.get(field, ())]
+            if len(set(pks)) != len(pks):
+                raise serializers.ValidationError({field: f"Duplicate ids in {field}."})
         if {u.pk for u in attrs.get("assign", ())} & {
             u.pk for u in attrs.get("unassign", ())
         }:

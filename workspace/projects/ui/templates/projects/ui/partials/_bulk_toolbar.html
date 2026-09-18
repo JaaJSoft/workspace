@@ -5,7 +5,7 @@ row shown while `selected` (root projectBoard state) is non-empty, and
 may append its own controls after it (the backlog's send to board /
 sprint menus).
 
-Every control is gated on bulkCan(<action id>): the action ids every
+Every control is gated on bulkCan(actionId): the action ids every
 selected task offers with bulk support, answered by
 POST /api/v1/projects/actions for the whole selection. Nothing is offered
 until that answer lands, and the handlers check the same list again.

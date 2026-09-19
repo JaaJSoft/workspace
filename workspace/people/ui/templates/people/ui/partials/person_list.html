@@ -1,0 +1,25 @@
+<div
+  id="person-list"
+  class="flex-1 overflow-y-auto"
+  data-count="{{ person_count }}"
+>
+  {% if not groups_of_persons %}
+    <div class="p-8 text-center text-sm text-base-content/60">
+      {% if query %}
+        No contact matches "{{ query }}".
+      {% else %}
+        No contacts yet.
+      {% endif %}
+    </div>
+  {% endif %}
+  {% for letter, persons in groups_of_persons %}
+    <div
+      class="sticky top-0 bg-base-100 px-4 py-1 text-xs font-semibold opacity-60 border-b border-base-200"
+    >
+      {{ letter }}
+    </div>
+    {% for person in persons %}
+      {% include "people/ui/partials/person_row.html" %}
+    {% endfor %}
+  {% endfor %}
+</div>

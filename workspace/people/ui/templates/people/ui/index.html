@@ -1,0 +1,193 @@
+{% extends "base_with_navbar.html" %}
+
+{% load static %}
+
+{% block title %}People{% endblock %}
+
+{% block navbar %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}people-drawer{% endblock %}
+{% block main_class %}p-0 flex h-full overflow-hidden{% endblock %}
+
+{% block drawer_attrs %}
+  x-data="peopleApp({
+  query: '{{ query|escapejs }}',
+  scope: '{{ scope|escapejs }}',
+  listUuid: '{{ list_uuid|escapejs }}',
+  initialPerson: '{{ panel_person_uuid|escapejs }}',
+  })"
+  @popstate.window="onPopState()"
+{% endblock %}
+
+{% block drawer_sidebar %}
+  <div class="drawer-side z-40 h-full !overflow-visible">
+    <label for="people-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
+    >
+      <div class="lg:border-b border-base-300 py-4 px-3">
+        <div
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        </div>
+      </div>
+
+      <div class="px-3 pt-3">
+        <button
+          type="button"
+          class="btn btn-sm btn-primary w-full"
+          @click="newPerson()"
+          :title="sidebarCollapsed() ? 'New contact' : ''"
+        >
+          <i data-lucide="user-plus" class="w-4 h-4"></i>
+          <span
+            class="{% if workspace_sidebar_collapsed %}hidden{% endif %}"
+            :class="{ hidden: sidebarCollapsed() }"
+          >New contact</span>
+        </button>
+      </div>
+
+      <nav class="flex-1 overflow-y-auto px-2 py-3 space-y-1">
+        {% include "ui/partials/drawer_item.html" with icon="users" label="All" onclick="setScope('')" active_binding="scope === '' && !listUuid" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False tooltip="All" %}
+        {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" onclick="setScope('mine')" active_binding="scope === 'mine'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False tooltip="My contacts" %}
+        {% for group in user_groups %}
+          <div class="flex items-center">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm flex-1 justify-start gap-2 font-normal{% if workspace_sidebar_collapsed %} w-10 px-0 justify-center{% endif %}"
+              :class="{ 'btn-active': scope === 'group:{{ group.id }}', 'w-10 px-0 justify-center': sidebarCollapsed() }"
+              data-scope="group:{{ group.id }}"
+              title="{{ group.name }}"
+              @click="setScope($el.dataset.scope)"
+            >
+              <i data-lucide="users-round" class="w-4 h-4 shrink-0"></i>
+              <span
+                class="truncate{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+                :class="{ hidden: sidebarCollapsed() }"
+              >{{ group.name }}</span>
+            </button>
+          </div>
+        {% endfor %}
+
+        <div
+          class="pt-4 pb-1 px-3 flex items-center justify-between text-xs uppercase tracking-wide opacity-60 {% if workspace_sidebar_collapsed %}hidden{% endif %}"
+          :class="{ hidden: sidebarCollapsed() }"
+        >
+          <span>Lists</span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs"
+            title="New list"
+            @click="newList()"
+          >
+            <i data-lucide="plus" class="w-3 h-3"></i>
+          </button>
+        </div>
+        <template x-for="list in lists" :key="list.uuid">
+          <div class="group flex items-center">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm flex-1 justify-start gap-2 font-normal"
+              :class="{ 'btn-active': listUuid === list.uuid, 'w-10 px-0 justify-center': sidebarCollapsed() }"
+              :title="list.name"
+              @click="setList(list.uuid)"
+            >
+              <i data-lucide="list" class="w-4 h-4 shrink-0"></i>
+              <span class="truncate" x-show="!sidebarCollapsed()" x-text="list.name"></span>
+              <span
+                class="badge badge-ghost badge-xs ml-auto"
+                x-show="!sidebarCollapsed()"
+                x-text="list.member_count"
+              ></span>
+            </button>
+            <div class="dropdown dropdown-end" x-show="!sidebarCollapsed()">
+              <button
+                type="button"
+                tabindex="0"
+                class="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100"
+              >
+                <i data-lucide="more-horizontal" class="w-3 h-3"></i>
+              </button>
+              <ul
+                tabindex="0"
+                class="dropdown-content menu menu-sm bg-base-100 rounded-box shadow z-50 w-40 p-1"
+              >
+                <li>
+                  <a @click.prevent="renameList(list)">Rename</a>
+                </li>
+                <li>
+                  <a class="text-error" @click.prevent="deleteList(list)">Delete</a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </template>
+      </nav>
+
+      <div class="border-t border-base-300 p-2 hidden lg:block">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm w-full"
+          @click="toggleCollapse()"
+          :title="sidebarCollapsed() ? 'Expand' : 'Collapse'"
+        >
+          <i
+            data-lucide="chevrons-left"
+            class="w-4 h-4{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: sidebarCollapsed() }"
+          ></i>
+          <i
+            data-lucide="chevrons-right"
+            class="w-4 h-4{% if not workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: !sidebarCollapsed() }"
+          ></i>
+        </button>
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {{ lists_data|json_script:"people-lists-data" }}
+  <section
+    class="w-full lg:w-96 shrink-0 border-r border-base-300 flex flex-col h-full"
+    :class="{ 'max-lg:hidden': panelOpen }"
+  >
+    <div class="p-3 border-b border-base-300">
+      <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+        <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+        <input
+          type="search"
+          class="grow"
+          placeholder="Search people..."
+          x-model="query"
+          @input.debounce.300ms="refreshList()"
+        />
+      </label>
+    </div>
+    {% include "people/ui/partials/person_list.html" %}
+  </section>
+  <section
+    id="person-panel"
+    class="flex-1 h-full overflow-y-auto"
+    :class="{ 'max-lg:hidden': !panelOpen }"
+  >
+    <div
+      class="h-full flex items-center justify-center text-base-content/50 text-sm"
+    >
+      Select a contact to see its details.
+    </div>
+  </section>
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'people/ui/js/people.js' %}"></script>
+{% endblock %}

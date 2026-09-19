@@ -12,6 +12,13 @@
 {% block drawer_id %}people-drawer{% endblock %}
 {% block main_class %}p-0 flex h-full overflow-hidden{% endblock %}
 
+{% block extra_head %}
+  <link
+    rel="stylesheet"
+    href="{% static 'users/ui/css/vendor/cropper/cropper.css' %}"
+  />
+{% endblock %}
+
 {% block drawer_attrs %}
   x-data="peopleApp({
   query: '{{ query|escapejs }}',
@@ -20,6 +27,7 @@
   initialPerson: '{{ panel_person_uuid|escapejs }}',
   })"
   @popstate.window="onPopState()"
+  @people-lists-changed.window="reloadLists()"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -175,19 +183,34 @@
     </div>
     {% include "people/ui/partials/person_list.html" %}
   </section>
-  <section
-    id="person-panel"
-    class="flex-1 h-full overflow-y-auto"
+  {% comment %}
+    The empty state is a sibling of the swap target, not its content: closing
+    the panel (or deleting the contact) has no fragment to swap back in, so a
+    panel that hid itself only on mobile would keep a deleted contact on
+    screen at desktop width.
+  {% endcomment %}
+  <div
+    class="flex-1 h-full min-w-0 flex"
     :class="{ 'max-lg:hidden': !panelOpen }"
   >
     <div
-      class="h-full flex items-center justify-center text-base-content/50 text-sm"
+      class="flex-1 flex items-center justify-center text-base-content/50 text-sm"
+      x-show="!panelOpen"
     >
       Select a contact to see its details.
     </div>
-  </section>
+    <section
+      id="person-panel"
+      class="flex-1 h-full overflow-y-auto"
+      x-show="panelOpen"
+      :class="{ 'max-lg:hidden': !panelOpen }"
+    >
+    </section>
+  </div>
 {% endblock %}
 
 {% block extra_scripts %}
+  {# The panel is a fragment and cannot load scripts of its own: Cropper comes from the shell. #}
+  <script src="{% static 'users/ui/js/vendor/cropper/cropper.js' %}"></script>
   <script src="{% static 'people/ui/js/people.js' %}"></script>
 {% endblock %}

@@ -1,12 +1,16 @@
 import re
 from itertools import batched
+from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.html import escapejs
 
 from workspace.core.module_registry import registry
+from workspace.people.sections import PersonSection, section_registry
 from workspace.people.services.lists import add_members, create_list
 from workspace.people.services.persons import create_person
 
@@ -14,6 +18,7 @@ User = get_user_model()
 
 HEADER_RE = r'<div[^>]*data-letter="([^"]+)"'
 ROW_NAME_RE = r'<span class="font-medium truncate">([^<]*)</span>'
+TEST_TEMPLATES = Path(__file__).parent / "templates"
 
 
 class PeopleModuleTests(TestCase):
@@ -127,3 +132,67 @@ class PersonLetterGroupingTests(TestCase):
         self.assertEqual(by_letter["E"], ["Eddy", "Élodie"])
         self.assertEqual(by_letter["Z"], ["Zoe"])
         self.assertEqual(by_letter["#"], ["4Front Studio"])
+
+
+class PersonPanelTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="x")
+        self.other = User.objects.create_user(username="bob", password="x")
+        self.client.force_login(self.user)
+        self.person = create_person(
+            owner=self.user,
+            display_name="Bob Martin",
+            emails=[{"value": "bob@acme.com", "type": "work"}],
+        )
+        self.hidden = create_person(owner=self.other, display_name="Hidden")
+
+    def tearDown(self):
+        section_registry.unregister("fake")
+
+    def test_panel_renders_person_and_actions(self):
+        response = self.client.get(f"/people/{self.person.uuid}/panel")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bob Martin")
+        self.assertContains(response, 'id="person-panel-data"')
+        self.assertContains(response, 'id="person-panel-actions"')
+        self.assertContains(response, '"id": "delete"')
+
+    def test_panel_unreachable_is_404(self):
+        response = self.client.get(f"/people/{self.hidden.uuid}/panel")
+        self.assertEqual(response.status_code, 404)
+
+    def test_one_swap_target_in_the_page_and_in_the_fragment(self):
+        # alpine-ajax replaces the first element carrying the id; a second one
+        # would be swapped around silently.
+        page = self.client.get("/people")
+        self.assertEqual(page.content.decode().count('id="person-panel"'), 1)
+        fragment = self.client.get(f"/people/{self.person.uuid}/panel")
+        self.assertEqual(fragment.content.decode().count('id="person-panel"'), 1)
+
+    def test_panel_includes_registered_sections(self):
+        section_registry.register(
+            PersonSection(
+                slug="fake",
+                label="Fake section",
+                icon="star",
+                template="people/tests/hello.html",
+            )
+        )
+        with self.settings(
+            TEMPLATES=[
+                {
+                    **settings.TEMPLATES[0],
+                    "DIRS": [*settings.TEMPLATES[0]["DIRS"], TEST_TEMPLATES],
+                }
+            ]
+        ):
+            response = self.client.get(f"/people/{self.person.uuid}/panel")
+        self.assertContains(response, "Fake section")
+        self.assertContains(response, "Hello Bob Martin")
+
+    def test_deep_link_opens_panel(self):
+        response = self.client.get("/people", {"person": str(self.person.uuid)})
+        # The config object goes through |escapejs, which escapes every hyphen
+        # of the uuid: the browser reads the literal back as the uuid, but the
+        # rendered source never carries the bare one.
+        self.assertContains(response, f"initialPerson: '{escapejs(self.person.uuid)}'")

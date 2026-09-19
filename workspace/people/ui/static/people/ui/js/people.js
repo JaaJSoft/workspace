@@ -209,5 +209,281 @@ window.peopleApp = function peopleApp(config) {
       this.lists = this.lists.filter((entry) => entry.uuid !== list.uuid);
       if (this.listUuid === list.uuid) this.setList('');
     },
+
+    // Membership is changed from the panel, which knows nothing of the
+    // sidebar's counts: it says so and the shell re-reads them.
+    async reloadLists() {
+      const res = await fetch('/api/v1/people/lists');
+      if (res.ok) this.lists = await res.json();
+    },
+  };
+};
+
+function readJson(id, fallback) {
+  const el = document.getElementById(id);
+  if (!el) return fallback;
+  try {
+    return JSON.parse(el.textContent);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+// The detail panel. alpine-ajax replaces the whole #person-panel section, so
+// the component is built afresh on every open and seeds itself from the
+// json_script blocks the fragment carries.
+window.personPanel = function personPanel() {
+  return {
+    person: readJson('person-panel-data', {}),
+    actions: readJson('person-panel-actions', []),
+    lists: readJson('person-panel-lists', []),
+    groups: readJson('person-panel-groups', []),
+    avatarStamp: Date.now(),
+    uploading: false,
+    cropper: null,
+    selectedFile: null,
+
+    can(id) {
+      return this.actions.some((a) => a.id === id);
+    },
+
+    menuActions() {
+      return this.actions.filter((a) => a.id !== 'edit' && a.id !== 'add_to_list');
+    },
+
+    runAction(id) {
+      if (id === 'delete') return this.deletePerson();
+      if (id === 'move') return this.move();
+      if (id === 'unlink_user') return this.unlinkUser();
+      return undefined;
+    },
+
+    async patch(body) {
+      const res = await fetch(`/api/v1/people/${this.person.uuid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const first = Object.values(data).flat()[0];
+        AppAlert.show({ type: 'error', message: typeof first === 'string' ? first : 'Could not save.' });
+        return null;
+      }
+      const updated = await res.json();
+      // Publish only the fields this request carried, the way a save() names
+      // its update_fields. Blurring a field starts a PATCH, and the click that
+      // blurred it runs while the reply is still in flight: a reply that
+      // restored the whole record would undo what that click just did, the new
+      // entry row or the half-typed note. `move` and `linkUser` send fields
+      // the reply does not echo back; they reload the panel from the server.
+      for (const key of Object.keys(body)) {
+        if (key in updated) this.person[key] = updated[key];
+      }
+      return updated;
+    },
+
+    saveField(name) {
+      if (!this.can('edit')) return;
+      const value = this.person[name] === '' && name === 'birthday' ? null : this.person[name];
+      this.patch({ [name]: value }).then((updated) => {
+        if (updated && name === 'display_name') this.refreshList();
+      });
+    },
+
+    addEntry(kind) {
+      if (kind === 'addresses') {
+        this.person.addresses.push({ street: '', city: '', region: '', postal_code: '', country: '', type: 'home' });
+      } else {
+        this.person[kind].push({ value: '', type: kind === 'phones' ? 'cell' : 'home' });
+      }
+    },
+
+    removeEntry(kind, index) {
+      this.person[kind].splice(index, 1);
+      this.saveEntries(kind);
+    },
+
+    // A blank row is one the user is still filling in: it is dropped from the
+    // payload rather than sent, so pressing Add never fails the whole save.
+    saveEntries(kind) {
+      if (!this.can('edit')) return;
+      const complete = this.person[kind].filter((entry) =>
+        kind === 'addresses'
+          ? [entry.street, entry.city, entry.region, entry.postal_code, entry.country].some(Boolean)
+          : Boolean(entry.value)
+      );
+      this.patch({ [kind]: complete }).then((updated) => {
+        if (updated && kind === 'emails') this.refreshList();
+      });
+    },
+
+    linkUser(user) {
+      this.patch({ linked_user_id: user.id }).then((updated) => {
+        if (updated) this.reloadPanel();
+      });
+    },
+
+    unlinkUser() {
+      this.patch({ linked_user_id: null }).then((updated) => {
+        if (updated) this.reloadPanel();
+      });
+    },
+
+    reloadPanel() {
+      this.$ajax(`/people/${this.person.uuid}/panel`, { target: 'person-panel' });
+      this.refreshList();
+    },
+
+    async move() {
+      const options = [{ value: 'mine', label: 'My contacts' }].concat(
+        this.groups.map((g) => ({ value: `group:${g.id}`, label: g.name }))
+      );
+      const choice = await AppDialog.select({
+        title: 'Move to',
+        options,
+        value: this.person.scope,
+        okLabel: 'Move',
+      });
+      if (!choice || choice === this.person.scope) return;
+      const updated = await this.patch({ scope: choice });
+      if (updated) this.reloadPanel();
+    },
+
+    async addToList() {
+      const options = this.lists.filter((l) => !l.member).map((l) => ({ value: l.uuid, label: l.name }));
+      const choice = await AppDialog.select({ title: 'Add to list', options, okLabel: 'Add' });
+      if (!choice) return;
+      const res = await fetch(`/api/v1/people/lists/${choice}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ uuids: [this.person.uuid] }),
+      });
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not add to the list.' });
+        return;
+      }
+      const list = this.lists.find((l) => l.uuid === choice);
+      if (list) list.member = true;
+      this.$dispatch('people-lists-changed');
+    },
+
+    async removeFromList(uuid) {
+      const res = await fetch(`/api/v1/people/lists/${uuid}/members`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ uuids: [this.person.uuid] }),
+      });
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not remove from the list.' });
+        return;
+      }
+      const list = this.lists.find((l) => l.uuid === uuid);
+      if (list) list.member = false;
+      this.$dispatch('people-lists-changed');
+    },
+
+    async deletePerson() {
+      const ok = await AppDialog.confirm({
+        title: 'Delete contact',
+        message: `Delete "${this.person.display_name}"? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+      const res = await fetch(`/api/v1/people/${this.person.uuid}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      });
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not delete the contact.' });
+        return;
+      }
+      this.closePanel();
+      this.refreshList();
+    },
+
+    onFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.selectedFile = file;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.$refs.cropImage.src = e.target.result;
+        this.$refs.cropDialog.showModal();
+        this.$nextTick(() => {
+          if (this.cropper) this.cropper.destroy();
+          this.cropper = new Cropper(this.$refs.cropImage, {
+            aspectRatio: 1,
+            viewMode: 1,
+            movable: true,
+            zoomable: true,
+            rotatable: false,
+            scalable: false,
+            guides: true,
+            center: true,
+            highlight: false,
+            background: true,
+          });
+        });
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    },
+
+    cancelCrop() {
+      this.$refs.cropDialog.close();
+      if (this.cropper) {
+        this.cropper.destroy();
+        this.cropper = null;
+      }
+      this.selectedFile = null;
+    },
+
+    async confirmCrop() {
+      if (!this.cropper || !this.selectedFile) return;
+      this.uploading = true;
+      const data = this.cropper.getData(true);
+      const formData = new FormData();
+      formData.append('image', this.selectedFile);
+      formData.append('crop_x', data.x);
+      formData.append('crop_y', data.y);
+      formData.append('crop_w', data.width);
+      formData.append('crop_h', data.height);
+      try {
+        const res = await fetch(`/api/v1/people/${this.person.uuid}/avatar`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          body: formData,
+        });
+        if (res.ok) {
+          this.person.has_avatar = true;
+          this.person.avatar_url = `/api/v1/people/${this.person.uuid}/avatar`;
+          this.avatarStamp = Date.now();
+          this.refreshList();
+        } else {
+          AppAlert.show({ type: 'error', message: 'Upload failed.' });
+        }
+      } finally {
+        this.uploading = false;
+        this.cancelCrop();
+      }
+    },
+
+    async deleteAvatar() {
+      if (!this.can('edit')) return;
+      const res = await fetch(`/api/v1/people/${this.person.uuid}/avatar`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      });
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not remove the photo.' });
+        return;
+      }
+      this.person.has_avatar = false;
+      this.person.avatar_url = null;
+      this.avatarStamp = Date.now();
+      this.refreshList();
+    },
   };
 };

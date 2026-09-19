@@ -19,3 +19,7 @@ class PeopleConfig(AppConfig):
                 order=30,
             )
         )
+
+        # Registers the actions at boot; a broken import fails the boot
+        # instead of a worker answering "no actions" forever.
+        from workspace.people.actions import person as person_actions  # noqa: F401

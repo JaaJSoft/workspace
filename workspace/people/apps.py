@@ -16,13 +16,14 @@ class PeopleConfig(AppConfig):
                 icon="contact",
                 color="secondary",
                 url="/people",
-                order=30,
+                order=32,
             )
         )
 
+        from workspace.core.module_registry import CommandInfo, SearchProviderInfo
+
         # Registers the actions at boot; a broken import fails the boot
         # instead of a worker answering "no actions" forever.
-        from workspace.core.module_registry import CommandInfo, SearchProviderInfo
         from workspace.people.actions import person as person_actions  # noqa: F401
         from workspace.people.search import search_persons
 
@@ -41,7 +42,7 @@ class PeopleConfig(AppConfig):
                     url="/people",
                     kind="navigate",
                     module_slug="people",
-                    order=30,
+                    order=35,
                 ),
                 CommandInfo(
                     name="New contact",
@@ -51,7 +52,7 @@ class PeopleConfig(AppConfig):
                     url="/people?action=new-person",
                     kind="action",
                     module_slug="people",
-                    order=31,
+                    order=36,
                 ),
             ]
         )

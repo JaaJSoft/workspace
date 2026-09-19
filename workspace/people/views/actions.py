@@ -11,21 +11,10 @@ from workspace.common.uuids import (
     parse_uuid_batch,
 )
 
-from ..actions import PersonActionRegistry
+from ..actions import actions_for
 from ..queries import user_persons
 
 MAX_BATCH = 200
-
-
-def actions_for(user, persons):
-    """``{uuid: [action]}`` for persons already known to be reachable."""
-    has_groups = user.groups.exists()
-    return {
-        str(person.uuid): PersonActionRegistry.get_available_actions(
-            user, person, has_groups=has_groups
-        )
-        for person in persons
-    }
 
 
 def _refused(detail):

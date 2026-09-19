@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views import lists, persons
+from .views import avatar, lists, persons
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"people", persons.PersonViewSet, basename="person")
@@ -19,6 +19,11 @@ urlpatterns = [
         "api/v1/people/lists/<uuid:uuid>/members",
         lists.PersonListMembersView.as_view(),
         name="person-list-members",
+    ),
+    path(
+        "api/v1/people/<uuid:uuid>/avatar",
+        avatar.PersonAvatarView.as_view(),
+        name="person-avatar",
     ),
     path("api/v1/", include(router.urls)),
 ]

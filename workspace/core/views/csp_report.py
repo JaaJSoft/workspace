@@ -3,6 +3,7 @@ import logging
 from urllib.parse import urlsplit, urlunsplit
 
 from django.core.exceptions import RequestDataTooBig
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -20,35 +21,35 @@ MAX_LOGGED_URI = 512
 
 REPORT_CONTENT_TYPES = {"application/csp-report", "application/json"}
 
-# What a browser writes in blocked-uri when the refused thing was not a URL.
-URI_KEYWORDS = {
-    "inline",
-    "eval",
-    "wasm-eval",
-    "self",
-    "data",
-    "blob",
-    "trusted-types-policy",
-    "trusted-types-sink",
-}
-
 
 class CspReportIpThrottle(IpRateThrottle):
     scope = "core.csp_report.ip"
 
 
-def _without_query(uri):
-    """Scheme, host and path only: a query string or a fragment can carry a
-    token, and nothing downstream of the logger would redact it."""
+def _loggable(uri):
+    """What is left of a refused URI once the parts that can carry a secret
+    are gone. Every field of a report is written by the page that was refused,
+    and nothing downstream of the logger would redact any of it.
+
+    A query string or a fragment can carry a token, and the authority can
+    carry credentials. An opaque URI - data:, javascript: - has no authority
+    and keeps its payload where a hierarchical URL keeps a path, so only its
+    scheme survives; a bare keyword (inline, eval, blob) parses as a path
+    under no scheme and is left alone.
+    """
     if not isinstance(uri, str):
         return ""
-    if uri in URI_KEYWORDS:
-        return uri
     try:
         parts = urlsplit(uri)
     except ValueError:
         return ""
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    if parts.scheme and not parts.netloc:
+        return f"{parts.scheme}:"
+    # Everything up to the last "@" is userinfo. Taken this way rather than
+    # through parts.hostname, which lowercases the host, drops the port and
+    # unwraps the brackets an IPv6 authority needs.
+    authority = parts.netloc.rpartition("@")[2]
+    return urlunsplit((parts.scheme, authority, parts.path, "", ""))
 
 
 class CspReportView(APIView):
@@ -58,6 +59,10 @@ class CspReportView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [CspReportIpThrottle]
 
+    # The report body and the parsed report both hold the script sample, which
+    # on a vault page is whatever the refused snippet was holding. It is never
+    # logged; this keeps it out of the traceback locals too.
+    @sensitive_variables()
     @extend_schema(exclude=True)
     def post(self, request):
         content_type = request.content_type.split(";")[0].strip().lower()
@@ -95,8 +100,8 @@ class CspReportView(APIView):
         directive = str(
             report.get("effective-directive") or report.get("violated-directive") or ""
         )
-        blocked_uri = _without_query(report.get("blocked-uri"))
-        document_uri = _without_query(report.get("document-uri"))
+        blocked_uri = _loggable(report.get("blocked-uri"))
+        document_uri = _loggable(report.get("document-uri"))
         logger.warning(
             "CSP violation: %s refused %s on %s",
             scrub(directive[:MAX_LOGGED_DIRECTIVE]),

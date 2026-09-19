@@ -84,6 +84,43 @@ class CspReportViewTests(TestCase):
         self.assertNotIn("token=secret", line)
         self.assertNotIn("frag", line)
 
+    def test_credentials_in_the_authority_never_reach_the_log(self):
+        """A refused URL can carry userinfo, and stripping the query alone
+        leaves it in the authority the log would publish."""
+        line = self.logged_line(
+            csp_report(
+                **{"blocked-uri": "https://alice:hunter2@intranet.example/x?q=1"}
+            )
+        )
+        self.assertNotIn("hunter2", line)
+        self.assertNotIn("alice", line)
+        self.assertIn("https://intranet.example/x", line)
+
+    def test_the_port_and_an_ipv6_host_survive_the_redaction(self):
+        """The authority is trimmed of its userinfo, not rebuilt: a port and
+        the brackets of an IPv6 host are both signal in a CSP log."""
+        for uri, expected in (
+            ("https://cdn.example:8443/a.js", "https://cdn.example:8443/a.js"),
+            ("https://[2001:db8::1]:8443/a.js", "https://[2001:db8::1]:8443/a.js"),
+        ):
+            with self.subTest(uri=uri):
+                self.assertIn(
+                    expected, self.logged_line(csp_report(**{"blocked-uri": uri}))
+                )
+
+    def test_an_opaque_uri_is_logged_as_its_scheme_alone(self):
+        """data: and javascript: carry their payload where a hierarchical URL
+        carries a host and a path - and on a vault page that payload is
+        whatever the refused snippet was holding."""
+        for uri in (
+            "data:text/html;base64,aHVudGVyMg==",
+            "javascript:alert(document.cookie)",
+        ):
+            with self.subTest(uri=uri):
+                line = self.logged_line(csp_report(**{"blocked-uri": uri}))
+                self.assertIn(uri.split(":")[0] + ":", line)
+                self.assertNotIn(uri.split(":", 1)[1], line)
+
     def test_a_keyword_in_place_of_a_url_is_kept(self):
         line = self.logged_line(csp_report(**{"blocked-uri": "inline"}))
         self.assertIn("refused inline on", line)

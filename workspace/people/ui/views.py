@@ -121,7 +121,6 @@ def person_panel(request, uuid):
     )
     member_of = set(person.lists.values_list("uuid", flat=True))
     context = {
-        "person": person,
         "person_data": PersonSerializer(person, context={"request": request}).data,
         "actions": actions_for(request.user, [person])[str(person.uuid)],
         "lists_data": [

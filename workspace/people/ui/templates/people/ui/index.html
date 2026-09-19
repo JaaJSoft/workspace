@@ -28,6 +28,7 @@
   })"
   @popstate.window="onPopState()"
   @people-lists-changed.window="reloadLists()"
+  @ajax:error="AppAlert.show({ type: 'error', message: 'Could not load that contact.' })"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -193,9 +194,10 @@
     class="flex-1 h-full min-w-0 flex"
     :class="{ 'max-lg:hidden': !panelOpen }"
   >
+    {# Hidden server-side on a deep link too, or it paints until Alpine binds. #}
     <div
-      class="flex-1 flex items-center justify-center text-base-content/50 text-sm"
-      x-show="!panelOpen"
+      class="flex-1 flex items-center justify-center text-base-content/50 text-sm{% if panel_person_uuid %} hidden{% endif %}"
+      :class="{ hidden: panelOpen }"
     >
       Select a contact to see its details.
     </div>
@@ -203,7 +205,6 @@
       id="person-panel"
       class="flex-1 h-full overflow-y-auto"
       x-show="panelOpen"
-      :class="{ 'max-lg:hidden': !panelOpen }"
     >
     </section>
   </div>

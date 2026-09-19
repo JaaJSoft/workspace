@@ -7,7 +7,6 @@
   id="person-panel"
   class="flex-1 h-full overflow-y-auto"
   x-show="panelOpen"
-  :class="{ 'max-lg:hidden': !panelOpen }"
 >
   {{ person_data|json_script:"person-panel-data" }}
   {{ actions|json_script:"person-panel-actions" }}

@@ -161,6 +161,24 @@ class PersonPanelTests(TestCase):
         response = self.client.get(f"/people/{self.hidden.uuid}/panel")
         self.assertEqual(response.status_code, 404)
 
+    def test_panel_offers_only_the_lists_of_the_person_scope(self):
+        family = create_list(owner=self.user, name="Family")
+        add_members(family, [self.person])
+        create_list(owner=self.user, name="Work")
+        team = Group.objects.create(name="team")
+        self.user.groups.add(team)
+        create_list(group=team, name="Teammates")
+
+        response = self.client.get(f"/people/{self.person.uuid}/panel")
+        offered = {
+            entry["name"]: entry["member"] for entry in response.context["lists_data"]
+        }
+        # A list only accepts members of its own scope, so a team list is not
+        # offered for a personal contact, whatever the user can otherwise see.
+        self.assertNotIn("Teammates", offered)
+        self.assertIs(offered["Family"], True)
+        self.assertIs(offered["Work"], False)
+
     def test_one_swap_target_in_the_page_and_in_the_fragment(self):
         # alpine-ajax replaces the first element carrying the id; a second one
         # would be swapped around silently.

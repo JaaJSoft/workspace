@@ -22,6 +22,18 @@ window.peopleHelpers = {
     });
   },
 
+  // The state a server-rendered fragment embeds, or the fallback when the
+  // block is missing (the panel placeholder carries none).
+  readJson(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    try {
+      return JSON.parse(el.textContent);
+    } catch (_) {
+      return fallback;
+    }
+  },
+
   // A /people URL carrying the filters, and the open contact when there is one.
   listUrl(base, { query = '', scope = '', listUuid = '', person = '' } = {}) {
     const params = new URLSearchParams();
@@ -214,34 +226,29 @@ window.peopleApp = function peopleApp(config) {
     // sidebar's counts: it says so and the shell re-reads them.
     async reloadLists() {
       const res = await fetch('/api/v1/people/lists');
-      if (res.ok) this.lists = await res.json();
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not refresh the lists.' });
+        return;
+      }
+      this.lists = await res.json();
     },
   };
 };
-
-function readJson(id, fallback) {
-  const el = document.getElementById(id);
-  if (!el) return fallback;
-  try {
-    return JSON.parse(el.textContent);
-  } catch (_) {
-    return fallback;
-  }
-}
 
 // The detail panel. alpine-ajax replaces the whole #person-panel section, so
 // the component is built afresh on every open and seeds itself from the
 // json_script blocks the fragment carries.
 window.personPanel = function personPanel() {
   return {
-    person: readJson('person-panel-data', {}),
-    actions: readJson('person-panel-actions', []),
-    lists: readJson('person-panel-lists', []),
-    groups: readJson('person-panel-groups', []),
+    person: window.peopleHelpers.readJson('person-panel-data', {}),
+    actions: window.peopleHelpers.readJson('person-panel-actions', []),
+    lists: window.peopleHelpers.readJson('person-panel-lists', []),
+    groups: window.peopleHelpers.readJson('person-panel-groups', []),
     avatarStamp: Date.now(),
     uploading: false,
     cropper: null,
     selectedFile: null,
+    _patchGen: {},
 
     can(id) {
       return this.actions.some((a) => a.id === id);
@@ -258,7 +265,35 @@ window.personPanel = function personPanel() {
       return undefined;
     },
 
+    // A reply publishes a field only if that field has not moved since the
+    // request left. Blurring an input starts a PATCH and the click that blurred
+    // it runs while the reply is in flight, so `emails` can already hold a row
+    // the server never saw; adopting the reply there would delete it. Per key
+    // rather than per request, because two fields can be in flight at once.
+    _claimPatch(body) {
+      const claims = {};
+      for (const key of Object.keys(body)) {
+        this._patchGen[key] = (this._patchGen[key] || 0) + 1;
+        claims[key] = {
+          gen: this._patchGen[key],
+          before: JSON.stringify(this.person[key]),
+        };
+      }
+      return claims;
+    },
+
+    _adopt(updated, claims) {
+      for (const [key, claim] of Object.entries(claims)) {
+        if (!(key in updated)) continue;
+        // A newer request owns the field, or the user changed it meanwhile.
+        if (this._patchGen[key] !== claim.gen) continue;
+        if (JSON.stringify(this.person[key]) !== claim.before) continue;
+        this.person[key] = updated[key];
+      }
+    },
+
     async patch(body) {
+      const claims = this._claimPatch(body);
       const res = await fetch(`/api/v1/people/${this.person.uuid}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -271,15 +306,10 @@ window.personPanel = function personPanel() {
         return null;
       }
       const updated = await res.json();
-      // Publish only the fields this request carried, the way a save() names
-      // its update_fields. Blurring a field starts a PATCH, and the click that
-      // blurred it runs while the reply is still in flight: a reply that
-      // restored the whole record would undo what that click just did, the new
-      // entry row or the half-typed note. `move` and `linkUser` send fields
-      // the reply does not echo back; they reload the panel from the server.
-      for (const key of Object.keys(body)) {
-        if (key in updated) this.person[key] = updated[key];
-      }
+      // Only the fields this request carried, the way a save() names its
+      // update_fields. `move` and `linkUser` send fields the reply does not
+      // echo back; they reload the panel from the server instead.
+      this._adopt(updated, claims);
       return updated;
     },
 

@@ -3,7 +3,7 @@ from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -29,7 +29,7 @@ class PersonAvatarView(CacheControlMixin, APIView):
     cache_stale_while_revalidate = 86400
 
     def get_permissions(self):
-        if self.request.method == "GET":
+        if self.request.method in SAFE_METHODS:
             return [AllowAny()]
         return [IsAuthenticated()]
 

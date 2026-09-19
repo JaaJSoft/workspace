@@ -60,6 +60,12 @@ class PersonAvatarApiTests(APITestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
+    def test_head_is_public(self):
+        save_avatar(self.person, png_upload(), 0, 0, 64, 64)
+        self.client.force_authenticate(None)
+        response = self.client.head(self.url)
+        self.assertEqual(response.status_code, 200)
+
     def test_upload_unreachable_is_404(self):
         self.client.force_authenticate(self.bob)
         response = self.client.post(

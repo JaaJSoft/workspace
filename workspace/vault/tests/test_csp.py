@@ -78,7 +78,13 @@ class VaultCspTests(TestCase):
         it with the setting: a renamed route would leave both sides agreeing
         on a URL that answers 404, and every report would vanish."""
         directives = dict(
-            part.strip().split(" ", 1)
-            for part in self._policy("vault_ui:onboarding").split(";")
+            # partition, not split: a valueless directive such as
+            # upgrade-insecure-requests would otherwise fail this test on an
+            # unpacking error that says nothing about the policy.
+            (name, value.strip())
+            for name, _, value in (
+                part.strip().partition(" ")
+                for part in self._policy("vault_ui:onboarding").split(";")
+            )
         )
         self.assertEqual(resolve(directives["report-uri"]).url_name, "csp-report")

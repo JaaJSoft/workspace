@@ -11,6 +11,7 @@ attribute or a CDN tag added to the navbar tomorrow lands here as a blank
 banner - and this test names the offender instead.
 """
 
+import logging
 import time
 
 from django.core.cache import cache
@@ -88,23 +89,34 @@ class VaultCspEnforcementTests(PlaywrightTestCase):
         """The header and the endpoint are each tested on their own; only a
         browser proves they meet. It also proves the request survives what a
         real one carries - the signed-in page's cookies, and no CSRF token."""
-        with self.assertLogs("workspace.core.csp_report", "WARNING") as logs:
+        # Captured by hand rather than with assertLogs: the wait belongs
+        # inside the capture, and a report that never arrives should fail on
+        # the assertion below - which names what was expected - not on
+        # assertLogs reporting an empty list as it leaves the block.
+        records = []
+        handler = logging.Handler(logging.WARNING)
+        handler.emit = records.append
+        logger = logging.getLogger("workspace.core.csp_report")
+        logger.addHandler(handler)
+        try:
             self.page.goto(f"{self.live_server_url}/vault/onboarding")
             self.page.wait_for_load_state("networkidle")
             self.page.evaluate(PROVOKE_VIOLATION)
             # The report is posted by the browser on its own schedule and
             # handled on the live server's thread.
             deadline = time.monotonic() + 10
-            while not logs.records and time.monotonic() < deadline:
+            while not records and time.monotonic() < deadline:
                 time.sleep(0.1)
+        finally:
+            logger.removeHandler(handler)
 
-        lines = [record.getMessage() for record in logs.records]
+        lines = [record.getMessage() for record in records]
         self.assertTrue(
             any(
                 "img-src" in line and "https://blocked.example/pixel.png" in line
                 for line in lines
             ),
-            lines,
+            f"no CSP report reached the endpoint within 10s; captured: {lines}",
         )
         self.assertFalse([line for line in lines if "leak=1" in line], lines)
 

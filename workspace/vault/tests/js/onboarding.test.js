@@ -510,8 +510,8 @@ test('the csrf token comes from the shared helper', () => {
 });
 
 test('editing the password drops the previous verdict at once', () => {
-  // x-model writes the field synchronously, the lookups wait 400 ms. Between
-  // the two the floor must not still be answering about the old value.
+  // x-model writes the field synchronously, the corpus lookup waits 400 ms.
+  // Between the two the floor must not still be answering about the old value.
   const app = component();
   app.password = 'a-strong-one-nobody-has-used';
   app.score = 4;
@@ -523,25 +523,72 @@ test('editing the password drops the previous verdict at once', () => {
   app.confirmation = 'password1';
   app.passwordEdited();
   assert.equal(app.passwordAcceptable(), false, 'the old verdict survived');
-  assert.equal(app.score, null);
   assert.equal(app.breachStatus, 'unchecked');
 });
 
-test('a strength estimate that throws says so instead of hanging', async () => {
-  // The button is gated on the score, so a rejected estimate left it disabled
-  // for good with nothing on screen to explain it.
-  const app = component({
-    passwordStrengthTools: {
-      estimateStrength: async () => {
-        throw new Error('zxcvbn dictionaries missing');
-      },
-    },
-  });
-  app.password = 'whatever-the-user-typed';
-  await app.evaluateStrength();
+test('an input event alone never clears the score', () => {
+  // The score belongs to the meter, which speaks from an Alpine effect - and
+  // an effect does not re-run when a property is assigned the value it already
+  // holds. A password manager re-filling the field with what is already there
+  // is exactly that, so a score cleared on input would never come back and the
+  // step would stay shut on a password the bar calls very strong.
+  // tests/e2e/test_onboarding_browser.py walks that one in a browser; here the
+  // point is simply that nothing on this side touches the value.
+  const app = component();
+  app.password = 'a-strong-one-nobody-has-used';
+  app.confirmation = app.password;
+  app.strengthChanged({ status: 'ready', score: 4 });
+
+  app.passwordEdited();
+  assert.equal(app.score, 4, 'the floor threw away a verdict it cannot ask for again');
+});
+
+test('the score comes from the meter, and only from a landed estimate', () => {
+  const app = component();
+  app.strengthChanged({ status: 'ready', score: 4 });
+  assert.equal(app.score, 4);
+  assert.equal(app.passwordStrongEnough(), true);
+
+  // Every status short of a landed estimate is an unmeasured password, and an
+  // unmeasured password is not a strong one.
+  for (const status of ['checking', 'idle']) {
+    app.strengthChanged({ status, score: null });
+    assert.equal(app.score, null, status + ' left a score behind');
+    assert.equal(app.passwordStrongEnough(), false);
+  }
+});
+
+test('an estimator that could not run keeps the floor closed', () => {
+  // The button is gated on the score. The meter says "could not be checked" on
+  // screen; what must not happen here is the floor opening because nothing
+  // came back.
+  const app = component();
+  app.strengthChanged({ status: 'ready', score: 4 });
+  app.strengthChanged({ status: 'unavailable', score: null });
   assert.equal(app.score, null);
-  assert.match(app.feedback, /could not be checked/);
   assert.equal(app.passwordStrongEnough(), false);
+});
+
+test('a score below the norm is refused even when the meter reports one', () => {
+  const app = component();
+  app.password = 'a'.repeat(20);
+  app.confirmation = app.password;
+  app.breachStatus = 'clean';
+  app.strengthChanged({ status: 'ready', score: 2 });
+  assert.equal(app.passwordAcceptable(), false);
+  app.strengthChanged({ status: 'ready', score: 3 });
+  assert.equal(app.passwordAcceptable(), true);
+});
+
+test('the component never reaches for the estimator itself', () => {
+  // The meter under the field owns the estimate. A second caller here would
+  // put the two on different debounces and let the floor answer about a
+  // password the bar is no longer describing.
+  const source = require('node:fs').readFileSync(
+    'workspace/vault/ui/static/vault/ui/js/onboarding.js', 'utf8'
+  );
+  assert.doesNotMatch(source, /estimateStrength/);
+  assert.doesNotMatch(source, /passwordStrengthTools/);
 });
 
 test('leaving the page is guarded until the key is acknowledged', async () => {

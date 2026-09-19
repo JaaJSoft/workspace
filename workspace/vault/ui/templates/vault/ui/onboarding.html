@@ -193,6 +193,7 @@
               <section
                 class="space-y-4"
                 x-init="$nextTick(() => $el.querySelector('[data-step-focus]')?.focus())"
+                @strength-change="strengthChanged($event.detail)"
               >
                 <p>Pick your master password. It never leaves this browser.</p>
                 <label class="form-control w-full">
@@ -217,6 +218,15 @@
                     @keydown.enter="passwordAcceptable() && !busy && generateAndSeal()"
                   />
                 </label>
+                {% comment %}
+                  The bar and the verdict, under the field they measure, as on
+                  the account password form. The checklist below keeps the
+                  criterion - the floor is this page's - but the wording and the
+                  bands live in one component now. The meter only exists while
+                  this step does, so the estimator is fetched when the step
+                  opens and never on step one.
+                {% endcomment %}
+                {% include "ui/partials/password_strength.html" with password_expr="password" %}
                 <label class="form-control w-full">
                   <span class="label-text">Confirm it</span>
                   <input
@@ -266,10 +276,7 @@
                         <i data-lucide="circle-check" class="w-4 h-4"></i>
                       </span>
                     </span>
-                    <span>
-                      Strong enough to resist guessing
-                      <span x-show="feedback" x-text="'- ' + feedback" x-cloak></span>
-                    </span>
+                    <span>Strong enough to resist guessing</span>
                   </li>
                   <li
                     class="flex items-start gap-2"
@@ -444,9 +451,7 @@
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
   <script src="{% static 'vault/ui/js/vendor/vault-onboarding.js' %}"></script>
-  <script
-    src="{% static 'ui/js/vendor/password-strength/password-strength.js' %}"
-  ></script>
+  <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script src="{% static 'vault/ui/js/api.js' %}"></script>
   <script src="{% static 'vault/ui/js/session.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_create.js' %}"></script>

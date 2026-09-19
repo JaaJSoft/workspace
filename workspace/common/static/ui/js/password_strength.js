@@ -111,6 +111,7 @@ window.passwordStrengthMeter = function passwordStrengthMeter(bundleUrl) {
         this.warning = result.warning || '';
         this.suggestions = result.suggestions || [];
         this.status = 'ready';
+        this.announce('ready', result.score);
       } catch (err) {
         if (token !== generation) return;
         this.reset('unavailable');
@@ -122,6 +123,21 @@ window.passwordStrengthMeter = function passwordStrengthMeter(bundleUrl) {
       this.score = null;
       this.warning = '';
       this.suggestions = [];
+      this.announce(status, null);
+    },
+
+    // The score never leaves this scope on its own: the meter is a nested
+    // component, and a host with a floor of its own cannot read into it. So
+    // every state change is announced, and a listener never has to poll.
+    //
+    // Both values are arguments, and reading them off `this` instead is the
+    // one change to avoid: reset() runs inside the host's x-effect, so a read
+    // of this.status there makes the effect depend on a property the same
+    // effect writes. It then re-runs on its own write, forever - bumping the
+    // generation token past every estimate the debounce schedules, which
+    // leaves the meter saying "Checking..." and never anything else.
+    announce(status, score) {
+      this.$dispatch('strength-change', { status, score });
     },
 
     verdict() {

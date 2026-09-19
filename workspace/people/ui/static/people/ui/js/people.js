@@ -4,24 +4,31 @@
 const MOBILE_QUERY = '(max-width: 1023px)';
 
 window.peopleHelpers = {
-  // Group persons by the first letter of their display name, '#' for the rest.
+  // Bucket persons by accent-folded initial, '#' last. Mirrors _letter() in
+  // people/ui/views.py: the two must agree or a client-grouped list and a
+  // server-rendered one disagree on where a name belongs.
   groupPersons(persons) {
     const groups = new Map();
     for (const person of persons) {
-      const first = (person.display_name || '').slice(0, 1).toUpperCase();
-      const letter = /^[A-Z]$/.test(first) ? first : '#';
+      const first = (person.display_name || '').normalize('NFKD').charAt(0).toUpperCase();
+      const letter = /\p{L}/u.test(first) ? first : '#';
       if (!groups.has(letter)) groups.set(letter, []);
       groups.get(letter).push(person);
     }
-    return Array.from(groups, ([letter, items]) => ({ letter, items }));
+    return Array.from(groups, ([letter, items]) => ({ letter, items })).sort((a, b) => {
+      if (a.letter === '#') return b.letter === '#' ? 0 : 1;
+      if (b.letter === '#') return -1;
+      return a.letter.localeCompare(b.letter);
+    });
   },
 
-  // Query string for the list fragment from the current filters.
-  listUrl(base, { query = '', scope = '', listUuid = '' } = {}) {
+  // A /people URL carrying the filters, and the open contact when there is one.
+  listUrl(base, { query = '', scope = '', listUuid = '', person = '' } = {}) {
     const params = new URLSearchParams();
     if (query) params.set('q', query);
     if (scope) params.set('scope', scope);
     if (listUuid) params.set('list', listUuid);
+    if (person) params.set('person', person);
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
   },
@@ -64,8 +71,24 @@ window.peopleApp = function peopleApp(config) {
       });
     },
 
-    refreshList() {
+    // What the address bar should read for the current state. The view reads
+    // all four back, so a reload or a shared link reopens the same listing.
+    pageUrl() {
+      return window.peopleHelpers.listUrl('/people', {
+        query: this.query,
+        scope: this.scope,
+        listUuid: this.listUuid,
+        person: this.current,
+      });
+    },
+
+    swapList() {
       return this.$ajax(this.listFragmentUrl(), { target: 'person-list' });
+    },
+
+    refreshList() {
+      history.replaceState(history.state, '', this.pageUrl());
+      return this.swapList();
     },
 
     setScope(scope) {
@@ -83,20 +106,25 @@ window.peopleApp = function peopleApp(config) {
     openPerson(uuid, { push = true } = {}) {
       this.current = uuid;
       this.panelOpen = true;
-      if (push) history.pushState({ person: uuid }, '', `/people?person=${uuid}`);
+      if (push) history.pushState({ person: uuid }, '', this.pageUrl());
       return this.$ajax(`/people/${uuid}/panel`, { target: 'person-panel' });
     },
 
-    closePanel() {
+    closePanel({ push = true } = {}) {
       this.current = '';
       this.panelOpen = false;
-      history.pushState({}, '', '/people');
+      if (push) history.pushState({}, '', this.pageUrl());
     },
 
     onPopState() {
-      const uuid = new URLSearchParams(window.location.search).get('person');
+      const params = new URLSearchParams(window.location.search);
+      this.query = params.get('q') || '';
+      this.scope = params.get('scope') || '';
+      this.listUuid = params.get('list') || '';
+      this.swapList();
+      const uuid = params.get('person');
       if (uuid) this.openPerson(uuid, { push: false });
-      else this.closePanel();
+      else this.closePanel({ push: false });
     },
 
     async newPerson() {
@@ -118,6 +146,8 @@ window.peopleApp = function peopleApp(config) {
         return;
       }
       const person = await res.json();
+      // A fresh contact belongs to no list, so a list filter would hide it.
+      this.listUuid = '';
       await this.refreshList();
       this.openPerson(person.uuid);
     },

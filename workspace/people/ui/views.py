@@ -1,3 +1,4 @@
+import unicodedata
 from itertools import groupby
 
 from django.contrib.auth.decorators import login_required
@@ -7,30 +8,52 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.exceptions import ValidationError
 
 from workspace.common.uuids import parse_uuid_or_none
-from workspace.people.queries import user_person_lists, user_persons
+from workspace.people.queries import reachable_list, user_person_lists, user_persons
 from workspace.people.serializers import parse_scope
 
 
 def _letter(person):
-    first = person.display_name[:1].upper()
+    """The bucket a person falls in: an accent-folded initial, or ``#``."""
+    first = unicodedata.normalize("NFKD", person.display_name[:1])[:1].upper()
     return first if first.isalpha() else "#"
 
 
+def _display_sort_key(person):
+    # Bucketing and ordering must come from the same function, so the headers
+    # can never repeat: a database collation sorts `Zoe` before `alain` on
+    # SQLite and interleaves accents on PostgreSQL, either of which splits a
+    # letter into several groups.
+    letter = _letter(person)
+    return (letter == "#", letter, person.display_name.casefold())
+
+
 def _filtered_persons(request):
+    """The matching persons, plus the filters that were actually applied.
+
+    A scope or a list the user cannot reach is dropped rather than refused,
+    and the caller echoes back only what survived - otherwise the page would
+    reopen with a filter its own listing does not honour.
+    """
     qs = user_persons(request.user).select_related("linked_user", "group")
-    q = request.GET.get("q", "").strip().lower()
-    if q:
-        qs = qs.filter(search_text__contains=q)
-    scope = request.GET.get("scope")
+    query = request.GET.get("q", "").strip()
+    if query:
+        qs = qs.filter(search_text__contains=query.lower())
+    scope = request.GET.get("scope", "")
     if scope:
         try:
             qs = qs.filter(**parse_scope(request.user, scope))
         except ValidationError:
-            pass
+            scope = ""
     list_uuid = parse_uuid_or_none(request.GET.get("list", ""))
-    if list_uuid is not None:
-        qs = qs.filter(lists__uuid=list_uuid)
-    return qs.order_by("display_name", "uuid")
+    person_list = reachable_list(request.user, list_uuid) if list_uuid else None
+    if person_list is not None:
+        qs = qs.filter(lists=person_list)
+    applied = {
+        "query": query,
+        "scope": scope,
+        "list_uuid": str(person_list.uuid) if person_list is not None else "",
+    }
+    return qs.order_by("display_name", "uuid"), applied
 
 
 def _grouped(persons):
@@ -38,13 +61,12 @@ def _grouped(persons):
 
 
 def _list_context(request):
-    persons = list(_filtered_persons(request))
+    qs, applied = _filtered_persons(request)
+    persons = sorted(qs, key=_display_sort_key)
     return {
         "groups_of_persons": _grouped(persons),
         "person_count": len(persons),
-        "query": request.GET.get("q", ""),
-        "scope": request.GET.get("scope", ""),
-        "list_uuid": request.GET.get("list", ""),
+        **applied,
     }
 
 

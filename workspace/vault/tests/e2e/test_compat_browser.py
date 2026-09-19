@@ -15,6 +15,8 @@ if the two sides run identical code.
 """
 
 from django.contrib.auth import get_user_model
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 
@@ -70,6 +72,25 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             timeout=60000,
         )
 
-        read = self.page.evaluate(READ_EVERYTHING)
+        # A failed AEAD open inside READ_EVERYTHING reaches here as a bare
+        # WebCrypto ``OperationError`` - correct, but illegible to a reader
+        # two years from now with no WebCrypto background: nothing in that
+        # name says corpus, decryption, or format. TimeoutError is left to
+        # propagate as itself - it means Playwright never got an answer, not
+        # that the answer it got failed to decrypt, and relabelling it here
+        # would send the reader to the wrong cause. Every other Error raised
+        # by the evaluate is re-raised as an AssertionError that names what
+        # actually happened, chained so the original OperationError and its
+        # stack stay visible.
+        try:
+            read = self.page.evaluate(READ_EVERYTHING)
+        except PlaywrightTimeoutError:
+            raise
+        except PlaywrightError as exc:
+            raise AssertionError(
+                "The frozen v1 corpus no longer opens with today's vault "
+                "bundle - a format or algorithm change has broken "
+                f"compatibility with data already written. {exc}"
+            ) from exc
 
         self.assertEqual(read, self.corpus.manifest)

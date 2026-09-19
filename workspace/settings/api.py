@@ -45,6 +45,18 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        # Browser-posted Content-Security-Policy reports. Not one of the
+        # account limits above: it guards no key material, and refusing a
+        # report protects nothing - it only keeps a page stuck in a violation
+        # loop from turning the log into noise. What it costs is the mirror
+        # of that. Behind a reverse proxy with NUM_PROXIES unset, the bucket
+        # is shared by the whole deployment, so ordinary traffic can exhaust
+        # it and anyone able to reach the endpoint can exhaust it on purpose;
+        # reports refused past the limit are dropped silently on both sides,
+        # which is monitoring going dark with no symptom. Set NUM_PROXIES.
+        # The value is a v1 starting point like the ones above - retune it
+        # on telemetry from a real deployment rather than on a guess here.
+        "core.csp_report.ip": "30/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

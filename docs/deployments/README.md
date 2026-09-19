@@ -72,6 +72,13 @@ Leaving it unset behind a proxy is safe but blunt: every user shares one bucket,
 answers legitimate people with `429`. Set it to the length of your chain, and make sure that chain
 **overwrites** `X-Forwarded-For` rather than appending to it.
 
+On `POST /api/v1/csp-report` that bluntness costs more than a `429`, because the endpoint is
+unauthenticated and the caller is a browser reporting a Content-Security-Policy violation. Sharing
+one bucket across the deployment means ordinary traffic can exhaust it, and anyone able to reach the
+endpoint can exhaust it deliberately. A refused report is dropped silently at both ends - the
+browser does not retry and nothing is logged - so the effect is that violation reporting stops
+without any symptom to notice. Set `NUM_PROXIES` on any deployment that relies on those reports.
+
 ### ⚠️ Deploying without a reverse proxy is unsafe
 
 In production (`DEBUG=0`), Workspace sets `SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')`. **This is only safe when a reverse proxy is in front _and_ that proxy strips any incoming `X-Forwarded-Proto` header from the client.** If Gunicorn is exposed directly to the internet, a malicious client can forge `X-Forwarded-Proto: https` and bypass HTTPS-only checks (secure cookies, HSTS, redirects). Always run behind a proxy in production.

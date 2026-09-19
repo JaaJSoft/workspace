@@ -9,6 +9,7 @@ browser's.
 
 import json
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from django.test import SimpleTestCase
@@ -359,6 +360,31 @@ class ReferenceReplayTests(SimpleTestCase):
             verified += 1
 
         self.assertEqual(verified, expected)
+
+    def test_deriving_at_the_wrong_parameters_fails_to_open_the_account(self):
+        """The corpus happens to have been written at today's Argon2
+        defaults (onboarding gives a user no way to choose otherwise), so a
+        reader that ignored the stored row and derived at fixed parameters
+        would still open it - a coincidence, not a proof that the row is
+        read. What actually matters is that a wrong set of parameters fails:
+        that only holds if derivation is driven by kdf_params on the row,
+        never by a constant in the code deriving it.
+        """
+        identity = self.identity["fields"]
+        wrong_params = {"v": "1.3", "m": 8192, "t": 2, "p": 1}
+        amk = primitives.derive_amk(
+            self.corpus.credentials["vault_master_password"],
+            primitives.crockford_decode(self.corpus.credentials["secret_key"]),
+            _b64(identity["kdf_salt"]),
+            wrong_params,
+        )
+        unwrap = primitives.hkdf(amk, ad.unwrap_info())
+        with self.assertRaises(InvalidTag):
+            primitives.aead_open(
+                unwrap,
+                _b64(identity["wrapped_kex_priv"]),
+                ad.kex_priv_ad(self.account_uuid),
+            )
 
     def test_the_corpus_archive_opens_with_its_passphrase(self):
         tree = archive.open_archive(

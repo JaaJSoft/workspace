@@ -369,6 +369,12 @@ class ReferenceReplayTests(SimpleTestCase):
         read. What actually matters is that a wrong set of parameters fails:
         that only holds if derivation is driven by kdf_params on the row,
         never by a constant in the code deriving it.
+
+        This test proves the parameter is *used*, but only in combination with
+        test_the_account_private_keys_open_under_the_stored_parameters (which
+        proves the stored parameters are *read* from the row) does it fully
+        establish that readers respect the parameters written at account
+        creation time.
         """
         identity = self.identity["fields"]
         wrong_params = {"v": "1.3", "m": 8192, "t": 2, "p": 1}

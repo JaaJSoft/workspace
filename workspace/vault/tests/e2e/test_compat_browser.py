@@ -8,10 +8,13 @@ own everything: it is the only reader here that shares no line with either
 half of the corpus's own generation walk. Opening the frozen rows with it is
 what closes the circularity.
 
-``READ_EVERYTHING`` is imported from ``compat_scripts`` rather than defined
-here: it is the exact script the generation walk used to freeze the
-manifest, so comparing its output against that manifest is only meaningful
-if the two sides run identical code.
+Two scripts verify the frozen corpus: ``READ_EVERYTHING`` decrypts every
+ciphertext and compares the manifest to ensure all bytes still open under
+today's bundle, and ``VERIFY_EVERY_SIGNATURE`` checks every signed row
+through the client's own verification path. Decryption proves ciphertexts
+survive, signature verification proves the signing path still validates them,
+and a canonical-encoding regression breaks only the second - hence both are
+needed.
 """
 
 from django.contrib.auth import get_user_model
@@ -157,10 +160,10 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             ),
         )
 
-    def test_a_browser_opens_every_row_of_the_frozen_account(self):
-        """The whole manifest, compared in one shot - never a walk of
-        selected keys. A partial comparison would pass on a reader that
-        silently dropped a vault, a folder, or a field.
+    def _unlock(self):
+        """Navigate to the vault and unlock with the corpus credentials.
+
+        Waits for window.vaultSession.isUnlocked() to return true.
         """
         self.page.goto(f"{self.live_server_url}/vault")
         self.page.wait_for_selector("input[autocomplete='current-password']")
@@ -176,6 +179,13 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             "() => window.vaultSession && window.vaultSession.isUnlocked()",
             timeout=60000,
         )
+
+    def test_a_browser_opens_every_row_of_the_frozen_account(self):
+        """The whole manifest, compared in one shot - never a walk of
+        selected keys. A partial comparison would pass on a reader that
+        silently dropped a vault, a folder, or a field.
+        """
+        self._unlock()
 
         # A failed AEAD open inside READ_EVERYTHING reaches here as a bare
         # WebCrypto ``OperationError`` - correct, but illegible to a reader
@@ -224,20 +234,7 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
         for kind, count in expected.items():
             self.assertGreater(count, 0, f"expected at least one {kind}")
 
-        self.page.goto(f"{self.live_server_url}/vault")
-        self.page.wait_for_selector("input[autocomplete='current-password']")
-        self.page.fill(
-            "input[autocomplete='current-password']",
-            self.corpus.credentials["vault_master_password"],
-        )
-        self.page.fill(
-            "input[spellcheck='false']", self.corpus.credentials["secret_key"]
-        )
-        self.page.click("button:has-text('Unlock')")
-        self.page.wait_for_function(
-            "() => window.vaultSession && window.vaultSession.isUnlocked()",
-            timeout=60000,
-        )
+        self._unlock()
 
         # Same treatment as the manifest read above: a signature failure
         # reaches here as a bare WebCrypto rejection or the message this
@@ -252,7 +249,7 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             raise AssertionError(
                 "The frozen v1 corpus's signatures no longer verify against "
                 "today's vault bundle - a canonical encoding or signing "
-                f"change has broken compatibility with data already "
+                "change has broken compatibility with data already "
                 f"signed. {exc}"
             ) from exc
 

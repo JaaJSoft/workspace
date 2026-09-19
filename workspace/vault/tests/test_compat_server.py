@@ -11,10 +11,9 @@ encoder is a known limit of this layer, closed by the browser replay
 elsewhere, not by anything here.
 """
 
-from rest_framework.test import APIClient
 from django.test import TestCase
+from rest_framework.test import APIClient
 
-from . import compat
 from ..models import AccountIdentity, Vault, VaultEntry, VaultFolder, VaultTag
 from ..services.attestation import verify_kex_pub_attestation
 from ..services.metadata import (
@@ -24,20 +23,24 @@ from ..services.metadata import (
     vault_metadata_payload,
     verify_record,
 )
+from . import compat
 
-# Every published corpus version a replay test in this file reads. Task 5
-# checks this against compat.versions() so a new corpus directory can never
-# go unread.
-COVERED = ["v1"]
+# The corpora this file's replays actually open, and the versions derived
+# from them. test_compat_frozen checks COVERED against compat.versions() so a
+# new corpus directory can never go unread - deriving the list from the loads
+# themselves is what stops a version being *declared* covered by a replay that
+# never reads it.
+CORPORA = (compat.load("v1"),)
+COVERED = [corpus.root.name for corpus in CORPORA]
 
 
 class ServerReplayTests(TestCase):
-    fixtures = [str(compat.load("v1").rows)]
+    fixtures = [str(CORPORA[0].rows)]
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.corpus = compat.load("v1")
+        (cls.corpus,) = CORPORA
         cls.manifest_vaults = cls.corpus.manifest["vaults"]
 
     def setUp(self):
@@ -154,6 +157,7 @@ class ServerReplayTests(TestCase):
 
         stored_vaults = {str(v.uuid): v for v in Vault.objects.all()}
         self.assertEqual(len(stored_vaults), len(self.manifest_vaults))
+        self.assertGreater(len(stored_vaults), 0)
 
         resp = client.get("/api/v1/vault/vaults")
         self.assertEqual(resp.status_code, 200)
@@ -165,7 +169,9 @@ class ServerReplayTests(TestCase):
 
         for vault_uuid, stored_vault in stored_vaults.items():
             served_vault = served_vaults[vault_uuid]
-            self.assertEqual(served_vault["encrypted_name"], stored_vault.encrypted_name)
+            self.assertEqual(
+                served_vault["encrypted_name"], stored_vault.encrypted_name
+            )
             self.assertEqual(
                 served_vault["encrypted_description"],
                 stored_vault.encrypted_description,
@@ -176,9 +182,7 @@ class ServerReplayTests(TestCase):
             stored_folders = {
                 str(f.uuid): f for f in VaultFolder.objects.filter(vault=stored_vault)
             }
-            folder_resp = client.get(
-                "/api/v1/vault/folders", {"vault": vault_uuid}
-            )
+            folder_resp = client.get("/api/v1/vault/folders", {"vault": vault_uuid})
             self.assertEqual(folder_resp.status_code, 200)
             served_folders = {row["uuid"]: row for row in folder_resp.json()}
             self.assertEqual(set(served_folders), set(stored_folders))
@@ -201,7 +205,9 @@ class ServerReplayTests(TestCase):
             self.assertEqual(set(served_tags), set(stored_tags))
             for tag_uuid, stored_tag in stored_tags.items():
                 served_tag = served_tags[tag_uuid]
-                self.assertEqual(served_tag["encrypted_name"], stored_tag.encrypted_name)
+                self.assertEqual(
+                    served_tag["encrypted_name"], stored_tag.encrypted_name
+                )
                 self.assertEqual(served_tag["metadata_sig"], stored_tag.metadata_sig)
                 reconciled_tags += 1
 

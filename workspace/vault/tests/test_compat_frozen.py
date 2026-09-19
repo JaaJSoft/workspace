@@ -19,9 +19,7 @@ from pathlib import Path
 
 from django.test import SimpleTestCase
 
-from . import compat
-from . import test_compat_reference
-from . import test_compat_server
+from . import compat, test_compat_reference, test_compat_server
 from .e2e import test_compat_browser
 
 

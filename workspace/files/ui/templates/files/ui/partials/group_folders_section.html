@@ -55,6 +55,8 @@ Context variables:
         <li
           class="list-none"
           :class="collapsed ? 'flex justify-center' : ''"
+          data-drop-folder="{{ folder.uuid }}"
+          data-drop-folder-name="{{ folder.name }}"
           @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-group-folder-context-menu', { detail: { event: $event, uuid: '{{ folder.uuid }}', name: '{{ folder.name|escapejs }}', isFavorite: false } }))"
         >
           {% include "files/ui/partials/_sidebar_folder_item.html" with folder=folder default_icon="folder" default_color="text-warning" active_id="group:"|add:folder.uuid %}

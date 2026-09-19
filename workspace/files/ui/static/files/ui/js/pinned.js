@@ -47,8 +47,20 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     },
 
 
+    // Over a pinned folder the gesture is a move into it (drag_move.js
+    // owns that), so the pin zone steps back until the pointer is over
+    // its own empty area again.
+    _overFolderTarget(event) {
+      return window.fileDragMove && window.fileDragMove.isOverTarget(event);
+    },
+
     onDragOver(event) {
       if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
+      if (this._overFolderTarget(event)) {
+        this.dragOver = false;
+        return;
+      }
+      this.dragOver = true;
       // Must be a member of the source's effectAllowed or the browser
       // resets this to 'none' and refuses the drop. 'copy' belongs to
       // every default set; 'link' does not, and Chrome on Linux clamps
@@ -59,7 +71,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     onDragEnter(event) {
       if (!event.dataTransfer.types.includes('application/x-pin-folder')) return;
       this.dragCounter++;
-      this.dragOver = true;
+      this.dragOver = !this._overFolderTarget(event);
     },
 
     onDragLeave(event) {
@@ -73,6 +85,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     async onDrop(event) {
       this.dragOver = false;
       this.dragCounter = 0;
+      if (this._overFolderTarget(event)) return;
       const raw = event.dataTransfer.getData('application/x-pin-folder');
       if (!raw) return;
       try {

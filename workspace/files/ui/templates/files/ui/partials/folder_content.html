@@ -393,7 +393,8 @@
                   data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
                   data-created="{{ node.created_at|date:'U' }}"
                   data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% endif %}
+                  {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
+                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
                   @contextmenu="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
@@ -592,7 +593,8 @@
                   data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" @dragstart="$event.dataTransfer.effectAllowed = 'copy'; $event.dataTransfer.setData('application/x-pin-folder', JSON.stringify({uuid: '{{ node.uuid }}', name: '{{ node.name|escapejs }}'}))" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% endif %}
+                  {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
+                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
                   @contextmenu.prevent="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',

@@ -7,7 +7,7 @@
           {% if forloop.first %}
             <li class="flex items-center shrink-0">
               {% if item.url %}
-                <a href="{{ item.url }}" class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
                   {% if item.icon %}
                     <i
                       data-lucide="{{ item.icon }}"
@@ -46,7 +46,7 @@
                     {% if not forloop.first and forloop.revcounter > 2 %}
                       <li>
                         {% if mid_item.url %}
-                          <a href="{{ mid_item.url }}" class="gap-1.5 py-1"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+                          <a href="{{ mid_item.url }}"{% for k, v in mid_item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="gap-1.5 py-1"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
                             {% if mid_item.icon %}
                               <i
                                 data-lucide="{{ mid_item.icon }}"
@@ -74,7 +74,7 @@
             </li>
             <li class="flex items-center shrink-0">
               {% if item.url %}
-                <a href="{{ item.url }}" class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
                   {% if item.icon %}
                     <i
                       data-lucide="{{ item.icon }}"
@@ -98,7 +98,7 @@
           {% elif forloop.last %}
             <li class="flex items-center min-w-0">
               {% if item.url %}
-                <a href="{{ item.url }}" class="flex items-center gap-1 hover:opacity-70 min-w-0"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70 min-w-0"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
                   {% if item.icon %}
                     <i
                       data-lucide="{{ item.icon }}"
@@ -131,7 +131,7 @@
             class="flex items-center {% if forloop.last %}min-w-0{% else %}shrink-0{% endif %}"
           >
             {% if item.url %}
-              <a href="{{ item.url }}" class="flex items-center gap-1 hover:opacity-70 {% if forloop.last %}min-w-0{% endif %}"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+              <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70 {% if forloop.last %}min-w-0{% endif %}"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
                 {% if item.icon %}
                   <i
                     data-lucide="{{ item.icon }}"

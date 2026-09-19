@@ -344,6 +344,63 @@ window.fileTableControls = function fileTableControls() {
       return Array.from(this.selectedUuids);
     },
 
+    hasAction(uuid, actionId) {
+      return (this.actionsMap[uuid] || []).some((a) => a.id === actionId);
+    },
+
+    // The rows or cards the listing holds for these uuids, as the items the
+    // transfer helpers take.
+    itemsFromUuids(uuids) {
+      const items = [];
+      for (const uuid of uuids) {
+        const el = this.originalRows.find((row) => row.dataset.uuid === uuid);
+        if (!el) continue;
+        items.push({
+          uuid,
+          name: el.dataset.displayName || '',
+          nodeType: el.dataset.nodeType || 'file',
+          element: el,
+        });
+      }
+      return items;
+    },
+
+    // The folder this listing shows, null for the root, undefined when the
+    // listing is not a folder (favorites, recent, a tag, shared with me).
+    listingFolder() {
+      const browser = document.getElementById('folder-browser');
+      if (!browser || browser.dataset.folderListing !== '1') return undefined;
+      return browser.dataset.folder || null;
+    },
+
+    // A row or card starts a drag. Grabbing a selected item carries the
+    // whole selection; a folder additionally offers the sidebar pin. The
+    // move payload is only attached when every item can be cut - the
+    // registry decides, the drop targets refuse the rest.
+    onNodeDragStart(event, uuid, name, nodeType) {
+      const dt = event.dataTransfer;
+      if (nodeType === 'folder') {
+        dt.setData('application/x-pin-folder', JSON.stringify({ uuid, name }));
+      }
+      const uuids = this.selectedUuids.has(uuid) ? this.getSelectedUuids() : [uuid];
+      const items = this.itemsFromUuids(uuids);
+      const movable = items.length > 0 && items.every((item) => this.hasAction(item.uuid, 'cut'));
+      if (!movable && nodeType !== 'folder') {
+        event.preventDefault();
+        return;
+      }
+      // The pin zone asks for 'copy', a folder target for 'move': both have
+      // to be members of what the source allows.
+      dt.effectAllowed = movable ? 'copyMove' : 'copy';
+      if (movable) {
+        window.fileDragMove.start(
+          dt,
+          items.map(({ uuid, name, nodeType }) => ({ uuid, name, nodeType })),
+          { sourceFolder: this.listingFolder(), sources: items.map((item) => item.element) }
+        );
+      }
+    },
+
     getSelectedCount() {
       return this.selectedUuids.size;
     },
@@ -414,6 +471,7 @@ window.fileTableControls = function fileTableControls() {
           // replaced.
           this.actionsMap = { ...this.actionsMap, ...part };
           this._computeBulkActions();
+          if (window.fileDragMove) window.fileDragMove.rememberActions(part);
         }));
       } catch (e) {
         // silent

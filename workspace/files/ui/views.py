@@ -60,6 +60,7 @@ def build_breadcrumbs(folder, user=None):
             "uuid": f.uuid,
             "icon": f.icon or "folder",
             "icon_color": f.color or "text-warning",
+            "data": {"drop-folder": str(f.uuid), "drop-folder-name": f.name},
         }
 
     if len(parts) <= 1:
@@ -96,15 +97,18 @@ def build_breadcrumbs(folder, user=None):
         breadcrumbs.insert(0, {"label": "Groups", "icon": "users"})
     else:
         label = user.get_full_name() or user.username if user else "My Files"
-        breadcrumbs.insert(
-            0,
-            {
-                "label": label,
-                "url": "/files",
-                "icon": "hard-drive",
-            },
-        )
+        breadcrumbs.insert(0, _root_crumb(label))
     return breadcrumbs
+
+
+def _root_crumb(label):
+    """The user's root: a drop target like any folder, with an empty id."""
+    return {
+        "label": label,
+        "url": "/files",
+        "icon": "hard-drive",
+        "data": {"drop-folder": ""},
+    }
 
 
 def _build_context(request, folder=None, is_trash_view=False):
@@ -136,7 +140,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         and str(request.GET.get("recent", "")).lower() in {"1", "true", "yes"}
     )
     user_label = request.user.get_full_name() or request.user.username
-    files_root = {"label": user_label, "url": "/files", "icon": "hard-drive"}
+    files_root = _root_crumb(user_label)
     breadcrumbs = [files_root]
 
     SPECIAL_VIEWS = {

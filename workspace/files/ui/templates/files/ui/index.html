@@ -74,7 +74,7 @@
           </span>
         </h3>
         <ul class="space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
           {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
@@ -176,6 +176,7 @@
             class="h-full flex flex-col"
             id="folder-browser"
             data-folder="{{ current_folder.uuid|default:'' }}"
+            data-folder-listing="{% if current_folder or is_root_view %}1{% else %}0{% endif %}"
             data-view-url="{{ current_view_url }}"
             data-parent-url="{{ parent_url|default:'' }}"
             data-sidebar-active="{{ sidebar_active }}"
@@ -405,6 +406,7 @@
   <script src="{% static 'files/ui/js/tag_sidebar.js' %}"></script>
   <script src="{% static 'files/ui/js/browser.js' %}"></script>
   <script src="{% static 'files/ui/js/table.js' %}"></script>
+  <script src="{% static 'files/ui/js/drag_move.js' %}"></script>
   <script src="{% static 'files/ui/js/pinned.js' %}"></script>
   <script src="{% static 'files/ui/js/context_menu.js' %}"></script>
   <script src="{% static 'files/ui/js/share_modal.js' %}"></script>

@@ -143,6 +143,9 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
 
         The reorder path never had this bug: ``onPinnedDragStart`` sets
         ``effectAllowed = 'move'`` to match its own ``dropEffect``.
+
+        A row that can also be moved (``drag_move.js``) declares
+        ``copyMove``: ``copy`` for this zone, ``move`` for a folder.
         """
         folder = self.make_folder("Reports")
         self.login_as(self.user)
@@ -175,9 +178,9 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
         self.drag(row, drop_zone, mid_drag=capture)
 
         started = dragstart()
-        assert started["effectAllowed"] == "copy", (
-            f"drag source must declare effectAllowed='copy' to match the "
-            f"drop zone's dropEffect; got {started['effectAllowed']!r}"
+        assert started["effectAllowed"] in {"copy", "copyMove"}, (
+            f"drag source must allow the 'copy' the drop zone asks for; "
+            f"got {started['effectAllowed']!r}"
         )
         assert effects["dropEffect"] == "copy", (
             f"drop zone should ask for the 'copy' effect, got "

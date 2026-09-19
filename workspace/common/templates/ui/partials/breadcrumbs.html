@@ -6,6 +6,8 @@
     - code (optional bool): if true, wraps label in <code>
     - icon (optional): lucide icon name to display before the label
     - icon_color (optional): CSS class for icon color (e.g., 'text-warning')
+    - data (optional): dict of data-* attributes written on the link, without
+      the prefix ({'drop-folder': uuid} renders data-drop-folder="...")
 
   Optional context:
     - x_target: Alpine AJAX target id for links (enables SPA-like navigation)

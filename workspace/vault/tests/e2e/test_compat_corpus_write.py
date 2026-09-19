@@ -16,6 +16,7 @@ stopped at the form would leave unguarded.
 """
 
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -135,6 +136,26 @@ def _refuse_if_published(version: str, root: Path = compat.CORPUS_ROOT) -> Path:
     return target
 
 
+def _write_sums(staging: Path) -> None:
+    """Hash what the walk just wrote, from those exact bytes.
+
+    The alternative is hashing after publication, by hand, which certifies
+    "unchanged since somebody hashed it" rather than "unchanged since the
+    browser wrote it" - and quietly blesses whatever an editor, a formatter
+    or a line-ending normalisation did in between as canonical.
+
+    `sha256sum` format, LF, sorted by name, and SHA256SUMS does not hash
+    itself: exactly what test_compat_frozen._read_sums parses back.
+    """
+    lines = [
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+        for path in sorted(staging.iterdir())
+        if path.name != "SHA256SUMS"
+    ]
+    with (staging / "SHA256SUMS").open("w", encoding="utf-8", newline="\n") as handle:
+        handle.writelines(lines)
+
+
 @contextlib.contextmanager
 def _corpus_output(version: str, root: Path = compat.CORPUS_ROOT):
     """A directory to fill, published as ``version`` only if the walk finishes.
@@ -145,11 +166,17 @@ def _corpus_output(version: str, root: Path = compat.CORPUS_ROOT):
     directory then refuses every later regeneration while making compat.load()
     die on a missing file instead of saying what is wrong. Staging elsewhere
     turns publication into one rename - it either happened or it did not.
+
+    The last thing written into the staging directory is its own SHA256SUMS,
+    so a version arrives already guarded by the bytes the walk itself
+    produced - never by a hash taken of whatever was on disk some time after
+    publication.
     """
     target = _refuse_if_published(version, root)
     staging = Path(tempfile.mkdtemp(prefix=f"vault-corpus-{version}-"))
     try:
         yield staging
+        _write_sums(staging)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
@@ -178,6 +205,34 @@ class CorpusWriteGuardTests(SimpleTestCase):
             )
             (staging / "rows.json").write_text("[]", encoding="utf-8")
         self.assertEqual((root / "v99" / "rows.json").read_text(encoding="utf-8"), "[]")
+        # A version arrives self-guarded. Hashed by the generator from the
+        # bytes it wrote, so the append-only test of task 5 covers the corpus
+        # from the moment it is published rather than from whenever a human
+        # got round to hashing it.
+        self.assertEqual(
+            (root / "v99" / "SHA256SUMS").read_bytes(),
+            f"{hashlib.sha256(b'[]').hexdigest()}  rows.json\n".encode(),
+        )
+
+    def test_the_generator_reproduces_the_published_sums(self):
+        """v1's SHA256SUMS was written by hand, after publication. This is
+        what says the generator now produces that same file byte for byte -
+        so the format the append-only guard parses and the format the walk
+        emits cannot drift apart at v2.
+        """
+        published = compat.CORPUS_ROOT / VERSION
+        staging = self._scratch_root() / "staged"
+        staging.mkdir()
+        for path in published.iterdir():
+            if path.name != "SHA256SUMS":
+                shutil.copyfile(path, staging / path.name)
+
+        _write_sums(staging)
+
+        self.assertEqual(
+            (staging / "SHA256SUMS").read_bytes(),
+            (published / "SHA256SUMS").read_bytes(),
+        )
 
     def test_a_failed_walk_publishes_nothing_and_leaves_nothing(self):
         root = self._scratch_root()

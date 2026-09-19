@@ -22,4 +22,36 @@ class PeopleConfig(AppConfig):
 
         # Registers the actions at boot; a broken import fails the boot
         # instead of a worker answering "no actions" forever.
+        from workspace.core.module_registry import CommandInfo, SearchProviderInfo
         from workspace.people.actions import person as person_actions  # noqa: F401
+        from workspace.people.search import search_persons
+
+        registry.register_search_provider(
+            SearchProviderInfo(
+                slug="people", module_slug="people", search_fn=search_persons
+            )
+        )
+        registry.register_commands(
+            [
+                CommandInfo(
+                    name="People",
+                    keywords=["people", "contacts", "address book", "carnet"],
+                    icon="contact",
+                    color="secondary",
+                    url="/people",
+                    kind="navigate",
+                    module_slug="people",
+                    order=30,
+                ),
+                CommandInfo(
+                    name="New contact",
+                    keywords=["new contact", "new person", "add contact"],
+                    icon="user-plus",
+                    color="secondary",
+                    url="/people?action=new-person",
+                    kind="action",
+                    module_slug="people",
+                    order=31,
+                ),
+            ]
+        )

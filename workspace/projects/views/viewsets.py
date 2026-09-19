@@ -48,6 +48,8 @@ from ..serializers import (
     SubtaskSerializer,
     TaskAttachmentCreateSerializer,
     TaskAttachmentSerializer,
+    TaskBulkDeleteSerializer,
+    TaskBulkEditSerializer,
     TaskCommentBodySerializer,
     TaskCommentSerializer,
     TaskFileLinkCreateSerializer,
@@ -66,6 +68,7 @@ from ..services.attachments import (
     create_attachments,
     remove_attachment,
 )
+from ..services.bulk import UNSET, bulk_update_tasks, delete_tasks
 from ..services.comments import add_comment, notify_comment_edited
 from ..services.conversion import convert_project_type
 from ..services.epics import epics_with_progress
@@ -889,6 +892,40 @@ class TaskViewSet(ProjectContextMixin, viewsets.ModelViewSet):
         except ProjectRuleError as exc:
             return _rule_error_response(exc)
         return Response({"success": True, "updated": len(changed)})
+
+    def bulk_edit(self, request, *args, **kwargs):
+        """Bulk field edit (selection toolbars): assign/unassign, add or
+        remove labels, set the priority or the due date of the listed tasks
+        in one request. Set-oriented, so replaying a payload is a no-op."""
+        self._require_writable()
+        serializer = TaskBulkEditSerializer(
+            data=request.data, context={"project": self.project}
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        changed, skipped = bulk_update_tasks(
+            self.project,
+            data["tasks"],
+            actor=request.user,
+            assign=data.get("assign", ()),
+            unassign=data.get("unassign", ()),
+            add_labels=data.get("add_labels", ()),
+            remove_labels=data.get("remove_labels", ()),
+            priority=data.get("priority"),
+            due_date=data["due_date"] if "due_date" in data else UNSET,
+        )
+        return Response({"success": True, "updated": len(changed), "skipped": skipped})
+
+    def bulk_delete(self, request, *args, **kwargs):
+        """Bulk delete (selection toolbars). Unknown UUIDs are skipped, so a
+        retry after a partial failure is safe."""
+        self._require_writable()
+        serializer = TaskBulkDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        deleted = delete_tasks(
+            self.project, serializer.validated_data["tasks"], actor=request.user
+        )
+        return Response({"success": True, "deleted": deleted})
 
     def _resolve_status(self, status_uuid):
         return self.project.statuses.filter(uuid=status_uuid).first()

@@ -484,6 +484,91 @@ class TaskSprintSerializer(serializers.Serializer):
         return _parse_uuid_list(value, "tasks")
 
 
+class TaskBulkEditSerializer(serializers.Serializer):
+    """Bulk field edit payload: the selection plus at least one operation.
+
+    Assignees and labels are add/remove sets rather than replacement lists:
+    the selection's tasks carry different values, and "put Alice on these"
+    must not strip whoever else was on them.
+    """
+
+    # Same cap rationale as TaskMoveSerializer.
+    tasks = serializers.ListField(allow_empty=False, max_length=1000)
+    assign = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False
+    )
+    unassign = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), many=True, required=False
+    )
+    add_labels = serializers.PrimaryKeyRelatedField(
+        queryset=Label.objects.none(), many=True, required=False
+    )
+    remove_labels = serializers.PrimaryKeyRelatedField(
+        queryset=Label.objects.none(), many=True, required=False
+    )
+    priority = serializers.ChoiceField(choices=Task.Priority.choices, required=False)
+    due_date = serializers.DateField(required=False, allow_null=True)
+
+    OPERATIONS = (
+        "assign",
+        "unassign",
+        "add_labels",
+        "remove_labels",
+        "priority",
+        "due_date",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        project = self.context.get("project")
+        if project is not None:
+            for field in ("add_labels", "remove_labels"):
+                self.fields[field].child_relation.queryset = project.labels.all()
+
+    def validate_tasks(self, value):
+        return _parse_uuid_list(value, "tasks")
+
+    def validate_assign(self, users):
+        project = self.context["project"]
+        for user in users:
+            if get_project_role(user, project) is None:
+                raise serializers.ValidationError(
+                    f"{user.username} is not a member of this project."
+                )
+        return users
+
+    def validate(self, attrs):
+        if not any(field in attrs for field in self.OPERATIONS):
+            raise serializers.ValidationError("No change requested.")
+        # A repeated id would insert the same relation row twice and trip
+        # the through table's unique constraint into a 500.
+        for field in ("assign", "unassign", "add_labels", "remove_labels"):
+            pks = [obj.pk for obj in attrs.get(field, ())]
+            if len(set(pks)) != len(pks):
+                raise serializers.ValidationError({field: f"Duplicate ids in {field}."})
+        if {u.pk for u in attrs.get("assign", ())} & {
+            u.pk for u in attrs.get("unassign", ())
+        }:
+            raise serializers.ValidationError(
+                {"unassign": "A user cannot be both assigned and unassigned."}
+            )
+        if {lbl.pk for lbl in attrs.get("add_labels", ())} & {
+            lbl.pk for lbl in attrs.get("remove_labels", ())
+        }:
+            raise serializers.ValidationError(
+                {"remove_labels": "A label cannot be both added and removed."}
+            )
+        return attrs
+
+
+class TaskBulkDeleteSerializer(serializers.Serializer):
+    # Same cap rationale as TaskMoveSerializer.
+    tasks = serializers.ListField(allow_empty=False, max_length=1000)
+
+    def validate_tasks(self, value):
+        return _parse_uuid_list(value, "tasks")
+
+
 class ProjectConvertSerializer(serializers.Serializer):
     """Target board model for a project conversion."""
 

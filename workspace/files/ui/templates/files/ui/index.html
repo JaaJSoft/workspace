@@ -130,7 +130,7 @@
 
         <!-- Tags: favourites, plus the manager for the rest -->
         <div x-show="showTags" x-transition x-data="tagSidebar()">
-          {% include "files/ui/partials/tag_sidebar_section.html" %}
+          {% include "files/ui/partials/tag_sidebar_section.html" with collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </div>
       </div>
 

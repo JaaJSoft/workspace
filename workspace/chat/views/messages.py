@@ -35,7 +35,7 @@ from ..serializers import (
 from ..services.conversations import get_active_membership
 from ..services.deletion import purge_message_content
 from ..services.notifications import notify_conversation_members
-from ..services.posting import deliver_message
+from ..services.posting import post_message
 from ..services.rendering import render_message_body
 from ..services.threads import (
     mark_conversation_threads_read,
@@ -262,16 +262,19 @@ class MessageListView(CacheControlMixin, APIView):
 
         thread_root = resolve_thread_root(reply_to) if reply_to else None
 
+        conversation = Conversation.objects.get(pk=conversation_id)
         created_attachments = []
         try:
             with transaction.atomic():
-                message = Message.objects.create(
-                    conversation_id=conversation_id,
-                    author=request.user,
-                    body=body,
+                message = post_message(
+                    conversation,
+                    request.user,
+                    body,
                     body_html=body_html,
                     reply_to=reply_to,
                     thread_root=thread_root,
+                    mentioned_user_ids=mentioned_user_ids,
+                    mention_everyone=has_everyone,
                 )
 
                 for f, detection, viewer in zip(
@@ -307,14 +310,6 @@ class MessageListView(CacheControlMixin, APIView):
                         attachment.file = DjangoFile(f, name=ws_file.name)
                         attachment.save()
                     created_attachments.append(attachment)
-
-                conversation = Conversation.objects.get(pk=conversation_id)
-                deliver_message(
-                    conversation,
-                    message,
-                    mentioned_user_ids=mentioned_user_ids,
-                    mention_everyone=has_everyone,
-                )
         except (FileNotFoundError, OSError) as exc:
             logger.warning("Workspace file content unavailable: %s", scrub(str(exc)))
             return Response(

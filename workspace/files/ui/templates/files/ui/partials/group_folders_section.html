@@ -14,9 +14,21 @@ Context variables:
 
 <div id="group-folders-section">
   {% if group_folders or available_groups %}
-    <hr class="my-2 border-base-300" x-show="!collapsed" />
-    <!-- Expanded: title + create button -->
-    <div class="flex items-center mb-1" x-show="!collapsed" x-transition>
+    <hr
+      class="my-2 border-base-300{% if workspace_sidebar_collapsed %} hidden{% else %} max-lg:hidden{% endif %}"
+      :class="{ hidden: collapsed }"
+      x-show="!collapsed"
+    />
+    <!-- Expanded: title + create button. Hidden in the HTML itself while the
+         sidebar is the rail (see tag_sidebar_section.html): the row cannot
+         shrink below its heading and button, and x-show alone would leave it
+         sticking out of the rail for one frame. -->
+    <div
+      class="flex items-center mb-1{% if workspace_sidebar_collapsed %} hidden{% else %} max-lg:hidden{% endif %}"
+      :class="{ hidden: collapsed }"
+      x-show="!collapsed"
+      x-transition
+    >
       <h3
         class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1"
       >

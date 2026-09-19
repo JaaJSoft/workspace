@@ -40,7 +40,7 @@ the target element outright when an OK response lacks it.
 
   <!-- Tags: favourites, plus the manager for the rest (shared with Files) -->
   <div class="mb-2" x-show="notePrefs.showTags">
-    {% include "files/ui/partials/tag_sidebar_section.html" with collapse_expr="sidebarCollapsed()" active_class="bg-success/10 text-success hover:bg-success/20" heading_class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider" %}
+    {% include "files/ui/partials/tag_sidebar_section.html" with collapse_expr="sidebarCollapsed()" active_class="bg-success/10 text-success hover:bg-success/20" heading_class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
   </div>
 
   <!-- Folders -->

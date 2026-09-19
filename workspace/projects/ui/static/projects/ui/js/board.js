@@ -7,6 +7,24 @@ function listOrder(listEl) {
   );
 }
 
+// Upper bound of POST /api/v1/projects/actions, mirrored from the endpoint.
+const ACTIONS_BATCH_SIZE = 200;
+
+// Action ids the whole selection offers with bulk support: the intersection
+// over every selected task of the ids answered with bulk=true. A task the
+// answer does not cover (unreachable, or lost to a failed slice) empties it.
+function bulkActionIntersection(uuids, actionsMap) {
+  let ids = null;
+  for (const uuid of uuids) {
+    const offered = new Set(
+      (actionsMap[uuid] || []).filter((a) => a.bulk).map((a) => a.id)
+    );
+    ids = ids === null ? offered : new Set([...ids].filter((id) => offered.has(id)));
+    if (!ids.size) break;
+  }
+  return ids === null ? [] : Array.from(ids);
+}
+
 function taskParamUrl(href, uuid) {
   const url = new URL(href);
   if (uuid) {
@@ -23,7 +41,7 @@ function fieldAction(field) {
   const map = {
     title: 'edit',
     description: 'edit',
-    priority: 'edit',
+    priority: 'set_priority',
     estimate: 'edit',
     status: 'move',
     due_date: 'set_due',
@@ -302,6 +320,14 @@ function projectBoard(config) {
     // _collection_loading.html.
     collectionLoading: false,
     selected: [],
+    // Ids the whole selection offers with bulk support (see
+    // bulkActionIntersection), answered by POST /api/v1/projects/actions.
+    // Null until the answer for the current selection lands, and the
+    // toolbar buttons stay disabled meanwhile - the backend registry is
+    // the only source of truth for what a selection may do.
+    bulkActionIds: null,
+    _bulkGeneration: 0,
+    _bulkTimer: null,
     // Panel section open/closed choices, kept here because patchTask swaps
     // the whole panel after every field commit; the shell survives the swap.
     // Keyed by task so opening another task starts from its own defaults.
@@ -322,6 +348,7 @@ function projectBoard(config) {
         document.getElementById('epics-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
+      this.$watch('selected', () => this.scheduleBulkActions());
 
       // Catch up on board changes made elsewhere while the stream was down
       // (resumed tab, or a bfcache restore after a mobile back).
@@ -634,10 +661,11 @@ function projectBoard(config) {
       return s && s.color ? s.color : '';
     },
 
-    visibleBacklogUuids() {
-      // Rendered rows already match the active filters server-side.
+    visibleTaskUuids() {
+      // Rendered rows already match the active filters server-side. The
+      // backlog and the all-tasks list both render into #task-collection.
       return Array.from(
-        document.querySelectorAll('#backlog [data-task-uuid]')
+        document.querySelectorAll('#task-collection [data-task-uuid]')
       ).map((el) => el.dataset.taskUuid);
     },
 
@@ -656,14 +684,14 @@ function projectBoard(config) {
     },
 
     allVisibleSelected() {
-      const visible = this.visibleBacklogUuids();
+      const visible = this.visibleTaskUuids();
       return visible.length > 0 && visible.every((u) => this.isSelected(u));
     },
 
     toggleSelectAll() {
       // Only touch the rows matching the current filters: selections made
       // under another filter must survive a select-all/deselect-all here.
-      const visible = this.visibleBacklogUuids();
+      const visible = this.visibleTaskUuids();
       if (!visible.length) return;
       if (this.allVisibleSelected()) {
         this.selected = this.selected.filter((u) => !visible.includes(u));
@@ -676,6 +704,139 @@ function projectBoard(config) {
 
     boardStatuses() {
       return this.statuses.filter((s) => s.category !== 'backlog');
+    },
+
+    scheduleBulkActions() {
+      // Checkbox clicks come in bursts (select-all, a quick run down the
+      // list); one request per settled selection is enough.
+      clearTimeout(this._bulkTimer);
+      this.bulkActionIds = null;
+      this._bulkTimer = setTimeout(() => this.loadBulkActions(), 150);
+    },
+
+    async loadBulkActions() {
+      const uuids = this.selected.slice();
+      const generation = ++this._bulkGeneration;
+      if (!uuids.length) return;
+      // The endpoint answers at most 200 UUIDs per call; a larger
+      // selection asks in slices, and every slice has to land before the
+      // intersection means anything.
+      const slices = [];
+      for (let i = 0; i < uuids.length; i += ACTIONS_BATCH_SIZE) {
+        slices.push(uuids.slice(i, i + ACTIONS_BATCH_SIZE));
+      }
+      let ids = [];
+      try {
+        const parts = await Promise.all(
+          slices.map(async (slice) => {
+            const resp = await fetch('/api/v1/projects/actions', {
+              method: 'POST',
+              headers: this.headers(),
+              body: JSON.stringify({ uuids: slice }),
+            });
+            if (!resp.ok) throw new Error('Actions lookup failed');
+            return resp.json();
+          })
+        );
+        ids = bulkActionIntersection(uuids, Object.assign({}, ...parts));
+      } catch (e) {
+        // Nothing offered: the toolbar stays disabled rather than
+        // offering what the backend may refuse.
+      }
+      if (generation !== this._bulkGeneration) return;
+      this.bulkActionIds = ids;
+    },
+
+    bulkCan(actionId) {
+      return !!this.bulkActionIds && this.bulkActionIds.includes(actionId);
+    },
+
+    async bulkEdit(patch, actionId) {
+      // Gated on the fetched action list on top of the button's disabled
+      // state: a stale toolbar must not send what the backend will refuse.
+      if (!config.writable || !this.selected.length || !this.bulkCan(actionId)) {
+        return;
+      }
+      const uuids = this.selected.slice();
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/bulk', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify(Object.assign({ tasks: uuids }, patch)),
+        });
+        if (!resp.ok) throw new Error('Bulk edit failed');
+        const data = await resp.json();
+        if (data.skipped && window.AppAlert) {
+          AppAlert.warning(
+            data.skipped +
+              (data.skipped === 1 ? ' task starts' : ' tasks start') +
+              ' after that due date and ' +
+              (data.skipped === 1 ? 'was' : 'were') +
+              ' left unchanged.'
+          );
+        }
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not update the tasks.');
+      } finally {
+        this.refresh();
+      }
+    },
+
+    bulkAssign(userId, add) {
+      return this.bulkEdit(
+        add ? { assign: [userId] } : { unassign: [userId] },
+        'assign'
+      );
+    },
+
+    bulkLabel(labelUuid, add) {
+      return this.bulkEdit(
+        add ? { add_labels: [labelUuid] } : { remove_labels: [labelUuid] },
+        'set_labels'
+      );
+    },
+
+    bulkPriority(priority) {
+      return this.bulkEdit({ priority: priority }, 'set_priority');
+    },
+
+    bulkDueDate(date) {
+      return this.bulkEdit({ due_date: date || null }, 'set_due');
+    },
+
+    async bulkDeleteSelected() {
+      if (!config.writable || !this.selected.length || !this.bulkCan('delete')) {
+        return;
+      }
+      const uuids = this.selected.slice();
+      const count = uuids.length;
+      const ok = await AppDialog.confirm({
+        title: count === 1 ? 'Delete task' : 'Delete ' + count + ' tasks',
+        message:
+          (count === 1 ? 'The selected task' : 'The ' + count + ' selected tasks') +
+          ' will be permanently deleted, with their comments, subtasks and attachments.',
+        okLabel: count === 1 ? 'Delete task' : 'Delete ' + count + ' tasks',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      try {
+        const resp = await fetch(config.apiBase + '/tasks/bulk-delete', {
+          method: 'POST',
+          headers: this.headers(),
+          body: JSON.stringify({ tasks: uuids }),
+        });
+        if (!resp.ok) throw new Error('Bulk delete failed');
+        this.selected = this.selected.filter((u) => !uuids.includes(u));
+        if (this.panelTaskUuid && uuids.includes(this.panelTaskUuid)) {
+          this.closePanel();
+        }
+      } catch (e) {
+        if (window.AppAlert) AppAlert.error('Could not delete the tasks.');
+      } finally {
+        this.refresh();
+      }
     },
 
     async moveTasks(uuids, statusUuid) {
@@ -1733,6 +1894,7 @@ window.projectBoardHelpers = {
   taskFiltersFromUrl: taskFiltersFromUrl,
   taskFilterUrl: taskFilterUrl,
   pickLabelColor: pickLabelColor,
+  bulkActionIntersection: bulkActionIntersection,
 };
 
 // --- Per-task watch state (the eye in the task panel header) ---

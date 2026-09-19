@@ -83,12 +83,8 @@ def post_bot_message(
     """
     from django.core.files.base import ContentFile
 
-    from workspace.chat.models import (
-        Message,
-        MessageAttachment,
-        MessageInteraction,
-    )
-    from workspace.chat.services.posting import deliver_message
+    from workspace.chat.models import MessageAttachment, MessageInteraction
+    from workspace.chat.services.posting import post_message
     from workspace.chat.services.rendering import render_message_body
 
     body = clean_llm_content(response.content)
@@ -106,10 +102,10 @@ def post_bot_message(
             {"thinking": thinking, "tool_calls": [], "results": []},
         ]
 
-    bot_message = Message.objects.create(
-        conversation_id=conversation.pk,
-        author=bot_user,
-        body=body,
+    bot_message = post_message(
+        conversation,
+        bot_user,
+        body,
         body_html=body_html,
         tool_data=tool_data,
     )
@@ -184,8 +180,6 @@ def post_bot_message(
             lambda atts=created_attachments: [enqueue_caption_if_image(a) for a in atts]
         )
 
-    deliver_message(conversation, bot_message)
-
     if usage is None:
         usage = RunUsage()
         usage.add(response)
@@ -203,8 +197,7 @@ def post_bot_message(
 @transaction.atomic
 def handle_generation_error(conversation, bot_user, ai_task, error):
     """Handle a failed bot response: post error message, update counts, notify."""
-    from workspace.chat.models import Message
-    from workspace.chat.services.posting import deliver_message
+    from workspace.chat.services.posting import post_message
     from workspace.chat.services.rendering import render_message_body
 
     # Detailed error stays on AITask + logs; the chat sees a generic message so
@@ -221,10 +214,4 @@ def handle_generation_error(conversation, bot_user, ai_task, error):
         "⚠️ Sorry, I encountered an error generating a response. Please try again."
     )
     error_html = render_message_body(error_body)
-    error_message = Message.objects.create(
-        conversation_id=conversation.pk,
-        author=bot_user,
-        body=error_body,
-        body_html=error_html,
-    )
-    deliver_message(conversation, error_message)
+    post_message(conversation, bot_user, error_body, body_html=error_html)

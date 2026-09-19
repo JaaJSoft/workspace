@@ -337,6 +337,16 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(response, "Send to board")
         self.assertContains(response, 'x-model="filters.q"')
         self.assertContains(response, "toggleSelectAll()")
+        self.assertContains(response, "data-bulk-toolbar")
+        for action_id in (
+            "move",
+            "assign",
+            "set_labels",
+            "set_priority",
+            "set_due",
+            "delete",
+        ):
+            self.assertContains(response, f"bulkCan('{action_id}')")
 
     def test_backlog_filters_apply_server_side(self):
         label = self.project.labels.create(name="Bug", color="#ff0000")
@@ -411,6 +421,7 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertNotContains(response, "Send to board")
         self.assertNotContains(response, "toggleSelectAll()")
+        self.assertNotContains(response, "data-bulk-toolbar")
         self.assertContains(response, 'id="task-filters"')
 
     def test_partial_returns_content_wrapper(self):
@@ -666,13 +677,35 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertLess(html.index("Queued work"), html.index("Active work"))
         self.assertLess(html.index("Active work"), html.index("Shipped work"))
 
-    def test_rows_are_readonly(self):
+    def test_rows_are_selectable_but_not_reorderable(self):
         self._seed_one_task_per_category()
         self.client.force_login(self.admin)
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
-        self.assertNotContains(response, "Select task")
+        self.assertContains(response, "Select task", count=3)
+        self.assertContains(response, "toggleSelectAll()")
         self.assertNotContains(response, "Send to board")
         self.assertNotContains(response, 'draggable="true"')
+
+    def test_has_the_selection_toolbar(self):
+        self._seed_one_task_per_category()
+        self.client.force_login(self.member)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertContains(response, "data-bulk-toolbar")
+        for action_id in ("assign", "set_labels", "set_priority", "set_due", "delete"):
+            self.assertContains(response, f"bulkCan('{action_id}')")
+        self.assertContains(response, "bulkDeleteSelected()")
+        self.assertContains(response, 'placeholder="Search members"')
+
+    def test_archived_project_has_no_selection_controls(self):
+        from django.utils import timezone
+
+        self._seed_one_task_per_category()
+        self.project.archived_at = timezone.now()
+        self.project.save(update_fields=["archived_at"])
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/projects/{self.project.uuid}/tasks")
+        self.assertNotContains(response, "Select task")
+        self.assertNotContains(response, "data-bulk-toolbar")
 
     def test_wraps_tasks_in_the_filter_swap_target(self):
         self.client.force_login(self.member)

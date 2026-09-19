@@ -79,6 +79,7 @@ class TaskActionTests(ProjectTestMixin, TestCase):
                 "move",
                 "assign",
                 "set_due",
+                "set_priority",
                 "set_labels",
                 "set_epic",
                 "attach",

@@ -241,3 +241,28 @@ test('an estimator that never arrives is announced, so a host floor stays closed
   await settle();
   assert.deepEqual({ ...m.dispatched.at(-1).detail }, { status: 'unavailable', score: null });
 });
+
+test('the announcement does not read the state it has just written', () => {
+  // reset() runs inside the host's x-effect, so a read of this.status there
+  // makes that effect depend on a property it writes: it re-runs on its own
+  // write, forever, and the generation token outruns every estimate the
+  // debounce schedules - a meter stuck on "Checking..." and nothing in the
+  // console. Only a browser sees the loop; this sees the read behind it.
+  const { meter } = page();
+  const m = meter();
+  const reads = [];
+  for (const key of ['status', 'score']) {
+    let value = m[key];
+    Object.defineProperty(m, key, {
+      get() {
+        reads.push(key);
+        return value;
+      },
+      set(next) {
+        value = next;
+      },
+    });
+  }
+  m.reset('checking');
+  assert.deepEqual(reads, [], 'reset() read reactive state on its way out');
+});

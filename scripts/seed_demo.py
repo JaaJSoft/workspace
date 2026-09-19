@@ -1197,6 +1197,8 @@ def main():
         parser.error("--min-events must be <= --max-events")
     if args.min_tasks > args.max_tasks:
         parser.error("--min-tasks must be <= --max-tasks")
+    if args.min_persons > args.max_persons:
+        parser.error("--min-persons must be <= --max-persons")
 
     if args.seed is not None:
         random.seed(args.seed)

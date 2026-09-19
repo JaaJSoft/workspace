@@ -198,7 +198,7 @@ jobs:
           - module: notifications
             min_coverage: 80
           - module: people
-            min_coverage: 85
+            min_coverage: 90
           - module: projects
             min_coverage: 85
           - module: users

@@ -1,5 +1,7 @@
 """REST framework, OpenAPI schema and API token authentication."""
 
+import orjson
+
 from .base import APP_VERSION, DEBUG
 from .env import env_non_negative_int
 
@@ -63,6 +65,10 @@ REST_FRAMEWORK = {
         "rest_framework.parsers.FormParser",
         "rest_framework.parsers.MultiPartParser",
     ],
+    # A nested many=True serializer field reports its per-item errors as a
+    # dict keyed by list index (DRF's LIST_SERIALIZER_ERRORS_AS_DICT default).
+    # orjson refuses non-str dict keys unless told to coerce them.
+    "ORJSON_RENDERER_OPTIONS": (orjson.OPT_NON_STR_KEYS,),
 }
 
 SPECTACULAR_SETTINGS = {
@@ -163,6 +169,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Notifications",
             "description": "User notifications and push subscriptions.",
+        },
+        {
+            "name": "People",
+            "description": "Personal and group address book.",
         },
         {
             "name": "Projects",

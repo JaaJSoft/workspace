@@ -111,6 +111,7 @@ window.passwordStrengthMeter = function passwordStrengthMeter(bundleUrl) {
         this.warning = result.warning || '';
         this.suggestions = result.suggestions || [];
         this.status = 'ready';
+        this.announce();
       } catch (err) {
         if (token !== generation) return;
         this.reset('unavailable');
@@ -122,6 +123,14 @@ window.passwordStrengthMeter = function passwordStrengthMeter(bundleUrl) {
       this.score = null;
       this.warning = '';
       this.suggestions = [];
+      this.announce();
+    },
+
+    // The score never leaves this scope on its own: the meter is a nested
+    // component, and a host with a floor of its own cannot read into it. So
+    // every state change is announced, and a listener never has to poll.
+    announce() {
+      this.$dispatch('strength-change', { status: this.status, score: this.score });
     },
 
     verdict() {

@@ -25,7 +25,16 @@ function page(tools) {
   return {
     ctx,
     scripts,
-    meter: () => ctx.passwordStrengthMeter(BUNDLE_URL),
+    // Alpine binds $dispatch on the component; the meter's only way out of its
+    // own scope is through it, so the stub collects what a host would receive.
+    meter() {
+      const component = ctx.passwordStrengthMeter(BUNDLE_URL);
+      component.dispatched = [];
+      component.$dispatch = (name, detail) => {
+        component.dispatched.push({ name, detail });
+      };
+      return component;
+    },
     land(estimate = tools) {
       ctx.window.passwordStrengthTools = { estimateStrength: estimate };
       for (const script of scripts.splice(0)) script.onload();
@@ -203,4 +212,32 @@ test('an answer arriving after teardown is dropped', async () => {
   release();
   await settle();
   assert.notEqual(m.status, 'ready');
+});
+
+test('every state change is announced to the host', async () => {
+  const { meter, land } = page(scoreBy({ 'correct horse battery staple': 4 }));
+  land();
+  const m = meter();
+  m.track('correct horse battery staple', true);
+  assert.deepEqual(m.dispatched.map((e) => e.name), ['strength-change']);
+  assert.deepEqual({ ...m.dispatched[0].detail }, { status: 'checking', score: null });
+  await settle();
+  assert.deepEqual({ ...m.dispatched.at(-1).detail }, { status: 'ready', score: 4 });
+});
+
+test('clearing the field is announced as idle, with no score', () => {
+  const { meter, land } = page(scoreBy({ hunter2: 0 }));
+  land();
+  const m = meter();
+  m.track('', true);
+  assert.deepEqual({ ...m.dispatched.at(-1).detail }, { status: 'idle', score: null });
+});
+
+test('an estimator that never arrives is announced, so a host floor stays closed', async () => {
+  const { meter, fail } = page();
+  const m = meter();
+  m.track('whatever-the-user-typed', true);
+  fail();
+  await settle();
+  assert.deepEqual({ ...m.dispatched.at(-1).detail }, { status: 'unavailable', score: null });
 });

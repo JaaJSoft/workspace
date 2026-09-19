@@ -17,10 +17,13 @@ from django.test import SimpleTestCase
 from . import compat
 from .reference import ad, archive, encoding, metadata, primitives
 
-# Every published corpus version a replay test in this file reads. Task 5
-# checks this against compat.versions() so a new corpus directory can never
-# go unread.
-COVERED = ["v1"]
+# The corpora this file's replays actually open, and the versions derived
+# from them. test_compat_frozen checks COVERED against compat.versions() so a
+# new corpus directory can never go unread - deriving the list from the loads
+# themselves is what stops a version being *declared* covered by a replay that
+# never reads it.
+CORPORA = (compat.load("v1"),)
+COVERED = [corpus.root.name for corpus in CORPORA]
 
 
 def _only(rows, model):
@@ -60,7 +63,7 @@ class ReferenceReplayTests(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.corpus = compat.load("v1")
+        (cls.corpus,) = CORPORA
         cls.rows = json.loads(cls.corpus.rows.read_text(encoding="utf-8"))
         cls.identity = _only(cls.rows, "vault.accountidentity")
         # An account is named by its AccountIdentity uuid, never the numeric
@@ -99,7 +102,9 @@ class ReferenceReplayTests(SimpleTestCase):
         kex_priv = self._kex_private_key()
         manifest_vaults = self.corpus.manifest["vaults"]
 
-        vault_rows = {row["pk"]: row["fields"] for row in _all(self.rows, "vault.vault")}
+        vault_rows = {
+            row["pk"]: row["fields"] for row in _all(self.rows, "vault.vault")
+        }
         keywrap_by_vault = {
             row["fields"]["vault"]: row["fields"]
             for row in _all(self.rows, "vault.vaultkeywrap")
@@ -392,8 +397,156 @@ class ReferenceReplayTests(SimpleTestCase):
                 ad.kex_priv_ad(self.account_uuid),
             )
 
-    def test_the_corpus_archive_opens_with_its_passphrase(self):
+    def test_the_corpus_archive_opens_to_the_whole_account(self):
+        """The archive decodes to the entire account in the clear, so every
+        part of it is compared to the manifest - the cleartext the browser
+        reported at generation time, never a value taken from the archive
+        itself.
+
+        This replay carries more weight than its siblings: the archive is
+        read by one implementation and one only. The bundle exports archives
+        but cannot open them (vault_archive.js has no reader), and the server
+        never sees one. Nothing else in this module cross-checks these bytes,
+        so an assertion that stopped at the container's format string would
+        leave a decoder free to mangle every string it returns.
+        """
         tree = archive.open_archive(
             self.corpus.archive, self.corpus.credentials["archive_passphrase"]
         )
         self.assertEqual(tree["format"], "vault-archive")
+        self.assertEqual(tree["version"], 1)
+
+        # Counted from the manifest before anything is compared, like the
+        # ciphertext replay above: a walk over an empty archive must never
+        # pass for a walk that ran and agreed.
+        manifest_vaults = self.corpus.manifest["vaults"]
+        expected_vaults = len(manifest_vaults)
+        expected_folders = sum(len(v["folders"]) for v in manifest_vaults)
+        expected_tags = sum(len(v["tags"]) for v in manifest_vaults)
+        expected_entries = sum(len(v["entries"]) for v in manifest_vaults)
+        expected_fields = sum(
+            len(e["fields"]) for v in manifest_vaults for e in v["entries"]
+        )
+        self.assertGreater(expected_vaults, 0)
+        self.assertGreater(expected_folders, 0)
+        self.assertGreater(expected_tags, 0)
+        self.assertGreater(expected_entries, 0)
+        self.assertGreater(expected_fields, 0)
+
+        # The two structures name the same things differently: the manifest
+        # points at rows by UUID, the archive - which has no rows to point at
+        # - numbers its folders and tags within the vault and refers to those
+        # numbers. The name is the only key both carry, so both sides are
+        # keyed by it and the numbering is resolved back to names before
+        # anything is compared.
+        archive_vaults = {vault["name"]: vault for vault in tree["vaults"]}
+        self.assertEqual(len(archive_vaults), len(tree["vaults"]))
+        self.assertEqual(
+            sorted(archive_vaults), sorted(v["name"] for v in manifest_vaults)
+        )
+
+        compared_vaults = compared_folders = compared_tags = 0
+        compared_entries = compared_fields = 0
+
+        for manifest_vault in manifest_vaults:
+            archive_vault = archive_vaults[manifest_vault["name"]]
+            self.assertEqual(
+                archive_vault["description"], manifest_vault["description"]
+            )
+            self.assertEqual(archive_vault["icon"], manifest_vault["icon"])
+            self.assertEqual(archive_vault["color"], manifest_vault["color"])
+            self.assertEqual(
+                archive_vault["is_favorite"], manifest_vault["is_favorite"]
+            )
+            compared_vaults += 1
+
+            folder_name_by_id = {f["id"]: f["name"] for f in archive_vault["folders"]}
+            self.assertEqual(len(folder_name_by_id), len(archive_vault["folders"]))
+            folder_name_by_uuid = {
+                f["uuid"]: f["name"] for f in manifest_vault["folders"]
+            }
+            archive_folders = {f["name"]: f for f in archive_vault["folders"]}
+            self.assertEqual(
+                sorted(archive_folders), sorted(folder_name_by_uuid.values())
+            )
+            for manifest_folder in manifest_vault["folders"]:
+                archive_folder = archive_folders[manifest_folder["name"]]
+                self.assertEqual(
+                    archive_folder["position"], manifest_folder["position"]
+                )
+                # Resolved to names on both sides: "Cards sits in Banking" is
+                # the claim, and comparing a 0 to a UUID could never make it.
+                # `is not None` on the archive side, never truthiness - the
+                # first folder of a vault is numbered 0.
+                expected_parent = (
+                    folder_name_by_uuid[manifest_folder["parent"]]
+                    if manifest_folder["parent"] is not None
+                    else None
+                )
+                actual_parent = (
+                    folder_name_by_id[archive_folder["parent"]]
+                    if archive_folder["parent"] is not None
+                    else None
+                )
+                self.assertEqual(actual_parent, expected_parent)
+                compared_folders += 1
+
+            tag_name_by_id = {t["id"]: t["name"] for t in archive_vault["tags"]}
+            self.assertEqual(len(tag_name_by_id), len(archive_vault["tags"]))
+            tag_name_by_uuid = {t["uuid"]: t["name"] for t in manifest_vault["tags"]}
+            archive_tags = {t["name"]: t for t in archive_vault["tags"]}
+            self.assertEqual(sorted(archive_tags), sorted(tag_name_by_uuid.values()))
+            for manifest_tag in manifest_vault["tags"]:
+                self.assertEqual(
+                    archive_tags[manifest_tag["name"]]["color"], manifest_tag["color"]
+                )
+                compared_tags += 1
+
+            archive_entries = {e["name"]: e for e in archive_vault["entries"]}
+            self.assertEqual(len(archive_entries), len(archive_vault["entries"]))
+            self.assertEqual(
+                sorted(archive_entries),
+                sorted(e["name"] for e in manifest_vault["entries"]),
+            )
+            for manifest_entry in manifest_vault["entries"]:
+                archive_entry = archive_entries[manifest_entry["name"]]
+                self.assertEqual(archive_entry["type"], manifest_entry["type"])
+                # The notes are the corpus's only NFD string, so this is the
+                # line a decoder that normalised what it decoded would break.
+                self.assertEqual(archive_entry["notes"], manifest_entry["notes"])
+                self.assertEqual(
+                    archive_entry["favorite"], manifest_entry["is_favorite"]
+                )
+                self.assertEqual(archive_entry["trashed"], manifest_entry["trashed"])
+                expected_folder = (
+                    folder_name_by_uuid[manifest_entry["folder"]]
+                    if manifest_entry["folder"] is not None
+                    else None
+                )
+                actual_folder = (
+                    folder_name_by_id[archive_entry["folder"]]
+                    if archive_entry["folder"] is not None
+                    else None
+                )
+                self.assertEqual(actual_folder, expected_folder)
+                self.assertEqual(
+                    sorted(tag_name_by_id[tag_id] for tag_id in archive_entry["tags"]),
+                    sorted(
+                        tag_name_by_uuid[tag_uuid]
+                        for tag_uuid in manifest_entry["tags"]
+                    ),
+                )
+
+                self.assertEqual(
+                    set(archive_entry["fields"]), set(manifest_entry["fields"])
+                )
+                for field_id, expected_value in manifest_entry["fields"].items():
+                    self.assertEqual(archive_entry["fields"][field_id], expected_value)
+                    compared_fields += 1
+                compared_entries += 1
+
+        self.assertEqual(compared_vaults, expected_vaults)
+        self.assertEqual(compared_folders, expected_folders)
+        self.assertEqual(compared_tags, expected_tags)
+        self.assertEqual(compared_entries, expected_entries)
+        self.assertEqual(compared_fields, expected_fields)

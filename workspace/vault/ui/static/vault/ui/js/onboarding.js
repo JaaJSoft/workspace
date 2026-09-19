@@ -16,7 +16,6 @@ window.vaultOnboarding = function vaultOnboarding() {
     password: '',
     confirmation: '',
     score: null,
-    feedback: '',
     // unchecked | checking | clean | found | unavailable
     breachStatus: 'unchecked',
     secretText: '',
@@ -34,10 +33,11 @@ window.vaultOnboarding = function vaultOnboarding() {
     leaveGuard: null,
     busy: false,
     error: '',
-    // One token per keystroke, read by both lookups. The corpus answer takes
-    // as long as the network wants: without it, a reply about a password the
-    // user has already replaced can overwrite the verdict on the one in the
-    // field, and a stale "clean" lets a breached password through the floor.
+    // One token per corpus lookup. The answer takes as long as the network
+    // wants: without it, a reply about a password the user has already
+    // replaced can overwrite the verdict on the one in the field, and a stale
+    // "clean" lets a breached password through the floor. The meter discards
+    // its own stale estimates on its side.
     generation: 0,
 
     // Code points after NFC, not UTF-16 units: someone who typed twelve
@@ -91,36 +91,21 @@ window.vaultOnboarding = function vaultOnboarding() {
     passwordEdited() {
       this.generation++;
       this.score = null;
-      this.feedback = '';
       this.breachStatus = 'unchecked';
     },
 
     passwordChanged() {
       this.generation++;
-      this.evaluateStrength();
       this.checkBreachCorpus();
     },
 
-    async evaluateStrength() {
-      const generation = this.generation;
-      if (!this.password) {
-        this.score = null;
-        this.feedback = '';
-        return;
-      }
-      try {
-        const result = await window.passwordStrengthTools.estimateStrength(this.password);
-        if (generation !== this.generation) return;
-        this.score = result.score;
-        this.feedback = result.warning || '';
-      } catch (err) {
-        // The floor stays closed - an unmeasured password is not a strong one
-        // - but silence would leave a button that refuses to enable and no
-        // reason on screen.
-        if (generation !== this.generation) return;
-        this.score = null;
-        this.feedback = 'could not be checked on this device';
-      }
+    // The meter under the field owns the estimate - one component for both
+    // pages that measure a password - and reports it here. Anything short of a
+    // landed estimate is an unmeasured password, which the floor refuses: an
+    // estimator that never loaded says so on screen and must not open the step
+    // it could not vouch for.
+    strengthChanged(detail) {
+      this.score = detail && detail.status === 'ready' ? detail.score : null;
     },
 
     // k-anonymity: only the first five hex characters of the SHA-1 leave the

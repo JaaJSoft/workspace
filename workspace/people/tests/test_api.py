@@ -72,6 +72,59 @@ class PersonApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("phones", response.data)
 
+    def test_patch_malformed_email_entry_is_400(self):
+        person = create_person(
+            owner=self.alice,
+            display_name="Bob",
+            emails=[{"value": "old@example.com", "type": "work"}],
+        )
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}", {"emails": [{}]}, format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("emails", response.data)
+        person.refresh_from_db()
+        self.assertEqual(person.emails, [{"value": "old@example.com", "type": "work"}])
+
+    def test_patch_malformed_phone_entry_is_400(self):
+        person = create_person(
+            owner=self.alice,
+            display_name="Bob",
+            phones=[{"value": "123", "type": "work"}],
+        )
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"phones": [{"type": "work"}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("phones", response.data)
+        person.refresh_from_db()
+        self.assertEqual(person.phones, [{"value": "123", "type": "work"}])
+
+    def test_patch_partial_address_fills_defaults(self):
+        person = create_person(owner=self.alice, display_name="Bob")
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"addresses": [{"street": "x"}]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        person.refresh_from_db()
+        self.assertEqual(
+            person.addresses,
+            [
+                {
+                    "street": "x",
+                    "city": "",
+                    "region": "",
+                    "postal_code": "",
+                    "country": "",
+                    "type": "home",
+                }
+            ],
+        )
+
     def test_list_only_reachable(self):
         create_person(owner=self.alice, display_name="Mine")
         create_person(group=self.team, display_name="Teams")
@@ -103,6 +156,10 @@ class PersonApiTests(APITestCase):
         names = [p["display_name"] for p in response.data["results"]]
         self.assertEqual(names, ["Mine"])
 
+    def test_scope_filter_unknown_group_is_400(self):
+        response = self.client.get("/api/v1/people", {"scope": "group:999"})
+        self.assertEqual(response.status_code, 400)
+
     def test_list_filter(self):
         bob = create_person(owner=self.alice, display_name="Bob")
         create_person(owner=self.alice, display_name="Carol")
@@ -115,6 +172,22 @@ class PersonApiTests(APITestCase):
     def test_list_filter_malformed_is_400(self):
         response = self.client.get("/api/v1/people", {"list": "nope"})
         self.assertEqual(response.status_code, 400)
+
+    def test_scope_and_list_filters_combine(self):
+        bob = create_person(owner=self.alice, display_name="Bob")
+        create_person(owner=self.alice, display_name="Carol")
+        family = create_list(owner=self.alice, name="Family")
+        add_members(family, [bob])
+        response = self.client.get(
+            "/api/v1/people", {"scope": "mine", "list": str(family.uuid)}
+        )
+        names = [p["display_name"] for p in response.data["results"]]
+        self.assertEqual(names, ["Bob"])
+        response = self.client.get(
+            "/api/v1/people",
+            {"scope": f"group:{self.team.id}", "list": str(family.uuid)},
+        )
+        self.assertEqual(response.data["results"], [])
 
     def test_retrieve_unreachable_is_404(self):
         bobs = create_person(owner=self.bob, display_name="Bobs")
@@ -142,6 +215,19 @@ class PersonApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_patch_scope_move_into_linked_clash_is_400(self):
+        person = create_person(
+            owner=self.alice, display_name="Bob", linked_user=self.bob
+        )
+        create_person(group=self.team, display_name="Bob team", linked_user=self.bob)
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"scope": f"group:{self.team.id}"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("linked_user_id", response.data)
+
     def test_patch_linked_user(self):
         person = create_person(owner=self.alice, display_name="Bob")
         response = self.client.patch(
@@ -166,6 +252,20 @@ class PersonApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("linked_user_id", response.data)
+
+    def test_patch_clear_linked_user(self):
+        person = create_person(
+            owner=self.alice, display_name="Bob", linked_user=self.bob
+        )
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"linked_user_id": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["linked_user"])
+        person.refresh_from_db()
+        self.assertIsNone(person.linked_user)
 
     def test_delete(self):
         person = create_person(owner=self.alice, display_name="Bob")

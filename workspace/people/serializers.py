@@ -37,13 +37,28 @@ def parse_scope(user, raw):
 
 
 class EmailEntrySerializer(serializers.Serializer):
+    # On a PATCH, DRF skips a field missing from the input instead of applying
+    # its default (Field.validate_empty_values, partial root) - so a bare
+    # `{}` entry would otherwise store with neither `value` nor `type`.
     value = serializers.EmailField(max_length=254)
     type = serializers.ChoiceField(choices=EMAIL_TYPES, default="other")
+
+    def validate(self, attrs):
+        if not attrs.get("value"):
+            raise serializers.ValidationError("A value is required.")
+        attrs.setdefault("type", "other")
+        return attrs
 
 
 class PhoneEntrySerializer(serializers.Serializer):
     value = serializers.CharField(max_length=64)
     type = serializers.ChoiceField(choices=PHONE_TYPES, default="other")
+
+    def validate(self, attrs):
+        if not attrs.get("value"):
+            raise serializers.ValidationError("A value is required.")
+        attrs.setdefault("type", "other")
+        return attrs
 
 
 class AddressEntrySerializer(serializers.Serializer):
@@ -58,6 +73,9 @@ class AddressEntrySerializer(serializers.Serializer):
         lines = ("street", "city", "region", "postal_code", "country")
         if not any(attrs.get(line) for line in lines):
             raise serializers.ValidationError("An address needs at least one line.")
+        for line in lines:
+            attrs.setdefault(line, "")
+        attrs.setdefault("type", "home")
         return attrs
 
 
@@ -139,7 +157,12 @@ class PersonSerializer(serializers.ModelSerializer):
         return {"owner": self.context["request"].user}
 
     def validate(self, attrs):
-        linked = attrs.get("linked_user")
+        if "linked_user" in attrs:
+            linked = attrs["linked_user"]
+        elif self.instance is not None:
+            linked = self.instance.linked_user
+        else:
+            linked = None
         if linked is not None:
             clash = Person.objects.filter(
                 linked_user=linked, **self._current_scope(attrs)

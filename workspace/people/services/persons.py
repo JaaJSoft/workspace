@@ -1,6 +1,6 @@
 from django.db import transaction
 
-from ..models import Person, PersonList
+from ..models import Person
 
 
 def _check_one_scope(owner, group):

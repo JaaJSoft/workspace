@@ -60,7 +60,7 @@ dependencies = [
     "openai>=3.13.0",
     "ollama>=0.6.2",
     # web search & scraping
-    "httpx2>=2.12.0",
+    "httpx2>=2.13.0",
     "trafilatura>=2.2.0",
     # Apache Tika compiled ahead of time to a native library: text and
     # metadata out of PDFs, Office and OpenDocument files without a JVM, a

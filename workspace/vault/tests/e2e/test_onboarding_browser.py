@@ -10,6 +10,8 @@ that the identity the browser sealed verifies through the same attestation
 code the API uses.
 """
 
+import re
+
 from django.core.cache import cache
 from playwright.sync_api import expect
 
@@ -40,10 +42,20 @@ class OnboardingWalkTests(PlaywrightTestCase):
         super().tearDown()
 
     def _serve_corpus(self, body="0000000000000000000000000000000000000:1\n"):
-        self.page.route(
-            CORPUS_ROUTE,
-            lambda route: route.fulfill(status=200, body=body),
-        )
+        self._route_corpus(lambda route: route.fulfill(status=200, body=body))
+
+    def _route_corpus(self, handler):
+        """Answer the corpus, on the context rather than on the page.
+
+        ``base.html`` registers a service worker with a fetch handler on every
+        page, so the lookup leaves through the worker - and ``page.route`` does
+        not see a request a service worker made. Routing there looks like it
+        works: the pattern is right, no error is raised, and the tests pass
+        because the real corpus happens to answer the way the stub would have.
+        What it costs is a suite that talks to a third party and a stub that
+        decides nothing.
+        """
+        self.context.route(CORPUS_ROUTE, handler)
 
     def _walk_to_the_password_step(self):
         self.page.goto(f"{self.live_server_url}/vault")
@@ -86,6 +98,40 @@ class OnboardingWalkTests(PlaywrightTestCase):
         self.page.wait_for_timeout(1500)
         self.assertTrue(
             self.page.is_disabled("button:has-text('Set my master password')")
+        )
+
+    def test_the_meter_drives_the_floor_on_a_long_but_guessable_password(self):
+        # The estimate now reaches the component through an event dispatched by
+        # a nested one. Nothing below the browser exercises that wiring: the JS
+        # units call the handler directly, and the Django test only sees markup.
+        self._serve_corpus()
+        self._walk_to_the_password_step()
+        self._fill_password("aaaaaaaaaaaaaaaaaaaa")
+
+        meter = self.page.locator("[data-password-strength]")
+        expect(meter).to_be_visible()
+        expect(meter).to_contain_text(re.compile(r"Very weak|Weak"))
+        # Every other criterion clears on this password: twenty code points,
+        # both fields equal, and a corpus answering "not found". Waiting out that
+        # lookup's debounce is what makes the button's state say something about
+        # the score rather than about a step still in flight.
+        self.page.wait_for_timeout(1500)
+        self.assertTrue(
+            self.page.is_disabled("button:has-text('Set my master password')"),
+            "a twenty-character password of one letter cleared the floor",
+        )
+
+    def test_a_strong_password_lights_the_meter_and_opens_the_step(self):
+        self._serve_corpus()
+        self._walk_to_the_password_step()
+        self._fill_password()
+
+        meter = self.page.locator("[data-password-strength]")
+        # The two bands that clear a floor of three, spelled as the component
+        # spells them.
+        expect(meter).to_contain_text(re.compile(r"Very strong|Strong"))
+        self.page.wait_for_selector(
+            "button:has-text('Set my master password'):not([disabled])", timeout=15000
         )
 
     def test_the_whole_flow_seals_an_identity_the_server_verifies(self):
@@ -169,7 +215,7 @@ class OnboardingWalkTests(PlaywrightTestCase):
     def test_an_unreachable_corpus_warns_without_blocking(self):
         """A third party that is down must not be able to stop someone
         protecting their vault."""
-        self.page.route(CORPUS_ROUTE, lambda route: route.abort())
+        self._route_corpus(lambda route: route.abort())
         self._walk_to_the_password_step()
         self._fill_password()
         self.page.wait_for_selector(

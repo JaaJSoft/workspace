@@ -309,6 +309,7 @@ jobs:
           - imports
           - mail
           - notes
+          - people
           - projects
           - users
           - vault

@@ -258,6 +258,7 @@ jobs:
           - files
           - mail
           - notes
+          - people
           - projects
           - users
           - vault

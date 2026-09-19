@@ -4,24 +4,6 @@
 const MOBILE_QUERY = '(max-width: 1023px)';
 
 window.peopleHelpers = {
-  // Bucket persons by accent-folded initial, '#' last. Mirrors _letter() in
-  // people/ui/views.py: the two must agree or a client-grouped list and a
-  // server-rendered one disagree on where a name belongs.
-  groupPersons(persons) {
-    const groups = new Map();
-    for (const person of persons) {
-      const first = (person.display_name || '').normalize('NFKD').charAt(0).toUpperCase();
-      const letter = /\p{L}/u.test(first) ? first : '#';
-      if (!groups.has(letter)) groups.set(letter, []);
-      groups.get(letter).push(person);
-    }
-    return Array.from(groups, ([letter, items]) => ({ letter, items })).sort((a, b) => {
-      if (a.letter === '#') return b.letter === '#' ? 0 : 1;
-      if (b.letter === '#') return -1;
-      return a.letter.localeCompare(b.letter);
-    });
-  },
-
   // The state a server-rendered fragment embeds, or the fallback when the
   // block is missing (the panel placeholder carries none).
   readJson(id, fallback) {

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.contrib.auth.models import Group
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -43,3 +44,20 @@ class PersonFlowTests(PlaywrightTestCase):
         self.page.locator("#app-dialog-confirm-ok").click()
         expect(self.page.locator("#person-list")).not_to_contain_text("Robert Martin")
         self.assertFalse(Person.objects.filter(owner=self.user).exists())
+
+    def test_a_group_list_is_marked_in_the_sidebar(self):
+        # Two scopes can name a list the same way and the sidebar mixes them:
+        # the icon is the only thing telling a group's list from a personal one.
+        team = Group.objects.create(name="Team")
+        self.user.groups.add(team)
+        create_list(group=team, name="Clients")
+
+        self.page.goto(f"{self.live_server_url}/people")
+        aside = self.page.locator(".drawer-side aside")
+        expect(aside.locator('button[title="Clients"]')).to_be_visible()
+        expect(
+            aside.locator('button[title="Clients"] [data-lucide="users-round"]:visible')
+        ).to_have_count(1)
+        expect(
+            aside.locator('button[title="Family"] [data-lucide="users-round"]:visible')
+        ).to_have_count(0)

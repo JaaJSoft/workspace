@@ -24,23 +24,6 @@ function load(fetchImpl) {
   });
 }
 
-test('groupPersons groups by first letter and buckets the rest under #', () => {
-  const ctx = load();
-  const groups = Array.from(
-    ctx.peopleHelpers.groupPersons([
-      { display_name: 'alice' },
-      { display_name: 'Bob' },
-      { display_name: '42 crew' },
-      { display_name: 'Anna' },
-    ])
-  ).map((g) => ({ letter: g.letter, names: Array.from(g.items).map((p) => p.display_name) }));
-  assert.deepStrictEqual(groups, [
-    { letter: 'A', names: ['alice', 'Anna'] },
-    { letter: 'B', names: ['Bob'] },
-    { letter: '#', names: ['42 crew'] },
-  ]);
-});
-
 test('listUrl only carries the filters that are set', () => {
   const ctx = load();
   assert.equal(ctx.peopleHelpers.listUrl('/people', {}), '/people');

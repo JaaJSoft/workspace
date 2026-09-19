@@ -208,3 +208,43 @@ class ExportDialogWiringTests(SimpleTestCase):
     def test_the_skipped_count_has_somewhere_to_be_read(self):
         """Computed and never rendered, it would look implemented and not be."""
         self.assertIn('x-text="skippedMessage()"', self.render())
+
+
+class OnboardingStrengthMeterTests(TestCase):
+    """The strength meter on the onboarding page is the shared one.
+
+    The component is covered by its own JS suite and the browser walk; what
+    neither notices is the include being dropped, or the estimator bundle being
+    pulled in eagerly again - which would ship 240 KB on a step that has no
+    password field on it.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="newcomer", password="pw")
+        self.client.force_login(self.user)
+        self.html = self.client.get(reverse("vault_ui:onboarding")).content.decode()
+
+    def test_the_shared_meter_is_rendered_once(self):
+        self.assertEqual(self.html.count("data-password-strength"), 1)
+        self.assertIn("passwordStrengthMeter(", self.html)
+
+    def test_the_page_loads_the_meter_component(self):
+        self.assertIn("ui/js/password_strength.js", self.html)
+
+    def test_the_estimator_itself_is_fetched_on_demand(self):
+        # The meter appends the bundle's script tag when the field comes on
+        # screen. A tag in the template would load it on step one, where there
+        # is nothing to measure. The path itself still appears on the page - it
+        # is the argument the component is constructed with - so this looks for
+        # a src attribute, which is the only form the browser would fetch.
+        self.assertNotIn(
+            'src="/static/ui/js/vendor/password-strength/password-strength.js"',
+            self.html,
+        )
+
+    def test_the_checklist_no_longer_states_the_verdict_itself(self):
+        self.assertIn("Strong enough to resist guessing", self.html)
+        self.assertNotIn("'- ' + feedback", self.html)
+        # The include's own explanation is a {% comment %} block, not a {# #}
+        # one, which would have rendered it into the page verbatim.
+        self.assertNotIn("under the field they measure", self.html)

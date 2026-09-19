@@ -26,7 +26,7 @@ from django.test import SimpleTestCase
 from workspace.vault.models import VaultEntry
 
 from .. import compat
-from .compat_scripts import READ_EVERYTHING, WRITE_NOTED_ENTRY
+from .compat_scripts import DESCRIBE_FIRST_VAULT, READ_EVERYTHING, WRITE_NOTED_ENTRY
 from .test_browser import GOOD_PASSWORD, PANEL, SIDEBAR, VaultBrowserCase
 
 WRITE = os.environ.get("VAULT_COMPAT_CORPUS_WRITE") == "1"
@@ -42,6 +42,12 @@ TOTP_URI = (
     "?secret=JBSWY3DPEHPK3PXP&issuer=Aurora%20Bank"
     "&algorithm=SHA256&digits=8&period=45"
 )
+
+# Non-ASCII and precomposed, where the entry notes below are decomposed: a
+# corpus carrying only one normalisation form cannot tell a reader that
+# normalises from one that leaves the bytes alone.
+PERSONAL_DESCRIPTION = "Coffre personnel \u2014 cl\u00e9s et papiers"
+WORK_DESCRIPTION = "Coffre de l'\u00e9quipe \u2014 acc\u00e8s partag\u00e9s"
 
 # Dumped in dependency order so loaddata can insert without deferring.
 DUMP_MODELS = [
@@ -172,11 +178,14 @@ class CorpusWriteWalk(VaultBrowserCase):
         self.page.click(f"{PANEL} button[aria-label='Move to trash']")
         self.page.wait_for_selector(f"tbody tr:has-text('{name}')", state="detached")
 
-    def _new_vault(self, name):
+    def _new_vault(self, name, description):
         self.page.click("[data-testid='vault-switcher']")
         self.page.click("text=New vault")
         self.page.wait_for_selector(".modal-box input[type=text]")
+        # The dialog's two text fields, in document order: the icon picker it
+        # includes contributes none, so nth is unambiguous here.
         self.page.fill(".modal-box input[type=text] >> nth=0", name)
+        self.page.fill(".modal-box input[type=text] >> nth=1", description)
         self.page.click(".modal-box button:has-text('Create')")
         self._wait_for_switcher_named(name)
 
@@ -210,6 +219,19 @@ class CorpusWriteWalk(VaultBrowserCase):
         vaults = manifest["vaults"]
         self.assertEqual(len(vaults), 2, "the corpus needs two vaults")
 
+        # Every vault, not merely one: the description is sealed under an
+        # associated-data string of its own, and a vault that left it empty
+        # would take that string out of the corpus on its own row.
+        descriptions = [vault["description"] for vault in vaults]
+        for description in descriptions:
+            self.assertTrue(
+                description, f"a vault has no description: {descriptions!r}"
+            )
+        self.assertTrue(
+            any(not text.isascii() for text in descriptions),
+            f"no description is non-ASCII, descriptions are {descriptions!r}",
+        )
+
         entries = [entry for vault in vaults for entry in vault["entries"]]
         folders = [folder for vault in vaults for folder in vault["folders"]]
         tags = [tag for vault in vaults for tag in vault["tags"]]
@@ -239,7 +261,7 @@ class CorpusWriteWalk(VaultBrowserCase):
         # hand back the same word in NFC, which renders identically and seals
         # differently - the exact break a corpus is for.
         self.assertTrue(
-            any("́" in note for note in noted),
+            any("\u0301" in note for note in noted),
             f"no note is in NFD, notes are {noted!r}",
         )
 
@@ -252,6 +274,12 @@ class CorpusWriteWalk(VaultBrowserCase):
         target = _prepare_output_dir(VERSION)
 
         self._open_vault()  # onboarding + the first vault, by the UI
+
+        # Onboarding names the first vault and describes nothing, and no
+        # dialog renders the field afterwards - so this one row needs the
+        # update helper the rename dialog itself calls.
+        described = self.page.evaluate(DESCRIBE_FIRST_VAULT, PERSONAL_DESCRIPTION)
+        self.assertEqual(described["status"], 200, described.get("reason"))
 
         self._create_entry("Aurora Bank", "ada", "hunter2")
         self._add_totp_uri("Aurora Bank", TOTP_URI)
@@ -279,7 +307,7 @@ class CorpusWriteWalk(VaultBrowserCase):
 
         # listVaults()[0] is the first vault by created_at, so the scripted
         # entry above landed in Personal whatever is on screen now.
-        self._new_vault("Work")
+        self._new_vault("Work", WORK_DESCRIPTION)
         self._create_entry("Work Wiki", "ada", "s3cret-wiki")
 
         manifest = self.page.evaluate(READ_EVERYTHING)

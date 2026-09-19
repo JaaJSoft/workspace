@@ -218,3 +218,45 @@ async () => {
   return { account_uuid: S.accountUuid(), vaults };
 }
 """
+
+# A description on the vault onboarding made.
+#
+# The creation dialog offers the field and the corpus uses it for every vault
+# it creates itself, but the first vault is not created there: onboarding
+# writes `{ name: 'Personal' }` with no description, and neither the rename
+# dialog nor the appearance one renders the field afterwards. So the one vault
+# every real account has is the one vault no sequence of clicks can describe.
+#
+# Left empty it would take `v1|vault-field|<uuid>|description` out of the
+# corpus on that row, which is the hole this closes. buildVaultUpdateRequest
+# is the product's own helper - the same one the rename dialog calls - handed
+# the field that dialog does not draw: the form is bypassed, never the crypto.
+#
+# The name has to be opened before it can be re-sealed: the helper takes a
+# vault as the browser holds it, with a decrypted `name`, and a row straight
+# off the wire carries `encrypted_name` instead.
+DESCRIBE_FIRST_VAULT = """
+async (description) => {
+  const V = window.vaultCrypto, A = window.vaultApi, S = window.vaultSession;
+  try {
+    const row = (await A.listVaults())[0];
+    const metaKey = await S.openVaultKey(row.uuid, row.wrapped_key);
+    const name = new TextDecoder().decode(
+      await V.open(
+        metaKey,
+        V.fromBase64Url(row.encrypted_name),
+        V.AD.vaultFieldAd(row.uuid, 'name')
+      )
+    );
+    const body = await window.buildVaultUpdateRequest(
+      S,
+      Object.assign({}, row, { name }),
+      { description }
+    );
+    await A.updateVault(row.uuid, body);
+    return { status: 200, uuid: row.uuid, name };
+  } catch (error) {
+    return { status: error.status || 0, reason: String(error && error.message) };
+  }
+}
+"""

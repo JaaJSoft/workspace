@@ -12,6 +12,20 @@ associated data and the signatures are the product's own. Only the widget that
 would have collected the values is missing.
 """
 
+# What WRITE_NOTED_ENTRY below seals, transcribed so the generator can hold
+# its manifest against it. A transcription and not the source: the script
+# carries the literals, and the generator's value guard comparing the two is
+# exactly what catches them drifting apart.
+NOTED_ENTRY = {
+    "name": "GitHub",
+    "notes": "Sauvegarde : cle\u0301 range\u0301e a\u0300 la cave (NFD)",
+    "fields": {
+        "username": "octocat",
+        "password": "hunter2",
+        "custom:pin": "1234",
+    },
+}
+
 # WRITE_ENTRY from test_entry_browser.py with two changes and nothing else:
 # encrypted_notes is sealed under entryFieldAd(entryUuid, 'notes') instead of
 # being the empty string, and the 'custom:pin' field of the original is kept.

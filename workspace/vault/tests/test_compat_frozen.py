@@ -27,5 +27,10 @@ class CorpusPresenceTests(SimpleTestCase):
                 files = compat.load(version)
                 self.assertTrue(files.rows.is_file())
                 self.assertTrue(files.archive.startswith(b"VLTARCH"))
-                self.assertIn("master_password", files.credentials)
+                # Both passwords, named apart: one opens the Django
+                # account, the other opens the vault, and a corpus that
+                # carried one key called "password" would read as a
+                # single credential pair that it never was.
+                self.assertIn("account_password", files.credentials)
+                self.assertIn("vault_master_password", files.credentials)
                 self.assertTrue(files.manifest["vaults"])

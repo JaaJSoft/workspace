@@ -4,15 +4,18 @@ The corpus has to come out of a real browser: a corpus produced by the Python
 reference would only prove the reference agrees with itself, and the node:vm
 harness has already been caught feeding the bundle data its own realm built.
 
-Everything the UI exposes is written through the UI. The two things it does
-not expose - an entry's notes and a custom: field - go through
-window.vaultCrypto / vaultApi / vaultSession in the same page, on the session
-the UI just opened. That is still the real client write path; it is the form
-that is bypassed, never the crypto. Both derive associated-data strings of
-their own (v1|entry-field|<uuid>|notes, v1|entry-field|<uuid>|custom:...),
-which is exactly what a corpus that stopped at the form would leave unguarded.
+Everything the UI exposes is written through the UI. The three things it does
+not expose - an entry's notes, a custom: field, and the description of the
+vault onboarding creates - go through window.vaultCrypto / vaultApi /
+vaultSession in the same page, on the session the UI just opened. That is
+still the real client write path; it is the form that is bypassed, never the
+crypto. Each derives associated-data strings of its own
+(v1|entry-field|<uuid>|notes, v1|entry-field|<uuid>|custom:...,
+v1|vault-field|<uuid>|description), which is exactly what a corpus that
+stopped at the form would leave unguarded.
 """
 
+import contextlib
 import json
 import os
 import shutil
@@ -26,12 +29,26 @@ from django.test import SimpleTestCase
 from workspace.vault.models import VaultEntry
 
 from .. import compat
-from .compat_scripts import DESCRIBE_FIRST_VAULT, READ_EVERYTHING, WRITE_NOTED_ENTRY
+from .compat_scripts import (
+    DESCRIBE_FIRST_VAULT,
+    NOTED_ENTRY,
+    READ_EVERYTHING,
+    WRITE_NOTED_ENTRY,
+)
 from .test_browser import GOOD_PASSWORD, PANEL, SIDEBAR, VaultBrowserCase
 
 WRITE = os.environ.get("VAULT_COMPAT_CORPUS_WRITE") == "1"
 VERSION = "v1"
 ARCHIVE_PASSPHRASE = "corpus fige sept huit neuf dix onze douze"
+
+# create_user's default, which the shared harness takes. Written into the
+# corpus rather than left implicit: the replays log in with login_as and never
+# need it, but a human opening this account does, and the only other way to
+# recover it is to crack the frozen hash - which works today solely because
+# the test settings pin a fast hasher, and nothing pins that. The walk checks
+# the constant against the stored hash, so a changed default fails loudly
+# instead of freezing a password that opens nothing.
+ACCOUNT_PASSWORD = "pass12345"
 
 # Not the default anything: SHA1/6/30 is what normalizeTotpInput writes for a
 # bare secret, so a reader that ignored the parameters and assumed the
@@ -43,11 +60,56 @@ TOTP_URI = (
     "&algorithm=SHA256&digits=8&period=45"
 )
 
-# Non-ASCII and precomposed, where the entry notes below are decomposed: a
-# corpus carrying only one normalisation form cannot tell a reader that
-# normalises from one that leaves the bytes alone.
+# Non-ASCII and precomposed, where the entry notes are decomposed: a corpus
+# carrying only one normalisation form cannot tell a reader that normalises
+# from one that leaves the bytes alone.
 PERSONAL_DESCRIPTION = "Coffre personnel \u2014 cl\u00e9s et papiers"
 WORK_DESCRIPTION = "Coffre de l'\u00e9quipe \u2014 acc\u00e8s partag\u00e9s"
+
+PERSONAL_VAULT = "Personal"
+WORK_VAULT = "Work"
+FOLDER_PARENT = "Banking"
+FOLDER_CHILD = "Cards"
+TAG_NAME = "Finance"
+FAVOURITE_ENTRY = "Aurora Bank"
+TAGGED_ENTRY = "Aurora Bank"
+FOLDERED_ENTRY = "Aurora Card"
+TRASHED_ENTRY = "Old Forum"
+
+# Every value the walk types into the form, in one place - and the walk types
+# them from here, so "what went in" and "what is expected" cannot drift into
+# two transcriptions of each other.
+TYPED_ENTRIES = {
+    "Aurora Bank": {"username": "ada", "password": "hunter2"},
+    "Aurora Card": {"username": "4111", "password": "0000"},
+    "Old Forum": {"username": "ada", "password": "letmein"},
+    "Work Wiki": {"username": "ada", "password": "s3cret-wiki"},
+}
+
+# The account the walk is supposed to have built, named end to end. A guard
+# that only checked the shape would pass a write that sealed the wrong bytes -
+# and freezing that is the one mistake this whole corpus cannot recover from,
+# because all three replays would then confirm it faithfully, forever.
+EXPECTED_ACCOUNT = {
+    PERSONAL_VAULT: {
+        "description": PERSONAL_DESCRIPTION,
+        # folder name -> parent folder name, or None at the root.
+        "folders": {FOLDER_PARENT: None, FOLDER_CHILD: FOLDER_PARENT},
+        "tags": {TAG_NAME},
+        "entries": {
+            "Aurora Bank": dict(TYPED_ENTRIES["Aurora Bank"], totp=TOTP_URI),
+            "Aurora Card": TYPED_ENTRIES["Aurora Card"],
+            "Old Forum": TYPED_ENTRIES["Old Forum"],
+            NOTED_ENTRY["name"]: NOTED_ENTRY["fields"],
+        },
+    },
+    WORK_VAULT: {
+        "description": WORK_DESCRIPTION,
+        "folders": {},
+        "tags": set(),
+        "entries": {"Work Wiki": TYPED_ENTRIES["Work Wiki"]},
+    },
+}
 
 # Dumped in dependency order so loaddata can insert without deferring.
 DUMP_MODELS = [
@@ -62,48 +124,100 @@ DUMP_MODELS = [
 ]
 
 
-def _prepare_output_dir(version: str, root: Path = compat.CORPUS_ROOT) -> Path:
-    """The directory to write, or FileExistsError if it is already published."""
+def _refuse_if_published(version: str, root: Path = compat.CORPUS_ROOT) -> Path:
+    """The path ``version`` would take, or FileExistsError if it is published."""
     target = root / version
     if target.exists():
         raise FileExistsError(
             f"{target} is published and append-only. A format change adds the "
             f"next version beside it; it never edits this one."
         )
-    target.mkdir(parents=True)
     return target
 
 
-class CorpusWriteGuardTests(SimpleTestCase):
-    """The generator refuses a version that already exists.
+@contextlib.contextmanager
+def _corpus_output(version: str, root: Path = compat.CORPUS_ROOT):
+    """A directory to fill, published as ``version`` only if the walk finishes.
 
-    Not politeness: the append-only test of task 5 compares committed hashes,
-    so an overwrite would be found only after it had already destroyed the
-    corpus in the working tree.
+    Creating the version directory up front and writing into it as the walk
+    goes makes every failure worse than the failure: a selector that times out
+    halfway leaves an empty or half-written directory behind, and that
+    directory then refuses every later regeneration while making compat.load()
+    die on a missing file instead of saying what is wrong. Staging elsewhere
+    turns publication into one rename - it either happened or it did not.
+    """
+    target = _refuse_if_published(version, root)
+    staging = Path(tempfile.mkdtemp(prefix=f"vault-corpus-{version}-"))
+    try:
+        yield staging
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    root.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(staging), str(target))
+
+
+class CorpusWriteGuardTests(SimpleTestCase):
+    """What the generator does with the output directory, without a browser.
+
+    The refusal is not politeness: the append-only test of task 5 compares
+    committed hashes, so an overwrite would be found only after it had already
+    destroyed the corpus in the working tree.
     """
 
-    def test_a_fresh_version_gets_its_directory(self):
-        # Under a root of its own, so the positive half never touches the
-        # published corpus. A version name that does not exist yet is the only
-        # thing this half is about.
+    def _scratch_root(self):
         root = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
-        target = _prepare_output_dir("v99", root=root)
-        self.assertEqual(target, root / "v99")
-        self.assertTrue(target.is_dir())
+        return root
+
+    def test_a_finished_walk_publishes_what_it_staged(self):
+        root = self._scratch_root()
+        with _corpus_output("v99", root=root) as staging:
+            self.assertFalse(
+                (root / "v99").exists(), "the version appeared before it was written"
+            )
+            (staging / "rows.json").write_text("[]", encoding="utf-8")
+        self.assertEqual((root / "v99" / "rows.json").read_text(encoding="utf-8"), "[]")
+
+    def test_a_failed_walk_publishes_nothing_and_leaves_nothing(self):
+        root = self._scratch_root()
+        staged = None
+        with self.assertRaises(RuntimeError):
+            with _corpus_output("v99", root=root) as staging:
+                staged = staging
+                (staging / "rows.json").write_text("[]", encoding="utf-8")
+                raise RuntimeError("a selector timed out halfway through the walk")
+        # Both halves. A version directory left behind refuses every later
+        # regeneration and makes the corpus unloadable; a staging directory
+        # left behind is a slow leak nobody would ever look for.
+        self.assertFalse((root / "v99").exists(), "a failed walk published a version")
+        self.assertFalse(staged.exists(), "the staging directory was left behind")
 
     def test_writing_into_a_published_version_is_refused(self):
         # The real root and the real version: the refusal is only worth
         # anything against the directory a rerun would actually destroy.
         with self.assertRaises(FileExistsError):
-            _prepare_output_dir(VERSION)
+            with _corpus_output(VERSION):
+                pass
 
 
 @unittest.skipUnless(WRITE, "set VAULT_COMPAT_CORPUS_WRITE=1 to rewrite the corpus")
 class CorpusWriteWalk(VaultBrowserCase):
     """One run, one corpus, then never again for this version."""
 
+    @classmethod
+    def setUpClass(cls):
+        # Before the browser starts. Chromium plus an onboarding costs the
+        # better part of a minute, and there is nothing to learn from spending
+        # it to fail on a directory that was already there when the run began.
+        _refuse_if_published(VERSION)
+        super().setUpClass()
+
     # ---- the pieces of the account the shared harness has no walk for -----
+
+    def _create_typed_entry(self, name):
+        fields = TYPED_ENTRIES[name]
+        self._create_entry(name, fields["username"], fields["password"])
 
     def _add_totp_uri(self, name, uri):
         """Put a complete otpauth:// address on an entry, through the form.
@@ -210,11 +324,11 @@ class CorpusWriteWalk(VaultBrowserCase):
     # ---- the account this corpus is ---------------------------------------
 
     def _assert_the_manifest_is_whole(self, manifest):
-        """Everything the corpus exists to guard, named one at a time.
+        """Everything the corpus exists to cover, named one at a time.
 
-        A silent selector produces a manifest that parses, so the run has to
-        refuse to write a thin one rather than leave three future replays
-        agreeing about an empty account.
+        This half is about coverage - that the account carries a trashed row,
+        a favourite, a nested folder at all. It survives a renamed entry on
+        purpose; the half below is the one that pins the values.
         """
         vaults = manifest["vaults"]
         self.assertEqual(len(vaults), 2, "the corpus needs two vaults")
@@ -270,10 +384,79 @@ class CorpusWriteWalk(VaultBrowserCase):
         ]
         self.assertEqual(keys, [TOTP_URI], "the authenticator key did not round-trip")
 
-    def test_write_the_corpus(self):
-        target = _prepare_output_dir(VERSION)
+    def _assert_the_manifest_matches_what_was_written(self, manifest):
+        """The manifest against the values that went in, one by one.
 
+        The half the corpus cannot do without. A shape check passes a write
+        that sealed the wrong bytes just as readily as a correct one, and a
+        wrong corpus is worse than no corpus: it is published append-only, so
+        the three replays spend every future commit confirming the mistake.
+        """
+        by_name = {vault["name"]: vault for vault in manifest["vaults"]}
+        self.assertEqual(sorted(by_name), sorted(EXPECTED_ACCOUNT))
+
+        for vault_name, expected in EXPECTED_ACCOUNT.items():
+            vault = by_name[vault_name]
+            self.assertEqual(vault["description"], expected["description"], vault_name)
+
+            folders = {folder["name"]: folder for folder in vault["folders"]}
+            self.assertEqual(sorted(folders), sorted(expected["folders"]), vault_name)
+            for folder_name, parent_name in expected["folders"].items():
+                # The tree by name: the manifest carries UUIDs, and resolving
+                # them here is what makes "Cards is inside Banking" a claim
+                # rather than "Cards has some parent".
+                expected_parent = folders[parent_name]["uuid"] if parent_name else None
+                self.assertEqual(
+                    folders[folder_name]["parent"], expected_parent, folder_name
+                )
+
+            self.assertEqual(
+                {tag["name"] for tag in vault["tags"]}, expected["tags"], vault_name
+            )
+
+            entries = {entry["name"]: entry for entry in vault["entries"]}
+            self.assertEqual(sorted(entries), sorted(expected["entries"]), vault_name)
+            for entry_name, fields in expected["entries"].items():
+                self.assertEqual(entries[entry_name]["fields"], fields, entry_name)
+
+        personal = by_name[PERSONAL_VAULT]
+        folders = {folder["name"]: folder for folder in personal["folders"]}
+        entries = {entry["name"]: entry for entry in personal["entries"]}
+
+        self.assertEqual(
+            entries[FOLDERED_ENTRY]["folder"], folders[FOLDER_CHILD]["uuid"]
+        )
+        tag_uuid = personal["tags"][0]["uuid"]
+        self.assertEqual(entries[TAGGED_ENTRY]["tags"], [tag_uuid])
+
+        every = [entry for vault in manifest["vaults"] for entry in vault["entries"]]
+        self.assertEqual(
+            {e["name"] for e in every if e["is_favorite"]}, {FAVOURITE_ENTRY}
+        )
+        self.assertEqual({e["name"] for e in every if e["trashed"]}, {TRASHED_ENTRY})
+        self.assertEqual({e["name"] for e in every if e["tags"]}, {TAGGED_ENTRY})
+        # Notes on the one entry that was given notes, and nowhere else: an
+        # empty string is what an entry without them stores, and a reader
+        # inventing one somewhere would show up here.
+        self.assertEqual(
+            {e["name"]: e["notes"] for e in every if e["notes"]},
+            {NOTED_ENTRY["name"]: NOTED_ENTRY["notes"]},
+        )
+
+    def test_write_the_corpus(self):
+        with _corpus_output(VERSION) as target:
+            self._walk_and_write(target)
+
+    def _walk_and_write(self, target):
         self._open_vault()  # onboarding + the first vault, by the UI
+
+        # The password the corpus writes down is the one the account has. A
+        # changed create_user default would otherwise be frozen as a password
+        # that opens nothing, and nobody would find out until they tried.
+        self.assertTrue(
+            self.user.check_password(ACCOUNT_PASSWORD),
+            "the account password written into the corpus is not the account's",
+        )
 
         # Onboarding names the first vault and describes nothing, and no
         # dialog renders the field afterwards - so this one row needs the
@@ -281,25 +464,25 @@ class CorpusWriteWalk(VaultBrowserCase):
         described = self.page.evaluate(DESCRIBE_FIRST_VAULT, PERSONAL_DESCRIPTION)
         self.assertEqual(described["status"], 200, described.get("reason"))
 
-        self._create_entry("Aurora Bank", "ada", "hunter2")
-        self._add_totp_uri("Aurora Bank", TOTP_URI)
-        self._favourite("Aurora Bank")
-        self._new_tag("Finance")
-        self._wear_tag("Aurora Bank", "Finance")
+        self._create_typed_entry(FAVOURITE_ENTRY)
+        self._add_totp_uri(FAVOURITE_ENTRY, TOTP_URI)
+        self._favourite(FAVOURITE_ENTRY)
+        self._new_tag(TAG_NAME)
+        self._wear_tag(TAGGED_ENTRY, TAG_NAME)
 
         # A folder inside a folder, and a row living in the inner one: parent
         # and position are plaintext and covered by nothing but the folder
         # signature, so a tree one level deep is the shallowest corpus that
         # exercises them.
-        self._new_folder("Banking")
-        self._open_folder("Banking")
-        self._new_folder("Cards")
-        self._open_folder("Cards")
-        self._create_entry("Aurora Card", "4111", "0000")
+        self._new_folder(FOLDER_PARENT)
+        self._open_folder(FOLDER_PARENT)
+        self._new_folder(FOLDER_CHILD)
+        self._open_folder(FOLDER_CHILD)
+        self._create_typed_entry(FOLDERED_ENTRY)
         self._back_to_all_entries()
 
-        self._create_entry("Old Forum", "ada", "letmein")
-        self._trash("Old Forum")
+        self._create_typed_entry(TRASHED_ENTRY)
+        self._trash(TRASHED_ENTRY)
 
         # The notes and the custom field, on the session the UI just opened.
         written = self.page.evaluate(WRITE_NOTED_ENTRY, False)
@@ -307,11 +490,12 @@ class CorpusWriteWalk(VaultBrowserCase):
 
         # listVaults()[0] is the first vault by created_at, so the scripted
         # entry above landed in Personal whatever is on screen now.
-        self._new_vault("Work", WORK_DESCRIPTION)
-        self._create_entry("Work Wiki", "ada", "s3cret-wiki")
+        self._new_vault(WORK_VAULT, WORK_DESCRIPTION)
+        self._create_typed_entry("Work Wiki")
 
         manifest = self.page.evaluate(READ_EVERYTHING)
         self._assert_the_manifest_is_whole(manifest)
+        self._assert_the_manifest_matches_what_was_written(manifest)
 
         archive = self._export_archive(ARCHIVE_PASSPHRASE)
         (target / "archive.bin").write_bytes(archive)
@@ -326,7 +510,8 @@ class CorpusWriteWalk(VaultBrowserCase):
                 {
                     "note": "Frozen test account. These are not live secrets.",
                     "username": self.user.username,
-                    "master_password": GOOD_PASSWORD,
+                    "account_password": ACCOUNT_PASSWORD,
+                    "vault_master_password": GOOD_PASSWORD,
                     "secret_key": self.secret,
                     "archive_passphrase": ARCHIVE_PASSPHRASE,
                 },

@@ -1,5 +1,5 @@
 {
-  "account_uuid": "01a0bb05-95b8-77fc-9916-3ee566bae835",
+  "account_uuid": "01a0bb18-bd5d-7782-b886-d73a34d097b7",
   "vaults": [
     {
       "color": "primary",
@@ -18,11 +18,11 @@
           "name": "Aurora Bank",
           "notes": "",
           "tags": [
-            "01a0bb05-a31b-7d65-bd63-6b55933e762e"
+            "01a0bb18-cb22-7dfd-af67-2422ad124377"
           ],
           "trashed": false,
           "type": "login",
-          "uuid": "01a0bb05-9dd4-7b8b-97b0-34864c6232f6"
+          "uuid": "01a0bb18-c557-7fa4-960e-7ade32216575"
         },
         {
           "entry_version": 1,
@@ -30,7 +30,7 @@
             "password": "0000",
             "username": "4111"
           },
-          "folder": "01a0bb05-ab5c-7e8f-ae32-e883b585548d",
+          "folder": "01a0bb18-d323-761a-8237-18f992bc95ce",
           "is_favorite": false,
           "key_version": 1,
           "name": "Aurora Card",
@@ -38,7 +38,7 @@
           "tags": [],
           "trashed": false,
           "type": "login",
-          "uuid": "01a0bb05-ae9e-74be-b1eb-4ea1bcc0ac67"
+          "uuid": "01a0bb18-d600-74fb-838d-7a450dbc81ca"
         },
         {
           "entry_version": 1,
@@ -54,7 +54,7 @@
           "tags": [],
           "trashed": true,
           "type": "login",
-          "uuid": "01a0bb05-b19c-74fa-a217-189e81ab765a"
+          "uuid": "01a0bb18-d8ee-7a66-83a2-9c7de3baa412"
         },
         {
           "entry_version": 1,
@@ -71,7 +71,7 @@
           "tags": [],
           "trashed": false,
           "type": "login",
-          "uuid": "01a0bb05-b3ed-7667-9a40-85213863b3fa"
+          "uuid": "01a0bb18-db3b-7f05-ad16-84f227400f4f"
         }
       ],
       "folders": [
@@ -79,13 +79,13 @@
           "name": "Banking",
           "parent": null,
           "position": 0,
-          "uuid": "01a0bb05-a85e-7281-bc0b-60317240f040"
+          "uuid": "01a0bb18-d046-7664-98f9-dac1e24eb47c"
         },
         {
           "name": "Cards",
-          "parent": "01a0bb05-a85e-7281-bc0b-60317240f040",
+          "parent": "01a0bb18-d046-7664-98f9-dac1e24eb47c",
           "position": 0,
-          "uuid": "01a0bb05-ab5c-7e8f-ae32-e883b585548d"
+          "uuid": "01a0bb18-d323-761a-8237-18f992bc95ce"
         }
       ],
       "icon": "lock",
@@ -96,10 +96,10 @@
         {
           "color": "#ef4444",
           "name": "Finance",
-          "uuid": "01a0bb05-a31b-7d65-bd63-6b55933e762e"
+          "uuid": "01a0bb18-cb22-7dfd-af67-2422ad124377"
         }
       ],
-      "uuid": "01a0bb05-9819-785e-b08c-a4e5c28d6f4d"
+      "uuid": "01a0bb18-bfac-72fa-ab91-e73a71a07f77"
     },
     {
       "color": "primary",
@@ -119,7 +119,7 @@
           "tags": [],
           "trashed": false,
           "type": "login",
-          "uuid": "01a0bb05-b737-71c4-8fc5-c4ff78d5d170"
+          "uuid": "01a0bb18-de66-782a-aa9b-1b265eebef97"
         }
       ],
       "folders": [],
@@ -128,7 +128,7 @@
       "key_version": 1,
       "name": "Work",
       "tags": [],
-      "uuid": "01a0bb05-b5ca-7e5c-82fc-400670006827"
+      "uuid": "01a0bb18-dcf8-77f7-8b29-af057e71b29f"
     }
   ]
 }

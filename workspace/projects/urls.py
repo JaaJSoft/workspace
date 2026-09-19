@@ -41,6 +41,8 @@ task_list = TaskViewSet.as_view({"get": "list", "post": "create"})
 task_reorder = TaskViewSet.as_view({"post": "reorder"})
 task_move = TaskViewSet.as_view({"post": "move"})
 task_assign_sprint = TaskViewSet.as_view({"post": "assign_sprint"})
+task_bulk_edit = TaskViewSet.as_view({"post": "bulk_edit"})
+task_bulk_delete = TaskViewSet.as_view({"post": "bulk_delete"})
 task_detail = TaskViewSet.as_view(
     {"get": "retrieve", "patch": "partial_update", "delete": "destroy"}
 )
@@ -171,6 +173,16 @@ urlpatterns = [
         "api/v1/projects/<uuid:project_uuid>/tasks/assign-sprint",
         task_assign_sprint,
         name="project-tasks-assign-sprint",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/bulk",
+        task_bulk_edit,
+        name="project-tasks-bulk",
+    ),
+    path(
+        "api/v1/projects/<uuid:project_uuid>/tasks/bulk-delete",
+        task_bulk_delete,
+        name="project-tasks-bulk-delete",
     ),
     path(
         "api/v1/projects/<uuid:project_uuid>/tasks/<uuid:task_uuid>",

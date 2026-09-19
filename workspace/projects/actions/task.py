@@ -14,6 +14,7 @@ class EditTaskAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class MoveTaskAction(BaseProjectAction):
     id = "move"
+    supports_bulk = True
     label = "Move"
     icon = "move"
     category = ActionCategory.ORGANIZE
@@ -23,6 +24,7 @@ class MoveTaskAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class AssignTaskAction(BaseProjectAction):
     id = "assign"
+    supports_bulk = True
     label = "Assign"
     icon = "user-plus"
     category = ActionCategory.EDIT
@@ -32,6 +34,7 @@ class AssignTaskAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class SetDueDateAction(BaseProjectAction):
     id = "set_due"
+    supports_bulk = True
     label = "Set due date"
     icon = "calendar"
     category = ActionCategory.EDIT
@@ -39,8 +42,19 @@ class SetDueDateAction(BaseProjectAction):
 
 
 @ProjectActionRegistry.register
+class SetPriorityAction(BaseProjectAction):
+    id = "set_priority"
+    supports_bulk = True
+    label = "Set priority"
+    icon = "flag"
+    category = ActionCategory.EDIT
+    target_types = ("task",)
+
+
+@ProjectActionRegistry.register
 class SetLabelsAction(BaseProjectAction):
     id = "set_labels"
+    supports_bulk = True
     label = "Set labels"
     icon = "tag"
     category = ActionCategory.EDIT
@@ -95,6 +109,7 @@ class CommentTaskAction(BaseProjectAction):
 @ProjectActionRegistry.register
 class DeleteTaskAction(BaseProjectAction):
     id = "delete"
+    supports_bulk = True
     label = "Delete"
     icon = "trash-2"
     category = ActionCategory.DANGER

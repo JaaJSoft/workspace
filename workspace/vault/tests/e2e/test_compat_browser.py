@@ -26,10 +26,13 @@ from workspace.common.tests.e2e.base import PlaywrightTestCase
 from .. import compat
 from .compat_scripts import READ_EVERYTHING
 
-# Every published corpus version a replay test in this file reads. Task 5
-# checks this against compat.versions() so a new corpus directory can never
-# go unread.
-COVERED = ["v1"]
+# The corpora this file's replays actually open, and the versions derived
+# from them. test_compat_frozen checks COVERED against compat.versions() so a
+# new corpus directory can never go unread - deriving the list from the loads
+# themselves is what stops a version being *declared* covered by a replay that
+# never reads it.
+CORPORA = (compat.load("v1"),)
+COVERED = [corpus.root.name for corpus in CORPORA]
 
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
 
@@ -140,11 +143,11 @@ async () => {
 
 
 class CorpusBrowserReplayTests(PlaywrightTestCase):
-    fixtures = [str(compat.load("v1").rows)]
+    fixtures = [str(CORPORA[0].rows)]
 
     def setUp(self):
         super().setUp()
-        self.corpus = compat.load("v1")
+        (self.corpus,) = CORPORA
         self.user = get_user_model().objects.get(
             username=self.corpus.credentials["username"]
         )
@@ -175,10 +178,30 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             "input[spellcheck='false']", self.corpus.credentials["secret_key"]
         )
         self.page.click("button:has-text('Unlock')")
-        self.page.wait_for_function(
-            "() => window.vaultSession && window.vaultSession.isUnlocked()",
-            timeout=60000,
-        )
+        # Everything below this line assumes the account opened at all, and
+        # the way it fails to is the worst break this corpus can report: not
+        # one ciphertext refusing, but Argon2, the Crockford secret-key
+        # decoding, the kexPrivAd/sigPrivAd strings, the seed -> sig_public
+        # recomputation or the kex_pub attestation moving, any one of which
+        # leaves every account ever created impossible to unlock. The unlock
+        # screen never resolves, so Playwright reports only "Timeout 60000ms
+        # exceeded" - the reading that sends a developer looking for a flaky
+        # e2e test instead of at the compatibility break they just shipped.
+        # TimeoutError is a PlaywrightError, so it is deliberately caught
+        # here rather than re-raised as itself: a timeout *is* this failure.
+        try:
+            self.page.wait_for_function(
+                "() => window.vaultSession && window.vaultSession.isUnlocked()",
+                timeout=60000,
+            )
+        except PlaywrightError as exc:
+            raise AssertionError(
+                "The frozen v1 corpus account can no longer be unlocked at "
+                "all - a change to key derivation, the secret key encoding, "
+                "the wrapping of the account private keys or the public-key "
+                "attestation has broken compatibility with every account "
+                f"already created. {exc}"
+            ) from exc
 
     def test_a_browser_opens_every_row_of_the_frozen_account(self):
         """The whole manifest, compared in one shot - never a walk of

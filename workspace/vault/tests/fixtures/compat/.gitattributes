@@ -1,0 +1,6 @@
+# The corpus is read back byte for byte, so every file in here is stored and
+# checked out verbatim. Line-ending translation on a Windows clone - what
+# core.autocrlf=true does - would hand the working copy a rows.json that
+# differs from the committed blob, and the append-only digest check would
+# then hold on one platform and fail on the other.
+* -text

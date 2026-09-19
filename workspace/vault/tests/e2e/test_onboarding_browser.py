@@ -134,6 +134,37 @@ class OnboardingWalkTests(PlaywrightTestCase):
             "button:has-text('Set my master password'):not([disabled])", timeout=15000
         )
 
+    def test_refilling_the_same_password_does_not_close_the_floor(self):
+        """A password manager re-fills the field with the value already in it.
+
+        That is an input event with nothing to change, and an Alpine effect does
+        not re-run when a property is assigned the value it already holds - so
+        the meter, which only speaks from its effect, says nothing. Anything that
+        clears the score on input alone therefore clears it for good: the bar
+        still reads "Very strong" while the criterion under it stays grey and the
+        button never comes back.
+        """
+        self._serve_corpus()
+        self._walk_to_the_password_step()
+        self._fill_password()
+        self.page.wait_for_selector(
+            "button:has-text('Set my master password'):not([disabled])", timeout=15000
+        )
+
+        # What a password manager does: same value, input event all the same.
+        self.page.eval_on_selector(
+            "input[autocomplete='new-password']",
+            """(el) => {
+                 el.value = el.value;
+                 el.dispatchEvent(new Event('input', { bubbles: true }));
+               }""",
+        )
+        self.page.wait_for_timeout(1500)
+        self.assertFalse(
+            self.page.is_disabled("button:has-text('Set my master password')"),
+            "re-filling the field with its own value closed the floor for good",
+        )
+
     def test_the_whole_flow_seals_an_identity_the_server_verifies(self):
         self._serve_corpus()
         self._walk_to_the_password_step()

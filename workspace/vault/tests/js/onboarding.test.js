@@ -510,8 +510,8 @@ test('the csrf token comes from the shared helper', () => {
 });
 
 test('editing the password drops the previous verdict at once', () => {
-  // x-model writes the field synchronously, the lookups wait 400 ms. Between
-  // the two the floor must not still be answering about the old value.
+  // x-model writes the field synchronously, the corpus lookup waits 400 ms.
+  // Between the two the floor must not still be answering about the old value.
   const app = component();
   app.password = 'a-strong-one-nobody-has-used';
   app.score = 4;
@@ -523,8 +523,24 @@ test('editing the password drops the previous verdict at once', () => {
   app.confirmation = 'password1';
   app.passwordEdited();
   assert.equal(app.passwordAcceptable(), false, 'the old verdict survived');
-  assert.equal(app.score, null);
   assert.equal(app.breachStatus, 'unchecked');
+});
+
+test('an input event alone never clears the score', () => {
+  // The score belongs to the meter, which speaks from an Alpine effect - and
+  // an effect does not re-run when a property is assigned the value it already
+  // holds. A password manager re-filling the field with what is already there
+  // is exactly that, so a score cleared on input would never come back and the
+  // step would stay shut on a password the bar calls very strong.
+  // tests/e2e/test_onboarding_browser.py walks that one in a browser; here the
+  // point is simply that nothing on this side touches the value.
+  const app = component();
+  app.password = 'a-strong-one-nobody-has-used';
+  app.confirmation = app.password;
+  app.strengthChanged({ status: 'ready', score: 4 });
+
+  app.passwordEdited();
+  assert.equal(app.score, 4, 'the floor threw away a verdict it cannot ask for again');
 });
 
 test('the score comes from the meter, and only from a landed estimate', () => {

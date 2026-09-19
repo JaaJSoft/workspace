@@ -84,13 +84,20 @@ window.vaultOnboarding = function vaultOnboarding() {
       return this.acknowledged;
     },
 
-    // x-model writes the field through on every keystroke while the lookups
-    // wait out the debounce. Without this the floor keeps reporting the
-    // previous password's verdict for those 400 ms, and a password manager
-    // filling both fields at once clears it on a value nobody evaluated.
+    // x-model writes the field through on every keystroke while the corpus
+    // lookup waits out its debounce. Without this the floor would keep
+    // reporting the previous password's verdict for those 400 ms.
+    //
+    // The score is deliberately not cleared here, and clearing it is the one
+    // change to avoid: it belongs to the meter, which speaks from an effect,
+    // and an Alpine effect does not re-run when a property is assigned the
+    // value it already holds. A password manager re-filling the field with
+    // what is already in it is exactly that - an input event with nothing to
+    // change - so a score cleared here would never come back. Nothing is
+    // stale in the meantime either: the line below shuts the floor on every
+    // input whatever the score says, until the corpus has answered again.
     passwordEdited() {
       this.generation++;
-      this.score = null;
       this.breachStatus = 'unchecked';
     },
 

@@ -83,22 +83,13 @@ class ReferenceReplayTests(SimpleTestCase):
         return X25519PrivateKey.from_private_bytes(kex_priv)
 
     def test_the_account_private_keys_open_under_the_stored_parameters(self):
-        identity = self.identity["fields"]
-        amk = primitives.derive_amk(
-            self.corpus.credentials["vault_master_password"],
-            primitives.crockford_decode(self.corpus.credentials["secret_key"]),
-            _b64(identity["kdf_salt"]),
-            identity["kdf_params"],
-        )
-        unwrap = primitives.hkdf(amk, ad.unwrap_info())
-        kex_priv = primitives.aead_open(
-            unwrap,
-            _b64(identity["wrapped_kex_priv"]),
-            ad.kex_priv_ad(self.account_uuid),
-        )
-        self.assertEqual(len(kex_priv), 32)
+        # The one manifest field the rest of this file never touches: every
+        # other test reaches the account through the identity row alone.
+        self.assertEqual(self.account_uuid, self.corpus.manifest["account_uuid"])
+        kex_priv = self._kex_private_key()
+        self.assertEqual(len(primitives.private_bytes(kex_priv)), 32)
 
-    def test_every_entry_field_opens_to_the_manifest(self):
+    def test_every_ciphertext_opens_to_the_manifest(self):
         """Every ciphertext the corpus holds, opened under the key and the
         associated data the write path would have used, compared against the
         manifest's own cleartext - never against a value derived from the
@@ -267,12 +258,18 @@ class ReferenceReplayTests(SimpleTestCase):
         entry_rows = _all(self.rows, "vault.vaultentry")
         field_rows = _all(self.rows, "vault.entryfield")
 
+        # Derived from the manifest, like the counts in the ciphertext test -
+        # never a literal, so an append-only corpus keeps both in step.
+        manifest_vaults = self.corpus.manifest["vaults"]
+        self.assertEqual(len(vault_rows), len(manifest_vaults))
+        self.assertEqual(
+            len(folder_rows), sum(len(v["folders"]) for v in manifest_vaults)
+        )
+        self.assertEqual(len(tag_rows), sum(len(v["tags"]) for v in manifest_vaults))
+        self.assertEqual(
+            len(entry_rows), sum(len(v["entries"]) for v in manifest_vaults)
+        )
         expected = len(vault_rows) + len(folder_rows) + len(tag_rows) + len(entry_rows)
-        self.assertEqual(len(vault_rows), 2)
-        self.assertEqual(len(folder_rows), 2)
-        self.assertEqual(len(tag_rows), 1)
-        self.assertEqual(len(entry_rows), 5)
-        self.assertEqual(expected, 10)
 
         fields_by_entry = {}
         for row in field_rows:

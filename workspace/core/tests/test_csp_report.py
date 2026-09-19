@@ -5,13 +5,21 @@ attacker-reachable: it is logged sanitised, capped before it is read, and
 rate-limited per address.
 """
 
+import io
 import json
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import Client, RequestFactory, TestCase
+from django.test import (
+    AsyncRequestFactory,
+    Client,
+    RequestFactory,
+    TestCase,
+    override_settings,
+)
+from django.test.client import FakePayload
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework.throttling import SimpleRateThrottle
 
@@ -113,6 +121,44 @@ class CspReportViewTests(TestCase):
         body = csp_report(**{"script-sample": "x" * MAX_REPORT_BYTES})
         with self.assertNoLogs(LOGGER):
             response = self.post(body)
+        self.assertEqual(response.status_code, 413)
+
+    def test_an_undeclared_oversized_body_is_refused(self):
+        """A declared Content-Length is the client's word. Under ASGI the
+        stream is read whole whatever the header says - or does not say - so
+        the cap has to be checked against the bytes that actually arrived."""
+        body = csp_report(**{"script-sample": "x" * MAX_REPORT_BYTES}).encode()
+        self.assertGreater(len(body), MAX_REPORT_BYTES)
+        request = AsyncRequestFactory().request(
+            method="POST",
+            path=URL,
+            headers=[(b"content-type", b"application/csp-report")],
+            _body_file=FakePayload(body),
+        )
+        self.assertIsNone(request.META.get("CONTENT_LENGTH"))
+        with self.assertNoLogs(LOGGER):
+            response = CspReportView.as_view()(request)
+        self.assertEqual(response.status_code, 413)
+
+    def test_djangos_own_size_guard_is_answered_with_413(self):
+        """Past DATA_UPLOAD_MAX_MEMORY_SIZE, reading the body raises rather
+        than returning bytes to measure. That is the same refusal."""
+        body = csp_report().encode()
+        request = AsyncRequestFactory().request(
+            method="POST",
+            path=URL,
+            headers=[(b"content-type", b"application/csp-report")],
+            _body_file=FakePayload(body),
+        )
+        # ASGIRequest is handed the seekable SpooledTemporaryFile the handler
+        # buffered the body into; only the test factory wraps it in a
+        # LimitedStream, and Django skips the guard on a stream it cannot seek.
+        request._stream = io.BytesIO(body)
+        with (
+            override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=len(body) - 1),
+            self.assertNoLogs(LOGGER),
+        ):
+            response = CspReportView.as_view()(request)
         self.assertEqual(response.status_code, 413)
 
     def test_another_content_type_is_refused(self):

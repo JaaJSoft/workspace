@@ -2,6 +2,7 @@ import json
 import logging
 from urllib.parse import urlsplit, urlunsplit
 
+from django.core.exceptions import RequestDataTooBig
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny
@@ -64,9 +65,8 @@ class CspReportView(APIView):
             return Response(status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE)
 
         # Under WSGI (gunicorn), request.body reads at most Content-Length
-        # bytes from the socket, so this check refuses an oversized report
-        # before it is buffered. ASGI buffers the whole body earlier, ahead
-        # of this check.
+        # bytes from the socket, so refusing on the declared length keeps an
+        # oversized report from being buffered at all.
         try:
             length = int(request.META.get("CONTENT_LENGTH") or 0)
         except ValueError:
@@ -74,8 +74,19 @@ class CspReportView(APIView):
         if length > MAX_REPORT_BYTES:
             return Response(status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
 
+        # That length is the client's word for it. ASGI reads the stream
+        # whole whatever the header claims - or omits - and Django's own
+        # DATA_UPLOAD_MAX_MEMORY_SIZE guard reads the same header, so the
+        # bytes that arrived are what the cap has to be measured against.
         try:
-            report = json.loads(request.body)["csp-report"]
+            body = request.body
+        except RequestDataTooBig:
+            return Response(status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+        if len(body) > MAX_REPORT_BYTES:
+            return Response(status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        try:
+            report = json.loads(body)["csp-report"]
         except ValueError, KeyError, TypeError:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         if not isinstance(report, dict):

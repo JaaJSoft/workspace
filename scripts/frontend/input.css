@@ -35,26 +35,41 @@
   }
 
   /* Drag & drop move (files/ui/js/drag_move.js toggles both classes): the
-     folder under the pointer and the items being carried. A table row takes
-     the ring on its cells - box-shadow does not paint on the row itself. */
+     folder under the pointer and the items being carried. The tint is
+     !important because the targets carry their own background utilities
+     (bg-base-100 on a card, bg-primary/10 on the active sidebar entry),
+     which would otherwise win over this component class. A table row paints
+     on its cells - background and box-shadow do not apply to the row. */
+  [data-drop-folder],
+  [data-drop-folder] > td,
+  [data-drop-folder] [data-col="icon"] svg {
+    @apply transition-[background-color,box-shadow,transform,color] duration-150;
+  }
   .file-drop-target {
-    @apply bg-primary/15 outline outline-2 -outline-offset-2 outline-primary rounded-lg;
+    @apply !bg-primary/10 ring-1 ring-primary/35 rounded-lg;
   }
-  tr.file-drop-target {
-    @apply outline-0 rounded-none;
+  /* The active sidebar entry already sits on bg-primary/10: step up. */
+  aside .file-drop-target {
+    @apply !bg-primary/20;
   }
-  /* A breadcrumb link: give the outline some air without moving the trail. */
+  #folder-browser .grid > .file-drop-target {
+    @apply scale-[1.02];
+  }
+  /* A breadcrumb link: give the ring some air without moving the trail. */
   .bc-sep a.file-drop-target {
     @apply px-1.5 py-0.5 -mx-1.5 -my-0.5;
   }
+  tr.file-drop-target {
+    @apply !bg-transparent ring-0 rounded-none;
+  }
   tr.file-drop-target > td {
-    @apply bg-primary/15 shadow-[inset_0_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+    @apply bg-primary/10;
   }
-  tr.file-drop-target > td:first-child {
-    @apply shadow-[inset_2px_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+  tr.file-drop-target [data-col="name"] {
+    @apply text-primary;
   }
-  tr.file-drop-target > td:last-child {
-    @apply shadow-[inset_-2px_2px_0_0_oklch(var(--p)),inset_0_-2px_0_0_oklch(var(--p))];
+  tr.file-drop-target [data-col="icon"] svg {
+    @apply text-primary scale-110;
   }
   .file-drag-source {
     @apply opacity-40;

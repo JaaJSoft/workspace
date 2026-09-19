@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
@@ -104,6 +105,9 @@ class PersonSerializer(serializers.ModelSerializer):
         write_only=True,
     )
     scope = serializers.CharField(required=False)
+    # vCard properties keyed by property name: a bare model JSONField would
+    # take a string or a list just as happily and the round trip would break.
+    extra_properties = serializers.DictField(required=False)
     avatar_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -185,13 +189,30 @@ class PersonSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         scope = validated_data.pop("scope", None)
-        if validated_data:
-            update_person(instance, **validated_data)
-        if scope is not None:
-            target_owner = scope.get("owner")
-            target_group = scope.get("group")
-            if (target_owner, target_group) != (instance.owner, instance.group):
-                move_to_scope(instance, owner=target_owner, group=target_group)
+        # `validate` checked the scope holds no other contact for that account,
+        # but a concurrent write can land between the check and here: the
+        # partial unique constraints are what actually decides, and their
+        # IntegrityError is the same refusal, not a 500.
+        try:
+            with transaction.atomic():
+                if validated_data:
+                    update_person(instance, **validated_data)
+                if scope is not None:
+                    target_owner = scope.get("owner")
+                    target_group = scope.get("group")
+                    if (target_owner, target_group) != (
+                        instance.owner,
+                        instance.group,
+                    ):
+                        move_to_scope(instance, owner=target_owner, group=target_group)
+        except IntegrityError as exc:
+            raise serializers.ValidationError(
+                {
+                    "linked_user_id": [
+                        "Another contact is already linked to this account."
+                    ]
+                }
+            ) from exc
         return instance
 
 

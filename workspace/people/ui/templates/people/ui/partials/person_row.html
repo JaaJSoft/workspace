@@ -9,7 +9,7 @@
     <user-avatar user-id="{{ person.linked_user_id }}" username="{{ person.linked_user.username }}" size="sm"></user-avatar>
   {% elif person.has_avatar %}
     <img
-      src="/api/v1/people/{{ person.uuid }}/avatar"
+      src="/api/v1/people/{{ person.uuid }}/avatar?v={{ person.updated_at|date:'U' }}"
       alt=""
       class="w-8 h-8 rounded-full object-cover"
     />

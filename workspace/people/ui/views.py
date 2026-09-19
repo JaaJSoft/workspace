@@ -9,6 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.exceptions import ValidationError
 
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.people.actions import actions_for
 from workspace.people.models import ADDRESS_TYPES, EMAIL_TYPES, PHONE_TYPES
 from workspace.people.queries import (
     reachable_list,
@@ -17,8 +18,7 @@ from workspace.people.queries import (
     user_persons,
 )
 from workspace.people.sections import render_sections
-from workspace.people.serializers import PersonSerializer, parse_scope
-from workspace.people.views.actions import actions_for
+from workspace.people.serializers import PersonSerializer, parse_scope, scope_label
 
 ENTRY_KINDS = [
     ("emails", "Emails", EMAIL_TYPES),
@@ -92,6 +92,7 @@ def index(request):
     if request.headers.get("X-Alpine-Request"):
         return render(request, "people/ui/partials/person_list.html", context)
     lists = user_person_lists(request.user).annotate(member_count=Count("members"))
+    panel_person = parse_uuid_or_none(request.GET.get("person", ""))
     context.update(
         {
             "lists_data": [
@@ -99,11 +100,15 @@ def index(request):
                     "uuid": str(person_list.uuid),
                     "name": person_list.name,
                     "member_count": person_list.member_count,
+                    "scope": scope_label(person_list),
                 }
                 for person_list in lists
             ],
             "user_groups": request.user.groups.order_by("name"),
-            "panel_person_uuid": request.GET.get("person", ""),
+            # Echoed into the page as the contact to open: a malformed value
+            # would have the shell ask for a panel that can only 404, leaving
+            # an empty panel open behind an error toast.
+            "panel_person_uuid": str(panel_person or ""),
         }
     )
     return render(request, "people/ui/index.html", context)

@@ -13,9 +13,10 @@ def avatar_path(person):
 def save_avatar(person, image_file, crop_x, crop_y, crop_w, crop_h):
     image_bytes = process_image_to_webp(image_file, crop_x, crop_y, crop_w, crop_h)
     save_image(avatar_path(person), image_bytes)
-    if not person.has_avatar:
-        person.has_avatar = True
-        person.save(update_fields=["has_avatar", "updated_at"])
+    person.has_avatar = True
+    # The row is written even on a re-upload: the blob keeps its path, so
+    # `updated_at` is the only thing that can bust a cached avatar.
+    person.save(update_fields=["has_avatar", "updated_at"])
 
 
 def delete_avatar(person):

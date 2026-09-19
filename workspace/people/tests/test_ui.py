@@ -91,6 +91,16 @@ class PeopleIndexTests(TestCase):
         self.assertEqual(response.context["scope"], "")
         self.assertEqual(response.context["list_uuid"], "")
 
+    def test_sidebar_lists_carry_their_scope(self):
+        group_list = create_list(group=self.team, name="Clients")
+        response = self.client.get("/people")
+        scopes = {
+            entry["name"]: entry["scope"] for entry in response.context["lists_data"]
+        }
+        self.assertEqual(scopes["Family"], "mine")
+        self.assertEqual(scopes["Clients"], f"group:{self.team.id}")
+        self.assertEqual(group_list.group, self.team)
+
     def test_unreachable_list_is_ignored(self):
         stranger = User.objects.create_user(username="mallory", password="x")
         foreign = create_list(owner=stranger, name="Theirs")
@@ -207,6 +217,14 @@ class PersonPanelTests(TestCase):
             response = self.client.get(f"/people/{self.person.uuid}/panel")
         self.assertContains(response, "Fake section")
         self.assertContains(response, "Hello Bob Martin")
+
+    def test_deep_link_with_a_malformed_uuid_opens_nothing(self):
+        # The shell would otherwise ask /people/<garbage>/panel, get a 404 and
+        # leave an empty panel open behind an error toast.
+        response = self.client.get("/people", {"person": "nope"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["panel_person_uuid"], "")
+        self.assertContains(response, "initialPerson: ''")
 
     def test_deep_link_opens_panel(self):
         response = self.client.get("/people", {"person": str(self.person.uuid)})

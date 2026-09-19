@@ -40,6 +40,16 @@ class AvatarServiceTests(TestCase):
             self.assertEqual(Image.open(f).format, "WEBP")
         self.assertIsNotNone(avatar_etag(self.person))
 
+    def test_reupload_rewrites_the_row(self):
+        # The blob keeps its path, so the row's `updated_at` is what the
+        # listing's cache-busting query parameter reads.
+        save_avatar(self.person, png_file(), 0, 0, 64, 64)
+        self.person.refresh_from_db()
+        first = self.person.updated_at
+        save_avatar(self.person, png_file(size=(32, 32)), 0, 0, 32, 32)
+        self.person.refresh_from_db()
+        self.assertGreater(self.person.updated_at, first)
+
     def test_delete_avatar_removes_blob_and_flag(self):
         save_avatar(self.person, png_file(), 0, 0, 64, 64)
         delete_avatar(self.person)

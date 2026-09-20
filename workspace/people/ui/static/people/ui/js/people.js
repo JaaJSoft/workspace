@@ -41,6 +41,8 @@ window.peopleApp = function peopleApp(config) {
     listForm: { uuid: '', name: '', original: '', scope: 'mine' },
     saving: false,
     collapsed: window.sidebarPreference.initial(),
+    ctxMenu: { open: false, x: 0, y: 0, type: null, data: null, actions: null },
+    _menuGeneration: 0,
 
     init() {
       this.lists = window.peopleHelpers.readJson('people-lists-data', []);
@@ -123,6 +125,94 @@ window.peopleApp = function peopleApp(config) {
       const uuid = params.get('person');
       if (uuid) this.openPerson(uuid, { push: false });
       else this.closePanel({ push: false });
+    },
+
+    // ---- context menu ---------------------------------------------------
+
+    // One menu for the rows, the panel button and the sidebar lists. A
+    // person's rows are fetched as the menu opens: a stale list is what turns
+    // into a request the server refuses. The generation drops a late answer
+    // for a menu that was closed or reopened elsewhere in the meantime.
+    openCtxMenu(event, type, data) {
+      event.preventDefault();
+      const menuW = 224;
+      const menuH = 240;
+      let x = event.clientX;
+      let y = event.clientY;
+      if (x + menuW > window.innerWidth) x = window.innerWidth - menuW;
+      if (y + menuH > window.innerHeight) y = window.innerHeight - menuH;
+      this._menuGeneration += 1;
+      const generation = this._menuGeneration;
+      this.ctxMenu = { open: true, x, y, type, data, actions: type === 'person' ? null : [] };
+      if (type !== 'person') return;
+      fetch('/api/v1/people/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ uuids: [data.uuid] }),
+      })
+        .then((res) => (res.ok ? res.json() : {}))
+        .catch(() => ({}))
+        .then((answer) => {
+          if (generation !== this._menuGeneration) return;
+          this.ctxMenu.actions = answer[data.uuid] || [];
+          this.$nextTick(() => {
+            if (window.lucide) window.lucide.createIcons();
+          });
+        });
+    },
+
+    closeCtxMenu() {
+      this._menuGeneration += 1;
+      this.ctxMenu = { open: false, x: 0, y: 0, type: null, data: null, actions: null };
+    },
+
+    ctxPersonAction(action) {
+      const data = this.ctxMenu.data;
+      this.closeCtxMenu();
+      if (!data) return;
+      if (action.id === 'edit') {
+        this.openPerson(data.uuid);
+        return;
+      }
+      if (action.id === 'delete') {
+        this.deletePerson(data);
+        return;
+      }
+      // The other actions open a dialog the panel owns: open the contact
+      // first when it is not the one on screen, then hand the action over.
+      const run = () =>
+        this.$dispatch('people-panel-run', { uuid: data.uuid, id: action.id });
+      if (this.current === data.uuid) run();
+      else Promise.resolve(this.openPerson(data.uuid)).then(run);
+    },
+
+    ctxListAction(id) {
+      const list = this.ctxMenu.data;
+      this.closeCtxMenu();
+      if (!list) return;
+      if (id === 'rename') this.renameList(list);
+      if (id === 'delete') this.deleteList(list);
+    },
+
+    async deletePerson(data) {
+      const ok = await AppDialog.confirm({
+        title: 'Delete contact',
+        message: `Delete "${data.name}"? This cannot be undone.`,
+        okLabel: 'Delete',
+        okClass: 'btn-error',
+      });
+      if (!ok) return;
+      const res = await fetch(`/api/v1/people/${data.uuid}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      });
+      if (!res.ok) {
+        AppAlert.show({ type: 'error', message: 'Could not delete the contact.' });
+        return;
+      }
+      this.onScopeChanged({ from: data.scope, to: null });
+      if (this.current === data.uuid) this.closePanel();
+      this.refreshList();
     },
 
     // A group earns its sidebar row with its first contact and loses it with
@@ -307,13 +397,11 @@ window.personPanel = function personPanel() {
       return this.actions.some((a) => a.id === id);
     },
 
-    menuActions() {
-      return this.actions.filter((a) => a.id !== 'edit' && a.id !== 'add_to_list');
-    },
-
+    // Reached from the page's context menu (people-panel-run) for the
+    // actions whose dialogs live in the panel.
     runAction(id) {
-      if (id === 'delete') return this.deletePerson();
       if (id === 'move') return this.move();
+      if (id === 'add_to_list') return this.addToList();
       if (id === 'unlink_user') return this.unlinkUser();
       return undefined;
     },
@@ -472,27 +560,6 @@ window.personPanel = function personPanel() {
       const list = this.lists.find((l) => l.uuid === uuid);
       if (list) list.member = false;
       this.$dispatch('people-lists-changed');
-    },
-
-    async deletePerson() {
-      const ok = await AppDialog.confirm({
-        title: 'Delete contact',
-        message: `Delete "${this.person.display_name}"? This cannot be undone.`,
-        okLabel: 'Delete',
-        okClass: 'btn-error',
-      });
-      if (!ok) return;
-      const res = await fetch(`/api/v1/people/${this.person.uuid}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRFToken': getCSRFToken() },
-      });
-      if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not delete the contact.' });
-        return;
-      }
-      this.$dispatch('people-scope-changed', { from: this.person.scope, to: null });
-      this.closePanel();
-      this.refreshList();
     },
 
     onFileSelect(event) {

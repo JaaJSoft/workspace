@@ -3,6 +3,7 @@
   class="flex items-center gap-3 px-4 py-2 hover:bg-base-200 border-b border-base-200"
   :class="{ 'bg-base-200': current === '{{ person.uuid }}' }"
   @click.prevent="openPerson('{{ person.uuid }}')"
+  @contextmenu="openCtxMenu($event, 'person', { uuid: '{{ person.uuid }}', name: '{{ person.display_name|escapejs }}', scope: '{% if person.group_id %}group:{{ person.group_id }}{% else %}mine{% endif %}' })"
   data-person-uuid="{{ person.uuid }}"
 >
   {% if person.linked_user_id %}

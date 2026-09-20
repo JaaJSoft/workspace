@@ -52,10 +52,6 @@ test('personPanel.can reads the action list', () => {
   panel.actions = [{ id: 'edit' }, { id: 'delete' }];
   assert.equal(panel.can('edit'), true);
   assert.equal(panel.can('move'), false);
-  assert.deepStrictEqual(
-    Array.from(panel.menuActions()).map((a) => a.id),
-    ['delete']
-  );
 });
 
 // The regression a previous task fixed by hand: a PATCH reply must not
@@ -130,4 +126,54 @@ test('the sidebar lists only the groups that hold contacts and follows moves', (
   assert.deepStrictEqual(Array.from(app.visibleGroups()).map((g) => g.name), ['Empty']);
   // An unknown group is ignored rather than crashing the page.
   app.onScopeChanged({ from: 'group:99', to: 'group:98' });
+});
+
+test('the person context menu opens on the row and fills from the actions endpoint', async () => {
+  const { impl, calls } = deferredFetch();
+  const ctx = load(impl);
+  const app = ctx.peopleApp({});
+  app.$nextTick = (fn) => fn();
+  app.$el = { querySelector: () => null };
+  const event = { preventDefault() {}, clientX: 40, clientY: 50 };
+  app.openCtxMenu(event, 'person', { uuid: 'p1', name: 'Bob', scope: 'mine' });
+  assert.equal(app.ctxMenu.open, true);
+  assert.equal(app.ctxMenu.type, 'person');
+  assert.equal(app.ctxMenu.actions, null);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, '/api/v1/people/actions');
+  calls[0].resolve({ ok: true, json: async () => ({ p1: [{ id: 'edit' }, { id: 'delete' }] }) });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepStrictEqual(Array.from(app.ctxMenu.actions).map((a) => a.id), ['edit', 'delete']);
+});
+
+test('a menu closed before its actions land ignores the late answer', async () => {
+  const { impl, calls } = deferredFetch();
+  const ctx = load(impl);
+  const app = ctx.peopleApp({});
+  app.$nextTick = (fn) => fn();
+  app.$el = { querySelector: () => null };
+  const event = { preventDefault() {}, clientX: 0, clientY: 0 };
+  app.openCtxMenu(event, 'person', { uuid: 'p1', name: 'Bob', scope: 'mine' });
+  app.closeCtxMenu();
+  calls[0].resolve({ ok: true, json: async () => ({ p1: [{ id: 'edit' }] }) });
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(app.ctxMenu.open, false);
+  assert.equal(app.ctxMenu.actions, null);
+});
+
+test('a list context menu needs no request and routes rename and delete', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({});
+  app.$nextTick = (fn) => fn();
+  app.$el = { querySelector: () => null };
+  const calls = [];
+  app.renameList = (list) => calls.push(['rename', list.uuid]);
+  app.deleteList = (list) => calls.push(['delete', list.uuid]);
+  app.openCtxMenu({ preventDefault() {}, clientX: 0, clientY: 0 }, 'list', { uuid: 'l1', name: 'Family' });
+  assert.deepStrictEqual(Array.from(app.ctxMenu.actions), []);
+  app.ctxListAction('rename');
+  assert.equal(app.ctxMenu.open, false);
+  app.openCtxMenu({ preventDefault() {}, clientX: 0, clientY: 0 }, 'list', { uuid: 'l1', name: 'Family' });
+  app.ctxListAction('delete');
+  assert.deepStrictEqual(calls, [['rename', 'l1'], ['delete', 'l1']]);
 });

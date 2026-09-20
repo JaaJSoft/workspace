@@ -13,7 +13,11 @@
   {{ lists_data|json_script:"person-panel-lists" }}
   {{ groups_data|json_script:"person-panel-groups" }}
 
-  <div x-data="personPanel()" class="max-w-3xl mx-auto p-4 lg:p-6 space-y-6">
+  <div
+    x-data="personPanel()"
+    @people-panel-run.window="if ($event.detail.uuid === person.uuid) runAction($event.detail.id)"
+    class="max-w-3xl mx-auto p-4 lg:p-6 space-y-6"
+  >
     <div class="flex items-start gap-4">
       <button
         type="button"
@@ -80,29 +84,15 @@
         </div>
       </div>
 
-      <div class="dropdown dropdown-end">
-        <button
-          type="button"
-          tabindex="0"
-          class="btn btn-ghost btn-sm"
-          title="Actions"
-        >
-          <i data-lucide="more-vertical" class="w-4 h-4"></i>
-        </button>
-        <ul
-          tabindex="0"
-          class="dropdown-content menu menu-sm bg-base-100 rounded-box shadow z-50 w-48 p-1"
-        >
-          <template x-for="action in menuActions()" :key="action.id">
-            <li>
-              <a :class="action.css_class" @click.prevent="runAction(action.id)">
-                <i :data-lucide="action.icon" class="w-4 h-4"></i>
-                <span x-text="action.label"></span>
-              </a>
-            </li>
-          </template>
-        </ul>
-      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square"
+        title="Actions"
+        aria-label="Actions"
+        @click="openCtxMenu($event, 'person', { uuid: person.uuid, name: person.display_name, scope: person.scope })"
+      >
+        <i data-lucide="more-vertical" class="w-4 h-4"></i>
+      </button>
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2">

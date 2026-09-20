@@ -143,6 +143,7 @@
                 ]"
                 :title="sidebarCollapsed() ? list.name : ''"
                 @click="setList(list.uuid)"
+                @contextmenu="openCtxMenu($event, 'list', list)"
               >
                 <i data-lucide="list" class="w-5 h-5 flex-shrink-0"></i>
                 <span
@@ -159,31 +160,16 @@
                   <span class="badge badge-sm ml-auto" x-text="list.member_count"></span>
                 </span>
               </button>
-              <div
-                class="dropdown dropdown-end absolute right-1 top-1/2 -translate-y-1/2"
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
                 x-show="!sidebarCollapsed()"
+                :title="'Actions for ' + list.name"
+                :aria-label="'Actions for ' + list.name"
+                @click.stop="openCtxMenu($event, 'list', list)"
               >
-                <button
-                  type="button"
-                  tabindex="0"
-                  class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100"
-                  :title="'Actions for ' + list.name"
-                  :aria-label="'Actions for ' + list.name"
-                >
-                  <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
-                </button>
-                <ul
-                  tabindex="0"
-                  class="dropdown-content menu menu-sm bg-base-100 rounded-box shadow z-50 w-40 p-1"
-                >
-                  <li>
-                    <a @click.prevent="renameList(list)">Rename</a>
-                  </li>
-                  <li>
-                    <a class="text-error" @click.prevent="deleteList(list)">Delete</a>
-                  </li>
-                </ul>
-              </div>
+                <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+              </button>
             </li>
           </template>
         </ul>
@@ -261,6 +247,7 @@
     </section>
   </div>
   {% include "people/ui/partials/dialogs.html" %}
+  {% include "ui/partials/context_menu_panel.html" with items="people/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="people-context-menu" width="w-56" %}
   {% include "people/ui/partials/help_dialog.html" %}
 {% endblock %}
 

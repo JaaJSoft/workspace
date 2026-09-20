@@ -34,6 +34,15 @@ class PersonFlowTests(PlaywrightTestCase):
         )
         expect(self.page.locator("#person-list")).to_contain_text("Bob Martin")
 
+        # Right-click on a row opens the same menu the panel button does, filled
+        # from the registry: the row must offer what the server allows.
+        self.page.locator("#person-list a", has_text="Bob Martin").click(button="right")
+        menu = self.page.locator("#people-context-menu")
+        expect(menu).to_be_visible()
+        expect(menu).to_contain_text("Delete")
+        self.page.keyboard.press("Escape")
+        expect(menu).to_be_hidden()
+
         panel.get_by_placeholder("Name").fill("Robert Martin")
         panel.get_by_placeholder("Name").press("Tab")
         expect(self.page.locator("#person-list")).to_contain_text("Robert Martin")
@@ -46,7 +55,10 @@ class PersonFlowTests(PlaywrightTestCase):
         expect(panel).to_contain_text("Family")
 
         panel.get_by_title("Actions").click()
-        panel.get_by_text("Delete").click()
+        # By role: the hidden list menu holds a "Delete" row of its own.
+        self.page.locator("#people-context-menu").get_by_role(
+            "button", name="Delete"
+        ).click()
         self.page.locator("#app-dialog-confirm-ok").click()
         expect(self.page.locator("#person-list")).not_to_contain_text("Robert Martin")
         self.assertFalse(Person.objects.filter(owner=self.user).exists())
@@ -89,6 +101,9 @@ class PersonFlowTests(PlaywrightTestCase):
 
         panel = self.page.locator("#person-panel")
         panel.get_by_title("Actions").click()
-        panel.get_by_text("Delete").click()
+        # By role: the hidden list menu holds a "Delete" row of its own.
+        self.page.locator("#people-context-menu").get_by_role(
+            "button", name="Delete"
+        ).click()
         self.page.locator("#app-dialog-confirm-ok").click()
         expect(row).to_have_count(0)

@@ -18,7 +18,7 @@
     @ajax:after="loading = false; loaded = true"
   >
     <svg
-      class="w-3.5 h-3.5 {% if all_read %}text-info{% else %}text-base-content/30{% endif %}"
+      class="w-3.5 h-3.5 {% if all_read %}text-module{% else %}text-base-content/30{% endif %}"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -31,7 +31,7 @@
     </svg>
     {% if not is_dm and total_recipients > 1 %}
       <span
-        class="text-[0.6rem] {% if all_read %}text-info{% else %}text-base-content/40{% endif %}"
+        class="text-[0.6rem] {% if all_read %}text-module{% else %}text-base-content/40{% endif %}"
       >{{ read_count }}/{{ total_recipients }}</span>
     {% endif %}
 

@@ -198,7 +198,7 @@
 
       bubble.classList.add(
         'msg-bubble', 'rounded-2xl', 'text-sm', 'text-base-content',
-        this._own ? 'bg-info/15' : 'bg-base-200',
+        this._own ? 'bg-module/15' : 'bg-base-200',
       );
 
       // Pull the non-bubble parts out before styling settles.
@@ -265,7 +265,7 @@
 
     _pendingMessage() {
       const wrap = el('div', 'relative group/msg hover:z-20 max-w-full');
-      const bubble = el('div', 'msg-bubble rounded-2xl text-sm bg-info/15 text-base-content opacity-70');
+      const bubble = el('div', 'msg-bubble rounded-2xl text-sm bg-module/15 text-base-content opacity-70');
       bubble.setAttribute(':class', COMPACT_BUBBLE_PAD);
 
       if (this.replyInfo) {
@@ -315,10 +315,10 @@
     _quote({ uuid, threadRoot, deleted, author, preview, interactive }) {
       const own = this._own;
       const base = 'flex gap-2 my-1.5 rounded-lg px-2 py-1 no-underline';
-      const surface = own ? 'bg-info/15' : 'bg-base-300/50';
+      const surface = own ? 'bg-module/15' : 'bg-base-300/50';
       let root;
       if (interactive) {
-        root = el('a', `${base} cursor-pointer transition-colors ${surface} ${own ? 'hover:bg-info/25' : 'hover:bg-base-300'}`);
+        root = el('a', `${base} cursor-pointer transition-colors ${surface} ${own ? 'hover:bg-module/25' : 'hover:bg-base-300'}`);
         root.setAttribute('href', `#${this._prefix}-${uuid}`);
         // The quoted message's thread root rides along so a quote pointing
         // into a thread opens the panel instead of paging the main flow back
@@ -329,14 +329,14 @@
       } else {
         root = el('div', `${base} ${surface}`);
       }
-      root.appendChild(el('div', 'w-0.5 flex-shrink-0 rounded-full bg-info'));
+      root.appendChild(el('div', 'w-0.5 flex-shrink-0 rounded-full bg-module'));
       const text = el('div', 'min-w-0 flex-1');
       if (deleted) {
         const span = el('span', 'text-xs italic opacity-50');
         span.textContent = 'Message deleted';
         text.appendChild(span);
       } else {
-        const authorEl = el('span', 'text-xs font-semibold text-info');
+        const authorEl = el('span', 'text-xs font-semibold text-module');
         authorEl.textContent = author;
         const previewEl = el('p', 'text-xs text-base-content/70 truncate');
         previewEl.textContent = preview;
@@ -350,7 +350,7 @@
       const frag = document.createDocumentFragment();
       if (!media.length && !files.length && !audios.length) return frag;
       if (hasBody) {
-        frag.appendChild(el('div', `border-t ${this._own ? 'border-info/30' : 'border-base-300'} my-1.5`));
+        frag.appendChild(el('div', `border-t ${this._own ? 'border-module/30' : 'border-base-300'} my-1.5`));
       }
       const box = el('div', `flex flex-col gap-1.5 mb-1.5${hasBody ? '' : ' mt-1.5'}`);
       if (media.length === 1) box.appendChild(this._singleMedia(media[0]));
@@ -455,8 +455,8 @@
       if (interactive) this._stampAttachment(row, item);
       const body = el('div', [
         'flex items-center gap-2 p-2 rounded-lg',
-        own ? 'bg-info/15' : 'bg-base-300/50',
-        interactive ? `${own ? 'hover:bg-info/25' : 'hover:bg-base-300'} transition-colors` : '',
+        own ? 'bg-module/15' : 'bg-base-300/50',
+        interactive ? `${own ? 'hover:bg-module/25' : 'hover:bg-base-300'} transition-colors` : '',
         'min-w-0 flex-1',
         interactive ? 'cursor-pointer' : '',
       ].filter(Boolean).join(' '));

@@ -20,12 +20,12 @@
     x-show="replyingTo"
     x-cloak
     x-transition
-    class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm"
+    class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-module/10 rounded-lg text-sm"
   >
-    <i data-lucide="reply" class="w-4 h-4 text-info flex-shrink-0"></i>
+    <i data-lucide="reply" class="w-4 h-4 text-module flex-shrink-0"></i>
     <div class="flex-1 min-w-0">
       <span
-        class="text-info font-semibold text-xs"
+        class="text-module font-semibold text-xs"
         x-text="'Replying to ' + (replyingTo?.author || '')"
       ></span>
       <p
@@ -47,10 +47,10 @@
   <div
     x-show="editingMessageUuid"
     x-cloak
-    class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-info/10 rounded-lg text-sm"
+    class="flex items-center gap-2 mb-2 px-3 py-1.5 bg-module/10 rounded-lg text-sm"
   >
-    <i data-lucide="pencil" class="w-4 h-4 text-info"></i>
-    <span class="text-info flex-1">Editing — <kbd class="kbd kbd-xs">Esc</kbd> to cancel</span>
+    <i data-lucide="pencil" class="w-4 h-4 text-module"></i>
+    <span class="text-module flex-1">Editing — <kbd class="kbd kbd-xs">Esc</kbd> to cancel</span>
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square"
@@ -113,7 +113,7 @@
   >
     {% include "ui/partials/attachment_menu.html" with menu_class="dropdown-top flex-shrink-0" button_class="btn btn-ghost btn-square w-[2.375rem] h-[2.375rem] min-h-0" icon_class="w-5 h-5" %}
     <div
-      class="flex-1 flex items-center border border-base-300 rounded-btn transition-colors focus-within:border-info/50 min-h-[2.375rem]"
+      class="flex-1 flex items-center border border-base-300 rounded-btn transition-colors focus-within:border-module/50 min-h-[2.375rem]"
     >
       <textarea
         x-ref="messageInputMobile"
@@ -142,7 +142,7 @@
     </button>
     <button
       type="button"
-      class="btn btn-info btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
+      class="btn btn-module btn-square flex-shrink-0 w-[2.375rem] h-[2.375rem] min-h-0"
       x-show="!recorderSupported || hasComposerContent()"
       @click="sendOrEdit()"
       title="Send"
@@ -242,7 +242,7 @@
       </button>
       <button
         type="button"
-        class="btn btn-info btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
+        class="btn btn-module btn-square flex-shrink-0 min-h-0 w-[2.375rem] h-[2.375rem] sm:w-8 sm:h-8"
         @click="sendRecording()"
         :disabled="sendingRecording"
         title="Send"
@@ -257,7 +257,7 @@
 
   <!-- Desktop input (>= sm) -->
   <div
-    class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-info/50"
+    class="hidden sm:block border border-base-300 rounded-xl transition-colors focus-within:border-module/50"
     x-show="recorderState === 'idle'"
     x-cloak
   >
@@ -373,7 +373,7 @@
       <!-- Send button -->
       <button
         type="button"
-        class="btn btn-info btn-sm btn-square"
+        class="btn btn-module btn-sm btn-square"
         @click="sendOrEdit()"
         title="Send"
         aria-label="Send message"

@@ -66,7 +66,7 @@
     </div>
     <span
       class="badge badge-sm"
-      :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-info badge-outline'"
+      :class="activeConversation.kind === 'dm' ? 'badge-ghost' : 'badge-module badge-outline'"
       x-text="activeConversation.kind === 'dm' ? 'Direct message' : 'Group'"
     ></span>
   </div>
@@ -196,7 +196,7 @@
             >you</span>
             <span
               x-show="member.user.id === activeConversation.created_by_id"
-              class="badge badge-info badge-sm badge-outline"
+              class="badge badge-module badge-sm badge-outline"
             >creator</span>
           </div>
           <p
@@ -785,7 +785,7 @@
             >
               <i
                 :data-lucide="sched.kind === 'once' ? 'clock' : 'repeat'"
-                class="w-3.5 h-3.5 text-info flex-shrink-0 mt-0.5"
+                class="w-3.5 h-3.5 text-module flex-shrink-0 mt-0.5"
               ></i>
               <div class="flex-1 min-w-0">
                 <p
@@ -795,7 +795,7 @@
                 <div class="flex items-center gap-1 mt-0.5">
                   <span
                     class="badge badge-xs"
-                    :class="sched.kind === 'once' ? 'badge-ghost' : 'badge-info badge-outline'"
+                    :class="sched.kind === 'once' ? 'badge-ghost' : 'badge-module badge-outline'"
                     x-text="scheduleTimingLabel(sched)"
                   ></span>
                 </div>

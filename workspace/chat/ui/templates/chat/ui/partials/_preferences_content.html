@@ -1,21 +1,21 @@
 <div class="space-y-3">
-  {% include "ui/partials/pref_toggle.html" with label="Compact conversation list" key="compactConversationList" accent="toggle-info" %}
-  {% include "ui/partials/pref_toggle.html" with label="Compact message view" key="compactMessageView" accent="toggle-info" %}
+  {% include "ui/partials/pref_toggle.html" with label="Compact conversation list" key="compactConversationList" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Compact message view" key="compactMessageView" accent="toggle-module" %}
   {% comment %}
     updateAndSync, not update: thread replies are filtered out of the message
     list server-side, so the list on screen cannot honour the new value until
     it is refetched, and that refetch has to wait for the write to land.
   {% endcomment %}
-  {% include "ui/partials/pref_toggle.html" with label="Show thread replies in the conversation" key="showThreadRepliesInline" accent="toggle-info" handler="updateAndSync" %}
-  {% include "ui/partials/pref_toggle.html" with label="Call sounds" state="callSounds" change="saveCallSounds($event.target.checked)" accent="toggle-info" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show thread replies in the conversation" key="showThreadRepliesInline" accent="toggle-module" handler="updateAndSync" %}
+  {% include "ui/partials/pref_toggle.html" with label="Call sounds" state="callSounds" change="saveCallSounds($event.target.checked)" accent="toggle-module" %}
   {% include "ui/partials/pref_select.html" with label="Message animation" key="messageAnimation" options=message_animations %}
   <div class="pt-4 border-t border-base-300">
     <button
       type="button"
-      class="btn btn-ghost btn-sm w-full justify-start gap-2 hover:text-info"
+      class="btn btn-ghost btn-sm w-full justify-start gap-2 hover:text-module"
       @click="$dispatch('chat-run-diagnostic'); $el.closest('dialog')?.close()"
     >
-      <i data-lucide="activity" class="w-4 h-4 text-info"></i>
+      <i data-lucide="activity" class="w-4 h-4 text-module"></i>
       <span class="text-sm">Test call connection</span>
     </button>
   </div>

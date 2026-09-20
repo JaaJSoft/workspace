@@ -180,7 +180,7 @@ function projectBoardModel(config) {
         okLabel: warning.okLabel,
         okClass: 'btn-module',
         icon: warning.icon,
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!ok) return;
       this.busy = true;

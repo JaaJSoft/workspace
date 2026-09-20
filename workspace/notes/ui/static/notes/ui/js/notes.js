@@ -56,7 +56,7 @@ window.notesPreferences = function notesPreferences() {
                 okLabel: 'Select',
                 okClass: 'btn-module',
                 icon: 'folder-pen',
-                iconClass: 'bg-module/10 text-module',
+                iconClass: 'bg-module/15 text-module',
             });
             if (!folder) return;
             this.prefs.defaultFolderUuid = folder.uuid;
@@ -78,7 +78,7 @@ window.notesPreferences = function notesPreferences() {
                 okLabel: 'Select',
                 okClass: 'btn-module',
                 icon: 'book-open',
-                iconClass: 'bg-module/10 text-module',
+                iconClass: 'bg-module/15 text-module',
             });
             if (!folder) return;
             this.prefs.journalFolderUuid = folder.uuid;
@@ -764,7 +764,7 @@ window.notesApp = function notesApp(config) {
                 okLabel: 'Create',
                 okClass: 'btn-module',
                 icon: 'file-plus',
-                iconClass: 'bg-module/10 text-module',
+                iconClass: 'bg-module/15 text-module',
             });
             if (!name) return;
             if (!name.endsWith('.md')) name += '.md';
@@ -1065,7 +1065,7 @@ window.notesApp = function notesApp(config) {
                 okLabel: 'Create',
                 okClass: 'btn-module',
                 icon: 'folder-plus',
-                iconClass: 'bg-module/10 text-module',
+                iconClass: 'bg-module/15 text-module',
             });
             if (!name) return;
 

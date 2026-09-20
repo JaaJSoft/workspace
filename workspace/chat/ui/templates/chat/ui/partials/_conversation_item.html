@@ -30,7 +30,7 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
     class="flex items-center w-full rounded-lg transition-colors"
     :class="[
       collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : (chatPrefs.compactConversationList ? 'gap-1.5 py-0.5 px-2' : 'gap-3 p-2'),
-      activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-module/10 text-module hover:bg-module/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
+      activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
     ]"
     @click="selectConversationById('{{ conv.uuid }}')"
     :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"

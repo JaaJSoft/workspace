@@ -56,7 +56,7 @@ test('a group, an empty direct message and no conversation have no partner', () 
 test('a group fallback is tinted, and turns solid on the selected row', () => {
   const { conversationAvatarFaceClasses } = load();
 
-  assert.deepEqual(conversationAvatarFaceClasses('group', false), ['bg-module/20', 'text-module']);
+  assert.deepEqual(conversationAvatarFaceClasses('group', false), ['bg-module/25', 'text-module']);
   assert.deepEqual(conversationAvatarFaceClasses('group', true), ['bg-module', 'text-module-content']);
 });
 

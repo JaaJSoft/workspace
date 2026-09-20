@@ -12,7 +12,7 @@
   <button
     type="button"
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
-    :class="unifiedInbox ? 'bg-module/10 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
+    :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
     @click="selectUnifiedInbox()"
   >
     <span class="flex-shrink-0 text-module">
@@ -35,7 +35,7 @@
   <button
     type="button"
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
-    :class="unifiedInbox ? 'bg-module/10 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
+    :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
     title="All Inboxes"
     @click="selectUnifiedInbox()"
   >
@@ -102,9 +102,9 @@
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
           :style="node.depth > 0 ? `padding-left: ${0.75 + node.depth * 1}rem` : ''"
           :class="{
-            'bg-module/10 text-module': selectedFolder?.uuid === node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
+            'bg-module/15 text-module': selectedFolder?.uuid === node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
             'text-base-content/70 hover:bg-base-content/5 hover:text-module': selectedFolder?.uuid !== node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
-            'ring-2 ring-module/50 ring-offset-1 bg-module/10': dragOverFolder?.uuid === node.folder.uuid,
+            'ring-2 ring-module/50 ring-offset-1 bg-module/15': dragOverFolder?.uuid === node.folder.uuid,
           }"
           @click="selectFolder(node.folder)"
           @contextmenu="openFolderContextMenu($event, node.folder)"
@@ -221,9 +221,9 @@
           type="button"
           class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
           :class="{
-            'bg-module/10 text-module': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'bg-module/15 text-module': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
             'text-base-content/70 hover:bg-base-content/5 hover:text-module': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
-            'ring-2 ring-module/50 ring-offset-1 bg-module/10': dragOverFolder?.uuid === folder.uuid,
+            'ring-2 ring-module/50 ring-offset-1 bg-module/15': dragOverFolder?.uuid === folder.uuid,
           }"
           :title="folder.display_name"
           @click="selectFolder(folder)"

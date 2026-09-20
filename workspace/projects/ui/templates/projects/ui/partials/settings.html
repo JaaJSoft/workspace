@@ -272,7 +272,7 @@
             <button
               type="button"
               class="rounded-box border p-3 text-left flex items-start gap-3 disabled:cursor-default"
-              :class="type === '{{ option.value }}' ? 'border-module bg-module/5' : 'border-base-300 bg-base-100 hover:border-module/50'"
+              :class="type === '{{ option.value }}' ? 'border-module bg-module/10' : 'border-base-300 bg-base-100 hover:border-module/50'"
               :disabled="busy || !writable || type === '{{ option.value }}'"
               @click="convertTo('{{ option.value }}')"
             >

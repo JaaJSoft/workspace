@@ -82,7 +82,7 @@
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
                   sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
-                  scope === 'group:' + group.id ? 'bg-module/10 text-module hover:bg-module/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
+                  scope === 'group:' + group.id ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? group.name : ''"
                 :data-scope="'group:' + group.id"
@@ -139,7 +139,7 @@
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
                   sidebarCollapsed() ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
-                  listUuid === list.uuid ? 'bg-module/10 text-module hover:bg-module/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
+                  listUuid === list.uuid ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? list.name : ''"
                 @click="setList(list.uuid)"

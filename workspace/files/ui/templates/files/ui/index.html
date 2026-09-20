@@ -107,7 +107,7 @@
             @dragenter.prevent="onDragEnter($event)"
             @dragleave="onDragLeave($event)"
             @drop.prevent="onDrop($event)"
-            :class="dragOver ? 'bg-module/10 ring-2 ring-module/40 ring-inset rounded-lg scale-[1.02]' : ''"
+            :class="dragOver ? 'bg-module/15 ring-2 ring-module/40 ring-inset rounded-lg scale-[1.02]' : ''"
             class="transition-all duration-200"
           >
             {% include "files/ui/partials/pinned_folders.html" %}
@@ -116,7 +116,7 @@
               x-show="dragOver && !collapsed"
               x-cloak
               x-transition
-              class="text-xs text-module font-medium text-center py-4 border-2 border-dashed border-module/40 rounded-lg mt-2 bg-module/5"
+              class="text-xs text-module font-medium text-center py-4 border-2 border-dashed border-module/40 rounded-lg mt-2 bg-module/10"
             >
               <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
               <br />

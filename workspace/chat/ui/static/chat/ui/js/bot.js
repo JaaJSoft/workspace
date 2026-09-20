@@ -473,7 +473,7 @@ window.chatBotMixin = function chatBotMixin() {
         okLabel: 'Save',
         inputSize: 'textarea',
         icon: 'clock',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (prompt === null || prompt.trim() === sched.prompt) return;
       try {

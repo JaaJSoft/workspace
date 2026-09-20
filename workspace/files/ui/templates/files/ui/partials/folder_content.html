@@ -270,7 +270,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item"
-                :class="viewMode === 'list' ? 'bg-module/10 text-module' : ''"
+                :class="viewMode === 'list' ? 'bg-module/15 text-module' : ''"
                 @click="setViewMode('list')"
                 title="List view"
                 aria-label="List view"
@@ -280,7 +280,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item"
-                :class="viewMode === 'mosaic' ? 'bg-module/10 text-module' : ''"
+                :class="viewMode === 'mosaic' ? 'bg-module/15 text-module' : ''"
                 @click="setViewMode('mosaic')"
                 title="Mosaic view"
                 aria-label="Mosaic view"
@@ -373,12 +373,12 @@
                 {% comment %}
               In the :class below, the quarantine tint is the last branch on
               purpose: selection has to stay readable on a flagged row, so
-              bg-module/10 wins when both would apply rather than the two
+              bg-module/15 wins when both would apply rather than the two
               backgrounds racing on stylesheet order.
                 {% endcomment %}
                 <tr
                   class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-module/10' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
+                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-module/15' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
                   data-uuid="{{ node.uuid }}"

@@ -37,7 +37,7 @@
   /* Drag & drop move (files/ui/js/drag_move.js toggles both classes): the
      folder under the pointer and the items being carried. The tint is
      !important because the targets carry their own background utilities
-     (bg-base-100 on a card, bg-module/10 on the active sidebar entry),
+     (bg-base-100 on a card, bg-module/15 on the active sidebar entry),
      which would otherwise win over this component class. A table row paints
      on its cells - background and box-shadow do not apply to the row. */
   [data-drop-folder],
@@ -46,11 +46,11 @@
     @apply transition-[background-color,box-shadow,transform,color] duration-150;
   }
   .file-drop-target {
-    @apply !bg-module/10 ring-1 ring-module/35 rounded-lg;
+    @apply !bg-module/15 ring-1 ring-module/35 rounded-lg;
   }
-  /* The active sidebar entry already sits on bg-module/10: step up. */
+  /* The active sidebar entry already sits on bg-module/15: step up. */
   aside .file-drop-target {
-    @apply !bg-module/20;
+    @apply !bg-module/25;
   }
   #folder-browser .grid > .file-drop-target {
     @apply scale-[1.02];
@@ -63,7 +63,7 @@
     @apply !bg-transparent ring-0 rounded-none;
   }
   tr.file-drop-target > td {
-    @apply bg-module/10;
+    @apply bg-module/15;
   }
   tr.file-drop-target [data-col="name"] {
     @apply text-module;

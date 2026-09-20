@@ -922,7 +922,7 @@ function projectBoard(config) {
         okLabel: 'Start',
         okClass: 'btn-module',
         icon: 'play',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!ok) return;
       try {
@@ -965,7 +965,7 @@ function projectBoard(config) {
           okLabel: 'Complete',
           okClass: 'btn-module',
           icon: 'flag',
-          iconClass: 'bg-module/10 text-module',
+          iconClass: 'bg-module/15 text-module',
         });
         if (!choice) return;
         moveTo = choice === 'backlog' ? null : choice;
@@ -976,7 +976,7 @@ function projectBoard(config) {
           okLabel: 'Complete',
           okClass: 'btn-module',
           icon: 'flag',
-          iconClass: 'bg-module/10 text-module',
+          iconClass: 'bg-module/15 text-module',
         });
         if (!ok) return;
       }

@@ -128,7 +128,7 @@
         <template x-for="entry in visibleEntries()" :key="entry.uuid">
           <tr
             class="hover cursor-pointer"
-            :class="[isSelected(entry.uuid) ? 'bg-module/5' : '', panelEntry === entry ? 'bg-module/10' : '']"
+            :class="[isSelected(entry.uuid) ? 'bg-module/10' : '', panelEntry === entry ? 'bg-module/15' : '']"
             @click="openEntryFromRow(entry)"
             @contextmenu.stop="openMenu($event, entry)"
           >

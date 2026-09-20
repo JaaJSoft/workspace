@@ -53,7 +53,7 @@
  */
 window.conversationAvatarFaceClasses = function conversationAvatarFaceClasses(kind, active) {
   if (kind === 'dm') return ['bg-neutral', 'text-neutral-content'];
-  return active ? ['bg-module', 'text-module-content'] : ['bg-module/20', 'text-module'];
+  return active ? ['bg-module', 'text-module-content'] : ['bg-module/25', 'text-module'];
 };
 
 /**

@@ -337,7 +337,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         okLabel: 'Create',
         okClass: 'btn-module',
         icon: 'folder-plus',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!name) return;
 
@@ -373,7 +373,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         okLabel: 'Rename',
         okClass: 'btn-module',
         icon: 'pencil',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!name || name === folder.display_name) return;
 
@@ -487,7 +487,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         okLabel: 'Move',
         okClass: 'btn-module',
         icon: 'folder-input',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (selected === null || selected === undefined) return;
 
@@ -521,7 +521,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         okLabel: 'Hide',
         okClass: 'btn-module',
         icon: 'eye-off',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!ok) return;
 
@@ -570,7 +570,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         okLabel: 'Merge',
         okClass: 'btn-module',
         icon: 'git-merge',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!target) return;
 

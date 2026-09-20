@@ -499,7 +499,7 @@ window.fileBrowser = function fileBrowser() {
           value: 'rename',
           okLabel: 'Continue',
           icon: 'files',
-          iconClass: 'bg-module/10 text-module',
+          iconClass: 'bg-module/15 text-module',
         });
         // Closing the dialog is the safe choice: the existing file stays.
         decisions.set(file, choice || 'skip');
@@ -613,7 +613,7 @@ window.fileBrowser = function fileBrowser() {
         cancelLabel: 'Keep both',
         okClass: 'btn-warning',
         icon: 'copy',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!discard) return false;
       try {
@@ -778,7 +778,7 @@ window.fileBrowser = function fileBrowser() {
         okLabel: 'Restore',
         okClass: 'btn-module',
         icon: 'rotate-ccw',
-        iconClass: 'bg-module/10 text-module'
+        iconClass: 'bg-module/15 text-module'
       });
       if (confirmed) {
         this.restoreItem(uuid);
@@ -1031,7 +1031,7 @@ window.fileBrowser = function fileBrowser() {
         okLabel: 'Restore',
         okClass: 'btn-module',
         icon: 'rotate-ccw',
-        iconClass: 'bg-module/10 text-module'
+        iconClass: 'bg-module/15 text-module'
       });
       if (!confirmed) return;
 
@@ -1350,7 +1350,7 @@ window.fileBrowser = function fileBrowser() {
         okLabel: 'Extract',
         okClass: 'btn-module',
         icon: 'archive-restore',
-        iconClass: 'bg-module/10 text-module',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!folder) return;
 

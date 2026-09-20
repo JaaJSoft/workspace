@@ -10,6 +10,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
+from workspace.core.module_registry import registry
 from workspace.files.models import File, FileScan, FileShareLink
 from workspace.files.ui.views import SHARED_FOLDER_PAGE_SIZE
 from workspace.users.services.settings import set_setting
@@ -129,6 +130,11 @@ class SharedLinkPageTests(TestCase):
         resp = self.client.get(f"/files/shared/{self.link.token}")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "doc.txt")
+
+    def test_a_file_link_scopes_the_files_module_hue(self):
+        """shared_base.html has no base.html to inherit module-<hue> from."""
+        resp = self.client.get(f"/files/shared/{self.link.token}")
+        self.assertContains(resp, f"module-{registry.get('files').color}")
 
     def test_a_read_only_link_still_loads_inline_alert_js(self):
         """<inline-alert> is also emitted by office_viewer_unavailable.html,

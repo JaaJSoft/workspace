@@ -34,7 +34,8 @@
     {% endcomment %}
     {% block head_extra %}{% endblock %}
   </head>
-  <body class="min-h-screen bg-base-200 flex flex-col">
+  {# This shell does not extend base.html, so it scopes the Files hue itself. #}
+  <body class="min-h-screen bg-base-200 flex flex-col module-indigo">
     <div class="flex-1 max-w-5xl mx-auto w-full p-4 sm:p-6 flex flex-col">
 
       {% if expired %}

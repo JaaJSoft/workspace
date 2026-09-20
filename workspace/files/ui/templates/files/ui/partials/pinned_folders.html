@@ -22,7 +22,7 @@ Context variables:
       :class="[
       collapsed ? 'flex justify-center' : '',
       draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',
-      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-primary/50 ring-offset-1 rounded-lg' : ''
+      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-module/50 ring-offset-1 rounded-lg' : ''
     ]"
       @dragstart="onPinnedDragStart($event, '{{ pin.folder.uuid }}')"
       @dragend="onPinnedDragEnd($event)"

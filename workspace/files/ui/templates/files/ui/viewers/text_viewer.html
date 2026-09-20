@@ -237,7 +237,7 @@
         <!-- Save -->
         <button
           type="button"
-          class="btn btn-primary btn-xs"
+          class="btn btn-module btn-xs"
           :disabled="!isDirty || saving || staleConflict"
           @click="save()"
           title="Save (Ctrl+S)"
@@ -759,7 +759,7 @@
             title: title,
             html: '<div class="prose prose-sm max-w-none">' + (resultHtml || result) + '</div>',
             icon: icon,
-            iconClass: 'bg-primary/10 text-primary',
+            iconClass: 'bg-module/10 text-module',
           });
         } else {
           if (!_editor) return;

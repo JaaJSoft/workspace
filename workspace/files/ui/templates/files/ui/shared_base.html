@@ -61,7 +61,7 @@
           <div class="card-body items-center text-center pt-10 pb-8 px-8">
             <!-- Lock icon -->
             <div
-              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg transition-transform duration-300 ease-out"
+              class="w-16 h-16 rounded-2xl bg-gradient-to-br from-module to-secondary flex items-center justify-center mb-4 shadow-lg transition-transform duration-300 ease-out"
               :class="unlocked && 'scale-110'"
             >
               <i x-show="!unlocked" data-lucide="lock" class="w-7 h-7 text-white"></i>
@@ -89,7 +89,7 @@
               />
               <button
                 type="button"
-                class="absolute right-2 inset-y-0 my-auto btn btn-primary btn-sm btn-square no-animation"
+                class="absolute right-2 inset-y-0 my-auto btn btn-module btn-sm btn-square no-animation"
                 :class="verifying && 'pointer-events-none'"
                 @click="verify()"
                 :disabled="!password"
@@ -156,14 +156,14 @@
           class="flex items-center justify-center gap-2 text-base-content/40 text-sm"
         >
           <div
-            class="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-secondary flex items-center justify-center"
+            class="w-6 h-6 rounded-md bg-gradient-to-br from-module to-secondary flex items-center justify-center"
           >
             <i data-lucide="share-2" class="w-3.5 h-3.5 text-white"></i>
           </div>
           <span>Shared with</span>
           <a
             href="/"
-            class="font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent hover:underline"
+            class="font-semibold bg-gradient-to-r from-module to-secondary bg-clip-text text-transparent hover:underline"
           >Workspace</a>
         </div>
       </footer>

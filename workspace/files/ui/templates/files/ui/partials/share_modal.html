@@ -139,7 +139,7 @@
             <div
               class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-200 text-sm"
             >
-              <i data-lucide="link" class="w-4 h-4 text-primary flex-shrink-0"></i>
+              <i data-lucide="link" class="w-4 h-4 text-module flex-shrink-0"></i>
               <div class="flex-1 min-w-0">
                 <div class="font-mono text-xs truncate" x-text="link.url"></div>
                 <div class="flex items-center gap-2 text-xs text-base-content/50">
@@ -241,7 +241,7 @@
               </button>
               <button
                 type="button"
-                class="btn btn-primary btn-xs"
+                class="btn btn-module btn-xs"
                 @click="createShareLink()"
                 :disabled="creatingLink"
               >
@@ -269,7 +269,7 @@
         <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
         <button
           type="button"
-          class="btn btn-sm btn-primary"
+          class="btn btn-sm btn-module"
           :disabled="!hasChanges || saving"
           @click="save()"
         >

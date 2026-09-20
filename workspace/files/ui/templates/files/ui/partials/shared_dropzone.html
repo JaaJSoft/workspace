@@ -23,7 +23,7 @@
     </h2>
 
     <label
-      class="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-base-300 rounded-lg p-8 cursor-pointer hover:border-primary transition-colors"
+      class="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-base-300 rounded-lg p-8 cursor-pointer hover:border-module transition-colors"
       @dragover.prevent
       @drop.prevent="drop($event)"
     >
@@ -45,7 +45,7 @@
             <template x-if="item.state === 'sending'">
               <span class="flex items-center gap-2 shrink-0">
                 <progress
-                  class="progress progress-primary w-32 h-1.5"
+                  class="progress progress-module w-32 h-1.5"
                   :value="item.percent"
                   max="100"
                 ></progress>

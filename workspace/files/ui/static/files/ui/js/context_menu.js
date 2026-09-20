@@ -100,7 +100,7 @@ window.contextMenu = function contextMenu() {
         return 'text-warning fill-current';
       }
       if (action.id === 'toggle_pin' && action.state && action.state.is_pinned) {
-        return 'text-primary fill-current';
+        return 'text-module fill-current';
       }
       return '';
     },

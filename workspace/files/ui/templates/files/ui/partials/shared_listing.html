@@ -26,7 +26,7 @@
         <a
           href="{{ entry.url }}"
           x-target.push="shared-content"
-          class="bg-base-100 border rounded-lg hover:border-primary hover:shadow-lg transition-all flex flex-col overflow-hidden {% if entry.is_quarantined %}border-error/40 bg-error/10{% else %}border-base-300{% endif %}"
+          class="bg-base-100 border rounded-lg hover:border-module hover:shadow-lg transition-all flex flex-col overflow-hidden {% if entry.is_quarantined %}border-error/40 bg-error/10{% else %}border-base-300{% endif %}"
         >
           {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
           <div class="p-3 min-w-0 border-t border-base-300 flex-1">

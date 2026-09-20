@@ -152,7 +152,7 @@
             x-show="hasClipboardItems"
             x-cloak
             type="button"
-            class="btn btn-sm btn-primary gap-1"
+            class="btn btn-sm btn-module gap-1"
             @click="bulkPaste()"
             title="Paste items here"
           >
@@ -247,7 +247,7 @@
 
             <!-- Tile size slider (mosaic view only) -->
             <div
-              class="flex items-center gap-1.5 text-primary"
+              class="flex items-center gap-1.5 text-module"
               x-show="viewMode === 'mosaic'"
               x-cloak
             >
@@ -259,7 +259,7 @@
                 step="1"
                 x-model.number="mosaicTileSize"
                 @change="setMosaicTileSize(mosaicTileSize)"
-                class="range range-xs range-primary w-24"
+                class="range range-xs range-module w-24"
                 title="Tile size"
               />
               <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
@@ -270,7 +270,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item"
-                :class="viewMode === 'list' ? 'bg-primary/10 text-primary' : ''"
+                :class="viewMode === 'list' ? 'bg-module/10 text-module' : ''"
                 @click="setViewMode('list')"
                 title="List view"
                 aria-label="List view"
@@ -280,7 +280,7 @@
               <button
                 type="button"
                 class="btn btn-sm btn-outline join-item"
-                :class="viewMode === 'mosaic' ? 'bg-primary/10 text-primary' : ''"
+                :class="viewMode === 'mosaic' ? 'bg-module/10 text-module' : ''"
                 @click="setViewMode('mosaic')"
                 title="Mosaic view"
                 aria-label="Mosaic view"
@@ -373,12 +373,12 @@
                 {% comment %}
               In the :class below, the quarantine tint is the last branch on
               purpose: selection has to stay readable on a flagged row, so
-              bg-primary/10 wins when both would apply rather than the two
+              bg-module/10 wins when both would apply rather than the two
               backgrounds racing on stylesheet order.
                 {% endcomment %}
                 <tr
                   class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-primary/10' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
+                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-module/10' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
                   data-uuid="{{ node.uuid }}"
@@ -440,7 +440,7 @@
                         {% endcomment %}
                         <a
                           href="/files/{{ node.uuid }}"
-                          class="font-medium hover:text-primary hover:underline block truncate min-w-0"
+                          class="font-medium hover:text-module hover:underline block truncate min-w-0"
                           x-target.push="folder-browser"
                           data-folder-link
                           draggable="false"
@@ -448,7 +448,7 @@
                         >{{ node.name }}</a>
                       {% elif node.node_type == "file" and not is_trash_view and node.is_viewable %}
                         <span
-                          class="font-medium block truncate min-w-0 group-hover:text-primary group-hover:underline"
+                          class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline"
                           title="{{ node.name }}"
                         >{{ node.name }}</span>
                       {% else %}
@@ -577,8 +577,8 @@
             >
               {% for node in nodes %}
                 <div
-                  class="bg-base-100 border {% if node.is_quarantined %}border-error/40{% else %}border-base-300{% endif %} rounded-lg hover:border-primary hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-primary border-primary' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
+                  class="bg-base-100 border {% if node.is_quarantined %}border-error/40{% else %}border-base-300{% endif %} rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-module border-module' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"

@@ -63,17 +63,8 @@ window.vaultPrefsMixin = function vaultPrefsMixin() {
         this.error = 'That preference could not be saved. Try again.';
       }
     },
-    forgetDevice: async function () {
-      const confirmed = await this.confirm(
-        'Forget the recovery key stored in this browser? You will need your '
-          + 'emergency kit the next time you unlock here.',
-        { title: 'Forget the key on this device', okLabel: 'Forget it', okClass: 'btn-error' }
-      );
-      if (!confirmed) return;
-      window.vaultSession.forgetDevice();
-      this.secretRequired = true;
-      this.secretRemembered = false;
-      this.secretText = '';
+    forgetDevice: function () {
+      return this.forgetSecret();
     },
   };
 };

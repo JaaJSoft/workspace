@@ -129,6 +129,29 @@ window.vaultUnlockMixin = (function () {
         await this.afterUnlock();
       },
 
+      // A remembered key is never printed: replacing it clears the field
+      // before mounting it, so what appears is empty and waiting for the
+      // emergency kit. The stored value stays until an unlock overwrites or
+      // drops it - a reload undoes a replace that was never completed.
+      replaceSecret: function () {
+        this.secretText = '';
+        this.secretRequired = true;
+        this.secretRemembered = false;
+        this.secretPanelOpen = true;
+      },
+
+      forgetSecret: async function () {
+        const confirmed = await this.confirm(
+          'Forget the recovery key stored in this browser? You will need your '
+            + 'emergency kit the next time you unlock here.',
+          { title: 'Forget the key on this device', okLabel: 'Forget it', okClass: 'btn-error' }
+        );
+        if (!confirmed) return;
+        window.vaultSession.forgetDevice();
+        this.replaceSecret();
+        this.remember = false;
+      },
+
       lockNow: function () {
         window.vaultSession.lock();
       },

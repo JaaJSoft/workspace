@@ -86,7 +86,7 @@
         geometry, so in the list there is nothing for it to size.
       {% endcomment %}
       <div
-        class="flex items-center gap-1.5 text-error"
+        class="flex items-center gap-1.5 text-module"
         x-show="viewMode === 'mosaic'"
         x-cloak
       >
@@ -98,7 +98,7 @@
           step="1"
           x-model.number="tileSize"
           @change="setTileSize(tileSize)"
-          class="range range-xs range-error w-24"
+          class="range range-xs range-module w-24"
           title="Tile size"
           aria-label="Tile size"
         />
@@ -109,7 +109,7 @@
         <button
           type="button"
           class="btn btn-sm btn-outline join-item"
-          :class="viewMode === 'list' ? 'bg-error/10 text-error' : ''"
+          :class="viewMode === 'list' ? 'bg-module/15 text-module' : ''"
           @click="setViewMode('list')"
           title="List view"
           aria-label="List view"
@@ -119,7 +119,7 @@
         <button
           type="button"
           class="btn btn-sm btn-outline join-item"
-          :class="viewMode === 'mosaic' ? 'bg-error/10 text-error' : ''"
+          :class="viewMode === 'mosaic' ? 'bg-module/15 text-module' : ''"
           @click="setViewMode('mosaic')"
           title="Mosaic view"
           aria-label="Mosaic view"

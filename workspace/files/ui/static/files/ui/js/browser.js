@@ -499,7 +499,7 @@ window.fileBrowser = function fileBrowser() {
           value: 'rename',
           okLabel: 'Continue',
           icon: 'files',
-          iconClass: 'bg-primary/10 text-primary',
+          iconClass: 'bg-module/15 text-module',
         });
         // Closing the dialog is the safe choice: the existing file stays.
         decisions.set(file, choice || 'skip');
@@ -613,7 +613,7 @@ window.fileBrowser = function fileBrowser() {
         cancelLabel: 'Keep both',
         okClass: 'btn-warning',
         icon: 'copy',
-        iconClass: 'bg-primary/10 text-primary',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!discard) return false;
       try {
@@ -776,9 +776,9 @@ window.fileBrowser = function fileBrowser() {
         title: `Restore ${nodeType}?`,
         message: `Restore "${name}" from trash?`,
         okLabel: 'Restore',
-        okClass: 'btn-primary',
+        okClass: 'btn-module',
         icon: 'rotate-ccw',
-        iconClass: 'bg-primary/10 text-primary'
+        iconClass: 'bg-module/15 text-module'
       });
       if (confirmed) {
         this.restoreItem(uuid);
@@ -1029,9 +1029,9 @@ window.fileBrowser = function fileBrowser() {
         title: 'Restore items?',
         message: `Restore ${count} item${count > 1 ? 's' : ''} from trash?`,
         okLabel: 'Restore',
-        okClass: 'btn-primary',
+        okClass: 'btn-module',
         icon: 'rotate-ccw',
-        iconClass: 'bg-primary/10 text-primary'
+        iconClass: 'bg-module/15 text-module'
       });
       if (!confirmed) return;
 
@@ -1348,9 +1348,9 @@ window.fileBrowser = function fileBrowser() {
         title: 'Extract archive',
         message: `Choose where to extract "${name}".`,
         okLabel: 'Extract',
-        okClass: 'btn-primary',
+        okClass: 'btn-module',
         icon: 'archive-restore',
-        iconClass: 'bg-primary/10 text-primary',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!folder) return;
 

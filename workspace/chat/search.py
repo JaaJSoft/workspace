@@ -52,7 +52,6 @@ def search_conversations(query, user, limit):
                 match_type="title",
                 type_icon="users",
                 module_slug="chat",
-                module_color="info",
                 tags=(SearchTag("Group", "info"),),
             )
         )
@@ -70,7 +69,6 @@ def search_conversations(query, user, limit):
                 match_type="member",
                 type_icon="message-circle",
                 module_slug="chat",
-                module_color="info",
                 tags=(SearchTag("DM", "info"),),
             )
         )
@@ -119,7 +117,6 @@ def search_chat_messages(query, user, limit):
                 match_type="message",
                 type_icon="message-square",
                 module_slug="chat",
-                module_color="info",
                 tags=(SearchTag("Message", "info"),),
             )
         )

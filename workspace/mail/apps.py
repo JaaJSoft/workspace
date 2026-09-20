@@ -25,7 +25,7 @@ class MailConfig(AppConfig):
                 slug="mail",
                 description="Read and send emails from external mail accounts.",
                 icon="mail",
-                color="warning",
+                color="amber",
                 url="/mail",
                 order=25,
             )
@@ -53,7 +53,6 @@ class MailConfig(AppConfig):
                     name="Mail",
                     keywords=["mail", "email", "inbox"],
                     icon="mail",
-                    color="warning",
                     url="/mail",
                     kind="navigate",
                     module_slug="mail",
@@ -63,7 +62,6 @@ class MailConfig(AppConfig):
                     name="New email",
                     keywords=["new email", "compose", "send"],
                     icon="mail-plus",
-                    color="warning",
                     url="/mail?compose=",
                     kind="action",
                     module_slug="mail",
@@ -88,7 +86,6 @@ class MailConfig(AppConfig):
                 slug="mail",
                 label="Mail",
                 icon="mail",
-                color="warning",
                 provider_cls=MailActivityProvider,
             )
         )

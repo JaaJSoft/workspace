@@ -10,7 +10,7 @@
 {% endcomment %}
 <div
   data-part="audio"
-  class="flex flex-col gap-1 rounded-lg px-2.5 py-2 w-64 sm:w-80 max-w-full min-w-0 {% if is_own %}bg-info/15{% else %}bg-base-300/50{% endif %}"
+  class="flex flex-col gap-1 rounded-lg px-2.5 py-2 w-64 sm:w-80 max-w-full min-w-0 {% if is_own %}bg-module/15{% else %}bg-base-300/50{% endif %}"
   x-data="chatAudioPlayer('{{ att.uuid }}', {% localize off %}{{ att.duration_seconds|default_if_none:'null' }}{% endlocalize %})"
 >
 

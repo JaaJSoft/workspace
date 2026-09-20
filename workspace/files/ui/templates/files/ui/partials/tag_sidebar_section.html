@@ -9,7 +9,7 @@ provide `tagViewHref(tag)`, `openTagView(tag)` and `isTagViewActive(tag)`.
 Parameters:
 - collapse_expr: Alpine expression for the collapsed state (default "collapsed")
 - active_class: classes of the active row, written out in full so Tailwind
-  sees them (default: the Files sidebar's primary tint)
+  sees them (default: the Files sidebar's module tint)
 - heading_class: classes of the section heading (default matches the Files sidebar)
 - collapsed_initial, mobile_rail: the server-known collapsed state and whether
   the drawer is the icon rail below `lg`, as for ui/partials/drawer_item.html.
@@ -18,7 +18,7 @@ Parameters:
   and bound in the object form: `x-show` alone hides it one animation frame
   after the aside has narrowed, and for that frame it pokes out of the rail.
 {% endcomment %}
-{% with ce=collapse_expr|default:"collapsed" active=active_class|default:"bg-primary/10 text-primary hover:bg-primary/20" %}
+{% with ce=collapse_expr|default:"collapsed" active=active_class|default:"bg-module/15 text-module hover:bg-module/25" %}
   <div id="tag-sidebar-section">
     <hr
       class="my-2 border-base-300{% if collapsed_initial %} hidden{% elif mobile_rail %} max-lg:hidden{% endif %}"

@@ -32,7 +32,7 @@
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </button>
-        <i data-lucide="contact" class="w-4 h-4 text-secondary flex-shrink-0"></i>
+        <i data-lucide="contact" class="w-4 h-4 text-module flex-shrink-0"></i>
         <input
           type="text"
           class="input input-ghost input-sm font-semibold flex-1 min-w-0"
@@ -348,7 +348,7 @@
             >
               Cancel
             </button>
-            <button type="submit" class="btn btn-secondary btn-sm" :disabled="!listPick">Add</button>
+            <button type="submit" class="btn btn-module btn-sm" :disabled="!listPick">Add</button>
           </div>
         </form>
       </div>
@@ -384,7 +384,7 @@
             </button>
             <button
               type="submit"
-              class="btn btn-secondary btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="movePick === person.scope"
             >
               Move
@@ -407,7 +407,7 @@
           <button type="button" class="btn btn-ghost btn-sm" @click="cancelCrop()">Cancel</button>
           <button
             type="button"
-            class="btn btn-secondary btn-sm"
+            class="btn btn-module btn-sm"
             :disabled="uploading"
             @click="confirmCrop()"
           >

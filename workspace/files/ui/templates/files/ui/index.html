@@ -51,7 +51,7 @@
           :class="{ 'justify-center': collapsed, 'justify-between': !collapsed }"
         >
           {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-primary" button_class="mr-1 hover:text-primary" show_expr="!collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/preferences_popover.html" with component="filePreferences()" content="files/ui/partials/_preferences_content.html" accent="text-module" button_class="mr-1 hover:text-module" show_expr="!collapsed" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </div>
       </div>
 
@@ -74,7 +74,7 @@
           </span>
         </h3>
         <ul class="space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="primary" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
+          {% include "ui/partials/drawer_item.html" with href="/files" icon="folder" label="My Files" color="module" active=is_root_view active_binding="activeView === 'root'" onclick="setActiveView('root')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True extra_attrs='data-drop-folder=""' %}
           {% include "ui/partials/drawer_item.html" with href="/files?favorites=1" icon="star" label="Favorites" color="warning" active=is_favorites_view active_binding="activeView === 'favorites'" onclick="setActiveView('favorites')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% include "ui/partials/drawer_item.html" with href="/files?recent=1" icon="clock" label="Recent" color="info" active=is_recent_view active_binding="activeView === 'recent'" onclick="setActiveView('recent')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
           {% include "ui/partials/drawer_item.html" with href="/files/trash" icon="trash-2" label="Trash" color="error" active=is_trash_view active_binding="activeView === 'trash'" onclick="setActiveView('trash')" x_target="folder-browser" x_target_history="push" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
@@ -107,7 +107,7 @@
             @dragenter.prevent="onDragEnter($event)"
             @dragleave="onDragLeave($event)"
             @drop.prevent="onDrop($event)"
-            :class="dragOver ? 'bg-primary/10 ring-2 ring-primary/40 ring-inset rounded-lg scale-[1.02]' : ''"
+            :class="dragOver ? 'bg-module/15 ring-2 ring-module/40 ring-inset rounded-lg scale-[1.02]' : ''"
             class="transition-all duration-200"
           >
             {% include "files/ui/partials/pinned_folders.html" %}
@@ -116,7 +116,7 @@
               x-show="dragOver && !collapsed"
               x-cloak
               x-transition
-              class="text-xs text-primary font-medium text-center py-4 border-2 border-dashed border-primary/40 rounded-lg mt-2 bg-primary/5"
+              class="text-xs text-module font-medium text-center py-4 border-2 border-dashed border-module/40 rounded-lg mt-2 bg-module/10"
             >
               <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
               <br />
@@ -137,18 +137,18 @@
       <!-- Storage & Help -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="primary" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="primary" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="chart-pie" label="Storage" color="module" onclick="window.dispatchEvent(new CustomEvent('open-storage-analysis', { detail: { uuid: null, name: 'My files' } }))" tooltip="Storage" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('help-dialog').showModal()" tooltip="Help" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="primary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="primary" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('files-prefs-dialog').showModal()" tooltip="Preferences" collapsed_initial=workspace_sidebar_collapsed mobile_rail=True %}
         </ul>
       </div>
     </aside>
@@ -252,7 +252,7 @@
                     {% elif not is_shared_view and not is_recent_view %}
                       <!-- Action button with dropdown -->
                       <div class="dropdown dropdown-end flex-shrink-0">
-                        <button type="button" tabindex="0" class="btn btn-primary btn-sm gap-2">
+                        <button type="button" tabindex="0" class="btn btn-module btn-sm gap-2">
                           <i data-lucide="plus" class="w-4 h-4"></i>
                           <span class="hidden sm:inline">New</span>
                           <i
@@ -284,14 +284,11 @@
                 x-show="dropZoneActive"
                 x-cloak
                 x-transition.opacity
-                class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-primary rounded-lg flex items-center justify-center pointer-events-none"
+                class="absolute inset-0 z-50 bg-base-100/90 backdrop-blur-sm border-2 border-dashed border-module rounded-lg flex items-center justify-center pointer-events-none"
               >
                 <div class="text-center">
-                  <i
-                    data-lucide="upload-cloud"
-                    class="w-12 h-12 mx-auto mb-3 text-primary"
-                  ></i>
-                  <p class="text-lg font-semibold text-primary">Drop files to upload</p>
+                  <i data-lucide="upload-cloud" class="w-12 h-12 mx-auto mb-3 text-module"></i>
+                  <p class="text-lg font-semibold text-module">Drop files to upload</p>
                   <p class="text-sm text-base-content/60">Files will be added to the current folder</p>
                 </div>
               </div>
@@ -324,7 +321,7 @@
           aria-live="polite"
           data-testid="folder-loading"
         >
-          <span class="inline-flex text-primary animate-spin">
+          <span class="inline-flex text-module animate-spin">
             <i data-lucide="loader-circle" class="w-8 h-8"></i>
           </span>
           <span class="sr-only">Loading folder…</span>
@@ -370,7 +367,7 @@
   <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
     <div class="modal-box">
       <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-primary"></i>
+        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "files/ui/partials/_preferences_content.html" %}</div>

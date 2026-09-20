@@ -45,10 +45,10 @@
             x-show="!sidebarCollapsed()"
             x-transition
           >
-            {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-warning" button_class="hover:text-warning" %}
+            {% include "ui/partials/preferences_popover.html" with component="mailPreferences()" content="mail/ui/partials/_preferences_content.html" accent="text-module" button_class="hover:text-module" %}
             <button
               type="button"
-              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-warning"
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-module"
               @click="showCompose()"
               title="Compose (C)"
             >
@@ -68,24 +68,24 @@
         x-show="sidebarCollapsed()"
       >
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="warning" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="plus" label="New" color="module" onclick="showCompose()" tooltip="Compose" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="warning" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('mail-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="warning" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="warning" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('mail-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>
@@ -102,11 +102,7 @@
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium mb-2">No mail accounts configured</p>
           <p class="text-sm mb-4">Add a mail account to get started</p>
-          <button
-            type="button"
-            class="btn btn-warning btn-sm"
-            @click="showAddAccount()"
-          >
+          <button type="button" class="btn btn-module btn-sm" @click="showAddAccount()">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Add Account
           </button>
@@ -140,7 +136,7 @@
     <!-- Mobile compose FAB -->
     <button
       type="button"
-      class="btn btn-warning btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+      class="btn btn-module btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
       @click="showCompose()"
       x-show="!selectedMessage"
       x-cloak
@@ -243,7 +239,7 @@
           </span>
           <input
             type="checkbox"
-            class="toggle toggle-sm toggle-warning"
+            class="toggle toggle-sm toggle-module"
             x-model="labelModal.notifyOnApply"
           />
         </label>
@@ -263,7 +259,7 @@
           <button type="button" class="btn btn-ghost btn-sm" @click="closeLabelModal()">Cancel</button>
           <button
             type="submit"
-            class="btn btn-warning btn-sm"
+            class="btn btn-module btn-sm"
             :disabled="labelModal.saving || !labelModal.name.trim()"
           >
             <span
@@ -339,7 +335,7 @@
   <dialog id="mail-prefs-dialog" class="modal" x-data="mailPreferences()">
     <div class="modal-box">
       <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-warning"></i>
+        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "mail/ui/partials/_preferences_content.html" %}</div>
@@ -423,7 +419,7 @@
               />
               <button
                 type="button"
-                class="btn btn-outline btn-warning btn-sm whitespace-nowrap"
+                class="btn btn-outline btn-module btn-sm whitespace-nowrap"
                 :disabled="!newAccount.email || autoDiscovering"
                 @click="autodiscoverSettings()"
               >
@@ -467,7 +463,7 @@
             <input
               type="checkbox"
               x-model="newAccount.imap_use_ssl"
-              class="toggle toggle-sm toggle-warning"
+              class="toggle toggle-sm toggle-module"
             />
             <span class="label-text">Use SSL</span>
           </label>
@@ -495,7 +491,7 @@
             <input
               type="checkbox"
               x-model="newAccount.smtp_use_tls"
-              class="toggle toggle-sm toggle-warning"
+              class="toggle toggle-sm toggle-module"
             />
             <span class="label-text">Use STARTTLS</span>
           </label>
@@ -527,11 +523,7 @@
         </div>
         <div class="modal-action">
           <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">Cancel</button>
-          <button
-            type="submit"
-            class="btn btn-warning btn-sm"
-            :disabled="addingAccount"
-          >
+          <button type="submit" class="btn btn-module btn-sm" :disabled="addingAccount">
             <span x-show="!addingAccount">Add Account</span>
             <span x-show="addingAccount" class="loading loading-spinner loading-xs"></span>
           </button>
@@ -583,7 +575,7 @@
               <input
                 type="checkbox"
                 x-model="editAccount.imap_use_ssl"
-                class="toggle toggle-sm toggle-warning"
+                class="toggle toggle-sm toggle-module"
               />
               <span class="label-text">Use SSL</span>
             </label>
@@ -611,7 +603,7 @@
               <input
                 type="checkbox"
                 x-model="editAccount.smtp_use_tls"
-                class="toggle toggle-sm toggle-warning"
+                class="toggle toggle-sm toggle-module"
               />
               <span class="label-text">Use STARTTLS</span>
             </label>
@@ -652,11 +644,7 @@
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              class="btn btn-warning btn-sm"
-              :disabled="savingAccount"
-            >
+            <button type="submit" class="btn btn-module btn-sm" :disabled="savingAccount">
               <span x-show="!savingAccount">Save</span>
               <span x-show="savingAccount" class="loading loading-spinner loading-xs"></span>
             </button>

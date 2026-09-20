@@ -30,12 +30,12 @@
         >
           <button
             type="button"
-            class="btn btn-ghost btn-sm hover:text-accent"
+            class="btn btn-ghost btn-sm hover:text-module"
             @click="calendarToday()"
           >
             Today
           </button>
-          {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-accent" button_class="hover:text-accent" %}
+          {% include "ui/partials/preferences_popover.html" with content="calendar/ui/partials/_preferences_content.html" accent="text-module" button_class="hover:text-module" %}
         </div>
       </div>
     </div>
@@ -73,7 +73,7 @@
         <button
           type="button"
           class="btn btn-xs flex-1"
-          :class="currentView === 'dayGridMonth' ? 'btn-primary' : 'btn-ghost'"
+          :class="currentView === 'dayGridMonth' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('dayGridMonth')"
         >
           Month
@@ -81,7 +81,7 @@
         <button
           type="button"
           class="btn btn-xs flex-1"
-          :class="currentView === 'timeGridWeek' ? 'btn-primary' : 'btn-ghost'"
+          :class="currentView === 'timeGridWeek' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('timeGridWeek')"
         >
           Week
@@ -89,7 +89,7 @@
         <button
           type="button"
           class="btn btn-xs flex-1"
-          :class="currentView === 'timeGridDay' ? 'btn-primary' : 'btn-ghost'"
+          :class="currentView === 'timeGridDay' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('timeGridDay')"
         >
           Day
@@ -97,7 +97,7 @@
         <button
           type="button"
           class="btn btn-xs flex-1"
-          :class="currentView === 'agenda' ? 'btn-primary' : 'btn-ghost'"
+          :class="currentView === 'agenda' ? 'btn-module' : 'btn-ghost'"
           @click="changeView('agenda')"
         >
           Agenda
@@ -317,7 +317,7 @@
             <input
               x-show="!sidebarCollapsed()"
               type="checkbox"
-              class="checkbox checkbox-xs checkbox-secondary flex-shrink-0{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+              class="checkbox checkbox-xs checkbox-module flex-shrink-0{% if workspace_sidebar_collapsed %} hidden{% endif %}"
               :class="{ hidden: sidebarCollapsed() }"
               :checked="prefs.showTasks"
               @change="updatePref('showTasks', !prefs.showTasks)"
@@ -378,9 +378,9 @@
     <div class="px-3 pb-2">
       <ul class="menu p-0">
         {% if poll_count %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" badge=poll_count collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="module" onclick="openPollList()" tooltip="Polls" badge=poll_count collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% else %}
-          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="accent" onclick="openPollList()" tooltip="Polls" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="bar-chart-3" label="Polls" color="module" onclick="openPollList()" tooltip="Polls" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         {% endif %}
       </ul>
     </div>
@@ -388,17 +388,17 @@
     <!-- Help button -->
     <div class="px-3 pb-2">
       <ul class="menu p-0">
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="accent" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('calendar-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
 
     <!-- Bottom action: settings on mobile, collapse on desktop -->
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="accent" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
       </ul>
       <ul class="menu p-0 lg:hidden">
-        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="accent" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('calendar-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </ul>
     </div>
   </aside>

@@ -6,7 +6,7 @@
   --fc-page-bg-color: oklch(var(--b1));
   --fc-neutral-bg-color: oklch(var(--b2));
   --fc-neutral-text-color: oklch(var(--bc));
-  --fc-today-bg-color: oklch(var(--a) / 0.08);
+  --fc-today-bg-color: rgb(var(--module) / 0.08);
 
   /* Event colors */
   --fc-event-bg-color: oklch(var(--p));
@@ -364,13 +364,13 @@
   background: oklch(var(--b3) / 0.6);
 }
 
-/* Today header gets the calendar module's accent color */
+/* Today header uses the module hue */
 .agenda-day-header.is-today {
-  color: oklch(var(--a));
+  color: rgb(var(--module));
 }
 
 .agenda-day-header.is-today::after {
-  background: oklch(var(--a) / 0.3);
+  background: rgb(var(--module) / 0.3);
 }
 
 .agenda-event {

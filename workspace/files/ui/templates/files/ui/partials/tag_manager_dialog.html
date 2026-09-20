@@ -7,7 +7,7 @@ and the tag_dialog partial on the same page for create/edit.
 <dialog id="tag-manager-dialog" class="modal">
   <div class="modal-box max-w-lg flex flex-col max-h-[85vh]">
     <div class="flex items-center gap-2 mb-3">
-      <i data-lucide="tags" class="w-5 h-5 text-primary flex-shrink-0"></i>
+      <i data-lucide="tags" class="w-5 h-5 text-module flex-shrink-0"></i>
       <h3 class="font-bold text-lg flex-1">Tags</h3>
       <span
         class="text-sm text-base-content/50 tabular-nums"
@@ -132,7 +132,7 @@ and the tag_dialog partial on the same page for create/edit.
 <dialog id="tag-merge-dialog" class="modal" @close="cancelTagMerge()">
   <div class="modal-box max-w-sm">
     <h3 class="font-bold text-lg flex items-center gap-2 mb-1">
-      <i data-lucide="git-merge" class="w-5 h-5 text-primary flex-shrink-0"></i>
+      <i data-lucide="git-merge" class="w-5 h-5 text-module flex-shrink-0"></i>
       Merge tag
     </h3>
     <p class="text-sm text-base-content/70 mb-3">
@@ -161,7 +161,7 @@ and the tag_dialog partial on the same page for create/edit.
         <button type="button" class="btn btn-ghost btn-sm" @click="cancelTagMerge()">Cancel</button>
         <button
           type="submit"
-          class="btn btn-primary btn-sm"
+          class="btn btn-module btn-sm"
           :disabled="!tagManager.mergeTarget || tagManager.busy"
         >
           <span x-show="!tagManager.busy">Merge</span>

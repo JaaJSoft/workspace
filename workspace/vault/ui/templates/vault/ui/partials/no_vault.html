@@ -9,11 +9,15 @@
 <div class="flex-1 flex items-center justify-center px-6">
   <div class="max-w-md text-center flex flex-col items-center gap-4">
     <div class="rounded-full bg-base-200 p-5">
-      <i data-lucide="lock-open" class="w-9 h-9 text-error"></i>
+      <i data-lucide="lock-open" class="w-9 h-9 text-module"></i>
     </div>
     <h2 class="text-xl font-semibold">No vault yet</h2>
     <p class="text-base-content/60">A vault gathers your passwords under its own key, sealed to your account.</p>
-    <button type="button" class="btn btn-error gap-2" @click="openCreateDialog()">
+    <button
+      type="button"
+      class="btn btn-module gap-2"
+      @click="openCreateDialog()"
+    >
       <i data-lucide="plus" class="w-4 h-4"></i>
       Create a vault
     </button>

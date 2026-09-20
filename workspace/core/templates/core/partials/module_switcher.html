@@ -33,12 +33,12 @@ Params:
     {% endcomment %}
     <label
       tabindex="0"
-      class="btn btn-ghost btn-sm h-auto min-h-0 border-0 normal-case flex-nowrap gap-2 p-1 cursor-pointer hover:bg-{{ module.color }}/10 transition-all"
+      class="btn btn-ghost btn-sm h-auto min-h-0 border-0 normal-case flex-nowrap gap-2 p-1 cursor-pointer hover:bg-module/15 transition-all"
       title="Switch module (Alt+K)"
       aria-label="Switch module, currently {{ module.name }}"
     >
       <span
-        class="w-8 h-8 shrink-0 rounded-lg bg-{{ module.color }}/10 text-{{ module.color }} flex items-center justify-center"
+        class="w-8 h-8 shrink-0 rounded-lg bg-module/15 text-module flex items-center justify-center"
       >
         <i data-lucide="{{ module.icon }}" class="w-5 h-5"></i>
       </span>
@@ -98,7 +98,7 @@ Params:
           class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-base-200 transition-colors"
         >
           <span
-            class="w-9 h-9 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center"
+            class="module-slate w-9 h-9 rounded-lg bg-module/15 text-module flex items-center justify-center"
           >
             <i data-lucide="home" class="w-5 h-5"></i>
           </span>
@@ -111,12 +111,12 @@ Params:
             {% if m.slug == module.slug %}aria-current="page"{% endif %}
           >
             <span
-              class="relative w-9 h-9 rounded-lg bg-{{ m.color }}/10 text-{{ m.color }} flex items-center justify-center"
+              class="module-{{ m.color }} relative w-9 h-9 rounded-lg bg-module/15 text-module flex items-center justify-center"
             >
               <i data-lucide="{{ m.icon }}" class="w-5 h-5"></i>
               {% if m.notification_count %}
                 <span
-                  class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-{{ m.color }} text-{{ m.color }}-content text-[10px] font-bold flex items-center justify-center"
+                  class="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-module text-module-content text-[10px] font-bold flex items-center justify-center"
                 >{{ m.notification_count }}</span>
               {% endif %}
             </span>

@@ -53,7 +53,6 @@ def search_mail(query, user, limit):
             match_type="subject",
             type_icon="mail",
             module_slug="mail",
-            module_color="warning",
             date=_format_date(m.date),
             tags=(
                 (SearchTag(canonical_folder(m.folder).display_name, "warning"),)
@@ -134,7 +133,6 @@ def search_contacts(query, user, limit):
                 match_type="contact",
                 type_icon="user",
                 module_slug="mail",
-                module_color="warning",
             )
         )
 

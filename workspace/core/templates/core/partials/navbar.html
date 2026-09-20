@@ -323,7 +323,7 @@
                 <li class="{% if request.path == module.url %}disabled{% endif %}">
                   <a
                     {% if request.path != module.url %}href="{{ module.url }}"{% endif %}
-                    class="gap-3 transition-colors {% if request.path == module.url %}opacity-40{% else %}hover:bg-{{ module.color }}/10 hover:text-{{ module.color }}{% endif %}"
+                    class="gap-3 transition-colors {% if request.path == module.url %}opacity-40{% else %}module-{{ module.color }} hover:bg-module/15 hover:text-module{% endif %}"
                     {% if request.path == module.url %}aria-current="page"{% endif %}
                   >
                     <i data-lucide="{{ module.icon }}" class="w-4 h-4"></i>

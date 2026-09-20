@@ -335,9 +335,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         message,
         placeholder: 'Folder name',
         okLabel: 'Create',
-        okClass: 'btn-warning',
+        okClass: 'btn-module',
         icon: 'folder-plus',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!name) return;
 
@@ -371,9 +371,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         title: 'Rename folder',
         value: folder.display_name,
         okLabel: 'Rename',
-        okClass: 'btn-warning',
+        okClass: 'btn-module',
         icon: 'pencil',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!name || name === folder.display_name) return;
 
@@ -485,9 +485,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         options,
         value: currentParent,
         okLabel: 'Move',
-        okClass: 'btn-warning',
+        okClass: 'btn-module',
         icon: 'folder-input',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-module/15 text-module',
       });
       if (selected === null || selected === undefined) return;
 
@@ -519,9 +519,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         title: 'Hide folder',
         message: `Hide "${folder.display_name}"? It will no longer appear in the sidebar or search results. You can restore it from the account menu.`,
         okLabel: 'Hide',
-        okClass: 'btn-warning',
+        okClass: 'btn-module',
         icon: 'eye-off',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!ok) return;
 
@@ -568,9 +568,9 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         message: `Mail in "${folder.display_name}" will show up in the folder you pick, and new mail will be filed there. Nothing moves on the server.`,
         options,
         okLabel: 'Merge',
-        okClass: 'btn-warning',
+        okClass: 'btn-module',
         icon: 'git-merge',
-        iconClass: 'bg-warning/10 text-warning',
+        iconClass: 'bg-module/15 text-module',
       });
       if (!target) return;
 
@@ -744,7 +744,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
       const count = ids.length;
       const label = document.createElement('div');
       label.textContent = count === 1 ? '1 message' : `${count} messages`;
-      label.className = 'badge badge-warning badge-sm';
+      label.className = 'badge badge-module badge-sm';
       label.style.position = 'absolute';
       label.style.top = '-9999px';
       document.body.appendChild(label);

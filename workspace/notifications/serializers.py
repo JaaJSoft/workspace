@@ -5,7 +5,6 @@ class NotificationSerializer(serializers.Serializer):
     uuid = serializers.UUIDField()
     origin = serializers.CharField()
     icon = serializers.CharField()
-    color = serializers.CharField()
     priority = serializers.CharField()
     title = serializers.CharField()
     body = serializers.CharField()

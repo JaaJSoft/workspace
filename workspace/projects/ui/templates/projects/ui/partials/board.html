@@ -19,7 +19,7 @@
         {% if role == "admin" and writable and selected_sprint.state == "active" %}
           <button
             type="button"
-            class="btn btn-accent btn-sm ml-auto"
+            class="btn btn-module btn-sm ml-auto"
             @click="completeSprint('{{ selected_sprint.uuid }}', '{{ selected_sprint.name|escapejs }}')"
           >
             <i data-lucide="flag" class="w-4 h-4"></i>
@@ -53,7 +53,7 @@
                   {% if role == "admin" and writable %}
                     <button
                       type="button"
-                      class="btn btn-accent btn-xs"
+                      class="btn btn-module btn-xs"
                       @click="startSprint('{{ s.uuid }}', '{{ s.name|escapejs }}')"
                     >
                       <i data-lucide="play" class="w-3.5 h-3.5"></i>
@@ -68,7 +68,7 @@
             {% if writable %}
               <button
                 type="button"
-                class="btn btn-accent btn-sm"
+                class="btn btn-module btn-sm"
                 @click="openSprints({ add: true })"
               >
                 <i data-lucide="plus" class="w-4 h-4"></i>

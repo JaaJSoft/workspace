@@ -42,15 +42,12 @@ def source_field(source):
         ) from None
 
 
-def _resolve_module_defaults(origin, icon, color):
-    """Fill icon/color from the module registry when not explicitly provided."""
+def _resolve_module_icon(origin, icon):
+    """Fill the icon from the module registry when not explicitly provided."""
     module = registry.get(origin)
-    if module:
-        if not icon:
-            icon = module.icon
-        if not color:
-            color = module.color
-    return icon, color
+    if module and not icon:
+        icon = module.icon
+    return icon
 
 
 def notify(
@@ -63,17 +60,15 @@ def notify(
     url="",
     actor=None,
     priority="normal",
-    color="",
     source=None,
 ):
     """Create a single notification and trigger SSE push."""
-    icon, color = _resolve_module_defaults(origin, icon, color)
+    icon = _resolve_module_icon(origin, icon)
     source_kwargs = {source_field(source): source} if source is not None else {}
     notif = Notification.objects.create(
         recipient=recipient,
         origin=origin,
         icon=icon,
-        color=color,
         title=title,
         body=body,
         url=url,
@@ -98,11 +93,10 @@ def notify_many(
     url="",
     actor=None,
     priority="normal",
-    color="",
     source=None,
 ):
     """Create notifications for multiple recipients and trigger SSE for each."""
-    icon, color = _resolve_module_defaults(origin, icon, color)
+    icon = _resolve_module_icon(origin, icon)
     source_kwargs = {source_field(source): source} if source is not None else {}
     notifs = Notification.objects.bulk_create(
         [
@@ -110,7 +104,6 @@ def notify_many(
                 recipient=user,
                 origin=origin,
                 icon=icon,
-                color=color,
                 title=title,
                 body=body,
                 url=url,
@@ -142,7 +135,6 @@ def notify_stream(
     priority_map=None,
     default_priority="normal",
     icon="",
-    color="",
     stream="",
 ):
     """Merge-or-create notifications keyed on a source object.
@@ -162,7 +154,7 @@ def notify_stream(
     if not recipient_ids:
         return []
     field = source_field(source)
-    icon, color = _resolve_module_defaults(origin, icon, color)
+    icon = _resolve_module_icon(origin, icon)
     priority_map = priority_map or {}
 
     existing = {
@@ -199,7 +191,6 @@ def notify_stream(
                     recipient_id=uid,
                     origin=origin,
                     icon=icon,
-                    color=color,
                     title=title,
                     body=body,
                     url=url,

@@ -22,13 +22,12 @@
       class="flex items-center gap-3 {% if size == 'lg' %}p-3{% else %}p-2{% endif %} hover:bg-base-200 rounded-lg cursor-pointer transition-colors"
     >
       <div
-        :class="`bg-${cmd.color}/10`"
-        class="{% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg flex items-center justify-center flex-shrink-0"
+        :class="`module-${cmd.color || 'slate'}`"
+        class="bg-module/15 {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} rounded-lg flex items-center justify-center flex-shrink-0"
       >
         <i
           :data-lucide="cmd.icon"
-          :class="`text-${cmd.color}`"
-          class="{% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"
+          class="text-module {% if size == 'lg' %}w-5 h-5{% else %}w-4 h-4{% endif %}"
         ></i>
       </div>
       <div class="flex-1 min-w-0">

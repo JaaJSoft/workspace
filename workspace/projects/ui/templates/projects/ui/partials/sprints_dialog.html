@@ -15,7 +15,7 @@ menus without a reload.
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">
-          <div class="bg-accent/10 text-accent rounded-lg p-2 shrink-0">
+          <div class="bg-module/15 text-module rounded-lg p-2 shrink-0">
             <i data-lucide="timer" class="w-5 h-5"></i>
           </div>
           <div class="min-w-0">
@@ -67,7 +67,7 @@ menus without a reload.
         <label class="flex items-center gap-2 cursor-pointer shrink-0">
           <input
             type="checkbox"
-            class="toggle toggle-sm toggle-accent"
+            class="toggle toggle-sm toggle-module"
             x-model="hideClosed"
           />
           <span class="text-sm">Hide closed</span>
@@ -123,7 +123,7 @@ menus without a reload.
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
             <button
               type="submit"
-              class="btn btn-accent btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
               Add
@@ -160,7 +160,7 @@ menus without a reload.
               </template>
               <span
                 class="badge badge-sm capitalize shrink-0"
-                :class="sprint.state === 'active' ? 'badge-accent' : 'badge-ghost'"
+                :class="sprint.state === 'active' ? 'badge-module' : 'badge-ghost'"
                 x-text="sprint.state"
               ></span>
               <span

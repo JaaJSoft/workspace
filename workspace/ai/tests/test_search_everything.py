@@ -96,7 +96,7 @@ class SearchEverythingPayloadTests(TestCase):
             "match_type": "title",
             "type_icon": "calendar",
             "module_slug": "calendar",
-            "module_color": "accent",
+            "module_color": "teal",
             "date": None,
             "tags": (),
             "provider_slug": "calendar",

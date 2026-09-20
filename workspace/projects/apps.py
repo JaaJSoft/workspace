@@ -14,7 +14,7 @@ class ProjectsConfig(AppConfig):
                 slug="projects",
                 description="Plan work with kanban boards and backlogs.",
                 icon="square-kanban",
-                color="accent",
+                color="orange",
                 url="/projects",
                 order=35,
             )
@@ -60,7 +60,6 @@ class ProjectsConfig(AppConfig):
                 slug="projects",
                 label="Projects",
                 icon="square-kanban",
-                color="accent",
                 provider_cls=ProjectsActivityProvider,
             )
         )

@@ -58,7 +58,7 @@ def workspace_modules(request):
         "workspace_sidebar_collapsed": sidebar_collapsed,
         "workspace_switcher_modules": switcher_modules,
         "workspace_commands": [
-            asdict(c)
+            registry.command_payload(c)
             for c in filter_visible_commands(
                 request.user, registry.get_active_commands()
             )

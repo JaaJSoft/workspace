@@ -28,19 +28,19 @@ the target element outright when an OK response lacks it.
       </span>
     </div>
     <ul class="space-y-1">
-      {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="success" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="notebook-pen" label="My Notes" color="module" active_binding="activeView === 'all'" onclick="setView('all')" tooltip="My Notes" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="activeView === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-      {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="success" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-      {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="success" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="clock" label="Recent" color="module" active_binding="activeView === 'recent'" onclick="setView('recent')" tooltip="Recent" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+      {% include "ui/partials/drawer_item.html" with icon="waypoints" label="Graph" color="module" active_binding="activeView === 'graph'" onclick="setView('graph')" tooltip="Graph" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       <template x-if="notePrefs.showJournal">
-        {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="success" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        {% include "ui/partials/drawer_item.html" with icon="book-open" label="Journal" color="module" active_binding="activeView === 'journal'" onclick="openJournal()" tooltip="Journal" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
       </template>
     </ul>
   </div>
 
   <!-- Tags: favourites, plus the manager for the rest (shared with Files) -->
   <div class="mb-2" x-show="notePrefs.showTags">
-    {% include "files/ui/partials/tag_sidebar_section.html" with collapse_expr="sidebarCollapsed()" active_class="bg-success/10 text-success hover:bg-success/20" heading_class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+    {% include "files/ui/partials/tag_sidebar_section.html" with collapse_expr="sidebarCollapsed()" active_class="bg-module/15 text-module hover:bg-module/25" heading_class="pr-2 py-1 text-xs font-semibold text-base-content/40 uppercase tracking-wider" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
   </div>
 
   <!-- Folders -->

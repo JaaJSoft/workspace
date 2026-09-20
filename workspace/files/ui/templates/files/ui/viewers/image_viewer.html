@@ -62,7 +62,7 @@
       <button
         type="button"
         class="btn btn-sm"
-        :class="editMode ? 'btn-primary' : 'btn-ghost'"
+        :class="editMode ? 'btn-module' : 'btn-ghost'"
         @click="toggleEditMode()"
         title="AI Edit"
       >
@@ -130,7 +130,7 @@
           <!-- Generate button -->
           <button
             type="button"
-            class="btn btn-primary btn-sm w-full"
+            class="btn btn-module btn-sm w-full"
             @click="generateEdit()"
             :disabled="editLoading || !editPrompt.trim()"
           >

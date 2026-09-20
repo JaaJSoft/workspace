@@ -131,7 +131,7 @@
       class="group w-full text-left border-b border-base-300/50 hover:bg-base-200 transition-colors"
       :class="[
         notePrefs.compactList ? 'px-3 py-1' : 'p-3',
-        selectedNote?.uuid === note.uuid ? 'bg-success/5 border-l-2 border-l-success' : ''
+        selectedNote?.uuid === note.uuid ? 'bg-module/10 border-l-2 border-l-module' : ''
       ]"
       :data-note-uuid="note.uuid"
       @click="selectNote(note)"

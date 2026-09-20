@@ -56,7 +56,7 @@
           >
             <button
               type="button"
-              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-secondary"
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-module"
               @click="newPerson()"
               title="New contact"
               aria-label="New contact"
@@ -69,8 +69,8 @@
       <!-- Address books and lists -->
       <div class="flex-1 overflow-y-auto py-2 px-3">
         <ul class="menu p-0 space-y-0.5">
-          {% include "ui/partials/drawer_item.html" with icon="users" label="All" color="secondary" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip="All" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" color="secondary" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip="My contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="users" label="All" color="module" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip="All" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" color="module" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip="My contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {# Only groups holding contacts, so the rows come from the component state and follow creations and moves. #}
           <template x-for="group in visibleGroups()" :key="group.id">
             <li
@@ -82,7 +82,7 @@
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
                   sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
-                  scope === 'group:' + group.id ? 'bg-secondary/10 text-secondary hover:bg-secondary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-secondary'
+                  scope === 'group:' + group.id ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? group.name : ''"
                 :data-scope="'group:' + group.id"
@@ -139,7 +139,7 @@
                 class="flex items-center w-full text-left text-base rounded-lg transition-colors"
                 :class="[
                   sidebarCollapsed() ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
-                  listUuid === list.uuid ? 'bg-secondary/10 text-secondary hover:bg-secondary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-secondary'
+                  listUuid === list.uuid ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
                 ]"
                 :title="sidebarCollapsed() ? list.name : ''"
                 @click="setList(list.uuid)"
@@ -181,19 +181,19 @@
         x-show="sidebarCollapsed()"
       >
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="user-plus" label="New" color="secondary" onclick="newPerson()" tooltip="New contact" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="user-plus" label="New" color="module" onclick="newPerson()" tooltip="New contact" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="secondary" onclick="document.getElementById('people-help-dialog').showModal()" tooltip="Help" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('people-help-dialog').showModal()" tooltip="Help" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
       <!-- Bottom action: collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="secondary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
       </div>
     </aside>

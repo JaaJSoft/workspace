@@ -54,7 +54,7 @@
             x-show="!sidebarCollapsed()"
             x-transition
           >
-            {% include "ui/partials/preferences_popover.html" with component="notesPreferences()" content="notes/ui/partials/_preferences_content.html" accent="text-success" button_class="hover:text-success" %}
+            {% include "ui/partials/preferences_popover.html" with component="notesPreferences()" content="notes/ui/partials/_preferences_content.html" accent="text-module" button_class="hover:text-module" %}
           </div>
         </div>
       </div>
@@ -68,17 +68,17 @@
       <!-- Help button -->
       <div class="px-3 pb-2">
         <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="success" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('notes-help-dialog').showModal()" tooltip="Help (?)" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
 
       <!-- Bottom action: settings on mobile, collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3">
         <ul class="menu p-0 hidden lg:block">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="success" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
         </ul>
         <ul class="menu p-0 lg:hidden">
-          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="success" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="sliders-horizontal" label="Preferences" color="module" onclick="document.getElementById('notes-prefs-dialog').showModal()" tooltip="Preferences" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
     </aside>
@@ -118,7 +118,7 @@
             >
               <i data-lucide="arrow-left" class="w-4 h-4"></i>
             </button>
-            <i data-lucide="notebook-pen" class="w-4 h-4 text-success flex-shrink-0"></i>
+            <i data-lucide="notebook-pen" class="w-4 h-4 text-module flex-shrink-0"></i>
             <input
               type="text"
               class="input input-ghost input-sm font-semibold flex-1 min-w-0"
@@ -214,7 +214,7 @@
               <p class="text-lg font-medium">Select or create a note</p>
               <label
                 for="notes-drawer"
-                class="btn btn-success btn-sm mt-4 lg:hidden cursor-pointer"
+                class="btn btn-module btn-sm mt-4 lg:hidden cursor-pointer"
               >
                 <i data-lucide="menu" class="w-4 h-4"></i>
                 Open notes
@@ -229,7 +229,7 @@
     <!-- Mobile new note FAB -->
     <button
       type="button"
-      class="btn btn-success btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
+      class="btn btn-module btn-circle shadow-lg fixed bottom-6 right-6 z-30 lg:hidden"
       @click="createNote()"
       x-show="!selectedNote && ['all', 'folder', 'group_folder'].includes(activeView)"
       x-cloak
@@ -250,7 +250,7 @@
     <div class="modal-box" x-data="{ selectedGroup: '' }">
       <h3 class="font-bold text-lg mb-4 flex items-center gap-3">
         <div
-          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-success/10 text-success"
+          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
         >
           <i data-lucide="users" class="w-5 h-5"></i>
         </div>
@@ -289,7 +289,7 @@
             </button>
             <button
               type="submit"
-              class="btn btn-success btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="!selectedGroup"
             >
               Create
@@ -318,7 +318,7 @@
   <dialog id="notes-prefs-dialog" class="modal" x-data="notesPreferences()">
     <div class="modal-box">
       <h3 class="font-bold text-lg flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-success"></i>
+        <i data-lucide="sliders-horizontal" class="w-5 h-5 text-module"></i>
         Preferences
       </h3>
       <div class="mt-4">{% include "notes/ui/partials/_preferences_content.html" %}</div>

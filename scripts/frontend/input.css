@@ -37,7 +37,7 @@
   /* Drag & drop move (files/ui/js/drag_move.js toggles both classes): the
      folder under the pointer and the items being carried. The tint is
      !important because the targets carry their own background utilities
-     (bg-base-100 on a card, bg-primary/10 on the active sidebar entry),
+     (bg-base-100 on a card, bg-module/15 on the active sidebar entry),
      which would otherwise win over this component class. A table row paints
      on its cells - background and box-shadow do not apply to the row. */
   [data-drop-folder],
@@ -46,11 +46,11 @@
     @apply transition-[background-color,box-shadow,transform,color] duration-150;
   }
   .file-drop-target {
-    @apply !bg-primary/10 ring-1 ring-primary/35 rounded-lg;
+    @apply !bg-module/15 ring-1 ring-module/35 rounded-lg;
   }
-  /* The active sidebar entry already sits on bg-primary/10: step up. */
+  /* The active sidebar entry already sits on bg-module/15: step up. */
   aside .file-drop-target {
-    @apply !bg-primary/20;
+    @apply !bg-module/25;
   }
   #folder-browser .grid > .file-drop-target {
     @apply scale-[1.02];
@@ -63,16 +63,111 @@
     @apply !bg-transparent ring-0 rounded-none;
   }
   tr.file-drop-target > td {
-    @apply bg-primary/10;
+    @apply bg-module/15;
   }
   tr.file-drop-target [data-col="name"] {
-    @apply text-primary;
+    @apply text-module;
   }
   tr.file-drop-target [data-col="icon"] svg {
-    @apply text-primary scale-110;
+    @apply text-module scale-110;
   }
   .file-drag-source {
     @apply opacity-40;
+  }
+  /* daisyUI generates btn-primary, badge-primary... only for its own seven
+     slots. These are the same rules with the module hue in place of --p,
+     for the components module templates use with their identity color. */
+  .btn-module {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+    outline-color: rgb(var(--module));
+  }
+  .btn-module:hover,
+  .btn-module.btn-active {
+    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+  }
+  .btn-outline.btn-module {
+    border-color: currentColor;
+    background-color: transparent;
+    color: rgb(var(--module));
+  }
+  .btn-outline.btn-module:hover,
+  .btn-outline.btn-module.btn-active {
+    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    color: rgb(var(--module-content));
+  }
+  .badge-module {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .badge-outline.badge-module {
+    background-color: transparent;
+    color: rgb(var(--module));
+  }
+  .toggle-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .toggle-module:checked,
+  .toggle-module[aria-checked="true"] {
+    border-color: rgb(var(--module) / 0.1);
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .link-module {
+    color: rgb(var(--module));
+  }
+  .link-module:hover {
+    color: color-mix(in oklab, rgb(var(--module)) 80%, black);
+  }
+  .progress-module::-moz-progress-bar {
+    background-color: rgb(var(--module));
+  }
+  .progress-module::-webkit-progress-value {
+    background-color: rgb(var(--module));
+  }
+  .progress-module:indeterminate {
+    --progress-color: rgb(var(--module));
+  }
+  .range-module {
+    --range-shdw: rgb(var(--module));
+  }
+  .radio-module {
+    border-color: rgb(var(--module));
+  }
+  .radio-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .radio-module:checked,
+  .radio-module[aria-checked="true"] {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .checkbox-module {
+    --chkbg: rgb(var(--module));
+    --chkfg: rgb(var(--module-content));
+    border-color: rgb(var(--module));
+  }
+  .checkbox-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .checkbox-module:checked,
+  .checkbox-module[aria-checked="true"] {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .input-module {
+    border-color: rgb(var(--module));
+  }
+  .input-module:focus,
+  .input-module:focus-within {
+    border-color: rgb(var(--module));
+    outline-color: rgb(var(--module));
   }
 }
 

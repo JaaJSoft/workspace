@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -27,7 +28,7 @@ def _module(slug="x", preview=False, active=True):
         slug=slug,
         description="",
         icon="i",
-        color="c",
+        color="indigo",
         url=f"/{slug}",
         active=active,
         preview=preview,
@@ -135,7 +136,6 @@ class VisibleModulesTests(TestCase):
                 name="Files",
                 keywords=[],
                 icon="i",
-                color="c",
                 url="/files",
                 kind="navigate",
                 module_slug="files",
@@ -144,7 +144,6 @@ class VisibleModulesTests(TestCase):
                 name="Lab",
                 keywords=[],
                 icon="i",
-                color="c",
                 url="/lab",
                 kind="navigate",
                 module_slug="lab",
@@ -163,11 +162,16 @@ class CurrentModuleTests(TestCase):
             slug="dashboard",
             description="",
             icon="i",
-            color="c",
+            color="indigo",
             url="/",
         )
         self.tool = ModuleInfo(
-            name="Tasks", slug="tasks", description="", icon="i", color="c", url=None
+            name="Tasks",
+            slug="tasks",
+            description="",
+            icon="i",
+            color="indigo",
+            url=None,
         )
         self.modules = [self.home, self.files, self.notes, self.tool]
 
@@ -216,16 +220,19 @@ class ContextProcessorVisibilityTests(TestCase):
                 name="Lab",
                 keywords=[],
                 icon="i",
-                color="c",
                 url="/lab",
                 kind="navigate",
                 module_slug="lab",
             ),
         ]
+        by_slug = {m.slug: m for m in mods}
         cp_registry.get_active.return_value = mods
         cp_registry.get_active_commands.return_value = cmds
+        cp_registry.command_payload.side_effect = lambda cmd: (
+            asdict(cmd) | {"color": by_slug[cmd.module_slug].color}
+        )
         svc_registry.get_active.return_value = mods
-        svc_registry.get.side_effect = lambda s: {m.slug: m for m in mods}.get(s)
+        svc_registry.get.side_effect = lambda s: by_slug.get(s)
 
         normal_ctx = self._ctx(self.normal)
         staff_ctx = self._ctx(self.staff)

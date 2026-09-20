@@ -7,7 +7,6 @@ assistant's `search_everything` tool) must go through the helpers here.
 """
 
 from collections import defaultdict
-from dataclasses import asdict
 
 from ..module_registry import registry
 from .module_visibility import filter_visible_commands, is_module_slug_visible
@@ -72,4 +71,4 @@ def search_commands(query, user) -> list[dict]:
     if len(query) < MIN_QUERY_LENGTH:
         return []
     commands = filter_visible_commands(user, registry.search_commands(query))
-    return [asdict(cmd) for cmd in commands]
+    return [registry.command_payload(cmd) for cmd in commands]

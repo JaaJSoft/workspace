@@ -122,7 +122,7 @@ class BuildTimelineTests(ProjectTestMixin, TestCase):
             for r in result["groups"][-1]["rows"]
         }
         self.assertEqual(classes["done"], "fill-success")
-        self.assertEqual(classes["active"], "fill-accent")
+        self.assertEqual(classes["active"], "fill-module")
         self.assertEqual(classes["backlog"], "fill-neutral")
         self.assertEqual(classes["late"], "fill-error")
 

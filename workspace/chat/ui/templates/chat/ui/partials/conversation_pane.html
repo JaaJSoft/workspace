@@ -164,7 +164,7 @@
             x-cloak
             class="px-4 py-2 border-b border-base-300 flex items-center gap-3 bg-base-200"
           >
-            <i data-lucide="phone" class="w-4 h-4 text-info flex-shrink-0"></i>
+            <i data-lucide="phone" class="w-4 h-4 text-module flex-shrink-0"></i>
             <div class="flex items-center gap-2 flex-1 min-w-0">
               <span
                 class="text-sm"
@@ -172,7 +172,7 @@
               ></span>
               <button
                 type="button"
-                class="btn btn-info btn-xs ml-auto"
+                class="btn btn-module btn-xs ml-auto"
                 @click="openCallRoom()"
               >
                 Join
@@ -230,7 +230,7 @@
 
             <!-- Loading messages -->
             <div x-show="loadingMessages" class="flex justify-center py-8">
-              <span class="loading loading-spinner loading-md text-info"></span>
+              <span class="loading loading-spinner loading-md text-module"></span>
             </div>
 
             <!-- Server-rendered messages container. The empty #message-list is
@@ -332,11 +332,11 @@
           <div
             x-show="isDraggingOver"
             x-cloak
-            class="absolute inset-0 z-50 flex items-center justify-center bg-base-100/80 border-2 border-dashed border-info rounded-xl pointer-events-none"
+            class="absolute inset-0 z-50 flex items-center justify-center bg-base-100/80 border-2 border-dashed border-module rounded-xl pointer-events-none"
           >
             <div class="text-center">
-              <i data-lucide="upload" class="w-8 h-8 text-info mx-auto mb-2"></i>
-              <p class="text-sm font-medium text-info">Drop files to attach</p>
+              <i data-lucide="upload" class="w-8 h-8 text-module mx-auto mb-2"></i>
+              <p class="text-sm font-medium text-module">Drop files to attach</p>
             </div>
           </div>
 
@@ -500,7 +500,7 @@
 <dialog id="chat-prefs-dialog" class="modal" x-data="chatPreferences()">
   <div class="modal-box max-w-sm">
     <h3 class="font-semibold text-base mb-3 flex items-center gap-2">
-      <i data-lucide="sliders-horizontal" class="w-4 h-4 text-info"></i>
+      <i data-lucide="sliders-horizontal" class="w-4 h-4 text-module"></i>
       Preferences
     </h3>
     {% include "chat/ui/partials/_preferences_content.html" %}
@@ -519,7 +519,7 @@
 <dialog :class="{'modal-open': diagOpen}" class="modal">
   <div class="modal-box max-w-md">
     <h3 class="font-semibold text-base mb-1 flex items-center gap-2">
-      <i data-lucide="activity" class="w-4 h-4 text-info"></i>
+      <i data-lucide="activity" class="w-4 h-4 text-module"></i>
       Connection diagnostic
     </h3>
     <p class="text-sm text-base-content/60 mb-4">
@@ -574,7 +574,7 @@
       <p class="text-xs text-base-content/60">Speak - the bar should move (audio sent through the test connection).</p>
       <div class="h-3 w-full rounded-full bg-base-300 overflow-hidden">
         <div
-          class="h-full bg-info transition-[width] duration-75"
+          class="h-full bg-module transition-[width] duration-75"
           :style="'width: ' + diagLevel + '%'"
         ></div>
       </div>
@@ -582,7 +582,7 @@
         <button
           type="button"
           class="btn btn-xs"
-          :class="diagMonitor ? 'btn-info' : 'btn-ghost'"
+          :class="diagMonitor ? 'btn-module' : 'btn-ghost'"
           @click="_diagToggleMonitor()"
         >
           <i data-lucide="headphones" class="w-3.5 h-3.5"></i>

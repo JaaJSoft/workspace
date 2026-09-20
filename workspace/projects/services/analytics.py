@@ -108,7 +108,7 @@ def _by_status(project, open_tasks):
             "label": status.name,
             "count": counts.get(status.pk, 0),
             "color": status.color,
-            "css_class": "bg-accent",
+            "css_class": "bg-module",
         }
         for status in statuses
     ]
@@ -122,7 +122,7 @@ def _by_assignee(open_tasks):
             "label": row["assignees__username"],
             "count": row["n"],
             "color": "",
-            "css_class": "bg-accent",
+            "css_class": "bg-module",
         }
         for row in open_tasks.filter(assignees__isnull=False)
         .values("assignees__username")

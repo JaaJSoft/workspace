@@ -14,7 +14,7 @@ _CLAMP_DAYS = 548
 
 _CATEGORY_CSS = {
     TaskStatus.Category.DONE: "fill-success",
-    TaskStatus.Category.ACTIVE: "fill-accent",
+    TaskStatus.Category.ACTIVE: "fill-module",
     TaskStatus.Category.BACKLOG: "fill-neutral",
 }
 _OVERDUE_CSS = "fill-error"

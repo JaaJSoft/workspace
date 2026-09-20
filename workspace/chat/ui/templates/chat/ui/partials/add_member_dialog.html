@@ -27,7 +27,7 @@
         </label>
         <div class="relative">
           <div
-            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-info/50 transition-colors cursor-text"
+            class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-base-300 bg-base-100 focus-within:border-module/50 transition-colors cursor-text"
             @click="$refs.addMemberSearchInput.focus()"
           >
             <!-- Selected user chips -->
@@ -106,7 +106,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-info btn-sm gap-1.5"
+          class="btn btn-module btn-sm gap-1.5"
           @click="confirmAddMembers()"
           :disabled="addMemberSelected.length === 0 || addMemberSaving"
         >

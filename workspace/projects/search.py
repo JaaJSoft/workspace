@@ -14,7 +14,6 @@ def search_projects(query, user, limit):
             match_type="project",
             type_icon="square-kanban",
             module_slug="projects",
-            module_color="accent",
             tags=(SearchTag("Project", "accent"),),
         )
         for p in projects
@@ -32,7 +31,6 @@ def search_project_tasks(query, user, limit):
             match_type="task",
             type_icon="list-todo",
             module_slug="projects",
-            module_color="accent",
             tags=(SearchTag(t.project.name, "accent"),),
         )
         for t in tasks

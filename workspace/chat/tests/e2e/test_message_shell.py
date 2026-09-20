@@ -72,7 +72,7 @@ class MessageShellRenderingTests(PlaywrightTestCase):
         own_group = self.page.locator("chat-message-group[own]", has=own_bubble).first
         self.assertIn("msg-group-end", self._classes(own_group))
         self.assertIn("flex-row-reverse", self._classes(own_group))
-        self.assertIn("bg-info/15", self._classes(own_bubble))
+        self.assertIn("bg-module/15", self._classes(own_bubble))
         expect(own_bubble).to_have_attribute("data-body", "an own message")
         # The sender's avatar rides along in the avatar column.
         expect(own_group.locator("user-avatar").first).to_be_visible()

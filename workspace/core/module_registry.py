@@ -5,6 +5,26 @@ from dataclasses import asdict, dataclass
 
 logger = logging.getLogger(__name__)
 
+# Tailwind hue names a module may claim as its identity color. The same list
+# drives the `.module-<hue>` rules in scripts/frontend/tailwind.config.js
+# (core.tests.test_module_colors keeps the two in step). `red` is reserved
+# for destructive semantics and `pink` for the AI feature, so neither is here.
+MODULE_HUES = (
+    "indigo",
+    "sky",
+    "emerald",
+    "teal",
+    "amber",
+    "orange",
+    "purple",
+    "rose",
+    "cyan",
+    "slate",
+    "lime",
+    "fuchsia",
+    "yellow",
+)
+
 
 @dataclass(frozen=True)
 class ModuleInfo:
@@ -12,7 +32,7 @@ class ModuleInfo:
     slug: str
     description: str
     icon: str
-    color: str
+    color: str  # one of MODULE_HUES
     url: str | None
     active: bool = True
     order: int = 0
@@ -55,7 +75,6 @@ class SearchResult:
     match_type: str
     type_icon: str
     module_slug: str
-    module_color: str
     date: str | None = None
     tags: tuple[SearchTag, ...] = ()
 
@@ -75,7 +94,6 @@ class CommandInfo:
     name: str
     keywords: list[str]
     icon: str
-    color: str
     url: str
     kind: str  # "navigate" | "action"
     module_slug: str
@@ -90,6 +108,10 @@ class ModuleRegistry:
         self._lock = threading.Lock()
 
     def register(self, module: ModuleInfo):
+        if module.color not in MODULE_HUES:
+            raise ValueError(
+                f"Module '{module.slug}' color '{module.color}' is not in MODULE_HUES"
+            )
         with self._lock:
             if module.slug in self._modules:
                 raise ValueError(
@@ -129,7 +151,9 @@ class ModuleRegistry:
                 # "project-tasks"); module_slug alone cannot tell two
                 # providers of the same module apart.
                 results.extend(
-                    asdict(h) | {"provider_slug": provider.slug} for h in hits
+                    asdict(h)
+                    | {"provider_slug": provider.slug, "module_color": module.color}
+                    for h in hits
                 )
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
@@ -153,6 +177,10 @@ class ModuleRegistry:
             ),
             key=lambda c: c.order,
         )
+
+    def command_payload(self, cmd: CommandInfo) -> dict:
+        """The command as the palette JSON expects it, colored like its module."""
+        return asdict(cmd) | {"color": self._modules[cmd.module_slug].color}
 
     def search_commands(self, query: str) -> list[CommandInfo]:
         q = query.lower()

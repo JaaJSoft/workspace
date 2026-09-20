@@ -23,7 +23,7 @@
 }
 
 .mail-body a {
-  color: oklch(var(--wa));
+  color: rgb(var(--module));
   text-decoration: underline;
 }
 
@@ -32,7 +32,7 @@
 }
 
 .mail-body blockquote {
-  border-left: 3px solid oklch(var(--wa) / 0.4);
+  border-left: 3px solid rgb(var(--module) / 0.4);
   padding-left: 1rem;
   margin-left: 0;
   color: oklch(var(--bc) / 0.7);
@@ -51,7 +51,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: oklch(var(--wa));
+  background: rgb(var(--module));
   flex-shrink: 0;
 }
 
@@ -68,8 +68,8 @@
 
 /* Folder list active state */
 .mail-folder-active {
-  background: oklch(var(--wa) / 0.1);
-  color: oklch(var(--wa));
+  background: rgb(var(--module) / 0.1);
+  color: rgb(var(--module));
 }
 
 /* Scrollbar styling for message list */

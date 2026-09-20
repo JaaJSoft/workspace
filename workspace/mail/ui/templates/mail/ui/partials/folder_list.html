@@ -12,16 +12,16 @@
   <button
     type="button"
     class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
-    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
     @click="selectUnifiedInbox()"
   >
-    <span class="flex-shrink-0 text-warning">
+    <span class="flex-shrink-0 text-module">
       <i data-lucide="inbox" class="w-4 h-4"></i>
     </span>
     <span class="flex-1 text-left truncate">All Inboxes</span>
     <span
       x-show="getTotalInboxUnread() > 0"
-      class="badge badge-xs badge-warning"
+      class="badge badge-xs badge-module"
       x-text="getTotalInboxUnread()"
     ></span>
   </button>
@@ -35,7 +35,7 @@
   <button
     type="button"
     class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
-    :class="unifiedInbox ? 'bg-warning/10 text-warning' : 'text-base-content/70 hover:bg-base-content/5 hover:text-warning'"
+    :class="unifiedInbox ? 'bg-module/15 text-module' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'"
     title="All Inboxes"
     @click="selectUnifiedInbox()"
   >
@@ -58,7 +58,7 @@
         x-show="!syncingAccounts[account.uuid]"
       ></i>
       <span
-        class="loading loading-spinner loading-xs text-warning flex-shrink-0"
+        class="loading loading-spinner loading-xs text-module flex-shrink-0"
         x-show="syncingAccounts[account.uuid]"
         x-cloak
       ></span>
@@ -102,9 +102,9 @@
           class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors"
           :style="node.depth > 0 ? `padding-left: ${0.75 + node.depth * 1}rem` : ''"
           :class="{
-            'bg-warning/10 text-warning': selectedFolder?.uuid === node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
-            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
-            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === node.folder.uuid,
+            'bg-module/15 text-module': selectedFolder?.uuid === node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
+            'text-base-content/70 hover:bg-base-content/5 hover:text-module': selectedFolder?.uuid !== node.folder.uuid && dragOverFolder?.uuid !== node.folder.uuid,
+            'ring-2 ring-module/50 ring-offset-1 bg-module/15': dragOverFolder?.uuid === node.folder.uuid,
           }"
           @click="selectFolder(node.folder)"
           @contextmenu="openFolderContextMenu($event, node.folder)"
@@ -128,7 +128,7 @@
           </span>
           <span
             x-show="getSubtreeUnreadCount(node) > 0 && !['sent', 'drafts'].includes(node.folder.folder_type)"
-            class="badge badge-xs badge-warning"
+            class="badge badge-xs badge-module"
             x-text="getSubtreeUnreadCount(node)"
           ></span>
           <!-- Expand/collapse toggle for parents -->
@@ -188,7 +188,7 @@
             <span class="flex-1 text-left truncate" x-text="label.name"></span>
             <span
               x-show="label.unread_count > 0"
-              class="badge badge-xs badge-warning"
+              class="badge badge-xs badge-module"
               x-text="label.unread_count"
             ></span>
           </button>
@@ -202,7 +202,7 @@
       <div>
         <button
           type="button"
-          class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
+          class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-module"
           @click="showLabelModal(account.uuid)"
         >
           <i data-lucide="tag" class="w-4 h-4"></i>
@@ -221,9 +221,9 @@
           type="button"
           class="flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-colors"
           :class="{
-            'bg-warning/10 text-warning': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
-            'text-base-content/70 hover:bg-base-content/5 hover:text-warning': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
-            'ring-2 ring-warning/50 ring-offset-1 bg-warning/10': dragOverFolder?.uuid === folder.uuid,
+            'bg-module/15 text-module': selectedFolder?.uuid === folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'text-base-content/70 hover:bg-base-content/5 hover:text-module': selectedFolder?.uuid !== folder.uuid && dragOverFolder?.uuid !== folder.uuid,
+            'ring-2 ring-module/50 ring-offset-1 bg-module/15': dragOverFolder?.uuid === folder.uuid,
           }"
           :title="folder.display_name"
           @click="selectFolder(folder)"
@@ -252,7 +252,7 @@
 >
   <button
     type="button"
-    class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-warning"
+    class="flex items-center gap-2.5 w-full px-3 py-1.5 text-sm rounded-lg transition-colors text-base-content/50 hover:bg-base-content/5 hover:text-module"
     @click="showAddAccount()"
   >
     <i data-lucide="plus-circle" class="w-4 h-4"></i>

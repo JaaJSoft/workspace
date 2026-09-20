@@ -48,7 +48,7 @@
               <div class="flex flex-col items-center">
                 <span
                   class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  :class="step === 1 ? 'bg-primary text-primary-content' : 'bg-success/20 text-success'"
+                  :class="step === 1 ? 'bg-module text-module-content' : 'bg-success/20 text-success'"
                 >
                   {% comment %}
                     Two icons behind x-show rather than one bound data-lucide:
@@ -75,7 +75,7 @@
               <div class="flex flex-col items-center">
                 <span
                   class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                  :class="step === 2 ? 'bg-primary text-primary-content' : step > 2 ? 'bg-success/20 text-success' : 'bg-base-200 text-base-content/40'"
+                  :class="step === 2 ? 'bg-module text-module-content' : step > 2 ? 'bg-success/20 text-success' : 'bg-base-200 text-base-content/40'"
                 >
                   <span x-show="step <= 2">
                     <i data-lucide="key-round" class="w-4 h-4"></i>
@@ -100,7 +100,7 @@
             <li class="flex gap-3">
               <span
                 class="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                :class="step === 3 ? 'bg-primary text-primary-content' : 'bg-base-200 text-base-content/40'"
+                :class="step === 3 ? 'bg-module text-module-content' : 'bg-base-200 text-base-content/40'"
               >
                 <i data-lucide="shield-check" class="w-4 h-4"></i>
               </span>
@@ -123,7 +123,7 @@
           <p
             class="flex items-start gap-2 mt-5 p-3 rounded-lg bg-base-100 border border-base-300 text-xs text-base-content/60"
           >
-            <i data-lucide="lock" class="w-4 h-4 shrink-0 text-primary"></i>
+            <i data-lucide="lock" class="w-4 h-4 shrink-0 text-module"></i>
             <span>
               Encrypted on this device. There is no password reset: lose both
               your password and your recovery key and your vaults are gone.
@@ -133,15 +133,15 @@
 
         <section class="flex-1 min-w-0 flex flex-col">
           <div class="flex items-center gap-3 px-6 py-4 border-b border-base-300">
-            <div class="rounded-lg bg-primary/10 p-2">
+            <div class="rounded-lg bg-module/15 p-2">
               <span x-show="step === 1">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-primary"></i>
+                <i data-lucide="shield-alert" class="w-5 h-5 text-module"></i>
               </span>
               <span x-show="step === 2" x-cloak>
-                <i data-lucide="key-round" class="w-5 h-5 text-primary"></i>
+                <i data-lucide="key-round" class="w-5 h-5 text-module"></i>
               </span>
               <span x-show="step === 3" x-cloak>
-                <i data-lucide="shield-check" class="w-5 h-5 text-primary"></i>
+                <i data-lucide="shield-check" class="w-5 h-5 text-module"></i>
               </span>
             </div>
             <h2 class="font-bold text-lg flex-1">
@@ -411,7 +411,7 @@
 
             <button
               type="button"
-              class="btn btn-primary btn-sm"
+              class="btn btn-module btn-sm"
               x-show="step === 1"
               @click="step = 2"
             >
@@ -420,7 +420,7 @@
             </button>
             <button
               type="button"
-              class="btn btn-primary btn-sm"
+              class="btn btn-module btn-sm"
               x-show="step === 2"
               x-cloak
               :disabled="!passwordAcceptable() || busy"
@@ -431,7 +431,7 @@
             </button>
             <button
               type="button"
-              class="btn btn-primary btn-sm"
+              class="btn btn-module btn-sm"
               x-show="step === 3"
               x-cloak
               :disabled="!canFinish() || busy"

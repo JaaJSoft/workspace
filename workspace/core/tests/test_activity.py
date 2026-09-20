@@ -41,7 +41,6 @@ class ActivityRegistryTests(TestCase):
             slug="files",
             label="Files",
             icon="hard-drive",
-            color="primary",
             provider_cls=StubProvider,
         )
         self.registry.register(info)
@@ -52,7 +51,6 @@ class ActivityRegistryTests(TestCase):
             slug="files",
             label="Files",
             icon="hard-drive",
-            color="primary",
             provider_cls=StubProvider,
         )
         self.registry.register(info)
@@ -64,7 +62,6 @@ class ActivityRegistryTests(TestCase):
             slug="files",
             label="Files",
             icon="hard-drive",
-            color="primary",
             provider_cls=StubProvider,
         )
         self.registry.register(info)
@@ -88,7 +85,6 @@ class ActivityRegistryTests(TestCase):
                 slug="a",
                 label="A",
                 icon="a",
-                color="primary",
                 provider_cls=ProviderA,
             )
         )
@@ -97,7 +93,6 @@ class ActivityRegistryTests(TestCase):
                 slug="b",
                 label="B",
                 icon="b",
-                color="info",
                 provider_cls=ProviderB,
             )
         )
@@ -130,7 +125,6 @@ class ActivityRegistryTests(TestCase):
                 slug="a",
                 label="A",
                 icon="a",
-                color="primary",
                 provider_cls=ProviderA,
             )
         )
@@ -139,7 +133,6 @@ class ActivityRegistryTests(TestCase):
                 slug="b",
                 label="B",
                 icon="b",
-                color="info",
                 provider_cls=ProviderB,
             )
         )
@@ -167,7 +160,6 @@ class ActivityRegistryTests(TestCase):
                 slug="a",
                 label="A",
                 icon="a",
-                color="primary",
                 provider_cls=ProviderA,
             )
         )
@@ -176,7 +168,6 @@ class ActivityRegistryTests(TestCase):
                 slug="b",
                 label="B",
                 icon="b",
-                color="info",
                 provider_cls=ProviderB,
             )
         )
@@ -203,7 +194,6 @@ class ActivityRegistryTests(TestCase):
                 slug="big",
                 label="Big",
                 icon="b",
-                color="info",
                 provider_cls=BigProvider,
             )
         )
@@ -227,7 +217,6 @@ class ActivityRegistryTests(TestCase):
                 slug="a",
                 label="A",
                 icon="a",
-                color="primary",
                 provider_cls=ProviderA,
             )
         )
@@ -236,7 +225,6 @@ class ActivityRegistryTests(TestCase):
                 slug="b",
                 label="B",
                 icon="b",
-                color="info",
                 provider_cls=ProviderB,
             )
         )
@@ -302,7 +290,6 @@ class ActivityRegistryTests(TestCase):
                 slug="dominant",
                 label="D",
                 icon="d",
-                color="primary",
                 provider_cls=DominantProvider,
             )
         )
@@ -311,7 +298,6 @@ class ActivityRegistryTests(TestCase):
                 slug="minor",
                 label="M",
                 icon="m",
-                color="info",
                 provider_cls=MinorProvider,
             )
         )
@@ -364,7 +350,6 @@ class ActivityRegistryTests(TestCase):
                 slug="mixed_actor",
                 label="MA",
                 icon="m",
-                color="info",
                 provider_cls=MixedActorProvider,
             )
         )
@@ -398,7 +383,6 @@ class ActivityRegistryTests(TestCase):
                 slug="mixed",
                 label="M",
                 icon="m",
-                color="info",
                 provider_cls=MixedProvider,
             )
         )
@@ -428,7 +412,6 @@ class ActivityRegistryTests(TestCase):
                 slug="fail",
                 label="Fail",
                 icon="x",
-                color="error",
                 provider_cls=FailingProvider,
             )
         )
@@ -438,6 +421,34 @@ class ActivityRegistryTests(TestCase):
         self.assertEqual(events, [])
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {"fail": {}})
+
+    def test_events_take_the_module_color_from_the_module_registry(self):
+        from django.utils import timezone
+
+        ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
+
+        class FilesProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "f", "timestamp": ts}]
+
+        class OrphanProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+                return [{"label": "o", "timestamp": ts}]
+
+        self.registry.register(
+            ActivityProviderInfo(
+                slug="files", label="Files", icon="f", provider_cls=FilesProvider
+            )
+        )
+        self.registry.register(
+            ActivityProviderInfo(
+                slug="no-such-module", label="X", icon="x", provider_cls=OrphanProvider
+            )
+        )
+        colors = {
+            e["label"]: e["source_color"] for e in self.registry.get_recent_events(1)
+        }
+        self.assertEqual(colors, {"f": "indigo", "o": "slate"})
 
 
 class ActivityRegistryAllowedSourcesTests(TestCase):
@@ -463,7 +474,6 @@ class ActivityRegistryAllowedSourcesTests(TestCase):
                 slug="a",
                 label="A",
                 icon="a",
-                color="primary",
                 provider_cls=ProviderA,
             )
         )
@@ -472,7 +482,6 @@ class ActivityRegistryAllowedSourcesTests(TestCase):
                 slug="b",
                 label="B",
                 icon="b",
-                color="info",
                 provider_cls=ProviderB,
             )
         )
@@ -516,7 +525,6 @@ class ActivityModuleVisibilityTests(TestCase):
                 slug="files",
                 label="Files",
                 icon="f",
-                color="primary",
                 provider_cls=FilesProvider,
             )
         )
@@ -525,7 +533,6 @@ class ActivityModuleVisibilityTests(TestCase):
                 slug="lab",
                 label="Lab",
                 icon="l",
-                color="info",
                 provider_cls=LabProvider,
             )
         )
@@ -538,7 +545,7 @@ class ActivityModuleVisibilityTests(TestCase):
                 slug=slug,
                 description="",
                 icon="i",
-                color="c",
+                color="indigo",
                 url=f"/{slug}",
                 active=True,
                 preview=preview,

@@ -128,7 +128,7 @@
         <template x-for="entry in visibleEntries()" :key="entry.uuid">
           <tr
             class="hover cursor-pointer"
-            :class="[isSelected(entry.uuid) ? 'bg-primary/5' : '', panelEntry === entry ? 'bg-primary/10' : '']"
+            :class="[isSelected(entry.uuid) ? 'bg-module/10' : '', panelEntry === entry ? 'bg-module/15' : '']"
             @click="openEntryFromRow(entry)"
             @contextmenu.stop="openMenu($event, entry)"
           >
@@ -142,7 +142,7 @@
               />
             </td>
             <td>
-              <i :data-lucide="typeIcon(entry.type)" class="w-5 h-5 text-error"></i>
+              <i :data-lucide="typeIcon(entry.type)" class="w-5 h-5 text-module"></i>
             </td>
             <td class="truncate">
               <span class="font-medium" x-text="entry.name"></span>

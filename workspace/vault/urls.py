@@ -64,6 +64,11 @@ urlpatterns = [
         name="vault-entry-list",
     ),
     path(
+        "api/v1/vault/entries/purge",
+        entries.EntryBatchPurgeView.as_view(),
+        name="vault-entry-batch-purge",
+    ),
+    path(
         "api/v1/vault/entries/<uuid:uuid>",
         entries.EntryDetailView.as_view(),
         name="vault-entry-detail",

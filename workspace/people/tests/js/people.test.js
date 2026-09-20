@@ -144,6 +144,8 @@ test('the person context menu opens on the row and fills from the actions endpoi
   calls[0].resolve({ ok: true, json: async () => ({ p1: [{ id: 'edit' }, { id: 'delete' }] }) });
   await new Promise((r) => setTimeout(r, 0));
   assert.deepStrictEqual(Array.from(app.ctxMenu.actions).map((a) => a.id), ['edit', 'delete']);
+  // The menu never lists `edit`: it is the gate of the inline fields.
+  assert.deepStrictEqual(Array.from(app.ctxMenuRows()).map((a) => a.id), ['delete']);
 });
 
 test('a menu closed before its actions land ignores the late answer', async () => {

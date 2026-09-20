@@ -17,10 +17,10 @@
       <span>Loading...</span>
     </span>
   </li>
-  <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenu.actions[idx - 1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class || ''" click="ctxPersonAction(action)" only %}
+  <template x-for="(action, idx) in ctxMenuRows()" :key="action.id">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenuRows()[idx - 1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class || ''" click="ctxPersonAction(action)" only %}
   </template>
-  <li x-show="ctxMenu.actions !== null && ctxMenu.actions.length === 0">
+  <li x-show="ctxMenu.actions !== null && ctxMenuRows().length === 0">
     <span class="opacity-50">Nothing can be done with this contact</span>
   </li>
 </ul>

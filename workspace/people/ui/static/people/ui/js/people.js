@@ -161,6 +161,12 @@ window.peopleApp = function peopleApp(config) {
         });
     },
 
+    // `edit` is what unlocks the inline fields, not something to click: a
+    // row's click already opens the contact.
+    ctxMenuRows() {
+      return (this.ctxMenu.actions || []).filter((a) => a.id !== 'edit');
+    },
+
     closeCtxMenu() {
       this._menuGeneration += 1;
       this.ctxMenu = { open: false, x: 0, y: 0, type: null, data: null, actions: null };
@@ -170,10 +176,6 @@ window.peopleApp = function peopleApp(config) {
       const data = this.ctxMenu.data;
       this.closeCtxMenu();
       if (!data) return;
-      if (action.id === 'edit') {
-        this.openPerson(data.uuid);
-        return;
-      }
       if (action.id === 'delete') {
         this.deletePerson(data);
         return;

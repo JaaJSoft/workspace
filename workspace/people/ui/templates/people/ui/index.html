@@ -234,14 +234,14 @@
   >
     {# Hidden server-side on a deep link too, or it paints until Alpine binds. #}
     <div
-      class="flex-1 flex items-center justify-center text-base-content/50 text-sm{% if panel_person_uuid %} hidden{% endif %}"
+      class="flex-1 flex items-center justify-center bg-base-200 text-base-content/50 text-sm{% if panel_person_uuid %} hidden{% endif %}"
       :class="{ hidden: panelOpen }"
     >
       Select a contact to see its details.
     </div>
     <section
       id="person-panel"
-      class="flex-1 h-full overflow-y-auto"
+      class="flex-1 h-full min-h-0 flex flex-col bg-base-200"
       x-show="panelOpen"
     >
     </section>

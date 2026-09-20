@@ -78,6 +78,27 @@ knowing before writing another implementation:
   sides agree on and are refused rather than guessed: negative integers between
   -2^31-1 and -2^32, and map keys that become one key once NFC-normalised.
 
+## The compatibility corpus
+
+`workspace/vault/tests/fixtures/compat/v1/` is one account, written once by the
+real client in a browser and never rewritten. The parity vectors prove that the
+bundle and the reference agree *today*; they are regenerated from the current
+code, so changing a primitive rewrites them and CI stays green while every
+existing vault stops opening. The corpus is the other half of that sentence:
+fixed bytes, replayed by the Python reference, by the server's verifiers and by
+a browser on every commit.
+
+It is append-only. A deliberate format change ships `v2` beside `v1` and leaves
+`v1` byte-for-byte alone - the point is to keep reading what was written before
+the change, so editing it would erase the only evidence. A test compares every
+file to `SHA256SUMS` and fails on any edit; another fails on a version no replay
+reads.
+
+The corpus carries an entry's notes and a `custom:` field, which the UI does not
+expose yet. It freezes the format, not the screen: both derive associated-data
+strings of their own, and a corpus that stopped at what the form can write would
+leave those two unguarded.
+
 ## The export archive
 
 `vault_archive.js` writes an archive and `tests/reference/archive.py` reads one.

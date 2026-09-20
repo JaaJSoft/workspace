@@ -1,0 +1,134 @@
+{
+  "account_uuid": "01a0bb18-bd5d-7782-b886-d73a34d097b7",
+  "vaults": [
+    {
+      "color": "primary",
+      "description": "Coffre personnel \u2014 cl\u00e9s et papiers",
+      "entries": [
+        {
+          "entry_version": 1,
+          "fields": {
+            "password": "hunter2",
+            "totp": "otpauth://totp/Aurora%20Bank:ada?secret=JBSWY3DPEHPK3PXP&issuer=Aurora%20Bank&algorithm=SHA256&digits=8&period=45",
+            "username": "ada"
+          },
+          "folder": null,
+          "is_favorite": true,
+          "key_version": 1,
+          "name": "Aurora Bank",
+          "notes": "",
+          "tags": [
+            "01a0bb18-cb22-7dfd-af67-2422ad124377"
+          ],
+          "trashed": false,
+          "type": "login",
+          "uuid": "01a0bb18-c557-7fa4-960e-7ade32216575"
+        },
+        {
+          "entry_version": 1,
+          "fields": {
+            "password": "0000",
+            "username": "4111"
+          },
+          "folder": "01a0bb18-d323-761a-8237-18f992bc95ce",
+          "is_favorite": false,
+          "key_version": 1,
+          "name": "Aurora Card",
+          "notes": "",
+          "tags": [],
+          "trashed": false,
+          "type": "login",
+          "uuid": "01a0bb18-d600-74fb-838d-7a450dbc81ca"
+        },
+        {
+          "entry_version": 1,
+          "fields": {
+            "password": "letmein",
+            "username": "ada"
+          },
+          "folder": null,
+          "is_favorite": false,
+          "key_version": 1,
+          "name": "Old Forum",
+          "notes": "",
+          "tags": [],
+          "trashed": true,
+          "type": "login",
+          "uuid": "01a0bb18-d8ee-7a66-83a2-9c7de3baa412"
+        },
+        {
+          "entry_version": 1,
+          "fields": {
+            "custom:pin": "1234",
+            "password": "hunter2",
+            "username": "octocat"
+          },
+          "folder": null,
+          "is_favorite": false,
+          "key_version": 1,
+          "name": "GitHub",
+          "notes": "Sauvegarde : cle\u0301 range\u0301e a\u0300 la cave (NFD)",
+          "tags": [],
+          "trashed": false,
+          "type": "login",
+          "uuid": "01a0bb18-db3b-7f05-ad16-84f227400f4f"
+        }
+      ],
+      "folders": [
+        {
+          "name": "Banking",
+          "parent": null,
+          "position": 0,
+          "uuid": "01a0bb18-d046-7664-98f9-dac1e24eb47c"
+        },
+        {
+          "name": "Cards",
+          "parent": "01a0bb18-d046-7664-98f9-dac1e24eb47c",
+          "position": 0,
+          "uuid": "01a0bb18-d323-761a-8237-18f992bc95ce"
+        }
+      ],
+      "icon": "lock",
+      "is_favorite": false,
+      "key_version": 1,
+      "name": "Personal",
+      "tags": [
+        {
+          "color": "#ef4444",
+          "name": "Finance",
+          "uuid": "01a0bb18-cb22-7dfd-af67-2422ad124377"
+        }
+      ],
+      "uuid": "01a0bb18-bfac-72fa-ab91-e73a71a07f77"
+    },
+    {
+      "color": "primary",
+      "description": "Coffre de l'\u00e9quipe \u2014 acc\u00e8s partag\u00e9s",
+      "entries": [
+        {
+          "entry_version": 1,
+          "fields": {
+            "password": "s3cret-wiki",
+            "username": "ada"
+          },
+          "folder": null,
+          "is_favorite": false,
+          "key_version": 1,
+          "name": "Work Wiki",
+          "notes": "",
+          "tags": [],
+          "trashed": false,
+          "type": "login",
+          "uuid": "01a0bb18-de66-782a-aa9b-1b265eebef97"
+        }
+      ],
+      "folders": [],
+      "icon": "lock",
+      "is_favorite": false,
+      "key_version": 1,
+      "name": "Work",
+      "tags": [],
+      "uuid": "01a0bb18-dcf8-77f7-8b29-af057e71b29f"
+    }
+  ]
+}

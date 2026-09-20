@@ -92,6 +92,12 @@ class LinkedUserSerializer(serializers.Serializer):
         return f"/api/v1/users/{obj.pk}/avatar"
 
 
+def _linked_user_clash():
+    return serializers.ValidationError(
+        {"linked_user_id": ["Another contact is already linked to this account."]}
+    )
+
+
 class PersonSerializer(serializers.ModelSerializer):
     emails = EmailEntrySerializer(many=True, required=False)
     phones = PhoneEntrySerializer(many=True, required=False)
@@ -185,7 +191,11 @@ class PersonSerializer(serializers.ModelSerializer):
         scope = validated_data.pop("scope", None) or {
             "owner": self.context["request"].user
         }
-        return create_person(**scope, **validated_data)
+        try:
+            with transaction.atomic():
+                return create_person(**scope, **validated_data)
+        except IntegrityError as exc:
+            raise _linked_user_clash() from exc
 
     def update(self, instance, validated_data):
         scope = validated_data.pop("scope", None)
@@ -206,13 +216,7 @@ class PersonSerializer(serializers.ModelSerializer):
                     ):
                         move_to_scope(instance, owner=target_owner, group=target_group)
         except IntegrityError as exc:
-            raise serializers.ValidationError(
-                {
-                    "linked_user_id": [
-                        "Another contact is already linked to this account."
-                    ]
-                }
-            ) from exc
+            raise _linked_user_clash() from exc
         return instance
 
 
@@ -231,6 +235,10 @@ class PersonListSerializer(serializers.ModelSerializer):
         return data
 
     def validate_scope(self, value):
+        if self.instance is not None:
+            raise serializers.ValidationError(
+                "A list cannot change scope; create one in the other address book."
+            )
         return parse_scope(self.context["request"].user, value)
 
 

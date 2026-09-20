@@ -60,6 +60,18 @@ class PersonListApiTests(APITestCase):
         self.assertEqual(response.status_code, 204)
         self.assertFalse(PersonList.objects.filter(pk=family.pk).exists())
 
+    def test_patch_scope_is_refused(self):
+        family = create_list(owner=self.alice, name="Family")
+        response = self.client.patch(
+            f"/api/v1/people/lists/{family.uuid}",
+            {"scope": f"group:{self.team.id}"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("scope", response.data)
+        family.refresh_from_db()
+        self.assertEqual(family.owner, self.alice)
+
     def test_unreachable_list_is_404(self):
         hidden = create_list(owner=self.bob, name="Hidden")
         response = self.client.get(f"/api/v1/people/lists/{hidden.uuid}")

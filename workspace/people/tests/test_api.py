@@ -300,6 +300,23 @@ class PersonApiTests(APITestCase):
         self.assertEqual(response.status_code, 400, response.data)
         self.assertIn("linked_user_id", response.data)
 
+    def test_post_linked_user_race_is_400(self):
+        def racing_create(**fields):
+            Person.objects.create(
+                owner=self.alice, display_name="Winner", linked_user=self.bob
+            )
+            return create_person(**fields)
+
+        with patch("workspace.people.serializers.create_person", racing_create):
+            response = self.client.post(
+                "/api/v1/people",
+                {"display_name": "Loser", "linked_user_id": self.bob.id},
+                format="json",
+            )
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("linked_user_id", response.data)
+        self.assertEqual(Person.objects.filter(display_name="Loser").count(), 0)
+
     def test_patch_clear_linked_user(self):
         person = create_person(
             owner=self.alice, display_name="Bob", linked_user=self.bob

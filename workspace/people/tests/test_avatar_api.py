@@ -91,6 +91,22 @@ class PersonAvatarApiTests(APITestCase):
         )
         self.assertEqual(response.status_code, 400)
 
+    def test_upload_non_finite_crop_is_400(self):
+        for value in ("inf", "nan", "-inf"):
+            response = self.client.post(
+                self.url,
+                {
+                    "image": png_upload(),
+                    "crop_x": 0,
+                    "crop_y": 0,
+                    "crop_w": value,
+                    "crop_h": 64,
+                },
+                format="multipart",
+            )
+            self.assertEqual(response.status_code, 400, value)
+            self.assertEqual(response.data["errors"], ["Invalid crop coordinates."])
+
     def test_delete_avatar(self):
         save_avatar(self.person, png_upload(), 0, 0, 64, 64)
         response = self.client.delete(self.url)

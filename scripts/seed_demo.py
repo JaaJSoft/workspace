@@ -1093,6 +1093,16 @@ def purge(domain, assume_yes):
     # Project.created_by is SET_NULL (not CASCADE): deleting the users would
     # orphan their projects with no remaining member, so drop them explicitly.
     Project.objects.filter(created_by__in=qs).delete()
+    # Group address books hang on the group, not on a user, so the user cascade
+    # leaves them behind and a reseed then skips the group. Only groups made of
+    # demo users alone are wiped: a real group's contacts are not ours.
+    demo_only_groups = [
+        group
+        for group in Group.objects.filter(user__in=qs).distinct()
+        if not group.user_set.exclude(pk__in=qs).exists()
+    ]
+    Person.objects.filter(group__in=demo_only_groups).delete()
+    PersonList.objects.filter(group__in=demo_only_groups).delete()
     deleted, _ = qs.delete()
     print(f"Purged {n} users on @{domain} ({deleted} rows total).")
 

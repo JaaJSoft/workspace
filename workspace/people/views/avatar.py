@@ -1,3 +1,5 @@
+import math
+
 from django.core.files.storage import default_storage
 from django.http import FileResponse, HttpResponse
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -88,7 +90,11 @@ class PersonAvatarView(CacheControlMixin, APIView):
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        if crop[2] <= 0 or crop[3] <= 0:
+        if (
+            not all(math.isfinite(value) for value in crop)
+            or crop[2] <= 0
+            or crop[3] <= 0
+        ):
             return Response(
                 {"errors": ["Invalid crop coordinates."]},
                 status=status.HTTP_400_BAD_REQUEST,

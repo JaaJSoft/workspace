@@ -104,6 +104,23 @@ window.vaultApi = (function () {
     purgeEntry: function (uuid) {
       return request('/api/v1/vault/entries/' + uuid + '/purge', { method: 'POST' });
     },
+    // The batch form of the one above, for a selection of rows. One request
+    // rather than N, because a loop of N fails in pieces and leaves nothing
+    // true to say about what survived. Answers { destroyed: [uuid] }.
+    purgeEntries: function (uuids) {
+      return request('/api/v1/vault/entries/purge', {
+        method: 'POST',
+        body: { uuids: uuids },
+      });
+    },
+    // A whole trash, named by its vault rather than by its rows: the list
+    // form is capped at 200, and a trash is not.
+    purgeVaultTrash: function (vaultUuid) {
+      return request('/api/v1/vault/entries/purge', {
+        method: 'POST',
+        body: { vault: vaultUuid },
+      });
+    },
     // Answers a map of UUID to action list. An entry the caller cannot reach
     // comes back as an empty list, never as a missing key, so a caller reads
     // the answer without checking whether the key is there.

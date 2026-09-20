@@ -101,6 +101,27 @@ test('restore and purge both post, and carry the token', () => {
   }
 });
 
+test('the batch purge posts its uuids to the collection, not to a member', () => {
+  const { api, calls } = withFetch();
+  api.purgeEntries([ENTRY, ENTRY]);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].url, '/api/v1/vault/entries/purge');
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), {
+    uuids: [ENTRY, ENTRY],
+  });
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+});
+
+test('emptying a trash names the vault and never a list of rows', () => {
+  // The two bodies are exclusive on the server, so sending both keys would
+  // be a 400 - and sending uuids here would put the 200-row cap back in
+  // front of a trash that has no cap.
+  const { api, calls } = withFetch();
+  api.purgeVaultTrash(VAULT);
+  assert.equal(calls[0].url, '/api/v1/vault/entries/purge');
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { vault: VAULT });
+});
+
 test('the action lookup posts the batch as a body, and carries the token', () => {
   const { api, calls } = withFetch();
   api.fetchEntryActions([ENTRY, ENTRY]);

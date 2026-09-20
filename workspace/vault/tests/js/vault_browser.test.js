@@ -1956,8 +1956,13 @@ test('a bulk action runs over every selected row', async () => {
   assert.equal(asked, 0);
 });
 
-test('destroying a batch asks once, not once per row', async () => {
+test('destroying a batch asks once, and sends one request', async () => {
+  // Two claims in one walk: the question is put to the user once for the
+  // whole selection - one confirmation per row trains people to click
+  // through them - and the selection leaves as a single request, because a
+  // loop of N can half-happen and then has nothing true to report.
   const calls = [];
+  let requests = 0;
   let asked = 0;
   const { component } = browser({
     api: {
@@ -1967,7 +1972,14 @@ test('destroying a batch asks once, not once per row', async () => {
         'e-1': [TRASH_ACTIONS.delete_forever],
         'e-2': [TRASH_ACTIONS.delete_forever],
       }),
-      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+      purgeEntry: async () => {
+        throw new Error('a selection must not be looped over row by row');
+      },
+      purgeEntries: async (uuids) => {
+        requests += 1;
+        calls.push(...uuids);
+        return { destroyed: uuids };
+      },
     },
   });
   component.init();
@@ -1978,6 +1990,7 @@ test('destroying a batch asks once, not once per row', async () => {
   component.toggleSelection('e-2');
   await component.runBulkAction(TRASH_ACTIONS.delete_forever);
   assert.deepStrictEqual(Array.from(calls).sort(), ['e-1', 'e-2']);
+  assert.equal(requests, 1);
   assert.equal(asked, 1);
 });
 

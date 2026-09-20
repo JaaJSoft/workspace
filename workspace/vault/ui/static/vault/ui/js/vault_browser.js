@@ -901,11 +901,23 @@ window.vaultBrowser = (function () {
           unfavorite: function (uuid) { return self.setFavorite(uuid, false); },
         }[actionId];
         if (!call) return;
+        // One request for a set, which the server destroys whole or not at
+        // all. Only delete_forever has such an endpoint behind it, and the
+        // per-row one keeps the single-row case: it cannot half-happen.
+        const batched = {
+          delete_forever: function (uuids) {
+            return window.vaultApi.purgeEntries(uuids);
+          },
+        }[actionId];
         this.busy = true;
         let failure = null;
         try {
-          for (const row of rows) {
-            await call(row.uuid);
+          if (batched && rows.length > 1) {
+            await batched(rows.map(function (row) { return row.uuid; }));
+          } else {
+            for (const row of rows) {
+              await call(row.uuid);
+            }
           }
         } catch (err) {
           if (err && err.reason === 'locked') return;

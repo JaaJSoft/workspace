@@ -1,20 +1,16 @@
 """A real browser opens an account this build never wrote.
 
-Task 2 (test_compat_reference.py) and Task 3 (test_compat_server.py) both
-prove the corpus, but both share ``cbor2`` between the writer and the
+test_compat_reference.py and test_compat_server.py both prove the corpus,
+but both share ``cbor2`` between the writer and the
 reader - the module's own docs call that agreement partly circular. The
 browser bundle carries its own CBOR encoder (``cbor-x``), its own AEAD, its
 own everything: it is the only reader here that shares no line with either
 half of the corpus's own generation walk. Opening the frozen rows with it is
 what closes the circularity.
 
-Two scripts verify the frozen corpus: ``READ_EVERYTHING`` decrypts every
-ciphertext and compares the manifest to ensure all bytes still open under
-today's bundle, and ``VERIFY_EVERY_SIGNATURE`` checks every signed row
-through the client's own verification path. Decryption proves ciphertexts
-survive, signature verification proves the signing path still validates them,
-and a canonical-encoding regression breaks only the second - hence both are
-needed.
+Two scripts run against it: ``READ_EVERYTHING`` decrypts every ciphertext,
+``VERIFY_EVERY_SIGNATURE`` checks every signed row. They cover independent
+surfaces - see the second one below.
 """
 
 from django.contrib.auth import get_user_model
@@ -196,11 +192,11 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             )
         except PlaywrightError as exc:
             raise AssertionError(
-                "The frozen v1 corpus account can no longer be unlocked at "
-                "all - a change to key derivation, the secret key encoding, "
-                "the wrapping of the account private keys or the public-key "
-                "attestation has broken compatibility with every account "
-                f"already created. {exc}"
+                f"The frozen {self.corpus.root.name} corpus account can no "
+                "longer be unlocked at all - a change to key derivation, the "
+                "secret key encoding, the wrapping of the account private "
+                "keys or the public-key attestation has broken compatibility "
+                f"with every account already created. {exc}"
             ) from exc
 
     def test_a_browser_opens_every_row_of_the_frozen_account(self):
@@ -226,26 +222,21 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             raise
         except PlaywrightError as exc:
             raise AssertionError(
-                "The frozen v1 corpus no longer opens with today's vault "
-                "bundle - a format or algorithm change has broken "
-                f"compatibility with data already written. {exc}"
+                f"The frozen {self.corpus.root.name} corpus no longer opens "
+                "with today's vault bundle - a format or algorithm change has "
+                f"broken compatibility with data already written. {exc}"
             ) from exc
 
         self.assertEqual(read, self.corpus.manifest)
 
     def test_every_signed_row_still_verifies(self):
-        """Decrypting is only half of opening an account: every vault,
-        folder, tag and entry also carries a metadata_sig that a real client
-        checks before it will show the row to a user (vault_reader.js).
-        READ_EVERYTHING never calls that path - it only decrypts - so a
-        canonical-encoding regression that broke every signature without
-        touching a single ciphertext byte would pass the test above and go
-        unnoticed. This is the other half.
+        """The other half of opening an account: a real client checks
+        metadata_sig before it will show a row to a user (vault_reader.js),
+        and READ_EVERYTHING never calls that path.
 
         Counted against the manifest before anything is verified, the same
         discipline the other two replays use: a loop that verified nothing
-        would otherwise pass silently, which is the exact gap this test
-        exists to close.
+        would otherwise pass silently.
         """
         manifest_vaults = self.corpus.manifest["vaults"]
         expected = {
@@ -270,10 +261,10 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             raise
         except PlaywrightError as exc:
             raise AssertionError(
-                "The frozen v1 corpus's signatures no longer verify against "
-                "today's vault bundle - a canonical encoding or signing "
-                "change has broken compatibility with data already "
-                f"signed. {exc}"
+                f"The frozen {self.corpus.root.name} corpus's signatures no "
+                "longer verify against today's vault bundle - a canonical "
+                "encoding or signing change has broken compatibility with "
+                f"data already signed. {exc}"
             ) from exc
 
         self.assertEqual(counts, expected)

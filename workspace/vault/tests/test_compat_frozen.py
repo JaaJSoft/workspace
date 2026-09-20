@@ -6,11 +6,10 @@ together, agree with each other, and every vault written before the change
 stops opening. Only data nobody may rewrite catches that, so the first claim
 this file makes is that such data exists.
 
-The append-only guard below closes a hole its own review found: a presence
-check (a file exists, an archive starts with the right magic) still passes
-for a corpus that has been quietly emptied. Hashing every published file
-against a committed manifest, and refusing an empty manifest, is what makes
-"unchanged" mean something.
+A presence check - a file exists, an archive starts with the right magic -
+still passes for a corpus that has been quietly emptied. Hashing every
+published file against a committed manifest, and refusing an empty manifest,
+is what makes "unchanged" mean something.
 """
 
 import hashlib
@@ -116,8 +115,8 @@ class AppendOnlyTests(SimpleTestCase):
 
 
 class AppendOnlyGuardSelfTests(SimpleTestCase):
-    """Proves `_verify_corpus_version` closes the hole Task 1's review
-    found, without touching the real corpus to do it.
+    """Proves `_verify_corpus_version` refuses an emptied or edited corpus,
+    without touching the real one to do it.
     """
 
     def test_an_empty_directory_with_an_empty_manifest_fails(self):

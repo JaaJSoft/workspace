@@ -3,8 +3,8 @@
 Loaded through loaddata rather than rebuilt by a factory: a factory would
 sign with today's code, which is the circularity this corpus exists to break.
 
-Task 2 (test_compat_reference.py) proves the corpus against the Python
-reference implementation. This file proves it against the server's own
+test_compat_reference.py proves the corpus against the Python reference
+implementation. This file proves it against the server's own
 code - workspace.vault.services.metadata and .attestation - which shares no
 line with the reference beyond both using cbor2 to encode. That shared
 encoder is a known limit of this layer, closed by the browser replay

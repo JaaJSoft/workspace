@@ -1,8 +1,10 @@
 """Access to the frozen compatibility corpora.
 
 One directory per published format version, never edited after its commit:
-a format change adds v2 beside v1. The replays import from here so that
-adding a version is a directory plus a parametrised run, never a new reader.
+a format change adds v2 beside v1. Each replay names the versions it opens in
+a CORPORA tuple of its own and test_compat_frozen refuses a version no replay
+names, so landing a second one is that tuple plus the class reading it - never
+a second reader.
 """
 
 import json

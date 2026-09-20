@@ -1,10 +1,11 @@
-"""The two page scripts the compatibility corpus is written and read with.
+"""The page scripts the compatibility corpus is written and read with.
 
-They live in a module of their own because both ends need the identical text.
-The generation walk writes the account with them; the browser replay reopens
-a restored copy of that same account with them. A script copied into each
-side would let the two drift apart silently - and a manifest compared against
-a reader that has quietly changed is a green run that proves nothing.
+READ_EVERYTHING lives here rather than beside either caller because both ends
+need the identical text: the generation walk lays the account out with it, and
+the browser replay reopens a restored copy with it. A copy on each side would
+let the two drift apart silently - and a manifest compared against a reader
+that has quietly changed is a green run that proves nothing. The two write
+scripts keep it company because they belong to the same walk.
 
 Neither script goes through a form. That is deliberate and it is the narrow
 part: the session they run on is the one the UI just opened, so the keys, the
@@ -39,7 +40,7 @@ NOTED_ENTRY = {
 # is a different byte string and a different seal - and every equality check
 # that compared rendered strings would still pass.
 WRITE_NOTED_ENTRY = """
-async (withTag) => {
+async () => {
   const V = window.vaultCrypto, A = window.vaultApi, S = window.vaultSession;
   const enc = new TextEncoder();
   try {
@@ -52,33 +53,6 @@ async (withTag) => {
         kdfId: V.KDF_HKDF_SHA256,
       })
     );
-
-    let tagUuids = [];
-    if (withTag) {
-      const tagUuid = V.uuidV7();
-      const metaKey = await S.openVaultKey(vault.uuid, vault.wrapped_key);
-      const tagName = V.toBase64Url(
-        await V.seal(metaKey, enc.encode('Work'), V.AD.tagFieldAd(tagUuid, 'name'), {
-          keyVersion: 1,
-          kdfId: V.KDF_HKDF_SHA256,
-        })
-      );
-      const tagPayload = V.tagMetadataPayload({
-        tag_uuid: tagUuid,
-        vault_uuid: vault.uuid,
-        signer_account_uuid: S.accountUuid(),
-        encrypted_name: tagName,
-        color: 'primary',
-      });
-      await A.createTag({
-        uuid: tagUuid,
-        vault: vault.uuid,
-        encrypted_name: tagName,
-        color: 'primary',
-        metadata_sig: await S.sign(tagPayload),
-      });
-      tagUuids = [tagUuid];
-    }
 
     const fields = {
       username: await seal('username', 'octocat'),
@@ -101,7 +75,7 @@ async (withTag) => {
       key_version: 1,
       entry_version: 1,
       is_favorite: false,
-      tag_uuids: tagUuids,
+      tag_uuids: [],
       fields,
     });
     const created = await A.createEntry({
@@ -109,7 +83,7 @@ async (withTag) => {
       vault: vault.uuid,
       type: 'login',
       folder: null,
-      tags: tagUuids,
+      tags: [],
       is_favorite: false,
       encrypted_name: encryptedName,
       encrypted_notes: encryptedNotes,

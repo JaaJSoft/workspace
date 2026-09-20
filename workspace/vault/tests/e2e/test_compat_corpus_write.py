@@ -187,7 +187,7 @@ def _corpus_output(version: str, root: Path = compat.CORPUS_ROOT):
 class CorpusWriteGuardTests(SimpleTestCase):
     """What the generator does with the output directory, without a browser.
 
-    The refusal is not politeness: the append-only test of task 5 compares
+    The refusal is not politeness: the append-only test compares
     committed hashes, so an overwrite would be found only after it had already
     destroyed the corpus in the working tree.
     """
@@ -206,9 +206,9 @@ class CorpusWriteGuardTests(SimpleTestCase):
             (staging / "rows.json").write_text("[]", encoding="utf-8")
         self.assertEqual((root / "v99" / "rows.json").read_text(encoding="utf-8"), "[]")
         # A version arrives self-guarded. Hashed by the generator from the
-        # bytes it wrote, so the append-only test of task 5 covers the corpus
-        # from the moment it is published rather than from whenever a human
-        # got round to hashing it.
+        # bytes it wrote, so the append-only test covers the corpus from the
+        # moment it is published rather than from whenever a human got round
+        # to hashing it.
         self.assertEqual(
             (root / "v99" / "SHA256SUMS").read_bytes(),
             f"{hashlib.sha256(b'[]').hexdigest()}  rows.json\n".encode(),
@@ -540,7 +540,7 @@ class CorpusWriteWalk(VaultBrowserCase):
         self._trash(TRASHED_ENTRY)
 
         # The notes and the custom field, on the session the UI just opened.
-        written = self.page.evaluate(WRITE_NOTED_ENTRY, False)
+        written = self.page.evaluate(WRITE_NOTED_ENTRY)
         self.assertEqual(written["status"], 201, written.get("reason"))
 
         # listVaults()[0] is the first vault by created_at, so the scripted

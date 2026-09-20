@@ -24,10 +24,21 @@ class CorpusFiles:
 
 
 def versions() -> list[str]:
-    """Every published corpus version, oldest first."""
+    """Every published corpus version, oldest first.
+
+    A dot-prefixed directory is not one. The generator stages a new corpus
+    beside the published ones so that publishing it is a rename on a single
+    filesystem, and a walk killed outright leaves that staging directory
+    behind; listing it would turn a harmless leftover into a version no
+    replay covers and load() cannot open.
+    """
     if not CORPUS_ROOT.is_dir():
         return []
-    return sorted(p.name for p in CORPUS_ROOT.iterdir() if p.is_dir())
+    return sorted(
+        p.name
+        for p in CORPUS_ROOT.iterdir()
+        if p.is_dir() and not p.name.startswith(".")
+    )
 
 
 def load(version: str) -> CorpusFiles:

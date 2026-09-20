@@ -23,6 +23,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from django.core import management
 from django.test import SimpleTestCase
@@ -164,24 +165,32 @@ def _corpus_output(version: str, root: Path = compat.CORPUS_ROOT):
     goes makes every failure worse than the failure: a selector that times out
     halfway leaves an empty or half-written directory behind, and that
     directory then refuses every later regeneration while making compat.load()
-    die on a missing file instead of saying what is wrong. Staging elsewhere
-    turns publication into one rename - it either happened or it did not.
+    die on a missing file instead of saying what is wrong. Staging under a name of
+    its own turns publication into one rename - it either happened or it did not.
+    Beside the versions rather than in the system temp directory: a move
+    across filesystems is a copy, and a copy that dies halfway publishes the
+    half-written version that every later run then refuses. The name is
+    dot-prefixed because a staging directory sitting in the corpus root is
+    not a published version, and compat.versions() says so.
 
     The last thing written into the staging directory is its own SHA256SUMS,
     so a version arrives already guarded by the bytes the walk itself
     produced - never by a hash taken of whatever was on disk some time after
     publication.
+
+    The publication itself is inside the try for the reason the walk is: a
+    rename that fails must leave no staging directory behind either.
     """
     target = _refuse_if_published(version, root)
-    staging = Path(tempfile.mkdtemp(prefix=f"vault-corpus-{version}-"))
+    root.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(dir=root, prefix=f".staging-{version}-"))
     try:
         yield staging
         _write_sums(staging)
+        staging.rename(target)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise
-    root.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(staging), str(target))
 
 
 class CorpusWriteGuardTests(SimpleTestCase):
@@ -246,6 +255,45 @@ class CorpusWriteGuardTests(SimpleTestCase):
         # regeneration and makes the corpus unloadable; a staging directory
         # left behind is a slow leak nobody would ever look for.
         self.assertFalse((root / "v99").exists(), "a failed walk published a version")
+        self.assertFalse(staged.exists(), "the staging directory was left behind")
+
+    def test_the_staging_directory_lives_beside_the_versions(self):
+        """Publication is a rename, and a rename only stays one when both
+        ends share a filesystem. Staged in the system temp directory it
+        degrades to a copy - on Windows the temp directory and the checkout
+        routinely sit on different drives - and a copy that dies halfway
+        leaves the half-written version _refuse_if_published then makes
+        unregenerable.
+        """
+        root = self._scratch_root()
+        with _corpus_output("v99", root=root) as staging:
+            self.assertEqual(staging.parent, root)
+
+    def test_a_staging_directory_is_not_a_published_version(self):
+        """The price of staging in the corpus root: while the walk runs, and
+        for good after one that is killed outright, a directory sits beside
+        the versions that is not one. versions() is where that is settled.
+        """
+        root = self._scratch_root()
+        (root / "v1").mkdir()
+        with _corpus_output("v99", root=root):
+            with mock.patch.object(compat, "CORPUS_ROOT", root):
+                self.assertEqual(compat.versions(), ["v1"])
+
+    def test_a_failed_publication_leaves_nothing_behind(self):
+        """The walk is not the only thing that can fail: so can the rename,
+        on a full disk or against a handle Windows has not let go of yet.
+        Publishing outside the try would leak the staging directory it could
+        not move, and that is the one failure nobody goes looking for.
+        """
+        root = self._scratch_root()
+        staged = None
+        with mock.patch.object(Path, "rename", side_effect=OSError("boom")):
+            with self.assertRaises(OSError):
+                with _corpus_output("v99", root=root) as staging:
+                    staged = staging
+                    (staging / "rows.json").write_text("[]", encoding="utf-8")
+        self.assertFalse((root / "v99").exists(), "a failed rename published a version")
         self.assertFalse(staged.exists(), "the staging directory was left behind")
 
     def test_writing_into_a_published_version_is_refused(self):

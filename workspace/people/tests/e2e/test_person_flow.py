@@ -60,10 +60,10 @@ class PersonFlowTests(PlaywrightTestCase):
 
         self.page.goto(f"{self.live_server_url}/people")
         aside = self.page.locator(".drawer-side aside")
-        expect(aside.locator('button[title="Clients"]')).to_be_visible()
-        expect(
-            aside.locator('button[title="Clients"] [data-lucide="users-round"]:visible')
-        ).to_have_count(1)
+        # The badge count is part of the button text, so match on the name only.
+        row = aside.locator("button", has_text="Clients")
+        expect(row).to_be_visible()
+        expect(row.locator('[data-lucide="users-round"]:visible')).to_have_count(1)
         expect(
             aside.locator('button[title="Family"] [data-lucide="users-round"]:visible')
         ).to_have_count(0)

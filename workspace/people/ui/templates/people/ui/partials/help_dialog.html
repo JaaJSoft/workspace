@@ -1,0 +1,32 @@
+{% load ui_tags %}
+{% help_items as items %}
+  book-user | Address books | checked
+  <p class="mb-2">
+    A contact belongs to one address book: <strong>My contacts</strong>, which only you see,
+    or one of your groups, shared with every member of that group.
+  </p>
+  <ul>
+    <li>Pick the book in the sidebar to narrow the list; <strong>All</strong> shows every contact you can reach.</li>
+    <li>A contact can be moved to another book from its <strong>Actions</strong> menu.</li>
+    <li>Link a contact to a workspace account to show that account's picture and name.</li>
+  </ul>
+  ---
+  list | Lists
+  <p class="mb-2">Lists gather contacts of one address book: family, clients, a team.</p>
+  <ul>
+    <li>Create a list with the <strong>+</strong> next to the Lists heading; rename or delete it from its row menu.</li>
+    <li>Add a contact from its panel with <strong>Add to list</strong>; deleting a list never deletes its contacts.</li>
+    <li>The group icon on a row marks a list that belongs to a group's book.</li>
+  </ul>
+  ---
+  code | API Access
+  <ul>
+    <li><strong>Base URL:</strong> <code>/api/v1/people</code></li>
+    <li><strong>Authentication:</strong> Use your session cookie or API token.</li>
+    <li>
+      <strong>Documentation:</strong> Full API docs are available at
+      <a href="/schema/swagger-ui/" class="link link-secondary">/schema/swagger-ui/</a>.
+    </li>
+  </ul>
+{% endhelp_items %}
+{% include "ui/partials/help_dialog.html" with dialog_id="people-help-dialog" accent_color="secondary" items=items %}

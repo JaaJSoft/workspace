@@ -77,12 +77,9 @@ MEASURE_NOW = """() => {
 # applies the `:class` bindings in a microtask, and `x-show` hides on the next
 # animation frame, so this is the state that a paint or a Playwright call can
 # catch between the aside narrowing and a row hidden by `x-show` alone
-# following it. Everything that leaves with the rail must leave here. The
-# people toggle button carries no aria-label (unlike files/mail, which build
-# it through drawer_item.html), only a bound `:title`, so the lookup matches
-# on that attribute instead.
-TOGGLE_AND_MEASURE = """async (title) => {
-  document.querySelector('.drawer-side aside [title="' + title + '"]').click();
+# following it. Everything that leaves with the rail must leave here.
+TOGGLE_AND_MEASURE = """async (label) => {
+  document.querySelector('.drawer-side aside [aria-label="' + label + '"]').click();
   for (let i = 0; i < 10; i++) await Promise.resolve();
   window.__rail = { overflow: 0, offenders: [], measured: 0, text: '' };
   window.__railMeasure();
@@ -143,7 +140,7 @@ class PeopleSidebarFirstPaintTests(PlaywrightTestCase):
             with self.subTest(module=module):
                 self._load(module)
                 expect(self._all_label()).to_be_visible()
-                same_task = self.page.evaluate(TOGGLE_AND_MEASURE, "Collapse")
+                same_task = self.page.evaluate(TOGGLE_AND_MEASURE, "Collapse sidebar")
                 self.assertLessEqual(same_task["overflow"], 1, same_task)
                 expect(self._all_label()).to_be_hidden()
                 settled = self.page.evaluate(MEASURE_NOW)
@@ -159,5 +156,5 @@ class PeopleSidebarFirstPaintTests(PlaywrightTestCase):
             with self.subTest(module=module):
                 self._load(module)
                 expect(self._all_label()).to_be_hidden()
-                self.page.locator(".drawer-side aside").get_by_title("Expand").click()
+                self.page.get_by_role("button", name="Expand sidebar").click()
                 expect(self._all_label()).to_be_visible()

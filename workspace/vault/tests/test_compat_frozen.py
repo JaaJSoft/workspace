@@ -25,8 +25,11 @@ from .e2e import test_compat_browser
 class CorpusPresenceTests(SimpleTestCase):
     def test_at_least_one_version_is_published(self):
         # The whole issue is that no old data exists to replay. An empty
-        # corpus root is that state, and it must not pass silently.
-        self.assertEqual(compat.versions(), ["v1"])
+        # corpus root is that state, and it must not pass silently. Which
+        # versions those are is not this test's business: pinning the list
+        # would make v2 land red, and a directory no replay reads is already
+        # refused by test_every_version_is_covered_by_the_replays.
+        self.assertTrue(compat.versions(), "no corpus version is published")
 
     def test_every_published_version_loads(self):
         # versions() only reads directory names. A version whose four files

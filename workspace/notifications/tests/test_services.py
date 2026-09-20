@@ -64,6 +64,12 @@ class NotifyTests(TestCase):
         # After notify, the cache must reflect the new unread count
         self.assertEqual(get_unread_count(self.alice), 1)
 
+    def test_notification_has_no_stored_color(self):
+        from workspace.notifications.models import Notification
+
+        field_names = {f.name for f in Notification._meta.get_fields()}
+        self.assertNotIn("color", field_names)
+
 
 class NotifyManyTests(TestCase):
     def setUp(self):

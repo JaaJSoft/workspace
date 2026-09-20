@@ -52,9 +52,6 @@ class Notification(models.Model):
     )
     origin = models.CharField(max_length=50)
     icon = models.CharField(max_length=50)
-    color = models.CharField(
-        max_length=20, blank=True, default=""
-    )  # DaisyUI color: 'primary', 'accent', 'success', ...
     priority = models.CharField(
         max_length=6, choices=Priority.choices, default=Priority.NORMAL
     )

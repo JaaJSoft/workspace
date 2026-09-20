@@ -42,7 +42,7 @@ function themePalette() {
   const baseContent = read('text-base-content', '#9ca3af');
   const pal = {
     favorite: read('text-warning', '#f59e0b'),
-    journal: read('text-success', '#22c55e'),
+    journal: read('text-module', '#22c55e'),
     regular: baseContent,
     text: baseContent, // node labels drawn on the canvas
     // Thin outline drawn in the background colour, so nodes stay crisp where

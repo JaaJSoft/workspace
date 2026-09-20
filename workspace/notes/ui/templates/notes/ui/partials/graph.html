@@ -14,7 +14,7 @@
         <button
           type="button"
           class="btn btn-xs join-item flex-1"
-          :class="graphScope === 'mine' ? 'btn-success' : 'btn-ghost'"
+          :class="graphScope === 'mine' ? 'btn-module' : 'btn-ghost'"
           @click="setGraphScope('mine')"
         >
           My notes
@@ -22,7 +22,7 @@
         <button
           type="button"
           class="btn btn-xs join-item flex-1"
-          :class="graphScope === 'all' ? 'btn-success' : 'btn-ghost'"
+          :class="graphScope === 'all' ? 'btn-module' : 'btn-ghost'"
           @click="setGraphScope('all')"
         >
           All
@@ -149,7 +149,7 @@
           class="dropdown-content z-50 bg-base-100 rounded-box shadow-lg ring-1 ring-base-300 p-3 mt-1 w-40 text-xs space-y-1.5"
         >
           <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-warning"></span> Favorite</div>
-          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-success"></span> Journal</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-module"></span> Journal</div>
           <div class="flex items-center gap-2">
             <span class="w-2.5 h-2.5 rounded-full bg-base-content/50"></span> Note
           </div>

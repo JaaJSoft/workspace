@@ -54,9 +54,9 @@ window.notesPreferences = function notesPreferences() {
                 title: 'Default notes folder',
                 message: 'Choose where new notes are created by default.',
                 okLabel: 'Select',
-                okClass: 'btn-success',
+                okClass: 'btn-module',
                 icon: 'folder-pen',
-                iconClass: 'bg-success/10 text-success',
+                iconClass: 'bg-module/10 text-module',
             });
             if (!folder) return;
             this.prefs.defaultFolderUuid = folder.uuid;
@@ -76,9 +76,9 @@ window.notesPreferences = function notesPreferences() {
                 title: 'Journal folder',
                 message: 'Choose which folder to use for daily journal notes.',
                 okLabel: 'Select',
-                okClass: 'btn-success',
+                okClass: 'btn-module',
                 icon: 'book-open',
-                iconClass: 'bg-success/10 text-success',
+                iconClass: 'bg-module/10 text-module',
             });
             if (!folder) return;
             this.prefs.journalFolderUuid = folder.uuid;
@@ -762,9 +762,9 @@ window.notesApp = function notesApp(config) {
                 message: 'Enter a name for the note',
                 placeholder: 'My note',
                 okLabel: 'Create',
-                okClass: 'btn-success',
+                okClass: 'btn-module',
                 icon: 'file-plus',
-                iconClass: 'bg-success/10 text-success',
+                iconClass: 'bg-module/10 text-module',
             });
             if (!name) return;
             if (!name.endsWith('.md')) name += '.md';
@@ -1063,9 +1063,9 @@ window.notesApp = function notesApp(config) {
                 message: 'Create a subfolder in "' + parentFolder.name + '"',
                 placeholder: 'Subfolder name',
                 okLabel: 'Create',
-                okClass: 'btn-success',
+                okClass: 'btn-module',
                 icon: 'folder-plus',
-                iconClass: 'bg-success/10 text-success',
+                iconClass: 'bg-module/10 text-module',
             });
             if (!name) return;
 

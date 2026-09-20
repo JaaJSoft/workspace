@@ -21,7 +21,7 @@
   --crepe-color-surface: oklch(var(--b2));
   --crepe-color-outline: oklch(var(--b3));
   --crepe-color-primary: rgb(var(--module));
-  --crepe-color-on-primary: oklch(var(--pc));
+  --crepe-color-on-primary: rgb(var(--module-content));
   --crepe-color-selected: rgb(var(--module) / 0.12);
   --crepe-color-hover: oklch(var(--b3) / 0.4);
   --crepe-color-solid: oklch(var(--bc));

@@ -52,7 +52,7 @@
       <label class="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
-          class="toggle toggle-sm toggle-primary"
+          class="toggle toggle-sm toggle-module"
           :checked="form.all_day"
           @change="toggleAllDay()"
         />
@@ -89,8 +89,8 @@
             >
               <button
                 type="button"
-                class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
-                :class="activeDuration() === d.m ? 'badge-primary' : 'badge-outline'"
+                class="badge badge-sm cursor-pointer hover:badge-module transition-colors"
+                :class="activeDuration() === d.m ? 'badge-module' : 'badge-outline'"
                 @click="applyDuration(d.m)"
                 x-text="d.l"
               ></button>
@@ -105,8 +105,8 @@
             >
               <button
                 type="button"
-                class="badge badge-sm cursor-pointer hover:badge-primary transition-colors"
-                :class="activeDuration() === d.m * 1440 ? 'badge-primary' : 'badge-outline'"
+                class="badge badge-sm cursor-pointer hover:badge-module transition-colors"
+                :class="activeDuration() === d.m * 1440 ? 'badge-module' : 'badge-outline'"
                 @click="applyDuration(d.m * 1440)"
                 x-text="d.l"
               ></button>
@@ -123,7 +123,7 @@
           </span>
           <input
             type="checkbox"
-            class="toggle toggle-sm toggle-primary"
+            class="toggle toggle-sm toggle-module"
             :checked="form.recurrence_frequency !== null || isComplexRecurrence()"
             :disabled="isComplexRecurrence()"
             @change="toggleRecurrence()"
@@ -216,7 +216,7 @@
         <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
         <button
           type="submit"
-          class="btn btn-sm btn-primary"
+          class="btn btn-sm btn-module"
           :disabled="saving || !form.title.trim()"
         >
           <span x-show="saving" class="loading loading-spinner loading-xs"></span>

@@ -27,11 +27,11 @@
             a fresh <svg> at boot, and a binding left on the <i> goes with it.
           {% endcomment %}
           <span class="inline-flex" :title="collapsed ? 'Vault' : ''">
-            <i data-lucide="key-round" class="w-6 h-6 text-error"></i>
+            <i data-lucide="key-round" class="w-6 h-6 text-module"></i>
           </span>
           <span x-show="!collapsed" x-transition>Vault</span>
         </h2>
-        {% include "ui/partials/preferences_popover.html" with content="vault/ui/partials/_preferences_content.html" accent="text-error" button_class="mr-1 hover:text-error" show_expr="!collapsed" panel_id="browser-preferences-panel" %}
+        {% include "ui/partials/preferences_popover.html" with content="vault/ui/partials/_preferences_content.html" accent="text-module" button_class="mr-1 hover:text-module" show_expr="!collapsed" panel_id="browser-preferences-panel" %}
       </div>
     </div>
 
@@ -55,7 +55,7 @@
         >
           <i
             :data-lucide="openVault ? (openVault.icon || 'lock') : 'lock'"
-            class="w-5 h-5 text-error"
+            class="w-5 h-5 text-module"
           ></i>
         </button>
       </div>
@@ -70,9 +70,9 @@
         </span>
       </div>
       <ul class="space-y-1">
-        {% include "ui/partials/drawer_item.html" with icon="list" label="All entries" color="error" active_binding="view === 'all' && !tagFilter" onclick="setView('all')" tooltip="All entries" %}
+        {% include "ui/partials/drawer_item.html" with icon="list" label="All entries" color="module" active_binding="view === 'all' && !tagFilter" onclick="setView('all')" tooltip="All entries" %}
         {% include "ui/partials/drawer_item.html" with icon="star" label="Favorites" color="warning" active_binding="view === 'favorites'" onclick="setView('favorites')" tooltip="Favorites" %}
-        {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" color="error" active_binding="view === 'trash'" onclick="setView('trash')" badge_binding="trashCount()" tooltip="Trash" %}
+        {% include "ui/partials/drawer_item.html" with icon="trash-2" label="Trash" color="module" active_binding="view === 'trash'" onclick="setView('trash')" badge_binding="trashCount()" tooltip="Trash" %}
         {% include "ui/partials/drawer_item.html" with icon="users" label="Shared with me" color="secondary" disabled=True badge="Soon" title_binding="'Sharing a vault with another account is not built yet'" %}
       </ul>
 
@@ -130,16 +130,16 @@
     {% endcomment %}
     <div class="px-3 pb-2">
       <ul class="menu p-0 space-y-1">
-        {% include "ui/partials/drawer_item.html" with icon="dices" label="Generator" color="error" onclick="openGeneratorDialog()" tooltip="Password generator" %}
-        {% include "ui/partials/drawer_item.html" with icon="download" label="Export" color="error" onclick="openExportDialog()" tooltip="Export this account" %}
-        {% include "ui/partials/drawer_item.html" with icon="lock" label="Lock" color="error" onclick="lockNow()" badge_binding="countdown()" tooltip="Lock" %}
-        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="error" onclick="document.getElementById('vault-help-dialog')?.showModal()" tooltip="Help" %}
+        {% include "ui/partials/drawer_item.html" with icon="dices" label="Generator" color="module" onclick="openGeneratorDialog()" tooltip="Password generator" %}
+        {% include "ui/partials/drawer_item.html" with icon="download" label="Export" color="module" onclick="openExportDialog()" tooltip="Export this account" %}
+        {% include "ui/partials/drawer_item.html" with icon="lock" label="Lock" color="module" onclick="lockNow()" badge_binding="countdown()" tooltip="Lock" %}
+        {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('vault-help-dialog')?.showModal()" tooltip="Help" %}
       </ul>
     </div>
 
     <div class="border-t border-base-300 py-4 px-3">
       <ul class="menu p-0 hidden lg:block">
-        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="error" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
+        {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" %}
       </ul>
     </div>
   </aside>

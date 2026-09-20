@@ -69,7 +69,7 @@
       <div
         class="bg-base-100 border rounded-lg hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
         :class="[
-        panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-error',
+        panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-module',
         isSelected(entry.uuid) ? 'ring-2 ring-primary border-primary' : ''
       ]"
         @click="openEntryFromRow(entry)"
@@ -105,11 +105,11 @@
         </div>
 
         <div class="relative w-full pb-[100%]">
-          <div class="absolute inset-0 flex items-center justify-center bg-error/5">
+          <div class="absolute inset-0 flex items-center justify-center bg-module/5">
             <div
               :style="{ width: tileIconSize() + 'px', height: tileIconSize() + 'px' }"
             >
-              <i :data-lucide="typeIcon(entry.type)" class="w-full h-full text-error"></i>
+              <i :data-lucide="typeIcon(entry.type)" class="w-full h-full text-module"></i>
             </div>
           </div>
         </div>

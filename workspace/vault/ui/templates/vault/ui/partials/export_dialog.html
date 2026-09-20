@@ -40,7 +40,7 @@
       <template x-if="!exportConfirming">
         <div>
           <h3 class="font-bold text-lg flex items-center gap-2">
-            <i data-lucide="download" class="w-5 h-5 text-error"></i>
+            <i data-lucide="download" class="w-5 h-5 text-module"></i>
             <span>Export this account</span>
           </h3>
 
@@ -315,7 +315,7 @@
             </button>
             <button
               type="button"
-              class="btn btn-sm btn-error"
+              class="btn btn-sm btn-module"
               data-testid="export-run"
               @click="requestExport()"
               :disabled="exportBusy || (exportFormat === 'archive' && !passphraseAccepted())"

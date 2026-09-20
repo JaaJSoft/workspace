@@ -23,7 +23,7 @@
     <span class="flex items-center gap-2 min-w-0">
       <i
         :data-lucide="openVault ? (openVault.icon || 'lock') : 'lock'"
-        class="w-5 h-5 text-error shrink-0"
+        class="w-5 h-5 text-module shrink-0"
       ></i>
       <span class="truncate" x-text="vaultName() || 'Vault'"></span>
       <span class="badge badge-ghost badge-sm" x-show="isMember(openVault)">member</span>
@@ -126,7 +126,7 @@
         <li>
           <button
             type="button"
-            class="text-error font-medium"
+            class="text-module font-medium"
             @click="openCreateDialog()"
           >
             <i data-lucide="plus" class="w-4 h-4"></i>

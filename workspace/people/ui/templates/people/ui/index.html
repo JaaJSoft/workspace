@@ -28,6 +28,7 @@
   })"
   @popstate.window="onPopState()"
   @people-lists-changed.window="reloadLists()"
+  @people-scope-changed.window="onScopeChanged($event.detail)"
   @ajax:error="AppAlert.show({ type: 'error', message: 'Could not load that contact.' })"
 {% endblock %}
 
@@ -70,9 +71,32 @@
         <ul class="menu p-0 space-y-0.5">
           {% include "ui/partials/drawer_item.html" with icon="users" label="All" color="secondary" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip="All" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" color="secondary" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip="My contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% for group in user_groups %}
-            {% include "ui/partials/drawer_item.html" with icon="users-round" label=group.name color="secondary" onclick="setScope($el.dataset.scope)" active_binding="scope === $el.dataset.scope" tooltip=group.name extra_attrs=group.scope_attr collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-          {% endfor %}
+          {# Only groups holding contacts, so the rows come from the component state and follow creations and moves. #}
+          <template x-for="group in visibleGroups()" :key="group.id">
+            <li
+              class="list-none"
+              :class="sidebarCollapsed() ? 'flex justify-center' : ''"
+            >
+              <button
+                type="button"
+                class="flex items-center w-full text-left text-base rounded-lg transition-colors"
+                :class="[
+                  sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+                  scope === 'group:' + group.id ? 'bg-secondary/10 text-secondary hover:bg-secondary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-secondary'
+                ]"
+                :title="sidebarCollapsed() ? group.name : ''"
+                :data-scope="'group:' + group.id"
+                @click="setScope('group:' + group.id)"
+              >
+                <i data-lucide="users-round" class="w-5 h-5 flex-shrink-0"></i>
+                <span
+                  x-show="!sidebarCollapsed()"
+                  class="flex-1 truncate"
+                  x-text="group.name"
+                ></span>
+              </button>
+            </li>
+          </template>
         </ul>
         {# The lists section follows the files tags section: heading and "+" hidden with the rail, rows drawn like drawer items. #}
         <hr

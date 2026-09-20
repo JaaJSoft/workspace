@@ -113,3 +113,21 @@ test('a stale reply is dropped when a newer patch of the same key already landed
 
   assert.deepStrictEqual(panel.person.emails, [{ value: 'a@x.io', type: 'home' }]);
 });
+
+test('the sidebar lists only the groups that hold contacts and follows moves', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({});
+  app.groups = [
+    { id: 1, name: 'Design', person_count: 2 },
+    { id: 2, name: 'Empty', person_count: 0 },
+  ];
+  assert.deepStrictEqual(Array.from(app.visibleGroups()).map((g) => g.name), ['Design']);
+  app.onScopeChanged({ from: 'mine', to: 'group:2' });
+  assert.deepStrictEqual(Array.from(app.visibleGroups()).map((g) => g.name), ['Design', 'Empty']);
+  app.onScopeChanged({ from: 'group:1', to: 'group:1' });
+  app.onScopeChanged({ from: 'group:1', to: null });
+  app.onScopeChanged({ from: 'group:1', to: 'mine' });
+  assert.deepStrictEqual(Array.from(app.visibleGroups()).map((g) => g.name), ['Empty']);
+  // An unknown group is ignored rather than crashing the page.
+  app.onScopeChanged({ from: 'group:99', to: 'group:98' });
+});

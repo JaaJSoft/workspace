@@ -125,6 +125,26 @@ window.peopleApp = function peopleApp(config) {
       else this.closePanel({ push: false });
     },
 
+    // A group earns its sidebar row with its first contact and loses it with
+    // the last one; the dialogs keep offering every group.
+    visibleGroups() {
+      return this.groups.filter((g) => g.person_count > 0);
+    },
+
+    _bumpGroup(scope, delta) {
+      if (typeof scope !== 'string' || !scope.startsWith('group:')) return;
+      const id = Number.parseInt(scope.slice('group:'.length), 10);
+      const group = this.groups.find((g) => g.id === id);
+      if (group) group.person_count = Math.max(0, group.person_count + delta);
+    },
+
+    // { from, to } are scopes ('mine' | 'group:<id>'); `to` is null on a delete.
+    onScopeChanged({ from, to }) {
+      if (from === to) return;
+      this._bumpGroup(from, -1);
+      this._bumpGroup(to, 1);
+    },
+
     // The sidebar selection is the default book of a new contact or list;
     // "All" and a list filter mean the personal one.
     defaultScope() {
@@ -165,6 +185,7 @@ window.peopleApp = function peopleApp(config) {
         }
         const person = await res.json();
         this.$refs.personDialog.close();
+        this.onScopeChanged({ from: null, to: person.scope });
         // A fresh contact belongs to no list, so a list filter would hide it.
         this.listUuid = '';
         await this.refreshList();
@@ -405,9 +426,13 @@ window.personPanel = function personPanel() {
     async confirmMove() {
       const choice = this.movePick;
       if (!choice || choice === this.person.scope) return;
+      const from = this.person.scope;
       const updated = await this.patch({ scope: choice });
       this.$refs.moveDialog.close();
-      if (updated) this.reloadPanel();
+      if (updated) {
+        this.$dispatch('people-scope-changed', { from, to: updated.scope });
+        this.reloadPanel();
+      }
     },
 
     addToList() {
@@ -465,6 +490,7 @@ window.personPanel = function personPanel() {
         AppAlert.show({ type: 'error', message: 'Could not delete the contact.' });
         return;
       }
+      this.$dispatch('people-scope-changed', { from: this.person.scope, to: null });
       this.closePanel();
       this.refreshList();
     },

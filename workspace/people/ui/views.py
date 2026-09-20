@@ -104,7 +104,6 @@ def index(request):
                 }
                 for person_list in lists
             ],
-            "user_groups": _sidebar_groups(request.user),
             "groups_data": _groups_data(request.user),
             # Echoed into the page as the contact to open: a malformed value
             # would have the shell ask for a panel that can only 404, leaving
@@ -115,20 +114,13 @@ def index(request):
     return render(request, "people/ui/index.html", context)
 
 
-def _sidebar_groups(user):
-    """Groups with the ``data-scope`` attribute their drawer item carries: the
-    item is a shared partial whose click and active expressions read it back
-    through ``$el.dataset.scope``, so the id never has to be spliced into an
-    Alpine expression from the template."""
-    groups = list(user.groups.order_by("name"))
-    for group in groups:
-        group.scope_attr = f'data-scope="group:{group.id}"'
-    return groups
-
-
 def _groups_data(user):
+    """Every group of the user with its contact count: the sidebar shows the
+    ones holding contacts, the dialogs offer them all."""
+    groups = user.groups.annotate(person_count=Count("persons")).order_by("name")
     return [
-        {"id": group.id, "name": group.name} for group in user.groups.order_by("name")
+        {"id": group.id, "name": group.name, "person_count": group.person_count}
+        for group in groups
     ]
 
 

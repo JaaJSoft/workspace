@@ -67,3 +67,28 @@ class PersonFlowTests(PlaywrightTestCase):
         expect(
             aside.locator('button[title="Family"] [data-lucide="users-round"]:visible')
         ).to_have_count(0)
+
+    def test_a_group_row_appears_with_its_first_contact_and_leaves_with_the_last(self):
+        # The dialogs offer every group, the sidebar only the ones holding a
+        # contact: the row must follow the first creation and the last delete
+        # without a reload.
+        team = Group.objects.create(name="Newcomers")
+        self.user.groups.add(team)
+
+        self.page.goto(f"{self.live_server_url}/people")
+        aside = self.page.locator(".drawer-side aside")
+        row = aside.locator(f'button[data-scope="group:{team.id}"]')
+        expect(row).to_have_count(0)
+
+        self.page.get_by_role("button", name="New contact").click()
+        dialog = self.page.locator("#people-person-dialog")
+        dialog.locator('input[name="display_name"]').fill("First Member")
+        dialog.locator('select[name="scope"]').select_option(f"group:{team.id}")
+        dialog.get_by_role("button", name="Create").click()
+        expect(row).to_be_visible()
+
+        panel = self.page.locator("#person-panel")
+        panel.get_by_title("Actions").click()
+        panel.get_by_text("Delete").click()
+        self.page.locator("#app-dialog-confirm-ok").click()
+        expect(row).to_have_count(0)

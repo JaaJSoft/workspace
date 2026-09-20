@@ -62,8 +62,18 @@ class PeopleIndexTests(TestCase):
         self.assertContains(response, "Bob Martin")
         self.assertContains(response, "Carol Team")
         self.assertContains(response, "Family")
-        self.assertContains(response, f'data-scope="group:{self.team.id}"')
+        self.assertEqual(
+            [g for g in response.context["groups_data"] if g["id"] == self.team.id],
+            [{"id": self.team.id, "name": "team", "person_count": 1}],
+        )
         self.assertContains(response, 'id="person-list"')
+
+    def test_a_group_without_contacts_counts_zero(self):
+        empty = Group.objects.create(name="empty")
+        self.user.groups.add(empty)
+        response = self.client.get("/people")
+        counts = {g["name"]: g["person_count"] for g in response.context["groups_data"]}
+        self.assertEqual(counts, {"empty": 0, "team": 1})
 
     def test_fragment_under_alpine_request(self):
         response = self.client.get(

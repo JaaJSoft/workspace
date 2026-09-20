@@ -104,6 +104,7 @@ class PersonListApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+        self.assertNotIn("Teams", response.data["detail"])
 
     def test_add_unreachable_member_is_404(self):
         family = create_list(owner=self.alice, name="Family")

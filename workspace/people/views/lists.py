@@ -129,8 +129,13 @@ class PersonListMembersView(APIView):
             return error
         try:
             add_members(person_list, persons)
-        except ScopeMismatch as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ScopeMismatch:
+            return Response(
+                {
+                    "detail": "Every person must be in the same address book as the list."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return self._respond(request, uuid)
 
     @extend_schema(summary="Remove persons from a list", request=ListMembersSerializer)

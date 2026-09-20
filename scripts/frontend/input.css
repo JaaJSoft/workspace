@@ -74,6 +74,107 @@
   .file-drag-source {
     @apply opacity-40;
   }
+  /* daisyUI generates btn-primary, badge-primary... only for its own seven
+     slots. These are the same rules with the module hue in place of --p,
+     for the components module templates use with their identity color. */
+  .btn-module {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+    outline-color: rgb(var(--module));
+  }
+  .btn-module:hover,
+  .btn-module.btn-active {
+    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+  }
+  .btn-outline.btn-module {
+    border-color: currentColor;
+    background-color: transparent;
+    color: rgb(var(--module));
+  }
+  .btn-outline.btn-module:hover,
+  .btn-outline.btn-module.btn-active {
+    border-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    background-color: color-mix(in oklab, rgb(var(--module)) 90%, black);
+    color: rgb(var(--module-content));
+  }
+  .badge-module {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .badge-outline.badge-module {
+    background-color: transparent;
+    color: rgb(var(--module));
+  }
+  .toggle-module {
+    accent-color: rgb(var(--module));
+  }
+  .toggle-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .toggle-module:checked,
+  .toggle-module[aria-checked="true"] {
+    border-color: rgb(var(--module) / 0.1);
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .link-module {
+    color: rgb(var(--module));
+  }
+  .link-module:hover {
+    color: color-mix(in oklab, rgb(var(--module)) 80%, black);
+  }
+  .progress-module {
+    --progress-color: rgb(var(--module));
+  }
+  .progress-module::-moz-progress-bar {
+    background-color: rgb(var(--module));
+  }
+  .progress-module::-webkit-progress-value {
+    background-color: rgb(var(--module));
+  }
+  .progress-module:indeterminate {
+    --progress-color: rgb(var(--module));
+  }
+  .range-module {
+    --range-shdw: rgb(var(--module));
+  }
+  .radio-module {
+    border-color: rgb(var(--module));
+  }
+  .radio-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .radio-module:checked,
+  .radio-module[aria-checked="true"] {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .checkbox-module {
+    --chkbg: rgb(var(--module));
+    --chkfg: rgb(var(--module-content));
+    border-color: rgb(var(--module));
+  }
+  .checkbox-module:focus-visible {
+    outline-color: rgb(var(--module));
+  }
+  .checkbox-module:checked,
+  .checkbox-module[aria-checked="true"] {
+    border-color: rgb(var(--module));
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
+  .input-module {
+    border-color: rgb(var(--module));
+  }
+  .input-module:focus,
+  .input-module:focus-within {
+    border-color: rgb(var(--module));
+    outline-color: rgb(var(--module));
+  }
 }
 
 /* Toast slide animations. ui/js/toast.js assigns the enter one inline and

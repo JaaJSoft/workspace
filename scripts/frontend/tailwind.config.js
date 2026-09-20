@@ -1,3 +1,74 @@
+const daisyThemes = require('daisyui/src/theming/themes');
+
+// Themes available in the user preference picker
+// (workspace/users/ui/templates/users/ui/partials/settings_appearance.html
+// lightThemes + darkThemes). Listing a theme bakes it into the bundle;
+// omitting it would break that user's selection.
+const THEMES = [
+  'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro',
+  'valentine', 'garden', 'pastel', 'lemonade', 'autumn', 'winter', 'nord',
+  'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
+  'dracula', 'business', 'night', 'coffee', 'dim', 'sunset',
+];
+
+// A module's identity color: a Tailwind hue, theme independent, with one
+// shade for light themes and one for dark ones. Must match MODULE_HUES in
+// workspace/core/module_registry.py (core.tests.test_module_colors checks).
+// Bright hues take 500 in the dark: their 400 is too pale on a dark surface.
+const MODULE_HUES = {
+  indigo: { light: 600, dark: 400 },
+  sky: { light: 600, dark: 400 },
+  emerald: { light: 600, dark: 400 },
+  teal: { light: 600, dark: 400 },
+  amber: { light: 600, dark: 500 },
+  orange: { light: 600, dark: 400 },
+  purple: { light: 600, dark: 400 },
+  rose: { light: 600, dark: 400 },
+  cyan: { light: 600, dark: 500 },
+  slate: { light: 600, dark: 400 },
+  lime: { light: 600, dark: 500 },
+  fuchsia: { light: 600, dark: 400 },
+  yellow: { light: 600, dark: 500 },
+};
+
+// Themes whose daisyUI definition declares `color-scheme: dark`: the dark
+// module shade applies under any of them. Read from daisyUI so the list
+// never has to be maintained by hand.
+const DARK_THEMES = THEMES.filter((t) => daisyThemes[t]['color-scheme'] === 'dark');
+
+// '#d97706' -> '217 119 6', the form `rgb(var(--module) / <alpha-value>)` needs.
+function channels(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return `${n >> 16} ${(n >> 8) & 255} ${n & 255}`;
+}
+
+// .module-<hue> sets --module / --module-content; <body> carries the current
+// module's class and any tile showing another module carries its own. The
+// dark rule is a descendant selector on [data-theme], which sits on <html>,
+// so it reaches <body> and nested tiles alike. :root falls back to slate for
+// pages outside any module (settings, profile).
+function moduleHuesPlugin({ addComponents, theme }) {
+  const light = {};
+  const dark = {};
+  for (const [hue, shade] of Object.entries(MODULE_HUES)) {
+    light[`.module-${hue}`] = {
+      '--module': channels(theme(`colors.${hue}.${shade.light}`)),
+      '--module-content': '255 255 255',
+    };
+    dark[`.module-${hue}`] = {
+      '--module': channels(theme(`colors.${hue}.${shade.dark}`)),
+      '--module-content': channels(theme(`colors.${hue}.950`)),
+    };
+  }
+  const darkScope = DARK_THEMES.map((t) => `[data-theme=${t}]`).join(', ');
+  const rules = { ':root': light['.module-slate'], ...light };
+  rules[`:is(${darkScope})`] = dark['.module-slate'];
+  for (const [selector, decls] of Object.entries(dark)) {
+    rules[`:is(${darkScope}) ${selector}`] = decls;
+  }
+  addComponents(rules);
+}
+
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   // Tailwind only ships classes it can see as literal strings in these files.
@@ -15,11 +86,12 @@ module.exports = {
     '!../../workspace/**/static/**/vendor/**',
   ],
   // DaisyUI semantic colors that the codebase interpolates at runtime
-  // (audit identified 14 dynamic patterns: module.color, calendar.color,
-  // tag.color, cmd.color, etc.). Without this, those rules get purged.
+  // (calendar.color, tag.color, badge_type, drawer_item's color param...).
+  // Without this, those rules get purged. `module` is in the list for
+  // drawer_item.html, which interpolates `bg-{{ c }}/10` with c="module".
   safelist: [
     {
-      pattern: /^(bg|text|border|ring|fill|stroke|checkbox|badge|btn)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content)(-content)?$/,
+      pattern: /^(bg|text|border|ring|fill|stroke|checkbox|badge|btn|toggle|link|progress|range|radio|input)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content|module)(-content)?$/,
       variants: ['hover', 'focus', 'group-hover'],
     },
     {
@@ -34,28 +106,32 @@ module.exports = {
       // built as plain strings in workspace/projects/services/timeline.py
       // (and any other chart service) - the scanner never reads .py files,
       // so those classes only exist in the bundle because of this entry.
-      pattern: /^(bg|text|border|ring|fill|stroke)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content)\/\d+$/,
+      pattern: /^(bg|text|border|ring|fill|stroke)-(primary|secondary|accent|neutral|info|success|warning|error|ghost|base-100|base-200|base-300|base-content|module)\/\d+$/,
       variants: ['hover'],
+    },
+    {
+      // .module-<hue> base layer rules set by moduleHuesPlugin to define
+      // --module and --module-content custom properties. These are not
+      // scanned as text literals since the plugin generates them, so the
+      // base rules would be purged without this safelist entry.
+      pattern: /^module-(indigo|sky|emerald|teal|amber|orange|purple|rose|cyan|slate|lime|fuchsia|yellow)$/,
     },
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        module: 'rgb(var(--module) / <alpha-value>)',
+        'module-content': 'rgb(var(--module-content) / <alpha-value>)',
+      },
+    },
   },
   plugins: [
     require('@tailwindcss/typography'),
     require('daisyui'),
+    moduleHuesPlugin,
   ],
-  // Themes available in the user preference picker
-  // (workspace/users/ui/templates/users/ui/partials/settings_appearance.html
-  // lightThemes + darkThemes). Listing a theme bakes it into the bundle;
-  // omitting it would break that user's selection.
   daisyui: {
-    themes: [
-      'light', 'cupcake', 'bumblebee', 'emerald', 'corporate', 'retro',
-      'valentine', 'garden', 'pastel', 'lemonade', 'autumn', 'winter', 'nord',
-      'dark', 'synthwave', 'halloween', 'forest', 'aqua', 'black', 'luxury',
-      'dracula', 'business', 'night', 'coffee', 'dim', 'sunset',
-    ],
+    themes: THEMES,
     logs: false,
   },
 };

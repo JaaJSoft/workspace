@@ -44,3 +44,39 @@ class ModuleHueValidationTests(SimpleTestCase):
 
         for module in registry.get_all():
             self.assertIn(module.color, MODULE_HUES, module.slug)
+
+
+MODULE_COMPONENTS = (
+    "btn-module",
+    "badge-module",
+    "toggle-module",
+    "link-module",
+    "progress-module",
+    "range-module",
+    "radio-module",
+    "checkbox-module",
+    "input-module",
+)
+
+
+class ModuleHueStylesheetTests(SimpleTestCase):
+    def test_tailwind_config_lists_the_same_hues(self):
+        body = HUES_BLOCK_RE.search(CONFIG.read_text(encoding="utf-8"))
+        self.assertIsNotNone(body, "MODULE_HUES table missing from tailwind.config.js")
+        config_hues = HUE_LINE_RE.findall(body["body"])
+        self.assertEqual(sorted(config_hues), sorted(MODULE_HUES))
+
+    def test_compiled_bundle_has_a_rule_per_hue(self):
+        css = STYLESHEET.read_text(encoding="utf-8")
+        missing = [hue for hue in MODULE_HUES if f".module-{hue}{{" not in css]
+        self.assertEqual(missing, [], "run `npm run build:css` in scripts/frontend")
+
+    def test_compiled_bundle_has_the_module_components(self):
+        css = STYLESHEET.read_text(encoding="utf-8")
+        missing = [cls for cls in MODULE_COMPONENTS if f".{cls}{{" not in css]
+        self.assertEqual(missing, [], "run `npm run build:css` in scripts/frontend")
+
+    def test_compiled_bundle_has_the_module_utilities(self):
+        css = STYLESHEET.read_text(encoding="utf-8")
+        for cls in (r".text-module{", r".bg-module\/10{", r".text-module-content{"):
+            self.assertIn(cls, css)

@@ -22,7 +22,7 @@ class PersonFlowTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/people")
         self.page.get_by_role("button", name="New contact").click()
         dialog = self.page.locator("#people-person-dialog")
-        expect(dialog).to_contain_text("In My contacts")
+        expect(dialog.locator('select[name="scope"]')).to_have_value("mine")
         dialog.locator('input[name="display_name"]').fill("Bob Martin")
         dialog.locator('input[name="email"]').fill("bob@example.com")
         dialog.get_by_role("button", name="Create").click()

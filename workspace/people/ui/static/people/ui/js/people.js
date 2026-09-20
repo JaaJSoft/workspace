@@ -37,8 +37,8 @@ window.peopleApp = function peopleApp(config) {
     panelOpen: Boolean(config.initialPerson),
     lists: [],
     groups: [],
-    personForm: { name: '', email: '' },
-    listForm: { uuid: '', name: '', original: '' },
+    personForm: { name: '', email: '', scope: 'mine' },
+    listForm: { uuid: '', name: '', original: '', scope: 'mine' },
     saving: false,
     collapsed: window.sidebarPreference.initial(),
 
@@ -125,19 +125,14 @@ window.peopleApp = function peopleApp(config) {
       else this.closePanel({ push: false });
     },
 
-    // Where a new contact or list lands: the sidebar selection, or the
-    // personal book when "All" is selected (the API default).
-    scopeLabel() {
-      if (this.scope.startsWith('group:')) {
-        const id = Number.parseInt(this.scope.slice('group:'.length), 10);
-        const group = this.groups.find((g) => g.id === id);
-        if (group) return group.name;
-      }
-      return 'My contacts';
+    // The sidebar selection is the default book of a new contact or list;
+    // "All" and a list filter mean the personal one.
+    defaultScope() {
+      return this.scope.startsWith('group:') ? this.scope : 'mine';
     },
 
     resetPersonForm() {
-      this.personForm = { name: '', email: '' };
+      this.personForm = { name: '', email: '', scope: this.defaultScope() };
     },
 
     newPerson() {
@@ -149,10 +144,9 @@ window.peopleApp = function peopleApp(config) {
     async createPerson() {
       const name = this.personForm.name.trim();
       if (!name || this.saving) return;
-      const body = { display_name: name };
+      const body = { display_name: name, scope: this.personForm.scope };
       const email = this.personForm.email.trim();
       if (email) body.emails = [{ value: email, type: 'other' }];
-      if (this.scope) body.scope = this.scope;
       this.saving = true;
       try {
         const res = await fetch('/api/v1/people', {
@@ -181,7 +175,7 @@ window.peopleApp = function peopleApp(config) {
     },
 
     resetListForm() {
-      this.listForm = { uuid: '', name: '', original: '' };
+      this.listForm = { uuid: '', name: '', original: '', scope: this.defaultScope() };
     },
 
     newList() {
@@ -191,7 +185,7 @@ window.peopleApp = function peopleApp(config) {
     },
 
     renameList(list) {
-      this.listForm = { uuid: list.uuid, name: list.name, original: list.name };
+      this.listForm = { uuid: list.uuid, name: list.name, original: list.name, scope: list.scope };
       this.$refs.listDialog.showModal();
       this.$nextTick(() => this.$refs.listName.select());
     },
@@ -204,8 +198,7 @@ window.peopleApp = function peopleApp(config) {
         this.$refs.listDialog.close();
         return;
       }
-      const body = { name };
-      if (!renaming && this.scope) body.scope = this.scope;
+      const body = renaming ? { name } : { name, scope: this.listForm.scope };
       this.saving = true;
       try {
         const res = await fetch(

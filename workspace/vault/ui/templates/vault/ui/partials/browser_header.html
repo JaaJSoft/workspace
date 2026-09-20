@@ -96,6 +96,23 @@
       Everything encrypted
     </span>
     <div class="flex-1"></div>
+    {% comment %}
+      The trash's own action, in the slot the New button occupies everywhere
+      else: the two are mutually exclusive, so nothing moves when the view
+      changes. Disabled rather than hidden while the actions are in flight -
+      a button that appears late is a button clicked twice.
+    {% endcomment %}
+    <button
+      type="button"
+      class="btn btn-error btn-outline btn-sm gap-2 flex-shrink-0"
+      x-show="view === 'trash' && !!openVault"
+      :disabled="busy || !canEmptyTrash()"
+      @click="emptyTrash()"
+    >
+      <i data-lucide="trash-2" class="w-4 h-4"></i>
+      <span class="hidden sm:inline">Empty the trash</span>
+    </button>
+
     <div
       class="dropdown dropdown-end flex-shrink-0"
       x-show="view !== 'trash' && !!openVault"

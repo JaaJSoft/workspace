@@ -157,3 +157,76 @@ test('the other bulk verbs still go row by row', async () => {
 
   assert.deepEqual(Array.from(trashed), ['e-0', 'e-1', 'e-2']);
 });
+
+test('the empty-trash button is offered only when every row offers delete_forever', () => {
+  // The rule is the registry's, never the client's: a row the server would
+  // refuse must not be swept up by a button that asked nobody.
+  const { component } = browser();
+  assert.equal(component.canEmptyTrash(), true);
+
+  component.entryActions = Object.assign({}, component.entryActions, {
+    'e-1': [],
+  });
+
+  assert.equal(component.canEmptyTrash(), false);
+});
+
+test('an empty trash offers nothing to empty', () => {
+  const { component } = browser({ count: 0 });
+  assert.equal(component.canEmptyTrash(), false);
+});
+
+test('the button is not offered outside the trash', () => {
+  const { component } = browser();
+  component.view = 'all';
+  assert.equal(component.canEmptyTrash(), false);
+});
+
+test('a search narrowing the listing does not narrow what is destroyed', () => {
+  // visibleEntries() is filtered by the search box; the trash is not. A
+  // confirmation built from the filtered rows would understate what the
+  // click destroys.
+  const { component } = browser();
+  component.search = 'a name no row carries';
+
+  assert.equal(component.visibleEntries().length, 0);
+  assert.equal(component.canEmptyTrash(), true);
+  assert.equal(component.trashCount(), 3);
+});
+
+test('emptying the trash names the vault, never its rows', async () => {
+  const { component, api, reloads } = browser();
+  const calls = [];
+  api.purgeVaultTrash = (vaultUuid) => {
+    calls.push(vaultUuid);
+    return Promise.resolve({ destroyed: [] });
+  };
+  api.purgeEntries = () => {
+    throw new Error('emptying must not slice the trash into batches');
+  };
+
+  await component.emptyTrash();
+
+  assert.deepEqual(Array.from(calls), [VAULT_UUID]);
+  assert.equal(reloads(), 1);
+});
+
+test('a refused empty reloads the listing and says so', async () => {
+  const { component, api, reloads } = browser();
+  api.purgeVaultTrash = () => Promise.reject(new Error('409'));
+
+  await component.emptyTrash();
+
+  assert.equal(reloads(), 1);
+  assert.match(component.error, /could not be emptied/);
+});
+
+test('emptying does nothing when the registry did not offer it', async () => {
+  const { component, api } = browser();
+  component.entryActions = {};
+  api.purgeVaultTrash = () => {
+    throw new Error('the request must not leave without the registry saying yes');
+  };
+
+  await component.emptyTrash();
+});

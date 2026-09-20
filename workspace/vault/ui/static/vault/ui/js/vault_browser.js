@@ -886,6 +886,53 @@ window.vaultBrowser = (function () {
         await this.applyTo(action.id, rows);
       },
 
+      // Whether the whole trash may be destroyed: every row in it was
+      // offered delete_forever by the server. The registry decides, never a
+      // role worked out here - the client's job is to hide what it would be
+      // refused, not to reason about why.
+      //
+      // The whole trash, not visibleEntries(): that one is narrowed by the
+      // search box and the type filter, and a button that destroys forty
+      // rows after asking about three is the worst kind of correct.
+      canEmptyTrash: function () {
+        if (this.view !== 'trash' || !this.openVault) return false;
+        const rows = this.entries.filter(function (entry) { return entry.trashed; });
+        if (!rows.length) return false;
+        const self = this;
+        return rows.every(function (row) {
+          return self.hasAction(row, 'delete_forever');
+        });
+      },
+
+      // One request for a trash of any size. The selection bar's batch is
+      // capped because it names its rows; this one names the vault, so the
+      // client never slices - and a slice failing alone would be exactly the
+      // half-emptied trash the endpoint exists to prevent.
+      emptyTrash: async function () {
+        if (!this.canEmptyTrash()) return;
+        const count = this.trashCount();
+        const confirmed = await this.confirm(
+          'Destroy the ' + count + ' entries in the trash? They are not in the '
+            + 'trash afterwards - they are gone.',
+          DESTRUCTIVE,
+        );
+        if (!confirmed) return;
+        this.busy = true;
+        let failure = null;
+        try {
+          await window.vaultApi.purgeVaultTrash(this.openVault.uuid);
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failure = err;
+        } finally {
+          this.busy = false;
+        }
+        await this.load();
+        if (failure) {
+          this.error = 'The trash could not be emptied. The listing above is current.';
+        }
+      },
+
       // One row or many, the same path. It stops at the first refusal rather
       // than pressing on: a batch that half-happened and said nothing is
       // worse than one that stopped and said where.

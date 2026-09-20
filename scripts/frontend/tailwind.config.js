@@ -47,7 +47,7 @@ function channels(hex) {
 // dark rule is a descendant selector on [data-theme], which sits on <html>,
 // so it reaches <body> and nested tiles alike. :root falls back to slate for
 // pages outside any module (settings, profile).
-function moduleHuesPlugin({ addComponents, theme }) {
+function moduleHuesPlugin({ addBase, addComponents, theme }) {
   const light = {};
   const dark = {};
   for (const [hue, shade] of Object.entries(MODULE_HUES)) {
@@ -66,6 +66,7 @@ function moduleHuesPlugin({ addComponents, theme }) {
   for (const [selector, decls] of Object.entries(dark)) {
     rules[`:is(${darkScope}) ${selector}`] = decls;
   }
+  // addComponents rather than addBase: base-layer class rules are dropped even when safelisted.
   addComponents(rules);
 }
 
@@ -110,11 +111,10 @@ module.exports = {
       variants: ['hover'],
     },
     {
-      // .module-<hue> base layer rules set by moduleHuesPlugin to define
-      // --module and --module-content custom properties. These are not
-      // scanned as text literals since the plugin generates them, so the
-      // base rules would be purged without this safelist entry.
-      pattern: /^module-(indigo|sky|emerald|teal|amber|orange|purple|rose|cyan|slate|lime|fuchsia|yellow)$/,
+      // Module hue classes come from moduleHuesPlugin and only ever appear
+      // interpolated in templates (`module-{{ m.color }}`), so the scanner
+      // never sees one as a literal and the rules would be purged.
+      pattern: new RegExp(`^module-(${Object.keys(MODULE_HUES).join('|')})$`),
     },
   ],
   theme: {

@@ -108,9 +108,6 @@
     background-color: transparent;
     color: rgb(var(--module));
   }
-  .toggle-module {
-    accent-color: rgb(var(--module));
-  }
   .toggle-module:focus-visible {
     outline-color: rgb(var(--module));
   }
@@ -125,9 +122,6 @@
   }
   .link-module:hover {
     color: color-mix(in oklab, rgb(var(--module)) 80%, black);
-  }
-  .progress-module {
-    --progress-color: rgb(var(--module));
   }
   .progress-module::-moz-progress-bar {
     background-color: rgb(var(--module));

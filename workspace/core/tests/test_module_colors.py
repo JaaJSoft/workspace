@@ -73,7 +73,11 @@ class ModuleHueStylesheetTests(SimpleTestCase):
 
     def test_compiled_bundle_has_the_module_components(self):
         css = STYLESHEET.read_text(encoding="utf-8")
-        missing = [cls for cls in MODULE_COMPONENTS if f".{cls}{{" not in css]
+        missing = [
+            cls
+            for cls in MODULE_COMPONENTS
+            if not re.search(rf"\.{re.escape(cls)}[{{:\[]", css)
+        ]
         self.assertEqual(missing, [], "run `npm run build:css` in scripts/frontend")
 
     def test_compiled_bundle_has_the_module_utilities(self):

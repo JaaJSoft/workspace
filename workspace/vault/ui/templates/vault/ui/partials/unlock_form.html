@@ -10,7 +10,7 @@
   <div class="card-body">
     <div class="flex items-start gap-3">
       <span
-        class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0"
+        class="w-10 h-10 rounded-full bg-module/15 text-module flex items-center justify-center shrink-0"
       >
         <i data-lucide="lock" class="w-5 h-5"></i>
       </span>
@@ -121,7 +121,7 @@
       <div class="flex justify-end mt-4">
         <button
           type="submit"
-          class="btn btn-primary btn-sm"
+          class="btn btn-module btn-sm"
           :disabled="state === 'deriving' || !password || secretMissing()"
         >
           <span x-show="state !== 'deriving'">Unlock</span>

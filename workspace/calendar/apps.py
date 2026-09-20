@@ -21,7 +21,7 @@ class CalendarConfig(AppConfig):
                 slug="calendar",
                 description="Plan and manage events, meetings and invitations.",
                 icon="calendar",
-                color="accent",
+                color="teal",
                 url="/calendar",
                 order=20,
             )

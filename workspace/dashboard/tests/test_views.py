@@ -27,7 +27,7 @@ def _mod(slug, active=True, preview=False, show_on_dashboard=True):
         slug=slug,
         description="",
         icon="i",
-        color="c",
+        color="indigo",
         url=f"/{slug}",
         active=active,
         preview=preview,

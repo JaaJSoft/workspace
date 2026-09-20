@@ -14,7 +14,7 @@ class PeopleConfig(AppConfig):
                 slug="people",
                 description="Keep the people around your data in one address book.",
                 icon="contact",
-                color="secondary",
+                color="rose",
                 url="/people",
                 order=32,
             )

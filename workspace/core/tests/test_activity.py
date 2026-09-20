@@ -538,7 +538,7 @@ class ActivityModuleVisibilityTests(TestCase):
                 slug=slug,
                 description="",
                 icon="i",
-                color="c",
+                color="indigo",
                 url=f"/{slug}",
                 active=True,
                 preview=preview,

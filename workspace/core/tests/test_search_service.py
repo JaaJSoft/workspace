@@ -22,7 +22,7 @@ def _module(slug, preview=False):
         slug=slug,
         description="",
         icon="i",
-        color="c",
+        color="indigo",
         url=f"/{slug}",
         preview=preview,
     )
@@ -33,7 +33,7 @@ def _command(slug):
         name=slug.title(),
         keywords=[],
         icon="i",
-        color="c",
+        color="indigo",
         url=f"/{slug}",
         kind="navigate",
         module_slug=slug,

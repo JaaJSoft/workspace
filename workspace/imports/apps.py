@@ -27,7 +27,7 @@ class ImportsConfig(AppConfig):
                 slug="imports",
                 description="Bring your files over from another cloud.",
                 icon="download-cloud",
-                color="accent",
+                color="cyan",
                 url="/imports",
                 order=90,
                 preview=True,

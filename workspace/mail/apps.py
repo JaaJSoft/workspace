@@ -25,7 +25,7 @@ class MailConfig(AppConfig):
                 slug="mail",
                 description="Read and send emails from external mail accounts.",
                 icon="mail",
-                color="warning",
+                color="amber",
                 url="/mail",
                 order=25,
             )

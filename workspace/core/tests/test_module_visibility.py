@@ -27,7 +27,7 @@ def _module(slug="x", preview=False, active=True):
         slug=slug,
         description="",
         icon="i",
-        color="c",
+        color="indigo",
         url=f"/{slug}",
         active=active,
         preview=preview,
@@ -135,7 +135,7 @@ class VisibleModulesTests(TestCase):
                 name="Files",
                 keywords=[],
                 icon="i",
-                color="c",
+                color="indigo",
                 url="/files",
                 kind="navigate",
                 module_slug="files",
@@ -144,7 +144,7 @@ class VisibleModulesTests(TestCase):
                 name="Lab",
                 keywords=[],
                 icon="i",
-                color="c",
+                color="indigo",
                 url="/lab",
                 kind="navigate",
                 module_slug="lab",
@@ -163,11 +163,16 @@ class CurrentModuleTests(TestCase):
             slug="dashboard",
             description="",
             icon="i",
-            color="c",
+            color="indigo",
             url="/",
         )
         self.tool = ModuleInfo(
-            name="Tasks", slug="tasks", description="", icon="i", color="c", url=None
+            name="Tasks",
+            slug="tasks",
+            description="",
+            icon="i",
+            color="indigo",
+            url=None,
         )
         self.modules = [self.home, self.files, self.notes, self.tool]
 
@@ -216,7 +221,7 @@ class ContextProcessorVisibilityTests(TestCase):
                 name="Lab",
                 keywords=[],
                 icon="i",
-                color="c",
+                color="indigo",
                 url="/lab",
                 kind="navigate",
                 module_slug="lab",

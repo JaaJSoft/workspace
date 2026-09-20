@@ -27,7 +27,7 @@ class ChatConfig(AppConfig):
                 slug="chat",
                 description="Real-time messaging with direct and group conversations.",
                 icon="message-circle",
-                color="info",
+                color="sky",
                 url="/chat",
                 order=15,
             )

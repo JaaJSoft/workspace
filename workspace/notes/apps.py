@@ -25,7 +25,7 @@ class NotesConfig(AppConfig):
                 slug="notes",
                 description="Write and organize markdown notes.",
                 icon="notebook-pen",
-                color="success",
+                color="emerald",
                 url="/notes",
                 order=30,
             )

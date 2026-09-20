@@ -23,7 +23,7 @@ class VaultConfig(AppConfig):
                 slug="vault",
                 description="Store passwords in an end-to-end encrypted vault.",
                 icon="key-round",
-                color="error",
+                color="purple",
                 url="/vault",
                 order=40,
                 preview=True,

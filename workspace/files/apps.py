@@ -36,7 +36,7 @@ class FilesConfig(AppConfig):
                 slug="files",
                 description="Store, organize and share files.",
                 icon="hard-drive",
-                color="primary",
+                color="indigo",
                 url="/files",
                 order=10,
             )

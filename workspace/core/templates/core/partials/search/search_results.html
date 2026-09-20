@@ -85,8 +85,8 @@
       >
         <div class="flex-shrink-0">
           <div
-            :class="`bg-${cmd.color || 'primary'}/10 text-${cmd.color || 'primary'}`"
-            class="rounded-lg {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center"
+            :class="`module-${cmd.color || 'slate'}`"
+            class="bg-module/10 text-module rounded-lg {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center"
           >
             <i
               :data-lucide="cmd.icon || 'terminal'"
@@ -136,8 +136,8 @@
       >
         <div class="avatar placeholder flex-shrink-0">
           <div
-            :class="`bg-${result.module_color || 'primary'} text-${result.module_color || 'primary'}-content`"
-            class="rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden"
+            :class="`module-${result.module_color || 'slate'}`"
+            class="bg-module text-module-content rounded-full {% if size == 'lg' %}w-10 h-10{% else %}w-8 h-8{% endif %} flex items-center justify-center overflow-hidden"
           >
             <i
               :data-lucide="result.type_icon || 'search'"
@@ -160,8 +160,8 @@
           <div class="text-xs text-base-content/60 flex items-center gap-2">
             <i
               :data-lucide="result.type_icon || 'tag'"
-              class="w-3 h-3 flex-shrink-0"
-              :class="`text-${result.module_color || 'primary'}`"
+              class="w-3 h-3 flex-shrink-0 text-module"
+              :class="`module-${result.module_color || 'slate'}`"
             ></i>
             <span
               class="truncate flex-1"

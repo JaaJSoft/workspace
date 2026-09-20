@@ -6,13 +6,13 @@
     >
       <div class="relative">
         <div
-          class="w-12 h-12 rounded-xl bg-{{ module.color }}/10 flex items-center justify-center text-{{ module.color }} group-hover:bg-{{ module.color }}/20 transition-colors"
+          class="module-{{ module.color }} w-12 h-12 rounded-xl bg-module/10 flex items-center justify-center text-module group-hover:bg-module/20 transition-colors"
         >
           <i data-lucide="{{ module.icon }}" class="w-6 h-6"></i>
         </div>
         {% if module.notification_count %}
           <span
-            class="absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-{{ module.color }} text-{{ module.color }}-content text-xs font-bold px-1"
+            class="module-{{ module.color }} absolute -top-1.5 -right-1.5 min-w-5 h-5 flex items-center justify-center rounded-full bg-module text-module-content text-xs font-bold px-1"
           >{{ module.notification_count }}</span>
         {% endif %}
       </div>

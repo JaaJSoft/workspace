@@ -4,7 +4,8 @@ import re
 from pathlib import Path
 
 from django.conf import settings
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
 
 from workspace.core.module_registry import MODULE_HUES, ModuleInfo, ModuleRegistry
 
@@ -84,3 +85,25 @@ class ModuleHueStylesheetTests(SimpleTestCase):
         css = STYLESHEET.read_text(encoding="utf-8")
         for cls in (r".text-module{", r".bg-module\/10{", r".text-module-content{"):
             self.assertIn(cls, css)
+
+
+class ModuleBodyClassTests(TestCase):
+    def setUp(self):
+        user = get_user_model().objects.create_user(username="hue", password="pass123")
+        self.client.force_login(user)
+
+    def test_module_page_body_carries_its_hue_class(self):
+        resp = self.client.get("/files")
+        self.assertEqual(resp.status_code, 200)
+        self.assertRegex(resp.content.decode(), r"<body[^>]*class=\"[^\"]*\bmodule-indigo\b")
+
+    def test_page_outside_a_module_has_no_hue_class(self):
+        resp = self.client.get("/users/settings")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotRegex(resp.content.decode(), r"<body[^>]*\bmodule-[a-z]+\b")
+
+    def test_switcher_tiles_scope_their_own_hue(self):
+        resp = self.client.get("/files")
+        html = resp.content.decode()
+        self.assertIn("module-sky", html)  # the chat tile in the switcher grid
+        self.assertNotIn("bg-indigo/10", html)

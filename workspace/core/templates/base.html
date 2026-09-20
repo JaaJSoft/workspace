@@ -63,7 +63,7 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body
-    class="{% block body_class %}bg-base-100{% endblock %}"
+    class="{% block body_class %}bg-base-100{% endblock %}{% if workspace_current_module %} module-{{ workspace_current_module.color }}{% endif %}"
     data-login-url="{% url 'login' %}"
     data-app-version="{{ APP_VERSION }}"
   >

@@ -407,7 +407,6 @@ class UnifiedSearchVisibilityTests(TestCase):
                 name="Lab",
                 keywords=[],
                 icon="i",
-                color="indigo",
                 url="/lab",
                 kind="navigate",
                 module_slug="lab",

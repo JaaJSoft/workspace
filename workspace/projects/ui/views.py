@@ -11,6 +11,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import column_chart, gantt_chart, line_chart
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.core.module_registry import registry
 from workspace.core.services.activity import annotate_time_ago
 from workspace.projects.actions import ProjectActionRegistry
 from workspace.projects.models import (
@@ -311,8 +312,7 @@ def _task_panel_context(user, project, role, task, *, members=None):
         for ev in task.events.select_related("actor", "project")[:20]
     ]
     for event in events:
-        # Same color as the registered projects activity provider.
-        event["source_color"] = "accent"
+        event["source_color"] = registry.get("projects").color
     annotate_time_ago(events)
     action_ids = [
         action["id"]

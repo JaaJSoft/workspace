@@ -60,7 +60,6 @@ class ProjectsConfig(AppConfig):
                 slug="projects",
                 label="Projects",
                 icon="square-kanban",
-                color="accent",
                 provider_cls=ProjectsActivityProvider,
             )
         )

@@ -99,7 +99,6 @@ class SearchProviderTests(TestCase):
                 match_type="title",
                 type_icon="msg",
                 module_slug="chat",
-                module_color="primary",
             )
         ]
         provider = SearchProviderInfo(
@@ -129,7 +128,6 @@ class SearchProviderTests(TestCase):
                             match_type="title",
                             type_icon="msg",
                             module_slug="chat",
-                            module_color="primary",
                         )
                     ],
                 )
@@ -154,7 +152,6 @@ class SearchProviderTests(TestCase):
                     match_type="t",
                     type_icon="i",
                     module_slug="chat",
-                    module_color="p",
                 )
             ],
         )
@@ -174,6 +171,28 @@ class SearchProviderTests(TestCase):
         hits = reg.search("test", user=None)
         self.assertEqual(hits, [])
 
+    def test_search_hits_carry_the_module_color(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat", color="sky"))
+        reg.register_search_provider(
+            SearchProviderInfo(
+                slug="chat",
+                module_slug="chat",
+                search_fn=lambda q, u, limit: [
+                    SearchResult(
+                        uuid="1",
+                        name="Chat",
+                        url="/chat",
+                        matched_value="Chat",
+                        match_type="title",
+                        type_icon="msg",
+                        module_slug="chat",
+                    )
+                ],
+            )
+        )
+        self.assertEqual(reg.search("test", user=None)[0]["module_color"], "sky")
+
 
 class CommandTests(TestCase):
     def _make_cmd(self, name="New Chat", module_slug="chat", **kwargs):
@@ -181,7 +200,6 @@ class CommandTests(TestCase):
             "name": name,
             "keywords": ["message", "dm"],
             "icon": "msg",
-            "color": "primary",
             "url": "/chat/new",
             "kind": "navigate",
             "module_slug": module_slug,
@@ -227,6 +245,13 @@ class CommandTests(TestCase):
         reg.register(_make_module("chat"))
         reg.register_commands([self._make_cmd()])
         self.assertEqual(reg.search_commands("zzzzz"), [])
+
+    def test_command_payload_carries_the_module_color(self):
+        reg = ModuleRegistry()
+        reg.register(_make_module("chat", color="sky"))
+        payload = reg.command_payload(self._make_cmd())
+        self.assertEqual(payload["color"], "sky")
+        self.assertEqual(payload["name"], "New Chat")
 
 
 class ModulePreviewAndVisibilityTests(TestCase):

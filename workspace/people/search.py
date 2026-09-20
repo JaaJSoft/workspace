@@ -25,7 +25,6 @@ def search_persons(query, user, limit):
             match_type="person",
             type_icon="contact",
             module_slug="people",
-            module_color="secondary",
         )
         for p in persons
     ]

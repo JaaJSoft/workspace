@@ -62,7 +62,6 @@ class ChatConfig(AppConfig):
                     name="Chat",
                     keywords=["chat", "messages", "conversations"],
                     icon="message-circle",
-                    color="info",
                     url="/chat",
                     kind="navigate",
                     module_slug="chat",
@@ -72,7 +71,6 @@ class ChatConfig(AppConfig):
                     name="New conversation",
                     keywords=["new chat", "message"],
                     icon="message-circle-plus",
-                    color="info",
                     url="/chat?action=new",
                     kind="action",
                     module_slug="chat",
@@ -92,7 +90,6 @@ class ChatConfig(AppConfig):
                 slug="chat",
                 label="Chat",
                 icon="message-circle",
-                color="info",
                 provider_cls=ChatActivityProvider,
             )
         )

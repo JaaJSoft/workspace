@@ -33,7 +33,6 @@ def search_notes(query, user, limit):
                 match_type=match_type_for(f.name, query),
                 type_icon="notebook-pen",
                 module_slug="notes",
-                module_color="success",
                 tags=tags,
             )
         )

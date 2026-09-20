@@ -5,6 +5,7 @@ these helpers, so the visibility filter is pinned here rather than once per
 caller.
 """
 
+from dataclasses import asdict
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -33,7 +34,6 @@ def _command(slug):
         name=slug.title(),
         keywords=[],
         icon="i",
-        color="indigo",
         url=f"/{slug}",
         kind="navigate",
         module_slug=slug,
@@ -109,6 +109,9 @@ class SearchCommandsTests(TestCase):
             _command("files"),
             _command("lab"),
         ]
+        mock_registry.command_payload.side_effect = lambda cmd: (
+            asdict(cmd) | {"color": "indigo"}
+        )
         mock_visibility_registry.get.side_effect = lambda slug: _module(
             slug, preview=slug == "lab"
         )

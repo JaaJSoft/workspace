@@ -7,7 +7,14 @@ from datetime import date
 
 from workspace.common.logging import scrub
 
+from .module_registry import registry as module_registry
+
 logger = logging.getLogger(__name__)
+
+
+def module_color(slug):
+    module = module_registry.get(slug)
+    return module.color if module else "slate"
 
 
 @dataclass(frozen=True)
@@ -15,7 +22,6 @@ class ActivityProviderInfo:
     slug: str
     label: str
     icon: str
-    color: str
     provider_cls: type  # subclass of ActivityProvider
 
 
@@ -140,7 +146,7 @@ class ActivityRegistry:
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
-                    event.setdefault("source_color", info.color)
+                    event.setdefault("source_color", module_color(info.slug))
                 return events
             except Exception:
                 logger.exception(
@@ -163,7 +169,7 @@ class ActivityRegistry:
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
-                    event.setdefault("source_color", info.color)
+                    event.setdefault("source_color", module_color(info.slug))
                 if exclude_actor_id is not None:
                     events = [
                         e

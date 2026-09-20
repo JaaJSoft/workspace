@@ -38,7 +38,6 @@ def search_files(query, user, limit):
                 match_type=match_type_for(f.name, query),
                 type_icon=type_icon,
                 module_slug="files",
-                module_color="primary",
                 tags=tags,
             )
         )

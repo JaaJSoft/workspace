@@ -51,7 +51,6 @@ class CalendarConfig(AppConfig):
                     name="Calendar",
                     keywords=["calendar", "agenda", "events", "planning"],
                     icon="calendar",
-                    color="accent",
                     url="/calendar",
                     kind="navigate",
                     module_slug="calendar",
@@ -61,7 +60,6 @@ class CalendarConfig(AppConfig):
                     name="New event",
                     keywords=["new event", "meeting", "schedule"],
                     icon="calendar-plus",
-                    color="accent",
                     url="/calendar?action=new-event",
                     kind="action",
                     module_slug="calendar",
@@ -71,7 +69,6 @@ class CalendarConfig(AppConfig):
                     name="New poll",
                     keywords=["new poll", "survey", "vote", "sondage"],
                     icon="bar-chart-3",
-                    color="accent",
                     url="/calendar?action=new-poll",
                     kind="action",
                     module_slug="calendar",
@@ -96,7 +93,6 @@ class CalendarConfig(AppConfig):
                 slug="calendar",
                 label="Calendar",
                 icon="calendar",
-                color="accent",
                 provider_cls=CalendarActivityProvider,
             )
         )

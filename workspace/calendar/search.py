@@ -50,7 +50,6 @@ def search_events(query, user, limit):
                 match_type=match_type,
                 type_icon="calendar",
                 module_slug="calendar",
-                module_color="accent",
                 tags=(SearchTag(e.calendar.name, "accent"),) if e.calendar else (),
             )
         )
@@ -71,7 +70,6 @@ def search_polls(query, user, limit):
             match_type="title",
             type_icon="bar-chart-3",
             module_slug="calendar",
-            module_color="accent",
             tags=(SearchTag(p.status.capitalize(), "accent"),),
         )
         for p in polls

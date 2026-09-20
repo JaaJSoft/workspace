@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from workspace.common.cache import cached
 from workspace.common.dates import time_ago
-from workspace.core.activity_registry import activity_registry
+from workspace.core.activity_registry import activity_registry, module_color
 
 from .module_visibility import hidden_module_slugs
 
@@ -32,7 +32,12 @@ def get_sources(user=None):
         hidden = hidden_module_slugs(user)
         infos = [info for info in infos if info.slug not in hidden]
     return [
-        {"slug": info.slug, "label": info.label, "icon": info.icon, "color": info.color}
+        {
+            "slug": info.slug,
+            "label": info.label,
+            "icon": info.icon,
+            "color": module_color(info.slug),
+        }
         for info in infos
     ]
 

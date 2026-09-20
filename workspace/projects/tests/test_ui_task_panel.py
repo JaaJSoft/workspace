@@ -137,7 +137,7 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, "Task created")
         events = resp.context["panel_events"]
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]["source_color"], "accent")
+        self.assertEqual(events[0]["source_color"], "orange")
         self.assertIn("time_ago", events[0])
         # Panel activity rows hide the redundant per-row View link.
         self.assertNotContains(resp, ">View</a>")

@@ -75,7 +75,6 @@ class SearchResult:
     match_type: str
     type_icon: str
     module_slug: str
-    module_color: str
     date: str | None = None
     tags: tuple[SearchTag, ...] = ()
 
@@ -95,7 +94,6 @@ class CommandInfo:
     name: str
     keywords: list[str]
     icon: str
-    color: str
     url: str
     kind: str  # "navigate" | "action"
     module_slug: str
@@ -153,7 +151,9 @@ class ModuleRegistry:
                 # "project-tasks"); module_slug alone cannot tell two
                 # providers of the same module apart.
                 results.extend(
-                    asdict(h) | {"provider_slug": provider.slug} for h in hits
+                    asdict(h)
+                    | {"provider_slug": provider.slug, "module_color": module.color}
+                    for h in hits
                 )
             except Exception:
                 logger.exception("Search provider '%s' failed", provider.slug)
@@ -177,6 +177,10 @@ class ModuleRegistry:
             ),
             key=lambda c: c.order,
         )
+
+    def command_payload(self, cmd: CommandInfo) -> dict:
+        """The command as the palette JSON expects it, colored like its module."""
+        return asdict(cmd) | {"color": self._modules[cmd.module_slug].color}
 
     def search_commands(self, query: str) -> list[CommandInfo]:
         q = query.lower()

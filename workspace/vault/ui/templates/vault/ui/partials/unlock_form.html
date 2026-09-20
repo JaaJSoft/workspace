@@ -23,39 +23,55 @@
           :disabled="state === 'deriving'"
         />
       </label>
+      {% comment %}
+        The recovery key is the second half of the lock, not an alternative
+        to the password - the intro says so because two fields side by side
+        read as "either one" otherwise. The block only exists on a device
+        that has not remembered the key, so the remember checkbox lives in
+        it too: on a known device it would describe a key nobody can see.
+      {% endcomment %}
       <template x-if="secretRequired">
-        <label class="form-control mt-4">
-          <span class="label-text">Recovery key</span>
-          <input
-            type="text"
-            class="input input-bordered font-mono"
-            autocomplete="off"
-            spellcheck="false"
-            x-model="secretText"
-            :disabled="state === 'deriving'"
-          />
-          <span class="label-text-alt">From your emergency kit. Dashes and case are ignored.</span>
-        </label>
+        <div class="mt-4 space-y-3">
+          <p class="text-sm text-base-content/60">
+            This device does not have your recovery key yet. Enter it
+            alongside your password: both are needed, one does not replace
+            the other.
+          </p>
+          <label class="form-control">
+            <span class="label-text">Recovery key (from your emergency kit)</span>
+            <input
+              type="text"
+              class="input input-bordered font-mono"
+              autocomplete="off"
+              spellcheck="false"
+              x-model="secretText"
+              :disabled="state === 'deriving'"
+            />
+            <span class="label-text-alt">Dashes and case are ignored.</span>
+          </label>
+          <label class="label cursor-pointer justify-start gap-3">
+            <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
+            <span class="label-text">
+              Remember my recovery key on this device. Anything that can run
+              code on this page can then read it, so leave it off on a shared
+              computer.
+            </span>
+          </label>
+        </div>
       </template>
-      <label class="label cursor-pointer justify-start gap-3 mt-4">
-        <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-        <span class="label-text">
-          Remember my recovery key on this device. Anything that can run
-          code on this page can then read it, so leave it off on a shared
-          computer.
-        </span>
-      </label>
-      <button
-        type="submit"
-        class="btn btn-module mt-4"
-        :disabled="state === 'deriving' || !password || secretMissing()"
-      >
-        <span x-show="state !== 'deriving'">Unlock</span>
-        <span x-show="state === 'deriving'" x-cloak>
-          <span class="loading loading-spinner loading-xs"></span>
-          Unlocking - the wait is deliberate
-        </span>
-      </button>
+      <div class="flex justify-end mt-4">
+        <button
+          type="submit"
+          class="btn btn-primary btn-sm"
+          :disabled="state === 'deriving' || !password || secretMissing()"
+        >
+          <span x-show="state !== 'deriving'">Unlock</span>
+          <span x-show="state === 'deriving'" x-cloak>
+            <span class="loading loading-spinner loading-xs"></span>
+            Unlocking - the wait is deliberate
+          </span>
+        </button>
+      </div>
     </form>
   </div>
 </div>

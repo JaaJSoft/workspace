@@ -1,4 +1,4 @@
-// Destroying entries for good is one request, not one per row. The loop it
+// Destroying entries permanently is one request, not one per row. The loop
 // replaces could half-happen - half the rows gone, half in place, and nothing
 // true left to tell the user - so the number of requests is asserted here
 // rather than described.
@@ -146,7 +146,7 @@ test('a refused batch reloads the listing and says so', async () => {
   await component.applyTo('delete_forever', component.selectedEntries());
 
   assert.equal(reloads(), 1);
-  assert.match(component.error, /could not be applied/);
+  assert.match(component.error, /Some entries could not be changed/);
 });
 
 test('the other bulk verbs still go row by row', async () => {
@@ -271,8 +271,8 @@ test('the question counts the stored rows, not the ones that opened', async () =
 
   await component.emptyTrash();
 
-  assert.match(asked, /Destroy the 5 entries/);
-  assert.match(asked, /2 this device could not read/);
+  assert.match(asked, /Permanently delete the 5 entries in the trash\?/);
+  assert.match(asked, /2 of them cannot be read on this device\./);
 });
 
 test('the question is grammatical for a single entry', async () => {
@@ -285,8 +285,8 @@ test('the question is grammatical for a single entry', async () => {
 
   await component.emptyTrash();
 
-  assert.match(asked, /Destroy the entry in the trash\?/);
-  assert.ok(!/could not read/.test(asked));
+  assert.match(asked, /Permanently delete the entry in the trash\?/);
+  assert.ok(!/cannot be read/.test(asked));
 });
 
 test('declining the question destroys nothing', async () => {

@@ -47,7 +47,7 @@ window.VAULT_ACTIONS_BATCH_SIZE = 200;
 // call (MAX_PURGE_BATCH in vault/views/entries.py). Nothing caps a selection -
 // Select all ticks every listed row - so a trash past this size has to be
 // destroyed in slices. Each slice is all-or-nothing on its own; the whole
-// trash in one transaction is what the Empty the trash button is for, and it
+// trash in one transaction is what the Empty trash button is for, and it
 // names the vault rather than its rows.
 window.VAULT_PURGE_BATCH_SIZE = 200;
 
@@ -102,7 +102,7 @@ window.vaultBrowser = (function () {
   // like a reversible one.
   const DESTRUCTIVE = {
     title: 'This cannot be undone',
-    okLabel: 'Delete for good',
+    okLabel: 'Delete permanently',
     okClass: 'btn-error',
   };
 
@@ -112,8 +112,8 @@ window.vaultBrowser = (function () {
   const CONFIRMS = {
     delete_forever: (count) =>
       count === 1
-        ? 'Destroy this entry? It is not in the trash afterwards - it is gone.'
-        : 'Destroy these ' + count + ' entries? They are not in the trash afterwards - they are gone.',
+        ? 'Permanently delete this entry?'
+        : 'Permanently delete these ' + count + ' entries?',
   };
 
   function readJson(elementId) {
@@ -932,12 +932,13 @@ window.vaultBrowser = (function () {
         const count = this.trashedRowCount();
         const unreadable = count - this.trashCount();
         const question = count === 1
-          ? 'Destroy the entry in the trash? It is not in the trash afterwards'
-            + ' - it is gone.'
-          : 'Destroy the ' + count + ' entries in the trash? They are not in the '
-            + 'trash afterwards - they are gone.';
+          ? 'Permanently delete the entry in the trash?'
+          : 'Permanently delete the ' + count + ' entries in the trash?';
+        // Never reached in the singular: the button is offered only when a
+        // readable trashed row exists, so an unreadable one always has
+        // company.
         const note = unreadable > 0
-          ? ' That includes ' + unreadable + ' this device could not read.'
+          ? ' ' + unreadable + ' of them cannot be read on this device.'
           : '';
         const confirmed = await this.confirm(question + note, DESTRUCTIVE);
         if (!confirmed) return;
@@ -953,7 +954,7 @@ window.vaultBrowser = (function () {
         }
         await this.load();
         if (failure) {
-          this.error = 'The trash could not be emptied. The listing above is current.';
+          this.error = 'The trash could not be emptied. The list above is up to date.';
         }
       },
 
@@ -1006,7 +1007,7 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failure) {
           this.error =
-            'That change could not be applied to every entry. The listing above is current.';
+            'Some entries could not be changed. The list above is up to date.';
         }
       },
 

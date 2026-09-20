@@ -79,7 +79,7 @@ def _not_in_the_trash():
 
 def _not_the_owner():
     return Response(
-        {"detail": "Only the vault owner may delete an entry for good."},
+        {"detail": "Only the vault owner may permanently delete an entry."},
         status=status.HTTP_403_FORBIDDEN,
     )
 
@@ -345,7 +345,7 @@ class EntryPurgeView(CacheControlMixin, APIView):
 
     @extend_schema(
         tags=["Vault"],
-        summary="Delete a trashed entry for good",
+        summary="Permanently delete a trashed entry",
         responses={204: None},
     )
     @sensitive_variables()

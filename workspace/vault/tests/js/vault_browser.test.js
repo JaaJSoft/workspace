@@ -1846,7 +1846,7 @@ test('a lock takes the secret back off the clipboard', async () => {
 const TRASH_ACTIONS = {
   restore: { id: 'restore', label: 'Restore', icon: 'undo-2', bulk: true, css_class: '' },
   delete_forever: {
-    id: 'delete_forever', label: 'Delete for good', icon: 'trash-2',
+    id: 'delete_forever', label: 'Delete permanently', icon: 'trash-2',
     bulk: true, css_class: 'text-error',
   },
 };
@@ -2108,7 +2108,7 @@ test('a confirmation carries its own question rather than the default one', asyn
   component.setView('trash');
   await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
   assert.equal(asked.length, 1);
-  assert.match(asked[0].message, /destroy this entry/i);
+  assert.match(asked[0].message, /permanently delete this entry/i);
   assert.equal(asked[0].okClass, 'btn-error');
 });
 

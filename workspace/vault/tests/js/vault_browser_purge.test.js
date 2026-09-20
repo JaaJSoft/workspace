@@ -79,6 +79,13 @@ function browser(options = {}) {
   component.openVault = { uuid: VAULT_UUID, name: 'Personal' };
   component.view = 'trash';
   component.entries = Array.from({ length: count }, (_, i) => trashedRow(i));
+  // The stored rows behind the opened ones. A row that fails to verify lives
+  // only here: readAll drops it from `entries` and counts it as tampered.
+  const unreadable = options.unreadable || 0;
+  component.entryRows = Array.from(
+    { length: count + unreadable },
+    (_, i) => ({ uuid: `e-${i}`, deleted_at: '2026-09-20T00:00:00Z' }),
+  );
   component.selected = component.entries.map((entry) => entry.uuid);
   component.entryActions = Object.fromEntries(
     component.entries.map((entry) => [
@@ -92,7 +99,7 @@ function browser(options = {}) {
   component.load = async () => {
     reloads += 1;
   };
-  return { component, api, reloads: () => reloads };
+  return { component, api, ctx, reloads: () => reloads };
 }
 
 test('destroying a selection sends one request, not one per row', async () => {
@@ -226,6 +233,67 @@ test('emptying does nothing when the registry did not offer it', async () => {
   component.entryActions = {};
   api.purgeVaultTrash = () => {
     throw new Error('the request must not leave without the registry saying yes');
+  };
+
+  await component.emptyTrash();
+});
+
+test('a selection larger than the cap is destroyed in slices of it', () => {
+  // Nothing caps a selection - Select all ticks every listed row - while the
+  // endpoint refuses more than VAULT_PURGE_BATCH_SIZE. Before this slicing a
+  // trash of 250 answered 400 and destroyed nothing, under a message that
+  // implied a partial success.
+  const { component, api, ctx } = browser({ count: 250 });
+  const sizes = [];
+  api.purgeEntries = (uuids) => {
+    sizes.push(uuids.length);
+    return Promise.resolve({ destroyed: uuids });
+  };
+  api.purgeEntry = () => {
+    throw new Error('a large selection must not fall back to one call per row');
+  };
+
+  return component.applyTo('delete_forever', component.selectedEntries()).then(() => {
+    assert.deepEqual(Array.from(sizes), [ctx.VAULT_PURGE_BATCH_SIZE, 50]);
+  });
+});
+
+test('the question counts the stored rows, not the ones that opened', async () => {
+  // A tampered row never reaches `entries`, and the server destroys it with
+  // the rest. Asking about three and destroying five would hide exactly the
+  // rows a user has most reason to keep.
+  const { component } = browser({ count: 3, unreadable: 2 });
+  let asked = '';
+  component.confirm = (message) => {
+    asked = message;
+    return Promise.resolve(false);
+  };
+
+  await component.emptyTrash();
+
+  assert.match(asked, /Destroy the 5 entries/);
+  assert.match(asked, /2 this device could not read/);
+});
+
+test('the question is grammatical for a single entry', async () => {
+  const { component } = browser({ count: 1 });
+  let asked = '';
+  component.confirm = (message) => {
+    asked = message;
+    return Promise.resolve(false);
+  };
+
+  await component.emptyTrash();
+
+  assert.match(asked, /Destroy the entry in the trash\?/);
+  assert.ok(!/could not read/.test(asked));
+});
+
+test('declining the question destroys nothing', async () => {
+  const { component, api } = browser();
+  component.confirm = () => Promise.resolve(false);
+  api.purgeVaultTrash = () => {
+    throw new Error('a declined confirmation must send no request');
   };
 
   await component.emptyTrash();

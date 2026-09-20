@@ -43,6 +43,14 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
 // slices rather than asking the server to lift it.
 window.VAULT_ACTIONS_BATCH_SIZE = 200;
 
+// POST /api/v1/vault/entries/purge refuses more than this many UUIDs in one
+// call (MAX_PURGE_BATCH in vault/views/entries.py). Nothing caps a selection -
+// Select all ticks every listed row - so a trash past this size has to be
+// destroyed in slices. Each slice is all-or-nothing on its own; the whole
+// trash in one transaction is what the Empty the trash button is for, and it
+// names the vault rather than its rows.
+window.VAULT_PURGE_BATCH_SIZE = 200;
+
 // The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
 // in full CSS classes, two of which the vault's colour column refuses, and the
 // signed metadata holds a bare daisyUI role rather than a class.
@@ -908,14 +916,30 @@ window.vaultBrowser = (function () {
       // capped because it names its rows; this one names the vault, so the
       // client never slices - and a slice failing alone would be exactly the
       // half-emptied trash the endpoint exists to prevent.
+      // Counted on the stored rows, not on the opened ones: a row whose
+      // signature did not verify never reaches `entries` - it only raises the
+      // tampered banner - and the server destroys it with the rest. Asking
+      // about three entries and destroying five would hide exactly the rows a
+      // user has most reason to keep.
+      trashedRowCount: function () {
+        return this.entryRows.filter(function (row) {
+          return !!row.deleted_at;
+        }).length;
+      },
+
       emptyTrash: async function () {
         if (!this.canEmptyTrash()) return;
-        const count = this.trashCount();
-        const confirmed = await this.confirm(
-          'Destroy the ' + count + ' entries in the trash? They are not in the '
-            + 'trash afterwards - they are gone.',
-          DESTRUCTIVE,
-        );
+        const count = this.trashedRowCount();
+        const unreadable = count - this.trashCount();
+        const question = count === 1
+          ? 'Destroy the entry in the trash? It is not in the trash afterwards'
+            + ' - it is gone.'
+          : 'Destroy the ' + count + ' entries in the trash? They are not in the '
+            + 'trash afterwards - they are gone.';
+        const note = unreadable > 0
+          ? ' That includes ' + unreadable + ' this device could not read.'
+          : '';
+        const confirmed = await this.confirm(question + note, DESTRUCTIVE);
         if (!confirmed) return;
         this.busy = true;
         let failure = null;
@@ -956,11 +980,15 @@ window.vaultBrowser = (function () {
             return window.vaultApi.purgeEntries(uuids);
           },
         }[actionId];
+        const cap = window.VAULT_PURGE_BATCH_SIZE;
         this.busy = true;
         let failure = null;
         try {
           if (batched && rows.length > 1) {
-            await batched(rows.map(function (row) { return row.uuid; }));
+            const uuids = rows.map(function (row) { return row.uuid; });
+            for (let i = 0; i < uuids.length; i += cap) {
+              await batched(uuids.slice(i, i + cap));
+            }
           } else {
             for (const row of rows) {
               await call(row.uuid);

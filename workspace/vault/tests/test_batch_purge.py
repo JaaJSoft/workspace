@@ -6,9 +6,12 @@ the rows were destroyed returns the right number and leaves the wrong
 database.
 """
 
+import re
 import uuid
+from pathlib import Path
 from unittest.mock import patch
 
+from django.conf import settings
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -16,6 +19,7 @@ from django.utils import timezone
 
 from workspace.vault.models import EntryField, EntryType, VaultEntry, VaultRole
 from workspace.vault.tests.factories import make_account, make_key_wrap, make_vault
+from workspace.vault.views.entries import MAX_PURGE_BATCH
 
 PURGE_URL = "/api/v1/vault/entries/purge"
 
@@ -254,3 +258,53 @@ class BatchPurgeTests(TestCase):
             self.assertEqual(response.status_code, 200)
 
         self.assertEqual(len(three_rows), len(one_row))
+
+    def test_emptying_a_trash_does_not_name_its_rows_one_by_one(self):
+        """The vault form is uncapped, so a filter naming each row would put a
+        bind parameter per entry into the query that opens the delete - and a
+        large enough trash would then be a 500 rather than an empty trash."""
+        trashed = [self._entry() for _ in range(4)]
+
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(
+                self._post({"vault": str(self.vault.uuid)}).status_code, 200
+            )
+
+        # Every read of the table, not only the first: the one that opens the
+        # delete filters by vault either way, and it is the collector's own
+        # read behind `delete()` that used to carry the UUID of each row.
+        reads = [
+            query["sql"]
+            for query in queries
+            if query["sql"].lstrip().startswith("SELECT")
+            and 'FROM "vault_vaultentry"' in query["sql"]
+        ]
+        self.assertTrue(reads)
+        for sql in reads:
+            for entry in trashed:
+                self.assertNotIn(entry.uuid.hex, sql)
+            self.assertIn(self.vault.uuid.hex, sql)
+
+
+class PurgeCapContractTests(TestCase):
+    """The cap the endpoint enforces and the one the browser slices at.
+
+    Nothing links the two numbers at runtime: raise one alone and a selection
+    past it answers 400 having destroyed nothing, under a message that says
+    the change could not be applied to every entry - which reads as a partial
+    success that never happened. A JS test cannot pin this; it would compare a
+    literal to a literal.
+    """
+
+    SOURCE = (
+        Path(settings.BASE_DIR)
+        / "workspace/vault/ui/static/vault/ui/js/vault_browser.js"
+    )
+
+    def test_the_browser_slices_at_the_cap_the_endpoint_enforces(self):
+        source = self.SOURCE.read_text(encoding="utf-8")
+        declared = re.search(r"window\.VAULT_PURGE_BATCH_SIZE = (\d+);", source)
+        self.assertIsNotNone(
+            declared, "the browser must declare the batch size it slices at"
+        )
+        self.assertEqual(int(declared.group(1)), MAX_PURGE_BATCH)

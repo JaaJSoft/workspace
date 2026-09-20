@@ -441,38 +441,41 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
         if named_uuids == named_vault:
             return _refused("Send exactly one of uuids or vault.")
 
-        if named_vault:
-            entries = self._whole_trash(request.user, data["vault"])
-        else:
-            entries = self._selection(request.user, data)
-        if isinstance(entries, Response):
-            return entries
-
-        # One query for every role, then pure in-memory checks: asking per
-        # row would make a 200-row batch cost 200 lookups.
-        roles = vault_roles(request.user, {entry.vault_id for entry in entries})
-        for entry in entries:
-            role = roles.get(entry.vault_id)
-            if role != VaultRole.OWNER:
-                return _not_the_owner()
-            # Read off the registry rather than restated here, so the batch
-            # and the single-entry endpoint cannot drift on who may destroy
-            # what.
-            if not _offers("delete_forever", request.user, entry, role):
-                return _not_in_the_trash()
-
-        targets = [entry.uuid for entry in entries]
+        # The whole request runs in the transaction, reads included. Outside
+        # it the rows are read under no lock, and `delete()` takes the
+        # collector path on a model with cascades: the final DELETE names
+        # primary keys with no deleted_at predicate on it, so a restore
+        # committing between the read and that statement would be destroyed
+        # whatever the read had seen.
         try:
             with transaction.atomic():
-                # Conditional, because every check above ran on rows read
-                # outside any lock: a restore landing in between would
-                # otherwise destroy an entry the user has just been told is
-                # back. The count is what detects it - the filter alone would
-                # quietly destroy fewer rows than the caller named and still
-                # answer 200.
-                _, per_model = VaultEntry.objects.filter(
-                    uuid__in=targets, deleted_at__isnull=False
-                ).delete()
+                if named_vault:
+                    outcome = self._whole_trash(request.user, data["vault"])
+                else:
+                    outcome = self._selection(request.user, data)
+                if isinstance(outcome, Response):
+                    return outcome
+                entries, doomed = outcome
+
+                # One query for every role, then pure in-memory checks:
+                # asking per row would make a 200-row batch cost 200 lookups.
+                roles = vault_roles(request.user, {entry.vault_id for entry in entries})
+                for entry in entries:
+                    role = roles.get(entry.vault_id)
+                    if role != VaultRole.OWNER:
+                        return _not_the_owner()
+                    # Read off the registry rather than restated here, so the
+                    # batch and the single-entry endpoint cannot drift on who
+                    # may destroy what.
+                    if not _offers("delete_forever", request.user, entry, role):
+                        return _not_in_the_trash()
+
+                targets = [entry.uuid for entry in entries]
+                # The count still guards, because the lock above is a no-op on
+                # SQLite - it holds the whole database for the transaction
+                # instead - and because a queryset delete on a model with
+                # cascades cannot carry the predicate itself.
+                _, per_model = doomed.delete()
                 if per_model.get(VaultEntry._meta.label, 0) != len(targets):
                     raise _TrashChanged
         except _TrashChanged:
@@ -480,7 +483,13 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
         return Response({"destroyed": [str(value) for value in targets]})
 
     def _whole_trash(self, user, vault_uuid):
-        """Every trashed entry of one vault, or the Response that refuses."""
+        """One vault's trash: the rows to check, and the set to destroy.
+
+        The set is a filter rather than the UUIDs of the rows - a trash is
+        uncapped, and naming its rows one by one would put a bind parameter
+        per entry into the DELETE, which a large enough trash turns into a
+        500 instead of an empty trash.
+        """
         parsed = parse_uuid_or_none(vault_uuid)
         vault = None if parsed is None else reachable_vault(user, parsed)
         if vault is None:
@@ -490,14 +499,16 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
         # must not turn into a 200 just because there was nothing to destroy.
         if get_vault_role(user, vault) != VaultRole.OWNER:
             return _not_the_owner()
-        return list(
-            VaultEntry.objects.filter(vault=vault, deleted_at__isnull=False)
+        trashed = VaultEntry.objects.filter(vault=vault, deleted_at__isnull=False)
+        entries = list(
+            trashed.select_for_update()
             .select_related("vault")
             .prefetch_related("fields")
         )
+        return entries, trashed
 
     def _selection(self, user, data):
-        """The named entries, or the Response that refuses."""
+        """The named entries and the set to destroy, or the refusal."""
         # The wording is chosen here from the kind of failure, never taken
         # from the exception: an exception's text is a path from the server's
         # internals to a response body.
@@ -512,6 +523,7 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
         wanted = set(parsed)
         entries = list(
             VaultEntry.objects.filter(accessible_entries_q(user), uuid__in=wanted)
+            .select_for_update()
             .select_related("vault")
             .prefetch_related("fields")
         )
@@ -520,4 +532,8 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
             # single-entry endpoint keeps: "no such entry" and "not yours"
             # are one answer.
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return entries
+        # Bounded by MAX_PURGE_BATCH, so naming the rows costs a bind
+        # parameter each and no more.
+        return entries, VaultEntry.objects.filter(
+            uuid__in=wanted, deleted_at__isnull=False
+        )

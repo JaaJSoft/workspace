@@ -13,6 +13,8 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 from django.test import SimpleTestCase
+from pyhpke import AEADId, KDFId, KEMId
+from pyhpke.exceptions import OpenError
 
 from . import compat
 from .reference import ad, archive, encoding, metadata, primitives
@@ -396,6 +398,46 @@ class ReferenceReplayTests(SimpleTestCase):
                 _b64(identity["wrapped_kex_priv"]),
                 ad.kex_priv_ad(self.account_uuid),
             )
+
+    def test_the_frozen_rows_name_the_algorithms_they_were_sealed_under(self):
+        """`kdf_algo` sits on the account and `hpke_suite` on every wrap, and
+        no reader consults either: one suite is implemented, so each assumes
+        it. They are the only columns the replays carry without checking, and
+        a corpus whose descriptor disagreed with its own bytes would replay
+        green for ever - the first reader to dispatch on the descriptor would
+        be the one to find out, against data nobody can regenerate.
+
+        `kdf_params` is deliberately not pinned to a value: it is per-account
+        by design, and the two tests above already prove a reader obeys what
+        the row carries.
+        """
+        self.assertEqual(self.identity["fields"]["kdf_algo"], "argon2id")
+        wraps = _all(self.rows, "vault.vaultkeywrap")
+        self.assertEqual(len(wraps), len(self.corpus.manifest["vaults"]))
+        for wrap in wraps:
+            self.assertEqual(wrap["fields"]["hpke_suite"], primitives.HPKE_SUITE_V1)
+
+    def test_a_wrapped_vault_key_refuses_a_suite_it_was_not_sealed_under(self):
+        """The other half: a descriptor is worth freezing only if it names
+        something load-bearing. AES-128-GCM is one number away from the
+        stored aead_id and the identifier feeds the HPKE key schedule, so a
+        wrap sealed under v1 cannot open under it.
+        """
+        kex_priv = self._kex_private_key()
+        wrap = _all(self.rows, "vault.vaultkeywrap")[0]["fields"]
+        sealed = _b64(wrap["wrapped_key"])
+        suite = primitives.hpke_suite(
+            KEMId.DHKEM_X25519_HKDF_SHA256, KDFId.HKDF_SHA256, AEADId.AES128_GCM
+        )
+        # The split hpke_open makes, at the encapsulated key size DHKEM
+        # (X25519) fixes: the encapsulated key, then the ciphertext.
+        recipient = suite.create_recipient_context(
+            enc=sealed[:32],
+            skr=suite.kem.deserialize_private_key(primitives.private_bytes(kex_priv)),
+            info=ad.vault_key_info(wrap["vault"], self.account_uuid),
+        )
+        with self.assertRaises(OpenError):
+            recipient.open(sealed[32:], aad=b"")
 
     def test_the_corpus_archive_opens_to_the_whole_account(self):
         """The archive decodes to the entire account in the clear, so every

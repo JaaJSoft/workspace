@@ -49,7 +49,9 @@
         :open="secretPanelOpen"
         @toggle="secretPanelOpen = $el.open"
       >
-        <summary class="flex items-center gap-2 py-3 cursor-pointer list-none select-none">
+        <summary
+          class="flex items-center gap-2 py-3 cursor-pointer list-none select-none"
+        >
           <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-base-content/50"></i>
           <span class="font-medium">Recovery key</span>
           <span
@@ -73,7 +75,11 @@
             :disabled="state === 'deriving'"
           />
           <label class="flex items-start gap-3 cursor-pointer">
-            <input type="checkbox" class="checkbox checkbox-sm mt-0.5" x-model="remember" />
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm mt-0.5"
+              x-model="remember"
+            />
             <span>
               <span class="block text-sm">Remember my recovery key on this device</span>
               <span class="block text-xs text-base-content/50">

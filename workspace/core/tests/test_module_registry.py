@@ -16,7 +16,7 @@ def _make_module(slug="chat", **kwargs):
         "slug": slug,
         "description": f"{slug} module",
         "icon": "icon",
-        "color": "primary",
+        "color": "indigo",
         "url": f"/{slug}",
     }
     defaults.update(kwargs)

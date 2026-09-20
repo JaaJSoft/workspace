@@ -5,6 +5,26 @@ from dataclasses import asdict, dataclass
 
 logger = logging.getLogger(__name__)
 
+# Tailwind hue names a module may claim as its identity color. The same list
+# drives the `.module-<hue>` rules in scripts/frontend/tailwind.config.js
+# (core.tests.test_module_colors keeps the two in step). `red` is reserved
+# for destructive semantics and `pink` for the AI feature, so neither is here.
+MODULE_HUES = (
+    "indigo",
+    "sky",
+    "emerald",
+    "teal",
+    "amber",
+    "orange",
+    "purple",
+    "rose",
+    "cyan",
+    "slate",
+    "lime",
+    "fuchsia",
+    "yellow",
+)
+
 
 @dataclass(frozen=True)
 class ModuleInfo:
@@ -12,7 +32,7 @@ class ModuleInfo:
     slug: str
     description: str
     icon: str
-    color: str
+    color: str  # one of MODULE_HUES
     url: str | None
     active: bool = True
     order: int = 0
@@ -90,6 +110,10 @@ class ModuleRegistry:
         self._lock = threading.Lock()
 
     def register(self, module: ModuleInfo):
+        if module.color not in MODULE_HUES:
+            raise ValueError(
+                f"Module '{module.slug}' color '{module.color}' is not in MODULE_HUES"
+            )
         with self._lock:
             if module.slug in self._modules:
                 raise ValueError(

@@ -76,7 +76,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             >
               <template x-for="p in remoteParticipants()" :key="p.user_id">
                 <div
-                  class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  class="relative rounded-xl bg-base-100 border-2 flex flex-col items-center justify-center gap-2 transition-colors overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-module"
                   :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                   role="button"
                   tabindex="0"
@@ -154,7 +154,7 @@ be defined before the parser reaches the markup using it, or server-rendered
               >
                 <template x-for="p in stripParticipants()" :key="p.user_id">
                   <div
-                    class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    class="relative w-28 h-20 shrink-0 rounded-lg bg-base-100 border-2 overflow-hidden flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-module"
                     :class="isSpeaking(p.user_id) ? 'border-success' : 'border-base-300'"
                     role="button"
                     tabindex="0"
@@ -237,7 +237,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             <button
               type="button"
               class="btn btn-circle border-0"
-              :class="cameraOn ? 'btn-primary' : 'btn-neutral'"
+              :class="cameraOn ? 'btn-module' : 'btn-neutral'"
               @click="toggleCamera()"
               :title="cameraOn ? 'Turn camera off' : 'Turn camera on'"
             >
@@ -246,7 +246,7 @@ be defined before the parser reaches the markup using it, or server-rendered
             <button
               type="button"
               class="btn btn-circle border-0"
-              :class="sharing ? 'btn-primary' : 'btn-neutral'"
+              :class="sharing ? 'btn-module' : 'btn-neutral'"
               @click="toggleScreenShare()"
               :title="sharing ? 'Stop sharing' : 'Share screen'"
             >

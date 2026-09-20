@@ -24,7 +24,7 @@
     {% for opt in msg.interaction.payload.options %}
       {% if forloop.counter0 == msg.interaction.state.selected_index %}
         <div
-          class="btn btn-sm btn-primary justify-start text-left normal-case no-animation pointer-events-none h-auto min-h-8 py-1.5 items-start flex-nowrap whitespace-normal leading-snug"
+          class="btn btn-sm btn-module justify-start text-left normal-case no-animation pointer-events-none h-auto min-h-8 py-1.5 items-start flex-nowrap whitespace-normal leading-snug"
         >
           <span class="shrink-0 mt-0.5">✓</span>
           <span>{{ opt }}</span>

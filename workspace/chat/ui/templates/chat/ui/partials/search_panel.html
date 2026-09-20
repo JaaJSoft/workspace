@@ -47,7 +47,7 @@
       Filters
       <span
         x-show="hasActiveSearchFilters()"
-        class="badge badge-xs badge-primary"
+        class="badge badge-xs badge-module"
       ></span>
     </button>
     <button
@@ -127,7 +127,7 @@
         <button
           type="button"
           class="btn btn-xs gap-1"
-          :class="searchFilterHasFiles ? 'btn-primary' : 'btn-ghost'"
+          :class="searchFilterHasFiles ? 'btn-module' : 'btn-ghost'"
           @click="searchFilterHasFiles = !searchFilterHasFiles; if (searchFilterHasFiles) searchFilterHasImages = false; searchMessages()"
         >
           <i data-lucide="paperclip" class="w-3 h-3"></i>
@@ -136,7 +136,7 @@
         <button
           type="button"
           class="btn btn-xs gap-1"
-          :class="searchFilterHasImages ? 'btn-primary' : 'btn-ghost'"
+          :class="searchFilterHasImages ? 'btn-module' : 'btn-ghost'"
           @click="searchFilterHasImages = !searchFilterHasImages; if (searchFilterHasImages) searchFilterHasFiles = false; searchMessages()"
         >
           <i data-lucide="image" class="w-3 h-3"></i>

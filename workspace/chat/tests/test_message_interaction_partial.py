@@ -57,7 +57,7 @@ class MessageInteractionPartialTests(TestCase):
         self.assertIn("answer(", html)
         self.assertIn('x-data="messageInteraction()"', html)
         self.assertNotIn("pointer-events-none", html)
-        self.assertNotIn("btn-primary", html)
+        self.assertNotIn("btn-module", html)
 
     def test_answered_state_renders_non_clickable_with_highlight(self):
         interaction = MessageInteraction.objects.create(
@@ -73,7 +73,7 @@ class MessageInteractionPartialTests(TestCase):
         html = self._render(self.message)
         self.assertNotIn("<button", html)
         self.assertIn("pointer-events-none", html)
-        self.assertIn("btn-primary", html)
+        self.assertIn("btn-module", html)
         self.assertIn("opacity-40", html)
         self.assertIn("Formal", html)
         self.assertIn("Casual", html)

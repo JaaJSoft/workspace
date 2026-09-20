@@ -65,7 +65,7 @@
                 <button
                   type="button"
                   class="btn btn-sm btn-square"
-                  :class="generatorField === field.field_id ? 'btn-primary' : 'btn-ghost'"
+                  :class="generatorField === field.field_id ? 'btn-module' : 'btn-ghost'"
                   :title="'Generate a ' + field.label.toLowerCase()"
                   :aria-label="'Generate a ' + field.label.toLowerCase()"
                   @click="openGenerator(field.field_id)"
@@ -197,7 +197,7 @@
               <button
                 type="button"
                 class="btn btn-xs"
-                :class="draft.tags.includes(tag.uuid) ? 'btn-primary' : 'btn-ghost'"
+                :class="draft.tags.includes(tag.uuid) ? 'btn-module' : 'btn-ghost'"
                 @click="toggleDraftTag(tag.uuid)"
               >
                 <tag-chip size="sm" :name="tag.name" :color="tag.color"></tag-chip>
@@ -221,7 +221,7 @@
           </button>
           <button
             type="submit"
-            class="btn btn-sm btn-primary"
+            class="btn btn-sm btn-module"
             :disabled="busy || !draft.name.trim()"
           >
             Save
@@ -261,7 +261,7 @@
           </button>
           <button
             type="submit"
-            class="btn btn-sm btn-primary"
+            class="btn btn-sm btn-module"
             :disabled="busy || !folderDraft.name.trim()"
             x-text="folderDraft.existing ? 'Rename' : 'Create'"
           ></button>

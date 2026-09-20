@@ -69,8 +69,8 @@
       <div
         class="bg-base-100 border rounded-lg hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
         :class="[
-        panelEntry === entry ? 'border-primary ring-2 ring-primary/30' : 'border-base-300 hover:border-module',
-        isSelected(entry.uuid) ? 'ring-2 ring-primary border-primary' : ''
+        panelEntry === entry ? 'border-module ring-2 ring-module/30' : 'border-base-300 hover:border-module',
+        isSelected(entry.uuid) ? 'ring-2 ring-module border-module' : ''
       ]"
         @click="openEntryFromRow(entry)"
         @contextmenu.stop="openMenu($event, entry)"

@@ -29,7 +29,7 @@ MATRIX_MODULES_RE = re.compile(r"^ +module:\n(?P<items>(?:^ +- [\w.-]+\n)+)", re
 
 
 def _locked_playwright_version():
-    lock = tomllib.loads(LOCK.read_text())
+    lock = tomllib.loads(LOCK.read_text(encoding="utf-8"))
     return next(
         pkg["version"] for pkg in lock["package"] if pkg["name"] == "playwright"
     )
@@ -38,7 +38,9 @@ def _locked_playwright_version():
 def _matrix_modules(job):
     """The `module:` list of a workflow job, as a set."""
     body = next(
-        m["body"] for m in JOB_RE.finditer(WORKFLOW.read_text()) if m["name"] == job
+        m["body"]
+        for m in JOB_RE.finditer(WORKFLOW.read_text(encoding="utf-8"))
+        if m["name"] == job
     )
     items = MATRIX_MODULES_RE.search(body)["items"]
     return {line.strip(" -") for line in items.splitlines()}
@@ -56,7 +58,7 @@ def _modules_with_tests(subdir, pattern):
 
 class PlaywrightImageTests(unittest.TestCase):
     def test_e2e_image_matches_locked_playwright_version(self):
-        matches = IMAGE_RE.findall(WORKFLOW.read_text())
+        matches = IMAGE_RE.findall(WORKFLOW.read_text(encoding="utf-8"))
         self.assertTrue(matches, "the E2E job no longer runs in the Playwright image")
         for image_version in matches:
             self.assertEqual(

@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between gap-2 mb-4">
       <div class="flex items-center gap-2 min-w-0">
         <span
-          class="w-8 h-8 rounded-full bg-warning/10 text-warning flex items-center justify-center flex-shrink-0"
+          class="w-8 h-8 rounded-full bg-module/10 text-module flex items-center justify-center flex-shrink-0"
         >
           <i data-lucide="filter" class="w-4 h-4"></i>
         </span>
@@ -107,7 +107,7 @@
               </div>
               <input
                 type="checkbox"
-                class="toggle toggle-sm toggle-warning flex-shrink-0"
+                class="toggle toggle-sm toggle-module flex-shrink-0"
                 :checked="rule.is_enabled"
                 :aria-label="rule.is_enabled ? 'Disable rule ' + rule.name : 'Enable rule ' + rule.name"
                 @change="rulesToggle(rule, $event.target.checked)"
@@ -333,7 +333,7 @@
             <button
               type="button"
               class="btn btn-ghost btn-xs gap-1"
-              :class="rulesShowAdvancedHelp ? 'text-warning' : 'text-base-content/60'"
+              :class="rulesShowAdvancedHelp ? 'text-module' : 'text-base-content/60'"
               @click="rulesShowAdvancedHelp = !rulesShowAdvancedHelp"
             >
               <i data-lucide="help-circle" class="w-4 h-4"></i>

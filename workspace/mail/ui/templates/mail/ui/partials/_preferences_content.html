@@ -24,17 +24,17 @@
     </select>
   </div>
   <hr class="border-base-300" />
-  {% include "ui/partials/pref_toggle.html" with label="Show labels in list" key="showLabels" accent="toggle-warning" %}
-  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-warning" %}
+  {% include "ui/partials/pref_toggle.html" with label="Show labels in list" key="showLabels" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Confirm before delete" key="confirmBeforeDelete" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"
   >
     AI features
   </div>
-  {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-warning" %}
-  {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-warning" %}
-  {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-warning" %}
+  {% include "ui/partials/pref_toggle.html" with label="Auto-classify new emails" key="classify" state="ai.classify" handler="saveAiFeature" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Extract events and tasks" key="extract" state="ai.extract" handler="saveAiFeature" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="AI writing assistance" key="manual" state="ai.manual" handler="saveAiFeature" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div
     class="text-xs font-semibold uppercase tracking-wide text-base-content/60"

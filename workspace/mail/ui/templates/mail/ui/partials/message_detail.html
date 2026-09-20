@@ -37,9 +37,9 @@
         class="flex items-center gap-1.5"
         x-show="selectedFolder?.unread_count > 0 && !['sent', 'drafts'].includes(selectedFolder?.folder_type)"
       >
-        <i data-lucide="circle-dot" class="w-4 h-4 text-warning"></i>
+        <i data-lucide="circle-dot" class="w-4 h-4 text-module"></i>
         <span
-          class="text-warning"
+          class="text-module"
           x-text="(selectedFolder?.unread_count ?? 0) + ' unread'"
         ></span>
       </span>
@@ -87,7 +87,7 @@
         <!-- Actions -->
         <div class="flex items-center gap-0.5 flex-shrink-0">
           <span
-            class="loading loading-spinner loading-xs text-warning mr-1"
+            class="loading loading-spinner loading-xs text-module mr-1"
             x-show="actionInProgress"
             x-cloak
           ></span>
@@ -216,7 +216,7 @@
         <div class="flex items-center gap-2">
           <span class="text-base-content/50 w-10 text-right flex-shrink-0">From</span>
           <span
-            class="inline-flex cursor-pointer hover:text-warning transition-colors"
+            class="inline-flex cursor-pointer hover:text-module transition-colors"
             @mouseenter="window._mailCardShow($el, messageDetail.from_address)"
             @mouseleave="window._mailCardScheduleHide($el)"
           >
@@ -237,7 +237,7 @@
             <template x-for="(addr, i) in (messageDetail.to_addresses || [])" :key="i">
               <span>
                 <span
-                  class="cursor-pointer hover:text-warning transition-colors"
+                  class="cursor-pointer hover:text-module transition-colors"
                   @mouseenter="window._mailCardShow($el, addr)"
                   @mouseleave="window._mailCardScheduleHide($el)"
                   x-text="cleanName(addr.name) || addr.email"
@@ -253,7 +253,7 @@
               <template x-for="(addr, i) in messageDetail.cc_addresses" :key="i">
                 <span>
                   <span
-                    class="cursor-pointer hover:text-warning transition-colors"
+                    class="cursor-pointer hover:text-module transition-colors"
                     @mouseenter="window._mailCardShow($el, addr)"
                     @mouseleave="window._mailCardScheduleHide($el)"
                     x-text="cleanName(addr.name) || addr.email"
@@ -308,7 +308,7 @@
     <!-- Body -->
     <div class="flex-1 overflow-y-auto p-4">
       <div x-show="loadingDetail" class="flex justify-center py-8">
-        <span class="loading loading-spinner loading-md text-warning"></span>
+        <span class="loading loading-spinner loading-md text-module"></span>
       </div>
 
       <!-- AI Summary loading -->

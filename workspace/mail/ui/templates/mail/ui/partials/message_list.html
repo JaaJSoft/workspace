@@ -76,7 +76,7 @@
     <button
       type="button"
       class="btn btn-xs gap-1"
-      :class="filters.unread ? 'btn-warning' : 'btn-ghost'"
+      :class="filters.unread ? 'btn-module' : 'btn-ghost'"
       @click="toggleFilter('unread')"
     >
       <i data-lucide="mail" class="w-3 h-3"></i> Unread
@@ -92,7 +92,7 @@
     <button
       type="button"
       class="btn btn-xs gap-1"
-      :class="filters.attachments ? 'btn-warning' : 'btn-ghost'"
+      :class="filters.attachments ? 'btn-module' : 'btn-ghost'"
       @click="toggleFilter('attachments')"
     >
       <i data-lucide="paperclip" class="w-3 h-3"></i> Attachments
@@ -125,7 +125,7 @@
     x-text="selectedMessages.length + ' selected'"
   ></span>
   <span
-    class="loading loading-spinner loading-xs text-warning"
+    class="loading loading-spinner loading-xs text-module"
     x-show="batchInProgress"
     x-cloak
   ></span>
@@ -187,7 +187,7 @@
 
 <!-- Loading -->
 <div x-show="loadingMessages" class="flex justify-center py-8">
-  <span class="loading loading-spinner loading-md text-warning"></span>
+  <span class="loading loading-spinner loading-md text-module"></span>
 </div>
 
 <!-- Message list -->
@@ -210,7 +210,7 @@
         'py-1.5': mailPrefs.density === 'compact',
         'py-2.5': mailPrefs.density === 'normal' || !mailPrefs.density,
         'py-3.5': mailPrefs.density === 'spacious',
-        'bg-warning/5': selectedMessage?.uuid === msg.uuid,
+        'bg-module/5': selectedMessage?.uuid === msg.uuid,
         'hover:bg-base-200/50': selectedMessage?.uuid !== msg.uuid,
         'font-normal opacity-70': msg.is_read,
         'font-semibold': !msg.is_read,
@@ -225,7 +225,7 @@
       <!-- Select checkbox -->
       <input
         type="checkbox"
-        class="checkbox checkbox-xs checkbox-warning mt-1"
+        class="checkbox checkbox-xs checkbox-module mt-1"
         :checked="selectedMessages.includes(msg.uuid)"
         @click.stop="toggleSelectMessage(msg.uuid)"
       />

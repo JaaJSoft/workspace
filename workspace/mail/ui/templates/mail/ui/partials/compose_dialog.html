@@ -53,7 +53,7 @@
             <div class="flex flex-wrap items-center gap-1 min-h-[2rem]">
               <template x-for="(email, i) in compose.to" :key="'to-'+i">
                 <span
-                  class="badge badge-sm gap-1 pr-0.5 bg-warning/10 text-warning border-warning/20"
+                  class="badge badge-sm gap-1 pr-0.5 bg-module/10 text-module border-module/20"
                 >
                   <span x-text="email" class="max-w-40 truncate"></span>
                   <button
@@ -280,7 +280,7 @@
 
         <button
           type="submit"
-          class="btn btn-warning btn-sm gap-2"
+          class="btn btn-module btn-sm gap-2"
           :disabled="compose.sending"
         >
           <span

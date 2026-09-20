@@ -31,7 +31,7 @@ function _buildMailCard(name, email) {
   const avatarWrap = document.createElement('div');
   avatarWrap.className = 'avatar placeholder';
   const avatarInner = document.createElement('div');
-  avatarInner.className = 'w-10 h-10 bg-warning/15 text-warning rounded-full flex items-center justify-center font-semibold';
+  avatarInner.className = 'w-10 h-10 bg-module/15 text-module rounded-full flex items-center justify-center font-semibold';
   avatarInner.textContent = _initial(name || email);
   avatarWrap.appendChild(avatarInner);
   row.appendChild(avatarWrap);

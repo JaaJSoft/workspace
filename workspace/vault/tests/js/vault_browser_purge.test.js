@@ -24,7 +24,6 @@ function trashedRow(index) {
 
 function browser(options = {}) {
   const api = {
-    purgeEntry: () => Promise.resolve(null),
     purgeEntries: () => Promise.resolve({ destroyed: [] }),
     purgeVaultTrash: () => Promise.resolve({ destroyed: [] }),
     fetchEntryActions: async () => ({}),
@@ -109,9 +108,6 @@ test('destroying a selection sends one request, not one per row', async () => {
     calls.push(uuids.slice());
     return Promise.resolve({ destroyed: uuids });
   };
-  api.purgeEntry = () => {
-    throw new Error('the single-entry endpoint must not be looped over');
-  };
 
   await component.applyTo('delete_forever', component.selectedEntries());
 
@@ -119,22 +115,19 @@ test('destroying a selection sends one request, not one per row', async () => {
   assert.deepEqual(Array.from(calls[0]), ['e-0', 'e-1', 'e-2']);
 });
 
-test('destroying one row still goes through the single-entry endpoint', async () => {
-  // One row cannot half-happen, so it keeps the simpler answer - and that
-  // endpoint keeps a caller rather than becoming dead code.
+test('destroying one row goes through the same endpoint as a hundred', async () => {
+  // One way to destroy an entry rather than two that could answer
+  // differently: there is no per-row purge endpoint behind this any more.
   const { component, api } = browser();
-  let singles = 0;
-  api.purgeEntry = () => {
-    singles += 1;
-    return Promise.resolve(null);
-  };
-  api.purgeEntries = () => {
-    throw new Error('one row does not need the batch endpoint');
+  const calls = [];
+  api.purgeEntries = (uuids) => {
+    calls.push(uuids.slice());
+    return Promise.resolve({ destroyed: uuids });
   };
 
   await component.applyTo('delete_forever', [component.selectedEntries()[0]]);
 
-  assert.equal(singles, 1);
+  assert.deepEqual(Array.from(calls), [['e-0']]);
 });
 
 test('a refused batch reloads the listing and says so', async () => {
@@ -248,9 +241,6 @@ test('a selection larger than the cap is destroyed in slices of it', () => {
   api.purgeEntries = (uuids) => {
     sizes.push(uuids.length);
     return Promise.resolve({ destroyed: uuids });
-  };
-  api.purgeEntry = () => {
-    throw new Error('a large selection must not fall back to one call per row');
   };
 
   return component.applyTo('delete_forever', component.selectedEntries()).then(() => {

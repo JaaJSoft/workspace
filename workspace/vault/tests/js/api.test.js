@@ -91,11 +91,11 @@ test('every unsafe call carries the CSRF token, and no read does', () => {
 test('restore and purge both post, and carry the token', () => {
   const { api, calls } = withFetch();
   api.restoreEntry(ENTRY);
-  api.purgeEntry(ENTRY);
+  api.purgeEntries([ENTRY]);
   assert.equal(calls[0].options.method, 'POST');
   assert.ok(calls[0].url.endsWith('/restore'));
   assert.equal(calls[1].options.method, 'POST');
-  assert.ok(calls[1].url.endsWith('/purge'));
+  assert.ok(calls[1].url.endsWith('/entries/purge'));
   for (const call of calls) {
     assert.equal(call.options.headers['X-CSRFToken'], 'token');
   }

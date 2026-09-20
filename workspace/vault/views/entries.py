@@ -329,52 +329,6 @@ class EntryRestoreView(CacheControlMixin, APIView):
         return Response(VaultEntrySerializer(entry).data)
 
 
-class EntryPurgeView(CacheControlMixin, APIView):
-    """Destroy a trashed entry and its fields.
-
-    Only from the trash: that step is the confirmation, and without it one
-    mistyped URL destroys a live entry with nothing to undo it.
-
-    Owner only, and read off what DeleteEntryForeverAction declares rather
-    than written out again here. A key wrap opens a vault, and every other
-    entry action follows from that - this one does not, because it is the
-    only one no restore can undo.
-    """
-
-    cache_no_store = True
-
-    @extend_schema(
-        tags=["Vault"],
-        summary="Permanently delete a trashed entry",
-        responses={204: None},
-    )
-    @sensitive_variables()
-    def post(self, request, uuid):
-        # Lighter than _reachable_entry: the row is about to be destroyed, so
-        # only the vault comes along, for the role.
-        entry = (
-            VaultEntry.objects.filter(accessible_entries_q(request.user), uuid=uuid)
-            .select_related("vault")
-            .first()
-        )
-        if entry is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        role = get_vault_role(request.user, entry.vault)
-        if role != VaultRole.OWNER:
-            return _not_the_owner()
-        if not _offers("delete_forever", request.user, entry, role):
-            return _not_in_the_trash()
-        # Conditional, because the check above ran on a copy read outside any
-        # lock: a restore landing in between would otherwise destroy an entry
-        # the user has just been told is back.
-        destroyed, _ = VaultEntry.objects.filter(
-            pk=entry.pk, deleted_at__isnull=False
-        ).delete()
-        if not destroyed:
-            return _not_in_the_trash()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
 MAX_PURGE_BATCH = 200
 
 

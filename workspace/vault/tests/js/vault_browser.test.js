@@ -1897,7 +1897,7 @@ test('destroying an entry asks first, and a refusal writes nothing', async () =>
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+      purgeEntries: async (uuids) => { calls.push(...uuids); return { destroyed: uuids }; },
     },
   });
   component.init();
@@ -1973,7 +1973,7 @@ test('destroying a batch asks once, and sends one request', async () => {
         'e-2': [TRASH_ACTIONS.delete_forever],
       }),
       purgeEntry: async () => {
-        throw new Error('a selection must not be looped over row by row');
+        throw new Error('there is no per-row purge endpoint any more');
       },
       purgeEntries: async (uuids) => {
         requests += 1;
@@ -2097,7 +2097,7 @@ test('a confirmation carries its own question rather than the default one', asyn
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async () => ({}),
+      purgeEntries: async (uuids) => ({ destroyed: uuids }),
     },
   });
   ctx.AppDialog = {
@@ -2118,7 +2118,7 @@ test('a dialog that says no stops the action', async () => {
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async (uuid) => { purged.push(uuid); return {}; },
+      purgeEntries: async (uuids) => { purged.push(...uuids); return { destroyed: uuids }; },
     },
   });
   ctx.AppDialog = { confirm: async () => false };

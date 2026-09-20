@@ -100,13 +100,9 @@ window.vaultApi = (function () {
       return request('/api/v1/vault/entries/' + uuid + '/restore', { method: 'POST' });
     },
     // POST, not DELETE: DELETE on an entry is the trash, and this is the step
-    // after it.
-    purgeEntry: function (uuid) {
-      return request('/api/v1/vault/entries/' + uuid + '/purge', { method: 'POST' });
-    },
-    // The batch form of the one above, for a selection of rows. One request
-    // rather than N, because a loop of N fails in pieces and leaves nothing
-    // true to say about what survived. Answers { destroyed: [uuid] }.
+    // after it. One row or a hundred, the same call - a loop of N requests
+    // fails in pieces and leaves nothing true to say about what survived.
+    // Answers { destroyed: [uuid] }.
     purgeEntries: function (uuids) {
       return request('/api/v1/vault/entries/purge', {
         method: 'POST',

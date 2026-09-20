@@ -75,6 +75,17 @@ class BatchPurgeTests(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(VaultEntry.objects.count(), 2)
 
+    def test_a_live_entry_named_alone_is_refused(self):
+        """The trash is the confirmation step. Skipping it would make one
+        mistyped UUID destroy a live entry with no way back - and the batch
+        is now the only way to destroy one, so this claim has to live here."""
+        live = self._entry(trashed=False)
+
+        response = self._post({"uuids": [str(live.uuid)]})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultEntry.objects.filter(uuid=live.uuid).exists())
+
     def test_one_unreachable_uuid_in_the_batch_destroys_none_of_them(self):
         mine = self._entry()
         theirs = self._entry(vault=self.other_vault)

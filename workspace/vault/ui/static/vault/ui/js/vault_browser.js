@@ -961,31 +961,32 @@ window.vaultBrowser = (function () {
       // One row or many, the same path. It stops at the first refusal rather
       // than pressing on: a batch that half-happened and said nothing is
       // worse than one that stopped and said where.
+      //
+      // Destroying goes through the batch endpoint whatever the count, so
+      // there is one way to destroy an entry rather than two that could
+      // answer differently. Everything else is a per-row write.
       applyTo: async function (actionId, rows) {
         const self = this;
         const call = {
           trash: function (uuid) { return window.vaultApi.trashEntry(uuid); },
           restore: function (uuid) { return window.vaultApi.restoreEntry(uuid); },
-          delete_forever: function (uuid) { return window.vaultApi.purgeEntry(uuid); },
           // Not a flag the server flips: is_favorite is inside the signed
           // payload, so changing it is a re-signature of the whole record.
           favorite: function (uuid) { return self.setFavorite(uuid, true); },
           unfavorite: function (uuid) { return self.setFavorite(uuid, false); },
         }[actionId];
-        if (!call) return;
-        // One request for a set, which the server destroys whole or not at
-        // all. Only delete_forever has such an endpoint behind it, and the
-        // per-row one keeps the single-row case: it cannot half-happen.
+        // The set the server destroys whole or not at all.
         const batched = {
           delete_forever: function (uuids) {
             return window.vaultApi.purgeEntries(uuids);
           },
         }[actionId];
+        if (!call && !batched) return;
         const cap = window.VAULT_PURGE_BATCH_SIZE;
         this.busy = true;
         let failure = null;
         try {
-          if (batched && rows.length > 1) {
+          if (batched) {
             const uuids = rows.map(function (row) { return row.uuid; });
             for (let i = 0; i < uuids.length; i += cap) {
               await batched(uuids.slice(i, i + cap));

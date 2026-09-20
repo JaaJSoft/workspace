@@ -38,47 +38,48 @@
       </label>
       {% comment %}
         The recovery key is the second half of the lock, not an alternative
-        to the password - the intro says so because two fields side by side
-        read as "either one" otherwise. The panel is always in the page and
-        only folds: a device that remembers the key still has to let the user
-        replace it. @toggle keeps the state honest after a manual click, so a
-        later failure that sets it to true really does re-open the panel.
+        to the password - the header hint says so because two fields side by
+        side read as "either one" otherwise. The section is always in the page
+        and only folds: a device that remembers the key still has to let the
+        user replace it. @toggle keeps the state honest after a manual click,
+        so a later failure that sets it to true really does re-open it.
       {% endcomment %}
       <details
-        class="collapse collapse-arrow bg-base-200 rounded-lg mt-4"
+        class="group mt-4 border-t border-base-300"
         :open="secretPanelOpen"
         @toggle="secretPanelOpen = $el.open"
       >
-        <summary class="collapse-title py-3 min-h-0">
+        <summary class="flex items-center gap-2 py-3 cursor-pointer list-none select-none">
+          <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-base-content/50"></i>
           <span class="font-medium">Recovery key</span>
           <span
-            class="block text-xs text-base-content/50"
+            class="text-xs text-base-content/50 truncate"
             x-text="secretRemembered ? 'Remembered on this device' : 'Needed on this device, alongside your password'"
           ></span>
+          <i
+            data-lucide="chevron-down"
+            class="w-4 h-4 ml-auto shrink-0 text-base-content/50 transition-transform group-open:rotate-180"
+          ></i>
         </summary>
-        <div class="collapse-content space-y-3">
-          <p class="text-sm text-base-content/60">
-            The key from your emergency kit is the second half of the lock.
-            Both are needed: one does not replace the other.
-          </p>
-          <label class="form-control">
-            <input
-              type="text"
-              class="input input-bordered font-mono"
-              aria-label="Recovery key"
-              autocomplete="off"
-              spellcheck="false"
-              x-model="secretText"
-              :disabled="state === 'deriving'"
-            />
-            <span class="label-text-alt">Dashes and case are ignored.</span>
-          </label>
-          <label class="label cursor-pointer justify-start gap-3">
-            <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-            <span class="label-text">
-              Remember my recovery key on this device. Anything that can run
-              code on this page can then read it, so leave it off on a shared
-              computer.
+        <div class="space-y-3 pb-1">
+          <input
+            type="text"
+            class="input input-bordered font-mono placeholder:font-sans w-full"
+            aria-label="Recovery key"
+            placeholder="From your emergency kit. Dashes and case are ignored."
+            autocomplete="off"
+            spellcheck="false"
+            x-model="secretText"
+            :disabled="state === 'deriving'"
+          />
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-sm mt-0.5" x-model="remember" />
+            <span>
+              <span class="block text-sm">Remember my recovery key on this device</span>
+              <span class="block text-xs text-base-content/50">
+                Anything that can run code on this page can then read it, so
+                leave it off on a shared computer.
+              </span>
             </span>
           </label>
         </div>

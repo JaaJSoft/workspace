@@ -95,7 +95,9 @@ class ModuleBodyClassTests(TestCase):
     def test_module_page_body_carries_its_hue_class(self):
         resp = self.client.get("/files")
         self.assertEqual(resp.status_code, 200)
-        self.assertRegex(resp.content.decode(), r"<body[^>]*class=\"[^\"]*\bmodule-indigo\b")
+        self.assertRegex(
+            resp.content.decode(), r"<body[^>]*class=\"[^\"]*\bmodule-indigo\b"
+        )
 
     def test_page_outside_a_module_has_no_hue_class(self):
         resp = self.client.get("/users/settings")

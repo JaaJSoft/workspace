@@ -82,11 +82,10 @@
                 @click.prevent="goTo('{{ module.url|escapejs }}')"
                 class="flex items-start gap-3 p-3 rounded-lg border border-base-300 hover:border-primary hover:bg-base-200 transition-colors"
               >
-                <div class="module-{{ module.color }} rounded-lg bg-module/10 p-2 shrink-0">
-                  <i
-                    data-lucide="{{ module.icon }}"
-                    class="w-5 h-5 text-module"
-                  ></i>
+                <div
+                  class="module-{{ module.color }} rounded-lg bg-module/10 p-2 shrink-0"
+                >
+                  <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-module"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-sm">{{ module.name }}</div>
@@ -99,11 +98,10 @@
               </a>
             {% else %}
               <div class="flex items-start gap-3 p-3 rounded-lg border border-base-300">
-                <div class="module-{{ module.color }} rounded-lg bg-module/10 p-2 shrink-0">
-                  <i
-                    data-lucide="{{ module.icon }}"
-                    class="w-5 h-5 text-module"
-                  ></i>
+                <div
+                  class="module-{{ module.color }} rounded-lg bg-module/10 p-2 shrink-0"
+                >
+                  <i data-lucide="{{ module.icon }}" class="w-5 h-5 text-module"></i>
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-semibold text-sm">{{ module.name }}</div>

@@ -102,11 +102,7 @@
           <i data-lucide="mail" class="w-16 h-16 mx-auto mb-4 opacity-30"></i>
           <p class="text-lg font-medium mb-2">No mail accounts configured</p>
           <p class="text-sm mb-4">Add a mail account to get started</p>
-          <button
-            type="button"
-            class="btn btn-module btn-sm"
-            @click="showAddAccount()"
-          >
+          <button type="button" class="btn btn-module btn-sm" @click="showAddAccount()">
             <i data-lucide="plus" class="w-4 h-4"></i>
             Add Account
           </button>
@@ -527,11 +523,7 @@
         </div>
         <div class="modal-action">
           <button type="button" class="btn btn-ghost btn-sm" @click="closeAddAccount()">Cancel</button>
-          <button
-            type="submit"
-            class="btn btn-module btn-sm"
-            :disabled="addingAccount"
-          >
+          <button type="submit" class="btn btn-module btn-sm" :disabled="addingAccount">
             <span x-show="!addingAccount">Add Account</span>
             <span x-show="addingAccount" class="loading loading-spinner loading-xs"></span>
           </button>
@@ -652,11 +644,7 @@
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              class="btn btn-module btn-sm"
-              :disabled="savingAccount"
-            >
+            <button type="submit" class="btn btn-module btn-sm" :disabled="savingAccount">
               <span x-show="!savingAccount">Save</span>
               <span x-show="savingAccount" class="loading loading-spinner loading-xs"></span>
             </button>

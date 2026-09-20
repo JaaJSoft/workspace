@@ -105,6 +105,7 @@ def index(request):
                 for person_list in lists
             ],
             "user_groups": request.user.groups.order_by("name"),
+            "groups_data": _groups_data(request.user),
             # Echoed into the page as the contact to open: a malformed value
             # would have the shell ask for a panel that can only 404, leaving
             # an empty panel open behind an error toast.
@@ -112,6 +113,12 @@ def index(request):
         }
     )
     return render(request, "people/ui/index.html", context)
+
+
+def _groups_data(user):
+    return [
+        {"id": group.id, "name": group.name} for group in user.groups.order_by("name")
+    ]
 
 
 @login_required
@@ -136,10 +143,7 @@ def person_panel(request, uuid):
             }
             for person_list in lists
         ],
-        "groups_data": [
-            {"id": group.id, "name": group.name}
-            for group in request.user.groups.order_by("name")
-        ],
+        "groups_data": _groups_data(request.user),
         "entry_kinds": ENTRY_KINDS,
         "sections": render_sections(request, request.user, person),
     }

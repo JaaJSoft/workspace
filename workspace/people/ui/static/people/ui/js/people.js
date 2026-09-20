@@ -36,11 +36,15 @@ window.peopleApp = function peopleApp(config) {
     current: config.initialPerson || '',
     panelOpen: Boolean(config.initialPerson),
     lists: [],
+    groups: [],
+    personForm: { name: '', email: '' },
+    listForm: { uuid: '', name: '', original: '' },
+    saving: false,
     collapsed: window.sidebarPreference.initial(),
 
     init() {
-      const el = document.getElementById('people-lists-data');
-      this.lists = el ? JSON.parse(el.textContent) : [];
+      this.lists = window.peopleHelpers.readJson('people-lists-data', []);
+      this.groups = window.peopleHelpers.readJson('people-groups-data', []);
       if (this.current) this.openPerson(this.current, { push: false });
       const params = new URLSearchParams(window.location.search);
       if (params.get('action') === 'new-person') this.newPerson();
@@ -121,67 +125,118 @@ window.peopleApp = function peopleApp(config) {
       else this.closePanel({ push: false });
     },
 
-    async newPerson() {
-      const name = await AppDialog.prompt({
-        title: 'New contact',
-        placeholder: 'Display name',
-        okLabel: 'Create',
-      });
-      if (!name) return;
+    // Where a new contact or list lands: the sidebar selection, or the
+    // personal book when "All" is selected (the API default).
+    scopeLabel() {
+      if (this.scope.startsWith('group:')) {
+        const id = Number.parseInt(this.scope.slice('group:'.length), 10);
+        const group = this.groups.find((g) => g.id === id);
+        if (group) return group.name;
+      }
+      return 'My contacts';
+    },
+
+    resetPersonForm() {
+      this.personForm = { name: '', email: '' };
+    },
+
+    newPerson() {
+      this.resetPersonForm();
+      this.$refs.personDialog.showModal();
+      this.$nextTick(() => this.$refs.personName.focus());
+    },
+
+    async createPerson() {
+      const name = this.personForm.name.trim();
+      if (!name || this.saving) return;
       const body = { display_name: name };
+      const email = this.personForm.email.trim();
+      if (email) body.emails = [{ value: email, type: 'other' }];
       if (this.scope) body.scope = this.scope;
-      const res = await fetch('/api/v1/people', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not create the contact.' });
-        return;
+      this.saving = true;
+      try {
+        const res = await fetch('/api/v1/people', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const first = Object.values(data).flat()[0];
+          AppAlert.show({
+            type: 'error',
+            message: typeof first === 'string' ? first : 'Could not create the contact.',
+          });
+          return;
+        }
+        const person = await res.json();
+        this.$refs.personDialog.close();
+        // A fresh contact belongs to no list, so a list filter would hide it.
+        this.listUuid = '';
+        await this.refreshList();
+        this.openPerson(person.uuid);
+      } finally {
+        this.saving = false;
       }
-      const person = await res.json();
-      // A fresh contact belongs to no list, so a list filter would hide it.
-      this.listUuid = '';
-      await this.refreshList();
-      this.openPerson(person.uuid);
     },
 
-    async newList() {
-      const name = await AppDialog.prompt({
-        title: 'New list',
-        placeholder: 'Name',
-        okLabel: 'Create',
-      });
-      if (!name) return;
+    resetListForm() {
+      this.listForm = { uuid: '', name: '', original: '' };
+    },
+
+    newList() {
+      this.resetListForm();
+      this.$refs.listDialog.showModal();
+      this.$nextTick(() => this.$refs.listName.focus());
+    },
+
+    renameList(list) {
+      this.listForm = { uuid: list.uuid, name: list.name, original: list.name };
+      this.$refs.listDialog.showModal();
+      this.$nextTick(() => this.$refs.listName.select());
+    },
+
+    async saveList() {
+      const name = this.listForm.name.trim();
+      if (!name || this.saving) return;
+      const renaming = Boolean(this.listForm.uuid);
+      if (renaming && name === this.listForm.original) {
+        this.$refs.listDialog.close();
+        return;
+      }
       const body = { name };
-      if (this.scope) body.scope = this.scope;
-      const res = await fetch('/api/v1/people/lists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        AppAlert.show({ type: 'error', message: 'Could not create the list.' });
-        return;
+      if (!renaming && this.scope) body.scope = this.scope;
+      this.saving = true;
+      try {
+        const res = await fetch(
+          renaming ? `/api/v1/people/lists/${this.listForm.uuid}` : '/api/v1/people/lists',
+          {
+            method: renaming ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify(body),
+          }
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const first = Object.values(data).flat()[0];
+          AppAlert.show({
+            type: 'error',
+            message: typeof first === 'string' ? first : 'Could not save the list.',
+          });
+          return;
+        }
+        const saved = await res.json();
+        if (renaming) {
+          const list = this.lists.find((l) => l.uuid === saved.uuid);
+          if (list) list.name = saved.name;
+        } else {
+          this.lists.push(saved);
+        }
+        this.lists.sort((a, b) => a.name.localeCompare(b.name));
+        this.$refs.listDialog.close();
+      } finally {
+        this.saving = false;
       }
-      this.lists.push(await res.json());
-      this.lists.sort((a, b) => a.name.localeCompare(b.name));
-    },
-
-    async renameList(list) {
-      const name = await AppDialog.prompt({
-        title: 'Rename list',
-        value: list.name,
-        okLabel: 'Rename',
-      });
-      if (!name || name === list.name) return;
-      const res = await fetch(`/api/v1/people/lists/${list.uuid}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ name }),
-      });
-      if (res.ok) list.name = name;
-      else AppAlert.show({ type: 'error', message: 'Could not rename the list.' });
     },
 
     async deleteList(list) {
@@ -227,6 +282,8 @@ window.personPanel = function personPanel() {
     lists: window.peopleHelpers.readJson('person-panel-lists', []),
     groups: window.peopleHelpers.readJson('person-panel-groups', []),
     avatarStamp: Date.now(),
+    listPick: '',
+    movePick: '',
     uploading: false,
     cropper: null,
     selectedFile: null,
@@ -347,24 +404,27 @@ window.personPanel = function personPanel() {
       this.refreshList();
     },
 
-    async move() {
-      const options = [{ value: 'mine', label: 'My contacts' }].concat(
-        this.groups.map((g) => ({ value: `group:${g.id}`, label: g.name }))
-      );
-      const choice = await AppDialog.select({
-        title: 'Move to',
-        options,
-        value: this.person.scope,
-        okLabel: 'Move',
-      });
+    move() {
+      this.movePick = this.person.scope;
+      this.$refs.moveDialog.showModal();
+    },
+
+    async confirmMove() {
+      const choice = this.movePick;
       if (!choice || choice === this.person.scope) return;
       const updated = await this.patch({ scope: choice });
+      this.$refs.moveDialog.close();
       if (updated) this.reloadPanel();
     },
 
-    async addToList() {
-      const options = this.lists.filter((l) => !l.member).map((l) => ({ value: l.uuid, label: l.name }));
-      const choice = await AppDialog.select({ title: 'Add to list', options, okLabel: 'Add' });
+    addToList() {
+      const first = this.lists.find((l) => !l.member);
+      this.listPick = first ? first.uuid : '';
+      this.$refs.listPickDialog.showModal();
+    },
+
+    async confirmAddToList() {
+      const choice = this.listPick;
       if (!choice) return;
       const res = await fetch(`/api/v1/people/lists/${choice}/members`, {
         method: 'POST',
@@ -377,6 +437,7 @@ window.personPanel = function personPanel() {
       }
       const list = this.lists.find((l) => l.uuid === choice);
       if (list) list.member = true;
+      this.$refs.listPickDialog.close();
       this.$dispatch('people-lists-changed');
     },
 

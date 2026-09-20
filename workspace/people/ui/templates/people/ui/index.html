@@ -172,6 +172,7 @@
 
 {% block content %}
   {{ lists_data|json_script:"people-lists-data" }}
+  {{ groups_data|json_script:"people-groups-data" }}
   {# Hidden server-side on a deep link too: on a phone the list would paint over the panel until Alpine binds. #}
   <section
     class="w-full lg:w-96 shrink-0 border-r border-base-300 flex flex-col h-full{% if panel_person_uuid %} max-lg:hidden{% endif %}"
@@ -215,6 +216,7 @@
     >
     </section>
   </div>
+  {% include "people/ui/partials/dialogs.html" %}
 {% endblock %}
 
 {% block extra_scripts %}

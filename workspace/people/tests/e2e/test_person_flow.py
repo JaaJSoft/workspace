@@ -21,11 +21,17 @@ class PersonFlowTests(PlaywrightTestCase):
     def test_create_edit_list_delete(self):
         self.page.goto(f"{self.live_server_url}/people")
         self.page.get_by_role("button", name="New contact").click()
-        self.page.locator("#app-dialog-prompt-input").fill("Bob Martin")
-        self.page.locator("#app-dialog-prompt-ok").click()
+        dialog = self.page.locator("#people-person-dialog")
+        expect(dialog).to_contain_text("In My contacts")
+        dialog.locator('input[name="display_name"]').fill("Bob Martin")
+        dialog.locator('input[name="email"]').fill("bob@example.com")
+        dialog.get_by_role("button", name="Create").click()
 
         panel = self.page.locator("#person-panel")
         expect(panel.get_by_placeholder("Name")).to_have_value("Bob Martin")
+        expect(panel.locator('input[x-model="entry.value"]').first).to_have_value(
+            "bob@example.com"
+        )
         expect(self.page.locator("#person-list")).to_contain_text("Bob Martin")
 
         panel.get_by_placeholder("Name").fill("Robert Martin")
@@ -33,10 +39,10 @@ class PersonFlowTests(PlaywrightTestCase):
         expect(self.page.locator("#person-list")).to_contain_text("Robert Martin")
 
         panel.get_by_role("button", name="Add to list").click()
-        self.page.locator("#app-dialog-select-input").select_option(
-            str(self.family.uuid)
-        )
-        self.page.locator("#app-dialog-select-ok").click()
+        pick = self.page.locator("#people-list-pick-dialog")
+        expect(pick).to_contain_text("Robert Martin")
+        pick.locator('select[name="list"]').select_option(str(self.family.uuid))
+        pick.get_by_role("button", name="Add").click()
         expect(panel).to_contain_text("Family")
 
         panel.get_by_title("Actions").click()

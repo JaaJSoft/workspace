@@ -288,9 +288,83 @@
       </div>
     {% endfor %}
 
+    <dialog id="people-list-pick-dialog" x-ref="listPickDialog" class="modal">
+      <div class="modal-box">
+        {% include "people/ui/partials/_dialog_header.html" with icon="list-plus" title="Add to list" subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" %}
+        <form @submit.prevent="confirmAddToList()" class="space-y-3">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">List</span></div>
+            <select
+              name="list"
+              class="select select-bordered select-sm w-full"
+              x-model="listPick"
+              required
+            >
+              <template x-for="list in lists.filter(l => !l.member)" :key="list.uuid">
+                <option :value="list.uuid" x-text="list.name"></option>
+              </template>
+            </select>
+          </label>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="$refs.listPickDialog.close()"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-secondary btn-sm" :disabled="!listPick">Add</button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+      </form>
+    </dialog>
+
+    <dialog id="people-move-dialog" x-ref="moveDialog" class="modal">
+      <div class="modal-box">
+        {% include "people/ui/partials/_dialog_header.html" with icon="users" title="Move to" subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" %}
+        <form @submit.prevent="confirmMove()" class="space-y-3">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">Address book</span></div>
+            <select
+              name="scope"
+              class="select select-bordered select-sm w-full"
+              x-model="movePick"
+            >
+              <option value="mine">My contacts</option>
+              <template x-for="group in groups" :key="group.id">
+                <option :value="'group:' + group.id" x-text="group.name"></option>
+              </template>
+            </select>
+          </label>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="$refs.moveDialog.close()"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn-secondary btn-sm"
+              :disabled="movePick === person.scope"
+            >
+              Move
+            </button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+      </form>
+    </dialog>
+
     <dialog x-ref="cropDialog" class="modal">
       <div class="modal-box">
-        <h3 class="font-bold text-lg mb-3">Crop the photo</h3>
+        {% include "people/ui/partials/_dialog_header.html" with icon="camera" title="Crop the photo" subtitle_expr="person.display_name" close_expr="cancelCrop()" %}
         <div class="max-h-96 overflow-hidden">
           <img x-ref="cropImage" alt="" class="max-w-full block" />
         </div>
@@ -298,7 +372,7 @@
           <button type="button" class="btn btn-ghost btn-sm" @click="cancelCrop()">Cancel</button>
           <button
             type="button"
-            class="btn btn-primary btn-sm"
+            class="btn btn-secondary btn-sm"
             :disabled="uploading"
             @click="confirmCrop()"
           >

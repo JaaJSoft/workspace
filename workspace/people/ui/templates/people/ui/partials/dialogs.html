@@ -1,0 +1,97 @@
+{# Dialogs of the page shell: new contact, new or renamed list. The panel's own dialogs live in person_panel.html. #}
+<dialog
+  id="people-person-dialog"
+  x-ref="personDialog"
+  class="modal"
+  @close="resetPersonForm()"
+>
+  <div class="modal-box">
+    {% include "people/ui/partials/_dialog_header.html" with icon="user-plus" title="New contact" subtitle_expr="'In ' + scopeLabel()" close_expr="$refs.personDialog.close()" %}
+    <form @submit.prevent="createPerson()" class="space-y-3">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input
+          type="text"
+          name="display_name"
+          class="input input-bordered input-sm w-full"
+          placeholder="Full name"
+          x-ref="personName"
+          x-model="personForm.name"
+          required
+        />
+      </label>
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Email <span class="opacity-60">(optional)</span></span></div>
+        <input
+          type="email"
+          name="email"
+          class="input input-bordered input-sm w-full"
+          placeholder="name@example.com"
+          x-model="personForm.email"
+        />
+      </label>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.personDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-secondary btn-sm"
+          :disabled="saving || !personForm.name.trim()"
+        >
+          Create
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>
+
+<dialog
+  id="people-list-dialog"
+  x-ref="listDialog"
+  class="modal"
+  @close="resetListForm()"
+>
+  <div class="modal-box">
+    {% include "people/ui/partials/_dialog_header.html" with icon="list" title_expr="listForm.uuid ? 'Rename list' : 'New list'" subtitle_expr="listForm.uuid ? listForm.original : 'In ' + scopeLabel()" close_expr="$refs.listDialog.close()" %}
+    <form @submit.prevent="saveList()" class="space-y-3">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Name</span></div>
+        <input
+          type="text"
+          name="name"
+          class="input input-bordered input-sm w-full"
+          placeholder="Family, Clients..."
+          x-ref="listName"
+          x-model="listForm.name"
+          required
+        />
+      </label>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.listDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-secondary btn-sm"
+          :disabled="saving || !listForm.name.trim()"
+          x-text="listForm.uuid ? 'Rename' : 'Create'"
+        ></button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

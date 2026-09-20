@@ -1,0 +1,31 @@
+{% comment %}
+  Header of a people dialog, the shape the projects dialogs use: a tinted
+  icon, a title, a one-line subtitle bound to an Alpine expression, a close
+  button. Params: icon, title (or title_expr), subtitle_expr, close_expr.
+{% endcomment %}
+<div class="flex items-start justify-between gap-3 mb-4">
+  <div class="flex items-center gap-3 min-w-0">
+    <div class="bg-secondary/10 text-secondary rounded-lg p-2 shrink-0">
+      <i data-lucide="{{ icon }}" class="w-5 h-5"></i>
+    </div>
+    <div class="min-w-0">
+      {% if title_expr %}
+        <h3 class="font-bold text-lg" x-text="{{ title_expr }}"></h3>
+      {% else %}
+        <h3 class="font-bold text-lg">{{ title }}</h3>
+      {% endif %}
+      <p
+        class="text-sm text-base-content/60 truncate"
+        x-text="{{ subtitle_expr }}"
+      ></p>
+    </div>
+  </div>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm btn-square"
+    aria-label="Close"
+    @click="{{ close_expr }}"
+  >
+    <i data-lucide="x" class="w-4 h-4"></i>
+  </button>
+</div>

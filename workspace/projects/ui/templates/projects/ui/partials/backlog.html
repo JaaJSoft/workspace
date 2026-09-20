@@ -16,7 +16,7 @@
     {% if writable and backlog_status %}
       <button
         type="button"
-        class="btn btn-accent btn-sm shrink-0"
+        class="btn btn-module btn-sm shrink-0"
         @click="newTask('{{ backlog_status.uuid }}')"
       >
         <i data-lucide="plus" class="w-4 h-4"></i>
@@ -40,7 +40,7 @@
           <button
             type="button"
             tabindex="0"
-            class="btn btn-accent btn-sm"
+            class="btn btn-module btn-sm"
             title="Send to a sprint"
           >
             <i data-lucide="timer" class="w-4 h-4"></i>
@@ -59,7 +59,7 @@
                 >
                   <span class="truncate flex-1">{{ sprint.name }}</span>
                   {% if sprint.state == "active" %}
-                    <span class="badge badge-accent badge-sm">Active</span>
+                    <span class="badge badge-module badge-sm">Active</span>
                   {% endif %}
                 </button>
               </li>
@@ -83,7 +83,7 @@
         <div class="join">
           <button
             type="button"
-            class="btn btn-accent btn-sm join-item"
+            class="btn btn-module btn-sm join-item"
             :disabled="!bulkCan('move')"
             @click="sendSelected()"
           >
@@ -95,7 +95,7 @@
             <button
               type="button"
               tabindex="0"
-              class="btn btn-accent btn-sm join-item px-1.5"
+              class="btn btn-module btn-sm join-item px-1.5"
               title="Send to a specific column"
               aria-label="Send to a specific column"
               :disabled="!bulkCan('move')"

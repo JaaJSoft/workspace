@@ -54,7 +54,7 @@
           x-show="state !== 'muted'"
           data-lucide="eye"
           class="w-4 h-4"
-          :class="state === 'watching' ? 'text-accent' : 'opacity-60'"
+          :class="state === 'watching' ? 'text-module' : 'opacity-60'"
         ></i>
         <i x-show="state === 'muted'" data-lucide="eye-off" class="w-4 h-4"></i>
         <span
@@ -377,7 +377,7 @@
               <button type="button" class="btn btn-ghost btn-xs" @click="cancelEdit()">Cancel</button>
               <button
                 type="button"
-                class="btn btn-accent btn-xs"
+                class="btn btn-module btn-xs"
                 @click="commitDraft('description')"
               >
                 Save

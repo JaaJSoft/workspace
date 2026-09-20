@@ -59,7 +59,7 @@ not strip whoever else was on them.
       <button
         type="button"
         class="btn btn-xs join-item flex-1"
-        :class="mode === 'add' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        :class="mode === 'add' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'add'"
       >
         Assign
@@ -67,7 +67,7 @@ not strip whoever else was on them.
       <button
         type="button"
         class="btn btn-xs join-item flex-1"
-        :class="mode === 'remove' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        :class="mode === 'remove' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'remove'"
       >
         Unassign
@@ -105,7 +105,7 @@ not strip whoever else was on them.
       <button
         type="button"
         class="btn btn-xs join-item flex-1"
-        :class="mode === 'add' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        :class="mode === 'add' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'add'"
       >
         Add label
@@ -113,7 +113,7 @@ not strip whoever else was on them.
       <button
         type="button"
         class="btn btn-xs join-item flex-1"
-        :class="mode === 'remove' ? 'btn-accent' : 'btn-ghost border border-base-300'"
+        :class="mode === 'remove' ? 'btn-module' : 'btn-ghost border border-base-300'"
         @click="mode = 'remove'"
       >
         Remove label
@@ -212,7 +212,7 @@ not strip whoever else was on them.
     <div class="flex items-center gap-2">
       <button
         type="button"
-        class="btn btn-accent btn-sm flex-1"
+        class="btn btn-module btn-sm flex-1"
         :disabled="!date"
         @click="bulkDueDate(date); open = false"
       >

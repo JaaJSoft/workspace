@@ -4,14 +4,14 @@
     class="stats stats-vertical sm:stats-horizontal bg-base-200 shadow-sm w-full"
   >
     <div class="stat">
-      <div class="stat-figure text-accent">
+      <div class="stat-figure text-module">
         <i data-lucide="square-kanban" class="w-6 h-6"></i>
       </div>
       <div class="stat-title">On the board</div>
       <div class="stat-value text-2xl">{{ board_count }}</div>
     </div>
     <div class="stat">
-      <div class="stat-figure text-accent">
+      <div class="stat-figure text-module">
         <i data-lucide="list-todo" class="w-6 h-6"></i>
       </div>
       <div class="stat-title">In backlog</div>
@@ -30,7 +30,7 @@
     <div class="flex flex-col gap-4 lg:col-span-2">
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="info" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="info" class="w-4 h-4 text-module"></i>
           About
         </h2>
         {% if project.description %}
@@ -46,7 +46,7 @@
 
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="history" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="history" class="w-4 h-4 text-module"></i>
           Recent activity
         </h2>
         <ul class="flex flex-col gap-3">
@@ -85,7 +85,7 @@
     <div class="flex flex-col gap-4">
       <section class="rounded-box bg-base-200 p-4">
         <h2 class="font-semibold mb-2 flex items-center gap-2">
-          <i data-lucide="users" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="users" class="w-4 h-4 text-module"></i>
           Members
         </h2>
         <ul class="flex flex-col gap-2">
@@ -101,7 +101,7 @@
       {% if open_epics or closed_epic_count %}
         <section id="overview-epics" class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">
-            <i data-lucide="layers" class="w-4 h-4 text-accent"></i>
+            <i data-lucide="layers" class="w-4 h-4 text-module"></i>
             Epics
           </h2>
           <ul class="flex flex-col gap-3">
@@ -122,7 +122,7 @@
                 <div class="flex items-center gap-2">
                   <div class="h-1.5 flex-1 rounded-full bg-base-300 overflow-hidden">
                     <div
-                      class="h-full rounded-full bg-accent"
+                      class="h-full rounded-full bg-module"
                       style="width: {% widthratio e.done_task_count e.task_count|default:1 100 %}%"
                     ></div>
                   </div>
@@ -146,7 +146,7 @@
       {% if labels_data %}
         <section class="rounded-box bg-base-200 p-4">
           <h2 class="font-semibold mb-2 flex items-center gap-2">
-            <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+            <i data-lucide="tags" class="w-4 h-4 text-module"></i>
             Labels
           </h2>
           <div class="flex flex-wrap gap-1.5">

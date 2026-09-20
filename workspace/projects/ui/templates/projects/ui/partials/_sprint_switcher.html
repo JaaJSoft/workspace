@@ -33,13 +33,13 @@ Params:
     tabindex="0"
     class="btn btn-sm btn-ghost border border-base-300 font-normal gap-2"
   >
-    <i data-lucide="timer" class="w-4 h-4 text-accent"></i>
+    <i data-lucide="timer" class="w-4 h-4 text-module"></i>
     {% if selected == "none" %}
       <span class="font-medium">Unplanned</span>
     {% elif selected %}
       <span class="font-medium">{{ selected.name }}</span>
       {% if selected.state == "active" %}
-        <span class="badge badge-accent badge-sm">Active</span>
+        <span class="badge badge-module badge-sm">Active</span>
       {% elif selected.state == "closed" %}
         <span class="badge badge-ghost badge-sm">Closed</span>
       {% endif %}
@@ -103,7 +103,7 @@ Params:
           >
             <span class="truncate flex-1">{{ s.name }}</span>
             {% if s.state == "active" %}
-              <span class="badge badge-accent badge-sm">Active</span>
+              <span class="badge badge-module badge-sm">Active</span>
             {% elif s.state == "closed" %}
               <span class="badge badge-ghost badge-sm">Closed</span>
             {% else %}
@@ -125,7 +125,7 @@ Params:
               <span class="text-sm">Hide closed sprints</span>
               <input
                 type="checkbox"
-                class="toggle toggle-xs toggle-accent"
+                class="toggle toggle-xs toggle-module"
                 x-model="hideClosed"
                 @click.stop
               />
@@ -135,7 +135,7 @@ Params:
         {% if role == "admin" and writable %}
           <li>
             <button type="button" @click="openSprints({ add: true })">
-              <i data-lucide="plus" class="w-4 h-4 text-accent"></i>
+              <i data-lucide="plus" class="w-4 h-4 text-module"></i>
               New sprint
             </button>
           </li>

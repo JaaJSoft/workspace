@@ -849,8 +849,8 @@ def _sprint_reports_context(request, project, log):
                 },
                 {
                     "name": "Remaining",
-                    "css_class": "stroke-accent",
-                    "fill_class": "fill-accent",
+                    "css_class": "stroke-module",
+                    "fill_class": "fill-module",
                     "values": [
                         _plain_number(day["remaining"]) for day in burndown["days"]
                     ],
@@ -868,7 +868,7 @@ def _sprint_reports_context(request, project, log):
                 [
                     {
                         "name": "Completed",
-                        "css_class": "fill-accent",
+                        "css_class": "fill-module",
                         "values": [_plain_number(row["completed"]) for row in velocity],
                     },
                     {

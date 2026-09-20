@@ -6,7 +6,7 @@
 >
   <div>
     <h2 class="text-lg font-semibold flex items-center gap-2">
-      <i data-lucide="settings" class="w-5 h-5 text-accent"></i>
+      <i data-lucide="settings" class="w-5 h-5 text-module"></i>
       Settings
     </h2>
     <p class="text-sm text-base-content/60 mt-0.5">Project details, board setup and access.</p>
@@ -23,7 +23,7 @@
              })"
     >
       <h3 class="font-semibold flex items-center gap-2">
-        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-accent"></i>
+        <i data-lucide="sliders-horizontal" class="w-4 h-4 text-module"></i>
         General
       </h3>
       <template x-if="error">
@@ -70,7 +70,7 @@
         <div class="label py-1">
           <span class="label-text">Completed tasks visibility</span>
           <span
-            class="label-text-alt font-medium text-accent"
+            class="label-text-alt font-medium text-module"
             x-text="retentionSliderLabel()"
           ></span>
         </div>
@@ -79,7 +79,7 @@
           min="0"
           max="5"
           step="1"
-          class="range range-sm range-accent"
+          class="range range-sm range-module"
           aria-label="Completed tasks visibility"
           :aria-valuetext="retentionSliderLabel()"
           :value="retentionIndex()"
@@ -116,7 +116,7 @@
       <div class="flex justify-end">
         <button
           type="button"
-          class="btn btn-accent btn-sm"
+          class="btn btn-module btn-sm"
           @click="save()"
           :disabled="saving || !name.trim() || !key.trim() || !writable"
         >
@@ -134,7 +134,7 @@
       >
         <div>
           <h3 class="font-semibold flex items-center gap-2">
-            <i data-lucide="users" class="w-4 h-4 text-accent"></i>
+            <i data-lucide="users" class="w-4 h-4 text-module"></i>
             Access
           </h3>
           <p class="text-sm text-base-content/60 mt-0.5">Share this project with a group or add people directly.</p>
@@ -257,7 +257,7 @@
       >
         <div>
           <h3 class="font-semibold flex items-center gap-2">
-            <i data-lucide="layout-dashboard" class="w-4 h-4 text-accent"></i>
+            <i data-lucide="layout-dashboard" class="w-4 h-4 text-module"></i>
             Board model
           </h3>
           <p class="text-sm text-base-content/60 mt-0.5">
@@ -272,26 +272,26 @@
             <button
               type="button"
               class="rounded-box border p-3 text-left flex items-start gap-3 disabled:cursor-default"
-              :class="type === '{{ option.value }}' ? 'border-accent bg-accent/5' : 'border-base-300 bg-base-100 hover:border-accent/50'"
+              :class="type === '{{ option.value }}' ? 'border-module bg-module/5' : 'border-base-300 bg-base-100 hover:border-module/50'"
               :disabled="busy || !writable || type === '{{ option.value }}'"
               @click="convertTo('{{ option.value }}')"
             >
               <i
                 data-lucide="{{ option.icon }}"
-                class="w-5 h-5 mt-0.5 shrink-0 text-accent"
+                class="w-5 h-5 mt-0.5 shrink-0 text-module"
               ></i>
               <span class="flex flex-col gap-0.5 min-w-0">
                 <span class="flex items-center gap-2 font-medium">
                   {{ option.label }}
                   <span
-                    class="badge badge-accent badge-sm"
+                    class="badge badge-module badge-sm"
                     x-show="type === '{{ option.value }}'"
                     x-cloak
                   >Current</span>
                 </span>
                 <span class="text-sm text-base-content/60">{{ option.description }}</span>
                 <span
-                  class="text-sm text-accent font-medium"
+                  class="text-sm text-module font-medium"
                   x-show="type !== '{{ option.value }}' && writable"
                   x-cloak
                 >Convert to {{ option.label|lower }}</span>
@@ -309,7 +309,7 @@
     >
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="columns-3" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="columns-3" class="w-4 h-4 text-module"></i>
           Columns
         </h3>
         {% if writable %}
@@ -359,7 +359,7 @@
                 <button
                   type="button"
                   class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                  :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                   :style="c ? 'background:' + c : ''"
                   :aria-label="c ? 'Color ' + c : 'No color'"
                   :aria-pressed="addForm.color === c"
@@ -372,7 +372,7 @@
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
             <button
               type="submit"
-              class="btn btn-accent btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
               Add
@@ -440,7 +440,7 @@
                       <button
                         type="button"
                         class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                        :class="column.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                        :class="column.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                         :style="c ? 'background:' + c : ''"
                         :aria-label="c ? 'Color ' + c : 'No color'"
                         @click="setColor(column, c); document.activeElement.blur()"
@@ -470,7 +470,7 @@
     >
       <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h3 class="font-semibold flex items-center gap-2 shrink-0">
-          <i data-lucide="layers" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="layers" class="w-4 h-4 text-module"></i>
           Epics
         </h3>
         <div class="flex flex-wrap items-center gap-3">
@@ -487,7 +487,7 @@
             <label class="flex items-center gap-2 cursor-pointer shrink-0">
               <input
                 type="checkbox"
-                class="toggle toggle-sm toggle-accent"
+                class="toggle toggle-sm toggle-module"
                 x-model="openOnly"
               />
               <span class="text-sm">Open only</span>
@@ -533,7 +533,7 @@
                   <button
                     type="button"
                     class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                    :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                    :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                     :style="c ? 'background:' + c : ''"
                     :aria-label="c ? 'Color ' + c : 'No color'"
                     :aria-pressed="addForm.color === c"
@@ -563,7 +563,7 @@
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
             <button
               type="submit"
-              class="btn btn-accent btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
               Add
@@ -599,7 +599,7 @@
                         <button
                           type="button"
                           class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                          :class="epic.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                          :class="epic.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                           :style="c ? 'background:' + c : ''"
                           :aria-label="c ? 'Color ' + c : 'No color'"
                           @click="setColor(epic, c); document.activeElement.blur()"
@@ -718,7 +718,7 @@
             </div>
             <div class="h-1.5 rounded-full bg-base-300 overflow-hidden">
               <div
-                class="h-full rounded-full bg-accent"
+                class="h-full rounded-full bg-module"
                 :style="'width:' + progressPercent(epic) + '%'"
               ></div>
             </div>
@@ -765,7 +765,7 @@
     >
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
-          <i data-lucide="tags" class="w-4 h-4 text-accent"></i>
+          <i data-lucide="tags" class="w-4 h-4 text-module"></i>
           Labels
         </h3>
         {% if writable %}
@@ -806,7 +806,7 @@
                 <button
                   type="button"
                   class="w-6 h-6 rounded-full border border-base-300 shrink-0"
-                  :class="addForm.color === c ? 'ring-2 ring-accent ring-offset-2 ring-offset-base-100' : ''"
+                  :class="addForm.color === c ? 'ring-2 ring-module ring-offset-2 ring-offset-base-100' : ''"
                   :style="c ? 'background:' + c : ''"
                   :aria-label="c ? 'Color ' + c : 'No color'"
                   :aria-pressed="addForm.color === c"
@@ -819,7 +819,7 @@
             <button type="button" class="btn btn-ghost btn-sm" @click="adding = false">Cancel</button>
             <button
               type="submit"
-              class="btn btn-accent btn-sm"
+              class="btn btn-module btn-sm"
               :disabled="busy || !addForm.name.trim()"
             >
               Add
@@ -889,7 +889,7 @@
                     <button
                       type="button"
                       class="w-5 h-5 rounded-full border border-base-300 shrink-0"
-                      :class="label.color === c ? 'ring-2 ring-accent ring-offset-1 ring-offset-base-100' : ''"
+                      :class="label.color === c ? 'ring-2 ring-module ring-offset-1 ring-offset-base-100' : ''"
                       :style="c ? 'background:' + c : ''"
                       :aria-label="c ? 'Color ' + c : 'No color'"
                       @click="setColor(label, c); document.activeElement.blur()"

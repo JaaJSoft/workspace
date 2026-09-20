@@ -920,9 +920,9 @@ function projectBoard(config) {
         title: 'Start sprint',
         message: 'Start "' + name + '"? Its tasks move onto the board.',
         okLabel: 'Start',
-        okClass: 'btn-accent',
+        okClass: 'btn-module',
         icon: 'play',
-        iconClass: 'bg-accent/10 text-accent',
+        iconClass: 'bg-module/10 text-module',
       });
       if (!ok) return;
       try {
@@ -963,9 +963,9 @@ function projectBoard(config) {
           ),
           value: 'backlog',
           okLabel: 'Complete',
-          okClass: 'btn-accent',
+          okClass: 'btn-module',
           icon: 'flag',
-          iconClass: 'bg-accent/10 text-accent',
+          iconClass: 'bg-module/10 text-module',
         });
         if (!choice) return;
         moveTo = choice === 'backlog' ? null : choice;
@@ -974,9 +974,9 @@ function projectBoard(config) {
           title: 'Complete sprint',
           message: 'Complete "' + name + '"?',
           okLabel: 'Complete',
-          okClass: 'btn-accent',
+          okClass: 'btn-module',
           icon: 'flag',
-          iconClass: 'bg-accent/10 text-accent',
+          iconClass: 'bg-module/10 text-module',
         });
         if (!ok) return;
       }

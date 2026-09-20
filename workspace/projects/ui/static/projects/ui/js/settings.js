@@ -178,9 +178,9 @@ function projectBoardModel(config) {
         title: warning.title,
         message: warning.message,
         okLabel: warning.okLabel,
-        okClass: 'btn-accent',
+        okClass: 'btn-module',
         icon: warning.icon,
-        iconClass: 'bg-accent/10 text-accent',
+        iconClass: 'bg-module/10 text-module',
       });
       if (!ok) return;
       this.busy = true;

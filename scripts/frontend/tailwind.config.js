@@ -14,23 +14,24 @@ const THEMES = [
 // A module's identity color: a Tailwind hue, theme independent, with one
 // shade for light themes and one for dark ones. Must match MODULE_HUES in
 // workspace/core/module_registry.py (core.tests.test_module_colors checks).
-// Bright hues take 500 in the dark: their 400 is too pale on a dark surface.
-// Bright hues also take their 950 shade as light-theme foreground: white on
-// their 600 falls below 4.5:1 contrast.
+// The light shade is 500, Tailwind's vivid step. Bright hues take 500 in
+// the dark too: their 400 is too pale on a dark surface. Bright hues also
+// take their 950 shade as light-theme foreground: white on their 500 falls
+// below 4.5:1 contrast.
 const MODULE_HUES = {
-  indigo: { light: 600, dark: 400 },
-  sky: { light: 600, dark: 400, content: 950 },
-  emerald: { light: 600, dark: 400, content: 950 },
-  teal: { light: 600, dark: 400, content: 950 },
-  amber: { light: 600, dark: 500, content: 950 },
-  orange: { light: 600, dark: 400, content: 950 },
-  purple: { light: 600, dark: 400 },
-  rose: { light: 600, dark: 400 },
-  cyan: { light: 600, dark: 500, content: 950 },
-  slate: { light: 600, dark: 400 },
-  lime: { light: 600, dark: 500, content: 950 },
-  fuchsia: { light: 600, dark: 400 },
-  yellow: { light: 600, dark: 500, content: 950 },
+  indigo: { light: 500, dark: 400 },
+  sky: { light: 500, dark: 400, content: 950 },
+  emerald: { light: 500, dark: 400, content: 950 },
+  teal: { light: 500, dark: 400, content: 950 },
+  amber: { light: 500, dark: 500, content: 950 },
+  orange: { light: 500, dark: 400, content: 950 },
+  purple: { light: 500, dark: 400 },
+  rose: { light: 500, dark: 400 },
+  cyan: { light: 500, dark: 500, content: 950 },
+  slate: { light: 500, dark: 400 },
+  lime: { light: 500, dark: 500, content: 950 },
+  fuchsia: { light: 500, dark: 400 },
+  yellow: { light: 500, dark: 500, content: 950 },
 };
 
 // Themes whose daisyUI definition declares `color-scheme: dark`: the dark

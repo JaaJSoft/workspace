@@ -35,12 +35,13 @@ EXPANDED = {
     "mail": "w-72",
     "calendar": "w-72",
     "projects": "w-72",
+    "people": "w-72",
     "chat": "lg:!w-80",
 }
 COLLAPSED = "w-16"
 
 # Drawers that are off-canvas below `lg` (the `lg:drawer-open` shells).
-OFF_CANVAS_ON_MOBILE = ("notes", "mail", "calendar", "projects")
+OFF_CANVAS_ON_MOBILE = ("notes", "mail", "calendar", "projects", "people")
 MOBILE = {"width": 375, "height": 667}
 FULL_WIDTH = 288  # w-72
 OPEN_DRAWER = """() => {
@@ -84,6 +85,7 @@ class SidebarFirstPaintTests(PlaywrightTestCase):
             "mail": "/mail",
             "calendar": "/calendar",
             "projects": f"/projects/{project.uuid}",
+            "people": "/people",
         }
         self.login_as(self.user)
         self.page.set_viewport_size(DESKTOP)

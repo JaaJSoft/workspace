@@ -1,0 +1,420 @@
+{% comment %}
+  The person detail panel, swapped into #person-panel by alpine-ajax: a
+  toolbar strip like the notes editor (back, icon, the name as an inline
+  input, the actions button), then cards on a base-200 body. Fields PATCH on
+  change; the action list from the registry gates editing.
+{% endcomment %}
+<section
+  id="person-panel"
+  class="flex-1 h-full min-h-0 flex flex-col bg-base-200"
+  x-show="panelOpen"
+>
+  {{ person_data|json_script:"person-panel-data" }}
+  {{ actions|json_script:"person-panel-actions" }}
+  {{ lists_data|json_script:"person-panel-lists" }}
+  {{ groups_data|json_script:"person-panel-groups" }}
+
+  <div
+    x-data="personPanel()"
+    @people-panel-run.window="if ($event.detail.uuid === person.uuid) runAction($event.detail.id)"
+    class="flex-1 min-h-0 flex flex-col"
+  >
+    <div
+      class="flex items-center justify-between gap-2 p-3 border-b border-base-300 bg-base-100"
+    >
+      <div class="flex items-center gap-2 min-w-0 flex-1">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square lg:hidden"
+          @click="closePanel()"
+          title="Back"
+          aria-label="Back"
+        >
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </button>
+        <i data-lucide="contact" class="w-4 h-4 text-secondary flex-shrink-0"></i>
+        <input
+          type="text"
+          class="input input-ghost input-sm font-semibold flex-1 min-w-0"
+          x-model="person.display_name"
+          @change="saveField('display_name')"
+          :readonly="!can('edit')"
+          placeholder="Name"
+        />
+      </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        title="Actions"
+        aria-label="Actions"
+        @click="openCtxMenu($event, 'person', { uuid: person.uuid, name: person.display_name, scope: person.scope })"
+      >
+        <i data-lucide="more-vertical" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <div class="max-w-3xl mx-auto p-4 lg:p-6 space-y-4">
+        <div class="bg-base-100 border border-base-300 rounded-box p-4 space-y-3">
+          <h3
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
+          >
+            <i data-lucide="id-card" class="w-3.5 h-3.5"></i>Identity
+          </h3>
+          <div class="flex items-start gap-4">
+            <div class="relative shrink-0">
+              {# One element for the three cases: a null binding removes the attribute, and the element re-renders on every change. #}
+              <user-avatar size="xl" :user-id="person.linked_user ? person.linked_user.id : null" :username="person.linked_user ? person.linked_user.username : person.display_name" :color-key="person.uuid" :src="!person.linked_user && person.avatar_url ? person.avatar_url + '?t=' + avatarStamp : null"></user-avatar>
+              <label
+                class="absolute -bottom-1 -right-1 btn btn-circle btn-xs"
+                title="Change photo"
+                x-show="!person.linked_user && can('edit')"
+              >
+                <i data-lucide="camera" class="w-3 h-3"></i>
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="onFileSelect($event)"
+                />
+              </label>
+              <button
+                type="button"
+                class="absolute -top-1 -right-1 btn btn-circle btn-xs"
+                title="Remove photo"
+                x-show="!person.linked_user && person.avatar_url && can('edit')"
+                @click="deleteAvatar()"
+              >
+                <i data-lucide="trash-2" class="w-3 h-3"></i>
+              </button>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 flex-1 min-w-0">
+              <label class="form-control">
+                <span class="label-text text-xs opacity-60">First name</span>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm"
+                  x-model="person.given_name"
+                  @change="saveField('given_name')"
+                  :readonly="!can('edit')"
+                />
+              </label>
+              <label class="form-control">
+                <span class="label-text text-xs opacity-60">Last name</span>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm"
+                  x-model="person.family_name"
+                  @change="saveField('family_name')"
+                  :readonly="!can('edit')"
+                />
+              </label>
+              <label class="form-control">
+                <span class="label-text text-xs opacity-60">Organization</span>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm"
+                  x-model="person.organization"
+                  @change="saveField('organization')"
+                  :readonly="!can('edit')"
+                />
+              </label>
+              <label class="form-control">
+                <span class="label-text text-xs opacity-60">Title</span>
+                <input
+                  type="text"
+                  class="input input-bordered input-sm"
+                  x-model="person.title"
+                  @change="saveField('title')"
+                  :readonly="!can('edit')"
+                />
+              </label>
+              <label class="form-control">
+                <span class="label-text text-xs opacity-60">Birthday</span>
+                <input
+                  type="date"
+                  class="input input-bordered input-sm"
+                  x-model="person.birthday"
+                  @change="saveField('birthday')"
+                  :readonly="!can('edit')"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-base-100 border border-base-300 rounded-box p-4 space-y-3">
+          <h3
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
+          >
+            <i data-lucide="at-sign" class="w-3.5 h-3.5"></i>Contact details
+          </h3>
+          {% for kind, label, types in entry_kinds %}
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="text-sm font-medium">{{ label }}</h4>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  @click="addEntry('{{ kind }}')"
+                  x-show="can('edit')"
+                >
+                  <i data-lucide="plus" class="w-3 h-3"></i> Add
+                </button>
+              </div>
+              <template x-for="(entry, index) in person.{{ kind }}" :key="index">
+                <div class="flex items-center gap-2 mb-2">
+                  <select
+                    class="select select-bordered select-xs w-24"
+                    x-model="entry.type"
+                    @change="saveEntries('{{ kind }}')"
+                    :disabled="!can('edit')"
+                  >
+                    {% for type in types %}<option value="{{ type }}">{{ type|capfirst }}</option>{% endfor %}
+                  </select>
+                  {% if kind == "addresses" %}
+                    <input
+                      type="text"
+                      class="input input-bordered input-xs flex-1"
+                      placeholder="Street"
+                      x-model="entry.street"
+                      @change="saveEntries('addresses')"
+                      :readonly="!can('edit')"
+                    />
+                    <input
+                      type="text"
+                      class="input input-bordered input-xs w-28"
+                      placeholder="Postal code"
+                      x-model="entry.postal_code"
+                      @change="saveEntries('addresses')"
+                      :readonly="!can('edit')"
+                    />
+                    <input
+                      type="text"
+                      class="input input-bordered input-xs w-32"
+                      placeholder="City"
+                      x-model="entry.city"
+                      @change="saveEntries('addresses')"
+                      :readonly="!can('edit')"
+                    />
+                    <input
+                      type="text"
+                      class="input input-bordered input-xs w-28"
+                      placeholder="Country"
+                      x-model="entry.country"
+                      @change="saveEntries('addresses')"
+                      :readonly="!can('edit')"
+                    />
+                  {% else %}
+                    <input
+                      type="text"
+                      class="input input-bordered input-xs flex-1"
+                      x-model="entry.value"
+                      @change="saveEntries('{{ kind }}')"
+                      :readonly="!can('edit')"
+                    />
+                  {% endif %}
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-xs"
+                    @click="removeEntry('{{ kind }}', index)"
+                    x-show="can('edit')"
+                    title="Remove"
+                  >
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                  </button>
+                </div>
+              </template>
+              <p class="text-xs opacity-50" x-show="!person.{{ kind }}.length">None.</p>
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="bg-base-100 border border-base-300 rounded-box p-4 space-y-3">
+          <h3
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
+          >
+            <i data-lucide="list" class="w-3.5 h-3.5"></i>Lists and account
+          </h3>
+          <div>
+            <h4 class="text-sm font-medium mb-2">Lists</h4>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="list in lists.filter(l => l.member)" :key="list.uuid">
+                <span class="badge badge-outline gap-1">
+                  <span x-text="list.name"></span>
+                  <button
+                    type="button"
+                    class="opacity-60 hover:opacity-100"
+                    @click="removeFromList(list.uuid)"
+                    x-show="can('edit')"
+                    title="Remove from list"
+                  >
+                    <i data-lucide="x" class="w-3 h-3"></i>
+                  </button>
+                </span>
+              </template>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                @click="addToList()"
+                x-show="can('add_to_list') && lists.some(l => !l.member)"
+              >
+                <i data-lucide="plus" class="w-3 h-3"></i> Add to list
+              </button>
+              <p
+                class="text-xs opacity-50"
+                x-show="!lists.some(l => l.member) && !lists.some(l => !l.member)"
+              >
+                None.
+              </p>
+            </div>
+          </div>
+          <div>
+            <h4 class="text-sm font-medium mb-2">Workspace account</h4>
+            <template x-if="person.linked_user">
+              <div class="flex items-center gap-2">
+                {% include "ui/partials/user_chip.html" with user_id_expr="person.linked_user.id" username_expr="person.linked_user.username" remove_expr="unlinkUser()" remove_show_expr="can('unlink_user')" %}
+              </div>
+            </template>
+            {% comment %}
+              userSelector dispatches its event on window, not on its own element,
+              so the listener has to be a .window one: a bubbling listener would
+              never fire.
+            {% endcomment %}
+            <template x-if="!person.linked_user && can('edit')">
+              <div
+                class="max-w-xs"
+                @person-link-user-selected.window="linkUser($event.detail.user)"
+              >
+                {% include "users/ui/partials/user_selector.html" with on_select_event="person-link-user-selected" placeholder="Link a workspace account..." %}
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <div class="bg-base-100 border border-base-300 rounded-box p-4 space-y-3">
+          <h3
+            class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
+          >
+            <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>Notes
+          </h3>
+          <textarea
+            class="textarea textarea-bordered w-full"
+            rows="4"
+            x-model="person.notes"
+            @change="saveField('notes')"
+            :readonly="!can('edit')"
+          ></textarea>
+        </div>
+
+        {% for section, html in sections %}
+          <div
+            class="bg-base-100 border border-base-300 rounded-box p-4 space-y-3"
+            data-section="{{ section.slug }}"
+          >
+            <h3
+              class="text-xs font-semibold uppercase tracking-wider text-base-content/60 flex items-center gap-2"
+            >
+              <i data-lucide="{{ section.icon }}" class="w-3.5 h-3.5"></i>{{ section.label }}
+            </h3>
+            {{ html }}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <dialog id="people-list-pick-dialog" x-ref="listPickDialog" class="modal">
+      <div class="modal-box">
+        {% include "people/ui/partials/_dialog_header.html" with icon="list-plus" title="Add to list" subtitle_expr="person.display_name" close_expr="$refs.listPickDialog.close()" %}
+        <form @submit.prevent="confirmAddToList()" class="space-y-3">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">List</span></div>
+            <select
+              name="list"
+              class="select select-bordered select-sm w-full"
+              x-model="listPick"
+              required
+            >
+              <template x-for="list in lists.filter(l => !l.member)" :key="list.uuid">
+                <option :value="list.uuid" x-text="list.name"></option>
+              </template>
+            </select>
+          </label>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="$refs.listPickDialog.close()"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-secondary btn-sm" :disabled="!listPick">Add</button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+      </form>
+    </dialog>
+
+    <dialog id="people-move-dialog" x-ref="moveDialog" class="modal">
+      <div class="modal-box">
+        {% include "people/ui/partials/_dialog_header.html" with icon="users" title="Move to" subtitle_expr="person.display_name" close_expr="$refs.moveDialog.close()" %}
+        <form @submit.prevent="confirmMove()" class="space-y-3">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">Address book</span></div>
+            <select
+              name="scope"
+              class="select select-bordered select-sm w-full"
+              x-model="movePick"
+            >
+              <option value="mine">My contacts</option>
+              <template x-for="group in groups" :key="group.id">
+                <option :value="'group:' + group.id" x-text="group.name"></option>
+              </template>
+            </select>
+          </label>
+          <div class="modal-action">
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              @click="$refs.moveDialog.close()"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="btn btn-secondary btn-sm"
+              :disabled="movePick === person.scope"
+            >
+              Move
+            </button>
+          </div>
+        </form>
+      </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="submit">close</button>
+      </form>
+    </dialog>
+
+    <dialog x-ref="cropDialog" class="modal">
+      <div class="modal-box">
+        {% include "people/ui/partials/_dialog_header.html" with icon="camera" title="Crop the photo" subtitle_expr="person.display_name" close_expr="cancelCrop()" %}
+        <div class="max-h-96 overflow-hidden">
+          <img x-ref="cropImage" alt="" class="max-w-full block" />
+        </div>
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost btn-sm" @click="cancelCrop()">Cancel</button>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            :disabled="uploading"
+            @click="confirmCrop()"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </dialog>
+  </div>
+</section>

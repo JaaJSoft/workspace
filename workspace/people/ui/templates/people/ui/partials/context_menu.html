@@ -1,0 +1,34 @@
+{% comment %}
+  Rows of the people context menu. The panel around them is
+  ui/partials/context_menu_panel.html, included from index.html, and the
+  state lives on peopleApp() as ctxMenu. A person's rows come from
+  POST /api/v1/people/actions, in the order the server returned, so nothing
+  here may hard-code one; a list has no registry, so its two rows are written
+  out.
+{% endcomment %}
+<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'person'">
+  <li
+    class="menu-title text-xs truncate px-3 py-1"
+    x-text="ctxMenu.data ? ctxMenu.data.name : ''"
+  ></li>
+  <li x-show="ctxMenu.actions === null">
+    <span class="gap-3 rounded pointer-events-none">
+      <span class="loading loading-spinner loading-xs"></span>
+      <span>Loading...</span>
+    </span>
+  </li>
+  <template x-for="(action, idx) in ctxMenuRows()" :key="action.id">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== ctxMenuRows()[idx - 1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class || ''" click="ctxPersonAction(action)" only %}
+  </template>
+  <li x-show="ctxMenu.actions !== null && ctxMenuRows().length === 0">
+    <span class="opacity-50">Nothing can be done with this contact</span>
+  </li>
+</ul>
+<ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'list'">
+  <li
+    class="menu-title text-xs truncate px-3 py-1"
+    x-text="ctxMenu.data ? ctxMenu.data.name : ''"
+  ></li>
+  {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="ctxListAction('rename')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="ctxListAction('delete')" only %}
+</ul>

@@ -68,6 +68,7 @@ django.setup()
 from datetime import timedelta  # noqa: E402
 
 from django.contrib.auth import get_user_model  # noqa: E402
+from django.contrib.auth.models import Group  # noqa: E402
 from django.core.files.base import ContentFile  # noqa: E402
 from django.db import transaction  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -88,6 +89,7 @@ from workspace.core import setting_keys  # noqa: E402
 from workspace.core.changelog import get_latest_version  # noqa: E402
 from workspace.files.models import File, FileEvent  # noqa: E402
 from workspace.files.services import FileService  # noqa: E402
+from workspace.people.models import Person, PersonList  # noqa: E402
 from workspace.projects.models import (  # noqa: E402
     Project,
     ProjectMember,
@@ -987,6 +989,88 @@ def create_personal_projects(users, history_days):
     return n_tasks_total
 
 
+PERSON_LIST_NAMES = ["Family", "Friends", "Clients", "Suppliers", "Neighbours"]
+EMAIL_TYPES = ["home", "work", "other"]
+PHONE_TYPES = ["home", "work", "cell"]
+
+
+def _person_fields():
+    given, family = fake.first_name(), fake.last_name()
+    fields = {
+        "display_name": f"{given} {family}",
+        "given_name": given,
+        "family_name": family,
+        "emails": [{"value": fake.email(), "type": random.choice(EMAIL_TYPES)}],
+    }
+    if random.random() < 0.7:
+        fields["phones"] = [
+            {"value": fake.phone_number(), "type": random.choice(PHONE_TYPES)}
+        ]
+    if random.random() < 0.5:
+        fields["organization"] = fake.company()
+        fields["title"] = fake.job()
+    if random.random() < 0.4:
+        fields["birthday"] = fake.date_of_birth(minimum_age=18, maximum_age=80)
+    if random.random() < 0.3:
+        fields["addresses"] = [
+            {
+                "street": fake.street_address(),
+                "city": fake.city(),
+                "region": "",
+                "postal_code": fake.postcode(),
+                "country": fake.current_country(),
+                "type": "home",
+            }
+        ]
+    if random.random() < 0.2:
+        fields["notes"] = fake.sentence()
+    return fields
+
+
+def create_persons(users, min_persons, max_persons):
+    """Give every user an address book, link a few contacts to other demo
+    accounts, and put some in a shared group book. Returns (persons, lists)."""
+    n_persons = n_lists = 0
+    demo_groups = list(Group.objects.filter(user__in=users).distinct())
+    for user in users:
+        if Person.objects.filter(owner=user).exists():
+            continue
+        persons = [
+            Person.objects.create(owner=user, **_person_fields())
+            for _ in range(random.randint(min_persons, max_persons))
+        ]
+        for other in random.sample(
+            [u for u in users if u != user], k=min(3, len(users) - 1)
+        ):
+            persons.append(
+                Person.objects.create(
+                    owner=user,
+                    display_name=f"{other.first_name} {other.last_name}".strip()
+                    or other.username,
+                    given_name=other.first_name,
+                    family_name=other.last_name,
+                    emails=[{"value": other.email, "type": "work"}],
+                    linked_user=other,
+                )
+            )
+        n_persons += len(persons)
+        for name in random.sample(PERSON_LIST_NAMES, k=random.randint(1, 3)):
+            person_list = PersonList.objects.create(owner=user, name=name)
+            person_list.members.add(*random.sample(persons, k=min(4, len(persons))))
+            n_lists += 1
+    for group in demo_groups:
+        if Person.objects.filter(group=group).exists():
+            continue
+        persons = [
+            Person.objects.create(group=group, **_person_fields()) for _ in range(6)
+        ]
+        clients = PersonList.objects.create(group=group, name="Clients")
+        clients.members.add(*persons[:3])
+        n_persons += len(persons)
+        n_lists += 1
+    return n_persons, n_lists
+
+
 def purge(domain, assume_yes):
     """Delete all users on ``domain`` and cascade their data."""
     qs = User.objects.filter(email__endswith=f"@{domain}")
@@ -1009,6 +1093,16 @@ def purge(domain, assume_yes):
     # Project.created_by is SET_NULL (not CASCADE): deleting the users would
     # orphan their projects with no remaining member, so drop them explicitly.
     Project.objects.filter(created_by__in=qs).delete()
+    # Group address books hang on the group, not on a user, so the user cascade
+    # leaves them behind and a reseed then skips the group. Only groups made of
+    # demo users alone are wiped: a real group's contacts are not ours.
+    demo_only_groups = [
+        group
+        for group in Group.objects.filter(user__in=qs).distinct()
+        if not group.user_set.exclude(pk__in=qs).exists()
+    ]
+    Person.objects.filter(group__in=demo_only_groups).delete()
+    PersonList.objects.filter(group__in=demo_only_groups).delete()
     deleted, _ = qs.delete()
     print(f"Purged {n} users on @{domain} ({deleted} rows total).")
 
@@ -1079,6 +1173,11 @@ def main():
     )
     parser.add_argument("--no-vault", action="store_true", help="skip vault generation")
     parser.add_argument(
+        "--no-people", action="store_true", help="skip address book generation"
+    )
+    parser.add_argument("--min-persons", type=int, default=15)
+    parser.add_argument("--max-persons", type=int, default=25)
+    parser.add_argument(
         "--purge", action="store_true", help="delete existing demo users first"
     )
     parser.add_argument(
@@ -1108,6 +1207,8 @@ def main():
         parser.error("--min-events must be <= --max-events")
     if args.min_tasks > args.max_tasks:
         parser.error("--min-tasks must be <= --max-tasks")
+    if args.min_persons > args.max_persons:
+        parser.error("--min-persons must be <= --max-persons")
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -1159,6 +1260,14 @@ def main():
         personal_projects = len(users)
         print(f"  {personal_projects} personal projects", flush=True)
 
+    persons = person_lists = 0
+    if not args.no_people:
+        print("\nGenerating people ...")
+        persons, person_lists = create_persons(
+            users, args.min_persons, args.max_persons
+        )
+        print(f"  {persons} persons, {person_lists} lists", flush=True)
+
     groups = dms = msgs = group_avatars = 0
     if not args.no_chat:
         print("\nGenerating conversations ...")
@@ -1200,6 +1309,7 @@ def main():
     print(f"  events:        {events}")
     print(f"  projects:      {shared_projects} shared + {personal_projects} personal")
     print(f"  tasks:         {tasks}")
+    print(f"  persons:       {persons} in {person_lists} lists")
     print(f"  group convs:   {groups}")
     print(f"  direct convs:  {dms}")
     print(f"  messages:      {msgs}")

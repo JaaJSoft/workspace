@@ -62,6 +62,7 @@ api_urlpatterns = [
     path("", include("workspace.mail.urls")),
     path("", include("workspace.notifications.urls")),
     path("", include("workspace.projects.urls")),
+    path("", include("workspace.people.urls")),
     path("", include("workspace.ai.urls")),
     path("", include("workspace.imports.urls")),
     path("", include("workspace.vault.urls")),
@@ -76,6 +77,7 @@ ui_urlpatterns = [
     path("calendar", include("workspace.calendar.ui.urls")),
     path("mail", include("workspace.mail.ui.urls")),
     path("projects", include("workspace.projects.ui.urls")),
+    path("people", include("workspace.people.ui.urls")),
     path("vault", include("workspace.vault.ui.urls")),
     path("imports", include("workspace.imports.ui.urls")),
 ]

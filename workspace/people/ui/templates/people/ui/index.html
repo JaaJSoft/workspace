@@ -1,0 +1,258 @@
+{% extends "base_with_navbar.html" %}
+
+{% load static %}
+
+{% block title %}People{% endblock %}
+
+{% block navbar %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}people-drawer{% endblock %}
+{% block main_class %}p-0 flex h-full overflow-hidden{% endblock %}
+
+{% block extra_head %}
+  <link
+    rel="stylesheet"
+    href="{% static 'users/ui/css/vendor/cropper/cropper.css' %}"
+  />
+{% endblock %}
+
+{% block drawer_attrs %}
+  x-data="peopleApp({
+  query: '{{ query|escapejs }}',
+  scope: '{{ scope|escapejs }}',
+  listUuid: '{{ list_uuid|escapejs }}',
+  initialPerson: '{{ panel_person_uuid|escapejs }}',
+  })"
+  @popstate.window="onPopState()"
+  @people-lists-changed.window="reloadLists()"
+  @people-scope-changed.window="onScopeChanged($event.detail)"
+  @ajax:error="AppAlert.show({ type: 'error', message: 'Could not load that contact.' })"
+{% endblock %}
+
+{% block drawer_sidebar %}
+  <div class="drawer-side z-40 h-full !overflow-visible">
+    <label for="people-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
+    >
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          <div
+            class="flex items-center gap-0.5{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: sidebarCollapsed() }"
+            x-show="!sidebarCollapsed()"
+            x-transition
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square mr-1 hover:text-secondary"
+              @click="newPerson()"
+              title="New contact"
+              aria-label="New contact"
+            >
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Address books and lists -->
+      <div class="flex-1 overflow-y-auto py-2 px-3">
+        <ul class="menu p-0 space-y-0.5">
+          {% include "ui/partials/drawer_item.html" with icon="users" label="All" color="secondary" onclick="setScope('')" active_binding="scope === '' && !listUuid" tooltip="All" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="user" label="My contacts" color="secondary" onclick="setScope('mine')" active_binding="scope === 'mine'" tooltip="My contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {# Only groups holding contacts, so the rows come from the component state and follow creations and moves. #}
+          <template x-for="group in visibleGroups()" :key="group.id">
+            <li
+              class="list-none"
+              :class="sidebarCollapsed() ? 'flex justify-center' : ''"
+            >
+              <button
+                type="button"
+                class="flex items-center w-full text-left text-base rounded-lg transition-colors"
+                :class="[
+                  sidebarCollapsed() ? 'justify-center w-10 h-10 !p-0' : 'p-2 gap-3',
+                  scope === 'group:' + group.id ? 'bg-secondary/10 text-secondary hover:bg-secondary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-secondary'
+                ]"
+                :title="sidebarCollapsed() ? group.name : ''"
+                :data-scope="'group:' + group.id"
+                @click="setScope('group:' + group.id)"
+              >
+                <i data-lucide="users-round" class="w-5 h-5 flex-shrink-0"></i>
+                <span
+                  x-show="!sidebarCollapsed()"
+                  class="flex-1 truncate"
+                  x-text="group.name"
+                ></span>
+              </button>
+            </li>
+          </template>
+        </ul>
+        {# The lists section follows the files tags section: heading and "+" hidden with the rail, rows drawn like drawer items. #}
+        <hr
+          class="my-2 border-base-300{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+          :class="{ hidden: sidebarCollapsed() }"
+          x-show="!sidebarCollapsed()"
+        />
+        <div
+          class="flex items-center mb-1{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+          :class="{ hidden: sidebarCollapsed() }"
+          x-show="!sidebarCollapsed()"
+        >
+          <h3
+            class="text-sm font-semibold text-base-content/60 uppercase tracking-wider flex-1"
+          >
+            <span class="flex items-center gap-2">
+              <i data-lucide="list" class="w-3 h-3"></i>
+              Lists
+            </span>
+          </h3>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            @click="newList()"
+            title="New list"
+            aria-label="New list"
+          >
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <hr class="my-1 border-base-300" x-show="sidebarCollapsed()" />
+        <ul class="space-y-0.5">
+          <template x-for="list in lists" :key="list.uuid">
+            <li
+              class="list-none group relative"
+              :class="sidebarCollapsed() ? 'flex justify-center' : ''"
+            >
+              <button
+                type="button"
+                class="flex items-center w-full text-left text-base rounded-lg transition-colors"
+                :class="[
+                  sidebarCollapsed() ? 'justify-center w-10 h-10 p-0' : 'p-2 gap-3',
+                  listUuid === list.uuid ? 'bg-secondary/10 text-secondary hover:bg-secondary/20' : 'text-base-content/70 hover:bg-base-content/5 hover:text-secondary'
+                ]"
+                :title="sidebarCollapsed() ? list.name : ''"
+                @click="setList(list.uuid)"
+                @contextmenu="openCtxMenu($event, 'list', list)"
+              >
+                <i data-lucide="list" class="w-5 h-5 flex-shrink-0"></i>
+                <span
+                  x-show="!sidebarCollapsed()"
+                  class="flex items-center gap-2 flex-1 min-w-0 pr-6"
+                >
+                  <span class="truncate" x-text="list.name"></span>
+                  {# Two books can name a list the same way: the icon says whose it is. #}
+                  <i
+                    data-lucide="users-round"
+                    class="w-3.5 h-3.5 opacity-50 shrink-0"
+                    x-show="list.scope !== 'mine'"
+                  ></i>
+                  <span class="badge badge-sm ml-auto" x-text="list.member_count"></span>
+                </span>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                x-show="!sidebarCollapsed()"
+                :title="'Actions for ' + list.name"
+                :aria-label="'Actions for ' + list.name"
+                @click.stop="openCtxMenu($event, 'list', list)"
+              >
+                <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+              </button>
+            </li>
+          </template>
+        </ul>
+      </div>
+      <!-- New contact (collapsed) -->
+      <div
+        class="px-3 pb-2{% if not workspace_sidebar_collapsed %} hidden{% endif %}"
+        :class="{ hidden: !sidebarCollapsed() }"
+        x-show="sidebarCollapsed()"
+      >
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="user-plus" label="New" color="secondary" onclick="newPerson()" tooltip="New contact" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        </ul>
+      </div>
+      <!-- Help button -->
+      <div class="px-3 pb-2">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="secondary" onclick="document.getElementById('people-help-dialog').showModal()" tooltip="Help" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        </ul>
+      </div>
+      <!-- Bottom action: collapse on desktop -->
+      <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="secondary" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+        </ul>
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {{ lists_data|json_script:"people-lists-data" }}
+  {{ groups_data|json_script:"people-groups-data" }}
+  {# Hidden server-side on a deep link too: on a phone the list would paint over the panel until Alpine binds. #}
+  <section
+    class="w-full lg:w-96 shrink-0 border-r border-base-300 flex flex-col h-full{% if panel_person_uuid %} max-lg:hidden{% endif %}"
+    :class="{ 'max-lg:hidden': panelOpen }"
+  >
+    <div class="p-3 border-b border-base-300">
+      <label class="input input-sm input-bordered flex items-center gap-2 w-full">
+        <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+        <input
+          type="search"
+          class="grow"
+          placeholder="Search people..."
+          x-model="query"
+          @input.debounce.300ms="refreshList()"
+        />
+      </label>
+    </div>
+    {% include "people/ui/partials/person_list.html" %}
+  </section>
+  {% comment %}
+    The empty state is a sibling of the swap target, not its content: closing
+    the panel (or deleting the contact) has no fragment to swap back in, so a
+    panel that hid itself only on mobile would keep a deleted contact on
+    screen at desktop width.
+  {% endcomment %}
+  <div
+    class="flex-1 h-full min-w-0 flex"
+    :class="{ 'max-lg:hidden': !panelOpen }"
+  >
+    {# Hidden server-side on a deep link too, or it paints until Alpine binds. #}
+    <div
+      class="flex-1 flex items-center justify-center bg-base-200 text-base-content/50 text-sm{% if panel_person_uuid %} hidden{% endif %}"
+      :class="{ hidden: panelOpen }"
+    >
+      Select a contact to see its details.
+    </div>
+    <section
+      id="person-panel"
+      class="flex-1 h-full min-h-0 flex flex-col bg-base-200"
+      x-show="panelOpen"
+    >
+    </section>
+  </div>
+  {% include "people/ui/partials/dialogs.html" %}
+  {% include "ui/partials/context_menu_panel.html" with items="people/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="people-context-menu" width="w-56" %}
+  {% include "people/ui/partials/help_dialog.html" %}
+{% endblock %}
+
+{% block extra_scripts %}
+  {# The panel is a fragment and cannot load scripts of its own: Cropper comes from the shell. #}
+  <script src="{% static 'users/ui/js/vendor/cropper/cropper.js' %}"></script>
+  <script src="{% static 'people/ui/js/people.js' %}"></script>
+{% endblock %}

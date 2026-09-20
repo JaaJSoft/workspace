@@ -15,20 +15,22 @@ const THEMES = [
 // shade for light themes and one for dark ones. Must match MODULE_HUES in
 // workspace/core/module_registry.py (core.tests.test_module_colors checks).
 // Bright hues take 500 in the dark: their 400 is too pale on a dark surface.
+// Bright hues also take their 950 shade as light-theme foreground: white on
+// their 600 falls below 4.5:1 contrast.
 const MODULE_HUES = {
   indigo: { light: 600, dark: 400 },
-  sky: { light: 600, dark: 400 },
-  emerald: { light: 600, dark: 400 },
-  teal: { light: 600, dark: 400 },
-  amber: { light: 600, dark: 500 },
-  orange: { light: 600, dark: 400 },
+  sky: { light: 600, dark: 400, content: 950 },
+  emerald: { light: 600, dark: 400, content: 950 },
+  teal: { light: 600, dark: 400, content: 950 },
+  amber: { light: 600, dark: 500, content: 950 },
+  orange: { light: 600, dark: 400, content: 950 },
   purple: { light: 600, dark: 400 },
   rose: { light: 600, dark: 400 },
-  cyan: { light: 600, dark: 500 },
+  cyan: { light: 600, dark: 500, content: 950 },
   slate: { light: 600, dark: 400 },
-  lime: { light: 600, dark: 500 },
+  lime: { light: 600, dark: 500, content: 950 },
   fuchsia: { light: 600, dark: 400 },
-  yellow: { light: 600, dark: 500 },
+  yellow: { light: 600, dark: 500, content: 950 },
 };
 
 // Themes whose daisyUI definition declares `color-scheme: dark`: the dark
@@ -47,13 +49,15 @@ function channels(hex) {
 // dark rule is a descendant selector on [data-theme], which sits on <html>,
 // so it reaches <body> and nested tiles alike. :root falls back to slate for
 // pages outside any module (settings, profile).
-function moduleHuesPlugin({ addBase, addComponents, theme }) {
+function moduleHuesPlugin({ addComponents, theme }) {
   const light = {};
   const dark = {};
   for (const [hue, shade] of Object.entries(MODULE_HUES)) {
     light[`.module-${hue}`] = {
       '--module': channels(theme(`colors.${hue}.${shade.light}`)),
-      '--module-content': '255 255 255',
+      '--module-content': shade.content
+        ? channels(theme(`colors.${hue}.${shade.content}`))
+        : '255 255 255',
     };
     dark[`.module-${hue}`] = {
       '--module': channels(theme(`colors.${hue}.${shade.dark}`)),

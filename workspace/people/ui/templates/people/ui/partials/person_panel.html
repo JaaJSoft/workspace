@@ -25,22 +25,8 @@
       </button>
 
       <div class="relative shrink-0">
-        <template x-if="person.linked_user">
-          <user-avatar :user-id="person.linked_user.id" :username="person.linked_user.username" size="xl"></user-avatar>
-        </template>
-        <template x-if="!person.linked_user && person.avatar_url">
-          <img
-            :src="person.avatar_url + '?t=' + avatarStamp"
-            alt=""
-            class="w-20 h-20 rounded-full object-cover"
-          />
-        </template>
-        <template x-if="!person.linked_user && !person.avatar_url">
-          <div
-            class="w-20 h-20 rounded-full flex items-center justify-center text-2xl font-semibold bg-secondary/20 text-secondary"
-            x-text="person.display_name.slice(0, 1).toUpperCase()"
-          ></div>
-        </template>
+        {# One element for the three cases: a null binding removes the attribute, and the element re-renders on every change. #}
+        <user-avatar size="xl" :user-id="person.linked_user ? person.linked_user.id : null" :username="person.linked_user ? person.linked_user.username : person.display_name" :color-key="person.uuid" :src="!person.linked_user && person.avatar_url ? person.avatar_url + '?t=' + avatarStamp : null"></user-avatar>
         <label
           class="absolute -bottom-1 -right-1 btn btn-circle btn-xs"
           title="Change photo"

@@ -166,3 +166,24 @@ test('userAvatarTag escapes the name options too', () => {
   assert.ok(!tag.includes('<img'));
   assert.ok(!tag.includes('<script>'));
 });
+
+test('userAvatarColorClassForKey hashes any string into the same palette as ids', () => {
+  const ctx = load();
+  const key = '01a0bb57-426d-7378-856e-f1da212a3156';
+  assert.equal(ctx.userAvatarColorClassForKey(key), ctx.userAvatarColorClassForKey(key));
+  // Same formula as the seeder (sum of code points modulo the palette size),
+  // so a seeded picture and this fallback agree on the colour.
+  let sum = 0;
+  for (const ch of key) sum += ch.codePointAt(0);
+  assert.equal(ctx.userAvatarColorClassForKey(key), ctx.userAvatarColorClass(sum % 12));
+  const palette = new Set();
+  for (let i = 0; i < 200; i++) palette.add(ctx.userAvatarColorClassForKey(`k${i}`));
+  assert.equal(palette.size, 12);
+});
+
+test('userAvatarColorClassForKey falls back to bg-neutral on an empty key', () => {
+  const ctx = load();
+  assert.equal(ctx.userAvatarColorClassForKey(''), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClassForKey(null), 'bg-neutral');
+  assert.equal(ctx.userAvatarColorClassForKey(undefined), 'bg-neutral');
+});

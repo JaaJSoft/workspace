@@ -25,6 +25,12 @@
  *                   size by default).
  *   - ring          decorative ring, only drawn when there is no user-id
  *                   (the anonymous navbar avatar).
+ *   - color-key     any string (a uuid, an email) that picks the fallback
+ *                   colour when there is no user-id: what lets a module draw
+ *                   a non-user (a contact) with the same palette and sizes.
+ *   - src           image URL used instead of the user avatar endpoint. With
+ *                   a user-id the endpoint wins; without one, this is the
+ *                   only way to show a picture at all.
  *
  * `name` is what makes the hover card cover the name too: `card` wires the
  * listeners on the host, so a name rendered as a sibling node sits outside the
@@ -77,6 +83,22 @@ window.userAvatarColorClass = function (userId) {
   if (!Number.isInteger(id)) return 'bg-neutral';
   const n = AVATAR_COLORS.length;
   return AVATAR_COLORS[((id % n) + n) % n];
+};
+
+/**
+ * Stable background class for something that is not a user: the same palette,
+ * indexed by the sum of the key's code points, the formula the demo seeder
+ * uses so a seeded picture and this fallback agree.
+ *
+ * @param {string} key
+ * @returns {string} one of AVATAR_COLORS, or 'bg-neutral' for an empty key
+ */
+window.userAvatarColorClassForKey = function (key) {
+  const text = key == null ? '' : String(key);
+  if (text === '') return 'bg-neutral';
+  let sum = 0;
+  for (const ch of text) sum += ch.codePointAt(0);
+  return AVATAR_COLORS[sum % AVATAR_COLORS.length];
 };
 
 // The named scale. `box` goes on the host so the element measures correctly
@@ -162,7 +184,7 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
     static get observedAttributes() {
       return [
         'user-id', 'username', 'size', 'presence', 'card', 'ring',
-        'name', 'display-name', 'href', 'name-class',
+        'name', 'display-name', 'href', 'name-class', 'color-key', 'src',
       ];
     }
 
@@ -213,6 +235,8 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
       const size = this.getAttribute('size');
       const step = window.USER_AVATAR_SIZES[size] || window.USER_AVATAR_SIZES.md;
       const userId = this.userId;
+      const colorKey = this.getAttribute('color-key') || '';
+      const src = (this.getAttribute('src') || '').trim();
       const username = this.getAttribute('username') || '';
       const initial = (username || '?').trim().charAt(0).toUpperCase() || '?';
       const withPresence = this.hasAttribute('presence') && userId !== null;
@@ -241,7 +265,9 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
         'justify-center',
         'text-white',
         step.text,
-        window.userAvatarColorClass(userId),
+        userId !== null
+          ? window.userAvatarColorClass(userId)
+          : window.userAvatarColorClassForKey(colorKey),
       ].join(' ');
       if (withPresence) {
         // Ring SHAPE is static, only its COLOUR is patched from the presence
@@ -258,9 +284,9 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
       label.textContent = initial;
       face.appendChild(label);
 
-      if (userId !== null) {
+      if (userId !== null || src !== '') {
         const img = document.createElement('img');
-        img.src = `/api/v1/users/${encodeURIComponent(userId)}/avatar`;
+        img.src = userId !== null ? `/api/v1/users/${encodeURIComponent(userId)}/avatar` : src;
         img.alt = username;
         img.loading = 'lazy';
         img.decoding = 'async';

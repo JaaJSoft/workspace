@@ -7,18 +7,8 @@
 >
   {% if person.linked_user_id %}
     <user-avatar user-id="{{ person.linked_user_id }}" username="{{ person.linked_user.username }}" size="sm"></user-avatar>
-  {% elif person.has_avatar %}
-    <img
-      src="/api/v1/people/{{ person.uuid }}/avatar?v={{ person.updated_at|date:'U' }}"
-      alt=""
-      class="w-8 h-8 rounded-full object-cover"
-    />
   {% else %}
-    <div
-      class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-secondary/20 text-secondary"
-    >
-      {{ person.display_name|slice:":1"|upper }}
-    </div>
+    <user-avatar username="{{ person.display_name }}" color-key="{{ person.uuid }}" size="sm"{% if person.has_avatar %} src="/api/v1/people/{{ person.uuid }}/avatar?v={{ person.updated_at|date:'U' }}"{% endif %}></user-avatar>
   {% endif %}
   <div class="min-w-0 flex-1">
     <div class="flex items-center gap-1.5 truncate">

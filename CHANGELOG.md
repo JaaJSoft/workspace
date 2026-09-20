@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.40.0 - Timeline, Tags & Drag and Drop
+
+### Highlights
+
+Move files by dragging them where they belong, share a file with a whole group, and finally find your way around tags. Projects gain a timeline with milestones, bulk edits straight from the backlog, and tasks that link to live workspace files instead of copies.
+
+### Files
+
+- Move files and folders by drag and drop. Drop them onto a folder in the listing, an ancestor in the breadcrumbs, or the "My Files", pinned and group entries of the sidebar. Dragging a selected item carries the whole selection. A folder you cannot write to refuses the drop, and name clashes are resolved the same way as with cut and paste. The folder under the pointer lights up softly rather than growing a heavy frame.
+- Share a file with a group, not only with one user at a time. Someone who joins the group later sees the file right away, and someone who leaves loses it, with nothing to synchronize.
+- Tags get a home. The Files and Notes sidebars now list your favourite tags, and a tag manager opens from the section heading: search every tag with its usage count, star it into the sidebar, open it, rename it, recolor it, merge it into another one or delete it, and purge every unused tag at once. Clicking a tag chip in the listing, in a file's hover card or in the Notes list opens the tag view. The section says so when you have no favourite tag yet, and can be hidden from the module preferences like the pinned and group sections.
+- The properties panel now lists a folder's public links too, with the link mode shown as a badge, and offers "Manage links" when there is none yet.
+- On a public link that accepts uploads, a file dropped while browsing a subfolder now lands in that subfolder instead of the link's root, the drop zone names the folder, and the listing refreshes once the batch is done.
+- Two people editing the same file can no longer overwrite each other silently. The lock an editor takes is now honoured on every way of writing a file, WebDAV included, and a save whose file changed underneath it is refused instead of applied. A transfer cut off partway no longer leaves a file with bytes that are neither version.
+
+### Projects
+
+- Timeline view. Epics take an optional target date and act as milestones: a dated epic is a marker on the new Timeline tab, shows its date and progress on the overview and in the project settings, and groups its tasks ahead of the undated ones. Tasks get an optional start date, so a task with both dates draws as a bar and a due-only task as a point. Zoom between week, month and quarter; the filter bar applies, so a filtered timeline stays shareable by URL.
+- Bulk edit from the backlog and the all-tasks list. Select tasks and assign or unassign a member, add or remove a label, set the priority or the due date, or delete them after a confirmation that says how many. Someone put on several tasks at once gets one notification rather than one per task.
+- Link workspace files to a task. Linking shares the file with the project and pins it on the task; nothing is copied, so renames and edits follow through and every project member can open it. The share shows on the file like any other and can be changed or revoked from there. Removing the last link to a file in a project lifts the share, unless it was granted on the file itself before any task linked it.
+
+### Chat & AI Assistants
+
+- See what a bot reply cost. An info icon next to the reasoning line, or at the bottom right of a reply that used no tool, reveals the model, the prompt, completion and total tokens, the time spent waiting for the backend and the resulting output speed. The figures cover the whole run, tool rounds included.
+- A long unbreakable string in a bot's tool details, such as a URL, a hash or compact JSON, no longer runs out of the message bubble.
+- Asking the assistant what is coming up no longer fails as soon as an all-day event is in the window, and all-day events are reported on their day rather than at a shifted midnight.
+
+### Account
+
+- Changing your password now shows a strength bar and a one-line verdict under the new-password field, with a hint about what makes it weak. Advisory only: the server's password rules remain the gate.
+
+### Fixes
+
+- Live updates are no longer lost. A file lock release or a change notification could vanish when a second tab was open or after a reconnect; every open tab now sees every event, and a tab that reconnects catches up on what it missed.
+- The tag and group folder headings in the Files sidebar no longer stick out of the rail for a frame when the sidebar collapses.
+
 ## 0.39.0 - Sharing, Search & Reports
 
 ### Highlights

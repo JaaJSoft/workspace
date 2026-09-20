@@ -114,7 +114,11 @@ class UnlockWalkTests(PlaywrightTestCase):
         self._wait_for_vault_named("Personal", timeout=60000)
         self.page.reload()
         self.page.wait_for_selector("input[autocomplete='current-password']")
-        self.assertEqual(self.page.locator("input[spellcheck='false']").count(), 0)
+        # The field stays in the page, folded away: a remembered key is asked
+        # for nothing, but it has to stay reachable to be replaced.
+        field = self.page.locator("input[spellcheck='false']")
+        self.assertEqual(field.count(), 1)
+        self.assertFalse(field.is_visible())
 
     def test_the_recovery_key_survives_being_typed_one_key_at_a_time(self):
         """Every other test here reaches the field through ``fill()``, which

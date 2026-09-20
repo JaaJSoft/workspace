@@ -41,6 +41,11 @@ window.vaultUnlockMixin = (function () {
       // every keystroke, and a gate reading it would unmount the field on its
       // own first character - the key could then never be typed, only pasted.
       secretRequired: false,
+      // Whether the recovery-key panel is unfolded. Open on a device that
+      // has to be asked for the key, folded on one that remembers it - and
+      // forced open by any failure the key could be the cause of, so the
+      // field to correct is never behind a fold.
+      secretPanelOpen: false,
       // Whether the key in secretText came from this device rather than from
       // the user's hands. It is what lets a failed unlock tell "you mistyped
       // the password" apart from "the key we remembered is not yours".
@@ -58,6 +63,7 @@ window.vaultUnlockMixin = (function () {
         }
         this.secretRequired = !remembered;
         this.secretRemembered = !!remembered;
+        this.secretPanelOpen = !remembered;
         const self = this;
         window.vaultSession.onLock(function () {
           self.state = 'locked';
@@ -94,6 +100,7 @@ window.vaultUnlockMixin = (function () {
             this.secretText = '';
             this.secretRequired = true;
             this.secretRemembered = false;
+            this.secretPanelOpen = true;
             window.vaultSession.forgetDevice();
           }
           // A recovery key belonging to another account decodes cleanly and
@@ -105,6 +112,7 @@ window.vaultUnlockMixin = (function () {
           // that is actually wrong.
           if (err.reason === 'password' && this.secretRemembered) {
             this.secretRequired = true;
+            this.secretPanelOpen = true;
             this.error = MESSAGES['password-or-recovery-key'];
           }
           // A wrong password must not survive into the retry.

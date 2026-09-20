@@ -8,7 +8,20 @@
   class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
 >
   <div class="card-body">
-    <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+    <div class="flex items-start gap-3">
+      <span
+        class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0"
+      >
+        <i data-lucide="lock" class="w-5 h-5"></i>
+      </span>
+      <div>
+        <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+        <p class="text-sm text-base-content/60">
+          Encrypted on this device. Your master password never leaves this
+          browser.
+        </p>
+      </div>
+    </div>
     <inline-alert type="error" x-show="error" x-cloak>
     <span x-text="error"></span>
     </inline-alert>
@@ -26,22 +39,33 @@
       {% comment %}
         The recovery key is the second half of the lock, not an alternative
         to the password - the intro says so because two fields side by side
-        read as "either one" otherwise. The block only exists on a device
-        that has not remembered the key, so the remember checkbox lives in
-        it too: on a known device it would describe a key nobody can see.
+        read as "either one" otherwise. The panel is always in the page and
+        only folds: a device that remembers the key still has to let the user
+        replace it. @toggle keeps the state honest after a manual click, so a
+        later failure that sets it to true really does re-open the panel.
       {% endcomment %}
-      <template x-if="secretRequired">
-        <div class="mt-4 space-y-3">
+      <details
+        class="collapse collapse-arrow bg-base-200 rounded-lg mt-4"
+        :open="secretPanelOpen"
+        @toggle="secretPanelOpen = $el.open"
+      >
+        <summary class="collapse-title py-3 min-h-0">
+          <span class="font-medium">Recovery key</span>
+          <span
+            class="block text-xs text-base-content/50"
+            x-text="secretRemembered ? 'Remembered on this device' : 'Needed on this device, alongside your password'"
+          ></span>
+        </summary>
+        <div class="collapse-content space-y-3">
           <p class="text-sm text-base-content/60">
-            This device does not have your recovery key yet. Enter it
-            alongside your password: both are needed, one does not replace
-            the other.
+            The key from your emergency kit is the second half of the lock.
+            Both are needed: one does not replace the other.
           </p>
           <label class="form-control">
-            <span class="label-text">Recovery key (from your emergency kit)</span>
             <input
               type="text"
               class="input input-bordered font-mono"
+              aria-label="Recovery key"
               autocomplete="off"
               spellcheck="false"
               x-model="secretText"
@@ -58,7 +82,7 @@
             </span>
           </label>
         </div>
-      </template>
+      </details>
       <div class="flex justify-end mt-4">
         <button
           type="submit"

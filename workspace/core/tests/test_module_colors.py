@@ -107,3 +107,15 @@ class ModuleBodyClassTests(TestCase):
         html = resp.content.decode()
         self.assertIn("module-sky", html)  # the chat tile in the switcher grid
         self.assertNotIn("bg-indigo/10", html)
+
+    def test_switcher_home_tile_uses_the_dashboard_hue(self):
+        from workspace.core.module_registry import registry
+
+        resp = self.client.get("/files")
+        html = resp.content.decode()
+        switcher = html.split('id="module-switcher"', 1)[1]
+        home_tile = re.search(
+            r"<a\b[^>]*>(?:(?!</a>).)*?Home(?:(?!</a>).)*?</a>", switcher, re.DOTALL
+        )
+        self.assertIsNotNone(home_tile)
+        self.assertIn(f"module-{registry.get('dashboard').color}", home_tile.group())

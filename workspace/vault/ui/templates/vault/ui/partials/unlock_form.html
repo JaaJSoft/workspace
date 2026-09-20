@@ -8,7 +8,20 @@
   class="card bg-base-100 border border-base-300 shadow-sm max-w-lg mx-auto"
 >
   <div class="card-body">
-    <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+    <div class="flex items-start gap-3">
+      <span
+        class="w-10 h-10 rounded-full bg-module/15 text-module flex items-center justify-center shrink-0"
+      >
+        <i data-lucide="lock" class="w-5 h-5"></i>
+      </span>
+      <div>
+        <h1 class="text-xl font-semibold">Unlock your vaults</h1>
+        <p class="text-sm text-base-content/60">
+          Encrypted on this device. Your master password never leaves this
+          browser.
+        </p>
+      </div>
+    </div>
     <inline-alert type="error" x-show="error" x-cloak>
     <span x-text="error"></span>
     </inline-alert>
@@ -23,39 +36,101 @@
           :disabled="state === 'deriving'"
         />
       </label>
-      <template x-if="secretRequired">
-        <label class="form-control mt-4">
-          <span class="label-text">Recovery key</span>
-          <input
-            type="text"
-            class="input input-bordered font-mono"
-            autocomplete="off"
-            spellcheck="false"
-            x-model="secretText"
-            :disabled="state === 'deriving'"
-          />
-          <span class="label-text-alt">From your emergency kit. Dashes and case are ignored.</span>
-        </label>
-      </template>
-      <label class="label cursor-pointer justify-start gap-3 mt-4">
-        <input type="checkbox" class="checkbox checkbox-sm" x-model="remember" />
-        <span class="label-text">
-          Remember my recovery key on this device. Anything that can run
-          code on this page can then read it, so leave it off on a shared
-          computer.
-        </span>
-      </label>
-      <button
-        type="submit"
-        class="btn btn-module mt-4"
-        :disabled="state === 'deriving' || !password || secretMissing()"
+      {% comment %}
+        The recovery key is the second half of the lock, not an alternative
+        to the password - the header hint says so because two fields side by
+        side read as "either one" otherwise. The section is always in the page
+        and only folds, but the field itself is mounted only while the key is
+        asked for: a remembered key is never printed, a device that holds one
+        gets a Replace and a Forget instead. @toggle keeps the state honest
+        after a manual click, so a later failure that sets it to true really
+        does re-open the section. The remember warning sits inside the fold
+        on purpose: the fold is open whenever the choice is being made.
+      {% endcomment %}
+      <details
+        class="group mt-4 border-t border-base-300"
+        :open="secretPanelOpen"
+        @toggle="secretPanelOpen = $el.open"
       >
-        <span x-show="state !== 'deriving'">Unlock</span>
-        <span x-show="state === 'deriving'" x-cloak>
-          <span class="loading loading-spinner loading-xs"></span>
-          Unlocking - the wait is deliberate
-        </span>
-      </button>
+        <summary
+          class="flex items-center gap-2 py-3 cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden"
+        >
+          <i data-lucide="key-round" class="w-4 h-4 shrink-0 text-base-content/50"></i>
+          <span class="font-medium">Recovery key</span>
+          <span
+            class="text-xs text-base-content/50 truncate"
+            x-text="secretRemembered ? 'Remembered on this device' : 'Needed on this device, alongside your password'"
+          ></span>
+          <i
+            data-lucide="chevron-down"
+            class="w-4 h-4 ml-auto shrink-0 text-base-content/50 transition-transform group-open:rotate-180"
+          ></i>
+        </summary>
+        <div class="pb-1">
+          <template x-if="secretRequired">
+            <div class="space-y-3">
+              <input
+                type="text"
+                class="input input-bordered font-mono placeholder:font-sans w-full"
+                aria-label="Recovery key"
+                placeholder="From your emergency kit. Dashes and case are ignored."
+                autocomplete="off"
+                spellcheck="false"
+                x-model="secretText"
+                :disabled="state === 'deriving'"
+              />
+              <label class="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  class="checkbox checkbox-sm mt-0.5"
+                  x-model="remember"
+                />
+                <span>
+                  <span class="block text-sm">Remember my recovery key on this device</span>
+                  <span class="block text-xs text-base-content/50">
+                    Anything that can run code on this page can then read it, so
+                    leave it off on a shared computer.
+                  </span>
+                </span>
+              </label>
+            </div>
+          </template>
+          <template x-if="!secretRequired">
+            <div class="flex items-center gap-2 text-sm text-base-content/60">
+              <span class="flex-1">Kept in this browser. It is used without being shown.</span>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost"
+                :disabled="state === 'deriving'"
+                @click="replaceSecret()"
+              >
+                Replace
+              </button>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost text-error"
+                :disabled="state === 'deriving'"
+                @click="forgetSecret()"
+              >
+                Forget
+              </button>
+            </div>
+          </template>
+        </div>
+      </details>
+      <div class="flex justify-end mt-4">
+        <button
+          type="submit"
+          class="btn btn-module btn-sm"
+          :disabled="state === 'deriving' || !password || secretMissing()"
+        >
+          <span x-show="state !== 'deriving'">Unlock</span>
+          <span x-show="state === 'deriving'" x-cloak>
+            <span class="loading loading-spinner loading-xs"></span>
+            Unlocking - the wait is deliberate
+          </span>
+        </button>
+      </div>
     </form>
   </div>
 </div>

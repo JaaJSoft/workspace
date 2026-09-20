@@ -114,7 +114,26 @@ class UnlockWalkTests(PlaywrightTestCase):
         self._wait_for_vault_named("Personal", timeout=60000)
         self.page.reload()
         self.page.wait_for_selector("input[autocomplete='current-password']")
+        # A remembered key is never printed: the field is not in the page,
+        # and what the folded section holds instead is the way to replace it.
         self.assertEqual(self.page.locator("input[spellcheck='false']").count(), 0)
+        self.assertEqual(self.page.locator("button:has-text('Replace')").count(), 1)
+
+    def test_replacing_the_remembered_key_asks_for_it_again(self):
+        self._onboard()
+        self.page.reload()
+        self.page.check(REMEMBER_CHECKBOX)
+        self._unlock()
+        self._wait_for_vault_named("Personal", timeout=60000)
+        self.page.reload()
+        self.page.wait_for_selector("input[autocomplete='current-password']")
+        self.page.click("details > summary")
+        self.page.click("button:has-text('Replace')")
+        # Empty, not prefilled with the stored value - and the gate covers it.
+        field = self.page.locator("input[spellcheck='false']")
+        self.assertEqual(field.input_value(), "")
+        self.page.fill("input[autocomplete='current-password']", GOOD_PASSWORD)
+        self.assertTrue(self.page.is_disabled("button:has-text('Unlock')"))
 
     def test_the_recovery_key_survives_being_typed_one_key_at_a_time(self):
         """Every other test here reaches the field through ``fill()``, which

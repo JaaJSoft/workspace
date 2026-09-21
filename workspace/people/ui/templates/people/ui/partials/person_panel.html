@@ -174,7 +174,9 @@
                 </button>
               </div>
               <template x-for="(entry, index) in person.{{ kind }}" :key="index">
-                <div class="flex items-center gap-2 mb-2">
+                <div
+                  class="flex {% if kind == 'addresses' %}items-start{% else %}items-center{% endif %} gap-2 mb-2"
+                >
                   <select
                     class="select select-bordered select-xs w-24"
                     x-model="entry.type"
@@ -184,38 +186,42 @@
                     {% for type in types %}<option value="{{ type }}">{{ type|capfirst }}</option>{% endfor %}
                   </select>
                   {% if kind == "addresses" %}
-                    <input
-                      type="text"
-                      class="input input-bordered input-xs flex-1"
-                      placeholder="Street"
-                      x-model="entry.street"
-                      @change="saveEntries('addresses')"
-                      :readonly="!can('edit')"
-                    />
-                    <input
-                      type="text"
-                      class="input input-bordered input-xs w-28"
-                      placeholder="Postal code"
-                      x-model="entry.postal_code"
-                      @change="saveEntries('addresses')"
-                      :readonly="!can('edit')"
-                    />
-                    <input
-                      type="text"
-                      class="input input-bordered input-xs w-32"
-                      placeholder="City"
-                      x-model="entry.city"
-                      @change="saveEntries('addresses')"
-                      :readonly="!can('edit')"
-                    />
-                    <input
-                      type="text"
-                      class="input input-bordered input-xs w-28"
-                      placeholder="Country"
-                      x-model="entry.country"
-                      @change="saveEntries('addresses')"
-                      :readonly="!can('edit')"
-                    />
+                    <div class="flex-1 min-w-0 space-y-2">
+                      <input
+                        type="text"
+                        class="input input-bordered input-xs w-full"
+                        placeholder="Street"
+                        x-model="entry.street"
+                        @change="saveEntries('addresses')"
+                        :readonly="!can('edit')"
+                      />
+                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input
+                          type="text"
+                          class="input input-bordered input-xs w-full"
+                          placeholder="Postal code"
+                          x-model="entry.postal_code"
+                          @change="saveEntries('addresses')"
+                          :readonly="!can('edit')"
+                        />
+                        <input
+                          type="text"
+                          class="input input-bordered input-xs w-full"
+                          placeholder="City"
+                          x-model="entry.city"
+                          @change="saveEntries('addresses')"
+                          :readonly="!can('edit')"
+                        />
+                        <input
+                          type="text"
+                          class="input input-bordered input-xs w-full"
+                          placeholder="Country"
+                          x-model="entry.country"
+                          @change="saveEntries('addresses')"
+                          :readonly="!can('edit')"
+                        />
+                      </div>
+                    </div>
                   {% else %}
                     <input
                       type="text"

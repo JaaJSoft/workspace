@@ -1,4 +1,4 @@
-{# Dialogs of the page shell: new contact, new or renamed list, vCard import. The panel's own dialogs live in person_panel.html. #}
+{# Dialogs of the page shell: new contact, new or renamed list, vCard import and export. The panel's own dialogs live in person_panel.html. #}
 <dialog
   id="people-person-dialog"
   x-ref="personDialog"
@@ -164,6 +164,56 @@
         </button>
       </div>
     </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>
+
+<dialog id="people-export-dialog" x-ref="exportDialog" class="modal">
+  <div class="modal-box">
+    {% include "people/ui/partials/_dialog_header.html" with icon="download" title="Export contacts" subtitle_expr="'A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud.'" close_expr="$refs.exportDialog.close()" %}
+    <form @submit.prevent="confirmExport()" class="space-y-3">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">What to export</span></div>
+        <select
+          name="target"
+          class="select select-bordered select-sm w-full"
+          x-model="exportForm.target"
+        >
+          <option value="all">Everything</option>
+          <option value="mine">My contacts</option>
+          <template x-for="group in groups" :key="group.id">
+            <option :value="'group:' + group.id" x-text="group.name"></option>
+          </template>
+          <template x-for="list in lists" :key="list.uuid">
+            <option :value="'list:' + list.uuid" x-text="'List: ' + list.name"></option>
+          </template>
+        </select>
+      </label>
+      <div class="bg-base-200 rounded-box p-3 text-sm space-y-1">
+        <p class="font-medium" x-text="exportSummaryText()"></p>
+        <p class="text-xs text-base-content/60">
+          Photos and every property a contact came in with are included. Importing the file back creates no duplicate.
+        </p>
+      </div>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.exportDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-module btn-sm"
+          :disabled="exportSummary().contacts === 0 && exportSummary().lists === 0"
+        >
+          Download .vcf
+        </button>
+      </div>
+    </form>
   </div>
   <form method="dialog" class="modal-backdrop">
     <button type="submit">close</button>

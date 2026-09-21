@@ -75,6 +75,11 @@ class PeopleIndexTests(TestCase):
         counts = {g["name"]: g["person_count"] for g in response.context["groups_data"]}
         self.assertEqual(counts, {"empty": 0, "team": 1})
 
+    def test_page_carries_the_personal_count_for_the_export_dialog(self):
+        response = self.client.get("/people")
+        self.assertEqual(response.context["mine_count"], 1)
+        self.assertContains(response, 'id="people-mine-count-data"')
+
     def test_fragment_under_alpine_request(self):
         response = self.client.get(
             "/people", {"q": "carol"}, HTTP_X_ALPINE_REQUEST="true"

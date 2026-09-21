@@ -48,6 +48,52 @@ test('exportUrl picks the list, then the scope, then everything', () => {
   );
 });
 
+test('the export dialog opens on the sidebar selection and counts what it covers', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({ scope: 'group:3' });
+  app.mineCount = 4;
+  app.groups = [{ id: 3, name: 'Team', person_count: 2 }];
+  app.lists = [
+    { uuid: 'l1', name: 'Friends', member_count: 1, scope: 'mine' },
+    { uuid: 'l2', name: 'Crew', member_count: 2, scope: 'group:3' },
+  ];
+  let opened = false;
+  app.$refs = { exportDialog: { showModal: () => { opened = true; }, close() {} } };
+  app.openExport();
+  assert.equal(opened, true);
+  assert.equal(app.exportForm.target, 'group:3');
+  assert.deepEqual({ ...app.exportSummary() }, { contacts: 2, lists: 1 });
+  app.exportForm.target = 'all';
+  assert.deepEqual({ ...app.exportSummary() }, { contacts: 6, lists: 2 });
+  assert.equal(app.exportSummaryText(), '6 contacts and 2 lists will be exported.');
+  app.exportForm.target = 'list:l1';
+  assert.equal(app.exportSummaryText(), '1 contact and 1 list will be exported.');
+  app.listUuid = 'l2';
+  app.openExport();
+  assert.equal(app.exportForm.target, 'list:l2');
+  app.onScopeChanged({ from: null, to: 'mine' });
+  assert.equal(app.mineCount, 5);
+});
+
+test('confirmExport downloads the chosen target', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({});
+  const gone = [];
+  ctx.window.location = { assign: (url) => gone.push(url) };
+  app.$refs = { exportDialog: { close() {} } };
+  app.exportForm.target = 'list:abc';
+  app.confirmExport();
+  app.exportForm.target = 'all';
+  app.confirmExport();
+  app.exportForm.target = 'group:3';
+  app.confirmExport();
+  assert.deepEqual(gone, [
+    '/api/v1/people/lists/abc/vcf',
+    '/api/v1/people/export',
+    '/api/v1/people/export?scope=group%3A3',
+  ]);
+});
+
 test('runImport posts the file, shows the report and refreshes the sidebar', async () => {
   const { impl, calls } = deferredFetch();
   const ctx = load(impl);

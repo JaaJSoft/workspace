@@ -96,13 +96,16 @@ class PersonExportView(APIView):
     def get(self, request):
         persons = user_persons(request.user)
         lists = user_person_lists(request.user)
+        filename = "contacts"
         raw_scope = request.query_params.get("scope")
         if raw_scope:
             scope = parse_scope(request.user, raw_scope)
             persons = persons.filter(**scope)
             lists = lists.filter(**scope)
+            group = scope.get("group")
+            filename = group.name if group is not None else "my-contacts"
         text = export_vcards(persons, lists.prefetch_related("members"))
-        return _vcf_response(text, "contacts")
+        return _vcf_response(text, filename)
 
 
 @extend_schema(tags=["People"])

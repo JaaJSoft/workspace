@@ -70,6 +70,24 @@ class VCardImportFlowTests(PlaywrightTestCase):
             menu.get_by_role("button", name="Export vCard").click()
         self.assertEqual(download.value.suggested_filename, "Friends.vcf")
 
+    def test_drawer_export_opens_a_recap_before_downloading(self):
+        from workspace.people.services.lists import add_members, create_list
+        from workspace.people.services.persons import create_person
+
+        jane = create_person(owner=self.user, display_name="Jane Doe")
+        create_person(owner=self.user, display_name="John Doe")
+        add_members(create_list(owner=self.user, name="Friends"), [jane])
+        self.page.goto(f"{self.live_server_url}/people?scope=mine")
+        self.page.get_by_role("button", name="Export contacts").click()
+        dialog = self.page.locator("#people-export-dialog")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator('select[name="target"]')).to_have_value("mine")
+        expect(dialog).to_contain_text("2 contacts and 1 list will be exported.")
+        with self.page.expect_download() as download:
+            dialog.get_by_role("button", name="Download .vcf").click()
+        self.assertEqual(download.value.suggested_filename, "my-contacts.vcf")
+        self.assertFalse(dialog.evaluate("d => d.open"))
+
     def test_panel_button_downloads_the_contact(self):
         from workspace.people.services.persons import create_person
 

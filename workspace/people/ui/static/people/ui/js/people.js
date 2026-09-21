@@ -48,6 +48,8 @@ window.peopleApp = function peopleApp(config) {
     personForm: { name: '', email: '', scope: 'mine' },
     listForm: { uuid: '', name: '', original: '', scope: 'mine' },
     importForm: { file: null, scope: 'mine' },
+    exportForm: { target: 'all' },
+    mineCount: 0,
     importResult: null,
     importError: '',
     saving: false,
@@ -58,6 +60,7 @@ window.peopleApp = function peopleApp(config) {
     init() {
       this.lists = window.peopleHelpers.readJson('people-lists-data', []);
       this.groups = window.peopleHelpers.readJson('people-groups-data', []);
+      this.mineCount = window.peopleHelpers.readJson('people-mine-count-data', 0);
       if (this.current) this.openPerson(this.current, { push: false });
       const params = new URLSearchParams(window.location.search);
       if (params.get('action') === 'new-person') this.newPerson();
@@ -241,6 +244,10 @@ window.peopleApp = function peopleApp(config) {
     },
 
     _bumpGroup(scope, delta) {
+      if (scope === 'mine') {
+        this.mineCount = Math.max(0, this.mineCount + delta);
+        return;
+      }
       if (typeof scope !== 'string' || !scope.startsWith('group:')) return;
       const id = Number.parseInt(scope.slice('group:'.length), 10);
       const group = this.groups.find((g) => g.id === id);
@@ -426,10 +433,44 @@ window.peopleApp = function peopleApp(config) {
       }
     },
 
-    exportCurrent() {
-      window.location.assign(
-        window.peopleHelpers.exportUrl({ scope: this.scope, listUuid: this.listUuid })
-      );
+    // The dialog opens on what the sidebar shows: the selected list, the
+    // selected address book, or everything.
+    openExport() {
+      if (this.listUuid) this.exportForm.target = `list:${this.listUuid}`;
+      else this.exportForm.target = this.scope || 'all';
+      this.$refs.exportDialog.showModal();
+    },
+
+    // What the chosen target covers, from the counts the page already holds.
+    exportSummary() {
+      const target = this.exportForm.target;
+      if (target.startsWith('list:')) {
+        const list = this.lists.find((l) => l.uuid === target.slice('list:'.length));
+        return { contacts: list ? list.member_count : 0, lists: list ? 1 : 0 };
+      }
+      if (target === 'all') {
+        const contacts = this.groups.reduce((sum, g) => sum + g.person_count, this.mineCount);
+        return { contacts, lists: this.lists.length };
+      }
+      const lists = this.lists.filter((l) => l.scope === target).length;
+      if (target === 'mine') return { contacts: this.mineCount, lists };
+      const group = this.groups.find((g) => `group:${g.id}` === target);
+      return { contacts: group ? group.person_count : 0, lists };
+    },
+
+    exportSummaryText() {
+      const { contacts, lists } = this.exportSummary();
+      const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+      return `${count(contacts, 'contact')} and ${count(lists, 'list')} will be exported.`;
+    },
+
+    confirmExport() {
+      const target = this.exportForm.target;
+      const where = target.startsWith('list:')
+        ? { listUuid: target.slice('list:'.length) }
+        : { scope: target === 'all' ? '' : target };
+      this.$refs.exportDialog.close();
+      window.location.assign(window.peopleHelpers.exportUrl(where));
     },
 
     // Membership is changed from the panel, which knows nothing of the

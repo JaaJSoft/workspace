@@ -129,11 +129,17 @@ class ExportApiTests(APITestCase):
 
     def test_export_one_scope(self):
         response = self.client.get("/api/v1/people/export", {"scope": "mine"})
+        self.assertEqual(
+            response["Content-Disposition"], 'attachment; filename="my-contacts.vcf"'
+        )
         text = response.content.decode()
         self.assertIn("FN:Jane", text)
         self.assertNotIn("FN:Team Contact", text)
         response = self.client.get(
             "/api/v1/people/export", {"scope": f"group:{self.team.id}"}
+        )
+        self.assertEqual(
+            response["Content-Disposition"], 'attachment; filename="team.vcf"'
         )
         text = response.content.decode()
         self.assertIn("FN:Team Contact", text)

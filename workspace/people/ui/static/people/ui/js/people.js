@@ -30,7 +30,7 @@ window.peopleHelpers = {
   // The .vcf for what the sidebar shows: the selected list, the selected
   // address book, or every reachable contact.
   exportUrl({ scope = '', listUuid = '' } = {}) {
-    if (listUuid) return `/api/v1/people/lists/${listUuid}/vcf`;
+    if (listUuid) return `/api/v1/people/lists/${encodeURIComponent(listUuid)}/vcf`;
     if (scope) return `/api/v1/people/export?scope=${encodeURIComponent(scope)}`;
     return '/api/v1/people/export';
   },
@@ -196,7 +196,7 @@ window.peopleApp = function peopleApp(config) {
         return;
       }
       if (action.id === 'export') {
-        window.location.assign(`/api/v1/people/${data.uuid}/vcf`);
+        window.location.assign(`/api/v1/people/${encodeURIComponent(data.uuid)}/vcf`);
         return;
       }
       // The other actions open a dialog the panel owns: open the contact
@@ -212,7 +212,7 @@ window.peopleApp = function peopleApp(config) {
       this.closeCtxMenu();
       if (!list) return;
       if (id === 'rename') this.renameList(list);
-      if (id === 'export') window.location.assign(`/api/v1/people/lists/${list.uuid}/vcf`);
+      if (id === 'export') window.location.assign(`/api/v1/people/lists/${encodeURIComponent(list.uuid)}/vcf`);
       if (id === 'delete') this.deleteList(list);
     },
 
@@ -518,7 +518,7 @@ window.personPanel = function personPanel() {
 
     exportVCard() {
       if (!this.can('export')) return;
-      window.location.assign(`/api/v1/people/${this.person.uuid}/vcf`);
+      window.location.assign(`/api/v1/people/${encodeURIComponent(this.person.uuid)}/vcf`);
     },
 
     // A reply publishes a field only if that field has not moved since the

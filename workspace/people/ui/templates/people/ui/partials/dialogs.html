@@ -74,7 +74,11 @@
 >
   <div class="modal-box">
     {% include "people/ui/partials/_dialog_header.html" with icon="upload" title="Import contacts" subtitle_expr="'A .vcf file from a phone, Google Contacts or Nextcloud.'" close_expr="$refs.importDialog.close()" %}
-    <form @submit.prevent="runImport()" class="space-y-3" x-show="!importResult">
+    <form
+      @submit.prevent="runImport()"
+      class="space-y-3"
+      x-show="!importResult"
+    >
       <label class="form-control w-full">
         <div class="label"><span class="label-text">vCard file</span></div>
         <input
@@ -127,17 +131,26 @@
       <div class="stats stats-vertical sm:stats-horizontal w-full bg-base-200">
         <div class="stat">
           <div class="stat-title">Created</div>
-          <div class="stat-value text-2xl text-module" x-text="importResult ? importResult.created : 0"></div>
+          <div
+            class="stat-value text-2xl text-module"
+            x-text="importResult ? importResult.created : 0"
+          ></div>
           <div class="stat-desc">new contacts</div>
         </div>
         <div class="stat">
           <div class="stat-title">Updated</div>
-          <div class="stat-value text-2xl" x-text="importResult ? importResult.updated : 0"></div>
+          <div
+            class="stat-value text-2xl"
+            x-text="importResult ? importResult.updated : 0"
+          ></div>
           <div class="stat-desc">already there</div>
         </div>
         <div class="stat">
           <div class="stat-title">Lists</div>
-          <div class="stat-value text-2xl" x-text="importResult ? importResult.lists : 0"></div>
+          <div
+            class="stat-value text-2xl"
+            x-text="importResult ? importResult.lists : 0"
+          ></div>
           <div class="stat-desc">from groups</div>
         </div>
       </div>

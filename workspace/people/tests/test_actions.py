@@ -22,7 +22,7 @@ class PersonActionRegistryTests(APITestCase):
         actions = PersonActionRegistry.get_available_actions(
             self.alice, self.person, has_groups=False
         )
-        self.assertEqual(ids(actions), ["edit", "add_to_list", "delete"])
+        self.assertEqual(ids(actions), ["edit", "add_to_list", "export", "delete"])
 
     def test_with_groups_move_offered(self):
         actions = PersonActionRegistry.get_available_actions(
@@ -61,7 +61,8 @@ class PersonActionsEndpointTests(APITestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            ids(response.data[str(self.mine.uuid)]), ["edit", "add_to_list", "delete"]
+            ids(response.data[str(self.mine.uuid)]),
+            ["edit", "add_to_list", "export", "delete"],
         )
 
     def test_group_member_gets_move(self):

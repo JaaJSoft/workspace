@@ -6,7 +6,7 @@
 {% endcomment %}
 <section
   id="person-panel"
-  class="flex-1 h-full min-h-0 flex flex-col bg-base-200"
+  class="flex-1 h-full min-h-0 min-w-0 flex flex-col bg-base-200"
   x-show="panelOpen"
 >
   {{ person_data|json_script:"person-panel-data" }}
@@ -42,6 +42,17 @@
           placeholder="Name"
         />
       </div>
+      {# A plain download link, offered by the registry like every other action: the menu shows the same row. #}
+      <a
+        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        title="Export vCard"
+        aria-label="Export vCard"
+        x-show="can('export')"
+        :href="'/api/v1/people/' + person.uuid + '/vcf'"
+        download
+      >
+        <i data-lucide="download" class="w-4 h-4"></i>
+      </a>
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"

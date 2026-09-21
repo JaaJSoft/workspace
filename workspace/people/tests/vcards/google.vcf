@@ -1,0 +1,20 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:John Smith
+N:Smith;John;;;
+NICKNAME:Johnny
+EMAIL;TYPE=INTERNET:john@example.com
+TEL;TYPE=CELL:+1 555-123-4567
+TEL;TYPE=HOME:555-000-1111
+ADR;TYPE=HOME:;;12 Main St;Springfield;IL;62701;USA
+ORG:Globex
+CATEGORIES:myContacts,Friends
+item1.URL:https://john.example
+item1.X-ABLabel:Blog
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+FN:Globex Support
+EMAIL;TYPE=INTERNET:support@globex.example
+ORG:Globex
+END:VCARD

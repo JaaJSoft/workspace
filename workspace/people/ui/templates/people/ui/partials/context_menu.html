@@ -3,7 +3,7 @@
   ui/partials/context_menu_panel.html, included from index.html, and the
   state lives on peopleApp() as ctxMenu. A person's rows come from
   POST /api/v1/people/actions, in the order the server returned, so nothing
-  here may hard-code one; a list has no registry, so its two rows are written
+  here may hard-code one; a list has no registry, so its rows are written
   out.
 {% endcomment %}
 <ul class="menu menu-sm p-0" x-show="ctxMenu.type === 'person'">
@@ -30,5 +30,6 @@
     x-text="ctxMenu.data ? ctxMenu.data.name : ''"
   ></li>
   {% include "ui/partials/context_menu_item.html" with icon="pencil" label="Rename" click="ctxListAction('rename')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="download" label="Export vCard" click="ctxListAction('export')" only %}
   {% include "ui/partials/context_menu_item.html" with icon="trash-2" label="Delete" tone="error" click="ctxListAction('delete')" only %}
 </ul>

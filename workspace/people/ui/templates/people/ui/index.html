@@ -184,9 +184,11 @@
           {% include "ui/partials/drawer_item.html" with icon="user-plus" label="New" color="module" onclick="newPerson()" tooltip="New contact" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
-      <!-- Help button -->
+      <!-- Import / export, then help -->
       <div class="px-3 pb-2">
-        <ul class="menu p-0">
+        <ul class="menu p-0 space-y-0.5">
+          {% include "ui/partials/drawer_item.html" with icon="upload" label="Import" color="module" onclick="openImport()" tooltip="Import contacts" aria_label="Import contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          {% include "ui/partials/drawer_item.html" with icon="download" label="Export" color="module" onclick="openExport()" tooltip="Export contacts" aria_label="Export contacts" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
           {% include "ui/partials/drawer_item.html" with icon="circle-help" label="Help" color="module" onclick="document.getElementById('people-help-dialog').showModal()" tooltip="Help" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </ul>
       </div>
@@ -203,6 +205,7 @@
 {% block content %}
   {{ lists_data|json_script:"people-lists-data" }}
   {{ groups_data|json_script:"people-groups-data" }}
+  {{ mine_count|json_script:"people-mine-count-data" }}
   {# Hidden server-side on a deep link too: on a phone the list would paint over the panel until Alpine binds. #}
   <section
     class="w-full lg:w-96 shrink-0 border-r border-base-300 flex flex-col h-full{% if panel_person_uuid %} max-lg:hidden{% endif %}"
@@ -241,7 +244,7 @@
     </div>
     <section
       id="person-panel"
-      class="flex-1 h-full min-h-0 flex flex-col bg-base-200"
+      class="flex-1 h-full min-h-0 min-w-0 flex flex-col bg-base-200"
       x-show="panelOpen"
     >
     </section>

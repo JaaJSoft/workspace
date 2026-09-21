@@ -18,6 +18,7 @@ function load(fetchImpl) {
     matchMedia: () => ({ matches: false }),
     history: { replaceState() {}, pushState() {}, state: null },
     URLSearchParams,
+    FormData,
     fetch: fetchImpl || (() => Promise.reject(new Error('no network in tests'))),
     getCSRFToken: () => 'token',
     AppAlert: { show() {} },
@@ -32,6 +33,101 @@ test('listUrl only carries the filters that are set', () => {
     '/people?q=bo+b&scope=mine'
   );
   assert.equal(ctx.peopleHelpers.listUrl('/people', { listUuid: 'abc' }), '/people?list=abc');
+});
+
+test('exportUrl picks the list, then the scope, then everything', () => {
+  const ctx = load();
+  assert.equal(ctx.peopleHelpers.exportUrl({}), '/api/v1/people/export');
+  assert.equal(
+    ctx.peopleHelpers.exportUrl({ scope: 'group:3' }),
+    '/api/v1/people/export?scope=group%3A3'
+  );
+  assert.equal(
+    ctx.peopleHelpers.exportUrl({ scope: 'mine', listUuid: 'abc' }),
+    '/api/v1/people/lists/abc/vcf'
+  );
+});
+
+test('the export dialog opens on the sidebar selection and counts what it covers', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({ scope: 'group:3' });
+  app.mineCount = 4;
+  app.groups = [{ id: 3, name: 'Team', person_count: 2 }];
+  app.lists = [
+    { uuid: 'l1', name: 'Friends', member_count: 1, scope: 'mine' },
+    { uuid: 'l2', name: 'Crew', member_count: 2, scope: 'group:3' },
+  ];
+  let opened = false;
+  app.$refs = { exportDialog: { showModal: () => { opened = true; }, close() {} } };
+  app.openExport();
+  assert.equal(opened, true);
+  assert.equal(app.exportForm.target, 'group:3');
+  assert.deepEqual({ ...app.exportSummary() }, { contacts: 2, lists: 1 });
+  app.exportForm.target = 'all';
+  assert.deepEqual({ ...app.exportSummary() }, { contacts: 6, lists: 2 });
+  assert.equal(app.exportSummaryText(), '6 contacts and 2 lists will be exported.');
+  app.exportForm.target = 'list:l1';
+  assert.equal(app.exportSummaryText(), '1 contact and 1 list will be exported.');
+  app.listUuid = 'l2';
+  app.openExport();
+  assert.equal(app.exportForm.target, 'list:l2');
+  app.onScopeChanged({ from: null, to: 'mine' });
+  assert.equal(app.mineCount, 5);
+});
+
+test('exportHref follows the chosen target', () => {
+  const ctx = load();
+  const app = ctx.peopleApp({});
+  app.exportForm.target = 'list:abc';
+  assert.equal(app.exportHref(), '/api/v1/people/lists/abc/vcf');
+  app.exportForm.target = 'all';
+  assert.equal(app.exportHref(), '/api/v1/people/export');
+  app.exportForm.target = 'group:3';
+  assert.equal(app.exportHref(), '/api/v1/people/export?scope=group%3A3');
+});
+
+test('runImport posts the file, shows the report and refreshes the sidebar', async () => {
+  const { impl, calls } = deferredFetch();
+  const ctx = load(impl);
+  const app = ctx.peopleApp({ scope: 'group:3' });
+  app.groups = [{ id: 3, name: 'Team', person_count: 1 }];
+  app.$refs = { importFile: { value: 'x' } };
+  app.$ajax = () => Promise.resolve();
+  app.resetImportForm();
+  assert.equal(app.importForm.scope, 'group:3');
+  app.importForm.file = { name: 'a.vcf' };
+  const done = app.runImport();
+  assert.equal(calls[0].url, '/api/v1/people/import');
+  assert.equal(calls[0].opts.method, 'POST');
+  calls[0].resolve({
+    ok: true,
+    json: () => Promise.resolve({ created: 2, updated: 1, lists: 1 }),
+  });
+  await new Promise((r) => setImmediate(r));
+  // reloadLists is the second request.
+  assert.equal(calls[1].url, '/api/v1/people/lists');
+  calls[1].resolve({ ok: true, json: () => Promise.resolve([]) });
+  await done;
+  assert.deepEqual({ ...app.importResult }, { created: 2, updated: 1, lists: 1 });
+  assert.equal(app.groups[0].person_count, 3);
+  assert.equal(app.saving, false);
+});
+
+test('runImport surfaces the server error inside the dialog', async () => {
+  const { impl, calls } = deferredFetch();
+  const ctx = load(impl);
+  const app = ctx.peopleApp({});
+  app.$refs = {};
+  app.resetImportForm();
+  app.importForm.file = { name: 'a.txt' };
+  const done = app.runImport();
+  calls[0].resolve({
+    ok: false,
+    json: () => Promise.resolve({ file: ['This is not a vCard file.'] }),
+  });
+  await done;
+  assert.equal(app.importError, 'This is not a vCard file.');
+  assert.equal(app.importResult, null);
 });
 
 test('setScope clears the list filter and setList clears the scope', () => {

@@ -1929,6 +1929,15 @@ wheels = [
 ]
 
 [[package]]
+name = "phonenumbers"
+version = "9.0.39"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/d9/f73babd005dd7569a81789f4db9cc82efaf001af018d5752bf6d7ea14e19/phonenumbers-9.0.39.tar.gz", hash = "sha256:41a7ff0257d5a7a096a8e263da7efc0a96a6162c84ba64af2ebf8972d09e70e1", size = 2310991, upload-time = "2026-09-10T11:26:52.485Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/53/238c99f028b9c638ceae8218a33904e4b84d60e1c3bd707c0ff231b388cf/phonenumbers-9.0.39-py2.py3-none-any.whl", hash = "sha256:d83b878d0188c81a5f5e8572cedcc7262bd0ea3806eb7c8e35d8666d262a8af0", size = 2594744, upload-time = "2026-09-10T11:26:49.561Z" },
+]
+
+[[package]]
 name = "pillow"
 version = "12.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2712,6 +2721,20 @@ wheels = [
 ]
 
 [[package]]
+name = "vobject"
+version = "0.9.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+    { name = "pytz" },
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d0/8a/15c34b3d27c43fc81a467d0f66577afc5542326804c42f30557e31c3259e/vobject-0.9.9.tar.gz", hash = "sha256:ac44e5d7e2079d84c1d52c50a615b9bec4b1ba958608c4c7fe40cbf33247b38e", size = 1208905, upload-time = "2024-12-16T07:29:39.178Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/20/6bba813bbd498c28edbbcf8253a6398cf4266ecf7bfa6129835c0a2bfbb1/vobject-0.9.9-py2.py3-none-any.whl", hash = "sha256:0fbdb982065cf4d1843a5d5950c88510041c6de026bda49c3502721de1c6ac3d", size = 47526, upload-time = "2024-12-16T07:31:08.493Z" },
+]
+
+[[package]]
 name = "wcwidth"
 version = "0.2.14"
 source = { registry = "https://pypi.org/simple" }
@@ -2788,6 +2811,7 @@ dependencies = [
     { name = "nh3" },
     { name = "ollama" },
     { name = "openai" },
+    { name = "phonenumbers" },
     { name = "pillow" },
     { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pygments" },
@@ -2796,6 +2820,7 @@ dependencies = [
     { name = "pywebpush" },
     { name = "redis" },
     { name = "trafilatura" },
+    { name = "vobject" },
     { name = "whitenoise" },
     { name = "wsgidav" },
     { name = "zipstream-ng" },
@@ -2853,6 +2878,7 @@ requires-dist = [
     { name = "nh3", specifier = ">=0.3.7" },
     { name = "ollama", specifier = ">=0.6.2" },
     { name = "openai", specifier = ">=3.14.1" },
+    { name = "phonenumbers", specifier = ">=9.0.39" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.5" },
     { name = "pygments", specifier = ">=2.21.0" },
@@ -2861,6 +2887,7 @@ requires-dist = [
     { name = "pywebpush", specifier = ">=2.5.0" },
     { name = "redis", specifier = ">=8.1.0" },
     { name = "trafilatura", specifier = ">=2.2.0" },
+    { name = "vobject", specifier = ">=0.9.9" },
     { name = "whitenoise", specifier = ">=6.11.0" },
     { name = "wsgidav", specifier = ">=4.3.5" },
     { name = "zipstream-ng", specifier = ">=1.9.3" },

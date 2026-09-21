@@ -52,5 +52,14 @@ class PeopleConfig(AppConfig):
                     module_slug="people",
                     order=36,
                 ),
+                CommandInfo(
+                    name="Import contacts",
+                    keywords=["import contacts", "vcard", "vcf"],
+                    icon="upload",
+                    url="/people?action=import",
+                    kind="action",
+                    module_slug="people",
+                    order=37,
+                ),
             ]
         )

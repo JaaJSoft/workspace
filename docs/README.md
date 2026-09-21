@@ -12,6 +12,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 | [Mail](mail/) | IMAP/SMTP client with OAuth2, AI summaries, folders and labels |
 | [Notes](notes/) | Markdown notes with journal mode, folders, tags, full-text search |
 | [Projects](projects/) | Kanban boards with backlog, task references, labels, comments, activity |
+| [People](people/) | Address book with group books, lists, linked accounts, and vCard import/export |
 | [AI Assistants](ai/) | Configurable bots with tools, vision, memory, and scheduled messages |
 | [Notifications](notifications/) | In-app and Web Push notifications with priority and read tracking |
 | [Imports](imports/) | Bring files over from Nextcloud or any WebDAV host, in resumable background jobs |

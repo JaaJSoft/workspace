@@ -30,7 +30,9 @@ def _avatar_png(initials, color):
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 96
         )
     except OSError:
-        font = ImageFont.load_default()
+        # Pillow's bundled scalable font: initials stay readable on a host
+        # without DejaVu instead of shrinking to the tiny bitmap default.
+        font = ImageFont.load_default(size=96)
     left, top, right, bottom = draw.textbbox((0, 0), initials, font=font)
     draw.text(
         (
@@ -141,6 +143,7 @@ def seed(username, password):
     context["project_uuid"], context["task_uuid"] = _seed_projects(
         alex, sam, jordan, now
     )
+    context["person_uuid"] = _seed_people(alex, sam, jordan, design_team)
     _seed_notifications(alex, sam, jordan, now)
     return context
 
@@ -858,11 +861,137 @@ def _seed_projects(alex, sam, jordan, now):
     return str(project.uuid), str(hero.uuid)
 
 
+def _seed_people(alex, sam, jordan, group):
+    from datetime import date
+
+    from workspace.people.services.avatar import save_avatar
+    from workspace.people.services.lists import add_members, create_list
+    from workspace.people.services.persons import create_person
+
+    def contact(scope, given, family, organization="", title="", **fields):
+        return create_person(
+            **scope,
+            display_name=f"{given} {family}",
+            given_name=given,
+            family_name=family,
+            organization=organization,
+            title=title,
+            **fields,
+        )
+
+    mine = {"owner": alex}
+    # The capture opens this one: enough on the card to fill every section
+    # of the panel (several emails and phones, an address, a list, notes).
+    camille = contact(
+        mine,
+        "Camille",
+        "Roux",
+        "Atelier Nord",
+        "Art director",
+        birthday=date(1988, 4, 12),
+        emails=[
+            {"value": "camille@ateliernord.fr", "type": "work"},
+            {"value": "camille.roux@gmail.com", "type": "home"},
+        ],
+        phones=[
+            {"value": "+33 6 12 34 56 78", "type": "cell"},
+            {"value": "+33 4 72 00 12 34", "type": "work"},
+        ],
+        addresses=[
+            {
+                "street": "12 rue des Lilas",
+                "city": "Lyon",
+                "region": "",
+                "postal_code": "69003",
+                "country": "France",
+                "type": "work",
+            }
+        ],
+        notes="Met at the Lyon design meetup. Prefers a call over email for "
+        "anything urgent.",
+    )
+    png = _avatar_png("CR", (244, 63, 94))  # rose
+    save_avatar(camille, io.BytesIO(png), 0, 0, AVATAR_SIZE, AVATAR_SIZE)
+
+    priya = contact(
+        mine,
+        "Priya",
+        "Nair",
+        "Bright Labs",
+        "Product manager",
+        emails=[{"value": "priya@brightlabs.io", "type": "work"}],
+        phones=[{"value": "+44 20 7946 0123", "type": "work"}],
+    )
+    elena = contact(
+        mine,
+        "Elena",
+        "Fischer",
+        "Fischer & Co",
+        "Accountant",
+        emails=[{"value": "elena@fischer-co.de", "type": "work"}],
+    )
+    contact(
+        mine,
+        "Marco",
+        "Bianchi",
+        title="Photographer",
+        emails=[{"value": "hello@marcobianchi.photo", "type": "work"}],
+        phones=[{"value": "+39 333 123 4567", "type": "cell"}],
+    )
+    contact(
+        mine,
+        "Tom",
+        "Okafor",
+        emails=[{"value": "tom.okafor@gmail.com", "type": "home"}],
+        phones=[{"value": "+1 415 555 0134", "type": "cell"}],
+    )
+    contact(
+        mine,
+        "Nina",
+        "Berg",
+        emails=[{"value": "nina.berg@icloud.com", "type": "home"}],
+    )
+    # Linked contacts show the account's own avatar and name.
+    for user in (sam, jordan):
+        contact(
+            mine,
+            user.first_name,
+            user.last_name,
+            emails=[{"value": user.email, "type": "work"}],
+            linked_user=user,
+        )
+    clients = create_list(owner=alex, name="Clients")
+    add_members(clients, [camille, priya, elena])
+
+    # A group only earns its sidebar row once it holds a contact.
+    shared = {"group": group}
+    lucas = contact(
+        shared,
+        "Lucas",
+        "Moreau",
+        "Printworks",
+        "Account manager",
+        emails=[{"value": "lucas@printworks.fr", "type": "work"}],
+        phones=[{"value": "+33 1 44 55 66 77", "type": "work"}],
+    )
+    aiko = contact(
+        shared,
+        "Aiko",
+        "Tanaka",
+        "Glyph Foundry",
+        "Type designer",
+        emails=[{"value": "aiko@glyphfoundry.jp", "type": "work"}],
+    )
+    vendors = create_list(group=group, name="Vendors")
+    add_members(vendors, [lucas, aiko])
+    return str(camille.uuid)
+
+
 def _seed_notifications(alex, sam, jordan, now):
     # Rows are created directly instead of going through notify(): the
     # service also queues a Celery push task and publishes SSE, neither of
-    # which exists in the throwaway environment. Icons/colors still come
-    # from the module registry so they match what notify() would produce.
+    # which exists in the throwaway environment. Icons still come from the
+    # module registry so they match what notify() would produce.
     from workspace.core.module_registry import registry
     from workspace.notifications.models import Notification
 
@@ -914,7 +1043,6 @@ def _seed_notifications(alex, sam, jordan, now):
             recipient=alex,
             origin=origin,
             icon=module.icon if module else "bell",
-            color=module.color if module else "",
             title=title,
             body=body,
             url=url,
@@ -975,6 +1103,18 @@ def _open_first_note(page):
     page.wait_for_timeout(1500)
 
 
+def _person_panel(page):
+    # The panel is fetched after load; wait for the name field to carry
+    # the contact rather than trusting the fixed settle.
+    page.wait_for_function(
+        "document.querySelector('#person-panel input[placeholder=\"Name\"]')?.value",
+        timeout=15000,
+    )
+    # Park the cursor so no row or field is captured hovered.
+    page.mouse.move(5, 5)
+    page.wait_for_timeout(500)
+
+
 def _open_notifications(page):
     page.click('button[title="Notifications"]')
     # Park the cursor so no list item is captured hovered.
@@ -1013,5 +1153,10 @@ SHOTS = [
     },
     {"name": "projects_4", "path": "/projects/{project_uuid}/analytics"},
     {"name": "ai_1", "path": "/chat/{bot_conversation_uuid}"},
+    {
+        "name": "people_1",
+        "path": "/people?person={person_uuid}",
+        "prep": _person_panel,
+    },
     {"name": "notifications_1", "path": "/", "prep": _open_notifications},
 ]

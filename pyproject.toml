@@ -92,7 +92,7 @@ dev = [
     "playwright>=1.62.0",
     # Real OpenID Connect provider (RS256 + JWKS + discovery) booted in-process
     # by the OIDC login E2E test, so the SSO flow is exercised end to end.
-    "oidc-provider-mock>=0.4.6",
+    "oidc-provider-mock>=0.4.7",
     # Reference implementation of the vault cryptography, used only to generate
     # and verify workspace/vault/tests/crypto_vectors.json. Never imported by
     # application code: the browser owns every real cryptographic operation.

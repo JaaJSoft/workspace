@@ -123,6 +123,14 @@ class ImportTests(TestCase):
         with self.assertRaises(ValueError):
             import_vcards(card("FN:X"), owner=self.alice, group=self.team)
 
+    def test_long_group_name_is_cut_to_the_column(self):
+        import_vcards(
+            card("KIND:group", f"FN:{'g' * 300}") + card("FN:" + "p" * 300),
+            owner=self.alice,
+        )
+        self.assertEqual(len(PersonList.objects.get(owner=self.alice).name), 255)
+        self.assertEqual(len(Person.objects.get(owner=self.alice).display_name), 255)
+
     def test_garbage_raises_before_touching_the_database(self):
         with self.assertRaises(VCardError):
             import_vcards("nope", owner=self.alice)

@@ -212,6 +212,28 @@ class ParseEdgeCaseTests(SimpleTestCase):
             ["Jane Doe", "ACME", "a@b.example", "Unnamed"],
         )
 
+    def test_names_longer_than_the_columns_are_cut_to_fit(self):
+        long_name = "x" * 300
+        (card,) = parse_vcards(
+            f"BEGIN:VCARD\nVERSION:4.0\nFN:{long_name}\nN:{long_name};{long_name};;;\n"
+            f"ORG:{long_name}\nTITLE:{long_name}\nEND:VCARD\n"
+        )
+        for name in (
+            "display_name",
+            "given_name",
+            "family_name",
+            "organization",
+            "title",
+        ):
+            with self.subTest(name):
+                self.assertEqual(len(card.fields[name]), 255)
+
+    def test_uid_longer_than_the_column_is_refused(self):
+        with self.assertRaises(VCardError):
+            parse_vcards(
+                f"BEGIN:VCARD\nVERSION:4.0\nFN:X\nUID:{'u' * 256}\nEND:VCARD\n"
+            )
+
     def test_partial_birthday_is_kept_as_extra(self):
         (card,) = parse_vcards(
             "BEGIN:VCARD\nVERSION:4.0\nFN:X\nBDAY:--0412\nEND:VCARD\n"

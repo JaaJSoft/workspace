@@ -58,6 +58,12 @@ _DATA_URI_RE = re.compile(r"^data:[^,]*;base64,(?P<data>.*)$", re.S)
 _TEL_URI_PREFIX = "tel:"
 _UUID_URN_PREFIX = "urn:uuid:"
 
+# The width of the name, organisation, title and UID columns. A name past it
+# is cut to fit; a UID past it is refused, because a cut UID would match a
+# different contact on the next import.
+COLUMN_MAX_LENGTH = 255
+_CLIPPED_FIELDS = ("display_name", "given_name", "family_name", "organization", "title")
+
 # Order of preference when a property carries several TYPE values: iOS writes
 # ``TEL;type=WORK;type=FAX`` and the fax is the part worth keeping.
 _PHONE_TYPE_PREFERENCE = ("cell", "fax", "home", "work")
@@ -317,6 +323,10 @@ def _parse_card(lines):
         _apply_name(name_line, fields)
     if not fields["display_name"]:
         fields["display_name"] = _fallback_display_name(fields, kind)
+    for name in _CLIPPED_FIELDS:
+        fields[name] = fields[name][:COLUMN_MAX_LENGTH]
+    if len(uid) > COLUMN_MAX_LENGTH:
+        raise VCardError("A UID is longer than 255 characters.")
     return ParsedCard(
         kind=kind, uid=uid, fields=fields, photo=photo, member_uids=member_uids
     )

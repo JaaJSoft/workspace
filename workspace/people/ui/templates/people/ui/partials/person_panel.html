@@ -42,17 +42,17 @@
           placeholder="Name"
         />
       </div>
-      {# Offered by the registry like every other action: the menu would show the same row. #}
-      <button
-        type="button"
+      {# A plain download link, offered by the registry like every other action: the menu shows the same row. #}
+      <a
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"
         title="Export vCard"
         aria-label="Export vCard"
         x-show="can('export')"
-        @click="exportVCard()"
+        :href="'/api/v1/people/' + person.uuid + '/vcf'"
+        download
       >
         <i data-lucide="download" class="w-4 h-4"></i>
-      </button>
+      </a>
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"

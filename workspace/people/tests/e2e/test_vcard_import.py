@@ -84,7 +84,7 @@ class VCardImportFlowTests(PlaywrightTestCase):
         expect(dialog.locator('select[name="target"]')).to_have_value("mine")
         expect(dialog).to_contain_text("2 contacts and 1 list will be exported.")
         with self.page.expect_download() as download:
-            dialog.get_by_role("button", name="Download .vcf").click()
+            dialog.get_by_role("link", name="Download .vcf").click()
         self.assertEqual(download.value.suggested_filename, "my-contacts.vcf")
         self.assertFalse(dialog.evaluate("d => d.open"))
 
@@ -95,5 +95,5 @@ class VCardImportFlowTests(PlaywrightTestCase):
         self.page.goto(f"{self.live_server_url}/people?person={jane.uuid}")
         panel = self.page.locator("#person-panel")
         with self.page.expect_download() as download:
-            panel.get_by_role("button", name="Export vCard").click()
+            panel.get_by_role("link", name="Export vCard").click()
         self.assertEqual(download.value.suggested_filename, "Jane Doe.vcf")

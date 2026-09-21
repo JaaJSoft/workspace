@@ -173,7 +173,7 @@
 <dialog id="people-export-dialog" x-ref="exportDialog" class="modal">
   <div class="modal-box">
     {% include "people/ui/partials/_dialog_header.html" with icon="download" title="Export contacts" subtitle_expr="'A .vcf file (vCard 4.0) for a phone, Google Contacts or Nextcloud.'" close_expr="$refs.exportDialog.close()" %}
-    <form @submit.prevent="confirmExport()" class="space-y-3">
+    <form @submit.prevent class="space-y-3">
       <label class="form-control w-full">
         <div class="label"><span class="label-text">What to export</span></div>
         <select
@@ -205,13 +205,16 @@
         >
           Cancel
         </button>
-        <button
-          type="submit"
+        {# A download link rather than a request: the browser names the file from the response. #}
+        <a
           class="btn btn-module btn-sm"
-          :disabled="exportSummary().contacts === 0 && exportSummary().lists === 0"
+          :class="{ 'btn-disabled': exportSummary().contacts === 0 && exportSummary().lists === 0 }"
+          :href="exportHref()"
+          download
+          @click="$refs.exportDialog.close()"
         >
           Download .vcf
-        </button>
+        </a>
       </div>
     </form>
   </div>

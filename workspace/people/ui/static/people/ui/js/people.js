@@ -464,13 +464,12 @@ window.peopleApp = function peopleApp(config) {
       return `${count(contacts, 'contact')} and ${count(lists, 'list')} will be exported.`;
     },
 
-    confirmExport() {
+    exportHref() {
       const target = this.exportForm.target;
       const where = target.startsWith('list:')
         ? { listUuid: target.slice('list:'.length) }
         : { scope: target === 'all' ? '' : target };
-      this.$refs.exportDialog.close();
-      window.location.assign(window.peopleHelpers.exportUrl(where));
+      return window.peopleHelpers.exportUrl(where);
     },
 
     // Membership is changed from the panel, which knows nothing of the
@@ -514,11 +513,6 @@ window.personPanel = function personPanel() {
       if (id === 'add_to_list') return this.addToList();
       if (id === 'unlink_user') return this.unlinkUser();
       return undefined;
-    },
-
-    exportVCard() {
-      if (!this.can('export')) return;
-      window.location.assign(`/api/v1/people/${encodeURIComponent(this.person.uuid)}/vcf`);
     },
 
     // A reply publishes a field only if that field has not moved since the

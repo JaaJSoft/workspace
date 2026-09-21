@@ -75,23 +75,15 @@ test('the export dialog opens on the sidebar selection and counts what it covers
   assert.equal(app.mineCount, 5);
 });
 
-test('confirmExport downloads the chosen target', () => {
+test('exportHref follows the chosen target', () => {
   const ctx = load();
   const app = ctx.peopleApp({});
-  const gone = [];
-  ctx.window.location = { assign: (url) => gone.push(url) };
-  app.$refs = { exportDialog: { close() {} } };
   app.exportForm.target = 'list:abc';
-  app.confirmExport();
+  assert.equal(app.exportHref(), '/api/v1/people/lists/abc/vcf');
   app.exportForm.target = 'all';
-  app.confirmExport();
+  assert.equal(app.exportHref(), '/api/v1/people/export');
   app.exportForm.target = 'group:3';
-  app.confirmExport();
-  assert.deepEqual(gone, [
-    '/api/v1/people/lists/abc/vcf',
-    '/api/v1/people/export',
-    '/api/v1/people/export?scope=group%3A3',
-  ]);
+  assert.equal(app.exportHref(), '/api/v1/people/export?scope=group%3A3');
 });
 
 test('runImport posts the file, shows the report and refreshes the sidebar', async () => {

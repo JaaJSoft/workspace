@@ -475,6 +475,11 @@ window.personPanel = function personPanel() {
       return undefined;
     },
 
+    exportVCard() {
+      if (!this.can('export')) return;
+      window.location.assign(`/api/v1/people/${this.person.uuid}/vcf`);
+    },
+
     // A reply publishes a field only if that field has not moved since the
     // request left. Blurring an input starts a PATCH and the click that blurred
     // it runs while the reply is in flight, so `emails` can already hold a row

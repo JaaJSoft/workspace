@@ -27,12 +27,15 @@ window.peopleHelpers = {
     return qs ? `${base}?${qs}` : base;
   },
 
-  // The .vcf for what the sidebar shows: the selected list, the selected
-  // address book, or every reachable contact.
-  exportUrl({ scope = '', listUuid = '' } = {}) {
-    if (listUuid) return `/api/v1/people/lists/${encodeURIComponent(listUuid)}/vcf`;
-    if (scope) return `/api/v1/people/export?scope=${encodeURIComponent(scope)}`;
-    return '/api/v1/people/export';
+  // The one export url, for an export target: 'all', 'mine', 'group:<id>',
+  // 'list:<uuid>' or 'person:<uuid>'.
+  exportUrl(target) {
+    const params = new URLSearchParams();
+    const [kind, value] = target.includes(':') ? target.split(/:(.*)/s) : [target, ''];
+    if (kind === 'person' || kind === 'list') params.set(kind, value);
+    else if (target !== 'all') params.set('scope', target);
+    const qs = params.toString();
+    return qs ? `/api/v1/people/export?${qs}` : '/api/v1/people/export';
   },
 };
 
@@ -49,6 +52,9 @@ window.peopleApp = function peopleApp(config) {
     listForm: { uuid: '', name: '', original: '', scope: 'mine' },
     importForm: { file: null, scope: 'mine' },
     exportForm: { target: 'all' },
+    // The contact the export dialog was opened on, when it was: the select
+    // offers it as a target only then.
+    exportPerson: null,
     mineCount: 0,
     importResult: null,
     importError: '',
@@ -196,7 +202,7 @@ window.peopleApp = function peopleApp(config) {
         return;
       }
       if (action.id === 'export') {
-        window.location.assign(`/api/v1/people/${encodeURIComponent(data.uuid)}/vcf`);
+        this.openExport(`person:${data.uuid}`, data);
         return;
       }
       // The other actions open a dialog the panel owns: open the contact
@@ -212,7 +218,7 @@ window.peopleApp = function peopleApp(config) {
       this.closeCtxMenu();
       if (!list) return;
       if (id === 'rename') this.renameList(list);
-      if (id === 'export') window.location.assign(`/api/v1/people/lists/${encodeURIComponent(list.uuid)}/vcf`);
+      if (id === 'export') this.openExport(`list:${list.uuid}`);
       if (id === 'delete') this.deleteList(list);
     },
 
@@ -433,10 +439,13 @@ window.peopleApp = function peopleApp(config) {
       }
     },
 
-    // The dialog opens on what the sidebar shows: the selected list, the
-    // selected address book, or everything.
-    openExport() {
-      if (this.listUuid) this.exportForm.target = `list:${this.listUuid}`;
+    // The dialog opens on the target given (a menu row), or on what the
+    // sidebar shows: the selected list, the selected address book, or
+    // everything.
+    openExport(target = null, person = null) {
+      this.exportPerson = person;
+      if (target) this.exportForm.target = target;
+      else if (this.listUuid) this.exportForm.target = `list:${this.listUuid}`;
       else this.exportForm.target = this.scope || 'all';
       this.$refs.exportDialog.showModal();
     },
@@ -444,6 +453,7 @@ window.peopleApp = function peopleApp(config) {
     // What the chosen target covers, from the counts the page already holds.
     exportSummary() {
       const target = this.exportForm.target;
+      if (target.startsWith('person:')) return { contacts: 1, lists: 0 };
       if (target.startsWith('list:')) {
         const list = this.lists.find((l) => l.uuid === target.slice('list:'.length));
         return { contacts: list ? list.member_count : 0, lists: list ? 1 : 0 };
@@ -465,11 +475,7 @@ window.peopleApp = function peopleApp(config) {
     },
 
     exportHref() {
-      const target = this.exportForm.target;
-      const where = target.startsWith('list:')
-        ? { listUuid: target.slice('list:'.length) }
-        : { scope: target === 'all' ? '' : target };
-      return window.peopleHelpers.exportUrl(where);
+      return window.peopleHelpers.exportUrl(this.exportForm.target);
     },
 
     // Membership is changed from the panel, which knows nothing of the

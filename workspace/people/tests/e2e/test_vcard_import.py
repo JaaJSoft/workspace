@@ -54,7 +54,7 @@ class VCardImportFlowTests(PlaywrightTestCase):
         expect(dialog.locator("inline-alert")).to_contain_text("not a vCard file")
         self.assertFalse(Person.objects.exists())
 
-    def test_export_row_in_the_list_menu_downloads_a_vcf(self):
+    def test_export_row_in_the_list_menu_opens_the_dialog_on_the_list(self):
         from workspace.people.services.lists import add_members, create_list
         from workspace.people.services.persons import create_person
 
@@ -66,9 +66,36 @@ class VCardImportFlowTests(PlaywrightTestCase):
             "button", name=re.compile(r"^Friends")
         ).click(button="right")
         menu = self.page.locator("#people-context-menu")
+        menu.get_by_role("button", name="Export vCard").click()
+        dialog = self.page.locator("#people-export-dialog")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator('select[name="target"]')).to_have_value(
+            f"list:{friends.uuid}"
+        )
+        expect(dialog).to_contain_text("1 contact and 1 list will be exported.")
         with self.page.expect_download() as download:
-            menu.get_by_role("button", name="Export vCard").click()
+            dialog.get_by_role("link", name="Download .vcf").click()
         self.assertEqual(download.value.suggested_filename, "Friends.vcf")
+
+    def test_export_row_in_the_contact_menu_opens_the_dialog_on_the_contact(self):
+        from workspace.people.services.persons import create_person
+
+        jane = create_person(owner=self.user, display_name="Jane Doe")
+        self.page.goto(f"{self.live_server_url}/people?person={jane.uuid}")
+        self.page.locator("#person-panel").get_by_title("Actions").click()
+        self.page.locator("#people-context-menu").get_by_role(
+            "button", name="Export vCard"
+        ).click()
+        dialog = self.page.locator("#people-export-dialog")
+        expect(dialog).to_be_visible()
+        expect(dialog.locator('select[name="target"]')).to_have_value(
+            f"person:{jane.uuid}"
+        )
+        expect(dialog).to_contain_text("Contact: Jane Doe")
+        expect(dialog).to_contain_text("1 contact and 0 lists will be exported.")
+        with self.page.expect_download() as download:
+            dialog.get_by_role("link", name="Download .vcf").click()
+        self.assertEqual(download.value.suggested_filename, "Jane Doe.vcf")
 
     def test_drawer_export_opens_a_recap_before_downloading(self):
         from workspace.people.services.lists import add_members, create_list

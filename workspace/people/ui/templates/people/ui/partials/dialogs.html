@@ -181,6 +181,12 @@
           class="select select-bordered select-sm w-full"
           x-model="exportForm.target"
         >
+          <template x-if="exportPerson">
+            <option
+              :value="'person:' + exportPerson.uuid"
+              x-text="'Contact: ' + exportPerson.name"
+            ></option>
+          </template>
           <option value="all">Everything</option>
           <option value="mine">My contacts</option>
           <template x-for="group in groups" :key="group.id">

@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import safe_filename
+from workspace.common.uuids import parse_uuid_or_none
 
 from ..queries import reachable_list, reachable_person, user_person_lists, user_persons
 from ..serializers import parse_scope
@@ -80,20 +81,61 @@ class PersonImportView(APIView):
         return Response(report.as_dict())
 
 
+def _uuid_param(request, name):
+    """``(uuid, error)``: the parsed filter, or the 400 a malformed one earns."""
+    raw = request.query_params.get(name)
+    if not raw:
+        return None, None
+    value = parse_uuid_or_none(raw)
+    if value is None:
+        return None, Response(
+            {name: [f"Malformed {name} uuid."]}, status=status.HTTP_400_BAD_REQUEST
+        )
+    return value, None
+
+
 @extend_schema(tags=["People"])
 class PersonExportView(APIView):
+    """One endpoint, the same filters as the person list: the narrowest
+    one given decides what the file holds and what it is called."""
+
     @extend_schema(
-        summary="Export an address book as vCard",
+        summary="Export contacts as vCard",
         parameters=[
+            OpenApiParameter("person", str, description="One contact."),
+            OpenApiParameter("list", str, description="One list and its members."),
             OpenApiParameter(
                 "scope",
                 str,
                 description="`mine` or `group:<id>`; every reachable contact when omitted.",
-            )
+            ),
         ],
-        responses={200: OpenApiResponse(description="A .vcf file")},
+        responses={
+            200: OpenApiResponse(description="A .vcf file"),
+            400: None,
+            404: None,
+        },
     )
     def get(self, request):
+        person_uuid, error = _uuid_param(request, "person")
+        if error is not None:
+            return error
+        if person_uuid is not None:
+            person = reachable_person(request.user, person_uuid)
+            if person is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            return _vcf_response(export_vcards([person]), person.display_name)
+
+        list_uuid, error = _uuid_param(request, "list")
+        if error is not None:
+            return error
+        if list_uuid is not None:
+            person_list = reachable_list(request.user, list_uuid)
+            if person_list is None:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            text = export_vcards(person_list.members.all(), [person_list])
+            return _vcf_response(text, person_list.name)
+
         persons = user_persons(request.user)
         lists = user_person_lists(request.user)
         filename = "contacts"
@@ -106,30 +148,3 @@ class PersonExportView(APIView):
             filename = group.name if group is not None else "my-contacts"
         text = export_vcards(persons, lists.prefetch_related("members"))
         return _vcf_response(text, filename)
-
-
-@extend_schema(tags=["People"])
-class PersonVCardView(APIView):
-    @extend_schema(
-        summary="Export a person as vCard",
-        responses={200: OpenApiResponse(description="A .vcf file"), 404: None},
-    )
-    def get(self, request, uuid):
-        person = reachable_person(request.user, uuid)
-        if person is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return _vcf_response(export_vcards([person]), person.display_name)
-
-
-@extend_schema(tags=["People"])
-class PersonListVCardView(APIView):
-    @extend_schema(
-        summary="Export a contact list as vCard",
-        responses={200: OpenApiResponse(description="A .vcf file"), 404: None},
-    )
-    def get(self, request, uuid):
-        person_list = reachable_list(request.user, uuid)
-        if person_list is None:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        text = export_vcards(person_list.members.all(), [person_list])
-        return _vcf_response(text, person_list.name)

@@ -40,6 +40,11 @@ Kanban boards for tracking tasks, solo or as a team. Drag & drop cards between c
 
 ![Projects](docs/images/projects_1.png)
 
+### [People](docs/people/)
+An address book for the people around your data. Personal contacts and shared group address books, lists, contact photos, workspace account linking, and vCard import/export to move contacts to and from a phone, Google Contacts, or Nextcloud.
+
+![People](docs/images/people_1.png)
+
 ### [AI Assistants](docs/ai/)
 Configurable chat bots with system prompts, vision, function calling, extended thinking, image generation, and bot memory. Works with OpenAI API or any compatible provider (Ollama, LM Studio, etc.).
 
@@ -205,8 +210,8 @@ Your module automatically appears in the sidebar, dashboard, and search results.
 
 See [IDEAS.md](IDEAS.md) for the full roadmap. Planned modules include:
 
-- **Contacts & CRM** - Contact management with interaction history
 - **Bookmarks** - Save and organize links with automatic previews
+- **Photos & Gallery** - Timeline and albums on top of your files, from capture dates
 
 ## Contributing
 

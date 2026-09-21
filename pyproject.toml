@@ -32,6 +32,9 @@ dependencies = [
     "myl-discovery>=0.6.4",
     "python-dateutil>=2.9",
     "icalendar>=7.3.0",
+    # people: vCard import/export, phone normalisation
+    "vobject>=0.9.9",
+    "phonenumberslite>=9.0.39",
     # vault
     "cbor2>=5.7.0",
     # utils

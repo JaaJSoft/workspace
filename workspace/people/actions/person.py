@@ -43,6 +43,14 @@ class MoveAction(BasePersonAction):
 
 
 @PersonActionRegistry.register
+class ExportAction(BasePersonAction):
+    id = "export"
+    label = "Export vCard"
+    icon = "download"
+    category = ActionCategory.ORGANIZE
+
+
+@PersonActionRegistry.register
 class DeleteAction(BasePersonAction):
     id = "delete"
     label = "Delete"

@@ -131,6 +131,8 @@ class PersonSerializer(serializers.ModelSerializer):
             "addresses",
             "extra_properties",
             "notes",
+            "source",
+            "import_uid",
             "linked_user",
             "linked_user_id",
             "scope",
@@ -139,7 +141,14 @@ class PersonSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["uuid", "has_avatar", "created_at", "updated_at"]
+        read_only_fields = [
+            "uuid",
+            "source",
+            "import_uid",
+            "has_avatar",
+            "created_at",
+            "updated_at",
+        ]
 
     @extend_schema_field(OpenApiTypes.STR)
     def get_avatar_url(self, obj):

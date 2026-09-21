@@ -1,0 +1,23 @@
+BEGIN:VCARD
+VERSION:4.0
+PRODID:-//Sabre//Sabre VObject 4.5.4//EN
+UID:0a2e4c6f-1b3d-4e5f-8a9b-0c1d2e3f4a5b
+FN:Marie Curie
+N:Curie;Marie;;;
+EMAIL;TYPE=work:marie@example.org
+TEL;TYPE=cell:+48 12 345 67 89
+ADR;TYPE=home:;;ul. Nowa 1;Warszawa;;00-001;Polska
+BDAY;VALUE=DATE:18671107
+GENDER:F
+LANG:pl
+X-SOCIALPROFILE;TYPE=mastodon:https://mastodon.example/@marie
+REV:20240101T000000Z
+END:VCARD
+BEGIN:VCARD
+VERSION:4.0
+PRODID:-//Sabre//Sabre VObject 4.5.4//EN
+UID:group-1
+KIND:group
+FN:Physicists
+MEMBER:urn:uuid:0a2e4c6f-1b3d-4e5f-8a9b-0c1d2e3f4a5b
+END:VCARD

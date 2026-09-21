@@ -26,6 +26,14 @@ window.peopleHelpers = {
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
   },
+
+  // The .vcf for what the sidebar shows: the selected list, the selected
+  // address book, or every reachable contact.
+  exportUrl({ scope = '', listUuid = '' } = {}) {
+    if (listUuid) return `/api/v1/people/lists/${listUuid}/vcf`;
+    if (scope) return `/api/v1/people/export?scope=${encodeURIComponent(scope)}`;
+    return '/api/v1/people/export';
+  },
 };
 
 window.peopleApp = function peopleApp(config) {
@@ -39,6 +47,9 @@ window.peopleApp = function peopleApp(config) {
     groups: [],
     personForm: { name: '', email: '', scope: 'mine' },
     listForm: { uuid: '', name: '', original: '', scope: 'mine' },
+    importForm: { file: null, scope: 'mine' },
+    importResult: null,
+    importError: '',
     saving: false,
     collapsed: window.sidebarPreference.initial(),
     ctxMenu: { open: false, x: 0, y: 0, type: null, data: null, actions: null },
@@ -50,6 +61,7 @@ window.peopleApp = function peopleApp(config) {
       if (this.current) this.openPerson(this.current, { push: false });
       const params = new URLSearchParams(window.location.search);
       if (params.get('action') === 'new-person') this.newPerson();
+      if (params.get('action') === 'import') this.openImport();
     },
 
     sidebarCollapsed() {
@@ -180,6 +192,10 @@ window.peopleApp = function peopleApp(config) {
         this.deletePerson(data);
         return;
       }
+      if (action.id === 'export') {
+        window.location.assign(`/api/v1/people/${data.uuid}/vcf`);
+        return;
+      }
       // The other actions open a dialog the panel owns: open the contact
       // first when it is not the one on screen, then hand the action over.
       const run = () =>
@@ -193,6 +209,7 @@ window.peopleApp = function peopleApp(config) {
       this.closeCtxMenu();
       if (!list) return;
       if (id === 'rename') this.renameList(list);
+      if (id === 'export') window.location.assign(`/api/v1/people/lists/${list.uuid}/vcf`);
       if (id === 'delete') this.deleteList(list);
     },
 
@@ -363,6 +380,56 @@ window.peopleApp = function peopleApp(config) {
       }
       this.lists = this.lists.filter((entry) => entry.uuid !== list.uuid);
       if (this.listUuid === list.uuid) this.setList('');
+    },
+
+    // ---- vCard import / export ------------------------------------------
+
+    resetImportForm() {
+      this.importForm = { file: null, scope: this.defaultScope() };
+      this.importResult = null;
+      this.importError = '';
+      if (this.$refs.importFile) this.$refs.importFile.value = '';
+    },
+
+    openImport() {
+      this.resetImportForm();
+      this.$refs.importDialog.showModal();
+    },
+
+    async runImport() {
+      const { file, scope } = this.importForm;
+      if (!file || this.saving) return;
+      const body = new FormData();
+      body.append('file', file);
+      body.append('scope', scope);
+      this.saving = true;
+      this.importError = '';
+      try {
+        const res = await fetch('/api/v1/people/import', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+          body,
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          const first = Object.values(data).flat()[0];
+          this.importError = typeof first === 'string' ? first : 'Could not import the file.';
+          return;
+        }
+        this.importResult = await res.json();
+        // The sidebar counts what a group holds; an import into it adds
+        // the created contacts, an update changes nothing there.
+        this._bumpGroup(scope, this.importResult.created);
+        await Promise.all([this.reloadLists(), this.refreshList()]);
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    exportCurrent() {
+      window.location.assign(
+        window.peopleHelpers.exportUrl({ scope: this.scope, listUuid: this.listUuid })
+      );
     },
 
     // Membership is changed from the panel, which knows nothing of the

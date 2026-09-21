@@ -1,4 +1,4 @@
-{# Dialogs of the page shell: new contact, new or renamed list. The panel's own dialogs live in person_panel.html. #}
+{# Dialogs of the page shell: new contact, new or renamed list, vCard import. The panel's own dialogs live in person_panel.html. #}
 <dialog
   id="people-person-dialog"
   x-ref="personDialog"
@@ -60,6 +60,97 @@
         </button>
       </div>
     </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>
+
+<dialog
+  id="people-import-dialog"
+  x-ref="importDialog"
+  class="modal"
+  @close="resetImportForm()"
+>
+  <div class="modal-box">
+    {% include "people/ui/partials/_dialog_header.html" with icon="upload" title="Import contacts" subtitle_expr="'A .vcf file from a phone, Google Contacts or Nextcloud.'" close_expr="$refs.importDialog.close()" %}
+    <form @submit.prevent="runImport()" class="space-y-3" x-show="!importResult">
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">vCard file</span></div>
+        <input
+          type="file"
+          name="file"
+          accept=".vcf,text/vcard,text/x-vcard"
+          class="file-input file-input-bordered file-input-sm w-full"
+          x-ref="importFile"
+          @change="importForm.file = $event.target.files[0] || null"
+        />
+      </label>
+      <label class="form-control w-full">
+        <div class="label"><span class="label-text">Address book</span></div>
+        <select
+          name="scope"
+          class="select select-bordered select-sm w-full"
+          x-model="importForm.scope"
+        >
+          <option value="mine">My contacts</option>
+          <template x-for="group in groups" :key="group.id">
+            <option :value="'group:' + group.id" x-text="group.name"></option>
+          </template>
+        </select>
+      </label>
+      <p class="text-xs text-base-content/60">
+        A contact already in the address book (same card or same email) is updated rather than duplicated. Groups become lists.
+      </p>
+      <template x-if="importError">
+        <inline-alert type="error"><span x-text="importError"></span></inline-alert>
+      </template>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="$refs.importDialog.close()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-module btn-sm"
+          :disabled="saving || !importForm.file"
+        >
+          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+          Import
+        </button>
+      </div>
+    </form>
+    <div x-show="importResult" class="space-y-3" x-cloak>
+      <div class="stats stats-vertical sm:stats-horizontal w-full bg-base-200">
+        <div class="stat">
+          <div class="stat-title">Created</div>
+          <div class="stat-value text-2xl text-module" x-text="importResult ? importResult.created : 0"></div>
+          <div class="stat-desc">new contacts</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Updated</div>
+          <div class="stat-value text-2xl" x-text="importResult ? importResult.updated : 0"></div>
+          <div class="stat-desc">already there</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Lists</div>
+          <div class="stat-value text-2xl" x-text="importResult ? importResult.lists : 0"></div>
+          <div class="stat-desc">from groups</div>
+        </div>
+      </div>
+      <div class="modal-action">
+        <button
+          type="button"
+          class="btn btn-module btn-sm"
+          @click="$refs.importDialog.close()"
+        >
+          Done
+        </button>
+      </div>
+    </div>
   </div>
   <form method="dialog" class="modal-backdrop">
     <button type="submit">close</button>

@@ -9,6 +9,10 @@ ADDRESS_TYPES = ("home", "work", "other")
 
 SEARCH_TEXT_MAX_LENGTH = 1024
 
+SOURCE_MANUAL = "manual"
+SOURCE_IMPORT = "import"
+SOURCE_CHOICES = [(SOURCE_MANUAL, "Manual"), (SOURCE_IMPORT, "Import")]
+
 
 def _one_scope_constraint(name):
     """Exactly one of ``owner`` / ``group`` is set."""
@@ -63,6 +67,12 @@ class Person(models.Model):
     # vCard properties with no column of their own, kept for the round trip.
     extra_properties = models.JSONField(default=dict, blank=True)
     notes = models.TextField(blank=True, default="")
+    source = models.CharField(
+        max_length=16, choices=SOURCE_CHOICES, default=SOURCE_MANUAL
+    )
+    # The vCard UID the person came in with: a re-import finds it again by
+    # this, before falling back to an email match.
+    import_uid = models.CharField(max_length=255, blank=True, default="")
     linked_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -95,6 +105,8 @@ class Person(models.Model):
         indexes = [
             models.Index(fields=["owner", "display_name"], name="person_owner_name"),
             models.Index(fields=["group", "display_name"], name="person_group_name"),
+            models.Index(fields=["owner", "import_uid"], name="person_owner_uid"),
+            models.Index(fields=["group", "import_uid"], name="person_group_uid"),
         ]
 
     def __str__(self):

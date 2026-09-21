@@ -1,0 +1,31 @@
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iOS 17.5//EN
+N:Doe;Jane;Marie;Dr.;PhD
+FN:Dr. Jane Marie Doe PhD
+ORG:ACME;Engineering
+TITLE:CTO
+EMAIL;type=INTERNET;type=WORK;type=pref:jane@acme.example
+EMAIL;type=INTERNET;type=HOME:jane@home.example
+TEL;type=CELL;type=VOICE;type=pref:+33 6 12 34 56 78
+TEL;type=WORK;type=FAX:+33 1 23 45 67 89
+item1.ADR;type=HOME;type=pref:;;1 rue de la Paix;Paris;;75001;France
+item1.X-ABADR:fr
+BDAY:1985-04-12
+NOTE:Met at FOSDEM.\nBrings cake.
+item2.URL;type=pref:https://jane.example
+item2.X-ABLabel:_$!<HomePage>!$_
+X-SOCIALPROFILE;type=twitter:https://twitter.com/janedoe
+UID:1B7C0F3A-2E5D-4C8B-9F1E-3A2B1C0D9E8F
+REV:2024-05-01T10:00:00Z
+END:VCARD
+BEGIN:VCARD
+VERSION:3.0
+PRODID:-//Apple Inc.//iOS 17.5//EN
+N:Friends;;;;
+FN:Friends
+X-ADDRESSBOOKSERVER-KIND:group
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:1B7C0F3A-2E5D-4C8B-9F1E-3A2B1C0D9E8F
+X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:00000000-0000-0000-0000-00000000dead
+UID:7D5E2B10-9A8C-4F3E-B2D1-5C6A7B8C9D0E
+END:VCARD

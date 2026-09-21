@@ -151,7 +151,9 @@ class ExportApiTests(APITestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_export_one_person(self):
-        response = self.client.get(f"/api/v1/people/{self.jane.uuid}/vcf")
+        response = self.client.get(
+            "/api/v1/people/export", {"person": str(self.jane.uuid)}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Disposition"],
@@ -162,11 +164,34 @@ class ExportApiTests(APITestCase):
         self.assertIn("EMAIL;TYPE=work:jane@example.com", text)
 
     def test_export_foreign_person_is_404(self):
-        response = self.client.get(f"/api/v1/people/{self.bobs.uuid}/vcf")
+        response = self.client.get(
+            "/api/v1/people/export", {"person": str(self.bobs.uuid)}
+        )
         self.assertEqual(response.status_code, 404)
 
+    def test_malformed_filters_are_400(self):
+        for name in ("person", "list"):
+            with self.subTest(name):
+                response = self.client.get("/api/v1/people/export", {name: "nope"})
+                self.assertEqual(response.status_code, 400)
+                self.assertIn(name, response.data)
+
+    def test_person_wins_over_list_and_scope(self):
+        response = self.client.get(
+            "/api/v1/people/export",
+            {
+                "person": str(self.jane.uuid),
+                "list": str(self.friends.uuid),
+                "scope": f"group:{self.team.id}",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content.decode().count("BEGIN:VCARD"), 1)
+
     def test_export_list_with_members(self):
-        response = self.client.get(f"/api/v1/people/lists/{self.friends.uuid}/vcf")
+        response = self.client.get(
+            "/api/v1/people/export", {"list": str(self.friends.uuid)}
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Content-Disposition"], 'attachment; filename="Friends.vcf"'
@@ -178,8 +203,19 @@ class ExportApiTests(APITestCase):
 
     def test_export_foreign_list_is_404(self):
         theirs = create_list(owner=self.bob, name="Theirs")
-        response = self.client.get(f"/api/v1/people/lists/{theirs.uuid}/vcf")
+        response = self.client.get("/api/v1/people/export", {"list": str(theirs.uuid)})
         self.assertEqual(response.status_code, 404)
+
+    def test_old_vcf_routes_are_gone(self):
+        self.assertEqual(
+            self.client.get(f"/api/v1/people/{self.jane.uuid}/vcf").status_code, 404
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/api/v1/people/lists/{self.friends.uuid}/vcf"
+            ).status_code,
+            404,
+        )
 
     def test_person_payload_carries_source_and_import_uid_read_only(self):
         response = self.client.get(f"/api/v1/people/{self.jane.uuid}")

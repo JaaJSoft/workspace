@@ -48,7 +48,7 @@
         title="Export vCard"
         aria-label="Export vCard"
         x-show="can('export')"
-        :href="'/api/v1/people/' + person.uuid + '/vcf'"
+        :href="peopleHelpers.exportUrl('person:' + person.uuid)"
         download
       >
         <i data-lucide="download" class="w-4 h-4"></i>

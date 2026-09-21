@@ -35,17 +35,14 @@ test('listUrl only carries the filters that are set', () => {
   assert.equal(ctx.peopleHelpers.listUrl('/people', { listUuid: 'abc' }), '/people?list=abc');
 });
 
-test('exportUrl picks the list, then the scope, then everything', () => {
+test('exportUrl maps every target onto the one export endpoint', () => {
   const ctx = load();
-  assert.equal(ctx.peopleHelpers.exportUrl({}), '/api/v1/people/export');
-  assert.equal(
-    ctx.peopleHelpers.exportUrl({ scope: 'group:3' }),
-    '/api/v1/people/export?scope=group%3A3'
-  );
-  assert.equal(
-    ctx.peopleHelpers.exportUrl({ scope: 'mine', listUuid: 'abc' }),
-    '/api/v1/people/lists/abc/vcf'
-  );
+  const url = ctx.peopleHelpers.exportUrl;
+  assert.equal(url('all'), '/api/v1/people/export');
+  assert.equal(url('mine'), '/api/v1/people/export?scope=mine');
+  assert.equal(url('group:3'), '/api/v1/people/export?scope=group%3A3');
+  assert.equal(url('list:abc'), '/api/v1/people/export?list=abc');
+  assert.equal(url('person:a-b'), '/api/v1/people/export?person=a-b');
 });
 
 test('the export dialog opens on the sidebar selection and counts what it covers', () => {
@@ -75,15 +72,25 @@ test('the export dialog opens on the sidebar selection and counts what it covers
   assert.equal(app.mineCount, 5);
 });
 
-test('exportHref follows the chosen target', () => {
+test('menu rows open the export dialog on their target instead of downloading', () => {
   const ctx = load();
-  const app = ctx.peopleApp({});
-  app.exportForm.target = 'list:abc';
-  assert.equal(app.exportHref(), '/api/v1/people/lists/abc/vcf');
-  app.exportForm.target = 'all';
-  assert.equal(app.exportHref(), '/api/v1/people/export');
-  app.exportForm.target = 'group:3';
-  assert.equal(app.exportHref(), '/api/v1/people/export?scope=group%3A3');
+  const app = ctx.peopleApp({ scope: 'mine' });
+  let opened = 0;
+  app.$refs = { exportDialog: { showModal: () => { opened += 1; }, close() {} } };
+  app.ctxMenu = { open: true, type: 'person', data: { uuid: 'p1', name: 'Jane', scope: 'mine' } };
+  app.ctxPersonAction({ id: 'export' });
+  assert.equal(opened, 1);
+  assert.equal(app.exportForm.target, 'person:p1');
+  assert.equal(app.exportPerson.name, 'Jane');
+  assert.deepEqual({ ...app.exportSummary() }, { contacts: 1, lists: 0 });
+  assert.equal(app.exportHref(), '/api/v1/people/export?person=p1');
+  app.ctxMenu = { open: true, type: 'list', data: { uuid: 'l1', name: 'Friends' } };
+  app.ctxListAction('export');
+  assert.equal(opened, 2);
+  assert.equal(app.exportForm.target, 'list:l1');
+  assert.equal(app.exportPerson, null);
+  assert.equal(app.exportHref(), '/api/v1/people/export?list=l1');
+  assert.equal(typeof ctx.window.location, 'undefined');
 });
 
 test('runImport posts the file, shows the report and refreshes the sidebar', async () => {

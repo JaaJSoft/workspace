@@ -26,16 +26,6 @@ urlpatterns = [
         name="person-export",
     ),
     path(
-        "api/v1/people/lists/<uuid:uuid>/vcf",
-        vcard.PersonListVCardView.as_view(),
-        name="person-list-vcf",
-    ),
-    path(
-        "api/v1/people/<uuid:uuid>/vcf",
-        vcard.PersonVCardView.as_view(),
-        name="person-vcf",
-    ),
-    path(
         "api/v1/people/lists/<uuid:uuid>",
         lists.PersonListDetailView.as_view(),
         name="person-list-detail",

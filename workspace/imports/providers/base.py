@@ -17,6 +17,7 @@ from typing import BinaryIO, ClassVar, Protocol
 from ..errors import ImportsError
 
 KIND_FILES = "files"
+KIND_CONTACTS = "contacts"
 
 
 class ProviderError(ImportsError):
@@ -85,6 +86,28 @@ class RemoteTag:
     name: str
 
 
+@dataclass(frozen=True)
+class RemoteAddressBook:
+    """An address book on the remote. ``id`` is its path relative to the
+    provider's CardDAV root; it is what ``ContactSource.card_refs`` takes."""
+
+    id: str
+    name: str
+    description: str = ""
+
+    def as_dict(self):
+        return {"id": self.id, "name": self.name, "description": self.description}
+
+
+@dataclass(frozen=True)
+class RemoteCard:
+    """One contact resource: its path, its version marker, its vCard text."""
+
+    id: str
+    etag: str
+    text: str
+
+
 class FileSource(Protocol):
     """Read access to a remote file tree."""
 
@@ -121,6 +144,26 @@ class FileMetadataSource(Protocol):
         """Release the underlying connection pool."""
 
 
+class ContactSource(Protocol):
+    """Read access to a remote's address books."""
+
+    def address_books(self) -> Iterator[RemoteAddressBook]:
+        """The address books the connection's user can read."""
+
+    def card_refs(self, book_id: str) -> Iterator[tuple[str, str]]:
+        """``(card id, etag)`` for every contact of a book - no card bodies."""
+
+    def fetch_cards(self, book_id: str, card_ids: list[str]) -> Iterator[RemoteCard]:
+        """The cards asked for; one the remote no longer has is left out."""
+
+    def fetch_photo(self, url: str) -> tuple[bytes, str] | None:
+        """``(bytes, image subtype)`` of a photo a card links to, or ``None``
+        when it cannot or must not be fetched."""
+
+    def close(self) -> None:
+        """Release the underlying connection pool."""
+
+
 class Provider(ABC):
     slug: ClassVar[str]
     name: ClassVar[str]
@@ -148,6 +191,9 @@ class Provider(ABC):
         """Favorites and tags for the files this provider served, or ``None``
         when it has none to offer - then the importer skips that phase."""
         return None
+
+    def contact_source(self, connection) -> ContactSource:
+        raise NotImplementedError(f"{self.slug} does not provide contacts")
 
     def describe(self) -> dict:
         return {

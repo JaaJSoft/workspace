@@ -264,11 +264,18 @@ class ContactsImporter(Importer):
     def _import_book(self, ctx, source, book_id, scope, errors):
         """Import the cards of one book not imported yet. Group cards wait for
         the end of the book, so the members they name exist by then."""
+        # A slice resuming mid-book must not recount a card this job already
+        # failed on - Retry starts a new job, so that card is still retried.
+        failed_here = set(
+            ImportJobItem.objects.filter(
+                job=ctx.job, kind=self.kind, status=ImportJobItem.Status.FAILED
+            ).values_list("remote_id", flat=True)
+        )
         try:
             etags = {
                 card_id: etag
                 for card_id, etag in source.card_refs(book_id)
-                if not ctx.already_done(card_id, etag)
+                if not ctx.already_done(card_id, etag) and card_id not in failed_here
             }
         except ProviderError as exc:
             ctx.report_item(

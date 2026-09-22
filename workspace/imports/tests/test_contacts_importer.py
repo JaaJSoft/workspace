@@ -294,6 +294,32 @@ class ContactsImporterTests(ContactsImporterTestCase):
             self._items(job, ImportJobItem.Status.DONE), ["/contacts/ann.vcf"]
         )
 
+    def test_a_resumed_slice_does_not_recount_a_failed_card(self):
+        self.provider.cards[BOOK].insert(
+            0,
+            RemoteCard(
+                id=f"{BOOK}/bad.vcf", etag="e9", text="BEGIN:VCARD\r\nFN:Broken\r\n"
+            ),
+        )
+        job = self._job()
+
+        def out_after_first_failure(ctx):
+            return ImportJobItem.objects.filter(
+                job=ctx.job, status=ImportJobItem.Status.FAILED
+            ).exists()
+
+        with patch.object(ImportContext, "out_of_time", out_after_first_failure):
+            self.assertIs(self._run(job), Outcome.PAUSED)
+        self.assertEqual(job.stats["contacts"]["failed"], 1)
+
+        self.assertIs(self._run(job), Outcome.DONE)
+        self.assertEqual(job.stats["contacts"]["failed"], 1)
+        self.assertEqual(self._names(owner=self.user), ["Ann", "Bob"])
+        self.assertEqual(
+            self.provider.last_contacts.fetch_calls,
+            [["/contacts/ann.vcf", "/contacts/bob.vcf"]],
+        )
+
     def test_a_failed_fetch_marks_its_batch_and_the_import_goes_on(self):
         self.provider.cards["/team"] = [card("cid", "Carol", book="/team")]
         self.provider.fail_fetch = {"/contacts/ann.vcf"}

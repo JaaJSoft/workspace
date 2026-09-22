@@ -30,6 +30,14 @@ def tiny_png(width=6, height=4):
     return buf.getvalue()
 
 
+def bomb_png():
+    """A PNG whose declared size trips Pillow's decompression-bomb guard, a
+    few KB on disk regardless (a 1-bit image compresses to nothing)."""
+    buf = BytesIO()
+    Image.new("1", (14000, 14000)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def card(*lines):
     return "BEGIN:VCARD\nVERSION:4.0\n" + "\n".join(lines) + "\nEND:VCARD\n"
 
@@ -155,6 +163,17 @@ class ImportTests(TestCase):
     def test_broken_photo_is_ignored(self):
         import_vcards(
             card("UID:p1", "FN:Pic", "PHOTO;ENCODING=b:bm90IGFuIGltYWdl"),
+            owner=self.alice,
+        )
+        person = Person.objects.get(owner=self.alice)
+        self.assertFalse(person.has_avatar)
+
+    def test_decompression_bomb_photo_is_ignored(self):
+        import base64
+
+        encoded = base64.b64encode(bomb_png()).decode()
+        import_vcards(
+            card("UID:p1", "FN:Pic", f"PHOTO:data:image/png;base64,{encoded}"),
             owner=self.alice,
         )
         person = Person.objects.get(owner=self.alice)

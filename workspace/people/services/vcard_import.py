@@ -80,14 +80,14 @@ def _apply_photo(person, photo):
     try:
         with Image.open(BytesIO(photo)) as image:
             width, height = image.size
-    except OSError, ValueError:
+    except OSError, ValueError, Image.DecompressionBombError:
         return
     side = min(width, height)
     try:
         save_avatar(
             person, BytesIO(photo), (width - side) / 2, (height - side) / 2, side, side
         )
-    except OSError, ValueError:
+    except OSError, ValueError, Image.DecompressionBombError:
         return
 
 

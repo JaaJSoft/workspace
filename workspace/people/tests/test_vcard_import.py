@@ -178,6 +178,19 @@ class ImportTests(TestCase):
         crew = PersonList.objects.get(owner=self.alice, name="Crew")
         self.assertEqual(list(crew.members.all()), [existing])
 
+    def test_report_names_the_row_each_person_card_became(self):
+        text = (
+            card("UID:ann", "FN:Ann")
+            + card("KIND:group", "FN:Team", "MEMBER:ann")
+            + card("UID:bob", "FN:Bob")
+        )
+        report = import_vcards(text, owner=self.alice)
+        self.assertEqual([p.display_name for p in report.persons], ["Ann", "Bob"])
+        self.assertEqual(report.as_dict(), {"created": 2, "updated": 0, "lists": 1})
+
+        again = import_vcards(text, owner=self.alice)
+        self.assertEqual([p.pk for p in again.persons], [p.pk for p in report.persons])
+
 
 class RoundTripTests(TestCase):
     """Export then import: nothing created, nothing changed."""

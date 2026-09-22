@@ -22,15 +22,30 @@ ROOTS = ("workspace", "scripts")
 WATCHED = ("read_text", "write_text")
 
 
+def _left_to_the_platform(call):
+    """Whether *call* lets the platform pick the encoding.
+
+    Saying ``encoding=None`` is the default spelled out rather than an
+    encoding named, so it reads cp1252 on Windows exactly like the bare
+    call does. Any other value is a decision somebody took on purpose -
+    the rule is that the choice is written down, not that it is UTF-8.
+    """
+    for keyword in call.keywords:
+        if keyword.arg == "encoding":
+            value = keyword.value
+            return isinstance(value, ast.Constant) and value.value is None
+    return True
+
+
 def offenders(source, label="<source>"):
-    """Every ``read_text``/``write_text`` call in *source* with no encoding."""
+    """Every ``read_text``/``write_text`` call in *source* naming no encoding."""
     found = []
     for node in ast.walk(ast.parse(source)):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
             and node.func.attr in WATCHED
-            and not any(keyword.arg == "encoding" for keyword in node.keywords)
+            and _left_to_the_platform(node)
         ):
             found.append(f"{label}:{node.lineno} {node.func.attr}()")
     return found
@@ -56,6 +71,12 @@ class TextFileEncodingTests(unittest.TestCase):
         )
         self.assertEqual(
             offenders("Path('x').write_text(body)", "x.py"), ["x.py:1 write_text()"]
+        )
+
+    def test_the_scan_sees_an_encoding_handed_back_to_the_platform(self):
+        self.assertEqual(
+            offenders("Path('x').read_text(encoding=None)", "x.py"),
+            ["x.py:1 read_text()"],
         )
 
     def test_the_scan_leaves_a_call_that_names_one_alone(self):

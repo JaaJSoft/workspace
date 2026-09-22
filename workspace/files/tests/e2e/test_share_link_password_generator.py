@@ -100,3 +100,28 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
             arg=use.element_handle(),
             timeout=2000,
         )
+
+    def test_the_panel_takes_the_page_module_hue(self):
+        # daisyUI paints the boxed active tab from the theme primary; the
+        # module rule has to outrank it for the panel to match its host.
+        dialog = self._open_link_form()
+        dialog.get_by_role("button", name="Generate a password").click()
+        expect(dialog.get_by_role("button", name="Use")).to_be_visible()
+
+        same_hue_as_host = """(expected) => {
+            const d = document.querySelector('dialog[open]');
+            const bg = (el) => getComputedStyle(el).backgroundColor;
+            const tab = d.querySelector('.tab.tab-active');
+            const dice = d.querySelector('[aria-label="Generate a password"]');
+            const module = getComputedStyle(document.body).getPropertyValue('--module').trim();
+            return bg(tab) === bg(dice) && bg(tab) === `rgb(${module.split(' ').join(', ')})`
+                && (!expected || bg(tab) === expected);
+        }"""
+        self.page.wait_for_function(same_hue_as_host, arg=None, timeout=3000)
+
+        self.page.evaluate(
+            "document.body.classList.replace('module-indigo', 'module-purple')"
+        )
+        self.page.wait_for_function(
+            same_hue_as_host, arg="rgb(168, 85, 247)", timeout=3000
+        )

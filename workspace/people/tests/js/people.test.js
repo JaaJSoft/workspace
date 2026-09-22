@@ -290,3 +290,26 @@ test('a list context menu needs no request and routes rename and delete', () => 
   app.ctxListAction('delete');
   assert.deepStrictEqual(calls, [['rename', 'l1'], ['delete', 'l1']]);
 });
+
+test('a QR image failure says too large only when the server answered 413', async () => {
+  const cases = [
+    [() => Promise.resolve({ status: 413 }), 'too_large'],
+    [() => Promise.resolve({ status: 500 }), 'failed'],
+    [() => Promise.resolve({ status: 403 }), 'failed'],
+    [() => Promise.reject(new Error('offline')), 'failed'],
+  ];
+  for (const [fetchImpl, expected] of cases) {
+    const requested = [];
+    const ctx = load((url) => {
+      requested.push(url);
+      return fetchImpl();
+    });
+    const app = ctx.peopleApp({});
+    app.$refs = { qrDialog: { showModal() {} } };
+    app.openQrCode({ uuid: 'abc', name: 'Alice' });
+    assert.equal(app.qrError, '');
+    await app.qrLoadFailed();
+    assert.equal(app.qrError, expected);
+    assert.deepEqual(requested, ['/api/v1/people/qrcode?person=abc']);
+  }
+});

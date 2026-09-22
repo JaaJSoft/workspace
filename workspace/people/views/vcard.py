@@ -167,9 +167,10 @@ class PersonQRCodeView(CacheControlMixin, APIView):
     """One contact as a QR code: pointing another phone's camera at it files
     the card in its address book, no file and no account in between."""
 
-    # The mixin's defaults: `private` keeps a contact's card out of any
-    # shared proxy, and the revalidation costs a 304 on an image that is
-    # cheap to rebuild anyway.
+    # A contact's card is personal data: `private` alone still lets the
+    # browser keep it on disk, where the next account on a shared machine
+    # finds it. The image is cheap to rebuild, so nothing is stored.
+    cache_no_store = True
 
     @extend_schema(
         summary="Render a contact as a QR code",

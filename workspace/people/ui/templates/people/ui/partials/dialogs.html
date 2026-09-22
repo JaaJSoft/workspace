@@ -310,14 +310,17 @@
             alt="QR code"
             :alt="'QR code for ' + qrPerson.name"
             class="w-56 h-56"
-            @error="qrError = true"
+            @error="qrLoadFailed()"
           />
         </div>
         <p class="text-xs text-base-content/60 text-center" x-show="!qrError">
           Point another phone's camera at it to add the contact.
         </p>
-        <template x-if="qrError">
+        <template x-if="qrError === 'too_large'">
           <inline-alert type="error" message="This contact holds more than a QR code can carry. Export it as a .vcf file instead."></inline-alert>
+        </template>
+        <template x-if="qrError === 'failed'">
+          <inline-alert type="error" message="Could not load the QR code. Reload the page and try again."></inline-alert>
         </template>
         <div class="modal-action">
           <a

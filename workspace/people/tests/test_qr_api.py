@@ -43,9 +43,9 @@ class QRCodeApiTests(APITestCase):
             response["Content-Disposition"], 'inline; filename="Alice Martin.svg"'
         )
 
-    def test_stays_out_of_shared_caches(self):
+    def test_never_stored_by_the_browser(self):
         response = self.get(person=self.person.uuid)
-        self.assertIn("private", response["Cache-Control"])
+        self.assertEqual(response["Cache-Control"], "no-store")
 
     def test_someone_elses_contact_is_404(self):
         self.assertEqual(self.get(person=self.bobs.uuid).status_code, 404)

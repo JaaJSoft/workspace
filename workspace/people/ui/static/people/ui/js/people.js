@@ -63,9 +63,10 @@ window.peopleApp = function peopleApp(config) {
     // The contact the export dialog was opened on, when it was: the select
     // offers it as a target only then.
     exportPerson: null,
-    // The contact the QR dialog is showing, and whether its image came back.
+    // The contact the QR dialog is showing, and why its image did not come
+    // back: '' while it loads or once it has, 'too_large' or 'failed'.
     qrPerson: null,
-    qrError: false,
+    qrError: '',
     mineCount: 0,
     importResult: null,
     importError: '',
@@ -497,13 +498,21 @@ window.peopleApp = function peopleApp(config) {
 
     openQrCode(person) {
       this.qrPerson = person;
-      this.qrError = false;
+      this.qrError = '';
       this.$refs.qrDialog.showModal();
     },
 
     qrSrc(kind = 'svg') {
       if (!this.qrPerson) return '';
       return window.peopleHelpers.qrUrl(this.qrPerson.uuid, kind);
+    },
+
+    // An <img> error says nothing about why. Asking again tells a contact
+    // too large for a QR (413, answered by the .vcf export) apart from an
+    // expired session or a server fault.
+    async qrLoadFailed() {
+      const res = await fetch(this.qrSrc()).catch(() => null);
+      this.qrError = res && res.status === 413 ? 'too_large' : 'failed';
     },
 
     // Membership is changed from the panel, which knows nothing of the

@@ -2,12 +2,15 @@ import httpx2
 from django.test import SimpleTestCase
 
 from workspace.imports.models import ImportConnection
-from workspace.imports.providers.base import ProviderError
+from workspace.imports.providers.base import KIND_CONTACTS, KIND_FILES, ProviderError
+from workspace.imports.providers.carddav import CardDavSource
 from workspace.imports.providers.nextcloud import (
     NextcloudMetadataSource,
     NextcloudProvider,
     _instance_root,
+    addressbook_home,
 )
+from workspace.imports.providers.webdav import WebDavProvider
 
 
 def _connection(base_url):
@@ -161,7 +164,7 @@ class TestConnectionTests(SimpleTestCase):
         self.assertEqual(
             capabilities,
             {
-                "kinds": ["files"],
+                "kinds": ["contacts", "files"],
                 "quota_used": 1,
                 "quota_available": 2,
                 "server_version": "31.0.2",
@@ -392,3 +395,46 @@ class MetadataSourceTests(SimpleTestCase):
         source = NextcloudProvider().file_metadata_source(conn)
         self.assertIsInstance(source, NextcloudMetadataSource)
         source.close()
+
+
+class AddressBookHomeTests(SimpleTestCase):
+    def test_derived_from_the_files_url(self):
+        self.assertEqual(
+            addressbook_home(
+                "https://cloud.example.org/remote.php/dav/files/alice", "alice"
+            ),
+            "https://cloud.example.org/remote.php/dav/addressbooks/users/alice/",
+        )
+
+    def test_keeps_the_sub_path_of_the_instance(self):
+        self.assertEqual(
+            addressbook_home(
+                "https://example.org/nextcloud/remote.php/dav/files/alice/Docs", "alice"
+            ),
+            "https://example.org/nextcloud/remote.php/dav/addressbooks/users/alice/",
+        )
+
+    def test_encodes_the_username(self):
+        self.assertEqual(
+            addressbook_home(
+                "https://cloud.example.org/remote.php/webdav", "a b@x.org"
+            ),
+            "https://cloud.example.org/remote.php/dav/addressbooks/users/a%20b%40x.org/",
+        )
+
+
+class ContactSourceTests(SimpleTestCase):
+    def test_nextcloud_offers_contacts_and_plain_webdav_does_not(self):
+        self.assertEqual(
+            NextcloudProvider().describe()["kinds"], [KIND_CONTACTS, KIND_FILES]
+        )
+        self.assertNotIn(KIND_CONTACTS, WebDavProvider.kinds)
+
+    def test_the_source_is_rooted_at_the_address_book_home(self):
+        conn = _connection("https://cloud.example.org/remote.php/dav/files/alice")
+        with NextcloudProvider().contact_source(conn) as source:
+            self.assertIsInstance(source, CardDavSource)
+            self.assertEqual(
+                source.root_url,
+                "https://cloud.example.org/remote.php/dav/addressbooks/users/alice/",
+            )

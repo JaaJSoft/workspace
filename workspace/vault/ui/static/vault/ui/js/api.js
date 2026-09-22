@@ -100,9 +100,22 @@ window.vaultApi = (function () {
       return request('/api/v1/vault/entries/' + uuid + '/restore', { method: 'POST' });
     },
     // POST, not DELETE: DELETE on an entry is the trash, and this is the step
-    // after it.
-    purgeEntry: function (uuid) {
-      return request('/api/v1/vault/entries/' + uuid + '/purge', { method: 'POST' });
+    // after it. One row or a hundred, the same call - a loop of N requests
+    // fails in pieces and leaves nothing true to say about what survived.
+    // Answers { destroyed: [uuid] }.
+    purgeEntries: function (uuids) {
+      return request('/api/v1/vault/entries/purge', {
+        method: 'POST',
+        body: { uuids: uuids },
+      });
+    },
+    // A whole trash, named by its vault rather than by its rows: the list
+    // form is capped at 200, and a trash is not.
+    purgeVaultTrash: function (vaultUuid) {
+      return request('/api/v1/vault/entries/purge', {
+        method: 'POST',
+        body: { vault: vaultUuid },
+      });
     },
     // Answers a map of UUID to action list. An entry the caller cannot reach
     // comes back as an empty list, never as a missing key, so a caller reads

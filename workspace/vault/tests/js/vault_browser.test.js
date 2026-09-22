@@ -1846,7 +1846,7 @@ test('a lock takes the secret back off the clipboard', async () => {
 const TRASH_ACTIONS = {
   restore: { id: 'restore', label: 'Restore', icon: 'undo-2', bulk: true, css_class: '' },
   delete_forever: {
-    id: 'delete_forever', label: 'Delete for good', icon: 'trash-2',
+    id: 'delete_forever', label: 'Delete permanently', icon: 'trash-2',
     bulk: true, css_class: 'text-error',
   },
 };
@@ -1897,7 +1897,7 @@ test('destroying an entry asks first, and a refusal writes nothing', async () =>
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+      purgeEntries: async (uuids) => { calls.push(...uuids); return { destroyed: uuids }; },
     },
   });
   component.init();
@@ -1956,8 +1956,13 @@ test('a bulk action runs over every selected row', async () => {
   assert.equal(asked, 0);
 });
 
-test('destroying a batch asks once, not once per row', async () => {
+test('destroying a batch asks once, and sends one request', async () => {
+  // Two claims in one walk: the question is put to the user once for the
+  // whole selection - one confirmation per row trains people to click
+  // through them - and the selection leaves as a single request, because a
+  // loop of N can half-happen and then has nothing true to report.
   const calls = [];
+  let requests = 0;
   let asked = 0;
   const { component } = browser({
     api: {
@@ -1967,7 +1972,14 @@ test('destroying a batch asks once, not once per row', async () => {
         'e-1': [TRASH_ACTIONS.delete_forever],
         'e-2': [TRASH_ACTIONS.delete_forever],
       }),
-      purgeEntry: async (uuid) => { calls.push(uuid); return {}; },
+      purgeEntry: async () => {
+        throw new Error('there is no per-row purge endpoint any more');
+      },
+      purgeEntries: async (uuids) => {
+        requests += 1;
+        calls.push(...uuids);
+        return { destroyed: uuids };
+      },
     },
   });
   component.init();
@@ -1978,6 +1990,7 @@ test('destroying a batch asks once, not once per row', async () => {
   component.toggleSelection('e-2');
   await component.runBulkAction(TRASH_ACTIONS.delete_forever);
   assert.deepStrictEqual(Array.from(calls).sort(), ['e-1', 'e-2']);
+  assert.equal(requests, 1);
   assert.equal(asked, 1);
 });
 
@@ -2084,7 +2097,7 @@ test('a confirmation carries its own question rather than the default one', asyn
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async () => ({}),
+      purgeEntries: async (uuids) => ({ destroyed: uuids }),
     },
   });
   ctx.AppDialog = {
@@ -2095,7 +2108,7 @@ test('a confirmation carries its own question rather than the default one', asyn
   component.setView('trash');
   await component.runAction(TRASH_ACTIONS.delete_forever, component.entries[0]);
   assert.equal(asked.length, 1);
-  assert.match(asked[0].message, /destroy this entry/i);
+  assert.match(asked[0].message, /permanently delete this entry/i);
   assert.equal(asked[0].okClass, 'btn-error');
 });
 
@@ -2105,7 +2118,7 @@ test('a dialog that says no stops the action', async () => {
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [trashed('e-1')] : []),
       fetchEntryActions: async () => ({ 'e-1': [TRASH_ACTIONS.delete_forever] }),
-      purgeEntry: async (uuid) => { purged.push(uuid); return {}; },
+      purgeEntries: async (uuids) => { purged.push(...uuids); return { destroyed: uuids }; },
     },
   });
   ctx.AppDialog = { confirm: async () => false };

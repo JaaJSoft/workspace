@@ -43,6 +43,14 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
 // slices rather than asking the server to lift it.
 window.VAULT_ACTIONS_BATCH_SIZE = 200;
 
+// POST /api/v1/vault/entries/purge refuses more than this many UUIDs in one
+// call (MAX_PURGE_BATCH in vault/views/entries.py). Nothing caps a selection -
+// Select all ticks every listed row - so a trash past this size has to be
+// destroyed in slices. Each slice is all-or-nothing on its own; the whole
+// trash in one transaction is what the Empty trash button is for, and it
+// names the vault rather than its rows.
+window.VAULT_PURGE_BATCH_SIZE = 200;
+
 // The swatches the vault offers. Not ICON_PICKER_COLORS: that list is written
 // in full CSS classes, two of which the vault's colour column refuses, and the
 // signed metadata holds a bare daisyUI role rather than a class.
@@ -94,7 +102,7 @@ window.vaultBrowser = (function () {
   // like a reversible one.
   const DESTRUCTIVE = {
     title: 'This cannot be undone',
-    okLabel: 'Delete for good',
+    okLabel: 'Delete permanently',
     okClass: 'btn-error',
   };
 
@@ -104,8 +112,8 @@ window.vaultBrowser = (function () {
   const CONFIRMS = {
     delete_forever: (count) =>
       count === 1
-        ? 'Destroy this entry? It is not in the trash afterwards - it is gone.'
-        : 'Destroy these ' + count + ' entries? They are not in the trash afterwards - they are gone.',
+        ? 'Permanently delete this entry?'
+        : 'Permanently delete these ' + count + ' entries?',
   };
 
   function readJson(elementId) {
@@ -454,7 +462,12 @@ window.vaultBrowser = (function () {
       loadEntryActions: async function () {
         this.actionsGeneration += 1;
         const generation = this.actionsGeneration;
-        const uuids = this.entries.map(function (entry) { return entry.uuid; });
+        // The stored rows, not the opened ones. A row whose signature did not
+        // verify never reaches `entries`, and asking only about those would
+        // leave the trash button reasoning about a subset of what it destroys
+        // - a trash holding nothing else would look empty of anything the
+        // server allows, and there is no per-row menu to fall back on.
+        const uuids = this.entryRows.map(function (row) { return row.uuid; });
         if (!uuids.length) {
           this.entryActions = {};
           return;
@@ -886,26 +899,115 @@ window.vaultBrowser = (function () {
         await this.applyTo(action.id, rows);
       },
 
+      // Whether the whole trash may be destroyed: every row in it was
+      // offered delete_forever by the server. The registry decides, never a
+      // role worked out here - the client's job is to hide what it would be
+      // refused, not to reason about why.
+      //
+      // The whole trash, not visibleEntries(): that one is narrowed by the
+      // search box and the type filter, and a button that destroys forty
+      // rows after asking about three is the worst kind of correct.
+      //
+      // Counted on the stored rows for the same reason trashedRowCount is: a
+      // row that failed to verify is still a row the call destroys, and a
+      // trash holding only those would otherwise disable the one control that
+      // can clear it - they are exactly the rows a user wants gone, and no
+      // menu of their own ever renders.
+      canEmptyTrash: function () {
+        if (this.view !== 'trash' || !this.openVault) return false;
+        const rows = this.entryRows.filter(function (row) { return !!row.deleted_at; });
+        if (!rows.length) return false;
+        const self = this;
+        return rows.every(function (row) {
+          return self.hasAction(row, 'delete_forever');
+        });
+      },
+
+      // One request for a trash of any size. The selection bar's batch is
+      // capped because it names its rows; this one names the vault, so the
+      // client never slices - and a slice failing alone would be exactly the
+      // half-emptied trash the endpoint exists to prevent.
+      // Counted on the stored rows, not on the opened ones: a row whose
+      // signature did not verify never reaches `entries` - it only raises the
+      // tampered banner - and the server destroys it with the rest. Asking
+      // about three entries and destroying five would hide exactly the rows a
+      // user has most reason to keep.
+      trashedRowCount: function () {
+        return this.entryRows.filter(function (row) {
+          return !!row.deleted_at;
+        }).length;
+      },
+
+      emptyTrash: async function () {
+        if (!this.canEmptyTrash()) return;
+        const count = this.trashedRowCount();
+        const unreadable = count - this.trashCount();
+        const question = count === 1
+          ? 'Permanently delete the entry in the trash?'
+          : 'Permanently delete the ' + count + ' entries in the trash?';
+        // The singular is reachable: a trash may hold one row and that row
+        // may be one this device cannot read.
+        let note = '';
+        if (unreadable > 0) {
+          note = count === 1
+            ? ' It cannot be read on this device.'
+            : ' ' + unreadable + ' of them cannot be read on this device.';
+        }
+        const confirmed = await this.confirm(question + note, DESTRUCTIVE);
+        if (!confirmed) return;
+        this.busy = true;
+        let failure = null;
+        try {
+          await window.vaultApi.purgeVaultTrash(this.openVault.uuid);
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          failure = err;
+        } finally {
+          this.busy = false;
+        }
+        await this.load();
+        if (failure) {
+          this.error = 'The trash could not be emptied. The list above is up to date.';
+        }
+      },
+
       // One row or many, the same path. It stops at the first refusal rather
       // than pressing on: a batch that half-happened and said nothing is
       // worse than one that stopped and said where.
+      //
+      // Destroying goes through the batch endpoint whatever the count, so
+      // there is one way to destroy an entry rather than two that could
+      // answer differently. Everything else is a per-row write.
       applyTo: async function (actionId, rows) {
         const self = this;
         const call = {
           trash: function (uuid) { return window.vaultApi.trashEntry(uuid); },
           restore: function (uuid) { return window.vaultApi.restoreEntry(uuid); },
-          delete_forever: function (uuid) { return window.vaultApi.purgeEntry(uuid); },
           // Not a flag the server flips: is_favorite is inside the signed
           // payload, so changing it is a re-signature of the whole record.
           favorite: function (uuid) { return self.setFavorite(uuid, true); },
           unfavorite: function (uuid) { return self.setFavorite(uuid, false); },
         }[actionId];
-        if (!call) return;
+        // The set the server destroys whole or not at all.
+        const batched = {
+          delete_forever: function (uuids) {
+            return window.vaultApi.purgeEntries(uuids);
+          },
+        }[actionId];
+        if (!call && !batched) return;
+        const cap = window.VAULT_PURGE_BATCH_SIZE;
         this.busy = true;
         let failure = null;
         try {
-          for (const row of rows) {
-            await call(row.uuid);
+          if (batched) {
+            const uuids = rows.map(function (row) { return row.uuid; });
+            for (let i = 0; i < uuids.length; i += cap) {
+              await batched(uuids.slice(i, i + cap));
+            }
+          } else {
+            for (const row of rows) {
+              await call(row.uuid);
+            }
           }
         } catch (err) {
           if (err && err.reason === 'locked') return;
@@ -919,7 +1021,7 @@ window.vaultBrowser = (function () {
         await this.load();
         if (failure) {
           this.error =
-            'That change could not be applied to every entry. The listing above is current.';
+            'Some entries could not be changed. The list above is up to date.';
         }
       },
 

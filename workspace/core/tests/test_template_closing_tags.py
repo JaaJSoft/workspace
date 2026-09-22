@@ -87,7 +87,7 @@ class BlockClosingTagAlignmentTests(SimpleTestCase):
         """Every block element gives its content a line of its own."""
         offenders = []
         for path in _templates():
-            lines = path.read_text().splitlines()
+            lines = path.read_text(encoding="utf-8").splitlines()
             for number, line in enumerate(lines, 1):
                 bracket = BRACKET_LINE.match(line)
                 if bracket is None:

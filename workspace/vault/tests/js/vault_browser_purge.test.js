@@ -86,9 +86,12 @@ function browser(options = {}) {
     (_, i) => ({ uuid: `e-${i}`, deleted_at: '2026-09-20T00:00:00Z' }),
   );
   component.selected = component.entries.map((entry) => entry.uuid);
+  // Keyed on the stored rows, the way loadEntryActions asks: the endpoint
+  // answers for a row this device could not open, and the trash button is
+  // the one control that acts on those.
   component.entryActions = Object.fromEntries(
-    component.entries.map((entry) => [
-      entry.uuid,
+    component.entryRows.map((row) => [
+      row.uuid,
       [{ id: 'delete_forever', bulk: true }],
     ]),
   );
@@ -169,6 +172,31 @@ test('the empty-trash button is offered only when every row offers delete_foreve
   });
 
   assert.equal(component.canEmptyTrash(), false);
+});
+
+test('a trash of rows this device cannot read can still be emptied', () => {
+  // Those rows never reach `entries`, so they have no menu of their own
+  // either: gating the button on the opened rows would leave a user looking
+  // at a trash full of entries nothing on the page can remove.
+  const { component } = browser({ count: 0, unreadable: 2 });
+
+  assert.equal(component.trashCount(), 0);
+  assert.equal(component.canEmptyTrash(), true);
+});
+
+test('the actions request covers the rows that did not open', async () => {
+  // canEmptyTrash reads the registry's answer for every stored row, so the
+  // question has to be asked about every stored row.
+  const { component, api } = browser({ count: 2, unreadable: 1 });
+  const asked = [];
+  api.fetchEntryActions = async (uuids) => {
+    asked.push(...uuids);
+    return {};
+  };
+
+  await component.loadEntryActions();
+
+  assert.deepEqual(asked.slice().sort(), ['e-0', 'e-1', 'e-2']);
 });
 
 test('an empty trash offers nothing to empty', () => {
@@ -277,6 +305,20 @@ test('the question is grammatical for a single entry', async () => {
 
   assert.match(asked, /Permanently delete the entry in the trash\?/);
   assert.ok(!/cannot be read/.test(asked));
+});
+
+test('the question is grammatical when the single entry did not open', async () => {
+  const { component } = browser({ count: 0, unreadable: 1 });
+  let asked = '';
+  component.confirm = (message) => {
+    asked = message;
+    return Promise.resolve(false);
+  };
+
+  await component.emptyTrash();
+
+  assert.match(asked, /Permanently delete the entry in the trash\?/);
+  assert.match(asked, /It cannot be read on this device\./);
 });
 
 test('declining the question destroys nothing', async () => {

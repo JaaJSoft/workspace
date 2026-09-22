@@ -462,7 +462,12 @@ window.vaultBrowser = (function () {
       loadEntryActions: async function () {
         this.actionsGeneration += 1;
         const generation = this.actionsGeneration;
-        const uuids = this.entries.map(function (entry) { return entry.uuid; });
+        // The stored rows, not the opened ones. A row whose signature did not
+        // verify never reaches `entries`, and asking only about those would
+        // leave the trash button reasoning about a subset of what it destroys
+        // - a trash holding nothing else would look empty of anything the
+        // server allows, and there is no per-row menu to fall back on.
+        const uuids = this.entryRows.map(function (row) { return row.uuid; });
         if (!uuids.length) {
           this.entryActions = {};
           return;
@@ -902,9 +907,15 @@ window.vaultBrowser = (function () {
       // The whole trash, not visibleEntries(): that one is narrowed by the
       // search box and the type filter, and a button that destroys forty
       // rows after asking about three is the worst kind of correct.
+      //
+      // Counted on the stored rows for the same reason trashedRowCount is: a
+      // row that failed to verify is still a row the call destroys, and a
+      // trash holding only those would otherwise disable the one control that
+      // can clear it - they are exactly the rows a user wants gone, and no
+      // menu of their own ever renders.
       canEmptyTrash: function () {
         if (this.view !== 'trash' || !this.openVault) return false;
-        const rows = this.entries.filter(function (entry) { return entry.trashed; });
+        const rows = this.entryRows.filter(function (row) { return !!row.deleted_at; });
         if (!rows.length) return false;
         const self = this;
         return rows.every(function (row) {
@@ -934,12 +945,14 @@ window.vaultBrowser = (function () {
         const question = count === 1
           ? 'Permanently delete the entry in the trash?'
           : 'Permanently delete the ' + count + ' entries in the trash?';
-        // Never reached in the singular: the button is offered only when a
-        // readable trashed row exists, so an unreadable one always has
-        // company.
-        const note = unreadable > 0
-          ? ' ' + unreadable + ' of them cannot be read on this device.'
-          : '';
+        // The singular is reachable: a trash may hold one row and that row
+        // may be one this device cannot read.
+        let note = '';
+        if (unreadable > 0) {
+          note = count === 1
+            ? ' It cannot be read on this device.'
+            : ' ' + unreadable + ' of them cannot be read on this device.';
+        }
         const confirmed = await this.confirm(question + note, DESTRUCTIVE);
         if (!confirmed) return;
         this.busy = true;

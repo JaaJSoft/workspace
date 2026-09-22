@@ -13,6 +13,7 @@ from workspace.common.logging import scrub
 
 from ..errors import ImportsError
 from ..models import ImportConnection, ImportJob
+from ..providers.base import KIND_CONTACTS
 from ..providers.registry import provider_registry
 from .url_guard import check_remote_url
 
@@ -24,6 +25,10 @@ class UnknownProvider(ImportsError):
 
 
 class ConnectionBusy(ImportsError):
+    pass
+
+
+class UnsupportedKind(ImportsError):
     pass
 
 
@@ -121,6 +126,21 @@ def browse_files(connection, entry_id):
         source.close()
     entries.sort(key=lambda e: (not e.is_dir, e.name.lower()))
     return entries
+
+
+def browse_address_books(connection):
+    """The connection's address books, by name."""
+    prov = get_available_provider(connection.provider)
+    if KIND_CONTACTS not in prov.kinds:
+        raise UnsupportedKind(f"{prov.name} does not provide contacts.")
+    check_remote_url(connection.base_url)
+    source = prov.contact_source(connection)
+    try:
+        books = list(source.address_books())
+    finally:
+        source.close()
+    books.sort(key=lambda book: book.name.lower())
+    return books
 
 
 def delete_connection(connection):

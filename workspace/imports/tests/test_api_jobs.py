@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import override_settings
 from rest_framework.test import APITestCase
@@ -179,3 +180,26 @@ class JobsApiTests(APITestCase):
         job = self.client.get(f"{BASE}/jobs/{response.json()['uuid']}").json()
         self.assertEqual(job["status"], "completed")
         self.assertEqual(job["stats"]["files"]["files"], 3)
+
+    def test_create_with_contacts_options(self):
+        response = self._create(
+            kinds=["contacts"], options={"contacts": {"books": [{"id": "/contacts"}]}}
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(
+            response.json()["options"]["contacts"],
+            {"books": [{"id": "/contacts", "target": "mine"}]},
+        )
+
+    def test_create_refuses_a_group_the_user_is_not_in(self):
+        other = Group.objects.create(name="Other")
+        response = self._create(
+            kinds=["contacts"],
+            options={
+                "contacts": {
+                    "books": [{"id": "/contacts", "target": f"group:{other.pk}"}]
+                }
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("contacts", response.json()["options"])

@@ -6,6 +6,7 @@ must name the person it became, or the next run could not tell it from a card
 never seen and would import the whole book again.
 """
 
+import base64
 import logging
 import re
 from itertools import batched
@@ -36,6 +37,10 @@ FETCH_BATCH = 50
 _FOLD_RE = re.compile(r"\r?\n[ \t]")
 _GROUP_KIND_RE = re.compile(
     r"^(?:X-ADDRESSBOOKSERVER-)?KIND(?:;[^:\r\n]*)?:[ \t]*group[ \t]*\r?$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_PHOTO_URL_RE = re.compile(
+    r"^PHOTO(?:;[^:\r\n]*)?:(?P<url>https?://\S+?)[ \t]*(?=\r?$)",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -78,6 +83,22 @@ def file_in_category_lists(person, scope):
                 person_list = PersonList.objects.get(**scope, name=name)
         add_members(person_list, [person])
     return created
+
+
+def inline_linked_photo(text, fetch_photo):
+    """The card with a photo given by URL swapped for the image itself, so the
+    People import stores it as the avatar like an inline one. The card is
+    returned untouched when it links no photo or the photo cannot be had."""
+    unfolded = unfold(text)
+    match = _PHOTO_URL_RE.search(unfolded)
+    if match is None:
+        return text
+    fetched = fetch_photo(match.group("url"))
+    if fetched is None:
+        return text
+    data, subtype = fetched
+    line = f"PHOTO:data:image/{subtype};base64,{base64.b64encode(data).decode()}"
+    return unfolded[: match.start()] + line + unfolded[match.end() :]
 
 
 class AddressBookChoiceSerializer(serializers.Serializer):
@@ -279,7 +300,7 @@ class ContactsImporter(Importer):
                     continue
                 if stop := ctx.should_stop():
                     return stop
-                self._import_card(ctx, card, scope, card.etag or etags[card.id])
+                self._import_card(ctx, source, card, scope, card.etag or etags[card.id])
             for card_id in batch:
                 if card_id not in fetched:
                     self._fail(
@@ -291,16 +312,17 @@ class ContactsImporter(Importer):
         for card in groups:
             if stop := ctx.should_stop():
                 return stop
-            self._import_card(ctx, card, scope, card.etag or etags[card.id])
+            self._import_card(ctx, source, card, scope, card.etag or etags[card.id])
         return Outcome.DONE
 
-    def _import_card(self, ctx, card, scope, etag):
+    def _import_card(self, ctx, source, card, scope, etag):
         ctx.current = card.id
+        text = inline_linked_photo(card.text, source.fetch_photo)
         try:
             # The contact and its DONE record commit together: a worker dying
             # between the two would leave a contact the next run cannot place.
             with transaction.atomic():
-                report = import_vcards(card.text, **scope)
+                report = import_vcards(text, **scope)
                 new_lists = sum(
                     file_in_category_lists(person, scope) for person in report.persons
                 )

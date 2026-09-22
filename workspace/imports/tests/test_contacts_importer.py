@@ -1,4 +1,5 @@
 from datetime import timedelta
+from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -6,6 +7,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
+from PIL import Image
 
 from workspace.imports.importers.base import (
     ImportContext,
@@ -17,6 +19,7 @@ from workspace.imports.importers.contacts import (
     ContactsImporter,
     ContactsImportOptionsSerializer,
     categories,
+    inline_linked_photo,
     is_group_card,
     unfold,
 )
@@ -44,6 +47,12 @@ def card(uid, name, *lines, etag="e1", book=BOOK):
     return RemoteCard(
         id=f"{book}/{uid or name}.vcf", etag=etag, text=vcard(uid, name, *lines)
     )
+
+
+def tiny_png():
+    buf = BytesIO()
+    Image.new("RGB", (8, 6), (20, 120, 220)).save(buf, format="PNG")
+    return buf.getvalue()
 
 
 class CardHelpersTests(SimpleTestCase):
@@ -499,3 +508,47 @@ class CategoriesTests(ContactsImporterTestCase):
         # Person should be a member of the list.
         friends = PersonList.objects.get(owner=self.user, name="Friends")
         self.assertIn(person, friends.members.all())
+
+
+class InlineLinkedPhotoTests(SimpleTestCase):
+    def test_a_folded_url_is_found_and_replaced_by_the_image(self):
+        seen = []
+        text = (
+            "BEGIN:VCARD\r\nPHOTO;VALUE=uri:https://x/very/long\r\n /path.png\r\n"
+            "END:VCARD\r\n"
+        )
+        out = inline_linked_photo(
+            text, lambda url: seen.append(url) or (b"\x89PNG", "png")
+        )
+        self.assertEqual(seen, ["https://x/very/long/path.png"])
+        self.assertIn("\r\nPHOTO:data:image/png;base64,iVBORw==\r\nEND:VCARD", out)
+
+    def test_an_inline_photo_is_left_alone(self):
+        text = "BEGIN:VCARD\r\nPHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQ\r\nEND:VCARD\r\n"
+        self.assertEqual(
+            inline_linked_photo(text, lambda url: self.fail("fetched")), text
+        )
+
+    def test_a_photo_that_cannot_be_fetched_leaves_the_card_as_it_was(self):
+        text = "BEGIN:VCARD\r\nPHOTO:https://x/p.png\r\nEND:VCARD\r\n"
+        self.assertEqual(inline_linked_photo(text, lambda url: None), text)
+
+
+class LinkedPhotoTests(ContactsImporterTestCase):
+    URL = "https://x/remote.php/dav/addressbooks/users/a/contacts/ann.vcf?photo"
+
+    def test_a_linked_photo_becomes_the_avatar(self):
+        self.provider.photos = {self.URL: (tiny_png(), "png")}
+        self.provider.cards[BOOK] = [card("ann", "Ann", f"PHOTO;VALUE=uri:{self.URL}")]
+        self._run(self._job())
+        ann = Person.objects.get(display_name="Ann")
+        self.assertTrue(ann.has_avatar)
+        self.assertNotIn("PHOTO", ann.extra_properties)
+        self.assertEqual(self.provider.last_contacts.photo_calls, [self.URL])
+
+    def test_a_photo_that_cannot_be_fetched_keeps_its_link(self):
+        self.provider.cards[BOOK] = [card("ann", "Ann", f"PHOTO:{self.URL}")]
+        self._run(self._job())
+        ann = Person.objects.get(display_name="Ann")
+        self.assertFalse(ann.has_avatar)
+        self.assertEqual(ann.extra_properties["PHOTO"][0]["value"], self.URL)

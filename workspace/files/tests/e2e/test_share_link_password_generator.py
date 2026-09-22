@@ -26,6 +26,7 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
             mime_type="text/plain",
         )
         self.login_as(self.user)
+        self.context.grant_permissions(["clipboard-read", "clipboard-write"])
 
     def _open_link_form(self):
         self.page.goto(f"{self.live_server_url}/files")
@@ -81,6 +82,24 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
         dialog.get_by_role("button", name="Regenerate").click()
         expect(field).not_to_have_value(first)
         self.assertTrue(field.input_value())
+
+    def test_copy_puts_the_displayed_value_on_the_clipboard(self):
+        dialog = self._open_link_form()
+        dialog.get_by_role("button", name="Generate a password").click()
+        shown = dialog.locator(".font-mono.break-all")
+        expect(shown).not_to_be_empty()
+        displayed = shown.inner_text()
+
+        dialog.get_by_role("button", name="Copy").click()
+
+        # The write is async and wait_for_function does not await a Promise
+        # (it reads one as truthy), so the clipboard is polled from here.
+        read = "() => navigator.clipboard.readText()"
+        for _ in range(30):
+            if self.page.evaluate(read) == displayed:
+                break
+            self.page.wait_for_timeout(100)
+        self.assertEqual(self.page.evaluate(read), displayed)
 
     def test_opening_the_panel_scrolls_it_into_the_modal(self):
         # 720px is the height where the panel's buttons open below the modal's

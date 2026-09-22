@@ -403,6 +403,16 @@ def _name_value(person):
     )
 
 
+def _address_value(entry):
+    return vobject.vcard.Address(
+        street=entry.get("street", ""),
+        city=entry.get("city", ""),
+        region=entry.get("region", ""),
+        code=entry.get("postal_code", ""),
+        country=entry.get("country", ""),
+    )
+
+
 def person_to_vcard(person, *, photo=None, photo_type="webp"):
     """A vCard 4.0 component for the person; ``photo`` is inlined when given."""
     card = vobject.vCard()
@@ -423,14 +433,7 @@ def person_to_vcard(person, *, photo=None, photo_type="webp"):
     for entry in person.phones or []:
         _add_typed(card, "tel", entry["value"], entry.get("type"))
     for entry in person.addresses or []:
-        address = vobject.vcard.Address(
-            street=entry.get("street", ""),
-            city=entry.get("city", ""),
-            region=entry.get("region", ""),
-            code=entry.get("postal_code", ""),
-            country=entry.get("country", ""),
-        )
-        _add_typed(card, "adr", address, entry.get("type"))
+        _add_typed(card, "adr", _address_value(entry), entry.get("type"))
     if person.notes:
         _add(card, "note", person.notes)
     if photo is not None:
@@ -448,6 +451,41 @@ def person_to_vcard(person, *, photo=None, photo_type="webp"):
                 group=entry.get("group"),
             )
     return card
+
+
+def person_to_qr_vcard(person, *, include_notes=True):
+    """The person as a compact vCard 3.0, serialized.
+
+    3.0 rather than the 4.0 the file export writes: this card is read by
+    whatever camera app the other phone ships with, and 3.0 is the version
+    every one of them understands. Everything kept only so a re-import round
+    trips - the photo, the UID, the properties with no column - is left out,
+    because a QR code holds about two kilobytes in total and an avatar alone
+    is past that.
+    """
+    card = vobject.vCard()
+    _add(card, "version", "3.0")
+    _add(card, "fn", person.display_name)
+    extra = person.extra_properties or {}
+    if person.given_name or person.family_name or "N" in extra:
+        _add(card, "n", _name_value(person))
+    if person.organization:
+        _add(card, "org", [person.organization])
+    if person.title:
+        _add(card, "title", person.title)
+    if person.birthday:
+        _add(card, "bday", person.birthday.isoformat())
+    for entry in person.emails or []:
+        _add_typed(card, "email", entry["value"], entry.get("type"))
+    for entry in person.phones or []:
+        _add_typed(card, "tel", entry["value"], entry.get("type"))
+    for entry in person.addresses or []:
+        _add_typed(card, "adr", _address_value(entry), entry.get("type"))
+    for entry in extra.get("URL", []):
+        _add_raw(card, "URL", entry.get("value", ""))
+    if include_notes and person.notes:
+        _add(card, "note", person.notes)
+    return card.serialize()
 
 
 def list_to_vcard(person_list, members):

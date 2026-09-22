@@ -1,4 +1,4 @@
-{# Dialogs of the page shell: new contact, new or renamed list, vCard import and export. The panel's own dialogs live in person_panel.html. #}
+{# Dialogs of the page shell: new contact, new or renamed list, vCard import and export, and a contact's QR code. The panel's own dialogs live in person_panel.html. #}
 <dialog
   id="people-person-dialog"
   x-ref="personDialog"
@@ -281,6 +281,66 @@
         ></button>
       </div>
     </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>
+
+<dialog id="people-qrcode-dialog" x-ref="qrDialog" class="modal">
+  <div class="modal-box max-w-sm">
+    {% include "people/ui/partials/_dialog_header.html" with icon="qr-code" title="QR code" subtitle_expr="qrPerson ? qrPerson.name : ''" close_expr="$refs.qrDialog.close()" %}
+    {% comment %}
+      x-if, not x-show: the image url is built from the contact the dialog
+      was opened on, so the element must be created once that is known
+      rather than at page load with an empty src.
+    {% endcomment %}
+    <template x-if="qrPerson">
+      <div class="space-y-3">
+        <div
+          class="bg-white rounded-box p-4 flex items-center justify-center"
+          x-show="!qrError"
+        >
+          {% comment %}
+            Rendered server-side and always dark-on-white: a scanner reads
+            the image, not the page, so the theme never reaches it.
+          {% endcomment %}
+          <img
+            :src="qrSrc()"
+            alt="QR code"
+            :alt="'QR code for ' + qrPerson.name"
+            class="w-56 h-56"
+            @error="qrLoadFailed()"
+          />
+        </div>
+        <p class="text-xs text-base-content/60 text-center" x-show="!qrError">
+          Point another phone's camera at it to add the contact.
+        </p>
+        <template x-if="qrError === 'too_large'">
+          <inline-alert type="error" message="This contact holds more than a QR code can carry. Export it as a .vcf file instead."></inline-alert>
+        </template>
+        <template x-if="qrError === 'failed'">
+          <inline-alert type="error" message="Could not load the QR code. Reload the page and try again."></inline-alert>
+        </template>
+        <div class="modal-action">
+          <a
+            class="btn btn-ghost btn-sm"
+            :href="qrSrc('png')"
+            :download="qrPerson.name + '.png'"
+            x-show="!qrError"
+          >
+            Download PNG
+          </a>
+          <button
+            type="button"
+            class="btn btn-module btn-sm"
+            @click="$refs.qrDialog.close()"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </template>
   </div>
   <form method="dialog" class="modal-backdrop">
     <button type="submit">close</button>

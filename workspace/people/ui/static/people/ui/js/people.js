@@ -37,6 +37,14 @@ window.peopleHelpers = {
     const qs = params.toString();
     return qs ? `/api/v1/people/export?${qs}` : '/api/v1/people/export';
   },
+
+  // The QR image for one contact: svg on screen, png for a download that
+  // lands in a photo gallery or a print job.
+  qrUrl(uuid, kind = 'svg') {
+    const params = new URLSearchParams({ person: uuid });
+    if (kind !== 'svg') params.set('kind', kind);
+    return `/api/v1/people/qrcode?${params.toString()}`;
+  },
 };
 
 window.peopleApp = function peopleApp(config) {
@@ -55,6 +63,10 @@ window.peopleApp = function peopleApp(config) {
     // The contact the export dialog was opened on, when it was: the select
     // offers it as a target only then.
     exportPerson: null,
+    // The contact the QR dialog is showing, and why its image did not come
+    // back: '' while it loads or once it has, 'too_large' or 'failed'.
+    qrPerson: null,
+    qrError: '',
     mineCount: 0,
     importResult: null,
     importError: '',
@@ -203,6 +215,10 @@ window.peopleApp = function peopleApp(config) {
       }
       if (action.id === 'export') {
         this.openExport(`person:${data.uuid}`, data);
+        return;
+      }
+      if (action.id === 'qrcode') {
+        this.openQrCode(data);
         return;
       }
       // The other actions open a dialog the panel owns: open the contact
@@ -476,6 +492,27 @@ window.peopleApp = function peopleApp(config) {
 
     exportHref() {
       return window.peopleHelpers.exportUrl(this.exportForm.target);
+    },
+
+    // ---- QR code ---------------------------------------------------------
+
+    openQrCode(person) {
+      this.qrPerson = person;
+      this.qrError = '';
+      this.$refs.qrDialog.showModal();
+    },
+
+    qrSrc(kind = 'svg') {
+      if (!this.qrPerson) return '';
+      return window.peopleHelpers.qrUrl(this.qrPerson.uuid, kind);
+    },
+
+    // An <img> error says nothing about why. Asking again tells a contact
+    // too large for a QR (413, answered by the .vcf export) apart from an
+    // expired session or a server fault.
+    async qrLoadFailed() {
+      const res = await fetch(this.qrSrc()).catch(() => null);
+      this.qrError = res && res.status === 413 ? 'too_large' : 'failed';
     },
 
     // Membership is changed from the panel, which knows nothing of the

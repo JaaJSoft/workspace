@@ -35,6 +35,14 @@ test('listUrl only carries the filters that are set', () => {
   assert.equal(ctx.peopleHelpers.listUrl('/people', { listUuid: 'abc' }), '/people?list=abc');
 });
 
+test('qrUrl asks for svg by default and names the kind otherwise', () => {
+  const ctx = load();
+  const url = ctx.peopleHelpers.qrUrl;
+  assert.equal(url('abc'), '/api/v1/people/qrcode?person=abc');
+  assert.equal(url('abc', 'svg'), '/api/v1/people/qrcode?person=abc');
+  assert.equal(url('abc', 'png'), '/api/v1/people/qrcode?person=abc&kind=png');
+});
+
 test('exportUrl maps every target onto the one export endpoint', () => {
   const ctx = load();
   const url = ctx.peopleHelpers.exportUrl;
@@ -281,4 +289,27 @@ test('a list context menu needs no request and routes rename and delete', () => 
   app.openCtxMenu({ preventDefault() {}, clientX: 0, clientY: 0 }, 'list', { uuid: 'l1', name: 'Family' });
   app.ctxListAction('delete');
   assert.deepStrictEqual(calls, [['rename', 'l1'], ['delete', 'l1']]);
+});
+
+test('a QR image failure says too large only when the server answered 413', async () => {
+  const cases = [
+    [() => Promise.resolve({ status: 413 }), 'too_large'],
+    [() => Promise.resolve({ status: 500 }), 'failed'],
+    [() => Promise.resolve({ status: 403 }), 'failed'],
+    [() => Promise.reject(new Error('offline')), 'failed'],
+  ];
+  for (const [fetchImpl, expected] of cases) {
+    const requested = [];
+    const ctx = load((url) => {
+      requested.push(url);
+      return fetchImpl();
+    });
+    const app = ctx.peopleApp({});
+    app.$refs = { qrDialog: { showModal() {} } };
+    app.openQrCode({ uuid: 'abc', name: 'Alice' });
+    assert.equal(app.qrError, '');
+    await app.qrLoadFailed();
+    assert.equal(app.qrError, expected);
+    assert.deepEqual(requested, ['/api/v1/people/qrcode?person=abc']);
+  }
 });

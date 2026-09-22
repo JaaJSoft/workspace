@@ -53,6 +53,17 @@
       >
         <i data-lucide="download" class="w-4 h-4"></i>
       </a>
+      {# Nested x-data: the dialog and its state live on the page shell, and a bare name resolves up to it. #}
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square flex-shrink-0"
+        title="Show QR code"
+        aria-label="Show QR code"
+        x-show="can('qrcode')"
+        @click="openQrCode({ uuid: person.uuid, name: person.display_name })"
+      >
+        <i data-lucide="qr-code" class="w-4 h-4"></i>
+      </button>
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-square flex-shrink-0"

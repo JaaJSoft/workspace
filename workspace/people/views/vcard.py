@@ -6,16 +6,28 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.http_ranges import safe_filename
+from workspace.common.mixins import CacheControlMixin
+from workspace.common.qr import QRTooLarge, qr_png, qr_svg
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..queries import reachable_list, reachable_person, user_person_lists, user_persons
 from ..serializers import parse_scope
+from ..services.qr import person_qr_code
 from ..services.vcard import VCardError
 from ..services.vcard_export import export_vcards
 from ..services.vcard_import import import_vcards
 
 IMPORT_MAX_SIZE = 20 * 1024 * 1024
 VCARD_CONTENT_TYPE = "text/vcard; charset=utf-8"
+
+# The SVG is what the dialog shows - it stays sharp at whatever size the
+# page gives it - and the PNG is what a download hands to a gallery or a
+# print job, so it carries its resolution in the file.
+QR_RENDERERS = {
+    "svg": (qr_svg, "image/svg+xml", 8),
+    "png": (qr_png, "image/png", 12),
+}
+QR_BORDER = 4
 
 
 def _vcf_response(text, filename):
@@ -148,3 +160,71 @@ class PersonExportView(APIView):
             filename = group.name if group is not None else "my-contacts"
         text = export_vcards(persons, lists.prefetch_related("members"))
         return _vcf_response(text, filename)
+
+
+@extend_schema(tags=["People"])
+class PersonQRCodeView(CacheControlMixin, APIView):
+    """One contact as a QR code: pointing another phone's camera at it files
+    the card in its address book, no file and no account in between."""
+
+    # A contact's card is personal data: `private` alone still lets the
+    # browser keep it on disk, where the next account on a shared machine
+    # finds it. The image is cheap to rebuild, so nothing is stored.
+    cache_no_store = True
+
+    @extend_schema(
+        summary="Render a contact as a QR code",
+        parameters=[
+            OpenApiParameter("person", str, description="The contact.", required=True),
+            OpenApiParameter(
+                "kind",
+                str,
+                description="`svg` (default) or `png`.",
+                enum=["svg", "png"],
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(description="An SVG or PNG image"),
+            400: None,
+            404: None,
+            413: OpenApiResponse(description="The contact is too large for a QR code."),
+        },
+    )
+    def get(self, request):
+        person_uuid, error = _uuid_param(request, "person")
+        if error is not None:
+            return error
+        if person_uuid is None:
+            return Response(
+                {"person": ["No contact given."]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # `kind`, not `format`: DRF reserves the latter for picking a renderer
+        # and answers 404 for a value none of them declares.
+        kind = request.query_params.get("kind", "svg").lower()
+        if kind not in QR_RENDERERS:
+            return Response(
+                {"kind": ["Unsupported image kind. Use svg or png."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        person = reachable_person(request.user, person_uuid)
+        if person is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        try:
+            code = person_qr_code(person)
+        except QRTooLarge:
+            return Response(
+                {
+                    "person": [
+                        "This contact holds more than a QR code can carry. "
+                        "Export it as a .vcf file instead."
+                    ]
+                },
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        render, content_type, scale = QR_RENDERERS[kind]
+        response = HttpResponse(
+            render(code, scale=scale, border=QR_BORDER), content_type=content_type
+        )
+        filename = f"{safe_filename(person.display_name)}.{kind}"
+        response["Content-Disposition"] = f'inline; filename="{filename}"'
+        return response

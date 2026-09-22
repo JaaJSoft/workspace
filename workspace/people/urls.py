@@ -26,6 +26,11 @@ urlpatterns = [
         name="person-export",
     ),
     path(
+        "api/v1/people/qrcode",
+        vcard.PersonQRCodeView.as_view(),
+        name="person-qrcode",
+    ),
+    path(
         "api/v1/people/lists/<uuid:uuid>",
         lists.PersonListDetailView.as_view(),
         name="person-list-detail",

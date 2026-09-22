@@ -499,7 +499,15 @@ window.importsApp = function importsApp() {
       const conn = this.wizard.connection;
       if (!conn) return [];
       const provider = this.providers.find((p) => p.slug === conn.provider);
-      return (provider ? provider.kinds : []).map((kind) => ({
+      const kinds = provider ? provider.kinds : [];
+      // Known kinds show in the step 3 / run order (KIND_LABELS); anything
+      // else keeps the order the provider declared it in.
+      const known = Object.keys(KIND_LABELS);
+      const ordered = [
+        ...known.filter((kind) => kinds.includes(kind)),
+        ...kinds.filter((kind) => !known.includes(kind)),
+      ];
+      return ordered.map((kind) => ({
         kind,
         ...(KIND_LABELS[kind] || { name: kind, description: '' }),
       }));

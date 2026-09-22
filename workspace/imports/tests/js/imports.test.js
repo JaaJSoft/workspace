@@ -84,6 +84,14 @@ test('wizard kinds come from the selected connection provider', () => {
   assert.deepStrictEqual(Array.from(component.wizard.kinds), ['photos']);
 });
 
+test('wizard kinds put files before contacts regardless of provider order', () => {
+  const { component } = app();
+  component.providers = [{ slug: 'fake', kinds: ['contacts', 'files', 'photos'] }];
+  component.wizard.connection = { provider: 'fake' };
+  const kinds = Array.from(component.wizardKinds()).map((k) => k.kind);
+  assert.deepStrictEqual(kinds, ['files', 'contacts', 'photos']);
+});
+
 test('editing a connection only sends the fields that changed', () => {
   const { ctx } = app();
   const original = { label: 'Old', base_url: 'https://a', username: 'me' };

@@ -224,21 +224,61 @@
             </div>
             <div class="form-control">
               <label class="label py-0.5"><span class="label-text text-xs">Password (optional)</span></label>
-              <input
-                type="password"
-                class="input input-bordered input-sm"
-                x-model="newLinkPassword"
-                placeholder="Leave empty for no password"
-              />
+              <div class="flex items-center gap-1.5">
+                <input
+                  id="share-link-password"
+                  :type="linkPasswordRevealed ? 'text' : 'password'"
+                  class="input input-bordered input-sm flex-1 min-w-0"
+                  :class="linkPasswordRevealed && 'font-mono'"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                  x-model="newLinkPassword"
+                  @input="noteLinkPasswordEdited()"
+                  placeholder="Leave empty for no password"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square"
+                  :title="linkPasswordRevealed ? 'Hide password' : 'Show password'"
+                  :aria-label="linkPasswordRevealed ? 'Hide password' : 'Show password'"
+                  @click="linkPasswordRevealed = !linkPasswordRevealed"
+                >
+                  <i data-lucide="eye" class="w-4 h-4" x-show="!linkPasswordRevealed"></i>
+                  <i data-lucide="eye-off" class="w-4 h-4" x-show="linkPasswordRevealed"></i>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-square"
+                  :class="linkGeneratorOpen ? 'btn-module' : 'btn-ghost'"
+                  title="Generate a password"
+                  aria-label="Generate a password"
+                  @click="toggleLinkGenerator()"
+                >
+                  <i data-lucide="dices" class="w-4 h-4"></i>
+                </button>
+              </div>
             </div>
-            <div class="flex gap-2 justify-end">
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs"
-                @click="showLinkForm = false"
+            {% comment %}
+              x-if, not x-show: the panel draws a password as it is constructed,
+              so a mounted-but-hidden one would hold a value nobody asked for.
+              Closing it runs destroy(), which drops what it held.
+            {% endcomment %}
+            <template x-if="linkGeneratorOpen">
+              {# The modal scrolls its own body, so on a short screen the panel would open below the fold. #}
+              <div
+                x-init="$nextTick(() => $el.scrollIntoView({ block: 'nearest' }))"
+                @password-apply="applyGeneratedLinkPassword($event.detail.value)"
+                @password-regenerate="trackGeneratedLinkPassword($event.detail.value)"
+                @password-copy="copyGeneratedLinkPassword($event.detail.value)"
               >
-                Cancel
-              </button>
+                <inline-alert type="error" class="mb-2" x-show="linkGeneratorError" x-cloak>
+                <span x-text="linkGeneratorError"></span>
+                </inline-alert>
+                {% include "ui/partials/password_generator.html" with show_apply=True %}
+              </div>
+            </template>
+            <div class="flex gap-2 justify-end">
+              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">Cancel</button>
               <button
                 type="button"
                 class="btn btn-module btn-xs"

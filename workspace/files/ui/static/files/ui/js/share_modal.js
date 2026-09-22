@@ -29,6 +29,19 @@ window.shareModal = function shareModal() {
     newLinkMode: 'read',
     newLinkMaxBytes: '',
     newLinkMaxCount: '',
+    // The generator is mounted under x-if, so closing it tears the panel down
+    // and its destroy() drops the value it drew.
+    linkGeneratorOpen: false,
+    // Whether the password field still holds the panel's value. A redraw after
+    // Use rewrites the field only while this holds, so the link is never
+    // created with one password while the panel shows, and copies, another.
+    linkPasswordFollowsGenerator: false,
+    // The field is masked until the sender asks otherwise or applies a
+    // generated value: they have to pass that one on with the link.
+    linkPasswordRevealed: false,
+    // Reported beside the panel, not through AppAlert: the toasts render
+    // under the dialog's backdrop, out of sight of whoever pressed Copy.
+    linkGeneratorError: '',
 
     // A share is addressed to a user or a group, and the two id spaces
     // overlap, so every entry is keyed by both.
@@ -275,12 +288,59 @@ window.shareModal = function shareModal() {
       this.pendingRemovals = new Set();
       this.pendingPermissionChanges = new Map();
       this.shareLinks = [];
+      this.closeLinkForm();
+    },
+
+    closeLinkForm() {
       this.showLinkForm = false;
       this.newLinkExpiry = '';
       this.newLinkPassword = '';
       this.newLinkMode = 'read';
       this.newLinkMaxBytes = '';
       this.newLinkMaxCount = '';
+      this.linkGeneratorOpen = false;
+      this.linkPasswordFollowsGenerator = false;
+      this.linkPasswordRevealed = false;
+      this.linkGeneratorError = '';
+    },
+
+    // --- Link password generator ---
+
+    toggleLinkGenerator() {
+      this.linkGeneratorOpen = !this.linkGeneratorOpen;
+      this.linkGeneratorError = '';
+    },
+
+    applyGeneratedLinkPassword(value) {
+      if (!value) return;
+      this.newLinkPassword = value;
+      this.linkPasswordFollowsGenerator = true;
+      this.linkPasswordRevealed = true;
+      this.linkGeneratorOpen = false;
+      this.linkGeneratorError = '';
+    },
+
+    // A failed draw announces an empty value; blanking a password the sender
+    // already applied would silently drop the protection from the link.
+    trackGeneratedLinkPassword(value) {
+      if (!this.linkPasswordFollowsGenerator || !value) return;
+      this.newLinkPassword = value;
+    },
+
+    noteLinkPasswordEdited() {
+      this.linkPasswordFollowsGenerator = false;
+    },
+
+    // The plain clipboard, with no clearing timer: the sender is about to
+    // paste this next to the link, and taking it back would lose it.
+    async copyGeneratedLinkPassword(value) {
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        this.linkGeneratorError = '';
+      } catch (err) {
+        this.linkGeneratorError = 'That password could not be copied.';
+      }
     },
 
     // --- Share Links ---
@@ -348,12 +408,7 @@ window.shareModal = function shareModal() {
           credentials: 'same-origin',
         });
         if (resp.ok) {
-          this.showLinkForm = false;
-          this.newLinkExpiry = '';
-          this.newLinkPassword = '';
-          this.newLinkMode = 'read';
-          this.newLinkMaxBytes = '';
-          this.newLinkMaxCount = '';
+          this.closeLinkForm();
           await this.loadShareLinks();
         }
       } catch (e) {}

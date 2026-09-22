@@ -13,10 +13,13 @@ from itertools import batched
 from django.conf import settings
 from django.db import DataError, IntegrityError, transaction
 from rest_framework import serializers
+from vobject.vcard import stringToTextValues
 
 from workspace.common.logging import scrub
+from workspace.people.models import PersonList
 from workspace.people.queries import user_persons
 from workspace.people.serializers import SCOPE_MINE, parse_scope
+from workspace.people.services.lists import add_members, create_list
 from workspace.people.services.vcard import VCardError
 from workspace.people.services.vcard_import import import_vcards
 
@@ -36,6 +39,8 @@ _GROUP_KIND_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+_LIST_NAME_MAX = PersonList._meta.get_field("name").max_length
+
 
 def unfold(text):
     """The card with its continuation lines joined back (RFC 6350 3.2)."""
@@ -44,6 +49,35 @@ def unfold(text):
 
 def is_group_card(text):
     return _GROUP_KIND_RE.search(unfold(text)) is not None
+
+
+def categories(person):
+    """The category names on the person's card, in order, each once."""
+    names = []
+    for entry in (person.extra_properties or {}).get("CATEGORIES", []):
+        for value in stringToTextValues(entry.get("value", "")):
+            name = " ".join(value.split())[:_LIST_NAME_MAX]
+            if name and name not in names:
+                names.append(name)
+    return names
+
+
+def file_in_category_lists(person, scope):
+    """Put the person in one list per category of its card, creating the
+    missing lists; returns how many were created."""
+    created = 0
+    for name in categories(person):
+        person_list = PersonList.objects.filter(**scope, name=name).first()
+        if person_list is None:
+            try:
+                with transaction.atomic():
+                    person_list = create_list(**scope, name=name)
+                created += 1
+            except IntegrityError:
+                # Another slice created it between the lookup and the insert.
+                person_list = PersonList.objects.get(**scope, name=name)
+        add_members(person_list, [person])
+    return created
 
 
 class AddressBookChoiceSerializer(serializers.Serializer):
@@ -267,6 +301,9 @@ class ContactsImporter(Importer):
             # between the two would leave a contact the next run cannot place.
             with transaction.atomic():
                 report = import_vcards(card.text, **scope)
+                new_lists = sum(
+                    file_in_category_lists(person, scope) for person in report.persons
+                )
                 # A group card stores a list, not a person: recorded without a
                 # target, it is imported again on every run, which is harmless.
                 target = report.persons[0].uuid if report.persons else None
@@ -287,7 +324,7 @@ class ContactsImporter(Importer):
         ctx.stat("cards")
         ctx.stat("created", report.created)
         ctx.stat("updated", report.updated)
-        ctx.stat("lists", report.lists)
+        ctx.stat("lists", report.lists + new_lists)
 
     def _fail(self, ctx, card_id, message, etag):
         ctx.report_item(

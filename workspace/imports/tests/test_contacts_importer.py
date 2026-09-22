@@ -16,12 +16,14 @@ from workspace.imports.importers.base import (
 from workspace.imports.importers.contacts import (
     ContactsImporter,
     ContactsImportOptionsSerializer,
+    categories,
     is_group_card,
     unfold,
 )
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
 from workspace.imports.providers.base import RemoteCard
 from workspace.people.models import Person, PersonList
+from workspace.people.services.lists import create_list
 from workspace.people.services.persons import delete_person
 
 from .fakes import fake_provider
@@ -384,3 +386,66 @@ class ContactsImporterTests(ContactsImporterTestCase):
             ),
             "3 contacts added, 1 updated, 2 lists, 1 failed",
         )
+
+
+class CategoriesTests(ContactsImporterTestCase):
+    def _lists(self, **scope):
+        return {
+            person_list.name: sorted(
+                person_list.members.values_list("display_name", flat=True)
+            )
+            for person_list in PersonList.objects.filter(**scope)
+        }
+
+    def test_categories_become_lists_of_the_target_address_book(self):
+        self.provider.cards[BOOK] = [
+            card("ann", "Ann", "CATEGORIES:Friends,Family"),
+            card("bob", "Bob", "CATEGORIES:Friends"),
+        ]
+        job = self._job()
+        self._run(job)
+        self.assertEqual(
+            self._lists(owner=self.user),
+            {"Family": ["Ann"], "Friends": ["Ann", "Bob"]},
+        )
+        self.assertEqual(job.stats["contacts"]["lists"], 2)
+
+    def test_lists_go_to_the_group_when_the_book_does(self):
+        self.provider.cards[BOOK] = [card("ann", "Ann", "CATEGORIES:Clients")]
+        self._run(self._job({"id": BOOK, "target": f"group:{self.team.pk}"}))
+        self.assertEqual(self._lists(group=self.team), {"Clients": ["Ann"]})
+        self.assertEqual(self._lists(owner=self.user), {})
+
+    def test_an_escaped_comma_stays_in_the_name(self):
+        self.provider.cards[BOOK] = [
+            card("ann", "Ann", r"CATEGORIES:Smith\, Jones,VIP")
+        ]
+        self._run(self._job())
+        self.assertEqual(sorted(self._lists(owner=self.user)), ["Smith, Jones", "VIP"])
+
+    def test_an_existing_list_of_the_same_name_is_reused(self):
+        create_list(owner=self.user, name="Friends")
+        self.provider.cards[BOOK] = [card("ann", "Ann", "CATEGORIES:Friends")]
+        job = self._job()
+        self._run(job)
+        self.assertEqual(self._lists(owner=self.user), {"Friends": ["Ann"]})
+        self.assertEqual(job.stats["contacts"]["lists"], 0)
+
+    def test_a_re_run_does_not_duplicate_the_lists(self):
+        self.provider.cards[BOOK] = [card("ann", "Ann", "CATEGORIES:Friends")]
+        self._run(self._job())
+        self.provider.cards[BOOK] = [
+            card("ann", "Ann", "CATEGORIES:Friends", etag="e2")
+        ]
+        job = self._job()
+        self._run(job)
+        self.assertEqual(PersonList.objects.filter(name="Friends").count(), 1)
+        self.assertEqual(job.stats["contacts"]["lists"], 0)
+
+    def test_categories_read_every_line_once(self):
+        person = Person(
+            extra_properties={
+                "CATEGORIES": [{"value": "A,B"}, {"value": "B, C\\nD"}, {"value": ""}]
+            }
+        )
+        self.assertEqual(categories(person), ["A", "B", "C D"])

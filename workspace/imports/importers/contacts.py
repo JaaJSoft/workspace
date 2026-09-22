@@ -317,7 +317,15 @@ class ContactsImporter(Importer):
 
     def _import_card(self, ctx, source, card, scope, etag):
         ctx.current = card.id
-        text = inline_linked_photo(card.text, source.fetch_photo)
+        try:
+            text = inline_linked_photo(card.text, source.fetch_photo)
+        except Exception as exc:
+            logger.warning(
+                "Photo fetch for contact %s failed: %s",
+                scrub(card.id[:200]),
+                scrub(str(exc)),
+            )
+            text = card.text
         try:
             # The contact and its DONE record commit together: a worker dying
             # between the two would leave a contact the next run cannot place.

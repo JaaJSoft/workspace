@@ -273,3 +273,19 @@ class PhotoTests(SimpleTestCase):
 
         with _source(handler) as source:
             self.assertIsNone(source.fetch_photo("https://cloud.example.org/p.png"))
+
+    def test_a_malformed_url_is_no_photo(self, guard):
+        with _source(_never) as source:
+            self.assertIsNone(source.fetch_photo("https://[cloud.example.org/p.png"))
+        guard.assert_not_called()
+
+    def test_a_corrupt_encoded_body_is_no_photo(self, guard):
+        def handler(request):
+            return httpx2.Response(
+                200,
+                content=b"not actually gzip",
+                headers={"Content-Type": "image/png", "Content-Encoding": "gzip"},
+            )
+
+        with _source(handler) as source:
+            self.assertIsNone(source.fetch_photo("https://cloud.example.org/p.png"))

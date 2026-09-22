@@ -12,6 +12,8 @@ import re
 from urllib.parse import quote, unquote, urlparse
 from xml.etree import ElementTree
 
+import httpx2
+
 from workspace.common.logging import scrub
 
 from ..errors import ImportsError
@@ -132,10 +134,12 @@ class CardDavSource:
 
     def fetch_photo(self, url):
         # The client sends the connection's credentials to whatever URL it is
-        # given, so a card must not be able to name another origin.
-        if _origin(url) != self._origin:
-            return None
+        # given, so a card must not be able to name another origin. The
+        # comparison itself can raise on a malformed URL, so it stays inside
+        # the guarded region: any failure here just means no photo.
         try:
+            if _origin(url) != self._origin:
+                return None
             check_remote_url(url)
             with (
                 _translate_transport_errors(self._host),
@@ -152,11 +156,11 @@ class CardDavSource:
                     data += chunk
                     if len(data) > _MAX_PHOTO_BYTES:
                         return None
-        except ImportsError as exc:
+        except ValueError:
+            return None
+        except (ImportsError, httpx2.HTTPError) as exc:
             logger.info(
-                "Contact photo %s skipped: %s",
-                scrub(url[:200]),
-                scrub(exc.user_message),
+                "Contact photo %s skipped: %s", scrub(url[:200]), scrub(str(exc))
             )
             return None
         return bytes(data), match.group(1)

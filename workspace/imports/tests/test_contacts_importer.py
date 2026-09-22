@@ -29,7 +29,7 @@ from workspace.people.models import Person, PersonList
 from workspace.people.services.lists import create_list
 from workspace.people.services.persons import delete_person
 
-from .fakes import fake_provider
+from .fakes import FakeContactSource, fake_provider
 
 User = get_user_model()
 BOOK = "/contacts"
@@ -279,6 +279,20 @@ class ContactsImporterTests(ContactsImporterTestCase):
             self._items(job, ImportJobItem.Status.FAILED), ["/contacts/bob.vcf"]
         )
         self.assertEqual(self._names(owner=self.user), ["Ann"])
+
+    def test_a_photo_fetch_that_raises_never_fails_the_card(self):
+        url = "https://x/remote.php/dav/addressbooks/users/a/contacts/ann.vcf?photo"
+        self.provider.cards[BOOK] = [card("ann", "Ann", f"PHOTO:{url}")]
+        job = self._job()
+        with patch.object(
+            FakeContactSource, "fetch_photo", side_effect=RuntimeError("boom")
+        ):
+            self.assertIs(self._run(job), Outcome.DONE)
+        ann = Person.objects.get(display_name="Ann")
+        self.assertFalse(ann.has_avatar)
+        self.assertEqual(
+            self._items(job, ImportJobItem.Status.DONE), ["/contacts/ann.vcf"]
+        )
 
     def test_a_failed_fetch_marks_its_batch_and_the_import_goes_on(self):
         self.provider.cards["/team"] = [card("cid", "Carol", book="/team")]

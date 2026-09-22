@@ -10,10 +10,12 @@ from django.utils import timezone
 from workspace.files.models import File
 from workspace.imports.importers.base import Outcome
 from workspace.imports.models import ImportConnection, ImportJob, ImportJobItem
+from workspace.imports.providers.base import RemoteCard
 from workspace.imports.services import jobs as svc
 from workspace.imports.sse_provider import ImportsSSEProvider
 from workspace.imports.tasks import purge_old_jobs, recover_stale_jobs, run_import_job
 from workspace.notifications.models import Notification
+from workspace.people.models import Person
 
 from .fakes import fake_provider
 
@@ -275,6 +277,33 @@ class RunJobTests(JobsTestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, ImportJob.Status.CANCELLED)
         self.assertIn("cancelled", Notification.objects.get().title)
+
+    def test_files_and_contacts_run_in_sequence_off_one_job(self):
+        self.provider.cards = {
+            "/contacts": [
+                RemoteCard(
+                    id="/contacts/a.vcf",
+                    etag="e1",
+                    text="BEGIN:VCARD\r\nVERSION:3.0\r\nUID:a\r\nFN:Ann\r\nEND:VCARD\r\n",
+                )
+            ]
+        }
+        job = ImportJob.objects.create(
+            connection=self.conn,
+            kinds=["files", "contacts"],
+            options={
+                "files": {},
+                "contacts": {"books": [{"id": "/contacts", "target": "mine"}]},
+            },
+        )
+        self.assertIs(svc.run_job(job.pk), Outcome.DONE)
+        job.refresh_from_db()
+        self.assertEqual(job.status, ImportJob.Status.COMPLETED)
+        self.assertEqual(job.stats["files"]["files"], 3)
+        self.assertEqual(job.stats["contacts"]["created"], 1)
+        self.assertTrue(
+            Person.objects.filter(owner=self.user, display_name="Ann").exists()
+        )
 
 
 class CancelRetryPurgeTests(JobsTestCase):

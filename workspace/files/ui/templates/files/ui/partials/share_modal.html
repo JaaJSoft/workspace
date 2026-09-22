@@ -264,7 +264,9 @@
               Closing it runs destroy(), which drops what it held.
             {% endcomment %}
             <template x-if="linkGeneratorOpen">
+              {# The modal scrolls its own body, so on a short screen the panel would open below the fold. #}
               <div
+                x-init="$nextTick(() => $el.scrollIntoView({ block: 'nearest' }))"
                 @password-apply="applyGeneratedLinkPassword($event.detail.value)"
                 @password-regenerate="trackGeneratedLinkPassword($event.detail.value)"
                 @password-copy="copyGeneratedLinkPassword($event.detail.value)"

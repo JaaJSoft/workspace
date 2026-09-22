@@ -81,3 +81,22 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
         dialog.get_by_role("button", name="Regenerate").click()
         expect(field).not_to_have_value(first)
         self.assertTrue(field.input_value())
+
+    def test_opening_the_panel_scrolls_it_into_the_modal(self):
+        # 720px is the height where the panel's buttons open below the modal's
+        # fold: the modal is capped at the viewport and scrolls its own body.
+        self.page.set_viewport_size({"width": 1280, "height": 720})
+        dialog = self._open_link_form()
+        dialog.get_by_role("button", name="Generate a password").click()
+        use = dialog.get_by_role("button", name="Use")
+        expect(use).to_be_visible()
+
+        self.page.wait_for_function(
+            """(button) => {
+                const box = button.closest('.modal-box').getBoundingClientRect();
+                const rect = button.getBoundingClientRect();
+                return rect.top >= box.top && rect.bottom <= box.bottom;
+            }""",
+            arg=use.element_handle(),
+            timeout=2000,
+        )

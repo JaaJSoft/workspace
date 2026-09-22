@@ -34,6 +34,8 @@ dependencies = [
     "icalendar>=7.3.0",
     # people: vCard import/export, phone normalisation
     "vobject>=0.9.9",
+    # QR codes (pure Python, no dependencies): a contact as a scannable card
+    "segno>=1.6.6",
     # vault
     "cbor2>=5.7.0",
     # utils

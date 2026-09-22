@@ -51,6 +51,14 @@ class ExportAction(BasePersonAction):
 
 
 @PersonActionRegistry.register
+class QRCodeAction(BasePersonAction):
+    id = "qrcode"
+    label = "Show QR code"
+    icon = "qr-code"
+    category = ActionCategory.ORGANIZE
+
+
+@PersonActionRegistry.register
 class DeleteAction(BasePersonAction):
     id = "delete"
     label = "Delete"

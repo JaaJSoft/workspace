@@ -35,6 +35,14 @@ test('listUrl only carries the filters that are set', () => {
   assert.equal(ctx.peopleHelpers.listUrl('/people', { listUuid: 'abc' }), '/people?list=abc');
 });
 
+test('qrUrl asks for svg by default and names the kind otherwise', () => {
+  const ctx = load();
+  const url = ctx.peopleHelpers.qrUrl;
+  assert.equal(url('abc'), '/api/v1/people/qrcode?person=abc');
+  assert.equal(url('abc', 'svg'), '/api/v1/people/qrcode?person=abc');
+  assert.equal(url('abc', 'png'), '/api/v1/people/qrcode?person=abc&kind=png');
+});
+
 test('exportUrl maps every target onto the one export endpoint', () => {
   const ctx = load();
   const url = ctx.peopleHelpers.exportUrl;

@@ -296,6 +296,28 @@ class BatchPurgeTests(TestCase):
                 self.assertNotIn(entry.uuid.hex, sql)
             self.assertIn(self.vault.uuid.hex, sql)
 
+    def test_destroying_entries_never_reads_a_ciphertext(self):
+        """delete_forever reads no field, so nothing on this path has a reason
+        to load one. The vault form is why it matters: it is uncapped, and
+        fetching the fields to check the action would pull every ciphertext a
+        whole trash holds into memory to answer a question the action does
+        not put."""
+        for body in ({"uuids": None}, {"vault": str(self.vault.uuid)}):
+            entries = [self._entry(fields=["password", "totp"]) for _ in range(3)]
+            if "uuids" in body:
+                body = {"uuids": [str(entry.uuid) for entry in entries]}
+            with self.subTest(form=next(iter(body))):
+                with CaptureQueriesContext(connection) as queries:
+                    self.assertEqual(self._post(body).status_code, 200)
+                reads = [
+                    query["sql"]
+                    for query in queries
+                    if query["sql"].lstrip().startswith("SELECT")
+                ]
+                self.assertTrue(reads)
+                for sql in reads:
+                    self.assertNotIn("encrypted_value", sql)
+
 
 class PurgeCapContractTests(TestCase):
     """The cap the endpoint enforces and the one the browser slices at.

@@ -278,7 +278,17 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
 
 
 def _offers(action_id, user, entry, role):
-    """Whether the registry offers *action_id* on *entry* for *role*."""
+    """Whether the registry offers *action_id* on *entry* for *role*.
+
+    Only the action that declares it gets present_fields, because building
+    it means reading the entry's field rows: restore and delete_forever
+    never look, and a whole trash destroyed in one call would otherwise pull
+    every ciphertext it holds to answer a question nobody asked. The others
+    get None rather than an empty set, so an action that grew a use for it
+    without declaring one raises instead of quietly hiding itself.
+    """
+    action = VaultActionRegistry.get(action_id)
+    reads_fields = action is not None and action.reads_present_fields
     return VaultActionRegistry.is_action_available(
         action_id,
         user,
@@ -286,10 +296,14 @@ def _offers(action_id, user, entry, role):
         role=role,
         trashed=entry.deleted_at is not None,
         schema=schema_for(entry.type, default=()),
-        # Iterating the manager rather than values_list: the same single
-        # query on a row fetched alone, and free on one the batch endpoint
-        # has already prefetched.
-        present_fields=frozenset(field.field_id for field in entry.fields.all()),
+        # Iterating the manager rather than values_list, which would ignore a
+        # prefetched cache and query again: every caller that gets here has
+        # the rows already, for the serializer it is about to build.
+        present_fields=(
+            frozenset(field.field_id for field in entry.fields.all())
+            if reads_fields
+            else None
+        ),
     )
 
 
@@ -476,11 +490,11 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
         if get_vault_role(user, vault) != VaultRole.OWNER:
             return _not_the_owner()
         trashed = VaultEntry.objects.filter(vault=vault, deleted_at__isnull=False)
-        entries = list(
-            trashed.select_for_update()
-            .select_related("vault")
-            .prefetch_related("fields")
-        )
+        # Neither the join nor the field rows: the role is resolved from
+        # vault_id below, delete_forever reads no field, and select_for_update
+        # would take the joined vault row with it - locking the vault itself
+        # for as long as its trash takes to empty.
+        entries = list(trashed.select_for_update())
         return entries, trashed
 
     def _selection(self, user, data):
@@ -498,10 +512,9 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
             return _refused("uuids must be a non-empty list.")
         wanted = set(parsed)
         entries = list(
-            VaultEntry.objects.filter(accessible_entries_q(user), uuid__in=wanted)
-            .select_for_update()
-            .select_related("vault")
-            .prefetch_related("fields")
+            VaultEntry.objects.filter(
+                accessible_entries_q(user), uuid__in=wanted
+            ).select_for_update()
         )
         if {entry.uuid for entry in entries} != wanted:
             # Nothing destroyed, and the answer keeps the silence the

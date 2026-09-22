@@ -48,6 +48,14 @@ class BaseVaultAction(BaseAction):
     available_when_trashed: bool = False
     only_when_trashed: bool = False
 
+    # Whether is_available reads present_fields. Every other piece of state an
+    # action reads is already in hand when it is asked; that one is a table of
+    # its own, and an endpoint checking a single action before performing it
+    # would read a whole trash's field rows to answer a question the action
+    # never puts. An action that leaves this False is passed None rather than
+    # an empty set, so reading it anyway raises instead of hiding the action.
+    reads_present_fields: bool = False
+
     def is_available(self, user, entry, *, role, trashed, schema, present_fields):
         if role is None:
             return False
@@ -76,6 +84,8 @@ class RequiresFieldMixin:
     """
 
     requires_field: str
+
+    reads_present_fields = True
 
     def is_available(self, user, entry, *, role, trashed, schema, present_fields):
         if not any(field.field_id == self.requires_field for field in schema):

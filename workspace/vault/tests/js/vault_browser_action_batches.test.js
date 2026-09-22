@@ -54,10 +54,13 @@ function browser(options = {}) {
     },
   );
   const component = ctx.vaultBrowser();
-  component.entries = Array.from(
+  // The stored rows are what the question is asked about, and the opened ones
+  // are the subset that verified - here every row opens, so the two match.
+  component.entryRows = Array.from(
     { length: options.count || 0 },
-    (_, i) => ({ uuid: `e-${i}` }),
+    (_, i) => ({ uuid: `e-${i}`, deleted_at: null }),
   );
+  component.entries = component.entryRows.map((row) => ({ uuid: row.uuid }));
   return { component, ctx };
 }
 

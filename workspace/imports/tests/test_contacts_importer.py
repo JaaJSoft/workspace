@@ -573,6 +573,12 @@ class InlineLinkedPhotoTests(SimpleTestCase):
         text = "BEGIN:VCARD\r\nPHOTO:https://x/p.png\r\nEND:VCARD\r\n"
         self.assertEqual(inline_linked_photo(text, lambda url: None), text)
 
+    def test_an_undecodable_subtype_is_not_inlined(self):
+        text = "BEGIN:VCARD\r\nPHOTO:https://x/p.svg\r\nEND:VCARD\r\n"
+        self.assertEqual(
+            inline_linked_photo(text, lambda url: (b"<svg/>", "svg+xml")), text
+        )
+
 
 class LinkedPhotoTests(ContactsImporterTestCase):
     URL = "https://x/remote.php/dav/addressbooks/users/a/contacts/ann.vcf?photo"

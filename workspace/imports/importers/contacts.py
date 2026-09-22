@@ -46,6 +46,10 @@ _PHOTO_URL_RE = re.compile(
 
 _LIST_NAME_MAX = PersonList._meta.get_field("name").max_length
 
+# Subtypes Pillow can decode into an avatar; anything else (svg+xml, heic...)
+# stays a link rather than a PHOTO line _apply_photo silently fails on.
+_INLINABLE_PHOTO_SUBTYPES = frozenset({"jpeg", "png", "gif", "webp", "bmp", "tiff"})
+
 
 def unfold(text):
     """The card with its continuation lines joined back (RFC 6350 3.2)."""
@@ -97,6 +101,8 @@ def inline_linked_photo(text, fetch_photo):
     if fetched is None:
         return text
     data, subtype = fetched
+    if subtype not in _INLINABLE_PHOTO_SUBTYPES:
+        return text
     line = f"PHOTO:data:image/{subtype};base64,{base64.b64encode(data).decode()}"
     return unfolded[: match.start()] + line + unfolded[match.end() :]
 

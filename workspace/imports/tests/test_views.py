@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
@@ -65,6 +66,15 @@ class ImportsPageTests(TestCase):
         response = self.client.get(reverse("imports_ui:index"), {"job": str(job.uuid)})
         self.assertFalse(response.context["open_wizard"])
         self.assertEqual(response.context["highlight_job"], str(job.uuid))
+
+    def test_embeds_the_users_groups_for_the_address_book_picker(self):
+        team = Group.objects.create(name="Team")
+        self.user.groups.add(team)
+        Group.objects.create(name="Not mine")
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("imports_ui:index"))
+        self.assertEqual(response.context["groups"], [{"id": team.id, "name": "Team"}])
+        self.assertContains(response, 'id="groups-data"')
 
 
 class UserMenuEntryTests(TestCase):

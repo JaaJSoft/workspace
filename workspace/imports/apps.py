@@ -25,7 +25,7 @@ class ImportsConfig(AppConfig):
             ModuleInfo(
                 name="Imports",
                 slug="imports",
-                description="Bring your files over from another cloud.",
+                description="Bring your files and contacts over from another cloud.",
                 icon="download-cloud",
                 color="cyan",
                 url="/imports",
@@ -39,7 +39,14 @@ class ImportsConfig(AppConfig):
             [
                 CommandInfo(
                     name="Import from another cloud",
-                    keywords=["import", "migrate", "nextcloud", "webdav", "cloud"],
+                    keywords=[
+                        "import",
+                        "migrate",
+                        "nextcloud",
+                        "webdav",
+                        "cloud",
+                        "contacts",
+                    ],
                     icon="download-cloud",
                     url="/imports?new=1",
                     kind="navigate",

@@ -14,7 +14,6 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
-from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
@@ -345,21 +344,44 @@ class _TrashChanged(Exception):
         "(every trashed entry of that vault, uncapped). Owner only."
     ),
     request={
+        # Two branches rather than one object with two optional keys: a body
+        # naming both matches both branches and a body naming neither matches
+        # none, which is how oneOf spells the exactly-one the view enforces.
         "application/json": {
-            "type": "object",
-            "properties": {
-                "uuids": {
-                    "type": "array",
-                    "items": {"type": "string", "format": "uuid"},
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "uuids": {
+                            "type": "array",
+                            "items": {"type": "string", "format": "uuid"},
+                            "minItems": 1,
+                            "maxItems": MAX_PURGE_BATCH,
+                        },
+                    },
+                    "required": ["uuids"],
                 },
-                "vault": {"type": "string", "format": "uuid"},
-            },
+                {
+                    "type": "object",
+                    "properties": {"vault": {"type": "string", "format": "uuid"}},
+                    "required": ["vault"],
+                },
+            ],
         },
     },
     responses={
         200: OpenApiResponse(
-            response=OpenApiTypes.OBJECT,
-            description="`destroyed`: the UUIDs that were destroyed.",
+            response={
+                "type": "object",
+                "properties": {
+                    "destroyed": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                    },
+                },
+                "required": ["destroyed"],
+            },
+            description="The UUIDs that were destroyed.",
         ),
         400: OpenApiResponse(description="Malformed, oversized or ambiguous body."),
         403: OpenApiResponse(description="Not the owner of the vault."),

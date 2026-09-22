@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from workspace.vault.models import EntryField, EntryType, VaultEntry, VaultRole
 from workspace.vault.tests.factories import make_account, make_key_wrap, make_vault
-from workspace.vault.views.entries import MAX_PURGE_BATCH
+from workspace.vault.views.entries import MAX_PURGE_BATCH, EntryBatchPurgeView
 
 PURGE_URL = "/api/v1/vault/entries/purge"
 
@@ -317,6 +317,30 @@ class BatchPurgeTests(TestCase):
                 self.assertTrue(reads)
                 for sql in reads:
                     self.assertNotIn("encrypted_value", sql)
+
+    def test_a_row_trashed_while_the_call_runs_goes_with_the_rest(self):
+        """The vault form names a filter rather than its rows, so a count that
+        comes back long means somebody trashed an entry between the read and
+        the delete. That row is one the user asked to be rid of - not a reason
+        to answer that an entry is not in the trash and destroy none of them.
+        """
+        trashed = self._entry()
+        live = self._entry(trashed=False)
+        read_the_trash = EntryBatchPurgeView._whole_trash
+
+        def trash_one_more(view, user, vault_uuid):
+            outcome = read_the_trash(view, user, vault_uuid)
+            VaultEntry.objects.filter(uuid=live.uuid).update(deleted_at=timezone.now())
+            return outcome
+
+        with patch.object(EntryBatchPurgeView, "_whole_trash", trash_one_more):
+            response = self._post({"vault": str(self.vault.uuid)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(VaultEntry.objects.exists())
+        # What the request read, which is all it can name: the row that
+        # arrived after it has no UUID in hand to report.
+        self.assertEqual(response.json()["destroyed"], [str(trashed.uuid)])
 
 
 class PurgeCapContractTests(TestCase):

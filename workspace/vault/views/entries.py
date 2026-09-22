@@ -465,8 +465,14 @@ class EntryBatchPurgeView(CacheControlMixin, APIView):
                 # SQLite - it holds the whole database for the transaction
                 # instead - and because a queryset delete on a model with
                 # cascades cannot carry the predicate itself.
+                #
+                # Short, not different: a row that left the trash under us is
+                # the accident this catches. The whole-trash form names a
+                # filter, so a row someone trashed while it ran is destroyed
+                # too and the count comes back long - which is what emptying a
+                # trash means, not a reason to refuse the whole call.
                 _, per_model = doomed.delete()
-                if per_model.get(VaultEntry._meta.label, 0) != len(targets):
+                if per_model.get(VaultEntry._meta.label, 0) < len(targets):
                     raise _TrashChanged
         except _TrashChanged:
             return _not_in_the_trash()

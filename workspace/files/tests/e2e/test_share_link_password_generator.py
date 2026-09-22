@@ -125,3 +125,28 @@ class ShareLinkPasswordGeneratorTests(PlaywrightTestCase):
         self.page.wait_for_function(
             same_hue_as_host, arg="rgb(168, 85, 247)", timeout=3000
         )
+
+    def test_the_panel_fits_a_narrow_phone(self):
+        # 360px leaves the panel about 230px once the modal, the link form and
+        # the panel have taken their padding.
+        self.page.set_viewport_size({"width": 360, "height": 740})
+        dialog = self._open_link_form()
+        dialog.get_by_role("button", name="Generate a password").click()
+        expect(dialog.get_by_role("button", name="Use")).to_be_visible()
+
+        layout = self.page.evaluate(
+            """() => {
+                const d = document.querySelector('dialog[open]');
+                const top = (name) => d.querySelector(`[aria-label="${name}"]`)
+                    .getBoundingClientRect().top;
+                const use = [...d.querySelectorAll('button')]
+                    .find((b) => b.textContent.trim() === 'Use');
+                return {
+                    tops: [top('Regenerate'), top('Copy'), use.getBoundingClientRect().top],
+                    clippedTabs: [...d.querySelectorAll('.tab')]
+                        .filter((t) => t.scrollWidth > t.clientWidth).length,
+                };
+            }"""
+        )
+        self.assertEqual(len(set(layout["tops"])), 1, layout)
+        self.assertEqual(layout["clippedTabs"], 0, layout)

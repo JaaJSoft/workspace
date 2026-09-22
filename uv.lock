@@ -1798,22 +1798,22 @@ sdist = { url = "https://files.pythonhosted.org/packages/97/73/8ade73f6749177003
 
 [[package]]
 name = "oidc-provider-mock"
-version = "0.4.6"
+version = "0.4.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "authlib" },
     { name = "flask" },
     { name = "htpy" },
-    { name = "httpx" },
+    { name = "httpx2" },
     { name = "joserfc" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "typing-extensions" },
     { name = "uvicorn" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/42/bb/9106a6c71b8aaba80928ee99f7baa6013ef529da515064975f3f08f2cc66/oidc_provider_mock-0.4.6.tar.gz", hash = "sha256:d8e349c7091533de1fdaeeb54f9f3274cadf1e3d07050e5163c22abd020b8c85", size = 153734, upload-time = "2026-06-29T07:24:26Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/53/570e60e4b5acb12a4777558c0772c333dfc4129dffde9db2c9ec3db16b42/oidc_provider_mock-0.4.7.tar.gz", hash = "sha256:94eab23c059f5b6440fa2c96f4a761b093f869c7b30dba38473e22571b983ea8", size = 162188, upload-time = "2026-09-16T09:18:26.032Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/90/c3/8176f0052357be14af8e924d7eb6afad39846ec5b06fc213a12a82c3a0aa/oidc_provider_mock-0.4.6-py3-none-any.whl", hash = "sha256:52597573e0b7b5c045cf0274b25903279951d5641c6a6e8ac51923d34743100c", size = 26121, upload-time = "2026-06-29T07:24:24.861Z" },
+    { url = "https://files.pythonhosted.org/packages/69/51/1bc70728c6f62b445bf21d3ccd6d7bb6762ab3a63dad00915f4f232db1f5/oidc_provider_mock-0.4.7-py3-none-any.whl", hash = "sha256:d5bd5c9807bbbb2590d2026d960b084284e786201709c7474b0433a91af3419d", size = 26144, upload-time = "2026-09-16T09:18:24.417Z" },
 ]
 
 [[package]]
@@ -2911,7 +2911,7 @@ dev = [
     { name = "django-debug-toolbar", specifier = "==8.0.0" },
     { name = "djlint", specifier = ">=1.46.1" },
     { name = "odfpy", specifier = ">=1.4.1" },
-    { name = "oidc-provider-mock", specifier = ">=0.4.6" },
+    { name = "oidc-provider-mock", specifier = ">=0.4.7" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "playwright", specifier = ">=1.62.0" },
     { name = "pyhpke", specifier = ">=0.6.0" },

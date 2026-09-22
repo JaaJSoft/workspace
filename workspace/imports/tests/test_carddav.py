@@ -34,10 +34,10 @@ def _connection():
     return conn
 
 
-def _source(handler):
+def _source(handler, **kwargs):
     conn = _connection()
     client = build_client(conn, base_url=ROOT, transport=httpx2.MockTransport(handler))
-    return CardDavSource(conn, ROOT, client=client)
+    return CardDavSource(conn, ROOT, client=client, **kwargs)
 
 
 def _response(href, props, status="HTTP/1.1 200 OK"):
@@ -143,6 +143,26 @@ class AddressBookTests(SimpleTestCase):
         ) as source:
             with self.assertRaises(ProviderError):
                 list(source.address_books())
+
+    def test_a_hidden_prefix_book_is_skipped(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=_multistatus(
+                    _response(
+                        f"{HOME}/contacts/",
+                        BOOK + "<d:displayname>Contacts</d:displayname>",
+                    ),
+                    _response(f"{HOME}/z-server-generated--system/", BOOK),
+                    _response(f"{HOME}/z-app-generated--contactsinteraction/", BOOK),
+                ),
+            )
+
+        with _source(
+            handler, hidden_prefixes=("z-server-generated--", "z-app-generated--")
+        ) as source:
+            books = list(source.address_books())
+        self.assertEqual(books, [RemoteAddressBook(id="/contacts", name="Contacts")])
 
 
 class CardTests(SimpleTestCase):

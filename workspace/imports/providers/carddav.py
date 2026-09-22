@@ -71,12 +71,13 @@ def _collection_url(entry_id):
 
 
 class CardDavSource:
-    def __init__(self, connection, root_url, client=None):
+    def __init__(self, connection, root_url, client=None, hidden_prefixes=()):
         self.root_url = root_url.rstrip("/") + "/"
         self._base_path = unquote(urlparse(self.root_url).path).rstrip("/")
         self._origin = _origin(self.root_url)
         self._host = urlparse(self.root_url).hostname or self.root_url
         self._client = client or build_client(connection, base_url=self.root_url)
+        self._hidden_prefixes = hidden_prefixes
 
     def close(self):
         self._client.close()
@@ -95,10 +96,13 @@ class CardDavSource:
             if props.find(f"{DAV}resourcetype/{CARDDAV}addressbook") is None:
                 continue
             book_id = self._id(href)
+            segment = posixpath.basename(book_id)
+            if segment.startswith(self._hidden_prefixes):
+                continue
             name = (props.findtext(f"{DAV}displayname") or "").strip()
             yield RemoteAddressBook(
                 id=book_id,
-                name=name or posixpath.basename(book_id) or book_id,
+                name=name or segment or book_id,
                 description=(
                     props.findtext(f"{CARDDAV}addressbook-description") or ""
                 ).strip(),

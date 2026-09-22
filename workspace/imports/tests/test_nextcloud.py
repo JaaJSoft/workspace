@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import httpx2
 from django.test import SimpleTestCase
 
@@ -423,6 +425,24 @@ class AddressBookHomeTests(SimpleTestCase):
         )
 
 
+def _addressbook_multistatus(*entries):
+    """``entries``: ``(path segment, displayname)`` pairs, rooted at alice's
+    address book home."""
+    body = "".join(
+        f"<d:response><d:href>/remote.php/dav/addressbooks/users/alice/{segment}/"
+        "</d:href><d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>"
+        "<d:resourcetype><d:collection/><card:addressbook/></d:resourcetype>"
+        f"<d:displayname>{name}</d:displayname>"
+        "</d:prop></d:propstat></d:response>"
+        for segment, name in entries
+    )
+    return (
+        '<?xml version="1.0"?>'
+        '<d:multistatus xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">'
+        f"{body}</d:multistatus>"
+    ).encode()
+
+
 class ContactSourceTests(SimpleTestCase):
     def test_nextcloud_offers_contacts_and_plain_webdav_does_not(self):
         self.assertEqual(
@@ -438,3 +458,28 @@ class ContactSourceTests(SimpleTestCase):
                 source.root_url,
                 "https://cloud.example.org/remote.php/dav/addressbooks/users/alice/",
             )
+
+    def test_the_source_hides_nextclouds_generated_books(self):
+        def handler(request):
+            return httpx2.Response(
+                207,
+                content=_addressbook_multistatus(
+                    ("contacts", "Contacts"),
+                    ("z-server-generated--system", ""),
+                    ("z-app-generated--contactsinteraction", ""),
+                ),
+            )
+
+        def fake_build_client(connection, *, base_url=None, **kwargs):
+            return httpx2.Client(
+                base_url=base_url or connection.base_url,
+                transport=httpx2.MockTransport(handler),
+            )
+
+        conn = _connection("https://cloud.example.org/remote.php/dav/files/alice")
+        with patch(
+            "workspace.imports.providers.carddav.build_client", fake_build_client
+        ):
+            with NextcloudProvider().contact_source(conn) as source:
+                books = list(source.address_books())
+        self.assertEqual([b.id for b in books], ["/contacts"])

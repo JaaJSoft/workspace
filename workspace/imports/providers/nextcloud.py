@@ -30,6 +30,11 @@ _OCS_CAPABILITIES = "/ocs/v1.php/cloud/capabilities"
 _DAV_SYSTEMTAGS = "/remote.php/dav/systemtags/"
 _DAV_ADDRESSBOOKS = "/remote.php/dav/addressbooks/users/"
 
+# Nextcloud-generated books that are not the user's own contacts: the instance
+# account directory (>= 27), and the contactsinteraction app's auto-collected
+# recent addresses.
+_HIDDEN_ADDRESS_BOOK_PREFIXES = ("z-server-generated--", "z-app-generated--")
+
 OC = "{http://owncloud.org/ns}"
 
 _SYSTEMTAGS_BODY = (
@@ -210,7 +215,9 @@ class NextcloudProvider(WebDavProvider):
 
     def contact_source(self, connection):
         return CardDavSource(
-            connection, addressbook_home(connection.base_url, connection.username)
+            connection,
+            addressbook_home(connection.base_url, connection.username),
+            hidden_prefixes=_HIDDEN_ADDRESS_BOOK_PREFIXES,
         )
 
     def _discover(self, connection) -> dict:

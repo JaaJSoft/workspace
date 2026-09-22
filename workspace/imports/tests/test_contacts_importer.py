@@ -5,6 +5,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
@@ -19,6 +20,7 @@ from workspace.imports.importers.contacts import (
     ContactsImporter,
     ContactsImportOptionsSerializer,
     categories,
+    file_in_category_lists,
     inline_linked_photo,
     is_group_card,
     unfold,
@@ -500,24 +502,17 @@ class CategoriesTests(ContactsImporterTestCase):
         self.assertEqual(categories(person), ["A", "B", "C D"])
 
     def test_concurrent_list_creation_reuses_the_created_list(self):
-        from django.db import IntegrityError
-
-        from workspace.imports.importers.contacts import file_in_category_lists
-
-        # Create a person with a category.
         person = Person.objects.create(
             owner=self.user,
             display_name="Ann",
             extra_properties={"CATEGORIES": [{"value": "Friends"}]},
         )
         scope = {"owner": self.user}
-
-        # Pre-create the list to simulate another worker creating it first.
         create_list(owner=self.user, name="Friends")
 
-        # Mock PersonList.objects.filter().first() to return None (simulating the
-        # race condition where the lookup happens before the other worker creates
-        # the list), then mock create_list to raise IntegrityError.
+        # Simulates another worker's insert landing between the lookup and
+        # the insert: filter().first() still returns None, and create_list
+        # raises the unique violation the real one would hit.
         original_filter = PersonList.objects.filter
 
         def filter_returns_none(*args, **kwargs):
@@ -537,15 +532,10 @@ class CategoriesTests(ContactsImporterTestCase):
             ):
                 created = file_in_category_lists(person, scope)
 
-        # Should return 0: the list was not created by this call.
         self.assertEqual(created, 0)
-
-        # Should have exactly one Friends list for the user.
         self.assertEqual(
             PersonList.objects.filter(owner=self.user, name="Friends").count(), 1
         )
-
-        # Person should be a member of the list.
         friends = PersonList.objects.get(owner=self.user, name="Friends")
         self.assertIn(person, friends.members.all())
 

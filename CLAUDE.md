@@ -492,13 +492,16 @@ Task-level queries filter with `project_id__in=user_project_ids(user)` - see `ta
 #### Photos - `workspace.photos.queries`
 
 ```python
-from workspace.photos.queries import library_files, library_tags
+from workspace.photos.queries import ALL, MINE, library_files, library_groups, library_tags
 
-files = library_files(user)   # the user's analyzed photos, as live File rows
-tags = library_tags(user)     # the user's tags carried by a photo, with photo_count
+files = library_files(user)          # the user's personal analyzed photos, as live File rows
+files = library_files(user, ALL)     # plus the folders of every group the user is in
+files = library_files(user, group)   # one group's folder; empty for a group the user is not in
+tags = library_tags(user, scope)     # the user's tags carried by a photo in scope, with photo_count
+groups = library_groups(user)        # the user's groups whose folder holds a photo
 ```
 
-`library_files` starts from `FileService.user_files_qs`, so trashed files drop out and come back on restore without touching their `Photo` row, and it excludes quarantined files. A raster image without a `Photo` row has not been analyzed yet; it is not in the library.
+The scopes start from `FileService.user_files_qs` / `user_group_files_qs`, so trashed files drop out and come back on restore without touching their `Photo` row, and quarantined files are excluded. A raster image without a `Photo` row has not been analyzed yet; it is not in the library.
 
 #### Vault - `workspace.vault.queries`
 

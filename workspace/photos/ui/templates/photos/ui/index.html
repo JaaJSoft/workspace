@@ -55,32 +55,53 @@
   {% endcomment %}
   <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
     <header
-      class="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-base-300 bg-base-100/90 backdrop-blur"
+      class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
     >
-      {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
-      <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
-      <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-        <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-        <span class="text-sm text-base-content/60">{{ total }} photo{{ total|pluralize }}</span>
+      <div class="flex items-center gap-3 px-4 py-3">
+        {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
+        <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
+        <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+          <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+          <span class="text-sm text-base-content/60">{{ total }} photo{{ total|pluralize }}</span>
+        </div>
+        {% if pending %}
+          <span
+            class="badge badge-ghost gap-1.5 max-sm:hidden"
+            title="New pictures show up here once their capture date has been read."
+          >
+            <span class="loading loading-spinner loading-xs"></span>
+            {{ pending }} being analyzed
+          </span>
+        {% endif %}
+        {% if date_param %}
+          <a
+            href="{{ latest_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-ghost btn-sm gap-1"
+          >
+            <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">Back to latest</span>
+          </a>
+        {% endif %}
       </div>
-      {% if pending %}
-        <span
-          class="badge badge-ghost gap-1.5 max-sm:hidden"
-          title="New pictures show up here once their capture date has been read."
+      {% if scope_tabs %}
+        {# Which folders the library reads. The view filters above (favorites, a tag) carry over; the date does not. #}
+        <nav
+          class="tabs tabs-boxed tabs-sm mx-4 mb-2 w-fit max-w-[calc(100%-2rem)] grid-flow-col auto-cols-max overflow-x-auto"
+          aria-label="Library"
         >
-          <span class="loading loading-spinner loading-xs"></span>
-          {{ pending }} being analyzed
-        </span>
-      {% endif %}
-      {% if date_param %}
-        <a
-          href="{{ latest_url }}"
-          x-target.push="photos-nav photos-content"
-          class="btn btn-ghost btn-sm gap-1"
-        >
-          <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
-          <span class="max-sm:hidden">Back to latest</span>
-        </a>
+          {% for tab in scope_tabs %}
+            <a
+              href="{{ tab.url }}"
+              x-target.push="photos-nav photos-content"
+              class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+              {% if tab.active %}aria-current="page"{% endif %}
+            >
+              <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+              <span class="max-w-40 truncate">{{ tab.label }}</span>
+            </a>
+          {% endfor %}
+        </nav>
       {% endif %}
     </header>
 
@@ -93,7 +114,7 @@
         <div class="rounded-full bg-module/10 p-5">
           <i data-lucide="images" class="w-10 h-10 text-module"></i>
         </div>
-        {% if active_view == "all" and not date_param %}
+        {% if is_timeline_view and not date_param %}
           <h2 class="text-lg font-semibold">No photos yet</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
             Pictures you upload to Files show up here, by the day they were taken.

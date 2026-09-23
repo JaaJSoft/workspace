@@ -11,11 +11,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import patch
 
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import FileFavorite
+from workspace.files.services import FileService
 from workspace.photos.tests.images import make_photo
 from workspace.users.services.settings import set_setting
 
@@ -135,3 +137,30 @@ class PhotosTimelineTests(PlaywrightTestCase):
         self.assertNotIn("w-72", first)
         box = self.page.locator(".drawer-side aside").bounding_box()
         self.assertEqual(round(box["width"]), 64)
+
+    def test_scope_tabs_switch_the_library_in_place(self):
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        bob = self.create_user(username="bob")
+        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        shared = make_photo(
+            bob, "family.jpg", datetime(2024, 7, 9, 12, tzinfo=UTC), parent=root
+        )
+        self._open()
+        tabs = self.page.locator("nav[aria-label='Library'] a")
+        expect(tabs).to_have_text(["Mine", "All", "Family"])
+
+        tabs.nth(2).click()
+
+        expect(self.page).to_have_url(
+            f"{self.live_server_url}/photos?scope=group%3A{family.pk}"
+        )
+        expect(self.page.locator(TILES)).to_have_count(1)
+        expect(self.page.locator(TILES).first).to_have_attribute(
+            "data-uuid", str(shared.uuid)
+        )
+        expect(tabs.nth(2)).to_have_attribute("aria-current", "page")
+
+        self.page.locator("nav[aria-label='Library'] a", has_text="All").click()
+
+        expect(self.page.locator(TILES)).to_have_count(7)

@@ -24,6 +24,13 @@ def _at(*args):
     return datetime(*args, tzinfo=UTC)
 
 
+def _next_url(response):
+    """The url the page's scroll sentinel will fetch, or None on the last page."""
+    match = re.search(r"timelineSentinel\('([^']+)'\)", response.content.decode())
+    # The url is written through |escapejs, as a JS string literal.
+    return match and json.loads(f'"{match[1]}"')
+
+
 class PhotosViewTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
@@ -251,14 +258,9 @@ class PaginationTests(PhotosViewTestCase):
             for day in (14, 13, 12)
         ]
 
-    def _next_url(self, response):
-        match = re.search(r"timelineSentinel\('([^']+)'\)", response.content.decode())
-        # The url is written through |escapejs, as a JS string literal.
-        return match and json.loads(f'"{match[1]}"')
-
     def test_scrolling_walks_the_whole_timeline(self):
         first = self.client.get("/photos")
-        next_url = self._next_url(first)
+        next_url = _next_url(first)
         self.assertTrue(next_url.startswith("/photos/timeline?cursor="))
 
         second = self.client.get(next_url)
@@ -273,7 +275,7 @@ class PaginationTests(PhotosViewTestCase):
         # The month goes on: the next page opens with a day, not a month.
         self.assertContains(second, 'data-day="2024-07-12"')
         self.assertNotContains(second, "data-month=")
-        self.assertIsNone(self._next_url(second))
+        self.assertIsNone(_next_url(second))
         self.assertContains(second, 'id="timeline-grid"')
         self.assertContains(second, 'id="timeline-more"')
 
@@ -281,7 +283,7 @@ class PaginationTests(PhotosViewTestCase):
         for f in self.photos:
             FileFavorite.objects.create(owner=self.user, file=f)
 
-        next_url = self._next_url(self.client.get("/photos?favorites=1"))
+        next_url = _next_url(self.client.get("/photos?favorites=1"))
 
         self.assertIn("favorites=1", next_url)
 
@@ -297,3 +299,92 @@ class PaginationTests(PhotosViewTestCase):
         self.client.logout()
 
         self.assertEqual(self.client.get("/photos/timeline?cursor=x").status_code, 302)
+
+
+class ScopeTabsTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.bob = User.objects.create_user(username="bob", password="p")
+        self.family = Group.objects.create(name="Family")
+        self.user.groups.add(self.family)
+        self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
+        root = FileService.create_folder(
+            owner=self.bob, name="Family", group=self.family
+        )
+        self.family_photo = make_photo(
+            self.bob, "family.jpg", _at(2024, 7, 13, 12), parent=root
+        )
+
+    def test_mine_by_default(self):
+        self.assertEqual(self._tiles(self.client.get("/photos")), [str(self.mine.uuid)])
+
+    def test_all_reads_mine_and_my_groups(self):
+        response = self.client.get("/photos?scope=all")
+
+        self.assertEqual(
+            self._tiles(response), [str(self.mine.uuid), str(self.family_photo.uuid)]
+        )
+
+    def test_a_group_reads_its_folder(self):
+        response = self.client.get(f"/photos?scope=group:{self.family.pk}")
+
+        self.assertEqual(self._tiles(response), [str(self.family_photo.uuid)])
+
+    def test_a_group_the_user_is_not_in_or_a_malformed_scope_is_404(self):
+        strangers = Group.objects.create(name="Strangers")
+        for value in (f"group:{strangers.pk}", "group:abc", "group:", "everything"):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.client.get(f"/photos?scope={value}").status_code, 404
+                )
+
+    def test_tabs_offer_mine_all_and_the_groups_holding_photos(self):
+        Group.objects.create(name="Empty").user_set.add(self.user)
+
+        response = self.client.get("/photos?favorites=1")
+
+        tabs = response.context["scope_tabs"]
+        self.assertEqual([t["label"] for t in tabs], ["Mine", "All", "Family"])
+        self.assertEqual([t["active"] for t in tabs], [True, False, False])
+        # The view filter carries over to the other libraries.
+        self.assertEqual(
+            [t["url"] for t in tabs],
+            [
+                "/photos?favorites=1",
+                "/photos?scope=all&favorites=1",
+                f"/photos?scope=group%3A{self.family.pk}&favorites=1",
+            ],
+        )
+
+    def test_no_tabs_when_there_is_nothing_to_switch_to(self):
+        self.family_photo.parent.soft_delete()
+
+        response = self.client.get("/photos")
+
+        self.assertEqual(response.context["scope_tabs"], [])
+        self.assertNotContains(response, 'aria-label="Library"')
+
+    def test_sidebar_links_stay_in_the_scope(self):
+        tag = Tag.objects.create(owner=self.user, name="Summer")
+        FileTag.objects.create(file=self.family_photo, tag=tag)
+
+        response = self.client.get("/photos?scope=all")
+
+        self.assertEqual(
+            response.context["favorites_url"], "/photos?scope=all&favorites=1"
+        )
+        self.assertEqual(response.context["timeline_url"], "/photos?scope=all")
+        self.assertEqual(
+            response.context["tags"][0]["url"], f"/photos?scope=all&tag={tag.uuid}"
+        )
+        self.assertContains(response, 'href="/photos?scope=all&amp;date=2024"')
+
+    @patch("workspace.photos.services.timeline.PAGE_SIZE", 1)
+    def test_the_next_page_stays_in_the_scope(self):
+        first = self.client.get("/photos?scope=all")
+        next_url = _next_url(first)
+        self.assertIn("scope=all", next_url)
+
+        second = self.client.get(next_url)
+
+        self.assertEqual(self._tiles(second), [str(self.family_photo.uuid)])

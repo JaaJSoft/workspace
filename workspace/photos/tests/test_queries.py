@@ -1,12 +1,20 @@
 from datetime import UTC, datetime
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.files.models import FileScan, FileTag, Tag
 from workspace.files.services import FileService
-from workspace.photos.queries import library_files, library_tags, unanalyzed_count
+from workspace.photos.queries import (
+    ALL,
+    MINE,
+    library_files,
+    library_groups,
+    library_tags,
+    unanalyzed_count,
+)
 
 from .images import make_photo, upload
 
@@ -81,3 +89,49 @@ class UnanalyzedCountTests(TestCase):
         )
 
         self.assertEqual(unanalyzed_count(self.user), 0)
+
+
+class ScopeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        bob = User.objects.create_user(username="bob", password="p")
+        self.family = Group.objects.create(name="Family")
+        self.team = Group.objects.create(name="Team")
+        self.strangers = Group.objects.create(name="Strangers")
+        self.user.groups.add(self.family, self.team)
+        self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14))
+        self.family_photo = self._group_photo(bob, self.family, "family.jpg")
+        self.strangers_photo = self._group_photo(bob, self.strangers, "other.jpg")
+
+    def _group_photo(self, owner, group, name):
+        root = FileService.create_folder(owner=owner, name=group.name, group=group)
+        return make_photo(owner, name, _at(2024, 7, 14), parent=root)
+
+    def test_mine_is_the_default(self):
+        self.assertEqual(list(library_files(self.user)), [self.mine])
+        self.assertEqual(list(library_files(self.user, MINE)), [self.mine])
+
+    def test_all_adds_the_users_group_folders(self):
+        self.assertEqual(
+            set(library_files(self.user, ALL)), {self.mine, self.family_photo}
+        )
+
+    def test_a_group_reads_that_group_alone(self):
+        self.assertEqual(
+            list(library_files(self.user, self.family)), [self.family_photo]
+        )
+        self.assertEqual(list(library_files(self.user, self.team)), [])
+
+    def test_a_group_the_user_is_not_in_reads_as_empty(self):
+        self.assertEqual(list(library_files(self.user, self.strangers)), [])
+
+    def test_library_groups_are_the_users_groups_holding_photos(self):
+        self.assertEqual(list(library_groups(self.user)), [self.family])
+
+    def test_unanalyzed_count_follows_the_scope(self):
+        root = self.family_photo.parent
+        upload(User.objects.get(username="bob"), "fresh.jpg", parent=root)
+
+        self.assertEqual(unanalyzed_count(self.user), 0)
+        self.assertEqual(unanalyzed_count(self.user, ALL), 1)
+        self.assertEqual(unanalyzed_count(self.user, self.family), 1)

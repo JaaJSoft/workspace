@@ -9,7 +9,14 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
-from workspace.photos.queries import library_files, library_tags, unanalyzed_count
+from workspace.photos.queries import (
+    ALL,
+    MINE,
+    library_files,
+    library_groups,
+    library_tags,
+    unanalyzed_count,
+)
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -20,6 +27,32 @@ from workspace.photos.services.timeline import (
     year_counts,
 )
 from workspace.users.services.settings import get_module_settings, get_user_timezone
+
+
+def _scope(request):
+    """The library ``?scope=`` asks for; 404 on a group the user is not in."""
+    raw = request.GET.get("scope", "")
+    if raw in ("", MINE):
+        return MINE
+    if raw == ALL:
+        return ALL
+    prefix, _, group_id = raw.partition(":")
+    if prefix == "group":
+        try:
+            group = request.user.groups.filter(pk=int(group_id)).first()
+        except ValueError:
+            group = None
+        if group is not None:
+            return group
+    raise Http404
+
+
+def _scope_params(scope):
+    if scope == MINE:
+        return {}
+    if scope == ALL:
+        return {"scope": ALL}
+    return {"scope": f"group:{scope.pk}"}
 
 
 def _filters(request):
@@ -35,8 +68,8 @@ def _filters(request):
     return favorites, tag
 
 
-def _filtered_library(user, favorites, tag):
-    files = library_files(user)
+def _filtered_library(user, scope, favorites, tag):
+    files = library_files(user, scope)
     if favorites:
         files = files.filter(favorites__owner=user)
     if tag is not None:
@@ -53,11 +86,35 @@ def _filter_params(favorites, tag):
     return params
 
 
-def _page_context(request, files, position, tz, favorites, tag):
+def _scope_tabs(user, scope, filter_params):
+    """The library switcher: Mine, All, then one tab per group with photos.
+
+    Hidden (empty) while there is nothing to switch to: a user whose groups
+    hold no photo would only see two tabs showing the same pictures.
+    """
+    groups = list(library_groups(user))
+    if not isinstance(scope, str) and scope not in groups:
+        groups.append(scope)
+    if not groups and scope == MINE:
+        return []
+    choices = [(MINE, "Mine", "user"), (ALL, "All", "layers")]
+    choices += [(group, group.name, "users") for group in groups]
+    return [
+        {
+            "label": label,
+            "icon": icon,
+            "url": _url_with(_scope_params(choice) | filter_params),
+            "active": choice == scope,
+        }
+        for choice, label, icon in choices
+    ]
+
+
+def _page_context(request, files, position, tz, view_params):
     page = timeline_page(with_timeline_fields(files, request.user), position, tz)
     next_url = None
     if page.next_cursor:
-        params = _filter_params(favorites, tag) | {"cursor": page.next_cursor}
+        params = view_params | {"cursor": page.next_cursor}
         next_url = f"{reverse('photos_ui:timeline')}?{urlencode(params)}"
     return {"entries": page.entries, "next_url": next_url}
 
@@ -71,6 +128,7 @@ def _url_with(params):
 @ensure_csrf_cookie
 def index(request):
     """The timeline, opened at its newest photo or at ``?date=``."""
+    scope = _scope(request)
     favorites, tag = _filters(request)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
@@ -81,14 +139,16 @@ def index(request):
         except ValueError:
             return HttpResponseBadRequest("Invalid date.")
 
-    files = _filtered_library(request.user, favorites, tag)
+    files = _filtered_library(request.user, scope, favorites, tag)
+    scope_params = _scope_params(scope)
     filter_params = _filter_params(favorites, tag)
+    view_params = scope_params | filter_params
     years = [
         {
             "label": str(year) if year is not None else "Undated",
             "count": count,
             "url": _url_with(
-                filter_params | {"date": str(year) if year is not None else UNDATED}
+                view_params | {"date": str(year) if year is not None else UNDATED}
             ),
             "active": date_param == (str(year) if year is not None else UNDATED),
         }
@@ -100,7 +160,7 @@ def index(request):
     elif favorites:
         active_view, title, icon = "favorites", "Favorites", "star"
     else:
-        active_view, title, icon = "all", "Timeline", "images"
+        active_view, title, icon = "timeline", "Timeline", "images"
 
     viewer_prefs = get_module_settings(request.user, "files").get("viewer") or {}
     if not isinstance(viewer_prefs, dict):
@@ -108,27 +168,30 @@ def index(request):
 
     context = {
         "active_view": active_view,
-        "is_all_view": active_view == "all",
+        "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
         "title": title,
         "title_icon": icon,
         "total": files.count(),
-        "pending": unanalyzed_count(request.user) if active_view == "all" else 0,
+        "pending": (
+            unanalyzed_count(request.user, scope) if active_view == "timeline" else 0
+        ),
         "date_param": date_param,
-        "latest_url": _url_with(filter_params),
+        "latest_url": _url_with(view_params),
+        "scope_tabs": _scope_tabs(request.user, scope, filter_params),
         "years": years,
         "tags": [
             {
                 "tag": t,
-                "url": _url_with({"tag": str(t.uuid)}),
+                "url": _url_with(scope_params | {"tag": str(t.uuid)}),
                 "active": tag is not None and t.pk == tag.pk,
             }
-            for t in library_tags(request.user)
+            for t in library_tags(request.user, scope)
         ],
-        "all_url": reverse("photos_ui:index"),
-        "favorites_url": _url_with({"favorites": "1"}),
+        "timeline_url": _url_with(scope_params),
+        "favorites_url": _url_with(scope_params | {"favorites": "1"}),
         "viewer_prefs": viewer_prefs,
-        **_page_context(request, files, position, tz, favorites, tag),
+        **_page_context(request, files, position, tz, view_params),
     }
     return render(request, "photos/ui/index.html", context)
 
@@ -136,13 +199,18 @@ def index(request):
 @login_required
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
+    scope = _scope(request)
     favorites, tag = _filters(request)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
-    files = _filtered_library(request.user, favorites, tag)
+    files = _filtered_library(request.user, scope, favorites, tag)
     context = _page_context(
-        request, files, position, get_user_timezone(request.user), favorites, tag
+        request,
+        files,
+        position,
+        get_user_timezone(request.user),
+        _scope_params(scope) | _filter_params(favorites, tag),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)

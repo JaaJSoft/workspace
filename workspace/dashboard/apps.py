@@ -45,16 +45,6 @@ class DashboardConfig(AppConfig):
 
         planned_modules = [
             ModuleInfo(
-                name="Tasks",
-                slug="tasks",
-                description="Track projects and to-dos.",
-                icon="check-square",
-                color="lime",
-                url=None,
-                active=False,
-                order=50,
-            ),
-            ModuleInfo(
                 name="Contacts",
                 slug="contacts",
                 description="Manage contacts and interactions.",

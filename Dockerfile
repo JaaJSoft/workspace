@@ -110,4 +110,4 @@ ENV GUNICORN_WORKERS=3 \
 EXPOSE 8000
 
 # Start command (exec replaces shell so gunicorn receives signals as PID 1)
-CMD ["sh", "-c", "exec gunicorn workspace.wsgi:application -b 0.0.0.0:8000 -k gevent -w ${GUNICORN_WORKERS} --log-level ${GUNICORN_LOG_LEVEL} --error-logfile - --access-logfile - --access-logformat \"${GUNICORN_ACCESS_LOGFORMAT}\" --capture-output"]
+CMD ["sh", "-c", "exec gunicorn workspace.wsgi:application -c gunicorn.conf.py -b 0.0.0.0:8000 -k gevent -w ${GUNICORN_WORKERS} --log-level ${GUNICORN_LOG_LEVEL} --error-logfile - --access-logfile - --access-logformat \"${GUNICORN_ACCESS_LOGFORMAT}\" --capture-output"]

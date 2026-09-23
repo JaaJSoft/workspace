@@ -23,7 +23,6 @@ from django.contrib.auth.decorators import login_required
 from django.urls import include, path
 from django.views.decorators.cache import cache_page
 from django.views.static import serve
-from django_prometheus import exports as prometheus_exports
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -32,6 +31,7 @@ from drf_spectacular.views import (
 from mozilla_django_oidc import views as oidc_views
 
 from workspace.core.metrics_auth import metrics_basic_auth
+from workspace.core.views import metrics as metrics_views
 from workspace.core.views.health import LiveView, ReadyView, StartupView
 from workspace.users.ui.views import WorkspaceLoginView
 
@@ -131,10 +131,9 @@ urlpatterns = [
     path("health/startup", StartupView.as_view(), name="health-startup"),
     path("health/live", LiveView.as_view(), name="health-live"),
     path("health/ready", ReadyView.as_view(), name="health-ready"),
-    # Prometheus metrics — django_prometheus exports them unauthenticated
     path(
         "metrics",
-        metrics_basic_auth(prometheus_exports.ExportToDjangoView),
+        metrics_basic_auth(metrics_views.metrics),
         name="prometheus-django-metrics",
     ),
 ]

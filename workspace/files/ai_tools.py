@@ -88,7 +88,7 @@ Use read_file with the returned UUID to get the content."""
         if not query:
             return "Error: query is required"
 
-        from workspace.files.search import in_browsable_tree
+        from workspace.files.search import in_browsable_tree, reachable_parent_ids
         from workspace.files.services import FileService
 
         qs = (
@@ -106,18 +106,18 @@ Use read_file with the returned UUID to get the content."""
         elif file_type == "folder":
             qs = qs.filter(node_type=File.NodeType.FOLDER)
 
-        matches = qs[:20]
+        matches = list(qs[:20])
         if not matches:
             return f'No files found matching "{query}".'
 
         from workspace.users.services.settings import get_user_timezone
 
         user_tz = get_user_timezone(user)
-        group_ids = set(user.groups.values_list("id", flat=True))
+        reachable_parents = reachable_parent_ids(user, matches)
         results = []
         for f in matches:
-            # A shared file's folder belongs to its owner; its name is not ours to show.
-            browsable = in_browsable_tree(f, user, group_ids)
+            # A folder the user cannot open is not theirs to name.
+            browsable = in_browsable_tree(f, user, reachable_parents)
             results.append(
                 {
                     "uuid": str(f.uuid),

@@ -97,6 +97,21 @@ class SearchFilenamesScopeTests(TestCase):
         self.assertEqual(hit["parent_folder"], "")
         self.assertTrue(hit["shared_with_me"])
 
+    def test_a_group_file_under_a_private_folder_does_not_name_it(self):
+        folder = File.objects.create(
+            owner=self.bob, name="Bob private", node_type=File.NodeType.FOLDER
+        )
+        File.objects.create(
+            owner=self.bob,
+            name="budget.xlsx",
+            node_type=File.NodeType.FILE,
+            group=self.team,
+            parent=folder,
+        )
+        [hit] = self._search("budget")
+        self.assertEqual(hit["parent_folder"], "")
+        self.assertTrue(hit["shared_with_me"])
+
     def test_another_users_unshared_file_stays_hidden(self):
         File.objects.create(
             owner=self.bob, name="budget.xlsx", node_type=File.NodeType.FILE

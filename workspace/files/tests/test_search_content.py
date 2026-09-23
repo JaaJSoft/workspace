@@ -184,6 +184,30 @@ class SearchFilesAccessScopeTests(ContentSearchTestCase):
         # The owner's folder is out of reach: its name must not surface.
         self.assertEqual([t.label for t in hit.tags], ["Shared with me"])
 
+    def test_a_group_file_under_a_private_folder_does_not_link_or_name_it(self):
+        # `group` is set on the row alone; the folder above can still be
+        # somebody's personal one.
+        doc = self._bobs_file("minutes.md")
+        File.objects.filter(pk=doc.pk).update(group=self.team)
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files?shared=1&open={doc.uuid}")
+        self.assertNotIn("Bob private", [t.label for t in hit.tags])
+
+    def test_a_folder_shared_directly_does_not_name_its_private_parent(self):
+        folder = File.objects.create(
+            owner=self.other,
+            name="Treasurer reports",
+            node_type=File.NodeType.FOLDER,
+            parent=self.bob_folder,
+        )
+        index_file(folder)
+        FileShare.objects.create(
+            file=folder, shared_by=self.other, shared_with=self.user
+        )
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files/{folder.uuid}")
+        self.assertEqual(hit.tags, ())
+
     def test_a_file_shared_with_one_of_the_users_groups_is_found(self):
         doc = self._bobs_file("minutes.md")
         FileShare.objects.create(

@@ -173,39 +173,50 @@ class ApiGuardTests(_GuardTestCase):
 
 
 class GuardCoverageTests(SimpleTestCase):
-    """A view that sets its own permission_classes replaces the defaults, and
-    with them ModuleVisible. Pages need no such check: the middleware sees
-    every one of them."""
+    """The guard knows a view's module by where the view's code lives. Two
+    ways out of it: a route whose view is defined elsewhere (a bare
+    ``TemplateView``, a decorator that drops ``__module__``), and an API view
+    whose permissions replace the defaults, ModuleVisible with them. Routes
+    are attributed here by the URLconf that declares them instead, which
+    neither can fool."""
 
-    def _preview_api_views(self):
+    def _preview_routes(self):
         found = []
 
-        def walk(patterns):
+        def walk(patterns, owner):
             for pattern in patterns:
                 if isinstance(pattern, URLResolver):
-                    walk(pattern.url_patterns)
-                    continue
-                view_class = getattr(pattern.callback, "cls", None)
-                module = owning_module(pattern.callback.__module__)
-                if (
-                    module is not None
-                    and module.preview
-                    and isinstance(view_class, type)
-                    and issubclass(view_class, APIView)
-                ):
-                    found.append((str(pattern.pattern), module.slug, view_class))
+                    # A dotted path, a module, or a bare list of patterns
+                    # (the admin's), which inherits its parent's owner.
+                    urlconf = pattern.urlconf_name
+                    name = urlconf if isinstance(urlconf, str) else ""
+                    name = getattr(urlconf, "__name__", name)
+                    walk(pattern.url_patterns, owning_module(name) or owner)
+                elif owner is not None and owner.preview:
+                    found.append((str(pattern.pattern), owner, pattern.callback))
 
-        walk(get_resolver().url_patterns)
+        walk(get_resolver().url_patterns, None)
         return found
 
-    def test_the_walk_reaches_the_preview_endpoints(self):
-        # A walk that finds nothing would let every view through.
-        self.assertIn("vault", {slug for _, slug, _ in self._preview_api_views()})
+    def test_the_walk_reaches_the_preview_routes(self):
+        # A walk that finds nothing would let every route through.
+        routes = {(owner.slug, route) for route, owner, _ in self._preview_routes()}
+        self.assertIn(("vault", ""), routes)
+        self.assertIn(("vault", "api/v1/vault/vaults"), routes)
+
+    def test_every_preview_route_is_attributed_to_its_module(self):
+        for route, owner, callback in self._preview_routes():
+            with self.subTest(route=route):
+                self.assertIs(owning_module(callback.__module__), owner)
 
     def test_no_preview_api_view_drops_the_module_guard(self):
-        for route, _, view_class in self._preview_api_views():
+        for route, _, callback in self._preview_routes():
+            view_class = getattr(callback, "cls", None)
+            if not (isinstance(view_class, type) and issubclass(view_class, APIView)):
+                continue
             with self.subTest(route=route):
-                self.assertIn(ModuleVisible, view_class.permission_classes)
+                permissions = view_class().get_permissions()
+                self.assertTrue(any(isinstance(p, ModuleVisible) for p in permissions))
 
     def test_the_middleware_refuses_before_the_csrf_check(self):
         middleware = settings.MIDDLEWARE

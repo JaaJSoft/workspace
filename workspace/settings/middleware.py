@@ -20,6 +20,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "workspace.users.middleware.TimezoneMiddleware",
     "workspace.users.middleware.AjaxLoginRedirectMiddleware",
+    # After authentication: a preview module refuses users outside its audience.
+    "workspace.core.module_guard.PreviewModuleMiddleware",
     "workspace.users.middleware.PresenceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

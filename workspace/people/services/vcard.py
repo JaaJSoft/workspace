@@ -313,9 +313,12 @@ def _parse_card(lines):
         elif name in ("MEMBER", "X-ADDRESSBOOKSERVER-MEMBER"):
             member_uids.append(_unescape(_raw_value(line)).strip())
         elif name == "PHOTO":
-            photo = _parse_photo(line)
-            if photo is None:
+            # The first image wins; any other PHOTO line is kept for the round trip.
+            decoded = _parse_photo(line) if photo is None else None
+            if decoded is None:
                 extra.setdefault(name, []).append(_extra_entry(line))
+            else:
+                photo = decoded
         elif name not in _CONSUMED:
             extra.setdefault(name, []).append(_extra_entry(line))
 

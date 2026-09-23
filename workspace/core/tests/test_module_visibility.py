@@ -2,6 +2,7 @@ import importlib.util
 from dataclasses import asdict
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
@@ -331,3 +332,11 @@ class OwningModuleTests(SimpleTestCase):
                 self.assertIsNotNone(
                     importlib.util.find_spec(f"workspace.{module.slug}")
                 )
+
+
+class SuiteDefaultTests(SimpleTestCase):
+    def test_the_suite_opens_preview_modules_to_everyone(self):
+        """Fixture users are regular users: under the production default a
+        preview module's own tests would all be refused. Tests of the audience
+        override it back."""
+        self.assertEqual(settings.PREVIEW_VISIBILITY, "all")

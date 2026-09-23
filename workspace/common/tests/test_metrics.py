@@ -8,6 +8,7 @@ from workspace.common.metrics import (
     safe_gauge,
     safe_histogram,
     safe_register,
+    scrape_time_collectors,
 )
 
 
@@ -21,6 +22,12 @@ class GetOrCreateTests(TestCase):
         a = safe_gauge("test_helper_gauge", "doc")
         b = safe_gauge("test_helper_gauge", "doc")
         self.assertIs(a, b)
+
+    def test_safe_gauge_forwards_the_multiprocess_mode(self):
+        gauge = safe_gauge(
+            "test_helper_livesum_gauge", "doc", multiprocess_mode="livesum"
+        )
+        self.assertEqual(gauge._multiprocess_mode, "livesum")
 
     def test_safe_histogram_returns_same_instance_on_second_call(self):
         a = safe_histogram("test_helper_hist_seconds", "doc", ["y"])
@@ -52,3 +59,16 @@ class SafeRegisterTests(TestCase):
         safe_register(collector)
         # Second call must not raise.
         safe_register(collector)
+
+    def test_registered_collector_is_listed_once_for_the_scrape_view(self):
+        from prometheus_client.core import GaugeMetricFamily
+
+        class _ListedCollector:
+            def collect(self):
+                yield GaugeMetricFamily("test_helper_listed", "doc", value=1)
+
+        collector = _ListedCollector()
+        safe_register(collector)
+        safe_register(collector)
+        listed = [c for c in scrape_time_collectors() if c is collector]
+        self.assertEqual(len(listed), 1)

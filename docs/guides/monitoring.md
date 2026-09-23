@@ -86,7 +86,7 @@ Remove the ingress snippet if you scrape from outside the cluster.
 
 ## What is exposed
 
-Beyond the standard `django_prometheus` series (HTTP requests by view, method and status, response latency, DB query counts, cache hits/misses, migration state) and the default Python process metrics, Workspace publishes:
+Beyond the standard `django_prometheus` series (HTTP requests by view, method and status, response latency, DB query counts, cache hits/misses), Workspace publishes:
 
 | Metric                                        | Type      | Labels                | Meaning                                          |
 |-----------------------------------------------|-----------|-----------------------|--------------------------------------------------|
@@ -112,6 +112,18 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 
 `celery_queue_length` requires Redis as the broker; it reports nothing with the in-memory broker.
 
+Series recorded inside Celery tasks stay in the worker process, which serves no `/metrics` of its own: `celery_task_duration_seconds`, `celery_tasks_total`, `ai_agent_checkins_total`, the thumbnail and malware scan series, and whatever share of the AI series a background task produces. They are exported by the web process, but only with the values the web process recorded itself.
+
+## Multiple Gunicorn workers
+
+The container runs several Gunicorn workers (`GUNICORN_WORKERS`), each a separate process with its own values. So that a scrape reports the whole instance rather than whichever worker answered it, the image runs `prometheus_client` in multiprocess mode, with no setup on your side:
+
+- At startup, Gunicorn creates an empty directory under `/tmp` and every worker writes its values there, one file per process. `/metrics` sums them. The directory is removed when Gunicorn exits.
+- When a worker dies, its counters stay in the totals and `sse_active_connections` stops counting its streams.
+- To put the files somewhere else, a tmpfs mount for instance, set `PROMETHEUS_MULTIPROC_DIR`. Workspace empties that directory at startup, so do not share it between containers.
+
+Unlike a single-process run such as `manage.py runserver`, the process and garbage-collector series (`process_*`, `python_gc_*`) are not exposed: they have no multiprocess form.
+
 ## Health probes
 
 Separate from metrics, unauthenticated by design, and used by Kubernetes:
@@ -130,6 +142,6 @@ Separate from metrics, unauthenticated by design, and used by Kubernetes:
 
 **Credentials look right but still 401.** Leading and trailing whitespace is trimmed from both variables, so a stray newline in a secret file is not the cause — but a quoted value is: `METRICS_PASSWORD="secret"` in a `.env` file keeps the quotes as part of the password in some shells. Compare against what the app received with `docker compose exec web env | grep METRICS`.
 
-**Counters jump around between scrapes.** Under Gunicorn each worker keeps its own registry and a scrape lands on one worker at random, so values appear to move backwards. Fixing it means running `prometheus_client` in multiprocess mode (`PROMETHEUS_MULTIPROC_DIR` plus a Gunicorn `child_exit` hook to reap dead workers); Workspace ships no such configuration by default. Rate-based queries over a single-worker deployment are unaffected.
+**Counters jump around between scrapes.** Each scrape is reporting a single worker. That happens when Gunicorn starts without the image's `gunicorn.conf.py`, for example from a custom command that drops `-c gunicorn.conf.py`. Keep the flag, and see [Multiple Gunicorn workers](#multiple-gunicorn-workers).
 
 **404 instead of 401.** The path has no trailing slash: `/metrics`, not `/metrics/`.

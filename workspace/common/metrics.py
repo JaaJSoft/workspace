@@ -19,13 +19,15 @@ from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
 logger = logging.getLogger(__name__)
 
+_scrape_time_collectors = []
+
 
 def safe_counter(name, doc, labels=()):
     return _get_or_create(Counter, name, doc, labels)
 
 
-def safe_gauge(name, doc, labels=()):
-    return _get_or_create(Gauge, name, doc, labels)
+def safe_gauge(name, doc, labels=(), **kwargs):
+    return _get_or_create(Gauge, name, doc, labels, **kwargs)
 
 
 def safe_histogram(name, doc, labels=(), **kwargs):
@@ -41,6 +43,18 @@ def safe_register(collector):
             "Collector %s already registered; skipping",
             type(collector).__name__,
         )
+        return
+    _scrape_time_collectors.append(collector)
+
+
+def scrape_time_collectors():
+    """Collectors registered through ``safe_register``.
+
+    In multiprocess mode a scrape reads the workers' value files instead of
+    REGISTRY, and those files know nothing of collectors that compute their
+    samples on the spot: the scrape view has to add these back itself.
+    """
+    return tuple(_scrape_time_collectors)
 
 
 def _get_or_create(cls, name, doc, labels, **kwargs):

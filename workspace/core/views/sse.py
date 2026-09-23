@@ -17,6 +17,7 @@ _P = "sse"
 SSE_CONNECTIONS = safe_gauge(
     f"{_P}_active_connections",
     "Number of active global SSE connections",
+    multiprocess_mode="livesum",
 )
 
 SSE_EVENTS_EMITTED = safe_counter(

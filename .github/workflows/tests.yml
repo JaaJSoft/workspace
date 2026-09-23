@@ -199,6 +199,8 @@ jobs:
             min_coverage: 80
           - module: people
             min_coverage: 90
+          - module: photos
+            min_coverage: 95
           - module: projects
             min_coverage: 85
           - module: users
@@ -259,6 +261,7 @@ jobs:
           - mail
           - notes
           - people
+          - photos
           - projects
           - users
           - vault
@@ -311,6 +314,7 @@ jobs:
           - mail
           - notes
           - people
+          - photos
           - projects
           - users
           - vault

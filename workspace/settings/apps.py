@@ -26,6 +26,8 @@ INSTALLED_APPS = [
     "workspace.files.ui",
     "workspace.notes",
     "workspace.notes.ui",
+    "workspace.photos",
+    "workspace.photos.ui",
     "workspace.projects",
     "workspace.projects.ui",
     "workspace.people",

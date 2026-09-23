@@ -1,0 +1,44 @@
+{% load file_filters %}
+{% comment %}
+  A square tile of the timeline, a fixed size so that day groups line up. On a
+  phone it is a third of the screen (the drawer is off-canvas there, and the
+  page padding plus two gaps come to 1.5rem). The data-* attributes are the
+  ones the Files viewer modal walks for its previous/next navigation, so the
+  viewer pages through the timeline in the order it is shown.
+{% endcomment %}
+<button
+  type="button"
+  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-sm bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-module"
+  data-uuid="{{ file.uuid }}"
+  data-node-type="file"
+  data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
+  data-display-name="{{ file.name }}"
+  data-file-type="{{ file.type }}"
+  title="{{ file.name }}"
+  @click="openPhoto($el)"
+>
+  {% if file.has_thumbnail %}
+    <img
+      src="{{ file|thumbnail_url }}"
+      alt="{{ file.name }}"
+      class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+      loading="lazy"
+      decoding="async"
+      draggable="false"
+    />
+  {% else %}
+    <span
+      class="absolute inset-0 flex items-center justify-center text-base-content/30"
+    >
+      <i data-lucide="image" class="w-8 h-8"></i>
+    </span>
+  {% endif %}
+  {% if file.is_favorite %}
+    <span
+      class="absolute top-1 right-1 flex rounded-full bg-base-100/80 p-0.5"
+      aria-label="Favorite"
+    >
+      <i data-lucide="star" class="w-3.5 h-3.5 text-warning fill-current"></i>
+    </span>
+  {% endif %}
+</button>

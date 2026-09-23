@@ -21,7 +21,15 @@ class DrawerOrderTests(TestCase):
         self.client.force_login(self.user)
 
     def test_sidebar_precedes_content_in_every_module_shell(self):
-        for path in ("/files", "/chat", "/notes", "/mail", "/calendar", "/projects"):
+        for path in (
+            "/files",
+            "/chat",
+            "/notes",
+            "/photos",
+            "/mail",
+            "/calendar",
+            "/projects",
+        ):
             with self.subTest(path=path):
                 response = self.client.get(path, follow=True)
                 self.assertEqual(response.status_code, 200)

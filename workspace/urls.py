@@ -72,6 +72,7 @@ ui_urlpatterns = [
     # UI apps
     path("files", include("workspace.files.ui.urls")),
     path("notes", include("workspace.notes.ui.urls")),
+    path("photos", include("workspace.photos.ui.urls")),
     path("users", include("workspace.users.ui.urls")),
     path("chat", include("workspace.chat.ui.urls")),
     path("calendar", include("workspace.calendar.ui.urls")),

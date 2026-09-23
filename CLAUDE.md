@@ -48,6 +48,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
 | `people` | Address book: persons and contact lists per user or group, linked workspace accounts, section registry for other modules |
+| `photos` | Photo library built on the files module: capture-date timeline, EXIF metadata read off-request (preview) |
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |
@@ -487,6 +488,17 @@ users = project_users(project)
 ```
 
 Task-level queries filter with `project_id__in=user_project_ids(user)` - see `tasks_due_between` / `assigned_open_tasks` in the same module for the canonical pattern (they also exclude archived projects and done statuses).
+
+#### Photos - `workspace.photos.queries`
+
+```python
+from workspace.photos.queries import library_files, library_tags
+
+files = library_files(user)   # the user's analyzed photos, as live File rows
+tags = library_tags(user)     # the user's tags carried by a photo, with photo_count
+```
+
+`library_files` starts from `FileService.user_files_qs`, so trashed files drop out and come back on restore without touching their `Photo` row, and it excludes quarantined files. A raster image without a `Photo` row has not been analyzed yet; it is not in the library.
 
 #### Vault - `workspace.vault.queries`
 

@@ -1,0 +1,115 @@
+{% extends "base_with_navbar.html" %}
+
+{% load static %}
+
+{% block title %}Photos - Workspace{% endblock %}
+
+{% block navbar %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}photos-drawer{% endblock %}
+{% block main_class %}p-0 flex h-full overflow-hidden{% endblock %}
+
+{% block drawer_attrs %}
+  x-data="photosApp()"
+  @ajax:missing="keepMissingTarget($event)"
+{% endblock %}
+
+{% block drawer_sidebar %}
+  <div class="drawer-side z-40 h-full !overflow-visible">
+    <label for="photos-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
+    >
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        </div>
+      </div>
+      {% include "photos/ui/partials/sidebar_nav.html" %}
+      <!-- Bottom action: collapse on desktop -->
+      <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+        </ul>
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {{ viewer_prefs|json_script:"viewer-prefs-data" }}
+  {% comment %}
+    The scroll container is the swap target itself: a sidebar navigation
+    replaces it whole, so the new listing starts at the top instead of
+    inheriting the previous one's scroll offset.
+  {% endcomment %}
+  <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
+    <header
+      class="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-base-300 bg-base-100/90 backdrop-blur"
+    >
+      {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
+      <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
+      <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+        <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+        <span class="text-sm text-base-content/60">{{ total }} photo{{ total|pluralize }}</span>
+      </div>
+      {% if pending %}
+        <span
+          class="badge badge-ghost gap-1.5 max-sm:hidden"
+          title="New pictures show up here once their capture date has been read."
+        >
+          <span class="loading loading-spinner loading-xs"></span>
+          {{ pending }} being analyzed
+        </span>
+      {% endif %}
+      {% if date_param %}
+        <a
+          href="{{ latest_url }}"
+          x-target.push="photos-nav photos-content"
+          class="btn btn-ghost btn-sm gap-1"
+        >
+          <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
+          <span class="max-sm:hidden">Back to latest</span>
+        </a>
+      {% endif %}
+    </header>
+
+    {% if entries %}
+      <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
+    {% else %}
+      <div
+        class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+      >
+        <div class="rounded-full bg-module/10 p-5">
+          <i data-lucide="images" class="w-10 h-10 text-module"></i>
+        </div>
+        {% if active_view == "all" and not date_param %}
+          <h2 class="text-lg font-semibold">No photos yet</h2>
+          <p class="text-sm text-base-content/60 max-w-sm">
+            Pictures you upload to Files show up here, by the day they were taken.
+          </p>
+          <a href="{% url 'files_ui:index' %}" class="btn btn-module btn-sm">Go to Files</a>
+        {% else %}
+          <h2 class="text-lg font-semibold">Nothing here</h2>
+          <p class="text-sm text-base-content/60 max-w-sm">No photo matches this view.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+  {% include "files/ui/partials/file_viewer_modal.html" %}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'photos/ui/js/photos.js' %}"></script>
+{% endblock %}

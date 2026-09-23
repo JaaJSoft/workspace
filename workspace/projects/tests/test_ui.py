@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
@@ -520,6 +521,60 @@ class SidebarTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         )
         self.assertNotContains(response, "drawer-side")
         self.assertNotIn("projects", response.context)
+
+    def _sidebar_counts_island(self, response):
+        html = response.content.decode()
+        start = html.index('<script id="project-sidebar-counts"')
+        body = html[html.index(">", start) + 1 : html.index("</script>", start)]
+        return json.loads(body)
+
+    def test_every_view_fragment_carries_fresh_sidebar_counts(self):
+        # The sidebar sits outside #project-content: after a task leaves the
+        # backlog, the swapped fragment is the only way its badges learn it.
+        backlog_status = self.project.statuses.get(name="Backlog")
+        todo_status = self.project.statuses.get(name="To do")
+        done_status = self.project.statuses.get(name="Done")
+        create_task(self.project, self.admin, title="Queued", status=backlog_status)
+        create_task(self.project, self.admin, title="Active", status=todo_status)
+        create_task(self.project, self.admin, title="Shipped", status=done_status)
+        self.client.force_login(self.admin)
+        base = f"/projects/{self.project.uuid}"
+        for path in (
+            "",
+            "/board",
+            "/backlog",
+            "/tasks",
+            "/timeline",
+            "/analytics",
+            "/settings",
+        ):
+            with self.subTest(view=path or "/overview"):
+                response = self.client.get(base + path, HTTP_X_ALPINE_REQUEST="1")
+                self.assertEqual(
+                    self._sidebar_counts_island(response), {"backlog": 1, "open": 2}
+                )
+
+    def test_backlog_counts_ignore_the_active_filters(self):
+        backlog_status = self.project.statuses.get(name="Backlog")
+        create_task(self.project, self.admin, title="Queued", status=backlog_status)
+        create_task(self.project, self.admin, title="Parked", status=backlog_status)
+        self.client.force_login(self.member)
+        response = self.client.get(
+            f"/projects/{self.project.uuid}/backlog?q=Queued",
+            HTTP_X_ALPINE_REQUEST="1",
+        )
+        self.assertEqual(self._sidebar_counts_island(response)["backlog"], 2)
+
+    def test_full_page_renders_the_backlog_badge_before_alpine_binds(self):
+        backlog_status = self.project.statuses.get(name="Backlog")
+        create_task(self.project, self.admin, title="Queued", status=backlog_status)
+        create_task(self.project, self.admin, title="Parked", status=backlog_status)
+        self.client.force_login(self.admin)
+        # Settings used to leave the badge out of the page altogether.
+        response = self.client.get(f"/projects/{self.project.uuid}/settings")
+        self.assertRegex(
+            response.content.decode(), r'x-text="sidebarCounts\.backlog"\s*>2</span>'
+        )
 
 
 class SettingsViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

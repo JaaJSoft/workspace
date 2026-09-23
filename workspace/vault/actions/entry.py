@@ -106,7 +106,7 @@ class RestoreEntryAction(BaseVaultAction):
 @VaultActionRegistry.register
 class DeleteEntryForeverAction(BaseVaultAction):
     id = "delete_forever"
-    label = "Delete for good"
+    label = "Delete permanently"
     icon = "trash-2"
     category = ActionCategory.DANGER
     css_class = "text-error"

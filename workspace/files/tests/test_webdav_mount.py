@@ -243,7 +243,9 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         # davfs2 then wraps every PUT in LOCK + UNLOCK, which is what
         # exercises the LOCK Content-Type middleware in ``app.py``.
         cls._davfs2_conf = cls._tmp_root / "davfs2.conf"
-        cls._davfs2_conf.write_text("delay_upload 0\ngui_optimize 0\n")
+        cls._davfs2_conf.write_text(
+            "delay_upload 0\ngui_optimize 0\n", encoding="utf-8"
+        )
 
     @classmethod
     def tearDownClass(cls):

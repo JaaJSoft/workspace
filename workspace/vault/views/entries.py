@@ -14,14 +14,20 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
-from workspace.common.uuids import parse_uuid_or_none
+from workspace.common.uuids import (
+    BatchTooLarge,
+    MalformedUuid,
+    UuidBatchError,
+    parse_uuid_batch,
+    parse_uuid_or_none,
+)
 
 from ..actions import VaultActionRegistry
 from ..models import VaultEntry, VaultRole
@@ -30,6 +36,7 @@ from ..queries import (
     active_identity,
     get_vault_role,
     reachable_vault,
+    vault_roles,
 )
 from ..serializers import VaultEntrySerializer, VaultEntryWriteSerializer
 from ..services.attestation import AttestationError
@@ -67,6 +74,17 @@ def _not_in_the_trash():
         {"detail": "The entry is not in the trash."},
         status=status.HTTP_409_CONFLICT,
     )
+
+
+def _not_the_owner():
+    return Response(
+        {"detail": "Only the vault owner may permanently delete an entry."},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _refused(detail):
+    return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
 
 def _signature_refused():
@@ -260,7 +278,17 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
 
 
 def _offers(action_id, user, entry, role):
-    """Whether the registry offers *action_id* on *entry* for *role*."""
+    """Whether the registry offers *action_id* on *entry* for *role*.
+
+    Only the action that declares it gets present_fields, because building
+    it means reading the entry's field rows: restore and delete_forever
+    never look, and a whole trash destroyed in one call would otherwise pull
+    every ciphertext it holds to answer a question nobody asked. The others
+    get None rather than an empty set, so an action that grew a use for it
+    without declaring one raises instead of quietly hiding itself.
+    """
+    action = VaultActionRegistry.get(action_id)
+    reads_fields = action is not None and action.reads_present_fields
     return VaultActionRegistry.is_action_available(
         action_id,
         user,
@@ -268,9 +296,14 @@ def _offers(action_id, user, entry, role):
         role=role,
         trashed=entry.deleted_at is not None,
         schema=schema_for(entry.type, default=()),
-        # One entry, so one query: the batch shape the actions endpoint needs
-        # would buy nothing here.
-        present_fields=frozenset(entry.fields.values_list("field_id", flat=True)),
+        # Iterating the manager rather than values_list, which would ignore a
+        # prefetched cache and query again: every caller that gets here has
+        # the rows already, for the serializer it is about to build.
+        present_fields=(
+            frozenset(field.field_id for field in entry.fields.all())
+            if reads_fields
+            else None
+        ),
     )
 
 
@@ -309,50 +342,193 @@ class EntryRestoreView(CacheControlMixin, APIView):
         return Response(VaultEntrySerializer(entry).data)
 
 
-class EntryPurgeView(CacheControlMixin, APIView):
-    """Destroy a trashed entry and its fields.
+MAX_PURGE_BATCH = 200
 
-    Only from the trash: that step is the confirmation, and without it one
-    mistyped URL destroys a live entry with nothing to undo it.
 
-    Owner only, and read off what DeleteEntryForeverAction declares rather
-    than written out again here. A key wrap opens a vault, and every other
-    entry action follows from that - this one does not, because it is the
-    only one no restore can undo.
+class _TrashChanged(Exception):
+    """A row named by the batch left the trash before the delete ran."""
+
+
+@extend_schema(
+    tags=["Vault"],
+    summary="Destroy trashed entries in one call",
+    description=(
+        "Destroy every named trashed entry, or none of them. Send exactly "
+        "one of `uuids` (an explicit selection, at most 200) or `vault` "
+        "(every trashed entry of that vault, uncapped). Owner only."
+    ),
+    request={
+        # Two branches rather than one object with two optional keys: a body
+        # naming both matches both branches and a body naming neither matches
+        # none, which is how oneOf spells the exactly-one the view enforces.
+        "application/json": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "uuids": {
+                            "type": "array",
+                            "items": {"type": "string", "format": "uuid"},
+                            "minItems": 1,
+                            "maxItems": MAX_PURGE_BATCH,
+                        },
+                    },
+                    "required": ["uuids"],
+                },
+                {
+                    "type": "object",
+                    "properties": {"vault": {"type": "string", "format": "uuid"}},
+                    "required": ["vault"],
+                },
+            ],
+        },
+    },
+    responses={
+        200: OpenApiResponse(
+            response={
+                "type": "object",
+                "properties": {
+                    "destroyed": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "uuid"},
+                    },
+                },
+                "required": ["destroyed"],
+            },
+            description="The UUIDs that were destroyed.",
+        ),
+        400: OpenApiResponse(description="Malformed, oversized or ambiguous body."),
+        403: OpenApiResponse(description="Not the owner of the vault."),
+        404: OpenApiResponse(description="A named entry or vault is out of reach."),
+        409: OpenApiResponse(description="A named entry is not in the trash."),
+    },
+)
+class EntryBatchPurgeView(CacheControlMixin, APIView):
+    """Destroy a set of trashed entries, all of them or none.
+
+    The single-entry endpoint above cannot be looped over safely: N requests
+    fail in pieces, half destroyed and half in place, and there is then
+    nothing true left to tell the user. Everything here runs in one
+    transaction for that reason, and the answer names what went.
+
+    Two bodies rather than one. A selection is a list of UUIDs, capped the
+    way the actions endpoint is, because it comes from rows on screen. A
+    whole trash is named by its vault and is *not* capped: capping it would
+    put the client back in the business of slicing, which is the loop this
+    endpoint exists to remove.
     """
 
     cache_no_store = True
 
-    @extend_schema(
-        tags=["Vault"],
-        summary="Delete a trashed entry for good",
-        responses={204: None},
-    )
     @sensitive_variables()
-    def post(self, request, uuid):
-        # Lighter than _reachable_entry: the row is about to be destroyed, so
-        # only the vault comes along, for the role.
-        entry = (
-            VaultEntry.objects.filter(accessible_entries_q(request.user), uuid=uuid)
-            .select_related("vault")
-            .first()
-        )
-        if entry is None:
+    def post(self, request):
+        # Read through a mapping check rather than with .get: a JSON array or
+        # scalar body hands the view a list or an int, and asking either for
+        # a key is a 500 where this deserves a 400.
+        data = request.data if isinstance(request.data, dict) else {}
+        named_uuids = "uuids" in data
+        named_vault = "vault" in data
+        if named_uuids == named_vault:
+            return _refused("Send exactly one of uuids or vault.")
+
+        # The whole request runs in the transaction, reads included. Outside
+        # it the rows are read under no lock, and `delete()` takes the
+        # collector path on a model with cascades: the final DELETE names
+        # primary keys with no deleted_at predicate on it, so a restore
+        # committing between the read and that statement would be destroyed
+        # whatever the read had seen.
+        try:
+            with transaction.atomic():
+                if named_vault:
+                    outcome = self._whole_trash(request.user, data["vault"])
+                else:
+                    outcome = self._selection(request.user, data)
+                if isinstance(outcome, Response):
+                    return outcome
+                entries, doomed = outcome
+
+                # One query for every role, then pure in-memory checks:
+                # asking per row would make a 200-row batch cost 200 lookups.
+                roles = vault_roles(request.user, {entry.vault_id for entry in entries})
+                for entry in entries:
+                    role = roles.get(entry.vault_id)
+                    if role != VaultRole.OWNER:
+                        return _not_the_owner()
+                    # Read off the registry rather than restated here, so the
+                    # batch and the single-entry endpoint cannot drift on who
+                    # may destroy what.
+                    if not _offers("delete_forever", request.user, entry, role):
+                        return _not_in_the_trash()
+
+                targets = [entry.uuid for entry in entries]
+                # The count still guards, because the lock above is a no-op on
+                # SQLite - it holds the whole database for the transaction
+                # instead - and because a queryset delete on a model with
+                # cascades cannot carry the predicate itself.
+                #
+                # Short, not different: a row that left the trash under us is
+                # the accident this catches. The whole-trash form names a
+                # filter, so a row someone trashed while it ran is destroyed
+                # too and the count comes back long - which is what emptying a
+                # trash means, not a reason to refuse the whole call.
+                _, per_model = doomed.delete()
+                if per_model.get(VaultEntry._meta.label, 0) < len(targets):
+                    raise _TrashChanged
+        except _TrashChanged:
+            return _not_in_the_trash()
+        return Response({"destroyed": [str(value) for value in targets]})
+
+    def _whole_trash(self, user, vault_uuid):
+        """One vault's trash: the rows to check, and the set to destroy.
+
+        The set is a filter rather than the UUIDs of the rows - a trash is
+        uncapped, and naming its rows one by one would put a bind parameter
+        per entry into the DELETE, which a large enough trash turns into a
+        500 instead of an empty trash.
+        """
+        parsed = parse_uuid_or_none(vault_uuid)
+        vault = None if parsed is None else reachable_vault(user, parsed)
+        if vault is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        role = get_vault_role(request.user, entry.vault)
-        if role != VaultRole.OWNER:
-            return Response(
-                {"detail": "Only the vault owner may delete an entry for good."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if not _offers("delete_forever", request.user, entry, role):
-            return _not_in_the_trash()
-        # Conditional, because the check above ran on a copy read outside any
-        # lock: a restore landing in between would otherwise destroy an entry
-        # the user has just been told is back.
-        destroyed, _ = VaultEntry.objects.filter(
-            pk=entry.pk, deleted_at__isnull=False
-        ).delete()
-        if not destroyed:
-            return _not_in_the_trash()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        # Checked here as well as in the loop the caller runs, because an
+        # empty trash never reaches that loop - and "you are not the owner"
+        # must not turn into a 200 just because there was nothing to destroy.
+        if get_vault_role(user, vault) != VaultRole.OWNER:
+            return _not_the_owner()
+        trashed = VaultEntry.objects.filter(vault=vault, deleted_at__isnull=False)
+        # Neither the join nor the field rows: the role is resolved from
+        # vault_id below, delete_forever reads no field, and select_for_update
+        # would take the joined vault row with it - locking the vault itself
+        # for as long as its trash takes to empty.
+        entries = list(trashed.select_for_update())
+        return entries, trashed
+
+    def _selection(self, user, data):
+        """The named entries and the set to destroy, or the refusal."""
+        # The wording is chosen here from the kind of failure, never taken
+        # from the exception: an exception's text is a path from the server's
+        # internals to a response body.
+        try:
+            parsed = parse_uuid_batch(data, max_items=MAX_PURGE_BATCH)
+        except BatchTooLarge:
+            return _refused(f"Too many UUIDs (max {MAX_PURGE_BATCH}).")
+        except MalformedUuid:
+            return _refused("Malformed UUID in uuids.")
+        except UuidBatchError:
+            return _refused("uuids must be a non-empty list.")
+        wanted = set(parsed)
+        entries = list(
+            VaultEntry.objects.filter(
+                accessible_entries_q(user), uuid__in=wanted
+            ).select_for_update()
+        )
+        if {entry.uuid for entry in entries} != wanted:
+            # Nothing destroyed, and the answer keeps the silence the
+            # single-entry endpoint keeps: "no such entry" and "not yours"
+            # are one answer.
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        # Bounded by MAX_PURGE_BATCH, so naming the rows costs a bind
+        # parameter each and no more.
+        return entries, VaultEntry.objects.filter(
+            uuid__in=wanted, deleted_at__isnull=False
+        )

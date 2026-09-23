@@ -174,6 +174,13 @@
     border-color: rgb(var(--module));
     outline-color: rgb(var(--module));
   }
+  /* daisyUI paints the boxed active tab from --p, with a :hover twin; both
+     are one class short of these, so the module hue wins in either state. */
+  .tabs-boxed .tab-module.tab-active:not(.tab-disabled):not([disabled]),
+  .tabs-boxed .tab-module.tab-active:not(.tab-disabled):not([disabled]):hover {
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
 }
 
 /* Toast slide animations. ui/js/toast.js assigns the enter one inline and

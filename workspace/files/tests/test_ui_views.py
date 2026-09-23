@@ -111,6 +111,42 @@ class FilesIndexSettingsTests(TestCase):
         )
 
 
+class ShareLinkPasswordGeneratorAssetsTests(TestCase):
+    """The generator's scripts are loaded by the page that hosts the share
+    modal, and by no page that does not use them."""
+
+    SCRIPTS = ("ui/js/password_generator.js", "ui/js/password_wordlist.js")
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="gen_assets", email="gen_assets@test.com", password="x"
+        )
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_the_file_browser_loads_the_generator(self):
+        html = self.client.get(reverse("files_ui:index")).content.decode()
+        for script in self.SCRIPTS:
+            self.assertIn(script, html)
+
+    def test_a_page_without_the_share_modal_loads_neither_script(self):
+        html = self.client.get(reverse("dashboard:index")).content.decode()
+        for script in self.SCRIPTS:
+            self.assertNotIn(script, html)
+
+    def test_the_public_share_page_loads_neither_script(self):
+        doc = File.objects.create(
+            owner=self.user, name="doc.txt", node_type=File.NodeType.FILE
+        )
+        link = FileShareLink.objects.create(file=doc, created_by=self.user)
+        self.client.logout()
+        html = self.client.get(f"/files/shared/{link.token}").content.decode()
+        for script in self.SCRIPTS:
+            self.assertNotIn(script, html)
+
+
 class SharedLinkPageTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(

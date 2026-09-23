@@ -39,16 +39,23 @@ def _floor(declared):
 
 
 def _pyproject_floor():
-    return _floor(tomllib.loads(PYPROJECT.read_text())["project"]["requires-python"])
+    return _floor(
+        tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"][
+            "requires-python"
+        ]
+    )
 
 
 def _lock_floor():
-    return _floor(tomllib.loads(LOCK.read_text())["requires-python"])
+    return _floor(tomllib.loads(LOCK.read_text(encoding="utf-8"))["requires-python"])
 
 
 def _manage_minimum():
     return tuple(
-        int(part) for part in MINIMUM_RE.search(MANAGE.read_text())["parts"].split(",")
+        int(part)
+        for part in MINIMUM_RE.search(MANAGE.read_text(encoding="utf-8"))[
+            "parts"
+        ].split(",")
     )
 
 
@@ -57,7 +64,7 @@ def _setup_python_versions():
     return {
         workflow.name: [
             _version(m["version"])
-            for m in SETUP_PYTHON_RE.finditer(workflow.read_text())
+            for m in SETUP_PYTHON_RE.finditer(workflow.read_text(encoding="utf-8"))
         ]
         for workflow in sorted(WORKFLOWS.glob("*.yml"))
     }
@@ -120,7 +127,7 @@ class DeclaredFloorTests(unittest.TestCase):
 
     @unittest.skipUnless(PYTHON_VERSION_FILE.exists(), "no .python-version in the tree")
     def test_python_version_file_matches_the_floor(self):
-        pinned = _version(PYTHON_VERSION_FILE.read_text())
+        pinned = _version(PYTHON_VERSION_FILE.read_text(encoding="utf-8"))
         self.assertEqual(
             pinned[:2],
             self.floor[:2],

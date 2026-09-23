@@ -24,7 +24,7 @@ def _submodules():
 
 def _assigned_settings(module):
     """Uppercase names assigned at any depth in the module's own source."""
-    tree = ast.parse(Path(module.__file__).read_text())
+    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
     names = set()
     for node in ast.walk(tree):
         targets = []

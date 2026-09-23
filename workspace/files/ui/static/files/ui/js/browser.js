@@ -1519,11 +1519,7 @@ window.fileBrowser = function fileBrowser() {
         this.openPropertiesPanel(uuid, nodeType);
       });
 
-      window.addEventListener('shares-changed', () => {
-        if (this.showPropertiesPanel && this.propertiesUuid) {
-          this.openPropertiesPanel(this.propertiesUuid, this.propertiesNodeType);
-        }
-      });
+      window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
 
       // alpine-ajax marks every swap target aria-busy for the life of its
       // request. Listening on the document, that attribute is what tells a

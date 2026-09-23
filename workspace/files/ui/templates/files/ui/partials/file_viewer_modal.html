@@ -284,6 +284,14 @@
 
         async _openFileFromUuid(fileUuid) {
           if (!isValidUuid(fileUuid)) return;
+          // A file only shared with the user is out of reach of the metadata
+          // endpoint (it answers 404 below edit rights), so the listing row -
+          // the "Shared with me" view renders one - is read first.
+          const row = document.querySelector(`[data-uuid="${fileUuid}"][data-node-type="file"]`);
+          if (row) {
+            this.openFile(fileUuid, row.dataset.displayName, row.dataset.fileType, false);
+            return;
+          }
           try {
             const response = await fetch('/api/v1/files/' + fileUuid);
             if (response.ok) {

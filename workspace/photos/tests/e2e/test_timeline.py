@@ -164,3 +164,48 @@ class PhotosTimelineTests(PlaywrightTestCase):
         self.page.locator("nav[aria-label='Library'] a", has_text="All").click()
 
         expect(self.page.locator(TILES)).to_have_count(7)
+
+    def _open_menu(self, index=0):
+        tile = self.page.locator(TILES).nth(index)
+        tile.hover()
+        tile.get_by_role("button", name="More actions").click()
+        menu = self.page.locator("#photos-context-menu")
+        expect(menu).to_be_visible()
+        expect(menu.get_by_role("button", name="Properties")).to_be_visible()
+        return menu
+
+    def test_more_actions_opens_the_files_properties_panel(self):
+        self._open()
+
+        self._open_menu().get_by_role("button", name="Properties").click()
+
+        panel = self.page.locator("#properties-sidebar")
+        expect(panel).to_be_visible()
+        expect(panel.locator("#properties-content")).to_contain_text("day14.jpg")
+        expect(self.page.locator("#photos-context-menu")).to_be_hidden()
+
+        panel.get_by_role("button").first.click()
+        expect(panel).to_be_hidden()
+
+    def test_right_click_opens_the_same_menu(self):
+        self._open()
+
+        self.page.locator(TILES).first.click(button="right")
+
+        menu = self.page.locator("#photos-context-menu")
+        expect(menu).to_be_visible()
+        expect(menu.get_by_role("link", name="Open in Files")).to_have_attribute(
+            "href", f"/files?open={self.photos[0].uuid}"
+        )
+
+    def test_favoriting_from_the_menu_stars_the_tile(self):
+        self._open()
+        tile = self.page.locator(TILES).first
+        expect(tile).to_have_attribute("data-favorite", "0")
+
+        self._open_menu().get_by_role("button", name="Add to favorites").click()
+
+        expect(tile).to_have_attribute("data-favorite", "1")
+        self.assertTrue(
+            FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
+        )

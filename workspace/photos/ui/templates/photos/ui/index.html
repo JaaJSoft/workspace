@@ -10,7 +10,7 @@
 
 {% block drawer_class %}lg:drawer-open{% endblock %}
 {% block drawer_id %}photos-drawer{% endblock %}
-{% block main_class %}p-0 flex h-full overflow-hidden{% endblock %}
+{% block main_class %}relative p-0 flex h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
   x-data="photosApp()"
@@ -127,10 +127,44 @@
       </div>
     {% endif %}
   </div>
+
+  {% comment %}
+    The Files properties panel, as is: same partial, same endpoint, same
+    mixin. It sits outside #photos-content so a sidebar navigation leaves it
+    open. Full-coverage overlay on mobile, in-flow 320 px panel on md+.
+  {% endcomment %}
+  <div
+    id="properties-sidebar"
+    x-show="showPropertiesPanel"
+    x-cloak
+    x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
+    x-transition:enter-start="max-md:opacity-0 md:!w-0"
+    x-transition:enter-end="max-md:opacity-100 md:!w-80"
+    x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
+    x-transition:leave-start="max-md:opacity-100 md:!w-80"
+    x-transition:leave-end="max-md:opacity-0 md:!w-0"
+    class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 shrink-0 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+  >
+    <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>
+  </div>
+
+  {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
+  {% include "files/ui/partials/tag_dialog.html" %}
+  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="photos-context-menu" %}
+  {% include "files/ui/partials/rename_dialog.html" %}
+  {% include "files/ui/partials/share_modal.html" %}
   {% include "files/ui/partials/file_viewer_modal.html" %}
 {% endblock %}
 
 {% block extra_scripts %}
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  {# The share modal's link password generator, as on the Files page. #}
+  <script src="{% static 'ui/js/password_wordlist.js' %}"></script>
+  <script src="{% static 'ui/js/password_generator.js' %}"></script>
+  <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+  <script src="{% static 'ui/js/comments.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>
 {% endblock %}

@@ -1,0 +1,29 @@
+{% comment %}
+Rows of a photo's context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included from index.html.
+
+The file actions come from `POST /api/v1/files/actions`, narrowed to the ones
+that make sense on a photo (see PHOTO_ACTIONS in photos.js), so a row is only
+ever offered when the registry says the user may do it. Download is a link
+rather than a button, to carry the download attribute. "Open in Files" is
+not a file action: it is written out here, as in the notes menu.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <li x-show="ctxMenu.actions === null">
+    <span class="gap-3 rounded pointer-events-none">
+      <span class="loading loading-spinner loading-xs"></span>
+      <span>Loading…</span>
+    </span>
+  </li>
+  <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
+    <li
+      :class="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
+    >
+      {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id === 'download'" icon="download" label_expr="action.label" href_expr="`/api/v1/files/${ctxMenu.photo?.uuid}/download`" download_expr="ctxMenu.photo?.name" click="closeCtxMenu()" only %}
+      {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id !== 'download'" icon_expr="action.icon" icon_class_expr="action.id === 'toggle_favorite' && action.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="action.label" class_expr="action.css_class || ''" click="runCtxAction(action)" only %}
+    </li>
+  </template>
+  <template x-if="ctxMenu.actions !== null">
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
+  </template>
+</ul>

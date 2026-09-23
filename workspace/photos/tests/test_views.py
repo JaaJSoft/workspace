@@ -427,3 +427,83 @@ class SharedScopeTests(PhotosViewTestCase):
         self.assertEqual(
             self._tiles(response), [str(self.mine.uuid), str(self.shared.uuid)]
         )
+
+
+class FilesLinkTests(PhotosViewTestCase):
+    """Where a tile's "Open in Files" lands, whoever owns the file."""
+
+    def _files_url(self, response, file_obj):
+        match = re.search(
+            rf'data-uuid="{file_obj.uuid}"[^>]*?data-files-url="([^"]+)"',
+            response.content.decode(),
+            re.S,
+        )
+        return match[1].replace("&amp;", "&")
+
+    def test_own_photo_opens_in_its_folder(self):
+        folder = FileService.create_folder(owner=self.user, name="Holidays")
+        f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12), parent=folder)
+
+        response = self.client.get("/photos")
+
+        self.assertEqual(
+            self._files_url(response, f), f"/files/{folder.uuid}?open={f.uuid}"
+        )
+
+    def test_photo_at_the_root_opens_in_my_files(self):
+        f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+
+        self.assertEqual(
+            self._files_url(self.client.get("/photos"), f), f"/files?open={f.uuid}"
+        )
+
+    def test_group_photo_opens_in_the_group_folder(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        f = make_photo(bob, "family.jpg", _at(2024, 7, 14, 12), parent=root)
+
+        response = self.client.get("/photos?scope=all")
+
+        self.assertEqual(
+            self._files_url(response, f), f"/files/{root.uuid}?open={f.uuid}"
+        )
+
+    def test_photo_shared_on_its_own_opens_in_shared_with_me(self):
+        carol = User.objects.create_user(username="carol", password="p")
+        private = FileService.create_folder(owner=carol, name="Private")
+        f = make_photo(carol, "shared.jpg", _at(2024, 7, 14, 12), parent=private)
+        share_file(
+            f,
+            target_user=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=carol,
+        )
+
+        response = self.client.get("/photos?scope=shared")
+
+        self.assertEqual(self._files_url(response, f), f"/files?shared=1&open={f.uuid}")
+        self.assertNotContains(response, str(private.uuid))
+
+
+class FilesComponentsTests(PhotosViewTestCase):
+    def test_the_page_carries_the_files_panel_menu_and_dialogs(self):
+        make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+
+        response = self.client.get("/photos")
+
+        for marker in (
+            'id="properties-sidebar"',
+            'id="properties-content"',
+            'id="photos-context-menu"',
+            'id="rename-dialog"',
+            'id="tag-dialog"',
+            'x-data="shareModal()"',
+            "files/ui/js/properties_panel.js",
+            "files/ui/js/tags.js",
+            "files/ui/js/share_modal.js",
+            "ui/js/comments.js",
+        ):
+            with self.subTest(marker=marker):
+                self.assertContains(response, marker)

@@ -20,7 +20,16 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
-from django.db.models import Count, Exists, OuterRef, Q
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    Exists,
+    OuterRef,
+    Q,
+    Value,
+    When,
+)
 from django.db.models.functions import ExtractYear
 from django.utils import timezone
 
@@ -122,11 +131,21 @@ def parse_date_position(raw, tz):
 
 
 def with_timeline_fields(files_qs, user):
-    """Load what a tile shows: the Photo row and the favorite star."""
+    """Load what a tile shows: the Photo row, the favorite star, and whether
+    the file's folder is one the user can browse in Files (their own or one
+    of their groups') or only the file itself was shared with them."""
     return files_qs.select_related("photo").annotate(
         is_favorite=Exists(
             FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
-        )
+        ),
+        in_browsable_folder=Case(
+            When(
+                Q(owner=user) | Q(group__in=user.groups.values("pk")),
+                then=Value(True),
+            ),
+            default=Value(False),
+            output_field=BooleanField(),
+        ),
     )
 
 

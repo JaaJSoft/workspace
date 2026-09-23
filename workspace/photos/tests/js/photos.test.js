@@ -1,8 +1,8 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
-function load({ mobile = false, collapsed = false, observers = [] } = {}) {
+function load({ mobile = false, collapsed = false, observers = [], ...extra } = {}) {
   const saved = [];
   const dispatched = [];
   class FakeObserver {
@@ -16,14 +16,28 @@ function load({ mobile = false, collapsed = false, observers = [] } = {}) {
     observe(el) { this.observed.push(el); }
     disconnect() { this.disconnected = true; }
   }
-  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/photos.js', {
-    sidebarPreference: { initial: () => collapsed, save: (m, v) => saved.push([m, v]) },
-    matchMedia: () => ({ matches: mobile }),
-    document: { getElementById: () => null },
-    IntersectionObserver: FakeObserver,
-    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
-    dispatchEvent: (event) => dispatched.push(event),
-  });
+  const ctx = loadScripts(
+    [
+      // The real mixin: photos.js spreads it, and the menu drives it.
+      'workspace/files/ui/static/files/ui/js/properties_panel.js',
+      'workspace/photos/ui/static/photos/ui/js/photos.js',
+    ],
+    {
+      sidebarPreference: { initial: () => collapsed, save: (m, v) => saved.push([m, v]) },
+      matchMedia: () => ({ matches: mobile }),
+      document: { getElementById: () => null, querySelector: () => null },
+      IntersectionObserver: FakeObserver,
+      CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } },
+      dispatchEvent: (event) => dispatched.push(event),
+      tagsMixin: () => ({
+        toggleFileTag: async () => {},
+        loadTags() { this.tagsLoaded = (this.tagsLoaded || 0) + 1; },
+      }),
+      innerWidth: 1280,
+      innerHeight: 900,
+      ...extra,
+    },
+  );
   return { ctx, saved, dispatched, observers };
 }
 
@@ -122,4 +136,207 @@ test('leaving the view does not load', () => {
   s.init();
   observers[0].callback([{ isIntersecting: false }]);
   assert.equal(called, false);
+});
+
+// ── Context menu and actions ─────────────────────────────
+
+function tile(dataset = {}) {
+  return {
+    dataset: {
+      uuid: 'u1',
+      displayName: 'beach.jpg',
+      fileType: 'jpeg',
+      filesUrl: '/files/p1?open=u1',
+      favorite: '0',
+      ...dataset,
+    },
+  };
+}
+
+function fetchActionsReturning(payload) {
+  const calls = [];
+  return {
+    calls,
+    fileActions: {
+      fetchActions(uuids) {
+        calls.push(Array.from(uuids));
+        return Promise.resolve(payload);
+      },
+    },
+  };
+}
+
+const flush = () => new Promise((r) => setImmediate(r));
+
+test('the menu keeps only the actions that mean something on a photo', async () => {
+  const { fileActions, calls } = fetchActionsReturning({
+    u1: [
+      { id: 'view' }, { id: 'open_new_tab' }, { id: 'download' }, { id: 'toggle_favorite' },
+      { id: 'toggle_pin' }, { id: 'cut' }, { id: 'share' }, { id: 'properties' }, { id: 'delete' },
+    ],
+  });
+  const app = load({ fileActions }).ctx.photosApp();
+
+  app.openCtxMenu({ clientX: 100, clientY: 100 }, tile());
+  assert.equal(app.ctxMenu.actions, null);
+  await flush();
+
+  assert.deepEqual(calls, [['u1']]);
+  assert.deepEqual(
+    Array.from(app.ctxMenu.actions, (a) => a.id),
+    ['view', 'download', 'toggle_favorite', 'share', 'properties', 'delete'],
+  );
+  assert.equal(app.ctxMenu.photo.filesUrl, '/files/p1?open=u1');
+});
+
+test('a slow answer for a previous photo does not fill the current menu', async () => {
+  const pending = {};
+  const fileActions = {
+    fetchActions: (uuids) => new Promise((resolve) => { pending[uuids[0]] = resolve; }),
+  };
+  const app = load({ fileActions }).ctx.photosApp();
+
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({ uuid: 'old' }));
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({ uuid: 'new' }));
+  pending.old({ old: [{ id: 'delete' }] });
+  await flush();
+
+  assert.equal(app.ctxMenu.actions, null);
+  pending.new({ new: [{ id: 'view' }] });
+  await flush();
+  assert.deepEqual(Array.from(app.ctxMenu.actions, (a) => a.id), ['view']);
+});
+
+test('the "..." button anchors the menu under itself, inside the viewport', () => {
+  const { fileActions } = fetchActionsReturning({});
+  const app = load({ fileActions }).ctx.photosApp();
+  const button = { getBoundingClientRect: () => ({ right: 1270, bottom: 880 }) };
+
+  // A keyboard press reports no cursor position.
+  app.openCtxMenu({ clientX: 0, clientY: 0 }, tile(), button);
+
+  assert.equal(app.ctxMenu.x, 1270 - 224);
+  assert.equal(app.ctxMenu.y, 900 - 340 - 4);
+});
+
+test('properties opens the Files panel and loads the tags once', () => {
+  const requests = [];
+  const app = load().ctx.photosApp();
+  app.$el = { addEventListener() {} };
+  app.$ajax = (url, opts) => requests.push([url, { ...opts }]);
+  app.ctxMenu = { open: true, photo: { uuid: 'u1', name: 'beach.jpg' } };
+
+  app.runCtxAction({ id: 'properties' });
+  app.closePropertiesPanel();
+  app.showProperties('u2', 'file');
+
+  assert.equal(app.ctxMenu.open, false);
+  assert.equal(app.showPropertiesPanel, true);
+  assert.equal(app.propertiesUuid, 'u2');
+  assert.equal(app.tagsLoaded, 1);
+  assert.deepEqual(requests.map((r) => r[0]), ['/files/properties/u1', '/files/properties/u2']);
+});
+
+test('share and view hand the photo to the Files components', () => {
+  const { ctx, dispatched } = load();
+  const app = ctx.photosApp();
+  const photo = { uuid: 'u1', name: 'beach.jpg', type: 'jpeg' };
+
+  app.ctxMenu = { open: true, photo };
+  app.runCtxAction({ id: 'share' });
+  app.ctxMenu = { open: true, photo };
+  app.runCtxAction({ id: 'view' });
+
+  assert.deepEqual(
+    dispatched.map((e) => [e.type, { ...e.detail }]),
+    [
+      ['open-share-modal', { uuid: 'u1', name: 'beach.jpg', nodeType: 'file' }],
+      ['open-file-viewer', { uuid: 'u1', name: 'beach.jpg', type: 'jpeg' }],
+    ],
+  );
+});
+
+test('favoriting flips the tile star once the server agrees', async () => {
+  const requests = [];
+  const shown = tile();
+  const app = load({
+    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+    document: { getElementById: () => null, querySelector: () => shown },
+  }).ctx.photosApp();
+
+  await app.toggleFavorite('u1', false);
+  assert.equal(shown.dataset.favorite, '1');
+  await app.toggleFavorite('u1', true);
+  assert.equal(shown.dataset.favorite, '0');
+  assert.deepEqual(requests, [
+    ['/api/v1/files/u1/favorite', 'POST'],
+    ['/api/v1/files/u1/favorite', 'DELETE'],
+  ]);
+});
+
+test('a refused favorite leaves the star alone', async () => {
+  const errors = [];
+  const shown = tile();
+  const app = load({
+    fetch: () => Promise.resolve({ ok: false }),
+    getCSRFToken: () => 't',
+    AppAlert: { error: (m) => errors.push(m) },
+    document: { getElementById: () => null, querySelector: () => shown },
+  }).ctx.photosApp();
+
+  await app.toggleFavorite('u1', false);
+
+  assert.equal(shown.dataset.favorite, '0');
+  assert.equal(errors.length, 1);
+});
+
+function removableTile(day) {
+  const el = tile();
+  el.removed = false;
+  el.closest = () => day;
+  el.remove = () => { el.removed = true; day.tiles -= 1; };
+  return el;
+}
+
+test('trashing removes the tile, and the day once it is empty', async () => {
+  const day = { tiles: 1, removed: false, querySelector() { return this.tiles ? {} : null; } };
+  day.remove = () => { day.removed = true; };
+  const shown = removableTile(day);
+  const requests = [];
+  const app = load({
+    AppDialog: { confirm: () => Promise.resolve(true) },
+    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+    document: { getElementById: () => null, querySelector: () => shown },
+  }).ctx.photosApp();
+  app.showPropertiesPanel = true;
+  app.propertiesUuid = 'u1';
+
+  await app.trashPhoto('u1', 'beach.jpg');
+
+  assert.deepEqual(requests, [['/api/v1/files/u1', 'DELETE']]);
+  assert.equal(shown.removed, true);
+  assert.equal(day.removed, true);
+  assert.equal(app.showPropertiesPanel, false);
+});
+
+test('trashing asks first, and a cancel sends nothing', async () => {
+  let called = false;
+  const app = load({
+    AppDialog: { confirm: () => Promise.resolve(false) },
+    fetch: () => { called = true; return Promise.resolve({ ok: true }); },
+  }).ctx.photosApp();
+
+  await app.trashPhoto('u1', 'beach.jpg');
+
+  assert.equal(called, false);
+});
+
+test('tag views of the shared partials point at the photos timeline', () => {
+  const app = load({ location: { search: '?tag=t1' }, URLSearchParams }).ctx.photosApp();
+
+  assert.equal(app.tagViewHref({ uuid: 't1' }), '/photos?tag=t1');
+  assert.equal(app.isTagViewActive({ uuid: 't1' }), true);
+  assert.equal(app.isTagViewActive({ uuid: 't2' }), false);
 });

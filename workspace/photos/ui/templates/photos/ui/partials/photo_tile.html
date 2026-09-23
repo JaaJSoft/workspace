@@ -1,44 +1,64 @@
-{% load file_filters %}
+{% load file_filters photos_filters %}
 {% comment %}
   A square tile of the timeline, a fixed size so that day groups line up. On a
   phone it is a third of the screen (the drawer is off-canvas there, and the
-  page padding plus two gaps come to 1.5rem). The data-* attributes are the
-  ones the Files viewer modal walks for its previous/next navigation, so the
-  viewer pages through the timeline in the order it is shown.
+  page padding plus two gaps come to 1.5rem).
+
+  The data-* attributes on the tile are the ones the Files viewer modal walks
+  for its previous/next navigation, so the viewer pages through the timeline
+  in the order it is shown; the context menu reads the rest, "Open in Files"
+  included (see the files_url filter).
 {% endcomment %}
-<button
-  type="button"
-  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-lg bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-module"
+<div
+  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-lg bg-base-200"
   data-uuid="{{ file.uuid }}"
   data-node-type="file"
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
   data-display-name="{{ file.name }}"
   data-file-type="{{ file.type }}"
-  title="{{ file.name }}"
-  @click="openPhoto($el)"
+  data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
+  data-files-url="{{ file|files_url }}"
+  @contextmenu.prevent="openCtxMenu($event, $el)"
 >
-  {% if file.has_thumbnail %}
-    <img
-      src="{{ file|thumbnail_url }}"
-      alt="{{ file.name }}"
-      class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-      loading="lazy"
-      decoding="async"
-      draggable="false"
-    />
-  {% else %}
-    <span
-      class="absolute inset-0 flex items-center justify-center text-base-content/30"
-    >
-      <i data-lucide="image" class="w-8 h-8"></i>
-    </span>
-  {% endif %}
-  {% if file.is_favorite %}
-    <span
-      class="absolute top-1.5 right-1.5 flex rounded-full bg-base-100/80 p-0.5"
-      aria-label="Favorite"
-    >
-      <i data-lucide="star" class="w-3.5 h-3.5 text-warning fill-current"></i>
-    </span>
-  {% endif %}
-</button>
+  <button
+    type="button"
+    class="absolute inset-0 w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-module"
+    title="{{ file.name }}"
+    @click="openPhoto($el.closest('[data-uuid]'))"
+  >
+    {% if file.has_thumbnail %}
+      <img
+        src="{{ file|thumbnail_url }}"
+        alt="{{ file.name }}"
+        class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+      />
+    {% else %}
+      <span
+        class="absolute inset-0 flex items-center justify-center text-base-content/30"
+      >
+        <i data-lucide="image" class="w-8 h-8"></i>
+      </span>
+    {% endif %}
+  </button>
+  {# Shown from data-favorite, so the menu's favorite toggle only has to flip the attribute. #}
+  <span
+    class="pointer-events-none absolute top-1.5 right-1.5 hidden group-data-[favorite='1']:flex rounded-full bg-base-100/80 p-0.5"
+    aria-label="Favorite"
+  >
+    <i data-lucide="star" class="w-3.5 h-3.5 text-warning fill-current"></i>
+  </span>
+  {# Always visible where nothing hovers (touch screens), on hover or focus elsewhere. #}
+  <button
+    type="button"
+    class="btn btn-xs btn-circle border-0 bg-base-100/80 hover:bg-base-100 absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
+    title="More actions"
+    aria-label="More actions for {{ file.name }}"
+    aria-haspopup="menu"
+    @click.stop="openCtxMenu($event, $el.closest('[data-uuid]'), $el)"
+  >
+    <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
+  </button>
+</div>

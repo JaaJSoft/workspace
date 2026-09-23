@@ -340,3 +340,55 @@ test('tag views of the shared partials point at the photos timeline', () => {
   assert.equal(app.isTagViewActive({ uuid: 't1' }), true);
   assert.equal(app.isTagViewActive({ uuid: 't2' }), false);
 });
+
+function starButton(dataset) {
+  const shown = tile(dataset);
+  return { shown, button: { closest: () => shown } };
+}
+
+test('the tile star toggles the favorite and flips itself', async () => {
+  const requests = [];
+  const { shown, button } = starButton({ canFavorite: '1', favorite: '1' });
+  const app = load({
+    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+    document: { getElementById: () => null, querySelector: () => shown },
+  }).ctx.photosApp();
+
+  await app.toggleTileFavorite(button);
+
+  assert.deepEqual(requests, [['/api/v1/files/u1/favorite', 'DELETE']]);
+  assert.equal(shown.dataset.favorite, '0');
+  assert.equal(shown.dataset.busy, undefined);
+});
+
+test('the tile star does nothing where the registry did not offer it', async () => {
+  let called = false;
+  const { button } = starButton({ canFavorite: '0' });
+  const app = load({
+    fetch: () => { called = true; return Promise.resolve({ ok: true }); },
+  }).ctx.photosApp();
+
+  await app.toggleTileFavorite(button);
+
+  assert.equal(called, false);
+});
+
+test('a second click while the first is on its way is ignored', async () => {
+  let calls = 0;
+  let finish;
+  const { shown, button } = starButton({ canFavorite: '1' });
+  const app = load({
+    fetch: () => { calls += 1; return new Promise((r) => { finish = r; }); },
+    getCSRFToken: () => 't',
+    document: { getElementById: () => null, querySelector: () => shown },
+  }).ctx.photosApp();
+
+  const first = app.toggleTileFavorite(button);
+  await app.toggleTileFavorite(button);
+  finish({ ok: true });
+  await first;
+
+  assert.equal(calls, 1);
+  assert.equal(shown.dataset.favorite, '1');
+});

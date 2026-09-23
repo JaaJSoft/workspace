@@ -17,6 +17,7 @@
   data-display-name="{{ file.name }}"
   data-file-type="{{ file.type }}"
   data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
+  data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"
   data-files-url="{{ file|files_url }}"
   @contextmenu.prevent="openCtxMenu($event, $el)"
 >
@@ -43,22 +44,44 @@
       </span>
     {% endif %}
   </button>
-  {# Shown from data-favorite, so the menu's favorite toggle only has to flip the attribute. #}
-  <span
-    class="pointer-events-none absolute top-1.5 right-1.5 hidden group-data-[favorite='1']:flex rounded-full bg-base-100/80 p-0.5"
-    aria-label="Favorite"
-  >
-    <i data-lucide="star" class="w-3.5 h-3.5 text-warning fill-current"></i>
-  </span>
-  {# Always visible where nothing hovers (touch screens), on hover or focus elsewhere. #}
+  {% comment %}
+    The two overlay buttons are the Files mosaic cards' own: a filled star
+    that stays on a favorite, an empty one on hover otherwise, and the menu
+    button. The star follows data-favorite, so a toggle from either place
+    only flips the attribute. Nothing hovers on a touch screen: the empty
+    star stays away there (the menu has the toggle) and the menu button
+    stays in view.
+  {% endcomment %}
+  {% if file.can_favorite %}
+    <div class="absolute top-2 right-2 z-10">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hidden group-data-[favorite='1']:inline-flex"
+        title="Remove from favorites"
+        aria-label="Remove from favorites"
+        @click.stop="toggleTileFavorite($el)"
+      >
+        <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus:opacity-100 group-data-[favorite='1']:hidden [@media(hover:none)]:hidden"
+        title="Add to favorites"
+        aria-label="Add to favorites"
+        @click.stop="toggleTileFavorite($el)"
+      >
+        <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+      </button>
+    </div>
+  {% endif %}
   <button
     type="button"
-    class="btn btn-xs btn-circle border-0 bg-base-100/80 hover:bg-base-100 absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity"
+    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
     title="More actions"
     aria-label="More actions for {{ file.name }}"
     aria-haspopup="menu"
     @click.stop="openCtxMenu($event, $el.closest('[data-uuid]'), $el)"
   >
-    <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
+    <i data-lucide="more-vertical" class="w-4 h-4"></i>
   </button>
 </div>

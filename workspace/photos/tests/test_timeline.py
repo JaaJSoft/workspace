@@ -4,14 +4,17 @@ from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import SimpleTestCase, TestCase
+from django.test.utils import CaptureQueriesContext
 
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
 from workspace.photos.queries import library_files
 from workspace.photos.services.timeline import (
     START,
     Position,
     encode_cursor,
+    mark_favorite_toggles,
     parse_cursor,
     parse_date_position,
     timeline_page,
@@ -389,3 +392,36 @@ class ParseDatePositionTests(SimpleTestCase):
         position = parse_date_position("2024-07-14", UTC)
 
         self.assertEqual(position.before - timedelta(days=1), _at(2024, 7, 14))
+
+
+class FavoriteToggleTests(TimelineTestCase):
+    def test_the_registry_decides_who_may_star_a_photo(self):
+        mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
+        stranger = User.objects.create_user(username="stranger", password="p")
+        theirs = make_photo(stranger, "theirs.jpg", _at(2024, 7, 14, 12))
+
+        mark_favorite_toggles([mine, theirs], self.user)
+
+        self.assertTrue(mine.can_favorite)
+        self.assertFalse(theirs.can_favorite)
+
+    def test_permissions_are_read_once_for_the_page(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        shared = []
+        for i in range(5):
+            f = make_photo(bob, f"s{i}.jpg", _at(2024, 7, 14, 12))
+            FileShare.objects.create(
+                file=f,
+                shared_by=bob,
+                shared_with=self.user,
+                permission=FileShare.Permission.READ_ONLY,
+            )
+            shared.append(f)
+
+        with CaptureQueriesContext(connection) as one:
+            mark_favorite_toggles(shared[:1], self.user)
+        with CaptureQueriesContext(connection) as five:
+            mark_favorite_toggles(shared, self.user)
+
+        self.assertEqual(len(five), len(one))
+        self.assertTrue(all(f.can_favorite for f in shared))

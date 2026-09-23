@@ -209,3 +209,23 @@ class PhotosTimelineTests(PlaywrightTestCase):
         self.assertTrue(
             FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
         )
+
+    def test_the_tile_star_toggles_the_favorite(self):
+        self._open()
+        tile = self.page.locator(TILES).first
+        tile.hover()
+
+        tile.get_by_role("button", name="Add to favorites").click()
+
+        expect(tile).to_have_attribute("data-favorite", "1")
+        expect(tile.get_by_role("button", name="Remove from favorites")).to_be_visible()
+        self.assertTrue(
+            FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
+        )
+
+        tile.get_by_role("button", name="Remove from favorites").click()
+
+        expect(tile).to_have_attribute("data-favorite", "0")
+        self.assertFalse(
+            FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
+        )

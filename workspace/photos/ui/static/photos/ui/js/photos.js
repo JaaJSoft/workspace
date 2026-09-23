@@ -198,6 +198,20 @@ window.photosApp = function photosApp() {
         .catch(() => window.AppAlert.error('Failed to copy link'));
     },
 
+    // The star on a tile. The server only renders it where the registry
+    // offers the toggle; the check here keeps a stale page from sending a
+    // request the endpoint would refuse anyway.
+    async toggleTileFavorite(el) {
+      const tile = el.closest('[data-uuid]');
+      if (!tile || tile.dataset.canFavorite !== '1' || tile.dataset.busy === '1') return;
+      tile.dataset.busy = '1';
+      try {
+        await this.toggleFavorite(tile.dataset.uuid, tile.dataset.favorite === '1');
+      } finally {
+        delete tile.dataset.busy;
+      }
+    },
+
     async toggleFavorite(uuid, isFavorite) {
       try {
         const response = await fetch(`/api/v1/files/${uuid}/favorite`, {

@@ -93,6 +93,14 @@ class IndexTests(PhotosViewTestCase):
         self.assertEqual(self._tiles(response), [])
         self.assertContains(response, "1 being analyzed")
 
+    def test_tiles_offer_the_favorite_star(self):
+        make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+
+        response = self.client.get("/photos")
+
+        self.assertContains(response, 'data-can-favorite="1"')
+        self.assertContains(response, 'aria-label="Add to favorites"')
+
     def test_tiles_carry_what_the_viewer_modal_navigates_by(self):
         beach = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
 

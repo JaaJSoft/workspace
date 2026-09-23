@@ -22,6 +22,7 @@ from workspace.photos.queries import (
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
+    mark_favorite_toggles,
     parse_cursor,
     parse_date_position,
     timeline_page,
@@ -118,6 +119,7 @@ def _scope_tabs(user, scope, filter_params):
 
 def _page_context(request, files, position, tz, view_params):
     page = timeline_page(with_timeline_fields(files, request.user), position, tz)
+    mark_favorite_toggles(page.photos, request.user)
     next_url = None
     if page.next_cursor:
         params = view_params | {"cursor": page.next_cursor}

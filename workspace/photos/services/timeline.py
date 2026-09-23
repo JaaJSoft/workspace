@@ -33,7 +33,9 @@ from django.db.models import (
 from django.db.models.functions import ExtractYear
 from django.utils import timezone
 
+from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileFavorite
+from workspace.files.services import FileService
 
 PAGE_SIZE = 60
 DAY_OVERFLOW = 500
@@ -198,6 +200,7 @@ def _has_more(files_qs, position):
 class TimelinePage:
     entries: list
     next_cursor: str | None
+    photos: list
 
 
 def timeline_page(files_qs, position, tz, *, page_size=None):
@@ -218,7 +221,25 @@ def timeline_page(files_qs, position, tz, *, page_size=None):
     next_cursor = None
     if photos and _has_more(files_qs, position_after(photos[-1])):
         next_cursor = encode_cursor(photos[-1])
-    return TimelinePage(entries=_entries(photos, position, tz), next_cursor=next_cursor)
+    return TimelinePage(
+        entries=_entries(photos, position, tz),
+        next_cursor=next_cursor,
+        photos=photos,
+    )
+
+
+def mark_favorite_toggles(photos, user):
+    """Set ``can_favorite`` on each photo, as the files action registry decides.
+
+    The tile's star is a file action like any other; asking the registry keeps
+    it from offering what the favorite endpoint would refuse. Permissions are
+    read in one pass for the whole page.
+    """
+    permissions = FileService.get_permissions_bulk(user, photos)
+    for photo in photos:
+        photo.can_favorite = ActionRegistry.is_action_available(
+            "toggle_favorite", user, photo, permission=permissions[photo.pk]
+        )
 
 
 def _entries(photos, position, tz):

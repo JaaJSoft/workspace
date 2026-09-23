@@ -78,7 +78,7 @@ A scan with no text layer has nothing to return, and says so."""
         concurrent=True,
     )
     def search_filenames(self, args, user, bot, conversation_id, context):
-        """Search your files and folders by NAME only - it does not look inside them. \
+        """Search the files and folders you can access (yours, your groups', and those shared with you) by NAME only - it does not look inside them. \
 Returns up to 20 matches with name, type, and parent folder. \
 Call this when the user names the file they are after ("open my budget spreadsheet"). \
 When they describe what is written inside instead ("the note about the catamaran"), \
@@ -88,11 +88,12 @@ Use read_file with the returned UUID to get the content."""
         if not query:
             return "Error: query is required"
 
+        from workspace.files.search import in_browsable_tree
         from workspace.files.services import FileService
 
         qs = (
-            FileService.user_files_qs(user)
-            .filter(
+            File.objects.filter(
+                pk__in=FileService.accessible_file_ids(user, include_deleted=False),
                 name__icontains=query,
             )
             .select_related("parent")
@@ -112,15 +113,19 @@ Use read_file with the returned UUID to get the content."""
         from workspace.users.services.settings import get_user_timezone
 
         user_tz = get_user_timezone(user)
+        group_ids = set(user.groups.values_list("id", flat=True))
         results = []
         for f in matches:
+            # A shared file's folder belongs to its owner; its name is not ours to show.
+            browsable = in_browsable_tree(f, user, group_ids)
             results.append(
                 {
                     "uuid": str(f.uuid),
                     "name": f.name,
                     "node_type": f.node_type,
                     "type": f.type or "",
-                    "parent_folder": f.parent.name if f.parent else "",
+                    "parent_folder": f.parent.name if f.parent and browsable else "",
+                    "shared_with_me": not browsable,
                     "updated_at": f.updated_at.astimezone(user_tz).strftime(
                         "%Y-%m-%d %H:%M"
                     ),

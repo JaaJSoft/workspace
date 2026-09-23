@@ -138,6 +138,33 @@ class PhotosTimelineTests(PlaywrightTestCase):
         box = self.page.locator(".drawer-side aside").bounding_box()
         self.assertEqual(round(box["width"]), 64)
 
+    def _tile_width(self):
+        return round(self.page.locator(TILES).first.bounding_box()["width"])
+
+    def test_the_size_slider_resizes_the_tiles_and_remembers_the_size(self):
+        set_setting(self.user, "photos", "tile_size", 1)
+        self.page.set_viewport_size({"width": 1280, "height": 900})
+        self._open()
+        self.assertEqual(self._tile_width(), 96)
+
+        self.page.get_by_title("Tile size").fill("5")
+
+        self.page.wait_for_function(
+            "(sel) => document.querySelector(sel).offsetWidth === 256", arg=TILES
+        )
+        self.page.wait_for_function(
+            "() => fetch('/api/v1/settings/photos/tile_size')"
+            ".then(r => r.json()).then(d => (window.__saved = d.value))"
+            " && window.__saved === 5"
+        )
+        # A sidebar navigation swaps the grid, not the size.
+        self.page.locator("#photos-nav a[href='/photos?favorites=1']").click()
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")
+        self.page.locator("#photos-nav a[href='/photos']").first.click()
+        expect(self.page.locator(TILES)).to_have_count(6)
+        self.assertEqual(self._tile_width(), 256)
+        expect(self.page.get_by_title("Tile size")).to_have_value("5")
+
     def test_scope_tabs_switch_the_library_in_place(self):
         family = Group.objects.create(name="Family")
         self.user.groups.add(family)

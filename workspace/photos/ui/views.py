@@ -29,7 +29,25 @@ from workspace.photos.services.timeline import (
     with_timeline_fields,
     year_counts,
 )
-from workspace.users.services.settings import get_module_settings, get_user_timezone
+from workspace.users.services.settings import (
+    get_module_settings,
+    get_setting,
+    get_user_timezone,
+)
+
+# Tile width in px at each step of the size slider, the ``photos`` /
+# ``tile_size`` setting (1 to 5, as the Files mosaic). Phones keep three
+# tiles a row whatever the step.
+TILE_WIDTHS = (96, 120, 144, 192, 256)
+DEFAULT_TILE_SIZE = 3
+
+
+def _tile_size(user):
+    """The user's slider step; anything malformed falls back to the default."""
+    size = get_setting(user, "photos", "tile_size", default=DEFAULT_TILE_SIZE)
+    if isinstance(size, bool) or not isinstance(size, int):
+        return DEFAULT_TILE_SIZE
+    return size if 1 <= size <= len(TILE_WIDTHS) else DEFAULT_TILE_SIZE
 
 
 def _scope(request):
@@ -174,6 +192,7 @@ def index(request):
     if not isinstance(viewer_prefs, dict):
         viewer_prefs = {}
 
+    tile_size = _tile_size(request.user)
     context = {
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
@@ -199,6 +218,8 @@ def index(request):
         "timeline_url": _url_with(scope_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"}),
         "viewer_prefs": viewer_prefs,
+        "tile": {"size": tile_size, "widths": TILE_WIDTHS},
+        "tile_width": TILE_WIDTHS[tile_size - 1],
         **_page_context(request, files, position, tz, view_params),
     }
     return render(request, "photos/ui/index.html", context)

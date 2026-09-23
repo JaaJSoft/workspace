@@ -20,8 +20,22 @@ const PHOTO_ACTIONS = [
 const PHOTOS_MENU_WIDTH = 224;
 const PHOTOS_MENU_HEIGHT = 340;
 
+// The size slider's step and the tile width in px of each step, as the page
+// was rendered with them.
+function photosTilePrefs() {
+  const el = document.getElementById('photo-tile-data');
+  try {
+    const data = el ? JSON.parse(el.textContent) : null;
+    if (data && Array.isArray(data.widths)) return data;
+  } catch (_) {
+    // Unreadable: the root keeps the width the server rendered.
+  }
+  return { size: 1, widths: [] };
+}
+
 window.photosApp = function photosApp() {
   const tags = window.tagsMixin();
+  const tile = photosTilePrefs();
 
   return {
     // The properties panel is the Files one, tag dropdown included: the
@@ -30,6 +44,8 @@ window.photosApp = function photosApp() {
     ...window.propertiesPanelMixin(),
 
     collapsed: window.sidebarPreference.initial(),
+    tileSize: tile.size,
+    _tileWidths: tile.widths,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
     _ctxGeneration: 0,
     _tagsLoaded: false,
@@ -62,6 +78,23 @@ window.photosApp = function photosApp() {
     closeDrawer() {
       const toggle = document.getElementById('photos-drawer');
       if (toggle) toggle.checked = false;
+    },
+
+    // ── Tile size ───────────────────────────────────────
+
+    tileStyle() {
+      const width = this._tileWidths[this.tileSize - 1];
+      return width ? { '--photo-tile': width + 'px' } : {};
+    },
+
+    // Never awaited: the grid has already resized, and a refused write only
+    // costs the size on the next load.
+    saveTileSize() {
+      return fetch('/api/v1/settings/photos/tile_size', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value: this.tileSize }),
+      }).catch(() => {});
     },
 
     keepMissingTarget(event) {

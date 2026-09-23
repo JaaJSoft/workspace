@@ -1,8 +1,9 @@
 {% load file_filters photos_filters %}
 {% comment %}
-  A square tile of the timeline, a fixed size so that day groups line up. On a
-  phone it is a third of the screen (the drawer is off-canvas there, and the
-  page padding plus two gaps come to 1.5rem).
+  A square tile of the timeline, a fixed size so that day groups line up: the
+  --photo-tile width the size slider sets on the page root. On a phone it is a
+  third of the screen (the drawer is off-canvas there, and the page padding
+  plus two gaps come to 1.5rem).
 
   The data-* attributes on the tile are the ones the Files viewer modal walks
   for its previous/next navigation, so the viewer pages through the timeline
@@ -10,7 +11,7 @@
   included (see the files_url filter).
 {% endcomment %}
 <div
-  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-lg bg-base-200"
+  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square overflow-hidden rounded-lg bg-base-200"
   data-uuid="{{ file.uuid }}"
   data-node-type="file"
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"

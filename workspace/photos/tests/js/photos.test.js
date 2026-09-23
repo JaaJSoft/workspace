@@ -392,3 +392,55 @@ test('a second click while the first is on its way is ignored', async () => {
   assert.equal(calls, 1);
   assert.equal(shown.dataset.favorite, '1');
 });
+
+function withTileData(textContent) {
+  return { getElementById: (id) => (id === 'photo-tile-data' ? { textContent } : null), querySelector: () => null };
+}
+
+test('the grid opens at the step and widths the page was rendered with', () => {
+  const app = load({
+    document: withTileData('{"size": 2, "widths": [96, 120, 144, 192, 256]}'),
+  }).ctx.photosApp();
+
+  assert.equal(app.tileSize, 2);
+  assert.deepEqual({ ...app.tileStyle() }, { '--photo-tile': '120px' });
+});
+
+test('moving the slider resizes the tiles', () => {
+  const app = load({
+    document: withTileData('{"size": 3, "widths": [96, 120, 144, 192, 256]}'),
+  }).ctx.photosApp();
+
+  app.tileSize = 5;
+
+  assert.deepEqual({ ...app.tileStyle() }, { '--photo-tile': '256px' });
+});
+
+test('without readable widths the root keeps the width the server rendered', () => {
+  for (const document of [withTileData('not json'), { getElementById: () => null, querySelector: () => null }]) {
+    assert.deepEqual({ ...load({ document }).ctx.photosApp().tileStyle() }, {});
+  }
+});
+
+test('releasing the slider saves the step under the photos module', async () => {
+  const requests = [];
+  const app = load({
+    document: withTileData('{"size": 3, "widths": [96, 120, 144, 192, 256]}'),
+    fetch: (url, opts) => { requests.push([url, opts.method, opts.body]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+
+  app.tileSize = 4;
+  await app.saveTileSize();
+
+  assert.deepEqual(requests, [['/api/v1/settings/photos/tile_size', 'PUT', '{"value":4}']]);
+});
+
+test('a refused save is swallowed', async () => {
+  const app = load({
+    fetch: () => Promise.reject(new Error('offline')),
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+
+  await app.saveTileSize();
+});

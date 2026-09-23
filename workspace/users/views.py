@@ -506,6 +506,11 @@ def _validate_setting_value(module, key, value):
             or not 0 <= value <= 23
         ):
             return "reminder_hour must be an integer between 0 and 23."
+    if module == "photos" and key == "tile_size" and value is not None:
+        # A step of the timeline's size slider; the page has a width for
+        # each of the five and none for anything else.
+        if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
+            return "tile_size must be an integer between 1 and 5."
     if module == "vault" and key == "default_sort" and value is not None:
         # The four the preferences panel offers. Stored unchecked, an unknown
         # value reaches the listing as a sort nothing implements, and the sort

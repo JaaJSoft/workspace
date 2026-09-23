@@ -12,8 +12,14 @@
 {% block drawer_id %}photos-drawer{% endblock %}
 {% block main_class %}relative p-0 flex h-full overflow-hidden{% endblock %}
 
+{% comment %}
+  The tile width is a custom property on the root, so it outlives every swap
+  of the timeline; the server renders the stored one for the first paint.
+{% endcomment %}
 {% block drawer_attrs %}
   x-data="photosApp()"
+  style="--photo-tile: {{ tile_width }}px"
+  :style="tileStyle()"
   @ajax:missing="keepMissingTarget($event)"
 {% endblock %}
 
@@ -48,6 +54,7 @@
 
 {% block content %}
   {{ viewer_prefs|json_script:"viewer-prefs-data" }}
+  {{ tile|json_script:"photo-tile-data" }}
   {% comment %}
     The scroll container is the swap target itself: a sidebar navigation
     replaces it whole, so the new listing starts at the top instead of
@@ -73,6 +80,9 @@
             {{ pending }} being analyzed
           </span>
         {% endif %}
+        <div class="max-sm:hidden">
+          {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
+        </div>
         {% if date_param %}
           <a
             href="{{ latest_url }}"

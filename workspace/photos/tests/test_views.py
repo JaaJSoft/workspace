@@ -15,6 +15,7 @@ from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, T
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Photo
+from workspace.users.services.settings import set_setting
 
 from .images import make_photo, upload
 
@@ -515,3 +516,38 @@ class FilesComponentsTests(PhotosViewTestCase):
         ):
             with self.subTest(marker=marker):
                 self.assertContains(response, marker)
+
+
+class TileSizeTests(PhotosViewTestCase):
+    def _tile(self, response):
+        match = re.search(
+            r'<script id="photo-tile-data" type="application/json">(.*?)</script>',
+            response.content.decode(),
+        )
+        return json.loads(match[1])
+
+    def test_the_default_step_until_the_user_picks_one(self):
+        response = self.client.get("/photos")
+
+        self.assertEqual(
+            self._tile(response), {"size": 3, "widths": [96, 120, 144, 192, 256]}
+        )
+        self.assertContains(response, 'style="--photo-tile: 144px"')
+
+    def test_the_page_opens_at_the_stored_step(self):
+        set_setting(self.user, "photos", "tile_size", 5)
+
+        response = self.client.get("/photos")
+
+        self.assertEqual(self._tile(response)["size"], 5)
+        self.assertContains(response, 'style="--photo-tile: 256px"')
+
+    def test_a_stored_value_off_the_slider_falls_back_to_the_default(self):
+        for value in (0, 6, "4", True, None, [2]):
+            with self.subTest(value=value):
+                set_setting(self.user, "photos", "tile_size", value)
+
+                response = self.client.get("/photos")
+
+                self.assertEqual(self._tile(response)["size"], 3)
+                self.assertContains(response, 'style="--photo-tile: 144px"')

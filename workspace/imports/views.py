@@ -1,6 +1,5 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -28,8 +27,6 @@ def _bad_remote(exc: ImportsError):
 
 @extend_schema(tags=["Imports"])
 class ProviderListView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(summary="List the import providers this server offers")
     def get(self, request):
         return Response([p.describe() for p in provider_registry.available()])
@@ -37,8 +34,6 @@ class ProviderListView(APIView):
 
 @extend_schema(tags=["Imports"])
 class ConnectionListView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(summary="List the user's import connections")
     def get(self, request):
         qs = user_connections_qs(request.user)
@@ -63,8 +58,6 @@ class ConnectionListView(APIView):
 
 
 class _ConnectionView(APIView):
-    permission_classes = [IsAuthenticated]
-
     def _get(self, request, uuid):
         return user_connections_qs(request.user).filter(uuid=uuid).first()
 
@@ -151,8 +144,6 @@ class ConnectionBrowseView(_ConnectionView):
 
 @extend_schema(tags=["Imports"])
 class JobListView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(
         summary="List the user's import jobs, newest first",
         parameters=[PageQuerySerializer],
@@ -202,8 +193,6 @@ class JobListView(APIView):
 
 
 class _JobView(APIView):
-    permission_classes = [IsAuthenticated]
-
     def _get(self, request, uuid):
         return (
             user_jobs_qs(request.user)

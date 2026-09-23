@@ -1,10 +1,16 @@
 import re
 import uuid
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.urls import URLResolver, get_resolver
 from knox.models import AuthToken
+from rest_framework.views import APIView
+
+from workspace.core.module_guard import ModuleVisible
+from workspace.core.services.module_visibility import owning_module
 
 User = get_user_model()
 
@@ -99,6 +105,10 @@ class ApiGuardTests(_GuardTestCase):
             HTTP_AUTHORIZATION=f"Token {token}",
         )
 
+    def test_another_preview_module_is_refused_too(self):
+        self.client.force_login(self.regular)
+        self.assertEqual(self.client.get("/api/v1/imports/jobs").status_code, 404)
+
     def test_a_write_is_refused_before_it_is_read(self):
         self.client.force_login(self.regular)
         init = self.client.post(
@@ -136,3 +146,46 @@ class ApiGuardTests(_GuardTestCase):
                     self.assertEqual(
                         response.status_code, 200 if name in names else 404
                     )
+
+
+class GuardCoverageTests(SimpleTestCase):
+    """A view that sets its own permission_classes replaces the defaults, and
+    with them ModuleVisible. Pages need no such check: the middleware sees
+    every one of them."""
+
+    def _preview_api_views(self):
+        found = []
+
+        def walk(patterns):
+            for pattern in patterns:
+                if isinstance(pattern, URLResolver):
+                    walk(pattern.url_patterns)
+                    continue
+                view_class = getattr(pattern.callback, "cls", None)
+                module = owning_module(pattern.callback.__module__)
+                if (
+                    module is not None
+                    and module.preview
+                    and isinstance(view_class, type)
+                    and issubclass(view_class, APIView)
+                ):
+                    found.append((str(pattern.pattern), module.slug, view_class))
+
+        walk(get_resolver().url_patterns)
+        return found
+
+    def test_the_walk_reaches_the_preview_endpoints(self):
+        # A walk that finds nothing would let every view through.
+        self.assertIn("vault", {slug for _, slug, _ in self._preview_api_views()})
+
+    def test_no_preview_api_view_drops_the_module_guard(self):
+        for route, _, view_class in self._preview_api_views():
+            with self.subTest(route=route):
+                self.assertIn(ModuleVisible, view_class.permission_classes)
+
+    def test_the_page_middleware_runs_after_authentication(self):
+        middleware = settings.MIDDLEWARE
+        self.assertGreater(
+            middleware.index("workspace.core.module_guard.PreviewModuleMiddleware"),
+            middleware.index("django.contrib.auth.middleware.AuthenticationMiddleware"),
+        )

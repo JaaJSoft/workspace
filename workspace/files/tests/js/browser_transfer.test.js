@@ -18,6 +18,7 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
   const events = [];
   const ctx = loadScript('workspace/files/ui/static/files/ui/js/browser.js', {
     tagsMixin: () => ({ toggleFileTag: async () => {} }),
+    propertiesPanelMixin: () => ({}),
     document: {
       getElementById: (id) =>
         id === 'folder-browser' ? { dataset: { folder: currentFolder } } : null,

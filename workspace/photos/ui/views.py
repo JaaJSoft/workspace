@@ -12,6 +12,8 @@ from workspace.files.models import Tag
 from workspace.photos.queries import (
     ALL,
     MINE,
+    SHARED,
+    has_shared_photos,
     library_files,
     library_groups,
     library_tags,
@@ -34,8 +36,8 @@ def _scope(request):
     raw = request.GET.get("scope", "")
     if raw in ("", MINE):
         return MINE
-    if raw == ALL:
-        return ALL
+    if raw in (SHARED, ALL):
+        return raw
     prefix, _, group_id = raw.partition(":")
     if prefix == "group":
         try:
@@ -50,8 +52,8 @@ def _scope(request):
 def _scope_params(scope):
     if scope == MINE:
         return {}
-    if scope == ALL:
-        return {"scope": ALL}
+    if scope in (SHARED, ALL):
+        return {"scope": scope}
     return {"scope": f"group:{scope.pk}"}
 
 
@@ -87,17 +89,21 @@ def _filter_params(favorites, tag):
 
 
 def _scope_tabs(user, scope, filter_params):
-    """The library switcher: Mine, All, then one tab per group with photos.
+    """The library switcher: Mine, All, Shared with me, then one tab per group.
 
-    Hidden (empty) while there is nothing to switch to: a user whose groups
-    hold no photo would only see two tabs showing the same pictures.
+    Shared with me and the groups only get a tab when they hold a photo. The
+    bar is hidden (empty) while there is nothing to switch to: All would show
+    the very same pictures as Mine.
     """
     groups = list(library_groups(user))
     if not isinstance(scope, str) and scope not in groups:
         groups.append(scope)
-    if not groups and scope == MINE:
+    shared = scope == SHARED or has_shared_photos(user)
+    if not groups and not shared and scope == MINE:
         return []
     choices = [(MINE, "Mine", "user"), (ALL, "All", "layers")]
+    if shared:
+        choices.append((SHARED, "Shared with me", "share-2"))
     choices += [(group, group.name, "users") for group in groups]
     return [
         {

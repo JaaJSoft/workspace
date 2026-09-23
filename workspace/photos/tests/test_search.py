@@ -2,12 +2,16 @@ from datetime import UTC, datetime
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
 from workspace.core.module_registry import registry
 from workspace.core.services.search import search_modules
+from workspace.files.models import FileShare
+from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
+from workspace.files.services.sharing import share_file
 from workspace.photos.search import search_photos
 from workspace.users.services.settings import set_setting
 
@@ -59,13 +63,45 @@ class SearchPhotosTests(TestCase):
         self.assertEqual(hit.url, f"/photos?date=undated&open={f.uuid}")
         self.assertIsNone(hit.date)
 
-    def test_only_the_users_analyzed_photos(self):
+    def test_only_photos_the_user_can_open(self):
         bob = User.objects.create_user(username="bob", password="p")
         make_photo(bob, "sunset-bob.jpg", datetime(2024, 7, 14, tzinfo=UTC))
         index_file(upload(self.user, "sunset-notes.txt", b"sunset"))
         index_file(upload(self.user, "sunset-fresh.jpg"))
 
         self.assertEqual(search_photos("sunset", self.user, 10), [])
+
+    def test_a_group_photo_opens_in_the_all_library(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        f = make_photo(
+            bob, "sunset-family.jpg", datetime(2024, 7, 14, tzinfo=UTC), parent=root
+        )
+
+        [hit] = search_photos("sunset", self.user, 10)
+
+        self.assertEqual(hit.url, f"/photos?scope=all&date=2024-07-14&open={f.uuid}")
+        self.assertEqual([t.label for t in hit.tags], ["Family"])
+
+    def test_a_shared_photo_is_found_without_its_owners_folder(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        folder = FileService.create_folder(owner=bob, name="Bob private")
+        f = make_photo(
+            bob, "sunset-shared.jpg", datetime(2024, 7, 14, tzinfo=UTC), parent=folder
+        )
+        share_file(
+            f,
+            target_user=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=bob,
+        )
+
+        [hit] = search_photos("sunset", self.user, 10)
+
+        self.assertEqual(hit.url, f"/photos?scope=all&date=2024-07-14&open={f.uuid}")
+        self.assertEqual(hit.tags, ())
 
 
 class UnifiedSearchTests(TestCase):

@@ -5,11 +5,14 @@ from django.contrib.auth.models import Group
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from workspace.files.models import FileScan, FileTag, Tag
+from workspace.files.models import FileScan, FileShare, FileTag, Tag
 from workspace.files.services import FileService
+from workspace.files.services.sharing import share_file
 from workspace.photos.queries import (
     ALL,
     MINE,
+    SHARED,
+    has_shared_photos,
     library_files,
     library_groups,
     library_tags,
@@ -102,6 +105,14 @@ class ScopeTests(TestCase):
         self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14))
         self.family_photo = self._group_photo(bob, self.family, "family.jpg")
         self.strangers_photo = self._group_photo(bob, self.strangers, "other.jpg")
+        self.carol = User.objects.create_user(username="carol", password="p")
+        self.shared_photo = make_photo(self.carol, "shared.jpg", _at(2024, 7, 12))
+        share_file(
+            self.shared_photo,
+            target_user=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=self.carol,
+        )
 
     def _group_photo(self, owner, group, name):
         root = FileService.create_folder(owner=owner, name=group.name, group=group)
@@ -111,10 +122,45 @@ class ScopeTests(TestCase):
         self.assertEqual(list(library_files(self.user)), [self.mine])
         self.assertEqual(list(library_files(self.user, MINE)), [self.mine])
 
-    def test_all_adds_the_users_group_folders(self):
+    def test_all_is_every_photo_the_user_can_open(self):
         self.assertEqual(
-            set(library_files(self.user, ALL)), {self.mine, self.family_photo}
+            set(library_files(self.user, ALL)),
+            {self.mine, self.family_photo, self.shared_photo},
         )
+
+    def test_shared_is_what_other_people_shared_with_the_user(self):
+        self.assertEqual(list(library_files(self.user, SHARED)), [self.shared_photo])
+        self.assertTrue(has_shared_photos(self.user))
+        self.assertFalse(has_shared_photos(self.carol))
+
+    def test_a_share_through_a_group_counts_too(self):
+        dave = User.objects.create_user(username="dave", password="p")
+        via_group = make_photo(dave, "team.jpg", _at(2024, 7, 11))
+        share_file(
+            via_group,
+            target_group=self.team,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=dave,
+        )
+
+        self.assertIn(via_group, library_files(self.user, SHARED))
+        self.assertIn(via_group, library_files(self.user, ALL))
+
+    def test_a_photo_the_user_shared_is_not_shared_with_them(self):
+        share_file(
+            self.mine,
+            target_group=self.family,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=self.user,
+        )
+
+        self.assertNotIn(self.mine, library_files(self.user, SHARED))
+
+    def test_a_trashed_shared_photo_drops_out(self):
+        FileService.soft_delete(self.shared_photo, acting_user=self.carol)
+
+        self.assertEqual(list(library_files(self.user, SHARED)), [])
+        self.assertNotIn(self.shared_photo, library_files(self.user, ALL))
 
     def test_a_group_reads_that_group_alone(self):
         self.assertEqual(
@@ -135,3 +181,4 @@ class ScopeTests(TestCase):
         self.assertEqual(unanalyzed_count(self.user), 0)
         self.assertEqual(unanalyzed_count(self.user, ALL), 1)
         self.assertEqual(unanalyzed_count(self.user, self.family), 1)
+        self.assertEqual(unanalyzed_count(self.user, SHARED), 0)

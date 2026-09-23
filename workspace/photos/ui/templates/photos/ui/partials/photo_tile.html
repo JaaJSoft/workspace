@@ -8,7 +8,7 @@
 {% endcomment %}
 <button
   type="button"
-  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-sm bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-module"
+  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-32 xl:w-36 aspect-square overflow-hidden rounded-lg bg-base-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-module"
   data-uuid="{{ file.uuid }}"
   data-node-type="file"
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
@@ -35,7 +35,7 @@
   {% endif %}
   {% if file.is_favorite %}
     <span
-      class="absolute top-1 right-1 flex rounded-full bg-base-100/80 p-0.5"
+      class="absolute top-1.5 right-1.5 flex rounded-full bg-base-100/80 p-0.5"
       aria-label="Favorite"
     >
       <i data-lucide="star" class="w-3.5 h-3.5 text-warning fill-current"></i>

@@ -42,28 +42,3 @@ class DashboardConfig(AppConfig):
                 ),
             ]
         )
-
-        planned_modules = [
-            ModuleInfo(
-                name="Contacts",
-                slug="contacts",
-                description="Manage contacts and interactions.",
-                icon="contact",
-                color="fuchsia",
-                url=None,
-                active=False,
-                order=60,
-            ),
-            ModuleInfo(
-                name="Bookmarks",
-                slug="bookmarks",
-                description="Save and organize links.",
-                icon="bookmark",
-                color="yellow",
-                url=None,
-                active=False,
-                order=70,
-            ),
-        ]
-        for module in planned_modules:
-            registry.register(module)

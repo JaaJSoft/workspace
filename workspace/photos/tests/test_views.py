@@ -11,8 +11,9 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from workspace.files.models import FileFavorite, FileScan, FileTag, Tag
+from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, Tag
 from workspace.files.services import FileService
+from workspace.files.services.sharing import share_file
 from workspace.photos.models import Photo
 
 from .images import make_photo, upload
@@ -388,3 +389,41 @@ class ScopeTabsTests(PhotosViewTestCase):
         second = self.client.get(next_url)
 
         self.assertEqual(self._tiles(second), [str(self.family_photo.uuid)])
+
+
+class SharedScopeTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.carol = User.objects.create_user(username="carol", password="p")
+        self.mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
+        self.shared = make_photo(self.carol, "shared.jpg", _at(2024, 7, 13, 12))
+        share_file(
+            self.shared,
+            target_user=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=self.carol,
+        )
+
+    def test_shared_with_me_gets_a_tab_even_without_groups(self):
+        tabs = self.client.get("/photos").context["scope_tabs"]
+
+        self.assertEqual(
+            [(t["label"], t["url"]) for t in tabs],
+            [
+                ("Mine", "/photos"),
+                ("All", "/photos?scope=all"),
+                ("Shared with me", "/photos?scope=shared"),
+            ],
+        )
+
+    def test_shared_reads_the_photos_shared_with_me(self):
+        response = self.client.get("/photos?scope=shared")
+
+        self.assertEqual(self._tiles(response), [str(self.shared.uuid)])
+
+    def test_all_includes_what_is_shared_with_me(self):
+        response = self.client.get("/photos?scope=all")
+
+        self.assertEqual(
+            self._tiles(response), [str(self.mine.uuid), str(self.shared.uuid)]
+        )

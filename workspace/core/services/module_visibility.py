@@ -1,8 +1,9 @@
 """Per-user module visibility.
 
 Non-preview modules are visible to everyone. Preview modules follow the global
-``settings.PREVIEW_VISIBILITY`` audience (all/staff/admin/none). This is UI
-hiding only - it is not request-level enforcement.
+``settings.PREVIEW_VISIBILITY`` audience (all/staff/admin/none): hidden from the
+navigation, the home grid, the palette and search here, and refused at request
+time by ``workspace.core.module_guard``.
 """
 
 from django.conf import settings
@@ -33,6 +34,19 @@ def is_module_slug_visible(user, slug) -> bool:
     """Visibility check by slug. Unknown slugs are treated as visible."""
     module = registry.get(slug)
     return module is None or user_can_see_module(user, module)
+
+
+def owning_module(dotted_path):
+    """The registered module whose package holds *dotted_path*, or None.
+
+    ``workspace.vault.views.entries`` belongs to ``vault``. Ownership is read
+    from where the code lives so that a view needs to declare nothing to be
+    guarded - a declaration is exactly what a new view forgets.
+    """
+    parts = dotted_path.split(".")
+    if len(parts) < 2 or parts[0] != "workspace":
+        return None
+    return registry.get(parts[1])
 
 
 def visible_modules(user):

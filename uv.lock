@@ -788,15 +788,15 @@ brotli = [
 
 [[package]]
 name = "django-prometheus"
-version = "2.6.0.dev4"
+version = "2.6.0.dev22"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "prometheus-client" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/30/6f/842acaf2d5bbfc800fb0ae2ff33f50860bf89c5e764fbbd50e6af627badd/django_prometheus-2.6.0.dev4.tar.gz", hash = "sha256:20ea6e8c7682e487f86ee5b685af5ab1ed588b37e910b1d4159fcd74a2542eb8", size = 26650, upload-time = "2026-07-30T16:36:28.285Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/16/35ec2a48ba9f85e93c87811ccd67cf105e57a874ab2616841683fd56d559/django_prometheus-2.6.0.dev22.tar.gz", hash = "sha256:b1279df40eee865e85eefb99dd01aa5886ad7c93ff04eb361d4d929888231767", size = 27228, upload-time = "2026-09-19T15:58:38.999Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9c/e2/0c2f59a8747053413269895b476645f2ebcfa190a1c0165985c750e4c51a/django_prometheus-2.6.0.dev4-py2.py3-none-any.whl", hash = "sha256:bd27a5c390c4bc2a26ecd66bcd941106b45a8aac9e4bbbd74605ab2974de871b", size = 31935, upload-time = "2026-07-30T16:36:26.918Z" },
+    { url = "https://files.pythonhosted.org/packages/09/8e/25f7e85932ca8811ab0f9cda29b740020862595dca0eb414cc815b238d9f/django_prometheus-2.6.0.dev22-py3-none-any.whl", hash = "sha256:02503f6b89f323489e618de3694830307347d1c8db5a987d4c3635a6409b3359", size = 32824, upload-time = "2026-09-19T15:58:37.598Z" },
 ]
 
 [[package]]
@@ -2866,7 +2866,7 @@ requires-dist = [
     { name = "django-csp", specifier = ">=4.0" },
     { name = "django-filter", specifier = "==26.1" },
     { name = "django-http-compression", extras = ["brotli"], specifier = ">=1.4.0" },
-    { name = "django-prometheus", specifier = ">=2.5.0" },
+    { name = "django-prometheus", specifier = ">=2.6.0.dev22" },
     { name = "django-redis", specifier = ">=7.0.0" },
     { name = "django-rest-knox", specifier = ">=5.1.0" },
     { name = "django-unfold", specifier = ">=0.107.0" },

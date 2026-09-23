@@ -6,9 +6,11 @@ setting cannot be used to learn which modules exist. Ownership comes from where
 a view's code lives (``owning_module``), so a new view is guarded without
 declaring anything.
 
-Pages go through ``PreviewModuleMiddleware``: a session is the only way a page
-authenticates. API views go through ``ModuleVisible``, which runs after DRF
-authentication and therefore sees token and basic-auth callers too.
+``PreviewModuleMiddleware`` judges the session user, on pages and API views
+alike, before the CSRF check: that check answers 403 to a tokenless write, and
+an unmatched URL never reaches it. A caller authenticated otherwise - a token,
+basic auth - is only known once DRF has authenticated it, so ``ModuleVisible``
+judges that one.
 
 ``rest_framework.views`` is imported inside the functions that need it: DRF
 loads ``DEFAULT_PERMISSION_CLASSES`` - this module - while that module is still
@@ -31,13 +33,6 @@ def is_hidden_from(user, dotted_path):
     return module is not None and not user_can_see_module(user, module)
 
 
-def _is_api_view(view_func):
-    from rest_framework.views import APIView
-
-    view_class = getattr(view_func, "cls", None)
-    return isinstance(view_class, type) and issubclass(view_class, APIView)
-
-
 class PreviewModuleMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
@@ -46,10 +41,9 @@ class PreviewModuleMiddleware:
         return self.get_response(request)
 
     def process_view(self, request, view_func, view_args, view_kwargs):
-        # A DRF view authenticates on its own, after this runs, so the session
-        # user seen here is not necessarily its caller: ModuleVisible judges
-        # it. An anonymous visitor is left to the view's own login redirect.
-        if _is_api_view(view_func) or not request.user.is_authenticated:
+        # An anonymous visitor is left to the view's own login redirect, and
+        # a token caller - anonymous to the session - to ModuleVisible.
+        if not request.user.is_authenticated:
             return None
         if is_hidden_from(request.user, view_func.__module__):
             raise HiddenModule

@@ -4,7 +4,7 @@ import uuid
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import URLResolver, get_resolver
 from knox.models import AuthToken
 from rest_framework.views import APIView
@@ -47,9 +47,12 @@ class _GuardTestCase(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def assertAnswersLikeAnAbsentPath(self, hidden_path, absent_path, **headers):
-        hidden = self.client.get(hidden_path, **headers)
-        absent = self.client.get(absent_path, **headers)
+    def assertAnswersLikeAnAbsentPath(
+        self, hidden_path, absent_path, method="get", client=None, **headers
+    ):
+        send = getattr(client or self.client, method)
+        hidden = send(hidden_path, **headers)
+        absent = send(absent_path, **headers)
         self.assertEqual(hidden.status_code, 404)
         self.assertEqual(_snapshot(hidden, hidden_path), _snapshot(absent, absent_path))
 
@@ -59,6 +62,15 @@ class PageGuardTests(_GuardTestCase):
     def test_a_hidden_page_answers_exactly_like_an_absent_one(self):
         self.client.force_login(self.regular)
         self.assertAnswersLikeAnAbsentPath("/vault", "/vault/does-not-exist")
+
+    def test_a_post_without_a_csrf_token_cannot_tell_them_apart_either(self):
+        """The CSRF check would answer 403 before any view ran - and an
+        unmatched URL never reaches it, so it answers 404."""
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.regular)
+        self.assertAnswersLikeAnAbsentPath(
+            "/vault/onboarding", "/vault/does-not-exist", method="post", client=client
+        )
 
     def test_every_page_of_a_preview_module_is_refused(self):
         self.client.force_login(self.regular)
@@ -108,6 +120,18 @@ class ApiGuardTests(_GuardTestCase):
     def test_another_preview_module_is_refused_too(self):
         self.client.force_login(self.regular)
         self.assertEqual(self.client.get("/api/v1/imports/jobs").status_code, 404)
+
+    def test_a_session_write_without_a_csrf_token_cannot_tell_them_apart(self):
+        """DRF's session authentication enforces CSRF before any permission
+        runs, and answers 403 where an unmatched URL answers 404."""
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.regular)
+        self.assertAnswersLikeAnAbsentPath(
+            "/api/v1/vault/account/init",
+            "/api/v1/vault/does-not-exist",
+            method="post",
+            client=client,
+        )
 
     def test_a_write_is_refused_before_it_is_read(self):
         self.client.force_login(self.regular)
@@ -183,9 +207,9 @@ class GuardCoverageTests(SimpleTestCase):
             with self.subTest(route=route):
                 self.assertIn(ModuleVisible, view_class.permission_classes)
 
-    def test_the_page_middleware_runs_after_authentication(self):
+    def test_the_middleware_refuses_before_the_csrf_check(self):
         middleware = settings.MIDDLEWARE
-        self.assertGreater(
+        self.assertLess(
             middleware.index("workspace.core.module_guard.PreviewModuleMiddleware"),
-            middleware.index("django.contrib.auth.middleware.AuthenticationMiddleware"),
+            middleware.index("django.middleware.csrf.CsrfViewMiddleware"),
         )

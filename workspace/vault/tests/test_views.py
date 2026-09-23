@@ -30,15 +30,10 @@ class VaultIndexViewTests(TestCase):
         self.assertTemplateUsed(response, "vault/ui/index.html")
 
     @override_settings(PREVIEW_VISIBILITY="staff")
-    def test_preview_hiding_does_not_gate_the_request(self):
-        """The preview flag hides the module from the navigation, the module
-        grid and the command palette - it is not request-level enforcement.
-
-        This asserts the known limitation rather than the desired end state,
-        so that adopting request-level access control fails here loudly and
-        forces a deliberate update instead of silently widening the gate.
-        """
+    def test_a_user_outside_the_preview_audience_is_refused(self):
+        """The preview flag gates the request, not only the navigation: a
+        regular user who types the URL gets the 404 an absent page gets."""
         self._finish_onboarding()
         self.client.force_login(self.user)
         self.assertFalse(self.user.is_staff)
-        self.assertEqual(self.client.get("/vault").status_code, 200)
+        self.assertEqual(self.client.get("/vault").status_code, 404)

@@ -25,8 +25,11 @@ Parameters:
 - disabled: Boolean, whether this item is disabled (default: False)
 - badge: Optional badge text (e.g., "Soon", "3", "New")
 - badge_binding: Alpine expression for a badge whose text changes (e.g. a
-  countdown or a live count). Ignored when `badge` is given, since a static
+  countdown or a live count). Hidden while the expression is falsy (0 or
+  empty), like a static badge. Ignored when `badge` is given, since a static
   badge and a reactive one on the same row would fight over the slot.
+- badge_initial: the value badge_binding has when the page renders, so the
+  first paint already shows it (or hides it when falsy) before Alpine binds.
 - badge_type: Badge variant (default: "sm") - can be "xs", "sm", "md", "lg"
 - x_target: Optional Alpine.js x-target attribute
 - x_target_history: Optional x-target history mode ("push" or "replace")
@@ -102,9 +105,10 @@ Usage Examples:
             <span class="badge badge-{{ badge_type|default:'sm' }}">{{ badge }}</span>
           {% elif badge_binding %}
             <span
-              class="badge badge-{{ badge_type|default:'sm' }}"
+              class="badge badge-{{ badge_type|default:'sm' }}{% if not badge_initial %} hidden{% endif %}"
+              :class="{ hidden: !({{ badge_binding|safe }}) }"
               x-text="{{ badge_binding|safe }}"
-            ></span>
+            >{{ badge_initial|default_if_none:'' }}</span>
           {% endif %}
         </span>
       </span>
@@ -147,9 +151,10 @@ Usage Examples:
             >{{ badge }}</span>
           {% elif badge_binding %}
             <span
-              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}"
+              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}{% if not badge_initial %} hidden{% endif %}"
+              :class="{ hidden: !({{ badge_binding|safe }}) }"
               x-text="{{ badge_binding|safe }}"
-            ></span>
+            >{{ badge_initial|default_if_none:'' }}</span>
           {% endif %}
         </span>
       </a>
@@ -192,9 +197,10 @@ Usage Examples:
             >{{ badge }}</span>
           {% elif badge_binding %}
             <span
-              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}"
+              class="badge badge-{{ badge_type|default:'sm' }}{% if badge_variant %} badge-{{ badge_variant }}{% endif %}{% if not badge_initial %} hidden{% endif %}"
+              :class="{ hidden: !({{ badge_binding|safe }}) }"
               x-text="{{ badge_binding|safe }}"
-            ></span>
+            >{{ badge_initial|default_if_none:'' }}</span>
           {% endif %}
         </span>
       </button>

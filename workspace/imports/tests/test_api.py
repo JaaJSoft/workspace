@@ -45,7 +45,7 @@ class ConnectionsApiTests(APITestCase):
                 "slug": "fake",
                 "name": "Fake cloud",
                 "auth": "credentials",
-                "kinds": ["files"],
+                "kinds": ["contacts", "files"],
             },
         )
 
@@ -198,6 +198,7 @@ class ConnectionsApiTests(APITestCase):
         response = self.client.get(f"{BASE}/connections/{conn.uuid}/browse")
         self.assertEqual(response.status_code, 200)
         body = response.json()
+        self.assertEqual(body["kind"], "files")
         self.assertEqual(body["path"], "/")
         self.assertEqual(
             [e["name"] for e in body["entries"]], ["alpha", "Zeta", "A.txt", "b.txt"]
@@ -259,3 +260,25 @@ class ConnectionsApiTests(APITestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("stop it", response.json()["detail"])
         self.assertTrue(ImportConnection.objects.filter(pk=conn.pk).exists())
+
+    def test_browse_contacts_lists_the_address_books(self):
+        conn = svc.create_connection(
+            self.user,
+            provider="fake",
+            label="mine",
+            base_url="https://cloud.example.org",
+            username="a",
+            secret="good",
+        )
+        response = self.client.get(
+            f"{BASE}/connections/{conn.uuid}/browse", {"kind": "contacts"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "kind": "contacts",
+                "path": "",
+                "entries": [{"id": "/contacts", "name": "Contacts", "description": ""}],
+            },
+        )

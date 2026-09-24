@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import ImportConnection, ImportJob, ImportJobItem
-from .providers.base import KIND_FILES
+from .providers.base import KIND_CONTACTS, KIND_FILES
 from .providers.registry import provider_registry
 
 
@@ -85,7 +85,9 @@ class RemotePathField(serializers.CharField):
 
 
 class BrowseQuerySerializer(serializers.Serializer):
-    kind = serializers.ChoiceField(choices=[KIND_FILES], default=KIND_FILES)
+    kind = serializers.ChoiceField(
+        choices=[KIND_FILES, KIND_CONTACTS], default=KIND_FILES
+    )
     path = RemotePathField()
 
 

@@ -30,6 +30,14 @@ def tiny_png(width=6, height=4):
     return buf.getvalue()
 
 
+def bomb_png():
+    """A PNG whose declared size trips Pillow's decompression-bomb guard, a
+    few KB on disk regardless (a 1-bit image compresses to nothing)."""
+    buf = BytesIO()
+    Image.new("1", (14000, 14000)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
 def card(*lines):
     return "BEGIN:VCARD\nVERSION:4.0\n" + "\n".join(lines) + "\nEND:VCARD\n"
 
@@ -160,6 +168,17 @@ class ImportTests(TestCase):
         person = Person.objects.get(owner=self.alice)
         self.assertFalse(person.has_avatar)
 
+    def test_decompression_bomb_photo_is_ignored(self):
+        import base64
+
+        encoded = base64.b64encode(bomb_png()).decode()
+        import_vcards(
+            card("UID:p1", "FN:Pic", f"PHOTO:data:image/png;base64,{encoded}"),
+            owner=self.alice,
+        )
+        person = Person.objects.get(owner=self.alice)
+        self.assertFalse(person.has_avatar)
+
     def test_existing_list_gains_members_without_duplicates(self):
         friends = create_list(owner=self.alice, name="Friends")
         other = create_person(owner=self.alice, display_name="Other")
@@ -177,6 +196,19 @@ class ImportTests(TestCase):
         )
         crew = PersonList.objects.get(owner=self.alice, name="Crew")
         self.assertEqual(list(crew.members.all()), [existing])
+
+    def test_report_names_the_row_each_person_card_became(self):
+        text = (
+            card("UID:ann", "FN:Ann")
+            + card("KIND:group", "FN:Team", "MEMBER:ann")
+            + card("UID:bob", "FN:Bob")
+        )
+        report = import_vcards(text, owner=self.alice)
+        self.assertEqual([p.display_name for p in report.persons], ["Ann", "Bob"])
+        self.assertEqual(report.as_dict(), {"created": 2, "updated": 0, "lists": 1})
+
+        again = import_vcards(text, owner=self.alice)
+        self.assertEqual([p.pk for p in again.persons], [p.pk for p in report.persons])
 
 
 class RoundTripTests(TestCase):

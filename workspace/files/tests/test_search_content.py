@@ -1,6 +1,7 @@
 """End-to-end content search: global search provider and the list API."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.db import connection
 from django.test import TestCase
@@ -18,9 +19,11 @@ from workspace.common.tests.office_fixtures import (
     make_xlsx,
 )
 from workspace.common.tests.pdf_fixtures import make_pdf
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
 from workspace.files.search import search_files
 from workspace.files.services.search_index import index_file
+from workspace.projects.services.members import add_member
+from workspace.projects.services.projects import create_project
 
 User = get_user_model()
 
@@ -129,6 +132,109 @@ class SearchFilesProviderTests(ContentSearchTestCase):
             [r.name for r in search_files("treasurer", self.user, limit=10)],
             ["minutes.md"],
         )
+
+
+class SearchFilesAccessScopeTests(ContentSearchTestCase):
+    """The global search covers every file the user can open, not only theirs."""
+
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team")
+        self.user.groups.add(self.team)
+        self.bob_folder = File.objects.create(
+            owner=self.other, name="Bob private", node_type=File.NodeType.FOLDER
+        )
+
+    def _bobs_file(self, name, body=b"the treasurer resigned"):
+        file_obj = self._file(self.other, name, body)
+        File.objects.filter(pk=file_obj.pk).update(parent=self.bob_folder)
+        file_obj.refresh_from_db()
+        return file_obj
+
+    def _search(self, term="treasurer"):
+        return search_files(term, self.user, limit=10)
+
+    def test_a_group_folder_file_is_found_in_its_folder(self):
+        root = File.objects.create(
+            owner=self.other,
+            name="Team files",
+            node_type=File.NodeType.FOLDER,
+            group=self.team,
+        )
+        index_file(root)
+        doc = File.objects.create(
+            owner=self.other,
+            name="minutes.md",
+            node_type=File.NodeType.FILE,
+            mime_type="text/markdown",
+            group=self.team,
+            parent=root,
+            content=ContentFile(b"the treasurer resigned", name="minutes.md"),
+        )
+        index_file(doc)
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files/{root.uuid}?open={doc.uuid}")
+        self.assertEqual([t.label for t in hit.tags], ["Team files"])
+
+    def test_a_file_shared_with_the_user_opens_in_shared_with_me(self):
+        doc = self._bobs_file("minutes.md")
+        FileShare.objects.create(file=doc, shared_by=self.other, shared_with=self.user)
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files?shared=1&open={doc.uuid}")
+        # The owner's folder is out of reach: its name must not surface.
+        self.assertEqual([t.label for t in hit.tags], ["Shared with me"])
+
+    def test_a_group_file_under_a_private_folder_does_not_link_or_name_it(self):
+        # `group` is set on the row alone; the folder above can still be
+        # somebody's personal one.
+        doc = self._bobs_file("minutes.md")
+        File.objects.filter(pk=doc.pk).update(group=self.team)
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files?shared=1&open={doc.uuid}")
+        self.assertNotIn("Bob private", [t.label for t in hit.tags])
+
+    def test_a_folder_shared_directly_does_not_name_its_private_parent(self):
+        folder = File.objects.create(
+            owner=self.other,
+            name="Treasurer reports",
+            node_type=File.NodeType.FOLDER,
+            parent=self.bob_folder,
+        )
+        index_file(folder)
+        FileShare.objects.create(
+            file=folder, shared_by=self.other, shared_with=self.user
+        )
+        [hit] = self._search()
+        self.assertEqual(hit.url, f"/files/{folder.uuid}")
+        self.assertEqual(hit.tags, ())
+
+    def test_a_file_shared_with_one_of_the_users_groups_is_found(self):
+        doc = self._bobs_file("minutes.md")
+        FileShare.objects.create(
+            file=doc, shared_by=self.other, shared_with_group=self.team
+        )
+        self.assertEqual([r.uuid for r in self._search()], [str(doc.uuid)])
+
+    def test_a_file_shared_with_one_of_the_users_projects_is_found(self):
+        project = create_project(self.other, name="Website")
+        add_member(project, self.user)
+        doc = self._bobs_file("minutes.md")
+        FileShare.objects.create(
+            file=doc, shared_by=self.other, shared_with_project=project
+        )
+        self.assertEqual([r.uuid for r in self._search()], [str(doc.uuid)])
+
+    def test_a_file_shared_with_someone_else_stays_hidden(self):
+        carol = User.objects.create_user(username="carol", password="pw")
+        doc = self._bobs_file("minutes.md")
+        FileShare.objects.create(file=doc, shared_by=self.other, shared_with=carol)
+        self.assertEqual(self._search(), [])
+
+    def test_a_trashed_shared_file_drops_out_of_search(self):
+        doc = self._bobs_file("minutes.md")
+        FileShare.objects.create(file=doc, shared_by=self.other, shared_with=self.user)
+        doc.soft_delete()
+        self.assertEqual(self._search(), [])
 
 
 class FileListSearchApiTests(APITestCase):

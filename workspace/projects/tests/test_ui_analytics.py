@@ -66,7 +66,9 @@ class AnalyticsViewTests(ProjectTestMixin, TestCase):
     def test_backlog_badge_still_renders_on_this_view(self):
         create_task(self.project, self.admin, title="Queued")
         self.client.force_login(self.member)
-        self.assertEqual(self.client.get(self.url).context["backlog_count"], 1)
+        self.assertEqual(
+            self.client.get(self.url).context["sidebar_counts"]["backlog"], 1
+        )
 
 
 class AnalyticsContentTests(ProjectTestMixin, TestCase):

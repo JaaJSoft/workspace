@@ -52,3 +52,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "daisyui"
         update-types: ["version-update:semver-major"]
+      # FullCalendar 7 drops the global build we vendor, the luxon3 timezone
+      # bridge and every fc-* class the calendar theme targets: a migration of
+      # its own, tracked in #1102, not a dependency bump.
+      - dependency-name: "fullcalendar"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@fullcalendar/*"
+        update-types: ["version-update:semver-major"]

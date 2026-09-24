@@ -123,6 +123,11 @@
   .link-module:hover {
     color: color-mix(in oklab, rgb(var(--module)) 80%, black);
   }
+  .steps .step-module + .step-module:before,
+  .steps .step-module:after {
+    background-color: rgb(var(--module));
+    color: rgb(var(--module-content));
+  }
   .progress-module::-moz-progress-bar {
     background-color: rgb(var(--module));
   }

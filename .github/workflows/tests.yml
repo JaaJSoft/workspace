@@ -61,8 +61,8 @@ permissions:
 
 jobs:
   # Detects which parts of the tree changed so jobs that only exercise a
-  # slice of it (ruff, djlint, JS unit tests, the davfs2 mount) can be
-  # skipped.
+  # slice of it (ruff, djlint, JS unit tests, the davfs2 mount, the live
+  # Nextcloud imports) can be skipped.
   # The Django and E2E matrices always run: they load templates and read
   # static assets, so nearly any non-doc change can affect them.
   changes:
@@ -73,6 +73,7 @@ jobs:
       js: ${{ steps.filter.outputs.js }}
       templates: ${{ steps.filter.outputs.templates }}
       webdav: ${{ steps.filter.outputs.webdav }}
+      nextcloud: ${{ steps.filter.outputs.nextcloud }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -108,6 +109,19 @@ jobs:
               - 'workspace/common/**'
               - 'workspace/users/**'
               - 'workspace/core/**'
+              - 'workspace/settings/**'
+              - 'workspace/*.py'
+              - 'manage.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+            # The imports code, what it writes into (people, files) and the
+            # shared plumbing, plus the dependency manifests.
+            nextcloud:
+              - 'workspace/imports/**'
+              - 'workspace/people/**'
+              - 'workspace/files/**'
+              - 'workspace/common/**'
               - 'workspace/settings/**'
               - 'workspace/*.py'
               - 'manage.py'
@@ -382,3 +396,59 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.files.tests.test_webdav_mount -v 2
+
+  nextcloud-live:
+    runs-on: ubuntu-latest
+    name: Imports (live Nextcloud)
+    needs: changes
+    if: needs.changes.outputs.nextcloud == 'true'
+    services:
+      nextcloud:
+        image: nextcloud:34-apache
+        ports:
+          - 8080:80
+        env:
+          SQLITE_DATABASE: nextcloud
+          NEXTCLOUD_ADMIN_USER: admin
+          NEXTCLOUD_ADMIN_PASSWORD: ci-nextcloud-admin-4f7c
+          NEXTCLOUD_TRUSTED_DOMAINS: localhost
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v10.1.0
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # The container answers HTTP before its first-run install is over.
+      - name: Wait for Nextcloud to finish installing
+        run: |
+          for _ in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/status.php | grep -q '"installed":true'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Nextcloud did not finish installing in time" >&2
+          curl -sS http://localhost:8080/status.php || true
+          exit 1
+
+      - name: Run the live Nextcloud tests
+        env:
+          # A server the tests cannot reach is a failure here, not a skip.
+          WORKSPACE_NEXTCLOUD_TESTS: '1'
+          WORKSPACE_NEXTCLOUD_URL: http://localhost:8080
+          WORKSPACE_NEXTCLOUD_ADMIN_USER: admin
+          WORKSPACE_NEXTCLOUD_ADMIN_PASSWORD: ci-nextcloud-admin-4f7c
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.imports.tests.test_nextcloud_live -v 2

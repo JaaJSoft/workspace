@@ -4,10 +4,12 @@ from contextlib import contextmanager
 from io import BytesIO
 
 from workspace.imports.providers.base import (
+    KIND_CONTACTS,
     KIND_FILES,
     AuthenticationFailed,
     ConnectionFailed,
     Provider,
+    RemoteAddressBook,
     RemoteEntry,
     RemoteNotFound,
     RemoteTag,
@@ -76,10 +78,50 @@ class FakeMetadataSource:
                 yield from entries
 
 
+class FakeContactSource:
+    def __init__(
+        self, books, cards, *, photos=None, fail_refs=(), fail_fetch=(), vanished=()
+    ):
+        self._books = books
+        self._cards = cards
+        self._photos = photos or {}
+        self.fail_refs = set(fail_refs)
+        self.fail_fetch = set(fail_fetch)
+        self.vanished = set(vanished)
+        self.closed = False
+        self.fetch_calls = []
+        self.photo_calls = []
+
+    def close(self):
+        self.closed = True
+
+    def address_books(self):
+        yield from self._books
+
+    def card_refs(self, book_id):
+        if book_id in self.fail_refs:
+            raise ConnectionFailed(f"cannot list {book_id}")
+        for card in self._cards.get(book_id, []):
+            yield card.id, card.etag
+
+    def fetch_cards(self, book_id, card_ids):
+        self.fetch_calls.append(list(card_ids))
+        if self.fail_fetch & set(card_ids):
+            raise ConnectionFailed("cannot fetch")
+        wanted = set(card_ids) - self.vanished
+        for card in self._cards.get(book_id, []):
+            if card.id in wanted:
+                yield card
+
+    def fetch_photo(self, url):
+        self.photo_calls.append(url)
+        return self._photos.get(url)
+
+
 class FakeProvider(Provider):
     slug = "fake"
     name = "Fake cloud"
-    kinds = frozenset({KIND_FILES})
+    kinds = frozenset({KIND_FILES, KIND_CONTACTS})
 
     def __init__(self):
         self.reset()
@@ -98,6 +140,13 @@ class FakeProvider(Provider):
         self.fail_list = set()
         self.fail_open = set()
         self.capabilities = {"kinds": ["files"], "quota_used": 42}
+        self.last_contacts = None
+        self.books = [RemoteAddressBook(id="/contacts", name="Contacts")]
+        self.cards = {}
+        self.photos = {}
+        self.fail_refs = set()
+        self.fail_fetch = set()
+        self.vanished = set()
         self.tree = {
             "/": [
                 RemoteEntry(id="/b.txt", name="b.txt", is_dir=False, size=2),
@@ -135,6 +184,17 @@ class FakeProvider(Provider):
             self.favorites or [], self.tags, fail=self.fail_metadata
         )
         return self.last_metadata
+
+    def contact_source(self, connection):
+        self.last_contacts = FakeContactSource(
+            self.books,
+            self.cards,
+            photos=self.photos,
+            fail_refs=self.fail_refs,
+            fail_fetch=self.fail_fetch,
+            vanished=self.vanished,
+        )
+        return self.last_contacts
 
 
 def fake_provider():

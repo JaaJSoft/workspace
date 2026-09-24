@@ -273,6 +273,18 @@ class ParseEdgeCaseTests(SimpleTestCase):
             [{"value": "https://x.example/p.jpg", "params": {"VALUE": ["uri"]}}],
         )
 
+    def test_a_later_photo_does_not_replace_the_decoded_one(self):
+        # The shape of Nextcloud's example contact: the image, then empty URIs.
+        photo = tiny_jpeg()
+        encoded = base64.b64encode(photo).decode()
+        (card,) = parse_vcards(
+            "BEGIN:VCARD\nVERSION:3.0\nFN:X\n"
+            f"PHOTO;ENCODING=b;TYPE=JPEG:{encoded}\n"
+            "PHOTO;VALUE=URI:\nPHOTO;VALUE=URI:\nEND:VCARD\n"
+        )
+        self.assertEqual(card.photo, photo)
+        self.assertEqual(len(card.fields["extra_properties"]["PHOTO"]), 2)
+
     def test_tel_uri_prefix_is_stripped(self):
         (card,) = parse_vcards(
             "BEGIN:VCARD\nVERSION:4.0\nFN:X\n"

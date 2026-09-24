@@ -219,7 +219,10 @@ importer_registry = ImporterRegistry()
 
 
 def register_builtin_importers():
+    from .contacts import ContactsImporter
     from .files import FilesImporter
 
-    if importer_registry.get(FilesImporter.kind) is None:
-        importer_registry.register(FilesImporter())
+    # Registration order is run order.
+    for importer in (FilesImporter(), ContactsImporter()):
+        if importer_registry.get(importer.kind) is None:
+            importer_registry.register(importer)

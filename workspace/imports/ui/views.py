@@ -23,5 +23,6 @@ def index(request):
             "jobs": JobSerializer(jobs, many=True).data,
             "open_wizard": request.GET.get("new") == "1",
             "highlight_job": str(parse_uuid_or_none(request.GET.get("job", "")) or ""),
+            "groups": list(request.user.groups.order_by("name").values("id", "name")),
         },
     )

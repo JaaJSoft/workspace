@@ -161,6 +161,14 @@ def _sidebar_projects(user):
     )
 
 
+def _sidebar_counts(project):
+    """Whole-project counts, never the filtered slice a view renders."""
+    return project.tasks.aggregate(
+        backlog=Count("uuid", filter=Q(status__category=TaskStatus.Category.BACKLOG)),
+        open=Count("uuid", filter=~Q(status__category=TaskStatus.Category.DONE)),
+    )
+
+
 def _deep_link_panel(request, project, role, members):
     """Panel context for a valid ?task= deep link (UUID or WR-42), else empty."""
     raw = (request.GET.get("task") or "").strip()
@@ -221,6 +229,10 @@ def _base_context(request, project, role, view):
             }
             for u in project_members
         ],
+        # In both render paths: the sidebar sits outside #project-content,
+        # so every swap carries fresh counts for the shell to pick up after
+        # a task moved in or out of the backlog.
+        "sidebar_counts": _sidebar_counts(project),
         # In both render paths: the header bell re-renders on every
         # alpine-ajax view swap and must reflect the current state.
         "notification_level": {
@@ -500,9 +512,6 @@ def board(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_BOARD)
-    context["backlog_count"] = project.tasks.filter(
-        status__category=TaskStatus.Category.BACKLOG
-    ).count()
     context.update(_sprint_context(request, project))
     tasks_qs = annotate_blocked(
         project.tasks.exclude(status__category=TaskStatus.Category.BACKLOG)
@@ -619,10 +628,6 @@ def backlog(request, project_uuid):
     context["filters_active"] = task_filters_active(request.GET)
     context["tasks_truncated"] = truncated
     context["task_render_limit"] = TASK_RENDER_LIMIT
-    # The sidebar badge counts the whole backlog, not the filtered slice.
-    context["backlog_count"] = project.tasks.filter(
-        status__category=TaskStatus.Category.BACKLOG
-    ).count()
     return _render_project_view(request, context)
 
 
@@ -632,9 +637,6 @@ def all_tasks(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_TASKS)
-    context["backlog_count"] = project.tasks.filter(
-        status__category=TaskStatus.Category.BACKLOG
-    ).count()
     try:
         all_tasks_list, truncated = _filtered_tasks(
             request,
@@ -662,9 +664,6 @@ def timeline(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_TIMELINE)
-    context["backlog_count"] = project.tasks.filter(
-        status__category=TaskStatus.Category.BACKLOG
-    ).count()
     scale = coerce_scale(request.GET.get("scale"))
     try:
         tasks, truncated = _filtered_tasks(
@@ -723,9 +722,6 @@ def analytics(request, project_uuid):
     project, role = _get_project_or_404(request.user, project_uuid)
     _record_visit(request.user, project_uuid)
     context = _base_context(request, project, role, VIEW_ANALYTICS)
-    context["backlog_count"] = project.tasks.filter(
-        status__category=TaskStatus.Category.BACKLOG
-    ).count()
     flow = weekly_flow(project)
     summary = flow_summary(flow)
     distribution = {

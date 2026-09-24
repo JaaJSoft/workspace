@@ -8,7 +8,7 @@ from workspace.common import search as fts
 from workspace.common.search.fallback import IcontainsFulltext
 from workspace.common.search.postgres import PostgresFulltext
 from workspace.common.search.schema import FulltextIndex
-from workspace.common.search.sqlite import to_fts5_match
+from workspace.common.search.sqlite import SqliteFtsFulltext, to_fts5_match
 
 User = get_user_model()
 
@@ -168,3 +168,41 @@ class SqliteFtsBranchTests(TestCase):
     def test_no_match_returns_empty(self):
         qs = fts.apply_fulltext(User.objects.all(), "zzzznomatch", index=USER_NAME_FTS)
         self.assertEqual(list(qs), [])
+
+
+class SqliteFtsUnindexedRowTests(TestCase):
+    """A row whose FTS key is NULL has never been indexed and matches nothing."""
+
+    # Stands in for a nullable key column that is only assigned once the row
+    # is indexed: NULL for inactive users.
+    ROWID_EXPR = '(CASE WHEN "auth_user".is_active THEN "auth_user".id END)'
+
+    def setUp(self):
+        if connection.vendor != "sqlite" or not fts.fts5_available():
+            self.skipTest("SQLite + FTS5 required")
+        self.indexed = User.objects.create_user(username="indexed", email="i@x.io")
+        self.unindexed = User.objects.create_user(
+            username="unindexed", email="u@x.io", is_active=False
+        )
+        with connection.cursor() as c:
+            c.execute("CREATE VIRTUAL TABLE auth_user_fts USING fts5(body, content='')")
+            c.execute(
+                "INSERT INTO auth_user_fts(rowid, body) VALUES (%s, 'treasurer')",
+                [self.indexed.pk],
+            )
+
+    def tearDown(self):
+        with connection.cursor() as c:
+            c.execute("DROP TABLE IF EXISTS auth_user_fts")
+
+    def _search(self, query):
+        qs = SqliteFtsFulltext().apply(
+            User.objects.all(),
+            query,
+            sqlite_fts_table="auth_user_fts",
+            sqlite_rowid_expr=self.ROWID_EXPR,
+        )
+        return [u.username for u in qs]
+
+    def test_unindexed_row_does_not_borrow_a_matching_documents_rank(self):
+        self.assertEqual(self._search("treasurer"), ["indexed"])

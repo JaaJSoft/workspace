@@ -117,6 +117,12 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Messages that arrived while the tab was hidden or unfocused stay
+      // unread until the user actually comes back to them.
+      const catchUp = () => this.catchUpUnreadOnReturn();
+      document.addEventListener('visibilitychange', catchUp);
+      window.addEventListener('focus', catchUp);
+
       // Save draft on page unload
       window.addEventListener('beforeunload', () => this._saveDraft());
 

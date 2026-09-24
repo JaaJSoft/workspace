@@ -6,6 +6,27 @@ window.chatSseMixin = function chatSseMixin() {
     // can land before a conversation is selected, and selectConversation
     // reads this back once it has one.
     generatingConversations: new Set(),
+    // Conversation that received messages while it was open but nobody was
+    // looking at the page. Marked read by catchUpUnreadOnReturn.
+    unreadWhileAway: null,
+
+    // An open tab is not someone reading: marking a message read clears its
+    // notification, and the push task drops read notifications, so a tab left
+    // open on a PC would silence the phone.
+    _pageIsWatched() {
+      return document.visibilityState === 'visible' && document.hasFocus();
+    },
+
+    async catchUpUnreadOnReturn() {
+      const convId = this.unreadWhileAway;
+      if (!convId || !this._pageIsWatched()) return;
+      this.unreadWhileAway = null;
+      if (this.activeConversation?.uuid !== convId) return;
+      await this.markAsRead(convId);
+      const conv = this.conversations.find(c => c.uuid === convId);
+      if (conv) conv.unread_count = 0;
+      this.refreshConversationItems([convId], { bump: false });
+    },
 
     async handleSSEMessage(detail) {
       const isViewing = this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
@@ -52,7 +73,11 @@ window.chatSseMixin = function chatSseMixin() {
           await this._refreshCurrentMessages();
           this._animateMessageEntry(detail.message.uuid);
           if (wasAtBottom) this.scrollToBottom();
-          await this.markAsRead(detail.conversation_id);
+          if (this._pageIsWatched()) {
+            await this.markAsRead(detail.conversation_id);
+          } else {
+            this.unreadWhileAway = detail.conversation_id;
+          }
         }
       }
 

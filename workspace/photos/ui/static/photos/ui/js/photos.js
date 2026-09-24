@@ -266,9 +266,10 @@ window.photosApp = function photosApp() {
         if (tile) {
           const newName = (file && file.name) || name;
           tile.dataset.displayName = newName;
-          tile.querySelectorAll('[title]').forEach((el) => {
-            if (el.title !== 'More actions') el.title = newName;
-          });
+          tile.querySelectorAll('[data-name-title]').forEach((el) => { el.title = newName; });
+          tile.querySelectorAll('img[alt]').forEach((el) => { el.alt = newName; });
+          const menuButton = tile.querySelector('[aria-haspopup="menu"]');
+          if (menuButton) menuButton.setAttribute('aria-label', `More actions for ${newName}`);
         }
         this.reloadPropertiesPanel();
       } catch (err) {

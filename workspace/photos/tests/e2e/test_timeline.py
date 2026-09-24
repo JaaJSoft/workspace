@@ -16,7 +16,7 @@ from django.core.cache import cache
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.files.models import FileFavorite
+from workspace.files.models import File, FileFavorite
 from workspace.files.services import FileService
 from workspace.photos.tests.images import make_photo
 from workspace.users.services.settings import set_setting
@@ -213,6 +213,27 @@ class PhotosTimelineTests(PlaywrightTestCase):
 
         panel.get_by_role("button").first.click()
         expect(panel).to_be_hidden()
+
+    def test_renaming_from_the_menu_renames_the_tile_and_nothing_else(self):
+        File.objects.filter(pk=self.photos[0].pk).update(has_thumbnail=True)
+        self._open()
+        tile = self.page.locator(TILES).first
+
+        self._open_menu().get_by_role("button", name="Rename").click()
+        dialog = self.page.locator("#rename-dialog")
+        dialog.locator("input").fill("sunset.jpg")
+        dialog.get_by_role("button", name="Rename").click()
+
+        expect(tile).to_have_attribute("data-display-name", "sunset.jpg")
+        expect(tile.locator("button").first).to_have_attribute("title", "sunset.jpg")
+        expect(tile.locator("img")).to_have_attribute("alt", "sunset.jpg")
+        expect(tile.locator("[aria-haspopup='menu']")).to_have_attribute(
+            "aria-label", "More actions for sunset.jpg"
+        )
+        for label in ("Add to favorites", "Remove from favorites"):
+            expect(tile.locator(f"[aria-label='{label}']")).to_have_attribute(
+                "title", label
+            )
 
     def test_right_click_opens_the_same_menu(self):
         self._open()

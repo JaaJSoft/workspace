@@ -26,6 +26,7 @@
     type="button"
     class="absolute inset-0 w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-module"
     title="{{ file.name }}"
+    data-name-title
     @click="openPhoto($el.closest('[data-uuid]'))"
   >
     {% if file.has_thumbnail %}

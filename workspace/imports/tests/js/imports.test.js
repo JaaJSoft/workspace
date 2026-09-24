@@ -84,6 +84,14 @@ test('wizard kinds come from the selected connection provider', () => {
   assert.deepStrictEqual(Array.from(component.wizard.kinds), ['photos']);
 });
 
+test('wizard kinds put files before contacts regardless of provider order', () => {
+  const { component } = app();
+  component.providers = [{ slug: 'fake', kinds: ['contacts', 'files', 'photos'] }];
+  component.wizard.connection = { provider: 'fake' };
+  const kinds = Array.from(component.wizardKinds()).map((k) => k.kind);
+  assert.deepStrictEqual(kinds, ['files', 'contacts', 'photos']);
+});
+
 test('editing a connection only sends the fields that changed', () => {
   const { ctx } = app();
   const original = { label: 'Old', base_url: 'https://a', username: 'me' };
@@ -131,4 +139,104 @@ test('a retry response does not duplicate a card an SSE refetch already inserted
   await component.retryJob({ uuid: 'old' });
   assert.deepStrictEqual(component.jobs.map((j) => j.uuid), ['new', 'old']);
   assert.equal(component.jobs[0].status, 'completed');
+});
+
+test('progress follows the kind the job is working on', () => {
+  const { component } = app();
+  const job = {
+    status: 'running',
+    kinds: ['files', 'contacts'],
+    stats: {
+      files: { phase: 'done', total_files: 3, files: 3 },
+      contacts: { phase: 'importing', total_cards: 10, cards: 3, unchanged: 1, failed: 1 },
+    },
+  };
+  const p = component.progress(job);
+  assert.equal(p.kind, 'contacts');
+  assert.equal(p.done, 5);
+  assert.equal(p.pct, 50);
+  assert.equal(component.phaseLabel(job), 'Importing contacts… 5 / 10');
+  job.stats.contacts.phase = 'listing';
+  assert.equal(component.phaseLabel(job), 'Listing the address books… 10 contacts found');
+});
+
+test('summary names each kind unless the job only moved files', () => {
+  const { component } = app();
+  assert.equal(
+    component.summary({
+      status: 'completed',
+      kinds: ['files', 'contacts'],
+      stats: { files: { files: 2 }, contacts: { created: 3, updated: 1, lists: 2 } },
+    }),
+    'Files: 2 imported / Contacts: 3 added · 1 updated · 2 lists',
+  );
+  assert.equal(
+    component.summary({ status: 'completed', kinds: ['contacts'], stats: { contacts: { updated: 1, unchanged: 4 } } }),
+    'Contacts: 1 updated · 4 unchanged',
+  );
+});
+
+test('failedCount adds up every kind', () => {
+  const { component } = app();
+  assert.equal(component.failedCount({ stats: { files: { failed: 2 }, contacts: { failed: 1 } } }), 3);
+  assert.equal(component.failedCount({ stats: {} }), 0);
+});
+
+test('bookSummary and targetLabel read the job and the groups', () => {
+  const { component } = app();
+  component.groups = [{ id: 4, name: 'Team' }];
+  assert.equal(component.bookSummary({ options: { contacts: { books: [{ id: '/a' }] } } }), '1 address book');
+  assert.equal(component.bookSummary({ options: { contacts: { books: [{ id: '/a' }, { id: '/b' }] } } }), '2 address books');
+  assert.equal(component.targetLabel('mine'), 'My contacts');
+  assert.equal(component.targetLabel('group:4'), 'Team');
+});
+
+test('the address books step needs at least one book picked', () => {
+  const { component } = app();
+  component.wizard.step = 3;
+  component.wizard.kinds = ['contacts'];
+  component.wizard.options.contacts.books = [{ id: '/a', name: 'A', selected: false, target: 'mine' }];
+  assert.equal(component.canContinue(), false);
+  component.wizard.options.contacts.books[0].selected = true;
+  assert.equal(component.canContinue(), true);
+});
+
+test('loadAddressBooks picks every book into my contacts', async () => {
+  const calls = [];
+  const fetchStub = (url) => {
+    calls.push(url);
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      json: async () => ({ kind: 'contacts', path: '', entries: [{ id: '/contacts', name: 'Contacts', description: '' }] }),
+    });
+  };
+  const { component } = app(fetchStub);
+  component.wizard.connection = { uuid: 'c1' };
+  await component.loadAddressBooks();
+  assert.deepStrictEqual(calls, ['/api/v1/imports/connections/c1/browse?kind=contacts']);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(component.wizard.options.contacts.books)), [
+    { id: '/contacts', name: 'Contacts', description: '', selected: true, target: 'mine' },
+  ]);
+  // Coming back to the step keeps the choices instead of listing again.
+  await component.loadAddressBooks();
+  assert.equal(calls.length, 1);
+});
+
+test('launchBody sends the picked address books and only the chosen kinds', () => {
+  const { component } = app();
+  component.wizard.connection = { uuid: 'c1' };
+  component.wizard.kinds = ['contacts'];
+  component.wizard.options.contacts.books = [
+    { id: '/contacts', name: 'Contacts', selected: true, target: 'mine' },
+    { id: '/old', name: 'Old', selected: false, target: 'mine' },
+    { id: '/team', name: 'Team', selected: true, target: 'group:4' },
+  ];
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(component.launchBody())), {
+    connection: 'c1',
+    kinds: ['contacts'],
+    options: {
+      contacts: { books: [{ id: '/contacts', target: 'mine' }, { id: '/team', target: 'group:4' }] },
+    },
+  });
 });

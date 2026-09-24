@@ -7,7 +7,7 @@ is created with ``source="import"``. Group cards become lists, their members
 resolved by UID against the cards of the same file and the address book.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass, field
 from io import BytesIO
 
 from django.db import transaction
@@ -29,9 +29,11 @@ class ImportReport:
     created: int = 0
     updated: int = 0
     lists: int = 0
+    # The rows the person cards became, in card order; not part of the wire report.
+    persons: list = field(default_factory=list)
 
     def as_dict(self):
-        return asdict(self)
+        return {"created": self.created, "updated": self.updated, "lists": self.lists}
 
 
 def _uid_key(uid):
@@ -78,14 +80,14 @@ def _apply_photo(person, photo):
     try:
         with Image.open(BytesIO(photo)) as image:
             width, height = image.size
-    except OSError, ValueError:
+    except OSError, ValueError, Image.DecompressionBombError:
         return
     side = min(width, height)
     try:
         save_avatar(
             person, BytesIO(photo), (width - side) / 2, (height - side) / 2, side, side
         )
-    except OSError, ValueError:
+    except OSError, ValueError, Image.DecompressionBombError:
         return
 
 
@@ -134,6 +136,7 @@ def import_vcards(text, *, owner=None, group=None):
         for card in cards:
             if card.kind != "group":
                 person = _store_person(scope, card, report)
+                report.persons.append(person)
                 by_uid[str(person.uuid)] = person
                 if card.uid:
                     by_uid[_uid_key(card.uid)] = person

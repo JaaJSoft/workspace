@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from workspace.imports.models import ImportConnection
-from workspace.imports.providers.base import AuthenticationFailed
+from workspace.imports.providers.base import AuthenticationFailed, RemoteAddressBook
 from workspace.imports.services import connections as svc
 from workspace.imports.services.url_guard import UnsafeUrl
 
@@ -135,6 +135,35 @@ class UpdateAndTestConnectionTests(TestCase):
         ):
             with self.assertRaises(UnsafeUrl):
                 svc.browse_files(self.conn, "")
+
+    def test_address_books_are_listed_by_name(self):
+        self.provider.books = [
+            RemoteAddressBook(id="/work", name="work"),
+            RemoteAddressBook(id="/contacts", name="Contacts"),
+        ]
+        books = svc.browse_address_books(self.conn)
+        self.assertEqual([b.id for b in books], ["/contacts", "/work"])
+        self.assertTrue(self.provider.last_contacts.closed)
+
+    def test_address_books_of_a_provider_without_contacts_are_refused(self):
+        conn = ImportConnection.objects.create(
+            owner=self.user,
+            provider="webdav",
+            label="dav",
+            base_url="https://cloud.example.org/dav",
+            username="a",
+        )
+        with self.assertRaises(svc.UnsupportedKind):
+            svc.browse_address_books(conn)
+
+    @override_settings(IMPORTS_ALLOWED_HOSTS=[])
+    def test_address_books_re_check_the_url(self):
+        with patch(
+            "workspace.imports.services.connections.check_remote_url",
+            side_effect=UnsafeUrl("no"),
+        ):
+            with self.assertRaises(UnsafeUrl):
+                svc.browse_address_books(self.conn)
 
     def test_delete_is_refused_while_a_job_is_live(self):
         from workspace.imports.models import ImportJob

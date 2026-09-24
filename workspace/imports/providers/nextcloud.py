@@ -2,14 +2,15 @@
 OCS discovery - and later its own data kinds: calendar, contacts, Deck...)."""
 
 import logging
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx2
 
 from workspace.common.booleans import is_truthy
 from workspace.common.logging import scrub
 
-from .base import ProviderError, RemoteTag
+from .base import KIND_CONTACTS, KIND_FILES, ProviderError, RemoteTag
+from .carddav import CardDavSource
 from .webdav import (
     DAV,
     WebDavProvider,
@@ -27,6 +28,12 @@ DAV_FILES_PREFIX = "/remote.php/dav/files/"
 _LEGACY_DAV_PREFIX = "/remote.php/webdav"
 _OCS_CAPABILITIES = "/ocs/v1.php/cloud/capabilities"
 _DAV_SYSTEMTAGS = "/remote.php/dav/systemtags/"
+_DAV_ADDRESSBOOKS = "/remote.php/dav/addressbooks/users/"
+
+# Nextcloud-generated books that are not the user's own contacts: the instance
+# account directory (>= 27), and the contactsinteraction app's auto-collected
+# recent addresses.
+_HIDDEN_ADDRESS_BOOK_PREFIXES = ("z-server-generated--", "z-app-generated--")
 
 OC = "{http://owncloud.org/ns}"
 
@@ -47,6 +54,11 @@ def _instance_root(base_url: str) -> str:
             path = path[: path.index(marker)]
             break
     return f"{parsed.scheme}://{parsed.netloc}{path.rstrip('/')}"
+
+
+def addressbook_home(base_url: str, username: str) -> str:
+    """The user's CardDAV address book home on the instance."""
+    return f"{_instance_root(base_url)}{_DAV_ADDRESSBOOKS}{quote(username, safe='')}/"
 
 
 def _filter_files_body(rule: bytes) -> bytes:
@@ -171,6 +183,7 @@ class NextcloudMetadataSource:
 class NextcloudProvider(WebDavProvider):
     slug = "nextcloud"
     name = "Nextcloud"
+    kinds = frozenset({KIND_FILES, KIND_CONTACTS})
 
     def normalize_base_url(self, url: str, username: str) -> str:
         """Accept the instance URL the user copies from the address bar and
@@ -199,6 +212,13 @@ class NextcloudProvider(WebDavProvider):
 
     def file_metadata_source(self, connection):
         return NextcloudMetadataSource(connection)
+
+    def contact_source(self, connection):
+        return CardDavSource(
+            connection,
+            addressbook_home(connection.base_url, connection.username),
+            hidden_prefixes=_HIDDEN_ADDRESS_BOOK_PREFIXES,
+        )
 
     def _discover(self, connection) -> dict:
         """Best effort: OCS is not required for files, so any failure here

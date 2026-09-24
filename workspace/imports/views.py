@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .errors import ImportsError
+from .providers.base import KIND_CONTACTS
 from .providers.registry import provider_registry
 from .queries import user_connections_qs, user_jobs_qs
 from .serializers import (
@@ -126,7 +127,7 @@ class ConnectionTestView(_ConnectionView):
 @extend_schema(tags=["Imports"])
 class ConnectionBrowseView(_ConnectionView):
     @extend_schema(
-        summary="List one level of the remote tree (for the folder picker)",
+        summary="List one level of the remote tree, or the address books",
         parameters=[BrowseQuerySerializer],
     )
     def get(self, request, uuid):
@@ -135,17 +136,18 @@ class ConnectionBrowseView(_ConnectionView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         query = BrowseQuerySerializer(data=request.query_params)
         query.is_valid(raise_exception=True)
+        kind = query.validated_data["kind"]
+        path = query.validated_data["path"]
         try:
-            entries = connections_service.browse_files(
-                connection, query.validated_data["path"]
-            )
+            if kind == KIND_CONTACTS:
+                entries = connections_service.browse_address_books(connection)
+                path = ""
+            else:
+                entries = connections_service.browse_files(connection, path)
         except ImportsError as exc:
             return _bad_remote(exc)
         return Response(
-            {
-                "path": query.validated_data["path"],
-                "entries": [e.as_dict() for e in entries],
-            }
+            {"kind": kind, "path": path, "entries": [e.as_dict() for e in entries]}
         )
 
 

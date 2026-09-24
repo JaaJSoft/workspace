@@ -11,7 +11,47 @@ const JOBS_POLL_MS = 10000;
 // What each data kind means to the user; providers declare which ones they serve.
 const KIND_LABELS = {
   files: { name: 'Files', description: 'Folders and files, with their dates.' },
+  contacts: { name: 'Contacts', description: 'Address books, with their contact groups as lists.' },
 };
+
+// What a kind has finished, out of what total.
+const KIND_PROGRESS = {
+  files: (s) => ({
+    done: (s.files || 0) + (s.unchanged || 0) + (s.skipped || 0) + (s.failed || 0),
+    total: s.total_files || 0,
+  }),
+  contacts: (s) => ({
+    done: (s.cards || 0) + (s.unchanged || 0) + (s.failed || 0),
+    total: s.total_cards || 0,
+  }),
+};
+
+// The non-zero counters of a kind, in reading order.
+const KIND_SUMMARY = {
+  files: (s, formatSize) => {
+    const parts = [];
+    if (s.files) parts.push(`${s.files} imported`);
+    if (s.unchanged) parts.push(`${s.unchanged} unchanged`);
+    if (s.skipped) parts.push(`${s.skipped} skipped`);
+    if (s.failed) parts.push(`${s.failed} failed`);
+    if (s.bytes) parts.push(formatSize(s.bytes));
+    return parts;
+  },
+  contacts: (s) => {
+    const parts = [];
+    if (s.created) parts.push(`${s.created} added`);
+    if (s.updated) parts.push(`${s.updated} updated`);
+    if (s.unchanged) parts.push(`${s.unchanged} unchanged`);
+    if (s.lists) parts.push(`${s.lists} lists`);
+    if (s.failed) parts.push(`${s.failed} failed`);
+    return parts;
+  },
+};
+
+// A partial job payload without kinds is a files job.
+function jobKinds(job) {
+  return job.kinds && job.kinds.length ? job.kinds : ['files'];
+}
 
 // Copy shown next to the connection form, per provider.
 const PROVIDER_HINTS = {
@@ -93,6 +133,7 @@ function emptyWizard() {
         on_conflict: 'rename',
         create_root_folder: true,
       },
+      contacts: { books: [] },
     },
     error: '',
     launching: false,
@@ -115,6 +156,8 @@ window.importsApp = function importsApp() {
 
     wizard: emptyWizard(),
     browse: { path: '/', entries: [], loading: false, error: '' },
+    groups: [],
+    addressBooks: { loading: false, error: '', loadedFor: '' },
 
     errorsDialog: { job: null, items: [], count: 0, loading: false, error: '' },
 
@@ -127,6 +170,7 @@ window.importsApp = function importsApp() {
       this.connections = readJson('connections-data', []);
       this.jobs = readJson('jobs-data', []);
       this.highlightJob = readJson('highlight-job-data', '');
+      this.groups = readJson('groups-data', []);
       this._onJobEvent = (e) => this.onJobEvent(e.detail);
       this._onReconnect = () => this.refreshJobs();
       window.addEventListener('sse:imports.job', this._onJobEvent);
@@ -193,11 +237,17 @@ window.importsApp = function importsApp() {
         : `${used} used`;
     },
 
-    // Progress for the files kind: total comes from the listing phase.
+    // The kind the job is working on: the first not done yet, else the last.
+    currentKind(job) {
+      const kinds = jobKinds(job);
+      const stats = job.stats || {};
+      return kinds.find((kind) => (stats[kind] || {}).phase !== 'done') || kinds[kinds.length - 1];
+    },
+
     progress(job) {
-      const s = (job.stats && job.stats.files) || {};
-      const done = (s.files || 0) + (s.unchanged || 0) + (s.skipped || 0) + (s.failed || 0);
-      const total = s.total_files || 0;
+      const kind = this.currentKind(job);
+      const s = (job.stats && job.stats[kind]) || {};
+      const { done, total } = (KIND_PROGRESS[kind] || KIND_PROGRESS.files)(s);
       const phase = s.phase || (job.status === 'pending' ? 'pending' : '');
       let pct = 0;
       if (job.status === 'completed') pct = 100;
@@ -206,7 +256,7 @@ window.importsApp = function importsApp() {
       // they are seen), so a ratio would mislead - a retry would look almost
       // finished before copying anything.
       const determinate = total > 0 && phase !== 'listing';
-      return { done, total, pct, phase, determinate, stats: s };
+      return { kind, done, total, pct, phase, determinate, stats: s };
     },
 
     isStopping(job) {
@@ -217,20 +267,44 @@ window.importsApp = function importsApp() {
       const p = this.progress(job);
       if (this.isStopping(job)) return 'Stopping… what is already imported stays.';
       if (job.status === 'pending') return 'Waiting to start…';
-      if (job.status === 'running' && p.phase === 'listing') return `Listing the remote folders… ${p.total} files found`;
-      if (job.status === 'running') return `Copying… ${p.done} / ${p.total}`;
-      return '';
+      if (job.status !== 'running') return '';
+      if (p.kind === 'contacts') {
+        return p.phase === 'listing'
+          ? `Listing the address books… ${p.total} contacts found`
+          : `Importing contacts… ${p.done} / ${p.total}`;
+      }
+      if (p.phase === 'listing') return `Listing the remote folders… ${p.total} files found`;
+      return `Copying… ${p.done} / ${p.total}`;
     },
 
     summary(job) {
-      const s = this.progress(job).stats;
-      const parts = [];
-      if (s.files) parts.push(`${s.files} imported`);
-      if (s.unchanged) parts.push(`${s.unchanged} unchanged`);
-      if (s.skipped) parts.push(`${s.skipped} skipped`);
-      if (s.failed) parts.push(`${s.failed} failed`);
-      if (s.bytes) parts.push(this.formatSize(s.bytes));
-      return parts.join(' · ');
+      const stats = job.stats || {};
+      const kinds = jobKinds(job).filter((kind) => stats[kind]);
+      const labelled = kinds.length > 1 || (kinds.length === 1 && kinds[0] !== 'files');
+      return kinds
+        .map((kind) => {
+          const parts = (KIND_SUMMARY[kind] || (() => []))(stats[kind], (bytes) => this.formatSize(bytes));
+          if (!parts.length) return '';
+          const text = parts.join(' · ');
+          return labelled ? `${(KIND_LABELS[kind] || { name: kind }).name}: ${text}` : text;
+        })
+        .filter(Boolean)
+        .join(' / ');
+    },
+
+    failedCount(job) {
+      return Object.values(job.stats || {}).reduce((sum, s) => sum + ((s && s.failed) || 0), 0);
+    },
+
+    bookSummary(job) {
+      const count = ((job.options && job.options.contacts && job.options.contacts.books) || []).length;
+      return count === 1 ? '1 address book' : `${count} address books`;
+    },
+
+    targetLabel(target) {
+      if (target === 'mine') return 'My contacts';
+      const group = this.groups.find((g) => `group:${g.id}` === target);
+      return group ? group.name : target;
     },
 
     statusClass(status) {
@@ -281,7 +355,7 @@ window.importsApp = function importsApp() {
     async cancelJob(job) {
       const ok = await AppDialog.confirm({
         title: 'Stop this import?',
-        message: 'What has already been imported stays in your files.',
+        message: 'What has already been imported stays.',
         okLabel: 'Stop',
         okClass: 'btn-warning',
         icon: 'octagon-x',
@@ -388,7 +462,7 @@ window.importsApp = function importsApp() {
     async deleteConnection(conn) {
       const ok = await AppDialog.confirm({
         title: `Remove ${conn.label}?`,
-        message: 'The import history of this connection goes with it. Imported files stay.',
+        message: 'The import history of this connection goes with it. What was imported stays.',
         okLabel: 'Remove',
         okClass: 'btn-error',
         icon: 'trash-2',
@@ -412,6 +486,7 @@ window.importsApp = function importsApp() {
       this.wizard = emptyWizard();
       this.wizard.connection = conn || (this.connections.length === 1 ? this.connections[0] : null);
       this.browse = { path: '/', entries: [], loading: false, error: '' };
+      this.addressBooks = { loading: false, error: '', loadedFor: '' };
       this.$refs.wizardDialog.showModal();
       this.$nextTick(() => initLucideIcons());
     },
@@ -424,7 +499,15 @@ window.importsApp = function importsApp() {
       const conn = this.wizard.connection;
       if (!conn) return [];
       const provider = this.providers.find((p) => p.slug === conn.provider);
-      return (provider ? provider.kinds : []).map((kind) => ({
+      const kinds = provider ? provider.kinds : [];
+      // Known kinds show in the step 3 / run order (KIND_LABELS); anything
+      // else keeps the order the provider declared it in.
+      const known = Object.keys(KIND_LABELS);
+      const ordered = [
+        ...known.filter((kind) => kinds.includes(kind)),
+        ...kinds.filter((kind) => !known.includes(kind)),
+      ];
+      return ordered.map((kind) => ({
         kind,
         ...(KIND_LABELS[kind] || { name: kind, description: '' }),
       }));
@@ -436,10 +519,15 @@ window.importsApp = function importsApp() {
       else this.wizard.kinds.splice(idx, 1);
     },
 
+    selectedBooks() {
+      return this.wizard.options.contacts.books.filter((book) => book.selected);
+    },
+
     canContinue() {
       const w = this.wizard;
       if (w.step === 1) return !!w.connection;
       if (w.step === 2) return w.kinds.length > 0;
+      if (w.step === 3 && w.kinds.includes('contacts')) return this.selectedBooks().length > 0;
       return true;
     },
 
@@ -447,8 +535,50 @@ window.importsApp = function importsApp() {
       if (!this.canContinue()) return;
       this.wizard.error = '';
       this.wizard.step += 1;
-      if (this.wizard.step === 3) this.loadBrowse('/');
+      if (this.wizard.step === 3) {
+        if (this.wizard.kinds.includes('files')) this.loadBrowse('/');
+        if (this.wizard.kinds.includes('contacts')) this.loadAddressBooks();
+      }
       this.$nextTick(() => initLucideIcons());
+    },
+
+    // Listed once per connection: going back and forth keeps the choices.
+    async loadAddressBooks() {
+      const conn = this.wizard.connection;
+      if (!conn || this.addressBooks.loadedFor === conn.uuid) return;
+      this.addressBooks = { loading: true, error: '', loadedFor: '' };
+      const res = await api(`/connections/${conn.uuid}/browse?kind=contacts`);
+      this.addressBooks.loading = false;
+      if (!res.ok) {
+        this.addressBooks.error = errorMessage(res.data, 'Could not list the address books.');
+        return;
+      }
+      this.addressBooks.loadedFor = conn.uuid;
+      this.wizard.options.contacts.books = res.data.entries.map((book) => ({
+        id: book.id,
+        name: book.name,
+        description: book.description,
+        selected: true,
+        target: 'mine',
+      }));
+    },
+
+    launchBody() {
+      const w = this.wizard;
+      const options = {};
+      if (w.kinds.includes('files')) {
+        const files = w.options.files;
+        options.files = {
+          source_path: files.source_path,
+          destination: files.destination,
+          on_conflict: files.on_conflict,
+          create_root_folder: files.create_root_folder,
+        };
+      }
+      if (w.kinds.includes('contacts')) {
+        options.contacts = { books: this.selectedBooks().map((book) => ({ id: book.id, target: book.target })) };
+      }
+      return { connection: w.connection.uuid, kinds: w.kinds, options };
     },
 
     prevStep() {
@@ -519,22 +649,7 @@ window.importsApp = function importsApp() {
       w.error = '';
       w.launching = true;
       try {
-        const files = w.options.files;
-        const res = await api('/jobs', {
-          method: 'POST',
-          body: {
-            connection: w.connection.uuid,
-            kinds: w.kinds,
-            options: {
-              files: {
-                source_path: files.source_path,
-                destination: files.destination,
-                on_conflict: files.on_conflict,
-                create_root_folder: files.create_root_folder,
-              },
-            },
-          },
-        });
+        const res = await api('/jobs', { method: 'POST', body: this.launchBody() });
         if (!res.ok) {
           w.error = errorMessage(res.data, 'The import could not be started.');
           return;

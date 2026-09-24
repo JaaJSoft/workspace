@@ -31,13 +31,16 @@ class SqliteFtsFulltext:
         # caller's rows. sqlite_fts_table and sqlite_rowid_expr are trusted
         # constants derived from the index declaration, never user input.
         # -rank flips FTS5's bm25 (lower = better) into "higher = better"; the
-        # subquery yields NULL for non-matching rows, filtered out below - and
-        # for a row whose key is still NULL, which is exactly a row that has
-        # never been indexed.
+        # subquery yields NULL for non-matching rows, filtered out below.
+        # A NULL key is a row that has never been indexed, and the IS NOT NULL
+        # guard is what keeps it out: from SQLite 3.53 on, an FTS5 "rowid = ?"
+        # constraint whose value is NULL no longer excludes every row, so
+        # without the guard such a row takes the rank of a matching document.
         return qs.annotate(
             search_rank=RawSQL(
                 f'(SELECT -rank FROM "{sqlite_fts_table}" '
-                f'WHERE "{sqlite_fts_table}".rowid = {sqlite_rowid_expr} '
+                f"WHERE {sqlite_rowid_expr} IS NOT NULL "
+                f'AND "{sqlite_fts_table}".rowid = {sqlite_rowid_expr} '
                 f'AND "{sqlite_fts_table}" MATCH %s)',
                 (match,),
                 output_field=FloatField(),

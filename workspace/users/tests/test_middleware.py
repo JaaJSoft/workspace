@@ -105,6 +105,16 @@ class PresenceMiddlewareTests(TestCase):
         mock_ps.touch.assert_not_called()
 
     @patch("workspace.users.middleware.presence_service")
+    def test_skips_request_sent_from_unattended_page(self, mock_ps):
+        # A tab left open refreshes on its own; that is not the user being
+        # active, and counting it would hold back push on their other devices.
+        middleware = self._get_middleware()
+        request = self.factory.get("/page", HTTP_X_PAGE_UNATTENDED="1")
+        request.user = self.user
+        middleware(request)
+        mock_ps.touch.assert_not_called()
+
+    @patch("workspace.users.middleware.presence_service")
     def test_skips_when_no_user_attr(self, mock_ps):
         middleware = self._get_middleware()
         request = self.factory.get("/page")

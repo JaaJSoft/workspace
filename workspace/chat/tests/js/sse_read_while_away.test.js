@@ -8,15 +8,13 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function buildApp({ visibility = 'visible', focused = true } = {}) {
-  const page = { visibility, focused };
+// Whether the page is attended is page_attention.js's call, tested in core.
+function buildApp({ attended = true } = {}) {
+  const page = { attended };
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', {
     clearTimeout: () => {},
-    document: {
-      get visibilityState() { return page.visibility; },
-      hasFocus: () => page.focused,
-      getElementById: () => null,
-    },
+    document: { getElementById: () => null },
+    pageAttention: { isAttended: () => page.attended },
     chatThreadRouteTargets: () => ({ mainFlow: true, bumpRoot: null, panel: false }),
   });
   const calls = { markAsRead: [], refresh: [] };
@@ -51,55 +49,24 @@ test('a message in the open conversation is marked read while the page is watche
   assert.equal(app.unreadWhileAway, null);
 });
 
-test('a hidden tab leaves the message unread', async () => {
-  const { app, calls } = buildApp({ visibility: 'hidden' });
+test('an unattended page leaves the message unread', async () => {
+  const { app, calls } = buildApp({ attended: false });
 
   await app.handleSSEMessage(incoming);
 
   assert.deepStrictEqual(calls.markAsRead, []);
   assert.equal(app.unreadWhileAway, 'conv-1');
-});
-
-test('a visible but unfocused window leaves the message unread', async () => {
-  const { app, calls } = buildApp({ focused: false });
-
-  await app.handleSSEMessage(incoming);
-
-  assert.deepStrictEqual(calls.markAsRead, []);
-  assert.equal(app.unreadWhileAway, 'conv-1');
-});
-
-test('a focused window nobody has touched for minutes leaves the message unread', async () => {
-  const { app, calls } = buildApp();
-  app.lastInputAt = Date.now() - 10 * 60 * 1000;
-
-  await app.handleSSEMessage(incoming);
-
-  assert.deepStrictEqual(calls.markAsRead, []);
-  assert.equal(app.unreadWhileAway, 'conv-1');
-});
-
-test('the first input after being idle marks the waiting conversation read', async () => {
-  const { app, calls } = buildApp();
-  app.lastInputAt = Date.now() - 10 * 60 * 1000;
-  await app.handleSSEMessage(incoming);
-
-  app.noteUserInput();
-  await new Promise(setImmediate);
-
-  assert.deepStrictEqual(calls.markAsRead, ['conv-1']);
-  assert.equal(app.unreadWhileAway, null);
 });
 
 test('coming back to the page marks the waiting conversation read', async () => {
-  const { app, calls, page } = buildApp({ visibility: 'hidden' });
+  const { app, calls, page } = buildApp({ attended: false });
   await app.handleSSEMessage(incoming);
   app.conversations[0].unread_count = 1;
 
   await app.catchUpUnreadOnReturn();
-  assert.deepStrictEqual(calls.markAsRead, [], 'still hidden: nothing to catch up yet');
+  assert.deepStrictEqual(calls.markAsRead, [], 'still away: nothing to catch up yet');
 
-  page.visibility = 'visible';
+  page.attended = true;
   await app.catchUpUnreadOnReturn();
 
   assert.deepStrictEqual(calls.markAsRead, ['conv-1']);
@@ -111,11 +78,11 @@ test('coming back to the page marks the waiting conversation read', async () => 
 });
 
 test('coming back after switching conversation does not mark the old one read', async () => {
-  const { app, calls, page } = buildApp({ visibility: 'hidden' });
+  const { app, calls, page } = buildApp({ attended: false });
   await app.handleSSEMessage(incoming);
   app.activeConversation = { uuid: 'conv-2' };
 
-  page.visibility = 'visible';
+  page.attended = true;
   await app.catchUpUnreadOnReturn();
 
   assert.deepStrictEqual(calls.markAsRead, []);

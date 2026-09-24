@@ -64,7 +64,13 @@ class TimezoneMiddleware:
 
 
 class PresenceMiddleware:
-    """Update user presence on every authenticated request (except SSE streams)."""
+    """Update user presence on every authenticated request.
+
+    Skipped for SSE streams and for requests the page flags as sent while
+    nobody was in front of it (``page_attention.js``): a tab left open keeps
+    refreshing on its own, and counting that as activity would hold back web
+    push on the user's other devices.
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -75,6 +81,7 @@ class PresenceMiddleware:
             hasattr(request, "user")
             and request.user.is_authenticated
             and not getattr(request, "_is_sse_stream", False)
+            and not request.headers.get("X-Page-Unattended")
         ):
             presence_service.touch(request.user.id)
         return response

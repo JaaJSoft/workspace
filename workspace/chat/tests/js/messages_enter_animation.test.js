@@ -48,7 +48,7 @@ function buildApp() {
       'workspace/chat/ui/static/chat/ui/js/messages.js',
       'workspace/chat/ui/static/chat/ui/js/sse.js',
     ],
-    { document: dom.document, clearTimeout: () => {} },
+    { document: dom.document, clearTimeout: () => {}, pageAttention: { isAttended: () => true } },
   );
   const app = { ...ctx.chatMessagesMixin(), ...ctx.chatSseMixin(), ...ctx.chatThreadsMixin() };
   Object.assign(app, {

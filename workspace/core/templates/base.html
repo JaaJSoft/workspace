@@ -111,6 +111,7 @@
     {% if user.is_authenticated %}
       {{ workspace_active_modules|json_script:"workspace-modules-data" }}
       {{ workspace_sidebar_collapsed|json_script:"sidebar-collapsed-data" }}
+      <script src="{% static 'core/js/page_attention.js' %}"></script>
       <script src="{% static 'core/js/sse.js' %}"></script>
       <script src="{% static 'core/js/stores.js' %}"></script>
       <script src="{% static 'core/js/module_switcher.js' %}"></script>

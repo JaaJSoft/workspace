@@ -1,6 +1,6 @@
-import uuid
 from datetime import UTC, date, datetime, timedelta
 from unittest.mock import patch
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -315,7 +315,7 @@ class CursorTests(SimpleTestCase):
 
         class _File:
             photo = _Photo()
-            uuid = uuid.uuid4()
+            uuid = uuid4()
             created_at = _at(2025, 1, 1)
 
         position = parse_cursor(encode_cursor(_File()))
@@ -331,7 +331,7 @@ class CursorTests(SimpleTestCase):
 
         class _File:
             photo = _Photo()
-            uuid = uuid.uuid4()
+            uuid = uuid4()
             created_at = _at(2025, 1, 1, 8)
 
         position = parse_cursor(encode_cursor(_File()))

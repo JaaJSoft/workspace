@@ -319,6 +319,10 @@ function projectBoard(config) {
     // #project-content, and both replace it. Drives the veil in
     // _collection_loading.html.
     collectionLoading: false,
+    // Sidebar badges (Backlog, the project switcher's open count). The
+    // sidebar is outside every swap target, so each #project-content
+    // fragment carries fresh counts and syncSidebarCounts() copies them.
+    sidebarCounts: { backlog: 0, open: 0 },
     selected: [],
     // Ids the whole selection offers with bulk support (see
     // bulkActionIntersection), answered by POST /api/v1/projects/actions.
@@ -348,6 +352,7 @@ function projectBoard(config) {
         document.getElementById('epics-data').textContent
       );
       this.filters = taskFiltersFromUrl(window.location.href);
+      this.syncSidebarCounts();
       this.$watch('selected', () => this.scheduleBulkActions());
 
       // Catch up on board changes made elsewhere while the stream was down
@@ -381,7 +386,13 @@ function projectBoard(config) {
       // (an overview or settings fragment has no collection to do it).
       window.addEventListener('project-fragment-bound', () => {
         this.collectionLoading = false;
+        this.syncSidebarCounts();
       });
+    },
+
+    syncSidebarCounts() {
+      const island = document.getElementById('project-sidebar-counts');
+      if (island) this.sidebarCounts = JSON.parse(island.textContent);
     },
 
     _collectionSwapPending() {

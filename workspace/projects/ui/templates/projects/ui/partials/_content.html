@@ -3,6 +3,8 @@
   class="flex-1 min-h-0 overflow-y-auto"
   x-init="$nextTick(() => window.dispatchEvent(new CustomEvent('project-fragment-bound')))"
 >
+  {# Read by syncSidebarCounts(): the sidebar badges live outside this swap target. #}
+  {{ sidebar_counts|json_script:"project-sidebar-counts" }}
   {% comment %}
     The page header lives inside the scroller so it shares the same width,
     centering and scrollbar as the active view - overview and settings render

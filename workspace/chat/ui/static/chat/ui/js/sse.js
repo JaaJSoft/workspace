@@ -1,4 +1,8 @@
 // SSE event handlers + conversation list helpers triggered by server events.
+
+// Without keyboard or pointer input for this long, nobody is reading the page.
+const CHAT_READ_IDLE_MS = 2 * 60 * 1000;
+
 window.chatSseMixin = function chatSseMixin() {
   return {
     // Conversations the server reported as generating when this connection
@@ -10,11 +14,24 @@ window.chatSseMixin = function chatSseMixin() {
     // looking at the page. Marked read by catchUpUnreadOnReturn.
     unreadWhileAway: null,
 
+    lastInputAt: Date.now(),
+
     // An open tab is not someone reading: marking a message read clears its
     // notification, and the push task drops read notifications, so a tab left
-    // open on a PC would silence the phone.
+    // open on a PC would silence the phone. A visible, focused window on a
+    // desk nobody sits at is just as unattended, hence the input check.
     _pageIsWatched() {
-      return document.visibilityState === 'visible' && document.hasFocus();
+      return document.visibilityState === 'visible'
+        && document.hasFocus()
+        && Date.now() - this.lastInputAt < CHAT_READ_IDLE_MS;
+    },
+
+    noteUserInput() {
+      const now = Date.now();
+      // Bound to pointermove: one write per second is plenty.
+      if (now - this.lastInputAt < 1000) return;
+      this.lastInputAt = now;
+      this.catchUpUnreadOnReturn();
     },
 
     async catchUpUnreadOnReturn() {

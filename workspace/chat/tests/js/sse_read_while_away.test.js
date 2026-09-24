@@ -69,6 +69,28 @@ test('a visible but unfocused window leaves the message unread', async () => {
   assert.equal(app.unreadWhileAway, 'conv-1');
 });
 
+test('a focused window nobody has touched for minutes leaves the message unread', async () => {
+  const { app, calls } = buildApp();
+  app.lastInputAt = Date.now() - 10 * 60 * 1000;
+
+  await app.handleSSEMessage(incoming);
+
+  assert.deepStrictEqual(calls.markAsRead, []);
+  assert.equal(app.unreadWhileAway, 'conv-1');
+});
+
+test('the first input after being idle marks the waiting conversation read', async () => {
+  const { app, calls } = buildApp();
+  app.lastInputAt = Date.now() - 10 * 60 * 1000;
+  await app.handleSSEMessage(incoming);
+
+  app.noteUserInput();
+  await new Promise(setImmediate);
+
+  assert.deepStrictEqual(calls.markAsRead, ['conv-1']);
+  assert.equal(app.unreadWhileAway, null);
+});
+
 test('coming back to the page marks the waiting conversation read', async () => {
   const { app, calls, page } = buildApp({ visibility: 'hidden' });
   await app.handleSSEMessage(incoming);

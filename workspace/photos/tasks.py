@@ -6,13 +6,18 @@ from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
+# The hourly pass is there for the uploads whose event dispatch was lost, not
+# for backfills (the analyze_photos command does those): bounded, it finishes
+# well inside the hour even on the first run over an existing library.
+CATCH_UP_LIMIT = 2000
+
 
 @shared_task(name="photos.analyze_pending", bind=True, max_retries=0)
 def analyze_pending(self):
-    """Catch-up pass: analyze every raster image missing or stale in the library."""
+    """Catch-up pass: analyze raster images missing or stale in the library."""
     from workspace.photos.services.analysis import analyze_pending as run
 
-    stats = run()
+    stats = run(limit=CATCH_UP_LIMIT)
     logger.info("Photo analysis catch-up complete: %s", stats)
     return stats
 

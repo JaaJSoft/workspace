@@ -54,6 +54,7 @@ CELERY_BEAT_SCHEDULE = {
     "analyze-photos": {
         "task": "photos.analyze_pending",
         "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
+        "options": {"expires": 3600.0},
     },
     "purge-trash": {
         "task": "files.purge_trash",

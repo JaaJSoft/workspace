@@ -20,9 +20,14 @@ window.chatSseMixin = function chatSseMixin() {
     async catchUpUnreadOnReturn() {
       const convId = this.unreadWhileAway;
       if (!convId || !this._pageIsWatched()) return;
+      // Claimed before the await so a second trigger does not post twice.
       this.unreadWhileAway = null;
       if (this.activeConversation?.uuid !== convId) return;
-      await this.markAsRead(convId);
+      if (!(await this.markAsRead(convId))) {
+        // Kept for the next return to the page to retry.
+        this.unreadWhileAway ??= convId;
+        return;
+      }
       const conv = this.conversations.find(c => c.uuid === convId);
       if (conv) conv.unread_count = 0;
       this.refreshConversationItems([convId], { bump: false });
@@ -77,6 +82,8 @@ window.chatSseMixin = function chatSseMixin() {
             await this.markAsRead(detail.conversation_id);
           } else {
             this.unreadWhileAway = detail.conversation_id;
+            const conv = this.conversations.find(c => c.uuid === detail.conversation_id);
+            if (conv) conv.unread_count = (conv.unread_count || 0) + 1;
           }
         }
       }
@@ -157,7 +164,10 @@ window.chatSseMixin = function chatSseMixin() {
 
       for (const conv of this.conversations) {
         const count = detail.conversations[conv.uuid] || 0;
-        if (this.activeConversation && conv.uuid === this.activeConversation.uuid) {
+        // The open conversation reads as caught up, unless its read is
+        // waiting for the user to come back.
+        const isOpen = this.activeConversation && conv.uuid === this.activeConversation.uuid;
+        if (isOpen && conv.uuid !== this.unreadWhileAway) {
           conv.unread_count = 0;
         } else {
           conv.unread_count = count;

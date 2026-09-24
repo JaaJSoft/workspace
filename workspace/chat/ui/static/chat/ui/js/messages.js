@@ -598,15 +598,18 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     },
 
     // ── Read status ────────────────────────────────────────
+    // Resolves to whether the server recorded the read.
     async markAsRead(conversationId) {
       try {
-        await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
+        const resp = await fetch(`/api/v1/chat/conversations/${conversationId}/read`, {
           method: 'POST',
           headers: { 'X-CSRFToken': getCSRFToken() },
           credentials: 'same-origin',
         });
+        return resp.ok;
       } catch (e) {
         console.error('Failed to mark as read', e);
+        return false;
       }
     },
 

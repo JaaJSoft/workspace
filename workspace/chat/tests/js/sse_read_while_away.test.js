@@ -9,8 +9,8 @@ const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 // Whether the page is attended is page_attention.js's call, tested in core.
-function buildApp({ attended = true } = {}) {
-  const page = { attended };
+function buildApp({ attended = true, readSucceeds = true } = {}) {
+  const page = { attended, readSucceeds };
   const ctx = loadScript('workspace/chat/ui/static/chat/ui/js/sse.js', {
     clearTimeout: () => {},
     document: { getElementById: () => null },
@@ -32,7 +32,7 @@ function buildApp({ attended = true } = {}) {
     _animateMessageEntry: () => {},
     _updateConversationLastMessage: () => {},
     scrollToBottom: () => {},
-    markAsRead: async (id) => { calls.markAsRead.push(id); },
+    markAsRead: async (id) => { calls.markAsRead.push(id); return page.readSucceeds; },
     refreshConversationItems: (uuids, options) => { calls.refresh.push({ uuids: Array.from(uuids), options }); },
   });
   return { app, calls, page };
@@ -87,4 +87,36 @@ test('coming back after switching conversation does not mark the old one read', 
 
   assert.deepStrictEqual(calls.markAsRead, []);
   assert.equal(app.unreadWhileAway, null);
+});
+
+test('a failed catch-up read stays pending for the next return', async () => {
+  const { app, calls, page } = buildApp({ attended: false, readSucceeds: false });
+  await app.handleSSEMessage(incoming);
+
+  page.attended = true;
+  await app.catchUpUnreadOnReturn();
+  assert.equal(app.unreadWhileAway, 'conv-1', 'the server did not record the read');
+
+  page.readSucceeds = true;
+  await app.catchUpUnreadOnReturn();
+  assert.deepStrictEqual(calls.markAsRead, ['conv-1', 'conv-1']);
+  assert.equal(app.unreadWhileAway, null);
+});
+
+test('the open conversation shows its unread badge while its read waits', async () => {
+  const { app } = buildApp({ attended: false });
+
+  await app.handleSSEMessage(incoming);
+  assert.equal(app.conversations[0].unread_count, 1);
+
+  app.handleSSEUnread({ total: 2, conversations: { 'conv-1': 2 } });
+  assert.equal(app.conversations[0].unread_count, 2, 'the server count is kept, not zeroed');
+});
+
+test('the open conversation reads as caught up when nothing waits', () => {
+  const { app } = buildApp();
+
+  app.handleSSEUnread({ total: 2, conversations: { 'conv-1': 2 } });
+
+  assert.equal(app.conversations[0].unread_count, 0);
 });

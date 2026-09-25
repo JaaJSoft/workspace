@@ -3,6 +3,8 @@ import logging
 from celery import shared_task
 from django.conf import settings
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY, LOW_PRIORITY
+
 from .importers.base import Outcome
 from .services import jobs
 
@@ -20,6 +22,7 @@ _MAX_EAGER_SLICES = 10_000
 
 @shared_task(
     name="imports.run_job",
+    priority=LOW_PRIORITY,
     bind=True,
     max_retries=0,
     soft_time_limit=_SOFT_LIMIT,
@@ -47,7 +50,9 @@ def run_import_job(self, job_uuid):
     )
 
 
-@shared_task(name="imports.recover_stale_jobs", ignore_result=True)
+@shared_task(
+    name="imports.recover_stale_jobs", priority=LOW_PRIORITY, ignore_result=True
+)
 def recover_stale_jobs():
     recovered = jobs.recover_stale_jobs()
     if recovered:
@@ -55,7 +60,9 @@ def recover_stale_jobs():
     return {"recovered": recovered}
 
 
-@shared_task(name="imports.purge_old_jobs", ignore_result=True)
+@shared_task(
+    name="imports.purge_old_jobs", priority=BACKGROUND_PRIORITY, ignore_result=True
+)
 def purge_old_jobs():
     deleted = jobs.purge_old_jobs()
     logger.info("Purged %d import job items past retention", deleted)

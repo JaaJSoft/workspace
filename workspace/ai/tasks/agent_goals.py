@@ -21,11 +21,12 @@ from workspace.ai.services.responses import (
 )
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
+from workspace.common.task_priority import LOW_PRIORITY
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="ai.dispatch_agent_goals")
+@shared_task(name="ai.dispatch_agent_goals", priority=LOW_PRIORITY)
 def dispatch_agent_goals():
     """Find agent goals due for a check-in and dispatch a worker for each.
 
@@ -143,7 +144,9 @@ def _build_goal_instruction(goal, user_tz):
     )
 
 
-@shared_task(name="ai.run_agent_goal_check", bind=True, max_retries=0)
+@shared_task(
+    name="ai.run_agent_goal_check", priority=LOW_PRIORITY, bind=True, max_retries=0
+)
 def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
     """Run one autonomous check-in: load goal, advance, let the agent work.
 

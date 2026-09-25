@@ -7,6 +7,7 @@ from django.core.cache import cache
 from pywebpush import WebPushException, webpush
 
 from workspace.common.logging import scrub
+from workspace.common.task_priority import BACKGROUND_PRIORITY, INTERACTIVE_PRIORITY
 from workspace.notifications.models import SOURCE_FIELD_NAMES
 from workspace.notifications.services.vapid import VapidKeyError, load_vapid_key
 from workspace.users.services.presence import is_active
@@ -51,7 +52,12 @@ def _notification_tag(notif):
     return f"{attr}:{value}"
 
 
-@shared_task(name="notifications.send_push", ignore_result=True, soft_time_limit=30)
+@shared_task(
+    name="notifications.send_push",
+    priority=INTERACTIVE_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=30,
+)
 def send_push_notification(notification_uuid: str, is_retry: bool = False):
     """Send a Web Push notification to all of the recipient's subscriptions.
 
@@ -177,7 +183,9 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
         cache.delete(cooldown_key)
 
 
-@shared_task(name="notifications.prune_read", ignore_result=True)
+@shared_task(
+    name="notifications.prune_read", priority=BACKGROUND_PRIORITY, ignore_result=True
+)
 def prune_read_notifications():
     """Delete read notifications older than RETENTION_DAYS. Unread rows are
     kept forever: pruning something the user never saw is data loss."""

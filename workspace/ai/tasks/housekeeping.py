@@ -7,10 +7,14 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY
+
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="ai.purge_ai_tasks", bind=True, max_retries=0)
+@shared_task(
+    name="ai.purge_ai_tasks", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
+)
 def purge_ai_tasks(self):
     """Delete terminal AI tasks (COMPLETED/FAILED) older than
     ``AI_TASK_RETENTION_DAYS``.

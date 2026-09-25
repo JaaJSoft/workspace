@@ -4,6 +4,12 @@ import logging
 
 from celery import shared_task
 
+from workspace.common.task_priority import (
+    BACKGROUND_PRIORITY,
+    INTERACTIVE_PRIORITY,
+    NORMAL_PRIORITY,
+)
+
 from .models import LinkPreview, Message, MessageLinkPreview
 from .services.link_preview import fetch_opengraph
 from .services.notifications import notify_conversation_members
@@ -11,7 +17,12 @@ from .services.notifications import notify_conversation_members
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="chat.purge_orphan_attachments", bind=True, max_retries=0)
+@shared_task(
+    name="chat.purge_orphan_attachments",
+    priority=BACKGROUND_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def purge_orphan_attachments(self):
     """Delete chat attachment files on disk with no matching DB row."""
     from io import StringIO
@@ -25,7 +36,12 @@ def purge_orphan_attachments(self):
     return result
 
 
-@shared_task(name="chat.fetch_link_previews", ignore_result=True, soft_time_limit=60)
+@shared_task(
+    name="chat.fetch_link_previews",
+    priority=INTERACTIVE_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=60,
+)
 def fetch_link_previews(message_uuid: str, urls: list[str]):
     """Fetch OpenGraph metadata for URLs found in a chat message.
 
@@ -84,7 +100,7 @@ def fetch_link_previews(message_uuid: str, urls: list[str]):
         notify_conversation_members(message.conversation)
 
 
-@shared_task(name="chat.end_stale_calls", ignore_result=True)
+@shared_task(name="chat.end_stale_calls", priority=NORMAL_PRIORITY, ignore_result=True)
 def end_stale_calls():
     """Reap call sessions whose participants all stopped sending heartbeats."""
     from .services.calls import end_stale_calls as _end_stale_calls

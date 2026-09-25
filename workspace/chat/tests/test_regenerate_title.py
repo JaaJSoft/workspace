@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from workspace.ai.models import BotProfile
 from workspace.chat.models import Conversation, ConversationMember, Message
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
 User = get_user_model()
 
@@ -65,9 +66,13 @@ class ConversationRegenerateTitleViewTests(APITestCase):
         resp = self.client.post(self.url(self.bot_conv))
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
 
-    @patch("workspace.ai.tasks.chat.generate_conversation_title.delay")
-    def test_dispatches_forced_title_generation(self, mock_delay):
+    @patch("workspace.ai.tasks.chat.generate_conversation_title.apply_async")
+    def test_dispatches_forced_title_generation_ahead_of_automatic_titles(
+        self, mock_apply_async
+    ):
         self.client.force_authenticate(self.user)
         resp = self.client.post(self.url(self.bot_conv))
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
-        mock_delay.assert_called_once_with(str(self.bot_conv.uuid), force=True)
+        mock_apply_async.assert_called_once_with(
+            [str(self.bot_conv.uuid)], {"force": True}, priority=INTERACTIVE_PRIORITY
+        )

@@ -12,7 +12,6 @@ from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 
-from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services import catch_up as registry
@@ -95,7 +94,7 @@ class CatchUpTaskTests(CatchUpTestCase):
         self.assertCountEqual(self.reader.processed, [a.pk, b.pk])
         self.assertEqual(run_catch_up()[0], {"fake": 0})
 
-    def test_queues_one_low_priority_task_per_file_expiring_before_the_next_pass(
+    def test_queues_one_task_per_file_expiring_before_the_next_pass(
         self,
     ):
         """Whatever the workers did not reach is dropped before the next pass
@@ -106,7 +105,6 @@ class CatchUpTaskTests(CatchUpTestCase):
         _, calls = run_catch_up()
 
         self.assertEqual([c.kwargs["args"] for c in calls], [["fake", str(f.pk)]])
-        self.assertEqual(calls[0].kwargs["priority"], BACKGROUND_PRIORITY)
         interval = timedelta(seconds=settings.FILES_CATCH_UP_INTERVAL)
         expires = calls[0].kwargs["expires"]
         self.assertGreaterEqual(expires, started + interval * CATCH_UP_EXPIRY_SHARE)
@@ -192,7 +190,7 @@ class RegistryTests(CatchUpTestCase):
         self.assertEqual([r.name for r in readers], ["other", "fake"])
         self.assertEqual(unknown, ["gone"])
 
-    def test_queue_pending_queues_one_low_priority_task_per_file(self):
+    def test_queue_pending_queues_one_task_per_file(self):
         a = self._upload("a.txt")
 
         with patch.object(catch_up_file, "apply_async") as queue:
@@ -204,7 +202,6 @@ class RegistryTests(CatchUpTestCase):
         queue.assert_called_once_with(
             args=["fake", str(a.pk)],
             kwargs={"reanalyze": True},
-            priority=BACKGROUND_PRIORITY,
             expires=60,
         )
 
@@ -219,7 +216,6 @@ class RegistryTests(CatchUpTestCase):
         queue.assert_called_once_with(
             args=["fake", str(a.pk)],
             kwargs={"reanalyze": False},
-            priority=BACKGROUND_PRIORITY,
             expires=None,
         )
 
@@ -327,7 +323,6 @@ class CatchUpCommandTests(CatchUpTestCase):
         )
         for call in queue.call_args_list:
             self.assertEqual(call.kwargs["kwargs"], {"reanalyze": False})
-            self.assertEqual(call.kwargs["priority"], BACKGROUND_PRIORITY)
 
     def test_sync_is_idempotent(self):
         self.assertIn("fake: processed 2 file(s).", self._run("--sync"))

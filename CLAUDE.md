@@ -68,7 +68,7 @@ Decide with three questions, in order. Does it name a module (import, URL name, 
 ## Infrastructure
 
 - **Cache & sessions:** Redis (`django-redis`). Sessions are NOT in the DB in production - don't count `SELECT django_session` as a prod cost.
-- **Async tasks:** Celery + Redis broker. Background work (mail sync, thumbnails, push) runs via tasks; never block a request on it.
+- **Async tasks:** Celery + Redis broker. Background work (mail sync, thumbnails, push) runs via tasks; never block a request on it. Every task declares `@shared_task(priority=...)` from the four-level scale in `workspace/common/task_priority.py` - interactive (someone is watching a spinner), normal (follow-up of an action or a due time), low (periodic sync, long bulk jobs), background (housekeeping, catch-up backlogs). A task sent without one gets 0 and jumps ahead of every chat reply; `core/tests/test_task_priorities.py` fails on it. A call site whose use case differs from the task's main one (a manual "sync now") overrides with `apply_async(..., priority=...)`.
 - **Database:** PostgreSQL canonical, SQLite for dev/tests (see `core/management/commands/sqlite_to_postgres.py` for migration).
 
 ## Workflow

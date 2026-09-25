@@ -23,11 +23,12 @@ from workspace.ai.services.responses import (
 )
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
+from workspace.common.task_priority import NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="ai.dispatch_scheduled_messages")
+@shared_task(name="ai.dispatch_scheduled_messages", priority=NORMAL_PRIORITY)
 def dispatch_scheduled_messages():
     """Find due scheduled messages and dispatch a generation task for each.
 
@@ -54,7 +55,12 @@ def dispatch_scheduled_messages():
     return outcome.as_dict()
 
 
-@shared_task(name="ai.generate_scheduled_response", bind=True, max_retries=0)
+@shared_task(
+    name="ai.generate_scheduled_response",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def generate_scheduled_response(self, schedule_id: str, claim_token: str | None = None):
     """Run a scheduled bot message: load schedule, advance, generate.
 

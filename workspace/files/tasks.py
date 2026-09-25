@@ -10,6 +10,11 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
+from workspace.common.task_priority import (
+    BACKGROUND_PRIORITY,
+    LOW_PRIORITY,
+    NORMAL_PRIORITY,
+)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -29,7 +34,9 @@ SYNC_USER_LOCK_TTL = max(int(2 * getattr(settings, "FILES_SYNC_INTERVAL", 1800))
 _INDEX_PAGE_SIZE = 500
 
 
-@shared_task(name="files.sync_all_users", bind=True, max_retries=0)
+@shared_task(
+    name="files.sync_all_users", priority=LOW_PRIORITY, bind=True, max_retries=0
+)
 def sync_all_users(self):
     """Dispatch a per-user sync task for every active user.
 
@@ -57,7 +64,9 @@ def sync_all_users(self):
     return {"users_dispatched": dispatched, "enqueue_failures": failed}
 
 
-@shared_task(name="files.sync_user_files", bind=True, max_retries=0)
+@shared_task(
+    name="files.sync_user_files", priority=LOW_PRIORITY, bind=True, max_retries=0
+)
 def sync_user_files(self, user_id):
     """Full recursive disk <-> DB sync for a single user.
 
@@ -94,7 +103,9 @@ def sync_user_files(self, user_id):
     }
 
 
-@shared_task(name="files.purge_trash", bind=True, max_retries=0)
+@shared_task(
+    name="files.purge_trash", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
+)
 def purge_trash(self):
     """Hard-delete files that have been in trash longer than TRASH_RETENTION_DAYS."""
     from workspace.files.models import File
@@ -154,7 +165,9 @@ CATCH_UP_LIMIT = 20_000
 CATCH_UP_EXPIRY_SHARE = 0.9
 
 
-@shared_task(name="files.catch_up", bind=True, max_retries=0)
+@shared_task(
+    name="files.catch_up", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
+)
 def catch_up(self, names=None):
     """Queue the pending files of every reader, or of the readers in *names*.
 
@@ -178,7 +191,13 @@ def catch_up(self, names=None):
     return stats
 
 
-@shared_task(name="files.catch_up_file", bind=True, max_retries=0, ignore_result=True)
+@shared_task(
+    name="files.catch_up_file",
+    priority=BACKGROUND_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
 def catch_up_file(self, name, file_uuid, reanalyze=False):
     """Run reader *name* on one file.
 
@@ -209,7 +228,9 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
     return {"status": "ok" if reader.process(file_obj) else "skipped"}
 
 
-@shared_task(name="files.sync_folder", bind=True, max_retries=0)
+@shared_task(
+    name="files.sync_folder", priority=NORMAL_PRIORITY, bind=True, max_retries=0
+)
 def sync_folder(self, user_id, folder_uuid=None):
     """Shallow sync for a single folder. Can be triggered via API."""
     from workspace.files.models import File
@@ -237,7 +258,12 @@ def sync_folder(self, user_id, folder_uuid=None):
     }
 
 
-@shared_task(name="files.run_file_event_handlers", bind=True, max_retries=0)
+@shared_task(
+    name="files.run_file_event_handlers",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def run_file_event_handlers(self, event_uuid):
     """Run the registered handlers for a recorded FileEvent (off-request)."""
     from workspace.files.services.event_dispatch import run_handlers
@@ -245,7 +271,12 @@ def run_file_event_handlers(self, event_uuid):
     run_handlers(event_uuid)
 
 
-@shared_task(name="files.index_search_document", bind=True, max_retries=0)
+@shared_task(
+    name="files.index_search_document",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def index_search_document(self, file_uuid, include_descendants=False):
     """Extract *file_uuid*'s text and write its full-text search document.
 
@@ -296,7 +327,7 @@ def index_search_document(self, file_uuid, include_descendants=False):
     return {"status": "ok", "indexed": indexed, "failed": skipped}
 
 
-@shared_task(name="files.scan_file", bind=True, max_retries=0)
+@shared_task(name="files.scan_file", priority=NORMAL_PRIORITY, bind=True, max_retries=0)
 def scan_file(self, file_uuid):
     """Scan one file's content for malware and record the verdict.
 
@@ -323,7 +354,7 @@ def scan_file(self, file_uuid):
     return scan_and_record(file_obj, scanner)
 
 
-@shared_task(name="files.notify_share_link_uploads")
+@shared_task(name="files.notify_share_link_uploads", priority=NORMAL_PRIORITY)
 def notify_share_link_uploads(link_uuid):
     """Tell the link owner about the uploads that landed since the last run."""
     from django.core.cache import cache

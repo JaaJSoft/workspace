@@ -5,11 +5,17 @@ from celery import shared_task
 
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
+from workspace.common.task_priority import LOW_PRIORITY, NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="calendar.send_ics_reply", ignore_result=True, soft_time_limit=30)
+@shared_task(
+    name="calendar.send_ics_reply",
+    priority=NORMAL_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=30,
+)
 def send_ics_reply(event_id, user_id, response_status):
     """Send an iCalendar REPLY email to the event organizer."""
     from email.mime.multipart import MIMEMultipart
@@ -67,7 +73,10 @@ def send_ics_reply(event_id, user_id, response_status):
 
 
 @shared_task(
-    name="calendar.sync_external_calendar", ignore_result=True, soft_time_limit=120
+    name="calendar.sync_external_calendar",
+    priority=LOW_PRIORITY,
+    ignore_result=True,
+    soft_time_limit=120,
 )
 def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
     """Sync a single external ICS calendar feed.
@@ -116,7 +125,11 @@ def sync_external_calendar_task(external_calendar_uuid, claim_token=None):
         raise
 
 
-@shared_task(name="calendar.sync_all_external_calendars", ignore_result=True)
+@shared_task(
+    name="calendar.sync_all_external_calendars",
+    priority=LOW_PRIORITY,
+    ignore_result=True,
+)
 def sync_all_external_calendars():
     """Dispatch sync tasks for active external calendars due for sync.
 
@@ -151,7 +164,9 @@ def sync_all_external_calendars():
     ).as_dict()
 
 
-@shared_task(name="calendar.notify_today_events", ignore_result=True)
+@shared_task(
+    name="calendar.notify_today_events", priority=NORMAL_PRIORITY, ignore_result=True
+)
 def notify_today_events():
     """Notify each user of their remaining events today.
 

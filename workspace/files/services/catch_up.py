@@ -14,11 +14,15 @@ and the expiry (see files/tasks.py).
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
+from django.core.cache import cache
+
 from workspace.common.task_priority import BACKGROUND_PRIORITY
+from workspace.common.uuids import parse_uuid_or_none
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -30,6 +34,12 @@ if TYPE_CHECKING:
 # locked" (tasks run inline in development), so the selection is paged rather
 # than streamed.
 _PAGE_SIZE = 200
+
+# The last file a pass queued, per reader: the next pass starts right after
+# it. Starting from the smallest uuid every time would hand each pass the same
+# oldest files, and a reader with more files that keep failing than a pass
+# takes would never reach the ones behind them.
+_CURSOR_KEY = "files:catch_up:{}:cursor"
 
 
 class PendingQuery(Protocol):
@@ -95,32 +105,49 @@ def resolve(names):
     return [_CATCH_UPS[name] for name in names if name in _CATCH_UPS], unknown
 
 
-def pending_ids(catch_up, *, reanalyze=False, limit=None):
-    """Yield the uuids of *catch_up*'s pending files, paged by keyset."""
+def pending_ids(catch_up, *, reanalyze=False, limit=None, start_after=None):
+    """Yield the uuids of *catch_up*'s pending files in uuid order.
+
+    From just after *start_after* when given, wrapping around to the start
+    once the end is reached, so every pending file comes up in turn.
+    """
     queryset = catch_up.pending_files(reanalyze=reanalyze)
-    produced = 0
-    last_uuid = None
+    ids = _keyset(queryset, after=start_after)
+    if start_after is not None:
+        ids = itertools.chain(ids, _keyset(queryset, until=start_after))
+    yield from itertools.islice(ids, limit)
+
+
+def _keyset(queryset, *, after=None, until=None):
+    last = after
     while True:
         page_qs = queryset.order_by("uuid")
-        if last_uuid is not None:
-            page_qs = page_qs.filter(uuid__gt=last_uuid)
+        if last is not None:
+            page_qs = page_qs.filter(uuid__gt=last)
+        if until is not None:
+            page_qs = page_qs.filter(uuid__lte=until)
         page = list(page_qs.values_list("uuid", flat=True)[:_PAGE_SIZE])
         if not page:
             return
-        last_uuid = page[-1]
-        for uuid in page:
-            if limit is not None and produced >= limit:
-                return
-            yield uuid
-            produced += 1
+        yield from page
+        last = page[-1]
 
 
-def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None):
-    """Queue one files.catch_up_file task per pending file; return how many."""
+def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None, resume=False):
+    """Queue one files.catch_up_file task per pending file; return how many.
+
+    With *resume*, start after the last file the previous resumed call queued
+    for this reader (see _CURSOR_KEY).
+    """
     from ..tasks import catch_up_file
 
+    cursor_key = _CURSOR_KEY.format(catch_up.name)
+    start_after = parse_uuid_or_none(cache.get(cursor_key)) if resume else None
     queued = 0
-    for uuid in pending_ids(catch_up, reanalyze=reanalyze, limit=limit):
+    last_uuid = None
+    for uuid in pending_ids(
+        catch_up, reanalyze=reanalyze, limit=limit, start_after=start_after
+    ):
         catch_up_file.apply_async(
             args=[catch_up.name, str(uuid)],
             kwargs={"reanalyze": reanalyze},
@@ -128,4 +155,10 @@ def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None):
             expires=expires,
         )
         queued += 1
+        last_uuid = uuid
+    if resume:
+        if last_uuid is None:
+            cache.delete(cursor_key)
+        else:
+            cache.set(cursor_key, str(last_uuid), timeout=None)
     return queued

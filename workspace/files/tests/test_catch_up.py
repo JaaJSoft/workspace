@@ -1,13 +1,16 @@
 """The hourly catch-up: one task per pending file of every registered reader."""
 
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
 from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.files.models import File
@@ -19,17 +22,22 @@ from workspace.files.services.catch_up import (
     register_catch_up,
     resolve,
 )
-from workspace.files.tasks import CATCH_UP_EXPIRES, catch_up, catch_up_file
+from workspace.files.tasks import CATCH_UP_EXPIRY_SHARE, catch_up, catch_up_file
 
 User = get_user_model()
 
 
 class FakeReader:
-    """Reads .txt files; a file is pending until it has been processed."""
+    """Reads .txt files; a file is pending until it has been processed.
+
+    A file named bad-* is never processed: it stays pending for good, like a
+    blob no reader can make sense of.
+    """
 
     def __init__(self, name="fake"):
         self.name = name
         self.processed = []
+        self.attempted = []
 
     def pending(self, *, reanalyze=False):
         qs = File.objects.filter(
@@ -40,6 +48,9 @@ class FakeReader:
         return qs if reanalyze else qs.exclude(pk__in=self.processed)
 
     def process(self, file_obj):
+        self.attempted.append(file_obj.pk)
+        if file_obj.name.startswith("bad-"):
+            return False
         self.processed.append(file_obj.pk)
         return True
 
@@ -63,6 +74,9 @@ class CatchUpTestCase(TestCase):
         register_catch_up(
             "fake", pending=self.reader.pending, process=self.reader.process
         )
+        # The rotation cursor lives in the cache, which LocMemCache keeps
+        # across tests.
+        self.addCleanup(cache.clear)
 
     def _upload(self, name):
         return FileService.create_file(
@@ -80,16 +94,22 @@ class CatchUpTaskTests(CatchUpTestCase):
         self.assertCountEqual(self.reader.processed, [a.pk, b.pk])
         self.assertEqual(run_catch_up()[0], {"fake": 0})
 
-    def test_queues_one_low_priority_task_per_file_expiring_with_the_pass(self):
-        """The backlog never holds up other tasks, and what the workers did not
-        reach before the next pass is dropped rather than queued twice."""
+    def test_queues_one_low_priority_task_per_file_expiring_before_the_next_pass(
+        self,
+    ):
+        """Whatever the workers did not reach is dropped before the next pass
+        queues the file again, so a file is never attempted twice per pass."""
         f = self._upload("a.txt")
+        started = timezone.now()
 
         _, calls = run_catch_up()
 
         self.assertEqual([c.kwargs["args"] for c in calls], [["fake", str(f.pk)]])
         self.assertEqual(calls[0].kwargs["priority"], BACKGROUND_PRIORITY)
-        self.assertEqual(calls[0].kwargs["expires"], CATCH_UP_EXPIRES)
+        interval = timedelta(seconds=settings.FILES_CATCH_UP_INTERVAL)
+        expires = calls[0].kwargs["expires"]
+        self.assertGreaterEqual(expires, started + interval * CATCH_UP_EXPIRY_SHARE)
+        self.assertLess(expires, started + interval)
 
     def test_every_registered_reader_runs(self):
         other = FakeReader("other")
@@ -120,6 +140,30 @@ class CatchUpTaskTests(CatchUpTestCase):
         self.assertEqual(run_catch_up()[0], {"fake": 2})
         self.assertEqual(run_catch_up()[0], {"fake": 1})
         self.assertEqual(len(self.reader.processed), 3)
+
+    @patch("workspace.files.tasks.CATCH_UP_LIMIT", 20)
+    def test_files_that_keep_failing_do_not_starve_the_ones_behind_them(self):
+        """More failing files than a pass takes: without a rotating start,
+        every pass would queue the same 20 oldest files and never the rest."""
+        for i in range(25):
+            self._upload(f"bad-{i:02}.txt")
+        healthy = self._upload("good.txt")
+
+        self.assertEqual(run_catch_up()[0], {"fake": 20})
+        self.assertEqual(self.reader.processed, [])
+
+        self.assertEqual(run_catch_up()[0], {"fake": 20})
+        self.assertEqual(self.reader.processed, [healthy.pk])
+        # Every failing file has come up once over the two passes.
+        self.assertEqual(len(set(self.reader.attempted)), 26)
+
+    def test_a_resumed_pass_wraps_around_to_the_start(self):
+        uploaded = [self._upload(f"{i}.txt").pk for i in range(4)]
+        reader = registry.get_catch_up("fake")
+
+        ids = list(pending_ids(reader, start_after=uploaded[1]))
+
+        self.assertEqual(ids, [*uploaded[2:], *uploaded[:2]])
 
     def test_pending_ids_pages_through_everything(self):
         uploaded = {self._upload(f"{i}.txt").pk for i in range(5)}
@@ -316,4 +360,4 @@ class CatchUpScheduleTests(SimpleTestCase):
         self.assertEqual(entry["schedule"], 3600.0)
         # A tick that never started is dropped: no second pass stacks up.
         self.assertEqual(entry["options"], {"expires": entry["schedule"]})
-        self.assertEqual(CATCH_UP_EXPIRES, entry["schedule"])
+        self.assertEqual(entry["schedule"], settings.FILES_CATCH_UP_INTERVAL)

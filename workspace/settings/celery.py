@@ -32,6 +32,11 @@ if DEBUG:
 # - the trade-off is how long such a change stays invisible in the UI.
 FILES_SYNC_INTERVAL = float(os.getenv("FILES_SYNC_INTERVAL", "1800"))
 
+# Cadence of the files catch-up (files/services/catch_up.py): how long a file
+# whose event-driven processing was lost waits before the catch-up takes it,
+# and how often a backlog drains another CATCH_UP_LIMIT files per reader.
+FILES_CATCH_UP_INTERVAL = float(os.getenv("FILES_CATCH_UP_INTERVAL", "3600"))
+
 # How stale an account's last successful sync must be before the dispatcher
 # claims it again. Doubles as the beat cadence: the dispatcher runs on this
 # period and only picks up accounts whose last_sync_at is older than it, so
@@ -49,8 +54,9 @@ CELERY_BEAT_SCHEDULE = {
     },
     "catch-up-readers": {
         "task": "files.catch_up",
-        "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
-        "options": {"expires": 3600.0},
+        # The primary path is event-driven; this catches what it missed.
+        "schedule": FILES_CATCH_UP_INTERVAL,
+        "options": {"expires": FILES_CATCH_UP_INTERVAL},
     },
     "purge-trash": {
         "task": "files.purge_trash",

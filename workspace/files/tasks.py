@@ -139,17 +139,19 @@ def purge_trash(self):
     }
 
 
-# The hourly pass queues one catch_up_file task per pending file of every
+# Each pass queues one catch_up_file task per pending file of every
 # registered reader (services/catch_up.py), so the work spreads over every
-# worker, at BACKGROUND_PRIORITY so a backlog never delays other tasks. The
-# bound, per reader, caps what one pass puts on the broker; a larger backlog
-# drains over the following passes.
+# worker. The bound, per reader, caps what one pass puts on the broker; a
+# larger backlog drains over the following passes.
 CATCH_UP_LIMIT = 20_000
 
-# One beat interval (the catch-up-readers entry of CELERY_BEAT_SCHEDULE). A
-# task no worker reached by the next pass is dropped, and that pass queues the
-# file again, so a backlog larger than the workers' throughput never piles up.
-CATCH_UP_EXPIRES = 3600.0
+# The tasks of a pass expire at this share of FILES_CATCH_UP_INTERVAL, counted
+# from the start of the pass, so each one has run or been dropped by the time
+# the next pass queues the files still pending: a file that keeps failing is
+# attempted once per pass, not twice. The worker checks the expiry when it
+# pops a message, so an expired one stays in Redis until then - at most one
+# pass's worth.
+CATCH_UP_EXPIRY_SHARE = 0.9
 
 
 @shared_task(name="files.catch_up", bind=True, max_retries=0)
@@ -163,9 +165,12 @@ def catch_up(self, names=None):
     readers, unknown = resolve(names)
     if unknown:
         logger.warning("Catch-up skips unknown reader(s): %s", ", ".join(unknown))
+    expires = timezone.now() + timedelta(
+        seconds=settings.FILES_CATCH_UP_INTERVAL * CATCH_UP_EXPIRY_SHARE
+    )
     stats = {
         reader.name: queue_pending(
-            reader, limit=CATCH_UP_LIMIT, expires=CATCH_UP_EXPIRES
+            reader, limit=CATCH_UP_LIMIT, expires=expires, resume=True
         )
         for reader in readers
     }

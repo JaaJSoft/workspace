@@ -8,9 +8,9 @@ from django.test import TestCase
 from workspace.files.models import FileEvent
 from workspace.files.services import FileService
 from workspace.files.services.event_dispatch import _HANDLERS, run_handlers
-from workspace.photos.models import Photo
-from workspace.photos.services.analysis import analyze_photo
-from workspace.photos.services.handlers import analyze_photo_for_event
+from workspace.photos.models import MediaItem
+from workspace.photos.services.analysis import analyze_media
+from workspace.photos.services.handlers import analyze_media_for_event
 
 from .images import jpeg_bytes, png_bytes, upload
 
@@ -21,7 +21,7 @@ class HandlerRegistrationTests(TestCase):
     def test_subscribed_to_uploads_and_content_replacements(self):
         for action in (FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED):
             with self.subTest(action=action):
-                self.assertIn(analyze_photo_for_event, _HANDLERS[str(action)])
+                self.assertIn(analyze_media_for_event, _HANDLERS[str(action)])
 
 
 class UploadDispatchTests(TestCase):
@@ -49,14 +49,14 @@ class UploadDispatchTests(TestCase):
         )
 
         self.assertEqual(
-            Photo.objects.get(file=f).taken_at,
+            MediaItem.objects.get(file=f).taken_at,
             datetime(2024, 7, 14, 16, 32, 5, tzinfo=UTC),
         )
 
     def test_upload_without_exif_is_undated(self):
         f = self._write(lambda: upload(self.user, "scan.png", png_bytes()))
 
-        self.assertIsNone(Photo.objects.get(file=f).taken_at)
+        self.assertIsNone(MediaItem.objects.get(file=f).taken_at)
 
     def test_replacing_the_content_refreshes_the_row(self):
         f = self._write(
@@ -72,7 +72,7 @@ class UploadDispatchTests(TestCase):
         )
 
         f.refresh_from_db()
-        photo = Photo.objects.get(file=f)
+        photo = MediaItem.objects.get(file=f)
         self.assertEqual(photo.taken_at, datetime(2025, 1, 2, 9, tzinfo=UTC))
         self.assertEqual(photo.content_hash, f.content_hash)
 
@@ -89,24 +89,24 @@ class HandlerTests(TestCase):
         FileService.soft_delete(f, acting_user=self.user)
         f.refresh_from_db()
 
-        analyze_photo_for_event(self._event(f, FileEvent.Action.CREATED))
+        analyze_media_for_event(self._event(f, FileEvent.Action.CREATED))
 
-        self.assertFalse(Photo.objects.filter(file=f).exists())
+        self.assertFalse(MediaItem.objects.filter(file=f).exists())
 
     def test_a_photo_overwritten_with_something_else_leaves_the_library(self):
         f = upload(self.user, "a.jpg")
-        analyze_photo(f)
+        analyze_media(f)
         FileService.update_content(f, ContentFile(b"plain text now", name="a.jpg"))
         f.refresh_from_db()
         self.assertNotEqual(f.type, "jpeg")
 
-        analyze_photo_for_event(self._event(f, FileEvent.Action.CONTENT_REPLACED))
+        analyze_media_for_event(self._event(f, FileEvent.Action.CONTENT_REPLACED))
 
-        self.assertFalse(Photo.objects.filter(file=f).exists())
+        self.assertFalse(MediaItem.objects.filter(file=f).exists())
 
     def test_a_non_image_upload_writes_nothing(self):
         f = upload(self.user, "a.txt", b"hello")
 
-        analyze_photo_for_event(self._event(f, FileEvent.Action.CREATED))
+        analyze_media_for_event(self._event(f, FileEvent.Action.CREATED))
 
-        self.assertFalse(Photo.objects.exists())
+        self.assertFalse(MediaItem.objects.exists())

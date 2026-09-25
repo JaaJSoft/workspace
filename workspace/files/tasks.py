@@ -152,6 +152,22 @@ def generate_thumbnails(self, retry_failed=False):
     return stats
 
 
+# The hourly pass is there for the uploads whose event dispatch was lost, not
+# for backfills: bounded, it finishes well inside the hour even on the first
+# run over an existing library.
+PROBE_CATCH_UP_LIMIT = 2000
+
+
+@shared_task(name="files.probe_media", bind=True, max_retries=0)
+def probe_media(self):
+    """Catch-up pass: probe audio and video files missing or stale MediaInfo."""
+    from workspace.files.services.media_info import probe_pending
+
+    stats = probe_pending(limit=PROBE_CATCH_UP_LIMIT)
+    logger.info("Media probe catch-up complete: %s", stats)
+    return stats
+
+
 @shared_task(name="files.sync_folder", bind=True, max_retries=0)
 def sync_folder(self, user_id, folder_uuid=None):
     """Shallow sync for a single folder. Can be triggered via API."""

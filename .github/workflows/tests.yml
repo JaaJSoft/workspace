@@ -239,6 +239,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      # Poster frames and video metadata run ffmpeg and ffprobe; their tests
+      # skip without the binaries, which would leave that code uncovered.
+      - name: Install ffmpeg
+        if: contains(fromJSON('["files", "photos"]'), matrix.module)
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends ffmpeg
+
       - name: Run Django test suite with coverage
         env:
           PYTHONWARNINGS: default

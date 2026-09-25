@@ -5,8 +5,8 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
-from workspace.photos.models import Photo
-from workspace.photos.services.analysis import analyze_photo
+from workspace.photos.models import MediaItem
+from workspace.photos.services.analysis import analyze_media
 
 from .images import jpeg_bytes, png_bytes, upload
 
@@ -32,7 +32,7 @@ class AnalyzePhotosCommandTests(TestCase):
 
         self.assertIn("Would analyze 2 file(s).", output)
         delay.assert_not_called()
-        self.assertFalse(Photo.objects.exists())
+        self.assertFalse(MediaItem.objects.exists())
 
     def test_dry_run_honours_the_limit(self):
         self.assertIn("Would analyze 1 file(s).", _run("--dry-run", "--limit", "1"))
@@ -42,22 +42,22 @@ class AnalyzePhotosCommandTests(TestCase):
 
         self.assertIn("Analyzed 2 file(s).", output)
         self.assertEqual(
-            set(Photo.objects.values_list("file_id", flat=True)),
+            set(MediaItem.objects.values_list("file_id", flat=True)),
             {self.dated.pk, self.undated.pk},
         )
 
     def test_idempotent(self):
         _run("--sync")
-        before = dict(Photo.objects.values_list("file_id", "analyzed_at"))
+        before = dict(MediaItem.objects.values_list("file_id", "analyzed_at"))
 
         self.assertIn("Analyzed 0 file(s).", _run("--sync"))
         self.assertEqual(
-            dict(Photo.objects.values_list("file_id", "analyzed_at")), before
+            dict(MediaItem.objects.values_list("file_id", "analyzed_at")), before
         )
 
     def test_limit(self):
         self.assertIn("Analyzed 1 file(s).", _run("--sync", "--limit", "1"))
-        self.assertEqual(Photo.objects.count(), 1)
+        self.assertEqual(MediaItem.objects.count(), 1)
 
     def test_default_queues_one_task_per_file(self):
         with patch("workspace.photos.tasks.analyze_photo.delay") as delay:
@@ -70,8 +70,8 @@ class AnalyzePhotosCommandTests(TestCase):
         )
 
     def test_reanalyze_takes_up_to_date_rows_too(self):
-        analyze_photo(self.dated)
-        analyze_photo(self.undated)
+        analyze_media(self.dated)
+        analyze_media(self.undated)
 
         self.assertIn("Would analyze 0 file(s).", _run("--dry-run"))
         self.assertIn("Would analyze 2 file(s).", _run("--dry-run", "--reanalyze"))

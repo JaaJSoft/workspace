@@ -636,7 +636,7 @@
                   {% if node.node_type == "folder" %}
                     {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
                   {% else %}
-                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" duration=node.media_info.duration %}
                   {% endif %}
 
                   <!-- File info -->

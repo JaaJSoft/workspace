@@ -1,4 +1,4 @@
-"""Fill the photo library for images uploaded before the module existed.
+"""Fill the photo library for photos and videos uploaded before it read them.
 
 Idempotent: a file whose row matches its current content is not pending, so a
 second run finds nothing left to do.
@@ -6,17 +6,17 @@ second run finds nothing left to do.
 
 from django.core.management.base import BaseCommand
 
-from workspace.photos.services.analysis import pending_photo_ids, pending_photos_qs
+from workspace.photos.services.analysis import pending_media_ids, pending_media_qs
 
 
 class Command(BaseCommand):
-    help = "Queue photo analysis for raster images whose Photo row is missing or stale."
+    help = "Queue the analysis of photos and videos whose MediaItem row is missing or stale."
 
     def add_arguments(self, parser):
         parser.add_argument(
             "--reanalyze",
             action="store_true",
-            help="Analyze every raster image, not only those missing or stale.",
+            help="Analyze every photo and video, not only those missing or stale.",
         )
         parser.add_argument(
             "--limit",
@@ -40,14 +40,14 @@ class Command(BaseCommand):
 
         limit = options["limit"]
         if options["dry_run"]:
-            total = pending_photos_qs(reanalyze=options["reanalyze"]).count()
+            total = pending_media_qs(reanalyze=options["reanalyze"]).count()
             if limit is not None:
                 total = min(total, limit)
             self.stdout.write(f"Would analyze {total} file(s).")
             return
 
         dispatched = 0
-        for uuid in pending_photo_ids(reanalyze=options["reanalyze"], limit=limit):
+        for uuid in pending_media_ids(reanalyze=options["reanalyze"], limit=limit):
             if options["sync"]:
                 analyze_photo(str(uuid))
             else:

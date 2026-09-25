@@ -15,6 +15,8 @@
     - icon_size_style_expr: str - raw Alpine `:style` expression for the
       icon's wrapper div (e.g. the mosaic tile's dynamic tileIconSize()
       binding). Omit for a fixed-size icon (w-12 h-12).
+    - duration: float - an audio or video length in seconds, shown as a
+      play badge over the preview.
 {% endcomment %}
 <div class="relative w-full" style="padding-bottom: 100%">
   {% if thumbnail_url %}
@@ -35,5 +37,8 @@
         <i data-lucide="{{ icon }}" class="w-full h-full {{ icon_color }}"></i>
       </div>
     </div>
+  {% endif %}
+  {% if duration %}
+    {% include "files/ui/partials/duration_badge.html" with duration=duration only %}
   {% endif %}
 </div>

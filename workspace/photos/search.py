@@ -5,32 +5,33 @@ from django.utils import dateformat, timezone
 from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
+from workspace.photos.models import MediaItem
 from workspace.photos.queries import ALL, library_files
 from workspace.photos.services.timeline import UNDATED
 from workspace.users.services.settings import get_user_timezone
 
 
 def search_photos(query, user, limit):
-    """Photos the user can open whose name matches, each opening the timeline
-    on its day.
+    """Photos and videos the user can open whose name matches, each opening
+    the timeline on its day.
 
-    The hit lands on the day the photo was taken (``?date=``) with the photo
-    open in the viewer (``?open=``), so the result shows the picture among the
-    ones taken around it rather than in whichever folder it was filed. A photo
+    The hit lands on the day the photo or video was taken (``?date=``) with
+    it open in the viewer (``?open=``), so the result shows it among the ones
+    taken around it rather than in whichever folder it was filed. A file
     outside the user's own files opens in the All library, the one that holds
     it whatever the reason the user can see it.
     """
     tz = get_user_timezone(user)
     group_ids = set(user.groups.values_list("pk", flat=True))
     qs = apply_fulltext(
-        library_files(user, ALL).select_related("photo", "parent"),
+        library_files(user, ALL).select_related("media_item", "parent"),
         query,
         index=FILES_FTS,
     ).order_by("-search_rank", "-updated_at")[:limit]
 
     results = []
     for f in qs:
-        taken_at = f.photo.taken_at
+        taken_at = f.media_item.taken_at
         day = timezone.localtime(taken_at, tz).date() if taken_at else None
         params = {"date": day.isoformat() if day else UNDATED, "open": f.uuid}
         personal = f.owner_id == user.pk and f.group_id is None
@@ -46,7 +47,11 @@ def search_photos(query, user, limit):
                 url=f"/photos?{urlencode(params)}",
                 matched_value=f.name,
                 match_type=match_type_for(f.name, query),
-                type_icon="image",
+                type_icon=(
+                    "video"
+                    if f.media_item.media_type == MediaItem.MediaType.VIDEO
+                    else "image"
+                ),
                 module_slug="photos",
                 date=dateformat.format(day, "j M Y") if day else None,
                 tags=(

@@ -1,4 +1,4 @@
-"""Thumbnail generation service for image files."""
+"""Thumbnail generation service for image and video files."""
 
 import logging
 from io import BytesIO
@@ -8,31 +8,38 @@ from django.core.files.storage import default_storage
 from django.utils import timezone
 
 from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
+from .. import ffmpeg
+from ..scanning.policy import is_blocked
 
 # Imported as a module, not as bare names: the ledger writes then resolve at
 # call time, so patching them at their definition site actually reaches this
 # call site. Narrowing this to `from .failures import ...` would make the
 # bookkeeping-robustness tests pass without exercising anything.
 from . import failures
+from .poster import poster_frame
 
 logger = logging.getLogger(__name__)
+
+RASTER_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif"})
+_SVG_LABELS = frozenset({"svg"})
+# The containers phones and cameras record into. Magika also files avif,
+# flv, wmv and mpegts under "video": avif is a still image, and mpegts
+# claims the .tsv extension.
+VIDEO_LABELS = frozenset({"mp4", "qt", "webm", "mkv", "3gp", "avi"})
+THUMBNAIL_LABELS = RASTER_LABELS | _SVG_LABELS | VIDEO_LABELS
 
 # Whitelist of labels used as the `mime_family` metric label.
 # Anything not in this set is reported as 'other' so the label cardinality
 # stays bounded even if THUMBNAIL_LABELS is later widened by mistake.
-_KNOWN_IMAGE_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif", "svg"})
+_KNOWN_LABELS = RASTER_LABELS | _SVG_LABELS | VIDEO_LABELS
 
 
 def _label_family(content_label):
     """Return a bounded label value for the metric ('jpeg', 'png', ..., 'other')."""
     if not content_label:
         return "unknown"
-    return content_label if content_label in _KNOWN_IMAGE_LABELS else "other"
+    return content_label if content_label in _KNOWN_LABELS else "other"
 
-
-RASTER_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif"})
-_SVG_LABELS = frozenset({"svg"})
-THUMBNAIL_LABELS = RASTER_LABELS | _SVG_LABELS
 
 THUMBNAIL_MAX_SIZE = (512, 512)
 THUMBNAIL_QUALITY = 80
@@ -44,9 +51,26 @@ def get_thumbnail_path(uuid):
     return f"thumbnails/{uuid}.webp"
 
 
+def generatable_labels():
+    """The labels a thumbnail can be generated for on this deployment.
+
+    Videos need ffmpeg for their poster frame; without it they are left out
+    rather than failing, and parking, on every pass.
+    """
+    if ffmpeg.FFMPEG:
+        return THUMBNAIL_LABELS
+    return THUMBNAIL_LABELS - VIDEO_LABELS
+
+
 def can_generate_thumbnail(content_label):
     """Check if a thumbnail can be generated for the given content label."""
-    return content_label in THUMBNAIL_LABELS
+    return content_label in generatable_labels()
+
+
+def _audio_viewer_slug():
+    from workspace.files.ui.viewers import AudioViewer
+
+    return AudioViewer.slug
 
 
 def _rasterize_svg(svg_data):
@@ -106,19 +130,29 @@ def generate_thumbnail(file_obj):
     """
     from PIL import Image, ImageOps
 
-    if not file_obj.content or not can_generate_thumbnail(file_obj.type):
+    # A video container pinned to the audio player holds a recording with no
+    # picture (see filetype.pin_viewer_for_upload). A quarantined file is
+    # never read at all: decoding untrusted bytes is what the policy forbids.
+    if (
+        not file_obj.content
+        or not can_generate_thumbnail(file_obj.type)
+        or (file_obj.type in VIDEO_LABELS and file_obj.viewer == _audio_viewer_slug())
+        or is_blocked(file_obj)
+    ):
         FILES_THUMBNAIL_RESULT.labels(result="skipped").inc()
         return False
 
     family = _label_family(file_obj.type)
     try:
         with FILES_THUMBNAIL_DURATION.labels(mime_family=family).time():
-            file_obj.content.open("rb")
-
-            if file_obj.type in _SVG_LABELS:
+            if file_obj.type in VIDEO_LABELS:
+                img = poster_frame(file_obj, THUMBNAIL_MAX_SIZE)
+            elif file_obj.type in _SVG_LABELS:
+                file_obj.content.open("rb")
                 svg_data = file_obj.content.read()
                 img = _rasterize_svg(svg_data)
             else:
+                file_obj.content.open("rb")
                 img = Image.open(file_obj.content)
 
                 # Hint the decoder to load at a reduced scale near the target
@@ -197,7 +231,7 @@ def delete_thumbnail(uuid):
 
 
 def generate_missing_thumbnails(*, retry_failed=False):
-    """Generate thumbnails for all image files that don't have one yet.
+    """Generate thumbnails for all image and video files that don't have one yet.
 
     Files that burned their attempt budget are skipped until PARKED_RETRY_AFTER
     has elapsed. Passing *retry_failed* purges the whole ledger instead - the
@@ -225,10 +259,11 @@ def generate_missing_thumbnails(*, retry_failed=False):
             node_type=File.NodeType.FILE,
             has_thumbnail=False,
             deleted_at__isnull=True,
-            type__in=THUMBNAIL_LABELS,
+            type__in=generatable_labels(),
         )
         .exclude(content="")
         .exclude(content__isnull=True)
+        .exclude(type__in=VIDEO_LABELS, viewer=_audio_viewer_slug())
         .exclude(uuid__in=failures.parked_file_ids())
     )
 

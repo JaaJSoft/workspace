@@ -73,7 +73,7 @@ START = Position()
 
 def position_after(file_obj):
     """The position right after *file_obj* in timeline order."""
-    taken_at = file_obj.photo.taken_at
+    taken_at = file_obj.media_item.taken_at
     if taken_at is None:
         return Position(
             undated=True, before=file_obj.created_at, after_uuid=file_obj.uuid
@@ -133,10 +133,11 @@ def parse_date_position(raw, tz):
 
 
 def with_timeline_fields(files_qs, user):
-    """Load what a tile shows: the Photo row, the favorite star, and whether
-    the file's folder is one the user can browse in Files (their own or one
-    of their groups') or only the file itself was shared with them."""
-    return files_qs.select_related("photo").annotate(
+    """Load what a tile shows: the MediaItem and MediaInfo rows, the favorite
+    star, and whether the file's folder is one the user can browse in Files
+    (their own or one of their groups') or only the file itself was shared
+    with them."""
+    return files_qs.select_related("media_item", "media_info").annotate(
         is_favorite=Exists(
             FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
         ),
@@ -163,14 +164,14 @@ def _after(field, position):
 
 def _dated(files_qs, position):
     return (
-        files_qs.filter(photo__taken_at__isnull=False)
-        .filter(_after("photo__taken_at", position))
-        .order_by("-photo__taken_at", "-uuid")
+        files_qs.filter(media_item__taken_at__isnull=False)
+        .filter(_after("media_item__taken_at", position))
+        .order_by("-media_item__taken_at", "-uuid")
     )
 
 
 def _undated(files_qs, position):
-    undated = files_qs.filter(photo__taken_at__isnull=True)
+    undated = files_qs.filter(media_item__taken_at__isnull=True)
     if position.undated:
         undated = undated.filter(_after("created_at", position))
     return undated.order_by("-created_at", "-uuid")
@@ -178,12 +179,12 @@ def _undated(files_qs, position):
 
 def _rest_of_day(files_qs, last, tz):
     """The photos after *last* taken on the same local day, up to the cap."""
-    day = timezone.localtime(last.photo.taken_at, tz).date()
+    day = timezone.localtime(last.media_item.taken_at, tz).date()
     day_start = timezone.make_aware(datetime.combine(day, time.min), tz)
     return list(
-        _dated(files_qs, position_after(last)).filter(photo__taken_at__gte=day_start)[
-            :DAY_OVERFLOW
-        ]
+        _dated(files_qs, position_after(last)).filter(
+            media_item__taken_at__gte=day_start
+        )[:DAY_OVERFLOW]
     )
 
 
@@ -192,7 +193,7 @@ def _has_more(files_qs, position):
         return _undated(files_qs, position).exists()
     return (
         _dated(files_qs, position).exists()
-        or files_qs.filter(photo__taken_at__isnull=True).exists()
+        or files_qs.filter(media_item__taken_at__isnull=True).exists()
     )
 
 
@@ -252,7 +253,7 @@ def _entries(photos, position, tz):
     entries = []
     group = None
     for photo in photos:
-        taken_at = photo.photo.taken_at
+        taken_at = photo.media_item.taken_at
         if taken_at is None:
             if not undated_open:
                 entries.append({"kind": "undated"})
@@ -281,15 +282,15 @@ def _entries(photos, position, tz):
 def year_counts(files_qs, tz):
     """``[(year, count), ...]`` newest first, then ``(None, count)`` if undated."""
     rows = (
-        files_qs.filter(photo__taken_at__isnull=False)
-        .annotate(year=ExtractYear("photo__taken_at", tzinfo=tz))
+        files_qs.filter(media_item__taken_at__isnull=False)
+        .annotate(year=ExtractYear("media_item__taken_at", tzinfo=tz))
         .order_by()
         .values("year")
         .annotate(count=Count("pk"))
         .order_by("-year")
     )
     counts = [(row["year"], row["count"]) for row in rows]
-    undated = files_qs.filter(photo__taken_at__isnull=True).count()
+    undated = files_qs.filter(media_item__taken_at__isnull=True).count()
     if undated:
         counts.append((None, undated))
     return counts

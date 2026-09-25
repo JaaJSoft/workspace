@@ -11,27 +11,26 @@ can open), or a ``Group`` instance for that group's folder alone.
 """
 
 from django.contrib.auth.models import Group
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import Lower
 
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
-from workspace.photos.services.analysis import PHOTO_LABELS
+from workspace.photos.models import MediaItem
+from workspace.photos.services.analysis import library_candidates
 
 MINE = "mine"
 SHARED = "shared"
 ALL = "all"
 
 
-def _images(files):
-    """The raster images of *files*, quarantined ones excluded."""
-    return exclude_blocked(
-        files.filter(node_type=File.NodeType.FILE, type__in=PHOTO_LABELS)
-    )
+def _media(files):
+    """The photos and videos of *files*, quarantined ones excluded."""
+    return exclude_blocked(library_candidates(files))
 
 
-def _scoped_images(user, scope):
+def _scoped_media(user, scope):
     if scope == MINE:
         files = FileService.user_files_qs(user)
     elif scope == SHARED:
@@ -49,27 +48,27 @@ def _scoped_images(user, scope):
         # Narrowed from the user's own groups, so a group they left, or never
         # joined, reads as empty rather than as someone else's folder.
         files = FileService.user_group_files_qs(user).filter(group=scope)
-    return _images(files)
+    return _media(files)
 
 
 def library_files(user, scope=MINE):
-    """The analyzed photos in *scope*, as live ``File`` rows.
+    """The analyzed photos and videos in *scope*, as live ``File`` rows.
 
     Trashed files drop out through the files helpers and come back on
-    restore: their Photo row is left alone the whole time.
+    restore: their MediaItem row is left alone the whole time.
     """
-    return _scoped_images(user, scope).filter(photo__isnull=False)
+    return _scoped_media(user, scope).filter(media_item__isnull=False)
 
 
 def unanalyzed_count(user, scope=MINE):
-    """How many raster images in *scope* are still waiting for a Photo row.
+    """How many photos and videos in *scope* are still waiting for a MediaItem row.
 
     Quarantined files never get one, so counting them would announce an
     analysis that is not coming.
     """
     return (
-        _scoped_images(user, scope)
-        .filter(photo__isnull=True)
+        _scoped_media(user, scope)
+        .filter(media_item__isnull=True)
         .exclude(content="")
         .exclude(content__isnull=True)
         .count()
@@ -90,8 +89,8 @@ def library_tags(user, scope=MINE):
 
 def library_groups(user):
     """The user's groups whose folder holds at least one photo, by name."""
-    group_photos = _images(FileService.user_group_files_qs(user)).filter(
-        photo__isnull=False
+    group_photos = _media(FileService.user_group_files_qs(user)).filter(
+        media_item__isnull=False
     )
     return Group.objects.filter(pk__in=group_photos.values("group_id")).order_by(
         Lower("name")
@@ -101,3 +100,11 @@ def library_groups(user):
 def has_shared_photos(user):
     """True when someone shared at least one photo with the user."""
     return library_files(user, SHARED).exists()
+
+
+def media_type_counts(files):
+    """How many photos and how many videos *files* holds, as a dict."""
+    return files.aggregate(
+        photos=Count("pk", filter=Q(media_item__media_type=MediaItem.MediaType.PHOTO)),
+        videos=Count("pk", filter=Q(media_item__media_type=MediaItem.MediaType.VIDEO)),
+    )

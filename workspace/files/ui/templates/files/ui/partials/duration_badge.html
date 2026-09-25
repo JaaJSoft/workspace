@@ -1,0 +1,21 @@
+{% load file_filters %}
+{% comment %}
+  The play badge of an audio or video preview, in its bottom left corner:
+  the corner the grid cards leave free (the star sits top right, the menu
+  button bottom right). The caller's wrapper must be positioned.
+
+  Optional context:
+    - duration: float - the length in seconds (MediaInfo.duration). Without
+      it the badge shows the play icon alone.
+{% endcomment %}
+<span
+  class="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white pointer-events-none"
+  data-duration-badge
+>
+  <i data-lucide="play" class="w-3 h-3 fill-current" aria-hidden="true"></i>
+  {% if duration %}
+    <span>{{ duration|media_duration }}</span>
+  {% else %}
+    <span class="sr-only">Playable media</span>
+  {% endif %}
+</span>

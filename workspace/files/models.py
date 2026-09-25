@@ -1007,6 +1007,34 @@ class ThumbnailFailure(models.Model):
         return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
 
 
+class MediaInfo(models.Model):
+    """What ffprobe read from an audio or video file: length and codecs.
+
+    Written off-request, once the file's content lands (see
+    ``services/media_info.py``), or by the hourly catch-up. A file without a
+    row has not been probed yet, or the deployment has no ffprobe.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="media_info"
+    )
+    # In seconds. Null when ffprobe could not read the file.
+    duration = models.FloatField(null=True, blank=True)
+    # ffprobe's codec names ("h264", "hevc", "vp9", "aac", "opus"...). The
+    # video codec decides which browsers can play a video.
+    video_codec = models.CharField(max_length=32, blank=True, default="")
+    audio_codec = models.CharField(max_length=32, blank=True, default="")
+    # The file's content_hash when it was probed. A row whose hash no longer
+    # matches describes bytes that were replaced, and the catch-up probes the
+    # file again.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    probed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"MediaInfo: {self.file_id}"
+
+
 class FileScan(models.Model):
     """The most recent malware-scan verdict for a file.
 

@@ -42,10 +42,16 @@
       <span
         class="absolute inset-0 flex items-center justify-center text-base-content/30"
       >
-        <i data-lucide="image" class="w-8 h-8"></i>
+        <i
+          data-lucide="{% if file.media_item.media_type == 'video' %}video{% else %}image{% endif %}"
+          class="w-8 h-8"
+        ></i>
       </span>
     {% endif %}
   </button>
+  {% if file.media_item.media_type == "video" %}
+    {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
+  {% endif %}
   {% comment %}
     The two overlay buttons are the Files mosaic cards' own: a filled star
     that stays on a favorite, an empty one on hover otherwise, and the menu

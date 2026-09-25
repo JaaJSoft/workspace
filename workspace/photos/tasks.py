@@ -14,11 +14,11 @@ CATCH_UP_LIMIT = 2000
 
 @shared_task(name="photos.analyze_pending", bind=True, max_retries=0)
 def analyze_pending(self):
-    """Catch-up pass: analyze raster images missing or stale in the library."""
+    """Catch-up pass: analyze photos and videos missing or stale in the library."""
     from workspace.photos.services.analysis import analyze_pending as run
 
     stats = run(limit=CATCH_UP_LIMIT)
-    logger.info("Photo analysis catch-up complete: %s", stats)
+    logger.info("Media analysis catch-up complete: %s", stats)
     return stats
 
 
@@ -33,7 +33,7 @@ def analyze_photo(self, file_uuid):
     from django.core.exceptions import ValidationError
 
     from workspace.files.models import File
-    from workspace.photos.services.analysis import analyze_photo as run
+    from workspace.photos.services.analysis import analyze_media as run
 
     try:
         file_obj = File.objects.select_related("owner").get(uuid=file_uuid)

@@ -1,4 +1,4 @@
-"""Keep Photo rows in step with the content of the files they describe.
+"""Keep MediaItem rows in step with the content of the files they describe.
 
 Registered with the file-event dispatcher, so it runs off-request (the
 files.run_file_event_handlers task) once an upload or a content replacement
@@ -9,17 +9,17 @@ dispatch left behind.
 from workspace.files.models import FileEvent
 from workspace.files.services.event_dispatch import on_file_event
 
-from .analysis import analyze_photo, forget_photo, is_photo_candidate
+from .analysis import analyze_media, forget_media, is_media_candidate
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def analyze_photo_for_event(event):
+def analyze_media_for_event(event):
     file_obj = event.file
     if file_obj.deleted_at is not None:
         # Trashed before we ran; the catch-up reads it after a restore.
         return
-    if is_photo_candidate(file_obj):
-        analyze_photo(file_obj)
+    if is_media_candidate(file_obj):
+        analyze_media(file_obj)
     elif event.action == FileEvent.Action.CONTENT_REPLACED:
         # A photo overwritten with something else is no longer a photo.
-        forget_photo(file_obj)
+        forget_media(file_obj)

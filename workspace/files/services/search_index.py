@@ -61,7 +61,8 @@ def index_file(file_obj):
     try:
         with transaction.atomic():
             index_document(FILES_FTS, file_obj.pk, build_document(file_obj))
-            _record_state(file_obj)
+            if File.objects.filter(pk=file_obj.pk).exists():
+                _record_state(file_obj)
     except Exception:
         logger.exception("Failed to index file %s", scrub(file_obj.pk))
         return False
@@ -92,6 +93,11 @@ def write_documents(documents):
     once for the batch, and an interrupted run keeps every batch it committed.
     """
     written = 0
+    alive = set(
+        File.objects.filter(pk__in=[f.pk for f, _ in documents]).values_list(
+            "pk", flat=True
+        )
+    )
     with transaction.atomic():
         for file_obj, document in documents:
             try:
@@ -99,7 +105,8 @@ def write_documents(documents):
                 # only itself.
                 with transaction.atomic():
                     index_document(FILES_FTS, file_obj.pk, document)
-                    _record_state(file_obj)
+                    if file_obj.pk in alive:
+                        _record_state(file_obj)
                 written += 1
             except Exception:
                 logger.exception("Failed to index file %s", scrub(file_obj.pk))
@@ -107,12 +114,14 @@ def write_documents(documents):
 
 
 def _record_state(file_obj):
+    """Record what *file_obj*'s document was built from.
+
+    Callers skip a row deleted meanwhile: index_document wrote nothing for it,
+    and the foreign key would fail the commit of the whole batch.
+    """
     # The values the document was built from, not a fresh read: a rename or
     # an edit landing meanwhile leaves the row behind the file, which is what
     # makes the catch-up index it again.
-    if not File.objects.filter(pk=file_obj.pk).exists():
-        # index_document wrote nothing for a row deleted meanwhile.
-        return
     SearchIndexState.objects.update_or_create(
         file_id=file_obj.pk,
         defaults={

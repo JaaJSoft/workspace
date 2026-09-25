@@ -5,6 +5,7 @@ from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -19,9 +20,11 @@ from workspace.files.services.search_index import (
     EXTRACTOR_VERSION,
     FILES_FTS,
     build_document,
+    build_documents,
     index_file,
     pending_search_qs,
     unindex_file,
+    write_documents,
 )
 from workspace.files.services.wopi.tokens import mint_access_token
 
@@ -260,6 +263,22 @@ class PendingSearchTests(TestCase):
         self.assertEqual(state.name, "groceries.md")
         self.assertEqual(state.content_hash, note.content_hash)
         self.assertEqual(state.extractor_version, EXTRACTOR_VERSION)
+
+    def test_a_batch_checks_its_rows_exist_in_one_query(self):
+        notes = [self._note(f"n{i}.md") for i in range(4)]
+        documents = build_documents(notes)
+
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertEqual(write_documents(documents), 4)
+
+        existence_checks = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if q["sql"].startswith("SELECT")
+            and 'FROM "files_file" WHERE "files_file"."uuid" ' in q["sql"]
+        ]
+        self.assertEqual(len(existence_checks), 1)
+        self.assertEqual(SearchIndexState.objects.count(), 4)
 
     def test_a_failed_index_records_no_state(self):
         note = self._note()

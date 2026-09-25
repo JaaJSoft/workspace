@@ -26,3 +26,8 @@ class FtsSqlCommandTests(SimpleTestCase):
     def test_bad_path_raises_command_error(self):
         with self.assertRaises(CommandError):
             call_command("fts_sql", "workspace.nowhere.MISSING")
+
+    def test_non_index_raises_command_error(self):
+        # Used to reach index.pg_forward_sql() and die on an AttributeError.
+        with self.assertRaises(CommandError):
+            call_command("fts_sql", "workspace.common.search.schema.PG_TSV_COLUMN")

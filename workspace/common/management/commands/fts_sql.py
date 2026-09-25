@@ -1,5 +1,7 @@
-from django.core.management.base import BaseCommand, CommandError
-from django.utils.module_loading import import_string
+from django.core.management.base import BaseCommand
+
+from workspace.common.management.declarations import load_declaration, write_blocks
+from workspace.common.search.schema import DerivedFulltextIndex, FulltextIndex
 
 
 class Command(BaseCommand):
@@ -16,17 +18,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        try:
-            index = import_string(options["dotted_path"])
-        except ImportError as exc:
-            raise CommandError(str(exc)) from exc
-        blocks = (
-            ("PG_FORWARD", index.pg_forward_sql()),
-            ("PG_REVERSE", index.pg_reverse_sql()),
-            ("SQLITE_FORWARD", index.sqlite_forward_sql()),
-            ("SQLITE_REVERSE", index.sqlite_reverse_sql()),
+        index = load_declaration(
+            options["dotted_path"], (FulltextIndex, DerivedFulltextIndex)
         )
-        for title, sql in blocks:
-            self.stdout.write(f"-- {title}")
-            self.stdout.write(sql)
-            self.stdout.write("")
+        write_blocks(
+            self.stdout,
+            (
+                ("PG_FORWARD", index.pg_forward_sql()),
+                ("PG_REVERSE", index.pg_reverse_sql()),
+                ("SQLITE_FORWARD", index.sqlite_forward_sql()),
+                ("SQLITE_REVERSE", index.sqlite_reverse_sql()),
+            ),
+        )

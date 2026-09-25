@@ -50,6 +50,21 @@ class DeclarationTests(SimpleTestCase):
                 partition_column="a b",
             )
 
+    def test_an_identifier_with_a_trailing_newline_is_refused(self):
+        # `$` matches before a final newline; the name goes into SQL verbatim.
+        with self.assertRaises(ValueError):
+            VectorIndex(table="photos_face\n", dims=3, source_column="e")
+
+    def test_a_reserved_word_is_refused(self):
+        # PostgreSQL reads an unquoted `user` as CURRENT_USER.
+        for name in ("user", "order", "group"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                VectorIndex(table="t", dims=3, source_column="e", partition_column=name)
+
+    def test_an_empty_partition_column_is_refused_not_ignored(self):
+        with self.assertRaises(ValueError):
+            VectorIndex(table="t", dims=3, source_column="e", partition_column="")
+
     def test_dims_are_bounded(self):
         for dims in (0, MAX_DIMS + 1, 3.0, True):
             with self.subTest(dims=dims), self.assertRaises(ValueError):

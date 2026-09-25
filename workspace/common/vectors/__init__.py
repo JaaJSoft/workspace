@@ -44,7 +44,9 @@ def nearest(index, query, *, partition=None, k, using=DEFAULT_DB_ALIAS):
     rows = active_backend(index, conn).nearest(
         index, conn, vector, partition=partition, k=k
     )
-    return [(_as_pk(pk), float(distance)) for pk, distance in rows]
+    # float32 rounding puts a vector's cosine distance to itself a hair below
+    # zero on numpy and sqlite-vec.
+    return [(_as_pk(pk), max(0.0, float(distance))) for pk, distance in rows]
 
 
 def active_backend(index, conn):
@@ -59,11 +61,18 @@ def active_backend(index, conn):
 
 
 def sqlite_vec_available(conn):
-    """Whether sqlite-vec is loaded on *conn*'s database (cached per alias)."""
-    cached = _sqlite_vec_cache.get(conn.alias)
-    if cached is None:
-        cached = _sqlite_vec_cache[conn.alias] = sqlite_vec_loaded(conn)
-    return cached
+    """Whether sqlite-vec is loaded on *conn*'s database.
+
+    Only a success is cached: a probe that failed once (on a connection opened
+    before the extension was installed, say) must not pin the fallback for
+    the life of the process.
+    """
+    if _sqlite_vec_cache.get(conn.alias):
+        return True
+    loaded = sqlite_vec_loaded(conn)
+    if loaded:
+        _sqlite_vec_cache[conn.alias] = True
+    return loaded
 
 
 def _pgvector_version(conn):  # pragma: no cover - exercised on PG only

@@ -50,8 +50,20 @@ _METRICS = {
 # char(32) hex on SQLite.
 _PARTITION_TYPES = {"integer": "integer", "uuid": "text"}
 
-# Every name below is interpolated into SQL, so every name is checked.
-_IDENTIFIER_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
+# Every name below is interpolated into SQL unquoted, so every name is checked,
+# and PostgreSQL's reserved words are refused: unquoted, `user` is CURRENT_USER.
+_IDENTIFIER_RE = re.compile(r"[a-z_][a-z0-9_]*")
+_RESERVED = frozenset(
+    """all analyse analyze and any array as asc asymmetric both case cast check
+    collate column constraint create current_catalog current_date current_role
+    current_time current_timestamp current_user default deferrable desc
+    distinct do else end except false fetch for foreign from grant group
+    having in initially intersect into lateral leading limit localtime
+    localtimestamp not null offset on only or order placing primary
+    references returning select session_user some symmetric system_user table
+    then to trailing true union unique user using variadic when where window
+    with""".split()
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -79,10 +91,14 @@ class VectorIndex:
             self.table,
             self.source_column,
             self.pk_column,
-            *((self.partition_column,) if self.partition_column else ()),
+            *((self.partition_column,) if self.partitioned else ()),
         )
         for name in names:
-            if not isinstance(name, str) or not _IDENTIFIER_RE.match(name):
+            if (
+                not isinstance(name, str)
+                or not _IDENTIFIER_RE.fullmatch(name)
+                or name in _RESERVED
+            ):
                 raise ValueError(f"invalid SQL identifier: {name!r}")
         if isinstance(self.dims, bool) or not isinstance(self.dims, int):
             raise ValueError(f"dims must be an integer, got {self.dims!r}")
@@ -249,6 +265,9 @@ class VectorIndex:
 
     # -- runtime SQL -----------------------------------------------------
 
+    def _partition_where(self):
+        return f" AND {self.partition_column} = %s" if self.partitioned else ""
+
     def _partition_select(self):
         return f"{self.partition_column}, " if self.partitioned else ""
 
@@ -305,7 +324,7 @@ class VectorIndex:
         flagged rather than filtered, so the caller can tell a short answer
         from one that dead entries crowded out.
         """
-        partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
+        partition = self._partition_where()
         return (
             f"WITH knn AS (\n"
             f"  SELECT {self.pk_column}, distance FROM {self.vec_table}\n"
@@ -333,7 +352,7 @@ class VectorIndex:
         partition among many nearer rows of other owners comes back short, or
         empty.
         """
-        partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
+        partition = self._partition_where()
         candidates = (
             f"SELECT {self.pk_column}, {self.pg_column} {self.pg_operator} %s::vector "
             f"AS distance\n"
@@ -356,7 +375,7 @@ class VectorIndex:
 
     def source_rows_sql(self):
         """Every (pk, vector bytes) the fallback scans. Binds the partition."""
-        partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
+        partition = self._partition_where()
         return (
             f"SELECT {self.pk_column}, {self.source_column} FROM {self.table} "
             f"WHERE {self.source_column} IS NOT NULL{partition}"

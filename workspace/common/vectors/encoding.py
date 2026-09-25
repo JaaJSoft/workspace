@@ -48,7 +48,7 @@ def from_bytes(blob, dims):
 def pg_literal(arr):
     """pgvector's text form, e.g. '[0.6,0.8]'.
 
-    Each component is printed at float64 precision from its float32 value, so
+    Nine significant digits round-trip any float32 (subnormals included), so
     pgvector parses back the exact float32 the source column holds.
     """
-    return "[" + ",".join(repr(float(x)) for x in arr) + "]"
+    return "[" + ",".join(f"{x:.9g}" for x in np.asarray(arr).tolist()) + "]"

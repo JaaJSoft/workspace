@@ -63,9 +63,9 @@ class RunVectorIndexSQL(Operation):
             return
         conn = schema_editor.connection
         if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-            schema_editor.execute(self.pg_forward, params=None)
+            self._run_script(schema_editor, self.pg_forward)
             backfill_pg_vectors(conn, **self.pg_backfill)
-            schema_editor.execute(self.pg_index, params=None)
+            self._run_script(schema_editor, self.pg_index)
         elif conn.vendor == "sqlite" and sqlite_vec_loaded(conn):
             self._run_script(schema_editor, self.sqlite_forward)
 
@@ -76,7 +76,7 @@ class RunVectorIndexSQL(Operation):
             return
         conn = schema_editor.connection
         if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-            schema_editor.execute(self.pg_reverse, params=None)
+            self._run_script(schema_editor, self.pg_reverse)
         elif conn.vendor == "sqlite" and sqlite_vec_loaded(conn):
             self._run_script(schema_editor, self.sqlite_reverse)
 
@@ -85,5 +85,7 @@ class RunVectorIndexSQL(Operation):
 
     @staticmethod
     def _run_script(schema_editor, sql):
+        # prepare_sql_script splits on SQLite and keeps the script whole on
+        # PostgreSQL, which a DO $$ ... $$ block needs.
         for statement in schema_editor.connection.ops.prepare_sql_script(sql):
             schema_editor.execute(statement, params=None)

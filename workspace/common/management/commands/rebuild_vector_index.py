@@ -1,7 +1,7 @@
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db import DEFAULT_DB_ALIAS
-from django.utils.module_loading import import_string
 
+from workspace.common.management.declarations import load_declaration
 from workspace.common.vectors.indexing import rebuild_vector_index
 from workspace.common.vectors.schema import VectorIndex, registered_vector_indexes
 
@@ -22,7 +22,9 @@ class Command(BaseCommand):
         parser.add_argument("--database", default=DEFAULT_DB_ALIAS)
 
     def handle(self, *args, **options):
-        indexes = [self._load(path) for path in options["dotted_paths"]]
+        indexes = [
+            load_declaration(path, VectorIndex) for path in options["dotted_paths"]
+        ]
         if not indexes:
             indexes = registered_vector_indexes()
         if not indexes:
@@ -31,13 +33,3 @@ class Command(BaseCommand):
         for index in indexes:
             backend = rebuild_vector_index(index, using=options["database"])
             self.stdout.write(f"{index.table}.{index.source_column}: {backend}")
-
-    @staticmethod
-    def _load(path):
-        try:
-            index = import_string(path)
-        except ImportError as exc:
-            raise CommandError(str(exc)) from exc
-        if not isinstance(index, VectorIndex):
-            raise CommandError(f"{path} is not a VectorIndex")
-        return index

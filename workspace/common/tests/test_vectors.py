@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from io import StringIO
 from pathlib import Path
 from unittest import mock
@@ -67,10 +68,13 @@ def _migration(index):
     )
 
 
+@contextmanager
 def _without_sqlite_vec():
-    return mock.patch.dict(
-        "workspace.common.vectors._sqlite_vec_cache", {connection.alias: False}
-    )
+    with (
+        mock.patch.dict("workspace.common.vectors._sqlite_vec_cache", clear=True),
+        mock.patch("workspace.common.vectors.sqlite_vec_loaded", return_value=False),
+    ):
+        yield
 
 
 def _fallback():
@@ -238,6 +242,22 @@ class NearestTests(_FixtureTestCase):
         self._rows_with_vectors(vectors[2:], owner=OTHER)
         results = nearest(VECTORS, vectors[3], partition=OWNER, k=10)
         self.assertEqual({pk for pk, _ in results}, set(mine))
+
+    def test_distances_are_never_negative(self):
+        # float32 rounding puts a vector's cosine distance to itself a hair
+        # below zero on numpy and sqlite-vec (never on pgvector).
+        vectors = _fixture_vectors(20)
+        self._rows_with_vectors(vectors)
+        for backend in (active_backend(VECTORS, connection), NumpyNearest()):
+            with (
+                self.subTest(backend=backend.name),
+                mock.patch(
+                    "workspace.common.vectors.active_backend", return_value=backend
+                ),
+            ):
+                for vector in vectors:
+                    [(_, distance)] = nearest(VECTORS, vector, partition=OWNER, k=1)
+                    self.assertGreaterEqual(distance, 0.0)
 
     def test_fewer_rows_than_k(self):
         vectors = _fixture_vectors(2)
@@ -820,6 +840,16 @@ class RunVectorIndexSQLTests(TransactionTestCase):
             self.assertFalse(self._has_derived_structure())
             self._apply("backwards")
 
+    def test_a_database_the_router_excludes_is_left_alone(self):
+        if not _derived_index_available():
+            self.skipTest("sqlite-vec or pgvector required")
+        with mock.patch(
+            "workspace.common.vectors.operations.router.allow_migrate",
+            return_value=False,
+        ):
+            self._apply("forwards")
+        self.assertFalse(self._has_derived_structure())
+
     def test_deconstructs_to_its_sql(self):
         operation = _migration(VECTORS)
         name, args, kwargs = operation.deconstruct()
@@ -934,12 +964,21 @@ class WriteDuringRebuildTests(TransactionTestCase):
 
 
 class LoaderTests(SimpleTestCase):
-    def test_a_failed_load_is_soft(self):
+    def test_a_failed_load_is_soft_and_logged_once(self):
         conn = mock.Mock(vendor="sqlite")
-        with mock.patch.object(
-            sqlite_backend, "load_into", side_effect=sqlite3.OperationalError("nope")
+        with (
+            mock.patch.object(sqlite_backend, "_load_failure_logged", False),
+            mock.patch.object(
+                sqlite_backend,
+                "load_into",
+                side_effect=sqlite3.OperationalError("nope"),
+            ),
+            self.assertLogs(sqlite_backend.logger, "INFO") as logs,
         ):
             sqlite_backend.load_sqlite_vec(sender=None, connection=conn)
+            sqlite_backend.load_sqlite_vec(sender=None, connection=conn)
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("nope", logs.output[0])
 
     def test_other_vendors_are_left_alone(self):
         with mock.patch.object(sqlite_backend, "load_into") as load:
@@ -951,6 +990,26 @@ class LoaderTests(SimpleTestCase):
     def test_loadable_reports_a_missing_wheel(self):
         with mock.patch.object(sqlite_backend, "load_into", side_effect=ImportError):
             self.assertFalse(sqlite_backend.sqlite_vec_loadable())
+
+
+class SqliteVecProbeCacheTests(SimpleTestCase):
+    def test_only_a_success_is_cached(self):
+        # A probe that failed once (a connection opened before the extension
+        # was installed, a transient error) must not pin the fallback for
+        # the life of the process.
+        from workspace.common import vectors
+
+        conn = mock.Mock(alias="probe")
+        with (
+            mock.patch.dict(vectors._sqlite_vec_cache, clear=True),
+            mock.patch.object(
+                vectors, "sqlite_vec_loaded", side_effect=[False, True]
+            ) as probe,
+        ):
+            self.assertFalse(vectors.sqlite_vec_available(conn))
+            self.assertTrue(vectors.sqlite_vec_available(conn))
+            self.assertTrue(vectors.sqlite_vec_available(conn))
+        self.assertEqual(probe.call_count, 2)
 
 
 class ServedByTheFallbackCheckTests(TestCase):

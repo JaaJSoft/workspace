@@ -149,11 +149,9 @@ def _run_script(conn, sql):
 
     Never executescript(): on SQLite it commits whatever transaction is open
     first, which would break the caller's atomicity (and a test's isolation).
-    PostgreSQL takes the script whole, which keeps a DO $$ ... $$ block intact.
+    PostgreSQL's prepare_sql_script keeps the script whole, and with it a
+    DO $$ ... $$ block.
     """
     with conn.cursor() as cursor:
-        if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-            cursor.execute(sql)
-            return
         for statement in conn.ops.prepare_sql_script(sql):
             cursor.execute(statement)

@@ -581,14 +581,37 @@ class FallbackMathTests(SimpleTestCase):
     """The ranking itself, fed rows directly instead of through a table."""
 
     @staticmethod
-    def _rank(index, rows, query, k):
+    def _rank(index, rows, query, k, block=2048):
         cursor = mock.MagicMock()
-        cursor.fetchall.return_value = rows
-        conn = mock.MagicMock()
-        conn.cursor.return_value.__enter__.return_value = cursor
-        return NumpyNearest().nearest(
-            index, conn, normalize(query, index.dims), partition=None, k=k
-        )
+        cursor.fetchmany.side_effect = [
+            *(rows[i : i + block] for i in range(0, len(rows), block)),
+            [],
+        ]
+        conn = mock.MagicMock(vendor="sqlite")
+        conn.chunked_cursor.return_value.__enter__.return_value = cursor
+        with mock.patch("workspace.common.vectors.fallback._BLOCK", block):
+            return NumpyNearest().nearest(
+                index, conn, normalize(query, index.dims), partition=None, k=k
+            )
+
+    def test_blocks_rank_like_a_single_pass(self):
+        # Only the running top k survives each block: the merge must not
+        # lose a row a later block would have ranked lower.
+        index = VectorIndex(table="t", dims=DIMS, source_column="e")
+        rows = [
+            (i, normalize(vector, DIMS).tobytes())
+            for i, vector in enumerate(_fixture_vectors(50))
+        ]
+        query = _fixture_vectors(1, seed=21)[0]
+        single = self._rank(index, rows, query, k=7)
+        for block in (1, 3, 7, 8, 49):
+            with self.subTest(block=block):
+                blocked = self._rank(index, rows, query, k=7, block=block)
+                self.assertEqual([pk for pk, _ in blocked], [pk for pk, _ in single])
+                # float32 products sum differently per block size.
+                np.testing.assert_allclose(
+                    [d for _, d in blocked], [d for _, d in single], atol=1e-6
+                )
 
     def test_l2_metric(self):
         index = VectorIndex(table="t", dims=2, source_column="e", metric="l2")

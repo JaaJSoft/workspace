@@ -39,7 +39,7 @@ class FilesAdminTests(TestCase):
             file=other_file, attempts=1, last_attempt_at=timezone.now()
         )
 
-        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+        with patch("workspace.files.tasks.catch_up.delay") as delay:
             response = self.client.post(
                 reverse("admin:files_thumbnailfailure_changelist"),
                 {

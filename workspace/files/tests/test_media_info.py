@@ -21,11 +21,11 @@ from workspace.files.services.media_info import (
     probe_file,
     probe_file_for_event,
 )
-from workspace.files.tasks import catch_up as catch_up_task
 from workspace.files.tasks import catch_up_file
 from workspace.files.templatetags.file_filters import codec_name, media_duration
 from workspace.users.services.settings import set_setting
 
+from .catch_up import run_catch_up
 from .videos import clip_bytes, requires_ffmpeg
 
 User = get_user_model()
@@ -55,16 +55,6 @@ class ParseReportTests(SimpleTestCase):
         self.assertEqual(
             parse_report({}), {"duration": None, "video_codec": "", "audio_codec": ""}
         )
-
-
-def catch_up():
-    """Run the hourly pass and every probe it queued; return how many it queued."""
-    with patch.object(catch_up_file, "apply_async") as queue:
-        stats = catch_up_task.apply().get()
-    for call in queue.call_args_list:
-        if call.kwargs["args"][0] == "media_info":
-            catch_up_file.apply(args=call.kwargs["args"])
-    return stats["media_info"]
 
 
 class MediaInfoTestCase(TestCase):
@@ -126,7 +116,7 @@ class ProbeGuardTests(MediaInfoTestCase):
         f = self._upload("clip.webm")
 
         self.assertIsNone(probe_file(f))
-        self.assertEqual(catch_up(), 0)
+        self.assertEqual(run_catch_up("media_info"), 0)
         self.assertFalse(MediaInfo.objects.exists())
         self.assertEqual(self._pending(), {f.pk})
 
@@ -191,11 +181,11 @@ class CatchUpTests(MediaInfoTestCase):
         ogg = self._upload("clip.ogg")
         self._upload("notes.txt", b"some text")
 
-        self.assertEqual(catch_up(), 2)
+        self.assertEqual(run_catch_up("media_info"), 2)
         self.assertEqual(
             set(MediaInfo.objects.values_list("file_id", flat=True)), {webm.pk, ogg.pk}
         )
-        self.assertEqual(catch_up(), 0)
+        self.assertEqual(run_catch_up("media_info"), 0)
 
     def test_a_file_probed_since_it_was_queued_is_not_read_again(self, probe):
         """Its upload event may have run while the task waited in the queue."""

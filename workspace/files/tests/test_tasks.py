@@ -7,11 +7,6 @@ via FileService.user_files_qs, and argument passing.
 
 purge_trash is not mocked at all — it runs the real ORM filter against
 File rows created by the test.
-
-generate_thumbnails is deliberately NOT covered here: its body is a
-pure pass-through to generate_missing_thumbnails, so testing it through
-the task wrapper would only assert ``mock.assert_called_once()``. The
-underlying helper should be tested directly instead.
 """
 
 from datetime import timedelta

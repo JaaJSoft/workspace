@@ -29,20 +29,18 @@ def restore_after_unblock(file_obj):
 
     The search document has to be rebuilt here: nothing else does it, since
     reindexing is a manual command and not a periodic pass. The thumbnail
-    would eventually come back on its own through generate_missing_thumbnails,
-    but an hour of a blank preview after somebody said the file was fine is a
-    poor answer, so it is regenerated now.
+    would eventually come back on its own through the hourly catch-up, but an
+    hour of a blank preview after somebody said the file was fine is a poor
+    answer, so it is regenerated now.
     """
     from ..search_index import index_file
-    from ..thumbnails.generation import can_generate_thumbnail, generate_thumbnail
+    from ..thumbnails.generation import can_generate_thumbnail, refresh_thumbnail
 
     index_file(file_obj)
 
     if file_obj.has_thumbnail or not can_generate_thumbnail(file_obj.type):
         return
-    if generate_thumbnail(file_obj):
-        file_obj.has_thumbnail = True
-        file_obj.save(update_fields=["has_thumbnail"])
+    refresh_thumbnail(file_obj)
 
 
 def mark_safe(scan, *, user, reason=""):

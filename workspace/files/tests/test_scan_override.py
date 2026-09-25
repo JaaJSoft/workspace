@@ -11,9 +11,8 @@ from workspace.core.services.admin_dashboard import quarantined_file_count
 from workspace.files.models import File, FileScan
 from workspace.files.services.scanning import override
 from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
-from workspace.files.services.thumbnails.generation import (
-    generate_missing_thumbnails,
-)
+
+from .catch_up import run_catch_up
 
 User = get_user_model()
 
@@ -247,14 +246,14 @@ class ThumbnailBackfillTests(TestCase):
 
     def test_quarantined_image_is_skipped(self):
         self._infect(self._image())
-        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+        self.assertEqual(run_catch_up("thumbnails"), 0)
 
     def test_readable_image_is_still_picked_up(self):
         self._image()
-        self.assertEqual(generate_missing_thumbnails()["generated"], 1)
+        self.assertEqual(run_catch_up("thumbnails"), 1)
 
     def test_overridden_image_is_picked_up_again(self):
         self._infect(
             self._image(), overridden_at=timezone.now(), overridden_by=self.user
         )
-        self.assertEqual(generate_missing_thumbnails()["generated"], 1)
+        self.assertEqual(run_catch_up("thumbnails"), 1)

@@ -140,19 +140,6 @@ def purge_trash(self):
     }
 
 
-@shared_task(name="files.generate_thumbnails", bind=True, max_retries=0)
-def generate_thumbnails(self, retry_failed=False):
-    """Generate thumbnails for image files that don't have one yet."""
-    from workspace.files.services.thumbnails.generation import (
-        generate_missing_thumbnails,
-    )
-
-    logger.info("Starting thumbnail generation (retry_failed=%s)...", retry_failed)
-    stats = generate_missing_thumbnails(retry_failed=retry_failed)
-    logger.info("Thumbnail generation complete: %s", stats)
-    return stats
-
-
 # The hourly pass queues one catch_up_file task per pending file of every
 # registered reader (services/catch_up.py), so the work spreads over every
 # worker, at BACKGROUND_PRIORITY so a backlog never delays other tasks. The
@@ -167,12 +154,23 @@ CATCH_UP_EXPIRES = 3600.0
 
 
 @shared_task(name="files.catch_up", bind=True, max_retries=0)
-def catch_up(self):
-    """Queue every registered reader's pending files; return counts per reader."""
-    from workspace.files.services.catch_up import pending_ids, registered_catch_ups
+def catch_up(self, names=None):
+    """Queue the pending files of every reader, or of the readers in *names*.
 
+    Returns how many files were queued per reader.
+    """
+    from workspace.files.services.catch_up import (
+        get_catch_up,
+        pending_ids,
+        registered_catch_ups,
+    )
+
+    if names is None:
+        readers = registered_catch_ups()
+    else:
+        readers = [r for r in map(get_catch_up, names) if r is not None]
     stats = {}
-    for reader in registered_catch_ups():
+    for reader in readers:
         queued = 0
         for uuid in pending_ids(reader, limit=CATCH_UP_LIMIT):
             catch_up_file.apply_async(

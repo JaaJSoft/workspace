@@ -95,6 +95,17 @@ class CatchUpTaskTests(CatchUpTestCase):
         self.assertEqual(self.reader.processed, [f.pk])
         self.assertEqual(other.processed, [f.pk])
 
+    def test_names_limit_the_pass_to_those_readers(self):
+        other = FakeReader("other")
+        register_catch_up("other", pending=other.pending, process=other.process)
+        self._upload("a.txt")
+
+        with patch.object(catch_up_file, "apply_async") as queue:
+            stats = catch_up.apply(kwargs={"names": ["other", "gone"]}).get()
+
+        self.assertEqual(stats, {"other": 1})
+        self.assertEqual([c.kwargs["args"][0] for c in queue.call_args_list], ["other"])
+
     @patch("workspace.files.tasks.CATCH_UP_LIMIT", 2)
     def test_one_pass_is_bounded(self):
         """A backlog larger than one pass drains over the following ones."""

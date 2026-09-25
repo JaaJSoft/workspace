@@ -5,7 +5,6 @@ from io import BytesIO
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.utils import timezone
 
 from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 from .. import ffmpeg
@@ -230,63 +229,40 @@ def delete_thumbnail(uuid):
         logger.warning("Failed to delete thumbnail for %s", uuid, exc_info=True)
 
 
-def generate_missing_thumbnails(*, retry_failed=False):
-    """Generate thumbnails for all image and video files that don't have one yet.
+def pending_thumbnails_qs(*, reanalyze=False):
+    """Live files a thumbnail can be generated for and that have none yet.
 
-    Files that burned their attempt budget are skipped until PARKED_RETRY_AFTER
-    has elapsed. Passing *retry_failed* purges the whole ledger instead - the
-    operational escape hatch for when the cause of the failures (a broken
-    dependency, an unreachable storage backend) has been fixed and waiting out
-    the window is not acceptable. The whole ledger means every row, including
-    files still under the budget: their counters restart, so a file that had
-    already failed once needs the full budget again before it parks.
-
-    Returns a dict with generation statistics.
+    Files that burned their attempt budget are left out until
+    PARKED_RETRY_AFTER has elapsed (see failures.py). With *reanalyze*, every
+    live file a thumbnail can be generated for, with a thumbnail or not.
     """
     from workspace.files.models import File
     from workspace.files.services.scanning.policy import exclude_blocked
 
-    unparked = failures.clear_all_failures() if retry_failed else 0
-
-    started_at = timezone.now()
-
     # Quarantining a file deletes its thumbnail, and "no thumbnail" is exactly
-    # what this pass looks for - so without the exclusion the preview of an
-    # infected image reappears at the next run. It also means a file leaving
-    # quarantine becomes a candidate again on its own.
+    # what this looks for - so without the exclusion the preview of an
+    # infected image reappears at the next pass. It also means a file leaving
+    # quarantine becomes pending again on its own.
     qs = exclude_blocked(
         File.objects.filter(
             node_type=File.NodeType.FILE,
-            has_thumbnail=False,
             deleted_at__isnull=True,
             type__in=generatable_labels(),
         )
         .exclude(content="")
         .exclude(content__isnull=True)
         .exclude(type__in=VIDEO_LABELS, viewer=_audio_viewer_slug())
-        .exclude(uuid__in=failures.parked_file_ids())
     )
+    if reanalyze:
+        return qs
+    return qs.filter(has_thumbnail=False).exclude(uuid__in=failures.parked_file_ids())
 
-    stats = {
-        "generated": 0,
-        "failed": 0,
-        "parked": 0,
-        "unparked": unparked,
-        "total": 0,
-    }
 
-    for file_obj in qs.iterator():
-        stats["total"] += 1
-        if generate_thumbnail(file_obj):
-            file_obj.has_thumbnail = True
-            file_obj.save(update_fields=["has_thumbnail"])
-            stats["generated"] += 1
-        else:
-            stats["failed"] += 1
-
-    # Files at the attempt budget whose row was touched during this pass. The
-    # count is global, so a file parked concurrently by the event handler lands
-    # in it too.
-    stats["parked"] = failures.count_parked_since(started_at)
-
-    return stats
+def refresh_thumbnail(file_obj):
+    """Generate *file_obj*'s thumbnail and flag the row; return True or None."""
+    if not generate_thumbnail(file_obj):
+        return None
+    if not file_obj.has_thumbnail:
+        file_obj.has_thumbnail = True
+        file_obj.save(update_fields=["has_thumbnail"])
+    return True

@@ -47,10 +47,6 @@ CELERY_BEAT_SCHEDULE = {
         # so a backed-up broker cannot accumulate stale fan-outs.
         "options": {"expires": FILES_SYNC_INTERVAL},
     },
-    "generate-thumbnails": {
-        "task": "files.generate_thumbnails",
-        "schedule": 3600.0,  # Hourly backfill; primary path is event-driven
-    },
     "catch-up-readers": {
         "task": "files.catch_up",
         "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven

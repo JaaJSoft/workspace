@@ -8,24 +8,14 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from workspace.files.services.catch_up import get_catch_up
-from workspace.files.tasks import catch_up as catch_up_task
 from workspace.files.tasks import catch_up_file
+from workspace.files.tests.catch_up import run_catch_up
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import analyze_media, pending_media_qs
 
 from .images import jpeg_bytes, png_bytes, upload
 
 User = get_user_model()
-
-
-def catch_up():
-    """Run the hourly pass and every analysis it queued; return how many it queued."""
-    with patch.object(catch_up_file, "apply_async") as queue:
-        stats = catch_up_task.apply().get()
-    for call in queue.call_args_list:
-        if call.kwargs["args"][0] == "photos":
-            catch_up_file.apply(args=call.kwargs["args"])
-    return stats["photos"]
 
 
 def analyze(file_obj, **kwargs):
@@ -44,21 +34,21 @@ class PhotosCatchUpTests(TestCase):
         undated = upload(self.user, "b.png", png_bytes())
         upload(self.user, "c.txt", b"not a photo")
 
-        self.assertEqual(catch_up(), 2)
+        self.assertEqual(run_catch_up("photos"), 2)
         self.assertEqual(
             set(MediaItem.objects.values_list("file_id", flat=True)),
             {dated.pk, undated.pk},
         )
-        self.assertEqual(catch_up(), 0)
+        self.assertEqual(run_catch_up("photos"), 0)
 
     def test_rows_from_an_older_reader_are_read_again_once(self):
         f = upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
         analyze_media(f)
         MediaItem.objects.filter(file=f).update(analysis_version=None, taken_at=None)
 
-        self.assertEqual(catch_up(), 1)
+        self.assertEqual(run_catch_up("photos"), 1)
         self.assertIsNotNone(MediaItem.objects.get(file=f).taken_at)
-        self.assertEqual(catch_up(), 0)
+        self.assertEqual(run_catch_up("photos"), 0)
 
     def test_a_file_analyzed_since_it_was_queued_is_not_read_again(self):
         """Its upload event may have run while the task waited in the queue."""

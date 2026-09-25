@@ -23,7 +23,7 @@ class PhotosConfig(AppConfig):
             ModuleInfo(
                 name="Photos",
                 slug="photos",
-                description="Browse your pictures by the day they were taken.",
+                description="Browse your photos and videos by the day they were taken.",
                 icon="images",
                 color="lime",
                 url="/photos",
@@ -45,7 +45,14 @@ class PhotosConfig(AppConfig):
             [
                 CommandInfo(
                     name="Photos",
-                    keywords=["photos", "pictures", "images", "timeline", "gallery"],
+                    keywords=[
+                        "photos",
+                        "pictures",
+                        "images",
+                        "videos",
+                        "timeline",
+                        "gallery",
+                    ],
                     icon="images",
                     url="/photos",
                     kind="navigate",
@@ -62,13 +69,22 @@ class PhotosConfig(AppConfig):
                     order=13,
                 ),
                 CommandInfo(
+                    name="Videos",
+                    keywords=["videos", "movies", "clips", "recordings"],
+                    icon="video",
+                    url="/photos?videos=1",
+                    kind="navigate",
+                    module_slug="photos",
+                    order=14,
+                ),
+                CommandInfo(
                     name="Undated photos",
                     keywords=["undated", "no date", "screenshots", "photos"],
                     icon="calendar-x",
                     url="/photos?date=undated",
                     kind="navigate",
                     module_slug="photos",
-                    order=14,
+                    order=15,
                 ),
             ]
         )

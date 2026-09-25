@@ -2,16 +2,50 @@
 <div class="flex flex-col h-full bg-base-200">
 
   {% if is_video %}
-    <div class="flex-1 flex items-center justify-center overflow-hidden">
+    {% comment %}
+      A browser that cannot decode the file either fires error (an unknown
+      container) or, for a video codec it lacks such as HEVC in Chrome on
+      Linux, loads the audio track alone and reports no picture size. Both end
+      on the download offer instead of a black box.
+    {% endcomment %}
+    <div
+      class="flex-1 flex items-center justify-center overflow-hidden"
+      x-data="{ unplayable: false }"
+    >
       <video
         controls
         autoplay
         class="max-w-full max-h-full"
         src="{{ content_url }}"
         preload="metadata"
+        x-show="!unplayable"
+        @error="unplayable = true"
+        @loadedmetadata="if (!$el.videoWidth) { $el.pause(); unplayable = true }"
       >
         Your browser does not support the video element.
       </video>
+      <div
+        x-show="unplayable"
+        x-cloak
+        class="flex flex-col items-center gap-3 px-6 text-center"
+        data-video-unplayable
+      >
+        <div class="rounded-full bg-base-300 p-5">
+          <i data-lucide="video-off" class="w-10 h-10 text-base-content/50"></i>
+        </div>
+        <p class="font-medium">This browser can't play this video</p>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          It is probably recorded in a format only some browsers can decode. Download it to watch it in a video player.
+        </p>
+        <a
+          href="{{ content_url }}"
+          download="{{ file.name }}"
+          class="btn btn-primary btn-sm gap-2"
+        >
+          <i data-lucide="download" class="w-4 h-4"></i>
+          Download
+        </a>
+      </div>
     </div>
   {% endif %}
 

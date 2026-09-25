@@ -48,7 +48,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
 | `people` | Address book: persons and contact lists per user or group, linked workspace accounts, section registry for other modules |
-| `photos` | Photo library built on the files module: capture-date timeline, EXIF metadata read off-request (preview) |
+| `photos` | Photo and video library built on the files module: capture-date timeline, EXIF and ffprobe metadata read off-request (preview) |
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |
@@ -496,7 +496,7 @@ from workspace.photos.queries import (
     ALL, MINE, SHARED, has_shared_photos, library_files, library_groups, library_tags,
 )
 
-files = library_files(user)          # the user's personal analyzed photos, as live File rows
+files = library_files(user)          # the user's personal analyzed photos and videos, as live File rows
 files = library_files(user, SHARED)  # photos other people shared with the user (directly, via a group or a project)
 files = library_files(user, ALL)     # every photo the user can open (FileService.accessible_file_ids)
 files = library_files(user, group)   # one group's folder; empty for a group the user is not in
@@ -505,7 +505,7 @@ groups = library_groups(user)        # the user's groups whose folder holds a ph
 shared = has_shared_photos(user)     # whether the Shared with me tab has anything to show
 ```
 
-The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image without a `MediaItem` row has not been analyzed yet; it is not in the library.
+The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image or a video without a `MediaItem` row has not been analyzed yet; it is not in the library. `MediaItem.media_type` tells photos and videos apart, and a video container pinned to the audio viewer (a voice recording) is neither.
 
 #### Vault - `workspace.vault.queries`
 

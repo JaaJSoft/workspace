@@ -12,6 +12,7 @@
   <ul class="menu p-0 space-y-0.5">
     {% include "ui/partials/drawer_item.html" with href=timeline_url icon="images" label="Timeline" color="module" active=is_timeline_view x_target="photos-nav photos-content" x_target_history="push" onclick="closeDrawer()" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
     {% include "ui/partials/drawer_item.html" with href=favorites_url icon="star" label="Favorites" color="warning" active=is_favorites_view x_target="photos-nav photos-content" x_target_history="push" onclick="closeDrawer()" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+    {% include "ui/partials/drawer_item.html" with href=videos_url icon="video" label="Videos" color="error" active=is_videos_view x_target="photos-nav photos-content" x_target_history="push" onclick="closeDrawer()" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
   </ul>
 
   {% if tags %}

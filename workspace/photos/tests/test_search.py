@@ -16,6 +16,7 @@ from workspace.photos.search import search_photos
 from workspace.users.services.settings import set_setting
 
 from .images import make_photo as _make_photo
+from .images import make_video as _make_video
 from .images import upload
 
 
@@ -46,6 +47,21 @@ class SearchPhotosTests(TestCase):
         self.assertEqual(hit.url, f"/photos?date=2024-07-14&open={f.uuid}")
         self.assertEqual(hit.module_slug, "photos")
         self.assertEqual(hit.date, "14 Jul 2024")
+
+    def test_a_video_is_found_like_a_photo(self):
+        f = _make_video(
+            self.user, "sunset-drone.webm", datetime(2024, 7, 14, 20, tzinfo=UTC)
+        )
+        index_file(f)
+        make_photo(self.user, "sunset-beach.jpg", datetime(2024, 7, 13, 20, tzinfo=UTC))
+
+        hits = {hit.name: hit for hit in search_photos("sunset", self.user, 10)}
+
+        self.assertEqual(hits["sunset-drone.webm"].type_icon, "video")
+        self.assertEqual(
+            hits["sunset-drone.webm"].url, f"/photos?date=2024-07-14&open={f.uuid}"
+        )
+        self.assertEqual(hits["sunset-beach.jpg"].type_icon, "image")
 
     def test_capture_day_is_the_users_local_day(self):
         set_setting(self.user, "core", "timezone", "Europe/Paris")
@@ -150,5 +166,11 @@ class RegistrationTests(TestCase):
         }
 
         self.assertEqual(
-            urls, {"/photos", "/photos?favorites=1", "/photos?date=undated"}
+            urls,
+            {
+                "/photos",
+                "/photos?favorites=1",
+                "/photos?videos=1",
+                "/photos?date=undated",
+            },
         )

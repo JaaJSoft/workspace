@@ -1,4 +1,4 @@
-"""Image fixtures for the photos tests: tiny pictures with chosen EXIF."""
+"""Fixtures for the photos tests: tiny pictures with chosen EXIF, and videos."""
 
 import io
 
@@ -7,6 +7,7 @@ from django.utils import timezone
 from PIL import ExifTags, Image
 
 from workspace.files.services import FileService
+from workspace.files.tests.videos import clip_bytes
 from workspace.photos.models import MediaItem
 
 
@@ -67,6 +68,27 @@ def make_photo(owner, name, taken_at, *, parent=None, **fields):
         file=file_obj,
         defaults={
             "taken_at": taken_at,
+            "content_hash": file_obj.content_hash,
+            "analyzed_at": timezone.now(),
+            **fields,
+        },
+    )
+    return file_obj
+
+
+def make_video(
+    owner, name, taken_at, *, clip="clip.webm", duration=3.0, parent=None, **fields
+):
+    """An uploaded clip (see files/tests/videos.py) with its MediaItem row
+    written directly."""
+    file_obj = upload(owner, name, clip_bytes(clip), parent=parent)
+    MediaItem.objects.update_or_create(
+        file=file_obj,
+        defaults={
+            "media_type": MediaItem.MediaType.VIDEO,
+            "taken_at": taken_at,
+            "duration": duration,
+            "codec": "vp9",
             "content_hash": file_obj.content_hash,
             "analyzed_at": timezone.now(),
             **fields,

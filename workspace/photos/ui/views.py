@@ -9,6 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
+from workspace.photos.models import MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -17,6 +18,7 @@ from workspace.photos.queries import (
     library_files,
     library_groups,
     library_tags,
+    media_type_counts,
     unanalyzed_count,
 )
 from workspace.photos.services.timeline import (
@@ -77,8 +79,10 @@ def _scope_params(scope):
 
 
 def _filters(request):
-    """The active filters as ``(favorites, tag)``; 404 on a tag not the user's."""
+    """The active filters as ``(favorites, videos, tag)``; 404 on a tag not the
+    user's."""
     favorites = is_truthy(request.GET.get("favorites"))
+    videos = is_truthy(request.GET.get("videos"))
     tag = None
     if request.GET.get("tag"):
         tag_uuid = parse_uuid_or_none(request.GET["tag"])
@@ -86,22 +90,26 @@ def _filters(request):
             tag = Tag.objects.filter(owner=request.user, uuid=tag_uuid).first()
         if tag is None:
             raise Http404
-    return favorites, tag
+    return favorites, videos, tag
 
 
-def _filtered_library(user, scope, favorites, tag):
+def _filtered_library(user, scope, favorites, videos, tag):
     files = library_files(user, scope)
     if favorites:
         files = files.filter(favorites__owner=user)
+    if videos:
+        files = files.filter(media_item__media_type=MediaItem.MediaType.VIDEO)
     if tag is not None:
         files = files.filter(file_tags__tag=tag)
     return files
 
 
-def _filter_params(favorites, tag):
+def _filter_params(favorites, videos, tag):
     params = {}
     if favorites:
         params["favorites"] = "1"
+    if videos:
+        params["videos"] = "1"
     if tag is not None:
         params["tag"] = str(tag.uuid)
     return params
@@ -145,6 +153,19 @@ def _page_context(request, files, position, tz, view_params):
     return {"entries": page.entries, "next_url": next_url}
 
 
+def _count_label(counts):
+    """What the listing holds, as "12 photos, 3 videos".
+
+    A kind it holds none of is left out, unless both are empty.
+    """
+    parts = [
+        f"{count} {noun}{'s' if count != 1 else ''}"
+        for noun, count in (("photo", counts["photos"]), ("video", counts["videos"]))
+        if count
+    ]
+    return ", ".join(parts) or "0 photos"
+
+
 def _url_with(params):
     base = reverse("photos_ui:index")
     return f"{base}?{urlencode(params)}" if params else base
@@ -155,7 +176,7 @@ def _url_with(params):
 def index(request):
     """The timeline, opened at its newest photo or at ``?date=``."""
     scope = _scope(request)
-    favorites, tag = _filters(request)
+    favorites, videos, tag = _filters(request)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
     position = START
@@ -165,9 +186,9 @@ def index(request):
         except ValueError:
             return HttpResponseBadRequest("Invalid date.")
 
-    files = _filtered_library(request.user, scope, favorites, tag)
+    files = _filtered_library(request.user, scope, favorites, videos, tag)
     scope_params = _scope_params(scope)
-    filter_params = _filter_params(favorites, tag)
+    filter_params = _filter_params(favorites, videos, tag)
     view_params = scope_params | filter_params
     years = [
         {
@@ -185,6 +206,8 @@ def index(request):
         active_view, title, icon = f"tag:{tag.uuid}", tag.name, tag.icon or "tag"
     elif favorites:
         active_view, title, icon = "favorites", "Favorites", "star"
+    elif videos:
+        active_view, title, icon = "videos", "Videos", "video"
     else:
         active_view, title, icon = "timeline", "Timeline", "images"
 
@@ -197,9 +220,10 @@ def index(request):
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
+        "is_videos_view": active_view == "videos",
         "title": title,
         "title_icon": icon,
-        "total": files.count(),
+        "count_label": _count_label(media_type_counts(files)),
         "pending": (
             unanalyzed_count(request.user, scope) if active_view == "timeline" else 0
         ),
@@ -217,6 +241,7 @@ def index(request):
         ],
         "timeline_url": _url_with(scope_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"}),
+        "videos_url": _url_with(scope_params | {"videos": "1"}),
         "viewer_prefs": viewer_prefs,
         "tile": {"size": tile_size, "widths": TILE_WIDTHS},
         "tile_width": TILE_WIDTHS[tile_size - 1],
@@ -229,17 +254,17 @@ def index(request):
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
     scope = _scope(request)
-    favorites, tag = _filters(request)
+    favorites, videos, tag = _filters(request)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
-    files = _filtered_library(request.user, scope, favorites, tag)
+    files = _filtered_library(request.user, scope, favorites, videos, tag)
     context = _page_context(
         request,
         files,
         position,
         get_user_timezone(request.user),
-        _scope_params(scope) | _filter_params(favorites, tag),
+        _scope_params(scope) | _filter_params(favorites, videos, tag),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)

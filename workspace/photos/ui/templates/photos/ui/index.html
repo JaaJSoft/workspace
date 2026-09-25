@@ -69,12 +69,12 @@
         <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
         <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
           <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-          <span class="text-sm text-base-content/60">{{ total }} photo{{ total|pluralize }}</span>
+          <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
         {% if pending %}
           <span
             class="badge badge-ghost gap-1.5 max-sm:hidden"
-            title="New pictures show up here once their capture date has been read."
+            title="New photos and videos show up here once their capture date has been read."
           >
             <span class="loading loading-spinner loading-xs"></span>
             {{ pending }} being analyzed
@@ -127,12 +127,14 @@
         {% if is_timeline_view and not date_param %}
           <h2 class="text-lg font-semibold">No photos yet</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
-            Pictures you upload to Files show up here, by the day they were taken.
+            Photos and videos you upload to Files show up here, by the day they were taken.
           </p>
           <a href="{% url 'files_ui:index' %}" class="btn btn-module btn-sm">Go to Files</a>
         {% else %}
           <h2 class="text-lg font-semibold">Nothing here</h2>
-          <p class="text-sm text-base-content/60 max-w-sm">No photo matches this view.</p>
+          <p class="text-sm text-base-content/60 max-w-sm">
+            {% if is_videos_view %}No video matches this view.{% else %}Nothing in your library matches this view.{% endif %}
+          </p>
         {% endif %}
       </div>
     {% endif %}

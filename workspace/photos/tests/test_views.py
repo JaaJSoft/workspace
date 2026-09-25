@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -15,9 +15,10 @@ from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, T
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import MediaItem
+from workspace.photos.templatetags.photos_filters import clip_duration
 from workspace.users.services.settings import set_setting
 
-from .images import make_photo, upload
+from .images import make_photo, make_video, upload
 
 User = get_user_model()
 
@@ -237,6 +238,90 @@ class FilterTests(PhotosViewTestCase):
         self.assertContains(response, 'href="/photos?date=2024"')
         self.assertContains(response, 'href="/photos?date=2019"')
         self.assertContains(response, 'href="/photos?date=undated"')
+
+
+class VideoTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.beach = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+        self.surf = make_video(
+            self.user, "surf.webm", _at(2024, 7, 14, 15), duration=754.4
+        )
+
+    def _badges(self, response):
+        return re.findall(
+            r"data-video-badge.*?<span>([^<]+)</span>", response.content.decode(), re.S
+        )
+
+    def test_videos_sit_in_the_timeline_with_the_photos(self):
+        response = self.client.get("/photos")
+
+        self.assertEqual(
+            self._tiles(response), [str(self.surf.uuid), str(self.beach.uuid)]
+        )
+        self.assertContains(response, "1 photo, 1 video")
+
+    def test_a_video_tile_shows_its_length(self):
+        self.assertEqual(self._badges(self.client.get("/photos")), ["12:34"])
+
+    def test_the_viewer_pages_through_videos_too(self):
+        response = self.client.get("/photos")
+
+        self.assertContains(
+            response,
+            f'data-uuid="{self.surf.uuid}"\n  data-node-type="file"\n  data-viewable="1"',
+        )
+
+    def test_videos_view(self):
+        response = self.client.get("/photos?videos=1")
+
+        self.assertEqual(self._tiles(response), [str(self.surf.uuid)])
+        self.assertContains(response, "1 video")
+        self.assertNotContains(response, "1 photo")
+
+    def test_videos_view_keeps_its_filter_on_the_next_page(self):
+        for day in range(3):
+            make_video(self.user, f"clip{day}.webm", _at(2024, 6, 1 + day, 9))
+
+        with patch("workspace.photos.services.timeline.PAGE_SIZE", 2):
+            response = self.client.get("/photos?videos=1")
+            next_page = self.client.get(_next_url(response))
+
+        self.assertIn("videos=1", _next_url(response))
+        self.assertTrue(self._tiles(next_page))
+        self.assertNotIn(str(self.beach.uuid), self._tiles(next_page))
+
+    def test_sidebar_offers_the_videos_view(self):
+        response = self.client.get("/photos")
+
+        self.assertContains(response, 'href="/photos?videos=1"')
+
+
+class CountLabelTests(PhotosViewTestCase):
+    def test_empty_library(self):
+        self.assertContains(self.client.get("/photos"), "0 photos")
+
+    def test_only_videos(self):
+        make_video(self.user, "a.webm", _at(2024, 7, 14, 12))
+        make_video(self.user, "b.webm", _at(2024, 7, 14, 13))
+
+        response = self.client.get("/photos")
+
+        self.assertContains(response, "2 videos")
+        self.assertNotContains(response, "0 photos")
+
+
+class ClipDurationTests(SimpleTestCase):
+    def test_as_a_player_shows_it(self):
+        for seconds, shown in (
+            (0.2, "0:01"),
+            (3.0, "0:03"),
+            (59.6, "1:00"),
+            (754.4, "12:34"),
+            (3723, "1:02:03"),
+        ):
+            with self.subTest(seconds=seconds):
+                self.assertEqual(clip_duration(seconds), shown)
 
 
 class DateTests(PhotosViewTestCase):

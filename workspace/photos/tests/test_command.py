@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.test import TestCase
 
 from workspace.photos.models import MediaItem
-from workspace.photos.services.analysis import analyze_photo
+from workspace.photos.services.analysis import analyze_media
 
 from .images import jpeg_bytes, png_bytes, upload
 
@@ -70,8 +70,8 @@ class AnalyzePhotosCommandTests(TestCase):
         )
 
     def test_reanalyze_takes_up_to_date_rows_too(self):
-        analyze_photo(self.dated)
-        analyze_photo(self.undated)
+        analyze_media(self.dated)
+        analyze_media(self.undated)
 
         self.assertIn("Would analyze 0 file(s).", _run("--dry-run"))
         self.assertIn("Would analyze 2 file(s).", _run("--dry-run", "--reanalyze"))

@@ -184,9 +184,22 @@ class VectorIndex:
     def _partition_select(self):
         return f"{self.partition_column}, " if self.partitioned else ""
 
+    @property
+    def byte_length(self):
+        return self.dims * 4
+
+    def _sqlite_valid_source(self, prefix=""):
+        """SQL true for a source vec0 accepts.
+
+        vec0 refuses any other blob, and one refusal aborts the whole INSERT
+        ... SELECT: a truncated blob, or rows still at the size of a previous
+        embedding model, would otherwise fail the migration and every rebuild.
+        """
+        return f"length({prefix}{self.source_column}) = {self.byte_length}"
+
     def _indexable_where(self):
-        """Rows the vec0 table can hold: a vector and, if any, a partition."""
-        where = f"{self.source_column} IS NOT NULL"
+        """Rows the vec0 table can hold: a valid vector and, if any, a partition."""
+        where = self._sqlite_valid_source()
         if self.partitioned:
             where += f" AND {self.partition_column} IS NOT NULL"
         return where
@@ -220,7 +233,8 @@ class VectorIndex:
         Binds the query blob, k, then the partition. The KNN is the CTE, as
         sqlite-vec requires: its MATCH/k constraints must reach the virtual
         table untouched by the join. A vec0 entry whose row is gone, or whose
-        row has since lost its vector, is dropped by the join.
+        row has since lost its vector (or holds one the fallback would skip),
+        is dropped by the join.
         """
         partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
         return (
@@ -230,7 +244,7 @@ class VectorIndex:
             f")\n"
             f"SELECT t.{self.pk_column}, knn.distance FROM knn\n"
             f"JOIN {self.table} AS t ON t.{self.pk_column} = knn.{self.pk_column}\n"
-            f"WHERE t.{self.source_column} IS NOT NULL\n"
+            f"WHERE {self._sqlite_valid_source('t.')}\n"
             f"ORDER BY knn.distance"
         )
 

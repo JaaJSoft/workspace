@@ -315,6 +315,32 @@ class SqliteVecTests(_FixtureTestCase):
         [(found, _)] = nearest(VECTORS, vectors[2], partition=OWNER, k=1)
         self.assertEqual(found, late)
 
+    def _set_source(self, pk, blob):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"UPDATE {TABLE} SET embedding = %s WHERE uuid = %s", [blob, pk.hex]
+            )
+
+    def test_rebuild_skips_vectors_of_the_wrong_size(self):
+        # One truncated blob, one left by an embedding model of another size:
+        # vec0 refuses both, and one refusal must not abort the whole INSERT.
+        valid, truncated, resized = self._rows_with_vectors(_fixture_vectors(3))
+        self._set_source(truncated, b"\x00" * 3)
+        self._set_source(resized, b"\x00" * 4 * (DIMS + 1))
+
+        self.assertEqual(rebuild_vector_index(VECTORS), "sqlite-vec")
+
+        self.assertEqual(self._vec_keys(), {valid})
+
+    def test_a_row_whose_source_lost_its_shape_is_not_returned(self):
+        # The fallback skips a blob of the wrong size; so must the index,
+        # whatever entry it still holds for the row.
+        vectors = _fixture_vectors(2)
+        broken, kept = self._rows_with_vectors(vectors)
+        self._set_source(broken, b"\x00" * 3)
+        results = nearest(VECTORS, vectors[0], partition=OWNER, k=5)
+        self.assertEqual([pk for pk, _ in results], [kept])
+
     def test_rebuild_creates_a_table_the_migration_could_not(self):
         with connection.cursor() as cursor:
             cursor.execute(VECTORS.sqlite_reverse_sql())
@@ -512,6 +538,19 @@ class RunVectorIndexSQLTests(TransactionTestCase):
         self.assertTrue(self._has_derived_structure())
         self._apply("backwards")
         self.assertFalse(self._has_derived_structure())
+
+    def test_forward_skips_rows_left_at_another_size(self):
+        # Switching embedding model is a schema change plus a reindex: the
+        # migration for the new size meets rows still at the old one.
+        if connection.vendor != "sqlite" or not _derived_index_available():
+            self.skipTest("SQLite + sqlite-vec required")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO {TABLE} (uuid, owner_id, embedding) VALUES (%s, %s, %s)",
+                [uuid.uuid4().hex, OWNER, b"\x00" * 4 * (DIMS - 1)],
+            )
+        self._apply("forwards")
+        self.assertTrue(self._has_derived_structure())
 
     def test_forward_and_backward_without_sqlite_vec(self):
         if connection.vendor != "sqlite":

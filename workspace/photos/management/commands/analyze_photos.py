@@ -36,7 +36,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from workspace.photos.tasks import analyze_photo
+        from workspace.photos.tasks import ANALYSIS_PRIORITY, analyze_photo
 
         limit = options["limit"]
         if options["dry_run"]:
@@ -46,12 +46,17 @@ class Command(BaseCommand):
             self.stdout.write(f"Would analyze {total} file(s).")
             return
 
+        reanalyze = options["reanalyze"]
         dispatched = 0
-        for uuid in pending_media_ids(reanalyze=options["reanalyze"], limit=limit):
+        for uuid in pending_media_ids(reanalyze=reanalyze, limit=limit):
             if options["sync"]:
-                analyze_photo(str(uuid))
+                analyze_photo(str(uuid), reanalyze=reanalyze)
             else:
-                analyze_photo.delay(str(uuid))
+                analyze_photo.apply_async(
+                    args=[str(uuid)],
+                    kwargs={"reanalyze": reanalyze},
+                    priority=ANALYSIS_PRIORITY,
+                )
             dispatched += 1
 
         verb = "Analyzed" if options["sync"] else "Queued"

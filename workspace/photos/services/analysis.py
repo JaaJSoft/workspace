@@ -31,7 +31,7 @@ MEDIA_LABELS = RASTER_LABELS | VIDEO_LABELS
 # number when its reader starts filling a new field: rows written by an older
 # version count as pending again, so existing libraries fill in on their own,
 # without a manual --reanalyze (at CATCH_UP_LIMIT files per hourly pass, see
-# tasks.py, so a large library takes several passes).
+# tasks.py, so a very large library takes several passes).
 ANALYSIS_VERSIONS = {
     # 2: lens, exposure settings and GPS position.
     MediaItem.MediaType.PHOTO: 2,
@@ -48,7 +48,7 @@ _EMPTY_METADATA = {
     **dataclasses.asdict(video.VideoMetadata()),
 }
 
-# Rows fetched per keyset page by analyze_pending. A read cursor held open
+# Rows fetched per keyset page by pending_media_ids. A read cursor held open
 # across the write transactions of the loop is what makes SQLite raise
 # "database is locked", so the selection is paged rather than streamed.
 _PAGE_SIZE = 200
@@ -229,15 +229,3 @@ def pending_media_ids(*, reanalyze=False, limit=None):
                 return
             yield uuid
             produced += 1
-
-
-def analyze_pending(*, limit=None):
-    """Analyze every pending file inline; return counts for the logs."""
-    stats = {"analyzed": 0, "skipped": 0}
-    for uuid in pending_media_ids(limit=limit):
-        file_obj = File.objects.select_related("owner").filter(uuid=uuid).first()
-        if file_obj is not None and analyze_media(file_obj) is not None:
-            stats["analyzed"] += 1
-        else:
-            stats["skipped"] += 1
-    return stats

@@ -16,7 +16,6 @@ from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import (
     ANALYSIS_VERSIONS,
     analyze_media,
-    analyze_pending,
     is_media_candidate,
     pending_media_qs,
 )
@@ -428,53 +427,3 @@ class AnalyzeVideoTests(TestCase):
 
     def _pending(self):
         return set(pending_media_qs().values_list("pk", flat=True))
-
-
-class AnalyzePendingTests(TestCase):
-    def setUp(self):
-        self.user = User.objects.create_user(username="carol", password="p")
-
-    def test_fills_the_library_and_is_idempotent(self):
-        dated = upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
-        undated = upload(self.user, "b.png", png_bytes())
-
-        self.assertEqual(analyze_pending(), {"analyzed": 2, "skipped": 0})
-        self.assertEqual(
-            set(MediaItem.objects.values_list("file_id", flat=True)),
-            {dated.pk, undated.pk},
-        )
-        self.assertEqual(analyze_pending(), {"analyzed": 0, "skipped": 0})
-
-    def test_rows_from_an_older_reader_are_read_again_once(self):
-        f = upload(self.user, "a.jpg", _shot_jpeg())
-        analyze_media(f)
-        # A row as the previous reader wrote it: no version, no settings.
-        MediaItem.objects.filter(file=f).update(
-            analysis_version=None, lens_model=None, f_number=None, latitude=None
-        )
-
-        self.assertEqual(analyze_pending(), {"analyzed": 1, "skipped": 0})
-        item = MediaItem.objects.get(file=f)
-        self.assertAlmostEqual(item.f_number, 1.78)
-        self.assertAlmostEqual(item.latitude, 48.8584)
-        self.assertEqual(analyze_pending(), {"analyzed": 0, "skipped": 0})
-
-    def test_limit(self):
-        upload(self.user, "a.jpg")
-        upload(self.user, "b.jpg")
-
-        self.assertEqual(analyze_pending(limit=1), {"analyzed": 1, "skipped": 0})
-        self.assertEqual(MediaItem.objects.count(), 1)
-
-    def test_an_unreadable_blob_does_not_stop_the_pass(self):
-        broken = upload(self.user, "a.jpg")
-        broken.content.storage.delete(broken.content.name)
-        fine = upload(self.user, "b.jpg")
-
-        with self.assertLogs("workspace.photos.services.analysis", "WARNING"):
-            stats = analyze_pending()
-
-        self.assertEqual(stats, {"analyzed": 1, "skipped": 1})
-        self.assertEqual(
-            list(MediaItem.objects.values_list("file_id", flat=True)), [fine.pk]
-        )

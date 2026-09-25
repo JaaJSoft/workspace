@@ -7,6 +7,7 @@ from django.test import TestCase
 
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import analyze_media
+from workspace.photos.tasks import ANALYSIS_PRIORITY
 
 from .images import jpeg_bytes, png_bytes, upload
 
@@ -27,11 +28,11 @@ class AnalyzePhotosCommandTests(TestCase):
         upload(self.user, "c.txt", b"not a photo")
 
     def test_dry_run_counts_and_writes_nothing(self):
-        with patch("workspace.photos.tasks.analyze_photo.delay") as delay:
+        with patch("workspace.photos.tasks.analyze_photo.apply_async") as queue:
             output = _run("--dry-run")
 
         self.assertIn("Would analyze 2 file(s).", output)
-        delay.assert_not_called()
+        queue.assert_not_called()
         self.assertFalse(MediaItem.objects.exists())
 
     def test_dry_run_honours_the_limit(self):
@@ -60,13 +61,25 @@ class AnalyzePhotosCommandTests(TestCase):
         self.assertEqual(MediaItem.objects.count(), 1)
 
     def test_default_queues_one_task_per_file(self):
-        with patch("workspace.photos.tasks.analyze_photo.delay") as delay:
+        with patch("workspace.photos.tasks.analyze_photo.apply_async") as queue:
             output = _run()
 
         self.assertIn("Queued 2 file(s).", output)
         self.assertEqual(
-            {c.args[0] for c in delay.call_args_list},
+            {c.kwargs["args"][0] for c in queue.call_args_list},
             {str(self.dated.pk), str(self.undated.pk)},
+        )
+        for call in queue.call_args_list:
+            self.assertEqual(call.kwargs["kwargs"], {"reanalyze": False})
+            self.assertEqual(call.kwargs["priority"], ANALYSIS_PRIORITY)
+
+    def test_queued_reanalysis_reads_up_to_date_rows(self):
+        analyze_media(self.dated)
+        with patch("workspace.photos.tasks.analyze_photo.apply_async") as queue:
+            _run("--reanalyze")
+
+        self.assertEqual(
+            {c.kwargs["kwargs"]["reanalyze"] for c in queue.call_args_list}, {True}
         )
 
     def test_reanalyze_takes_up_to_date_rows_too(self):
@@ -75,3 +88,11 @@ class AnalyzePhotosCommandTests(TestCase):
 
         self.assertIn("Would analyze 0 file(s).", _run("--dry-run"))
         self.assertIn("Would analyze 2 file(s).", _run("--dry-run", "--reanalyze"))
+
+    def test_sync_reanalyze_reads_up_to_date_rows_again(self):
+        analyze_media(self.dated)
+        analyze_media(self.undated)
+        MediaItem.objects.update(taken_at=None)
+
+        self.assertIn("Analyzed 2 file(s).", _run("--sync", "--reanalyze"))
+        self.assertIsNotNone(MediaItem.objects.get(file=self.dated).taken_at)

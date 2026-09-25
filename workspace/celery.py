@@ -76,6 +76,17 @@ def _on_task_retry(sender=None, **kwargs):
 # ---------------------------------------------------------------------------
 # Custom Collector — queue length sampled at scrape time via Redis LLEN.
 # ---------------------------------------------------------------------------
+def _priority_lists(queue_name):
+    """The Redis lists holding *queue_name*'s messages, one per priority step.
+
+    A message sent with a priority is pushed to its own list, which the worker
+    drains after the default one; LLEN on the queue name alone misses it.
+    """
+    from kombu.transport.redis import PRIORITY_STEPS, Channel
+
+    return [queue_name] + [f"{queue_name}{Channel.sep}{p}" for p in PRIORITY_STEPS if p]
+
+
 class _CeleryQueueLengthCollector:
     """Exposes celery_queue_length{queue} by calling LLEN on each known queue.
 
@@ -106,7 +117,7 @@ class _CeleryQueueLengthCollector:
             try:
                 for name in queue_names:
                     try:
-                        length = client.llen(name)
+                        length = sum(client.llen(key) for key in _priority_lists(name))
                     except Exception:
                         logger.exception("LLEN failed for celery queue '%s'", name)
                         continue

@@ -76,7 +76,9 @@ class QueueLengthCollectorTests(TestCase):
         collector = celery_app_module._CeleryQueueLengthCollector()
 
         fake_client = MagicMock()
-        fake_client.llen.side_effect = lambda name: {"celery": 3, "priority": 7}[name]
+        fake_client.llen.side_effect = lambda name: {"celery": 3, "priority": 7}.get(
+            name, 0
+        )
 
         import kombu
 
@@ -97,6 +99,25 @@ class QueueLengthCollectorTests(TestCase):
         # Build a dict from the samples for stable lookup regardless of ordering.
         samples = {s.labels["queue"]: s.value for s in family.samples}
         self.assertEqual(samples, {"celery": 3.0, "priority": 7.0})
+
+    def test_collector_counts_messages_sent_with_a_priority(self):
+        """Redis keeps them in a list of their own, next to the queue's."""
+        collector = celery_app_module._CeleryQueueLengthCollector()
+
+        fake_client = MagicMock()
+        fake_client.llen.side_effect = lambda name: {
+            "celery": 3,
+            "celery\x06\x169": 40,
+        }.get(name, 0)
+
+        with (
+            self.settings(CELERY_BROKER_URL="redis://localhost:6379/0"),
+            patch("redis.Redis.from_url", return_value=fake_client),
+        ):
+            families = list(collector.collect())
+
+        samples = {s.labels["queue"]: s.value for s in families[0].samples}
+        self.assertEqual(samples, {"celery": 43.0})
 
     def test_collector_swallows_redis_errors(self):
         collector = celery_app_module._CeleryQueueLengthCollector()

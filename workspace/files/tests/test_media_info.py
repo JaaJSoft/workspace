@@ -2,7 +2,6 @@
 
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
@@ -12,9 +11,9 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.files.models import File, FileEvent, FileScan, MediaInfo
 from workspace.files.services import FileService
+from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.event_dispatch import _HANDLERS, run_handlers
 from workspace.files.services.media_info import (
     parse_report,
@@ -22,7 +21,8 @@ from workspace.files.services.media_info import (
     probe_file,
     probe_file_for_event,
 )
-from workspace.files.tasks import PROBE_CATCH_UP_EXPIRES, probe_media, probe_media_file
+from workspace.files.tasks import catch_up as catch_up_task
+from workspace.files.tasks import catch_up_file
 from workspace.files.templatetags.file_filters import codec_name, media_duration
 from workspace.users.services.settings import set_setting
 
@@ -58,12 +58,13 @@ class ParseReportTests(SimpleTestCase):
 
 
 def catch_up():
-    """Run the hourly pass, then every probe it queued; return the queue calls."""
-    with patch.object(probe_media_file, "apply_async") as queue:
-        stats = probe_media.apply().get()
+    """Run the hourly pass and every probe it queued; return how many it queued."""
+    with patch.object(catch_up_file, "apply_async") as queue:
+        stats = catch_up_task.apply().get()
     for call in queue.call_args_list:
-        probe_media_file.apply(args=call.kwargs["args"])
-    return stats, queue.call_args_list
+        if call.kwargs["args"][0] == "media_info":
+            catch_up_file.apply(args=call.kwargs["args"])
+    return stats["media_info"]
 
 
 class MediaInfoTestCase(TestCase):
@@ -125,7 +126,7 @@ class ProbeGuardTests(MediaInfoTestCase):
         f = self._upload("clip.webm")
 
         self.assertIsNone(probe_file(f))
-        self.assertEqual(catch_up()[0], {"queued": 0})
+        self.assertEqual(catch_up(), 0)
         self.assertFalse(MediaInfo.objects.exists())
         self.assertEqual(self._pending(), {f.pk})
 
@@ -182,38 +183,19 @@ class PendingTests(MediaInfoTestCase):
 
 @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
 class CatchUpTests(MediaInfoTestCase):
+    def test_registered_with_the_catch_up(self, _probe):
+        self.assertIs(get_catch_up("media_info").process, probe_file)
+
     def test_fills_in_every_pending_file_and_is_idempotent(self, _probe):
         webm = self._upload("clip.webm")
         ogg = self._upload("clip.ogg")
         self._upload("notes.txt", b"some text")
 
-        self.assertEqual(catch_up()[0], {"queued": 2})
+        self.assertEqual(catch_up(), 2)
         self.assertEqual(
             set(MediaInfo.objects.values_list("file_id", flat=True)), {webm.pk, ogg.pk}
         )
-        self.assertEqual(catch_up()[0], {"queued": 0})
-
-    def test_queues_one_low_priority_task_per_file_expiring_with_the_pass(self, _probe):
-        """The backlog never holds up other tasks, and what the workers did not
-        reach before the next pass is dropped rather than queued twice."""
-        f = self._upload("clip.webm")
-
-        _, calls = catch_up()
-
-        self.assertEqual([c.kwargs["args"] for c in calls], [[str(f.pk)]])
-        self.assertEqual(calls[0].kwargs["priority"], BACKGROUND_PRIORITY)
-        self.assertEqual(calls[0].kwargs["expires"], PROBE_CATCH_UP_EXPIRES)
-
-    @patch("workspace.files.tasks.PROBE_CATCH_UP_LIMIT", 2)
-    def test_one_pass_is_bounded(self, _probe):
-        """A backlog larger than one pass drains over the following ones."""
-        self._upload("clip.webm")
-        self._upload("clip.ogg")
-        self._upload("clip_hevc.mp4")
-
-        self.assertEqual(catch_up()[0], {"queued": 2})
-        self.assertEqual(catch_up()[0], {"queued": 1})
-        self.assertEqual(MediaInfo.objects.count(), 3)
+        self.assertEqual(catch_up(), 0)
 
     def test_a_file_probed_since_it_was_queued_is_not_read_again(self, probe):
         """Its upload event may have run while the task waited in the queue."""
@@ -221,27 +203,22 @@ class CatchUpTests(MediaInfoTestCase):
         probe_file(f)
         probe.reset_mock()
 
-        status = probe_media_file.apply(args=[str(f.pk)]).get()
+        status = catch_up_file.apply(args=["media_info", str(f.pk)]).get()
 
         self.assertEqual(status, {"status": "skipped"})
         probe.assert_not_called()
 
-    def test_unknown_or_malformed_id(self, _probe):
-        for file_uuid in ("00000000-0000-0000-0000-000000000000", "nope", None):
-            with self.subTest(file_uuid=file_uuid):
-                self.assertEqual(
-                    probe_media_file.apply(args=[file_uuid]).get(),
-                    {"status": "skipped"},
-                )
+    def test_reanalyze_probes_an_up_to_date_file_again(self, probe):
+        f = self._upload("clip.webm")
+        probe_file(f)
+        probe.reset_mock()
 
+        status = catch_up_file.apply(
+            args=["media_info", str(f.pk)], kwargs={"reanalyze": True}
+        ).get()
 
-class ProbeScheduleTests(SimpleTestCase):
-    def test_queued_probes_expire_at_the_next_pass(self):
-        entry = settings.CELERY_BEAT_SCHEDULE["probe-media"]
-
-        self.assertEqual(entry["task"], "files.probe_media")
-        self.assertEqual(entry["options"], {"expires": entry["schedule"]})
-        self.assertEqual(PROBE_CATCH_UP_EXPIRES, entry["schedule"])
+        self.assertEqual(status, {"status": "ok"})
+        probe.assert_called_once()
 
 
 class HandlerTests(MediaInfoTestCase):

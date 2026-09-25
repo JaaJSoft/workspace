@@ -153,49 +153,46 @@ def generate_thumbnails(self, retry_failed=False):
     return stats
 
 
-# The hourly pass is there for the uploads whose event dispatch was lost, and
-# for the whole library the first time ffprobe is installed. It queues one
-# probe_media_file task per file, so the probing spreads over every worker, at
-# BACKGROUND_PRIORITY so the backlog never delays other tasks. The bound caps
-# what one pass puts on the broker; a larger backlog drains over the following
-# passes.
-PROBE_CATCH_UP_LIMIT = 20_000
+# The hourly pass queues one catch_up_file task per pending file of every
+# registered reader (services/catch_up.py), so the work spreads over every
+# worker, at BACKGROUND_PRIORITY so a backlog never delays other tasks. The
+# bound, per reader, caps what one pass puts on the broker; a larger backlog
+# drains over the following passes.
+CATCH_UP_LIMIT = 20_000
 
-# One beat interval (the probe-media entry of CELERY_BEAT_SCHEDULE). A task no
-# worker reached by the next pass is dropped, and that pass queues the file
-# again, so a backlog larger than the workers' throughput never piles up.
-PROBE_CATCH_UP_EXPIRES = 3600.0
+# One beat interval (the catch-up-readers entry of CELERY_BEAT_SCHEDULE). A
+# task no worker reached by the next pass is dropped, and that pass queues the
+# file again, so a backlog larger than the workers' throughput never piles up.
+CATCH_UP_EXPIRES = 3600.0
 
 
-@shared_task(name="files.probe_media", bind=True, max_retries=0)
-def probe_media(self):
-    """Catch-up pass: queue the probe of audio and video files missing or stale MediaInfo."""
-    from workspace.files.services import ffmpeg
-    from workspace.files.services.media_info import pending_ids
+@shared_task(name="files.catch_up", bind=True, max_retries=0)
+def catch_up(self):
+    """Queue every registered reader's pending files; return counts per reader."""
+    from workspace.files.services.catch_up import pending_ids, registered_catch_ups
 
-    queued = 0
-    # Without ffprobe every task would be a no-op and the files stay pending
-    # anyway; queueing them would only churn the broker every hour.
-    if ffmpeg.FFPROBE:
-        for uuid in pending_ids(limit=PROBE_CATCH_UP_LIMIT):
-            probe_media_file.apply_async(
-                args=[str(uuid)],
+    stats = {}
+    for reader in registered_catch_ups():
+        queued = 0
+        for uuid in pending_ids(reader, limit=CATCH_UP_LIMIT):
+            catch_up_file.apply_async(
+                args=[reader.name, str(uuid)],
                 priority=BACKGROUND_PRIORITY,
-                expires=PROBE_CATCH_UP_EXPIRES,
+                expires=CATCH_UP_EXPIRES,
             )
             queued += 1
-    logger.info("Media probe catch-up queued %d file(s)", queued)
-    return {"queued": queued}
+        stats[reader.name] = queued
+    logger.info("Catch-up queued %s", stats)
+    return stats
 
 
-@shared_task(
-    name="files.probe_media_file", bind=True, max_retries=0, ignore_result=True
-)
-def probe_media_file(self, file_uuid):
-    """Probe one file, queued by the catch-up pass.
+@shared_task(name="files.catch_up_file", bind=True, max_retries=0, ignore_result=True)
+def catch_up_file(self, name, file_uuid, reanalyze=False):
+    """Run reader *name* on one file.
 
-    A file that is no longer pending is skipped without reading its blob: its
-    upload event may have probed it while this task waited in the queue.
+    Unless *reanalyze*, a file that is no longer pending is skipped without
+    reading its blob: its upload event may have processed it while this task
+    waited in the queue.
 
     max_retries=0 on purpose: a blob that cannot be read now will not be read
     on a retry a few seconds later either, and the hourly catch-up already
@@ -204,13 +201,20 @@ def probe_media_file(self, file_uuid):
     from django.core.exceptions import ValidationError
 
     from workspace.files.models import File
-    from workspace.files.services.media_info import pending_qs, probe_file
+    from workspace.files.services.catch_up import get_catch_up
 
+    reader = get_catch_up(name)
+    if reader is None:
+        return {"status": "skipped"}
     try:
-        file_obj = pending_qs().get(uuid=file_uuid)
+        file_obj = (
+            reader.pending(reanalyze=reanalyze)
+            .select_related("owner")
+            .get(uuid=file_uuid)
+        )
     except File.DoesNotExist, ValidationError, ValueError, TypeError:
         return {"status": "skipped"}
-    return {"status": "ok" if probe_file(file_obj) is not None else "skipped"}
+    return {"status": "ok" if reader.process(file_obj) is not None else "skipped"}
 
 
 @shared_task(name="files.sync_folder", bind=True, max_retries=0)

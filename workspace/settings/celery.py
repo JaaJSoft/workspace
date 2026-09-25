@@ -51,13 +51,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.generate_thumbnails",
         "schedule": 3600.0,  # Hourly backfill; primary path is event-driven
     },
-    "probe-media": {
-        "task": "files.probe_media",
-        "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
-        "options": {"expires": 3600.0},
-    },
-    "analyze-photos": {
-        "task": "photos.analyze_pending",
+    "catch-up-readers": {
+        "task": "files.catch_up",
         "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
         "options": {"expires": 3600.0},
     },

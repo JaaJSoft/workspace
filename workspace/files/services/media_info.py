@@ -1,9 +1,9 @@
 """Probe audio and video files for their length and codecs (MediaInfo rows).
 
 Runs off-request: from the file-event handler once an upload or a content
-replacement has committed, and from the hourly catch-up for whatever a lost
-dispatch left behind. Nothing is written on a deployment without ffprobe, so
-the files become pending again as soon as it is installed.
+replacement has committed, and from the hourly catch-up (services/catch_up.py)
+for whatever that path missed. Nothing is written on a deployment without
+ffprobe, so the files are probed as soon as it is installed.
 """
 
 import logging
@@ -15,6 +15,7 @@ from workspace.common.logging import scrub
 
 from ..models import File, FileEvent, MediaInfo
 from . import ffmpeg
+from .catch_up import register_catch_up
 from .event_dispatch import on_file_event
 from .scanning.policy import exclude_blocked, is_blocked
 from .thumbnails.generation import VIDEO_LABELS
@@ -26,11 +27,6 @@ AUDIO_LABELS = frozenset({"mp3", "ogg", "flac", "wav", "wma", "au"})
 MEDIA_INFO_LABELS = AUDIO_LABELS | VIDEO_LABELS
 
 CODEC_FIELD_LENGTH = MediaInfo._meta.get_field("video_codec").max_length
-
-# Rows fetched per keyset page by pending_ids: a read cursor held open across
-# the write transactions of a loop over it makes SQLite raise "database is
-# locked", so the selection is paged rather than streamed.
-_PAGE_SIZE = 200
 
 
 def is_probe_candidate(file_obj):
@@ -47,8 +43,10 @@ def is_probe_candidate(file_obj):
     )
 
 
-def pending_qs():
+def pending_qs(*, reanalyze=False):
     """Live audio and video files whose MediaInfo row is missing or stale.
+
+    With *reanalyze*, every live audio and video file, up to date or not.
 
     A file whose own hash is empty (registered before hashes existed) only
     counts when it has no row at all: comparing an empty hash would mark it
@@ -56,7 +54,7 @@ def pending_qs():
     """
     # Both content exclusions are needed: Django renders exclude(content="")
     # as NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    return exclude_blocked(
+    qs = exclude_blocked(
         File.objects.filter(
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
@@ -64,11 +62,22 @@ def pending_qs():
         )
         .exclude(content="")
         .exclude(content__isnull=True)
-        .filter(
-            Q(media_info__isnull=True)
-            | (~Q(content_hash="") & ~Q(media_info__content_hash=F("content_hash")))
-        )
     )
+    if reanalyze:
+        return qs
+    return qs.filter(
+        Q(media_info__isnull=True)
+        | (~Q(content_hash="") & ~Q(media_info__content_hash=F("content_hash")))
+    )
+
+
+def _catch_up_pending(*, reanalyze=False):
+    # Without ffprobe nothing can be probed: queueing the files would only
+    # churn the broker every hour, and they stay pending for when it is
+    # installed.
+    if not ffmpeg.FFPROBE:
+        return File.objects.none()
+    return pending_qs(reanalyze=reanalyze)
 
 
 def parse_report(report):
@@ -136,25 +145,6 @@ def forget(file_obj):
     MediaInfo.objects.filter(file_id=file_obj.pk).delete()
 
 
-def pending_ids(*, limit=None):
-    """Yield the uuids of pending files, up to *limit*, paged by keyset."""
-    produced = 0
-    last_uuid = None
-    while True:
-        page_qs = pending_qs().order_by("uuid")
-        if last_uuid is not None:
-            page_qs = page_qs.filter(uuid__gt=last_uuid)
-        page = list(page_qs.values_list("uuid", flat=True)[:_PAGE_SIZE])
-        if not page:
-            return
-        last_uuid = page[-1]
-        for uuid in page:
-            if limit is not None and produced >= limit:
-                return
-            yield uuid
-            produced += 1
-
-
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
 def probe_file_for_event(event):
     file_obj = event.file
@@ -165,3 +155,6 @@ def probe_file_for_event(event):
         probe_file(file_obj)
     elif event.action == FileEvent.Action.CONTENT_REPLACED:
         forget(file_obj)
+
+
+register_catch_up("media_info", pending=_catch_up_pending, process=probe_file)

@@ -12,12 +12,20 @@ class PhotosConfig(AppConfig):
             SearchProviderInfo,
             registry,
         )
+        from workspace.files.properties_sections import (
+            PropertiesSection,
+            properties_section_registry,
+        )
         from workspace.photos.search import search_photos
 
         # Imported for the @on_file_event side effect, here rather than
         # lazily so a broken import fails the boot instead of leaving uploads
         # silently unanalyzed.
         from workspace.photos.services import handlers  # noqa: F401
+        from workspace.photos.services.details import (
+            is_section_visible,
+            section_context,
+        )
 
         registry.register(
             ModuleInfo(
@@ -38,6 +46,16 @@ class PhotosConfig(AppConfig):
                 module_slug="photos",
                 search_fn=search_photos,
                 refines=("files",),
+            )
+        )
+
+        properties_section_registry.register(
+            PropertiesSection(
+                slug="photo",
+                label="Photo",
+                template="photos/ui/partials/properties_section.html",
+                is_visible=is_section_visible,
+                get_context=section_context,
             )
         )
 

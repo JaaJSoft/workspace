@@ -27,6 +27,27 @@ logger = logging.getLogger(__name__)
 # drawing has no capture date and no fixed size.
 MEDIA_LABELS = RASTER_LABELS | VIDEO_LABELS
 
+# The version of the reader each kind of row is written by. Raise a kind's
+# number when its reader starts filling a new field: rows written by an older
+# version count as pending again, so existing libraries fill in on their own,
+# without a manual --reanalyze (at CATCH_UP_LIMIT files per hourly pass, see
+# tasks.py, so a large library takes several passes).
+ANALYSIS_VERSIONS = {
+    # 2: lens, exposure settings and GPS position.
+    MediaItem.MediaType.PHOTO: 2,
+    MediaItem.MediaType.VIDEO: 1,
+}
+# The version of a row written before rows recorded one.
+_UNVERSIONED = 1
+
+# Every field a reader fills, empty. A row is rewritten from this base, so a
+# photo replaced by a video (or the other way round) keeps nothing of the
+# previous reader's values.
+_EMPTY_METADATA = {
+    **dataclasses.asdict(PhotoMetadata()),
+    **dataclasses.asdict(video.VideoMetadata()),
+}
+
 # Rows fetched per keyset page by analyze_pending. A read cursor held open
 # across the write transactions of the loop is what makes SQLite raise
 # "database is locked", so the selection is paged rather than streamed.
@@ -65,8 +86,8 @@ def is_media_candidate(file_obj):
 
 
 def pending_media_qs(*, reanalyze=False):
-    """Live photos and videos whose MediaItem row is missing or describes
-    older bytes.
+    """Live photos and videos whose MediaItem row is missing, describes
+    older bytes, or was written by an older version of the reader.
 
     A file whose own hash is empty (registered before hashes existed) only
     counts when it has no row at all: comparing an empty hash would mark it
@@ -84,10 +105,16 @@ def pending_media_qs(*, reanalyze=False):
     )
     if reanalyze:
         return qs
-    return qs.filter(
-        Q(media_item__isnull=True)
-        | (~Q(content_hash="") & ~Q(media_item__content_hash=F("content_hash")))
+    pending = Q(media_item__isnull=True) | (
+        ~Q(content_hash="") & ~Q(media_item__content_hash=F("content_hash"))
     )
+    for media_type, version in ANALYSIS_VERSIONS.items():
+        if version > _UNVERSIONED:
+            pending |= Q(media_item__media_type=media_type) & (
+                Q(media_item__analysis_version__isnull=True)
+                | Q(media_item__analysis_version__lt=version)
+            )
+    return qs.filter(pending)
 
 
 def analyze_media(file_obj):
@@ -125,11 +152,11 @@ def analyze_media(file_obj):
     item, _ = MediaItem.objects.update_or_create(
         file_id=file_obj.pk,
         defaults={
-            "media_type": media_type,
-            "latitude": None,
-            "longitude": None,
+            **_EMPTY_METADATA,
             **dataclasses.asdict(metadata),
+            "media_type": media_type,
             "content_hash": read_hash,
+            "analysis_version": ANALYSIS_VERSIONS[media_type],
             "analyzed_at": timezone.now(),
         },
     )

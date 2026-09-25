@@ -6,12 +6,15 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from PIL import ExifTags
+from PIL.TiffImagePlugin import IFDRational
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import (
+    ANALYSIS_VERSIONS,
     analyze_media,
     analyze_pending,
     is_media_candidate,
@@ -20,9 +23,36 @@ from workspace.photos.services.analysis import (
 from workspace.photos.services.exif import PhotoMetadata
 from workspace.users.services.settings import set_setting
 
-from .images import jpeg_bytes, png_bytes, upload
+from .images import jpeg_bytes, make_video, png_bytes, upload
 
 User = get_user_model()
+
+
+def _shot_jpeg():
+    """A phone photo: lens, exposure settings and a GPS fix."""
+    return jpeg_bytes(
+        taken="2024:07:14 18:32:05",
+        make="Apple",
+        model="iPhone 15 Pro",
+        exif_tags={
+            ExifTags.Base.LensMake: "Apple",
+            ExifTags.Base.LensModel: "iPhone 15 Pro back camera 6.765mm f/1.78",
+            ExifTags.Base.FNumber: IFDRational(178, 100),
+            ExifTags.Base.ExposureTime: IFDRational(1, 120),
+            ExifTags.Base.ISOSpeedRatings: 100,
+            ExifTags.Base.FocalLength: IFDRational(6765, 1000),
+            ExifTags.Base.FocalLengthIn35mmFilm: 26,
+            ExifTags.Base.ExposureBiasValue: IFDRational(0, 1),
+            ExifTags.Base.Flash: 0x10,
+        },
+        gps={
+            ExifTags.GPS.GPSLatitudeRef: "N",
+            ExifTags.GPS.GPSLatitude: (48.0, 51.0, 30.24),
+            ExifTags.GPS.GPSLongitudeRef: "E",
+            ExifTags.GPS.GPSLongitude: (2.0, 17.0, 40.2),
+            ExifTags.GPS.GPSAltitude: IFDRational(35, 1),
+        },
+    )
 
 
 class AnalyzePhotoTests(TestCase):
@@ -54,6 +84,46 @@ class AnalyzePhotoTests(TestCase):
         self.assertEqual((photo.camera_make, photo.camera_model), ("Canon", "EOS R6"))
         self.assertEqual(photo.content_hash, f.content_hash)
         self.assertIsNotNone(photo.analyzed_at)
+
+    def test_writes_lens_exposure_settings_and_position(self):
+        f = upload(self.user, "shot.jpg", _shot_jpeg())
+
+        photo = analyze_media(f)
+
+        self.assertEqual(photo.lens_make, "Apple")
+        self.assertEqual(photo.lens_model, "iPhone 15 Pro back camera 6.765mm f/1.78")
+        self.assertAlmostEqual(photo.f_number, 1.78)
+        self.assertAlmostEqual(photo.exposure_time, 1 / 120)
+        self.assertEqual(photo.iso, 100)
+        self.assertAlmostEqual(photo.focal_length, 6.765)
+        self.assertEqual(photo.focal_length_35mm, 26)
+        self.assertEqual(photo.exposure_bias, 0)
+        self.assertIs(photo.flash_fired, False)
+        self.assertAlmostEqual(photo.latitude, 48.8584)
+        self.assertAlmostEqual(photo.longitude, 2.2945)
+        self.assertAlmostEqual(photo.altitude, 35.0)
+
+    def test_records_the_reader_version(self):
+        f = upload(self.user, "a.jpg")
+
+        photo = analyze_media(f)
+
+        self.assertEqual(
+            photo.analysis_version, ANALYSIS_VERSIONS[MediaItem.MediaType.PHOTO]
+        )
+
+    def test_replaced_bytes_without_exif_clear_the_previous_values(self):
+        f = upload(self.user, "a.jpg", _shot_jpeg())
+        analyze_media(f)
+        FileService.update_content(f, ContentFile(jpeg_bytes(), name="a.jpg"))
+        f.refresh_from_db()
+
+        photo = analyze_media(f)
+
+        self.assertEqual(photo.lens_model, "")
+        self.assertIsNone(photo.f_number)
+        self.assertIsNone(photo.latitude)
+        self.assertIsNone(photo.altitude)
 
     def test_no_capture_date_is_null_never_the_upload_date(self):
         f = upload(self.user, "screenshot.png", png_bytes())
@@ -208,6 +278,26 @@ class PendingPhotosTests(TestCase):
 
         self.assertEqual(self._pending(), set())
 
+    def test_row_from_an_older_reader_is_pending(self):
+        for older in (None, ANALYSIS_VERSIONS[MediaItem.MediaType.PHOTO] - 1):
+            with self.subTest(analysis_version=older):
+                f = upload(self.user, f"{older}.jpg")
+                analyze_media(f)
+                MediaItem.objects.filter(file=f).update(analysis_version=older)
+
+                self.assertEqual(self._pending(), {f.pk})
+
+                analyze_media(f)
+                self.assertEqual(self._pending(), set())
+
+    def test_video_rows_from_before_versions_are_not_pending(self):
+        # The video reader did not change when rows started recording a
+        # version: probing every existing video again would buy nothing.
+        f = make_video(self.user, "clip.webm", None)
+        MediaItem.objects.filter(file=f).update(analysis_version=None)
+
+        self.assertEqual(self._pending(), set())
+
     def test_reanalyze_takes_every_image(self):
         f = upload(self.user, "a.jpg")
         analyze_media(f)
@@ -250,6 +340,28 @@ class AnalyzeVideoTests(TestCase):
         self.assertEqual(item.media_type, MediaItem.MediaType.VIDEO)
         self.assertIsNone(item.taken_at)
         self.assertIsNone(item.width)
+        self.assertEqual(
+            item.analysis_version, ANALYSIS_VERSIONS[MediaItem.MediaType.VIDEO]
+        )
+
+    def test_a_video_keeps_nothing_of_the_photo_it_replaced(self):
+        f = upload(self.user, "a.jpg", _shot_jpeg())
+        analyze_media(f)
+        FileService.update_content(
+            f, ContentFile(clip_bytes("clip.webm"), name="a.jpg")
+        )
+        f.refresh_from_db()
+
+        with patch("workspace.files.services.ffmpeg.FFPROBE", None):
+            with self.assertLogs("workspace.photos.services.analysis", "INFO"):
+                item = analyze_media(f)
+
+        self.assertEqual(item.lens_model, "")
+        self.assertIsNone(item.f_number)
+        self.assertIsNone(item.iso)
+        self.assertIsNone(item.flash_fired)
+        self.assertIsNone(item.latitude)
+        self.assertIsNone(item.altitude)
 
     @patch("workspace.files.services.ffmpeg.FFPROBE", None)
     def test_without_ffprobe_the_video_goes_to_undated(self):
@@ -331,6 +443,20 @@ class AnalyzePendingTests(TestCase):
             set(MediaItem.objects.values_list("file_id", flat=True)),
             {dated.pk, undated.pk},
         )
+        self.assertEqual(analyze_pending(), {"analyzed": 0, "skipped": 0})
+
+    def test_rows_from_an_older_reader_are_read_again_once(self):
+        f = upload(self.user, "a.jpg", _shot_jpeg())
+        analyze_media(f)
+        # A row as the previous reader wrote it: no version, no settings.
+        MediaItem.objects.filter(file=f).update(
+            analysis_version=None, lens_model=None, f_number=None, latitude=None
+        )
+
+        self.assertEqual(analyze_pending(), {"analyzed": 1, "skipped": 0})
+        item = MediaItem.objects.get(file=f)
+        self.assertAlmostEqual(item.f_number, 1.78)
+        self.assertAlmostEqual(item.latitude, 48.8584)
         self.assertEqual(analyze_pending(), {"analyzed": 0, "skipped": 0})
 
     def test_limit(self):

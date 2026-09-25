@@ -1,0 +1,85 @@
+{% comment %}
+The Photo section of the Files properties panel (registered in
+PhotosConfig.ready(), rendered by files.properties_sections).
+
+Context: photo, a photos.services.details.PhotoDetails.
+{% endcomment %}
+<div class="space-y-2 text-sm">
+  {% if photo.taken_at %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-photo-detail="taken"
+    >
+      <i data-lucide="camera" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>Taken {{ photo.taken_at|date:"N j, Y, P" }}</span>
+    </div>
+  {% endif %}
+  {% if photo.dimensions %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-photo-detail="dimensions"
+    >
+      <i data-lucide="ruler" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>
+        {{ photo.dimensions }}
+        {% if photo.megapixels %}<span class="text-base-content/40">· {{ photo.megapixels }}</span>{% endif %}
+      </span>
+    </div>
+  {% endif %}
+  {% if photo.camera %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-photo-detail="camera"
+    >
+      <i data-lucide="smartphone" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words">{{ photo.camera }}</span>
+    </div>
+  {% endif %}
+  {% if photo.lens %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-photo-detail="lens"
+    >
+      <i data-lucide="aperture" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words">{{ photo.lens }}</span>
+    </div>
+  {% endif %}
+  {% if photo.exposure %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-photo-detail="exposure"
+    >
+      <i data-lucide="sun-medium" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      {# Each setting stays on one line; the line only wraps between them. #}
+      <span>
+        {% for setting in photo.exposure %}
+          <span class="whitespace-nowrap">{{ setting }}</span>
+          {% if not forloop.last %}·{% endif %}
+        {% endfor %}
+      </span>
+    </div>
+  {% endif %}
+  {% if photo.coordinates %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-photo-detail="location"
+    >
+      <i data-lucide="map-pinned" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <div class="min-w-0 space-y-0.5">
+        <div>
+          <span class="font-mono text-xs select-all">{{ photo.coordinates }}</span>
+          {% if photo.altitude %}<span class="text-base-content/40">· {{ photo.altitude }}</span>{% endif %}
+        </div>
+        <a
+          href="{{ photo.map_url }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="link link-hover text-xs inline-flex items-center gap-1 hover:text-module"
+        >
+          Open in OpenStreetMap
+          <i data-lucide="external-link" class="w-3 h-3"></i>
+        </a>
+      </div>
+    </div>
+  {% endif %}
+</div>

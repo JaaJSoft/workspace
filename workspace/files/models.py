@@ -1035,6 +1035,26 @@ class MediaInfo(models.Model):
         return f"MediaInfo: {self.file_id}"
 
 
+class FileLinkState(models.Model):
+    """What a note's outgoing links (FileLink rows) were extracted from.
+
+    Written with every reconcile (see ``services/links.py``). A note whose row
+    is missing, or whose content or extractor version no longer match it, is
+    reconciled again by the hourly catch-up.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="link_state"
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    extractor_version = models.PositiveSmallIntegerField()
+    reconciled_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"FileLinkState: {self.file_id}"
+
+
 class SearchIndexState(models.Model):
     """What a file's full-text search document was built from.
 

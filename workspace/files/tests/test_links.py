@@ -3,13 +3,21 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from workspace.files.models import File, FileLink
+from workspace.files.models import File, FileLink, FileLinkState
 from workspace.files.services import FileService
-from workspace.files.services.links import extract_link_targets, reconcile_file_links
+from workspace.files.services.catch_up import get_catch_up
+from workspace.files.services.links import (
+    EXTRACTOR_VERSION,
+    extract_link_targets,
+    pending_links_qs,
+    reconcile_file_links,
+    refresh_file_links,
+)
+
+from .catch_up import run_catch_up
 
 User = get_user_model()
 
@@ -171,24 +179,63 @@ class ReconcileFileLinksTests(TestCase):
         self.assertEqual(FileLink.objects.filter(source=txt).count(), 0)
 
 
-class BackfillFileLinksCommandTests(TestCase):
+class FileLinksCatchUpTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="backfill-links", password="p")
 
-    def test_backfill_populates_existing_links(self):
+    def _pending(self, **kwargs):
+        return set(pending_links_qs(**kwargs).values_list("pk", flat=True))
+
+    def test_registered_with_the_catch_up(self):
+        self.assertIs(get_catch_up("file_links").process, refresh_file_links)
+
+    def test_populates_existing_links_and_is_idempotent(self):
         b = _make_markdown(self.user, "B.md", "# B")
         a = _make_markdown(self.user, "A.md", f"[B](/notes?file={b.uuid})")
         self.assertEqual(FileLink.objects.count(), 0)
-        call_command("backfill_file_links")
+
+        self.assertEqual(run_catch_up("file_links"), 2)
+
         self.assertEqual(
             set(FileLink.objects.filter(source=a).values_list("target_id", flat=True)),
             {b.uuid},
         )
-
-    def test_backfill_is_idempotent(self):
-        b = _make_markdown(self.user, "B.md", "# B")
-        _make_markdown(self.user, "A.md", f"[B](/notes?file={b.uuid})")
-        call_command("backfill_file_links")
-        call_command("backfill_file_links")
+        self.assertEqual(run_catch_up("file_links"), 0)
         self.assertEqual(FileLink.objects.count(), 1)
+
+    def test_a_reconciled_note_is_pending_again_once_its_content_changes(self):
+        a = _make_markdown(self.user, "A.md", "# A")
+        reconcile_file_links(a)
+        self.assertEqual(self._pending(), set())
+        self.assertEqual(self._pending(reanalyze=True), {a.pk})
+
+        File.objects.filter(pk=a.pk).update(content_hash="f" * 64)
+
+        self.assertEqual(self._pending(), {a.pk})
+
+    def test_a_newer_extractor_makes_every_note_pending(self):
+        a = _make_markdown(self.user, "A.md", "# A")
+        reconcile_file_links(a)
+
+        with mock.patch(
+            "workspace.files.services.links.EXTRACTOR_VERSION", EXTRACTOR_VERSION + 1
+        ):
+            self.assertEqual(self._pending(), {a.pk})
+
+    def test_other_files_are_never_pending(self):
+        FileService.create_file(
+            owner=self.user,
+            name="note.txt",
+            content=ContentFile(b"text", name="note.txt"),
+            mime_type="text/plain",
+        )
+        self.assertEqual(self._pending(), set())
+
+    def test_an_unreadable_note_records_no_state(self):
+        a = _make_markdown(self.user, "A.md", "# A")
+        a.content.storage.delete(a.content.name)
+
+        self.assertFalse(refresh_file_links(a))
+        self.assertFalse(FileLinkState.objects.exists())
+        self.assertEqual(self._pending(), {a.pk})

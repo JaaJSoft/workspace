@@ -182,6 +182,12 @@ class Command(BaseCommand):
         self._reset_sequences()
         self.stdout.write(self.style.SUCCESS("  Sequences reset OK"))
 
+        # -- 5c. Derive the vector indexes ---------------------------------
+        # loaddata restores the vectors stored on each row, not what pgvector
+        # derives from them, and a SQLite dump has no pgvector column to carry.
+        self.stdout.write("Rebuilding vector indexes...")
+        call_command("rebuild_vector_index", database=TARGET_ALIAS, stdout=self.stdout)
+
         # -- 6. Verify counts ----------------------------------------------
         self.stdout.write("Verifying record counts...")
         mismatches = self._verify_counts()

@@ -81,6 +81,11 @@ dependencies = [
     "mozilla-django-oidc>=5.0.2",
     "django-csp>=4.0",
     "phonenumbers>=9.0.39",
+    # vector search (common.vectors): the vec0 index on SQLite, and the
+    # brute-force fallback wherever no vector extension is available.
+    # sqlite-vec ships wheels for Linux x86_64/aarch64, macOS and Windows.
+    "sqlite-vec>=0.1.6",
+    "numpy>=2.4.6",
 ]
 
 [build-system]

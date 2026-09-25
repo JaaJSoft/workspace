@@ -33,6 +33,7 @@ kubectl apply -f ingress.yaml
 ## Common Notes
 
 - **SQLite**: Both setups default to SQLite. Set `DATABASE_URL` to a PostgreSQL connection string to switch.
+- **Vector search** (similar faces and other "find the closest" features): indexed on SQLite out of the box through the bundled `sqlite-vec` extension. On PostgreSQL it is indexed when the server has [pgvector](https://github.com/pgvector/pgvector) - use the `pgvector/pgvector` image instead of `postgres`, and connect as a role allowed to create the extension (a superuser) the first time migrations run. A stock PostgreSQL image works too: the migrations apply, and searches scan each user's vectors instead of using an index, which stays fast for a personal library. `python manage.py check --database default` reports which one you are on (`common.W002`). After adding pgvector to an existing installation, run `python manage.py rebuild_vector_index` once.
 - **SECRET_KEY**: Always change the default secret key before deploying.
 - **Static files**: Collected at image build time via `collectstatic` and served by WhiteNoise.
 - **Metrics**: `/metrics` requires HTTP Basic credentials and answers `401` until `METRICS_USER` and `METRICS_PASSWORD` are both set. See [Monitoring with Prometheus](../guides/monitoring.md).

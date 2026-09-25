@@ -39,7 +39,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `ai` | LLM tools, AI assistants, prompt routing |
 | `calendar` | Events, recurrence, external calendar sync |
 | `chat` | Conversations, messages, typing indicators, link previews |
-| `common` | Toolbox: Python helpers, DRF plumbing, full-text search abstraction, UI kit. Names no other app - see *core vs common* below |
+| `common` | Toolbox: Python helpers, DRF plumbing, full-text search and vector index abstractions, UI kit. Names no other app - see *core vs common* below |
 | `core` | The app itself: plugin registries (modules, search, activity, SSE), unified search and activity endpoints, health and `/metrics`, changelog, onboarding, admin dashboard, DB maintenance, project-level tests |
 | `dashboard` | User home page widgets |
 | `files` | File/folder model, permissions, WebDAV, thumbnails, sharing |
@@ -57,7 +57,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 
 `common` is a **leaf**, `core` is the **root**. One rule, the same on the Python side and the frontend side.
 
-- **`common` is the toolbox**: code that would work unchanged in another Django project. Helpers, DRF mixins/pagination/filters, the full-text search abstraction, the UI kit (partials, custom elements, JS helpers, CSS, vendored bundles), test helpers. It has no `urls.py`, no models, no Celery tasks, no setting keys, and it **never names another app**: no `from workspace.<app>`, no `{% url 'app:...' %}`, no `{% include 'app/...' %}`, no hard-coded `/api/v1/...` or `/<app>/...` path. What a widget needs from a module is a parameter - `comments.html` takes `list_url`, `iconPicker()` takes `apiEndpoint`.
+- **`common` is the toolbox**: code that would work unchanged in another Django project. Helpers, DRF mixins/pagination/filters, the full-text search and vector index abstractions, the UI kit (partials, custom elements, JS helpers, CSS, vendored bundles), test helpers. It has no `urls.py`, no models, no Celery tasks, no setting keys, and it **never names another app**: no `from workspace.<app>`, no `{% url 'app:...' %}`, no `{% include 'app/...' %}`, no hard-coded `/api/v1/...` or `/<app>/...` path. What a widget needs from a module is a parameter - `comments.html` takes `list_url`, `iconPicker()` takes `apiEndpoint`.
 - **`core` is the app itself**: whatever is neither a business module nor a generic tool. The registries modules plug into (`module_registry`, `activity_registry`, `sse_registry`), the pages and endpoints that span modules (unified search, activity feed, health, `/metrics`, changelog, onboarding), deployment plumbing (DB maintenance, PostgreSQL migration, admin dashboard) and the project-level tests (CI matrix, settings layout, media root). `core` is the composition root: it may import from any module. Nothing generic belongs there - a helper that does not need to know about the app is `common`.
 - **Shared but module-specific stays in the module that owns the concept.** Two modules needing the same file picker, avatar widget or WebRTC config is not a reason to put it in `common` or `core`: it goes in `files`, `users`, `chat`, and the other module imports or includes it - `notes` already builds on `files` that way.
 

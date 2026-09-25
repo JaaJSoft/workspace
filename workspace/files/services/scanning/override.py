@@ -27,11 +27,10 @@ def restore_after_unblock(file_obj):
     Called from both ways out of quarantine - a fresh verdict and an
     administrator's override - so the two cannot restore different things.
 
-    The search document has to be rebuilt here: nothing else does it, since
-    reindexing is a manual command and not a periodic pass. The thumbnail
-    would eventually come back on its own through the hourly catch-up, but an
-    hour of a blank preview after somebody said the file was fine is a poor
-    answer, so it is regenerated now.
+    The search document and the thumbnail would both come back on their own
+    through the hourly catch-up, but an hour of a file missing from search,
+    behind a blank preview, after somebody said it was fine is a poor answer,
+    so both are rebuilt now.
     """
     from ..search_index import index_file
     from ..thumbnails.generation import can_generate_thumbnail, refresh_thumbnail

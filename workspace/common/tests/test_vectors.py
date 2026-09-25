@@ -374,6 +374,21 @@ class SqliteVecTests(_FixtureTestCase):
             self._rows_with_vectors([vector], owner=owner)
         self.assertLess(pages() - before, 150)
 
+    def test_a_zero_vector_ranks_last_instead_of_crashing(self):
+        # index_vector never writes one, but a raw write can: sqlite-vec's
+        # cosine distance to it is NaN, which comes back NULL and sorts first.
+        vectors = _fixture_vectors(3)
+        pks = self._rows_with_vectors(vectors[:2])
+        zero = self._row()
+        self._set_source(zero, b"\x00" * 4 * DIMS)
+        rebuild_vector_index(VECTORS)
+
+        results = nearest(VECTORS, vectors[0], partition=OWNER, k=3)
+
+        self.assertEqual([pk for pk, _ in results][:2], [pks[0], pks[1]])
+        self.assertEqual(results[2][0], zero)
+        self.assertEqual(results[2][1], float("inf"))
+
     def test_rebuild_creates_a_table_the_migration_could_not(self):
         with connection.cursor() as cursor:
             cursor.execute(VECTORS.sqlite_reverse_sql())

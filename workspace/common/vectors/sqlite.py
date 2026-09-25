@@ -1,6 +1,7 @@
 """sqlite-vec: loading the extension, probing for it, and KNN over vec0."""
 
 import logging
+import math
 import sqlite3
 
 from django.db import OperationalError
@@ -104,7 +105,16 @@ class SqliteVecNearest:
             with conn.cursor() as cursor:
                 cursor.execute(index.sqlite_nearest_sql(), params)
                 entries = cursor.fetchall()
-            live = [(pk, distance) for pk, distance, alive in entries if alive]
+            # A zero vector's cosine distance is NaN, which SQLite returns as
+            # NULL and sorts first: it ranks last instead, as in the fallback.
+            live = sorted(
+                (
+                    (pk, math.inf if distance is None else distance)
+                    for pk, distance, alive in entries
+                    if alive
+                ),
+                key=lambda entry: entry[1],
+            )
             if len(live) >= k or len(entries) < fetch or fetch == MAX_K:
                 return live[:k]
             fetch = min(fetch * 2, MAX_K)

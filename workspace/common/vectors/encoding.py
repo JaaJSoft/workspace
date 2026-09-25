@@ -23,10 +23,14 @@ def normalize(vector, dims):
         )
     if not np.isfinite(arr).all():
         raise ValueError("vector has a non-finite component")
-    norm = np.linalg.norm(arr)
-    if norm == 0:
+    # Scaled first: squaring a component beyond ~1e154 overflows the norm to
+    # inf (and below ~1e-154 underflows it to 0), which would store an
+    # all-zero "unit" vector, or refuse a direction that is plain enough.
+    scale = np.abs(arr).max()
+    if scale == 0:
         raise ValueError("cannot normalize a zero vector")
-    return (arr / norm).astype(_FLOAT32_LE)
+    arr = arr / scale
+    return (arr / np.linalg.norm(arr)).astype(_FLOAT32_LE)
 
 
 def to_bytes(arr):

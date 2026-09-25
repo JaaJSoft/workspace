@@ -201,6 +201,15 @@ class EncodingTests(SimpleTestCase):
         self.assertEqual(arr.dtype, np.dtype("<f4"))
         np.testing.assert_allclose(arr, [0.6, 0.8], rtol=1e-6)
 
+    def test_normalize_survives_components_beyond_float64_squares(self):
+        # The norm of [1e200, ...] overflows to inf; dividing by it would
+        # store an all-zero "unit" vector. The direction is plain enough.
+        for value in (1e200, 1e-200):
+            with self.subTest(value=value):
+                arr = normalize([value, value, 0], 3)
+                self.assertAlmostEqual(float(np.linalg.norm(arr)), 1.0, places=6)
+                np.testing.assert_allclose(arr, [2**-0.5, 2**-0.5, 0], rtol=1e-6)
+
     def test_normalize_rejects_what_has_no_direction(self):
         for bad in ([0, 0], [1, float("nan")], [1, float("inf")], [1, 2, 3], [[1, 2]]):
             with self.subTest(bad=bad), self.assertRaises(ValueError):

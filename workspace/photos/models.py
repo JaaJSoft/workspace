@@ -4,7 +4,7 @@ from workspace.common.uuids import uuid_v7_or_v4
 from workspace.files.models import File
 
 
-class Photo(models.Model):
+class MediaItem(models.Model):
     """What the photo library knows about one raster image file.
 
     Written off-request, after the file's content lands (see
@@ -14,7 +14,9 @@ class Photo(models.Model):
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    file = models.OneToOneField(File, on_delete=models.CASCADE, related_name="photo")
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="media_item"
+    )
     # EXIF DateTimeOriginal. With OffsetTimeOriginal it is the exact instant;
     # without it the wall-clock reading is taken in the owner's timezone, so
     # the photo lands on the day it shows. Null when the image carries no
@@ -34,8 +36,8 @@ class Photo(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["taken_at"], name="photo_taken_at_idx"),
+            models.Index(fields=["taken_at"], name="media_item_taken_at_idx"),
         ]
 
     def __str__(self):
-        return f"Photo: {self.file_id}"
+        return f"MediaItem: {self.file_id}"

@@ -505,7 +505,7 @@ groups = library_groups(user)        # the user's groups whose folder holds a ph
 shared = has_shared_photos(user)     # whether the Shared with me tab has anything to show
 ```
 
-The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `Photo` row, and quarantined files are excluded. A raster image without a `Photo` row has not been analyzed yet; it is not in the library.
+The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image without a `MediaItem` row has not been analyzed yet; it is not in the library.
 
 #### Vault - `workspace.vault.queries`
 

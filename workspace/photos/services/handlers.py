@@ -1,4 +1,4 @@
-"""Keep Photo rows in step with the content of the files they describe.
+"""Keep MediaItem rows in step with the content of the files they describe.
 
 Registered with the file-event dispatcher, so it runs off-request (the
 files.run_file_event_handlers task) once an upload or a content replacement

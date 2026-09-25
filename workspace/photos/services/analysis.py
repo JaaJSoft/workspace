@@ -1,4 +1,4 @@
-"""Turn raster image files into Photo rows."""
+"""Turn raster image files into MediaItem rows."""
 
 import logging
 
@@ -11,7 +11,7 @@ from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.files.services.thumbnails.generation import RASTER_LABELS
 from workspace.users.services.settings import get_user_timezone
 
-from ..models import Photo
+from ..models import MediaItem
 from .exif import PhotoMetadata, read_metadata
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def is_photo_candidate(file_obj):
 
 
 def pending_photos_qs(*, reanalyze=False):
-    """Live raster files whose Photo row is missing or describes older bytes.
+    """Live raster files whose MediaItem row is missing or describes older bytes.
 
     A file whose own hash is empty (registered before hashes existed) only
     counts when it has no row at all: comparing an empty hash would mark it
@@ -59,13 +59,13 @@ def pending_photos_qs(*, reanalyze=False):
     if reanalyze:
         return qs
     return qs.filter(
-        Q(photo__isnull=True)
-        | (~Q(content_hash="") & ~Q(photo__content_hash=F("content_hash")))
+        Q(media_item__isnull=True)
+        | (~Q(content_hash="") & ~Q(media_item__content_hash=F("content_hash")))
     )
 
 
 def analyze_photo(file_obj):
-    """Read *file_obj*'s metadata into its Photo row; return the row or None.
+    """Read *file_obj*'s metadata into its MediaItem row; return the row or None.
 
     None means nothing was written: the file is not a raster image, its blob
     could not be opened (the catch-up task tries again), or its content was
@@ -107,7 +107,7 @@ def analyze_photo(file_obj):
     if current_hash is None or current_hash != read_hash:
         return None
 
-    photo, _ = Photo.objects.update_or_create(
+    item, _ = MediaItem.objects.update_or_create(
         file_id=file_obj.pk,
         defaults={
             "taken_at": metadata.taken_at,
@@ -119,12 +119,12 @@ def analyze_photo(file_obj):
             "analyzed_at": timezone.now(),
         },
     )
-    return photo
+    return item
 
 
 def forget_photo(file_obj):
     """Drop the row of a file that stopped being a raster image."""
-    Photo.objects.filter(file_id=file_obj.pk).delete()
+    MediaItem.objects.filter(file_id=file_obj.pk).delete()
 
 
 def pending_photo_ids(*, reanalyze=False, limit=None):

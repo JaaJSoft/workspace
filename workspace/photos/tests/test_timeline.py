@@ -310,11 +310,11 @@ class YearCountsTests(TimelineTestCase):
 
 class CursorTests(SimpleTestCase):
     def test_round_trip(self):
-        class _Photo:
+        class _MediaItem:
             taken_at = _at(2024, 7, 14, 12, 30, 1, 123456)
 
         class _File:
-            photo = _Photo()
+            media_item = _MediaItem()
             uuid = uuid4()
             created_at = _at(2025, 1, 1)
 
@@ -322,15 +322,15 @@ class CursorTests(SimpleTestCase):
 
         self.assertEqual(
             position,
-            Position(undated=False, before=_Photo.taken_at, after_uuid=_File.uuid),
+            Position(undated=False, before=_MediaItem.taken_at, after_uuid=_File.uuid),
         )
 
     def test_undated_cursor_uses_the_upload_date(self):
-        class _Photo:
+        class _MediaItem:
             taken_at = None
 
         class _File:
-            photo = _Photo()
+            media_item = _MediaItem()
             uuid = uuid4()
             created_at = _at(2025, 1, 1, 8)
 

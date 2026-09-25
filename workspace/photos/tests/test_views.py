@@ -14,7 +14,7 @@ from django.utils import timezone
 from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, Tag
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
-from workspace.photos.models import Photo
+from workspace.photos.models import MediaItem
 from workspace.users.services.settings import set_setting
 
 from .images import make_photo, upload
@@ -145,7 +145,7 @@ class IndexTests(PhotosViewTestCase):
 class TrashTests(PhotosViewTestCase):
     def test_trashing_hides_and_restoring_brings_back_without_a_write(self):
         f = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
-        row = Photo.objects.get(file=f)
+        row = MediaItem.objects.get(file=f)
 
         FileService.soft_delete(f, acting_user=self.user)
         self.assertEqual(self._tiles(self.client.get("/photos")), [])
@@ -154,7 +154,7 @@ class TrashTests(PhotosViewTestCase):
         FileService.restore(f, acting_user=self.user)
         self.assertEqual(self._tiles(self.client.get("/photos")), [str(f.uuid)])
 
-        after = Photo.objects.get(file=f)
+        after = MediaItem.objects.get(file=f)
         self.assertEqual(
             (after.pk, after.taken_at, after.analyzed_at),
             (row.pk, row.taken_at, row.analyzed_at),
@@ -173,7 +173,7 @@ class TrashTests(PhotosViewTestCase):
 
         FileService.hard_delete(f, acting_user=self.user)
 
-        self.assertFalse(Photo.objects.exists())
+        self.assertFalse(MediaItem.objects.exists())
 
 
 class FilterTests(PhotosViewTestCase):

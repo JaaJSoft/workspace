@@ -56,20 +56,20 @@ def library_files(user, scope=MINE):
     """The analyzed photos in *scope*, as live ``File`` rows.
 
     Trashed files drop out through the files helpers and come back on
-    restore: their Photo row is left alone the whole time.
+    restore: their MediaItem row is left alone the whole time.
     """
-    return _scoped_images(user, scope).filter(photo__isnull=False)
+    return _scoped_images(user, scope).filter(media_item__isnull=False)
 
 
 def unanalyzed_count(user, scope=MINE):
-    """How many raster images in *scope* are still waiting for a Photo row.
+    """How many raster images in *scope* are still waiting for a MediaItem row.
 
     Quarantined files never get one, so counting them would announce an
     analysis that is not coming.
     """
     return (
         _scoped_images(user, scope)
-        .filter(photo__isnull=True)
+        .filter(media_item__isnull=True)
         .exclude(content="")
         .exclude(content__isnull=True)
         .count()
@@ -91,7 +91,7 @@ def library_tags(user, scope=MINE):
 def library_groups(user):
     """The user's groups whose folder holds at least one photo, by name."""
     group_photos = _images(FileService.user_group_files_qs(user)).filter(
-        photo__isnull=False
+        media_item__isnull=False
     )
     return Group.objects.filter(pk__in=group_photos.values("group_id")).order_by(
         Lower("name")

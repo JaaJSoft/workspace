@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 
-from workspace.photos.models import Photo
+from workspace.photos.models import MediaItem
 from workspace.photos.tasks import analyze_pending, analyze_photo
 
 from .images import jpeg_bytes, upload
@@ -18,7 +18,7 @@ class AnalyzePendingTaskTests(TestCase):
         f = upload(user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
 
         self.assertEqual(analyze_pending.apply().get(), {"analyzed": 1, "skipped": 0})
-        self.assertTrue(Photo.objects.filter(file=f).exists())
+        self.assertTrue(MediaItem.objects.filter(file=f).exists())
 
     @patch("workspace.photos.tasks.CATCH_UP_LIMIT", 1)
     def test_one_pass_is_bounded(self):
@@ -29,7 +29,7 @@ class AnalyzePendingTaskTests(TestCase):
         upload(user, "b.jpg")
 
         self.assertEqual(analyze_pending.apply().get(), {"analyzed": 1, "skipped": 0})
-        self.assertEqual(Photo.objects.count(), 1)
+        self.assertEqual(MediaItem.objects.count(), 1)
 
 
 class AnalyzePhotoTaskTests(TestCase):
@@ -38,7 +38,7 @@ class AnalyzePhotoTaskTests(TestCase):
         f = upload(user, "a.jpg")
 
         self.assertEqual(analyze_photo.apply(args=[str(f.pk)]).get(), {"status": "ok"})
-        self.assertTrue(Photo.objects.filter(file=f).exists())
+        self.assertTrue(MediaItem.objects.filter(file=f).exists())
 
     def test_a_non_photo_is_skipped(self):
         user = User.objects.create_user(username="alice", password="p")

@@ -10,7 +10,7 @@ from workspace.photos.services.analysis import pending_photo_ids, pending_photos
 
 
 class Command(BaseCommand):
-    help = "Queue photo analysis for raster images whose Photo row is missing or stale."
+    help = "Queue photo analysis for raster images whose MediaItem row is missing or stale."
 
     def add_arguments(self, parser):
         parser.add_argument(

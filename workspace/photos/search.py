@@ -23,14 +23,14 @@ def search_photos(query, user, limit):
     tz = get_user_timezone(user)
     group_ids = set(user.groups.values_list("pk", flat=True))
     qs = apply_fulltext(
-        library_files(user, ALL).select_related("photo", "parent"),
+        library_files(user, ALL).select_related("media_item", "parent"),
         query,
         index=FILES_FTS,
     ).order_by("-search_rank", "-updated_at")[:limit]
 
     results = []
     for f in qs:
-        taken_at = f.photo.taken_at
+        taken_at = f.media_item.taken_at
         day = timezone.localtime(taken_at, tz).date() if taken_at else None
         params = {"date": day.isoformat() if day else UNDATED, "open": f.uuid}
         personal = f.owner_id == user.pk and f.group_id is None

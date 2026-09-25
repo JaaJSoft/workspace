@@ -7,7 +7,7 @@ from django.utils import timezone
 from PIL import ExifTags, Image
 
 from workspace.files.services import FileService
-from workspace.photos.models import Photo
+from workspace.photos.models import MediaItem
 
 
 def jpeg_bytes(
@@ -57,13 +57,13 @@ def upload(owner, name, data=None, *, parent=None):
 
 
 def make_photo(owner, name, taken_at, *, parent=None, **fields):
-    """An uploaded JPEG with its Photo row written directly, for listing tests.
+    """An uploaded JPEG with its MediaItem row written directly, for listing tests.
 
     Outside a TestCase transaction the upload's own handler may already have
     written the row, so this overwrites it rather than inserting.
     """
     file_obj = upload(owner, name, parent=parent)
-    Photo.objects.update_or_create(
+    MediaItem.objects.update_or_create(
         file=file_obj,
         defaults={
             "taken_at": taken_at,

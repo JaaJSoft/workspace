@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
-from workspace.photos.models import Photo
+from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import (
     analyze_pending,
     analyze_photo,
@@ -77,13 +77,13 @@ class AnalyzePhotoTests(TestCase):
         second = analyze_photo(f)
 
         self.assertEqual(first.pk, second.pk)
-        self.assertEqual(Photo.objects.filter(file=f).count(), 1)
+        self.assertEqual(MediaItem.objects.filter(file=f).count(), 1)
 
     def test_non_image_is_left_alone(self):
         f = upload(self.user, "notes.txt", b"hello world")
 
         self.assertIsNone(analyze_photo(f))
-        self.assertFalse(Photo.objects.filter(file=f).exists())
+        self.assertFalse(MediaItem.objects.filter(file=f).exists())
 
     def test_svg_is_not_a_photo(self):
         f = upload(
@@ -113,7 +113,7 @@ class AnalyzePhotoTests(TestCase):
 
         with self.assertLogs("workspace.photos.services.analysis", "WARNING"):
             self.assertIsNone(analyze_photo(f))
-        self.assertFalse(Photo.objects.filter(file=f).exists())
+        self.assertFalse(MediaItem.objects.filter(file=f).exists())
 
     def test_content_replaced_while_reading_writes_nothing(self):
         f = upload(self.user, "race.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))
@@ -127,7 +127,7 @@ class AnalyzePhotoTests(TestCase):
             side_effect=replaced_meanwhile,
         ):
             self.assertIsNone(analyze_photo(f))
-        self.assertFalse(Photo.objects.filter(file=f).exists())
+        self.assertFalse(MediaItem.objects.filter(file=f).exists())
 
     def test_hard_deleted_while_reading_writes_nothing(self):
         f = upload(self.user, "vanished.jpg")
@@ -141,7 +141,7 @@ class AnalyzePhotoTests(TestCase):
             side_effect=deleted_meanwhile,
         ):
             self.assertIsNone(analyze_photo(f))
-        self.assertFalse(Photo.objects.exists())
+        self.assertFalse(MediaItem.objects.exists())
 
 
 class PendingPhotosTests(TestCase):
@@ -223,7 +223,7 @@ class AnalyzePendingTests(TestCase):
 
         self.assertEqual(analyze_pending(), {"analyzed": 2, "skipped": 0})
         self.assertEqual(
-            set(Photo.objects.values_list("file_id", flat=True)),
+            set(MediaItem.objects.values_list("file_id", flat=True)),
             {dated.pk, undated.pk},
         )
         self.assertEqual(analyze_pending(), {"analyzed": 0, "skipped": 0})
@@ -233,7 +233,7 @@ class AnalyzePendingTests(TestCase):
         upload(self.user, "b.jpg")
 
         self.assertEqual(analyze_pending(limit=1), {"analyzed": 1, "skipped": 0})
-        self.assertEqual(Photo.objects.count(), 1)
+        self.assertEqual(MediaItem.objects.count(), 1)
 
     def test_an_unreadable_blob_does_not_stop_the_pass(self):
         broken = upload(self.user, "a.jpg")
@@ -245,5 +245,5 @@ class AnalyzePendingTests(TestCase):
 
         self.assertEqual(stats, {"analyzed": 1, "skipped": 1})
         self.assertEqual(
-            list(Photo.objects.values_list("file_id", flat=True)), [fine.pk]
+            list(MediaItem.objects.values_list("file_id", flat=True)), [fine.pk]
         )

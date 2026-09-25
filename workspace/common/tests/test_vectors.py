@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import tempfile
 import threading
@@ -84,24 +85,33 @@ def _fixture_vectors(count, seed=7):
 
 
 def _derived_index_available():
-    """Whether the forward SQL creates a derived structure on this database."""
+    """Whether the forward SQL creates a derived structure on this database.
+
+    In the CI pgvector job (WORKSPACE_PGVECTOR_TESTS=1) a PostgreSQL that
+    cannot enable pgvector is a failure, not a reason to skip every test the
+    job exists for.
+    """
     if connection.vendor == "sqlite":
         return sqlite_backend.sqlite_vec_loaded(connection)
-    if connection.vendor == "postgresql":
-        from workspace.common.vectors.postgres import (
-            pgvector_available,
-            pgvector_version,
-        )
+    if connection.vendor != "postgresql":
+        return False
+    available = _pgvector_enableable()
+    if not available and os.environ.get("WORKSPACE_PGVECTOR_TESTS"):
+        raise AssertionError("WORKSPACE_PGVECTOR_TESTS is set but pgvector is unusable")
+    return available
 
-        if not pgvector_available(connection):
-            return False
-        if pgvector_version(connection) is not None:
-            return True
-        # pgvector is not a trusted extension: only a superuser enables it.
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
-            return cursor.fetchone()[0]
-    return False
+
+def _pgvector_enableable():
+    from workspace.common.vectors.postgres import pgvector_available, pgvector_version
+
+    if not pgvector_available(connection):
+        return False
+    if pgvector_version(connection) is not None:
+        return True
+    # pgvector is not a trusted extension: only a superuser enables it.
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+        return cursor.fetchone()[0]
 
 
 class _FixtureTestCase(TestCase):

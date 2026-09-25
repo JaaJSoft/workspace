@@ -943,6 +943,54 @@ class LoaderTests(SimpleTestCase):
             self.assertFalse(sqlite_backend.sqlite_vec_loadable())
 
 
+class ServedByTheFallbackCheckTests(TestCase):
+    """W002 names the backend actually serving each index, and why."""
+
+    def setUp(self):
+        with connection.cursor() as cursor:
+            _create_table(cursor)
+        registered = mock.patch.object(
+            checks, "registered_vector_indexes", return_value=(VECTORS,)
+        )
+        registered.start()
+        self.addCleanup(registered.stop)
+
+    def _warnings(self):
+        return checks.check_vector_backends(None, databases=[connection.alias])
+
+    def test_an_index_never_built_is_reported_with_the_rebuild_to_run(self):
+        # The extension may load, and still no index serves the queries: a
+        # database migrated before sqlite-vec was installed, a PostgreSQL
+        # role that could not enable pgvector, pgvector added afterwards.
+        if not _derived_index_available():
+            self.skipTest("sqlite-vec or pgvector required")
+        [warning] = self._warnings()
+        self.assertEqual(warning.id, "common.W002")
+        self.assertIn(TABLE, warning.msg)
+        self.assertIn("rebuild_vector_index", warning.hint)
+
+    def test_silent_once_the_index_serves(self):
+        if not _derived_index_available():
+            self.skipTest("sqlite-vec or pgvector required")
+        rebuild_vector_index(VECTORS)
+        self.assertEqual(self._warnings(), [])
+
+    def test_a_missing_extension_is_named_as_the_cause(self):
+        if connection.vendor != "sqlite":
+            self.skipTest("SQLite only")
+        with _without_sqlite_vec():
+            [warning] = self._warnings()
+        self.assertIn("sqlite-vec is not loaded", warning.msg)
+        self.assertIn("sqlite-vec wheel", warning.hint)
+
+    def test_an_unmigrated_table_is_not_reported(self):
+        # migrate runs the checks before the migrations: the index's own
+        # migration is about to create what the check would ask for.
+        with connection.cursor() as cursor:
+            cursor.execute(f"DROP TABLE {TABLE}")
+        self.assertEqual(self._warnings(), [])
+
+
 class FallbackCheckTests(SimpleTestCase):
     def _registered(self, indexes):
         return mock.patch.object(
@@ -981,16 +1029,14 @@ class FallbackCheckTests(SimpleTestCase):
         ):
             self.assertEqual(checks.check_vector_backends(None), [])
 
-    def test_postgres_is_only_asked_when_the_check_may_query_it(self):
+    def test_a_database_not_handed_over_is_never_queried(self):
+        # A bare `check` (runserver, collectstatic in a Docker build) may run
+        # with no database reachable at all.
         conn = mock.Mock(vendor="postgresql", alias="default")
         with (
             self._registered((VECTORS,)),
             mock.patch.object(checks, "connections", mock.Mock(all=lambda: [conn])),
-            mock.patch.object(
-                checks, "pgvector_available", return_value=False
-            ) as probe,
         ):
             self.assertEqual(checks.check_vector_backends(None), [])
-            probe.assert_not_called()
-            warnings = checks.check_vector_backends(None, databases=["default"])
-        self.assertEqual([w.id for w in warnings], ["common.W002"])
+        conn.cursor.assert_not_called()
+        conn.introspection.table_names.assert_not_called()

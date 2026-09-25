@@ -29,13 +29,15 @@ def index_vector(index, pk, vector, *, using=DEFAULT_DB_ALIAS):
     blob = to_bytes(stored)
     conn = connections[using]
     param = bind_uuid(pk, conn)
-    backend = active_backend(index, conn)
     with transaction.atomic(using=using), conn.cursor() as cursor:
-        if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
-            cursor.execute(index.pg_update_sql(), [blob, pg_literal(stored), param])
-            return
         cursor.execute(index.update_source_sql(), [blob, param])
-        if isinstance(backend, SqliteVecNearest):
+        # Only now, under the write lock: a rebuild creating the index holds
+        # it until it commits, so a backend chosen before the lock was taken
+        # would still see no index and leave this row out of the new one.
+        backend = active_backend(index, conn)
+        if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
+            cursor.execute(index.pg_set_vector_sql(), [pg_literal(stored), param])
+        elif isinstance(backend, SqliteVecNearest):
             cursor.execute(index.sqlite_delete_sql(), [param])
             cursor.execute(index.sqlite_insert_sql(), [param])
 
@@ -51,14 +53,14 @@ def drop_vector(index, pk, *, using=DEFAULT_DB_ALIAS):
     """
     conn = connections[using]
     param = bind_uuid(pk, conn)
-    backend = active_backend(index, conn)
     with transaction.atomic(using=using), conn.cursor() as cursor:
-        if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
-            cursor.execute(index.pg_clear_sql(), [param])
-            return
-        if isinstance(backend, SqliteVecNearest):
-            cursor.execute(index.sqlite_delete_sql(), [param])
         cursor.execute(index.update_source_sql(), [None, param])
+        # Under the write lock, for the same reason as in index_vector.
+        backend = active_backend(index, conn)
+        if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
+            cursor.execute(index.pg_set_vector_sql(), [None, param])
+        elif isinstance(backend, SqliteVecNearest):
+            cursor.execute(index.sqlite_delete_sql(), [param])
 
 
 def rebuild_vector_index(index, *, using=DEFAULT_DB_ALIAS):

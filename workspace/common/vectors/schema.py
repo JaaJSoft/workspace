@@ -266,22 +266,9 @@ class VectorIndex:
             f"ORDER BY knn.distance"
         )
 
-    def pg_update_sql(self):
-        """Write the source and its vector. Binds bytes, vector literal, pk."""
-        return (
-            f"UPDATE {self.table} SET {self.source_column} = %s, "
-            f"{self.pg_column} = %s::vector WHERE {self.pk_column} = %s"
-        )
-
     def pg_set_vector_sql(self):
-        """Derive the vector column from the source. Binds the literal, the pk."""
+        """Write the vector column. Binds the literal (or None), then the pk."""
         return f"UPDATE {self.table} SET {self.pg_column} = %s::vector WHERE {self.pk_column} = %s"
-
-    def pg_clear_sql(self):
-        return (
-            f"UPDATE {self.table} SET {self.source_column} = NULL, "
-            f"{self.pg_column} = NULL WHERE {self.pk_column} = %s"
-        )
 
     def pg_nearest_sql(self):
         """Binds the vector literal, the partition, then k."""

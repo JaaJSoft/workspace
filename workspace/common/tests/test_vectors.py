@@ -1,16 +1,20 @@
 import sqlite3
+import tempfile
+import threading
+import time
 import uuid
 from io import StringIO
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
 from django.core.management import call_command
-from django.db import connection, models
+from django.db import connection, connections, models
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.test.utils import isolate_apps
 
 from workspace.common.uuids import uuid_v7_or_v4
-from workspace.common.vectors import active_backend, checks, nearest
+from workspace.common.vectors import active_backend, checks, indexing, nearest
 from workspace.common.vectors import sqlite as sqlite_backend
 from workspace.common.vectors.encoding import from_bytes, normalize
 from workspace.common.vectors.fallback import NumpyNearest
@@ -599,6 +603,111 @@ class RunVectorIndexSQLTests(TransactionTestCase):
         self.assertEqual(name, "RunVectorIndexSQL")
         self.assertEqual(kwargs["sqlite_forward"], VECTORS.sqlite_forward_sql())
         self.assertIn("vector", self.OPERATION.describe())
+
+
+class WriteDuringRebuildTests(TransactionTestCase):
+    """A write racing a rebuild must land in the index the rebuild creates.
+
+    The scenario the docs prescribe: install sqlite-vec or pgvector, then run
+    rebuild_vector_index on a live instance. Two real connections, because
+    only the database's own locking decides the interleaving: a writer that
+    picks its backend before taking the write lock sees the index missing,
+    waits for the rebuild to commit, and writes the source alone.
+    """
+
+    ALIAS = "vectors_race"
+
+    def setUp(self):
+        if not _derived_index_available():
+            self.skipTest("sqlite-vec or pgvector required")
+        settings = dict(connection.settings_dict)
+        if connection.vendor == "sqlite":
+            # The in-memory test database uses shared-cache table locks, which
+            # fail at once instead of waiting: a file gets real WAL locking.
+            tmp = tempfile.TemporaryDirectory()
+            self.addCleanup(tmp.cleanup)
+            settings["NAME"] = str(Path(tmp.name) / "race.sqlite3")
+        connections.databases[self.ALIAS] = settings
+        # Declared for this test only: the class attribute is validated against
+        # settings.DATABASES before the alias exists.
+        cls = type(self)
+        cls.databases, saved = {*cls.databases, self.ALIAS}, cls.databases
+        self.addCleanup(setattr, cls, "databases", saved)
+        self.addCleanup(self._forget_alias)
+        with connections[self.ALIAS].cursor() as cursor:
+            _create_table(cursor)
+        self.pk = uuid.uuid4()
+        with connections[self.ALIAS].cursor() as cursor:
+            cursor.execute(
+                f"INSERT INTO {TABLE} (uuid, owner_id) VALUES (%s, %s)",
+                [self._param(self.pk), OWNER],
+            )
+
+    def _forget_alias(self):
+        with connections[self.ALIAS].cursor() as cursor:
+            if connection.vendor == "sqlite":
+                cursor.execute(VECTORS.sqlite_reverse_sql())
+            cursor.execute(f"DROP TABLE {TABLE}")
+        connections[self.ALIAS].close()
+        if hasattr(connections[self.ALIAS], "close_pool"):
+            connections[self.ALIAS].close_pool()
+        del connections.databases[self.ALIAS]
+
+    def _param(self, pk):
+        return pk if connection.vendor == "postgresql" else pk.hex
+
+    def test_the_racing_write_reaches_the_new_index(self):
+        created, release = threading.Event(), threading.Event()
+        run_script = indexing._run_script
+        errors = []
+
+        def held_open(conn, sql):
+            run_script(conn, sql)
+            created.set()
+            release.wait(10)
+
+        def rebuild():
+            try:
+                with mock.patch.object(indexing, "_run_script", held_open):
+                    rebuild_vector_index(VECTORS, using=self.ALIAS)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                created.set()
+                connections[self.ALIAS].close()
+
+        def write():
+            try:
+                index_vector(VECTORS, self.pk, _fixture_vectors(1)[0], using=self.ALIAS)
+            except Exception as exc:
+                errors.append(exc)
+            finally:
+                connections[self.ALIAS].close()
+
+        rebuilder = threading.Thread(target=rebuild)
+        rebuilder.start()
+        created.wait(10)
+        writer = threading.Thread(target=write)
+        writer.start()
+        # Long enough for the writer to pick its backend and block on the
+        # lock. Too short only lets a broken writer pass, never a sound one fail.
+        time.sleep(0.3)
+        release.set()
+        rebuilder.join(20)
+        writer.join(20)
+
+        self.assertEqual(errors, [])
+        self.assertEqual(self._indexed(), [self.pk])
+
+    def _indexed(self):
+        with connections[self.ALIAS].cursor() as cursor:
+            if connection.vendor == "postgresql":
+                cursor.execute(
+                    f"SELECT uuid FROM {TABLE} WHERE {VECTORS.pg_column} IS NOT NULL"
+                )
+                return [row[0] for row in cursor.fetchall()]
+            cursor.execute(f"SELECT uuid FROM {VECTORS.vec_table}")
+            return [uuid.UUID(row[0]) for row in cursor.fetchall()]
 
 
 class LoaderTests(SimpleTestCase):

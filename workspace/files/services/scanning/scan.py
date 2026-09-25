@@ -19,13 +19,15 @@ from ...models import File, FileScan
 logger = logging.getLogger(__name__)
 
 
+def scanning_enabled():
+    return bool(getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False))
+
+
 def pending_scan_qs(*, reanalyze=False):
-    """Live files whose verdict is missing or stale; none when scanning is off.
+    """Live files whose verdict is missing or stale.
 
     With *reanalyze*, every live file, verdict or not.
     """
-    if not getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False):
-        return File.objects.none()
     qs = File.objects.alive().with_blob()
     if reanalyze:
         return qs
@@ -48,8 +50,18 @@ def pending_scan_qs(*, reanalyze=False):
     )
 
 
-def scan_and_record(file_obj, scanner=None):
-    """Scan *file_obj* with *scanner* (the configured one by default).
+def scan_for_catch_up(file_obj):
+    """Scan *file_obj* with the configured scanner; True when a verdict was written."""
+    from .registry import get_scanner
+
+    scanner = get_scanner()
+    if scanner is None:
+        return False
+    return scan_and_record(file_obj, scanner)["status"] in FileScan.Status.values
+
+
+def scan_and_record(file_obj, scanner):
+    """Scan *file_obj* with *scanner* and record the verdict.
 
     Returns a dict whose "status" is the verdict, or why nothing was written.
     """
@@ -58,12 +70,6 @@ def scan_and_record(file_obj, scanner=None):
     from .base import ScanVerdict
     from .capped import CappedReader
     from .policy import blocked_statuses
-    from .registry import get_scanner
-
-    if scanner is None:
-        scanner = get_scanner()
-    if scanner is None:
-        return {"status": "disabled"}
 
     if file_obj.node_type != File.NodeType.FILE or not file_obj.content:
         return {"status": "not_applicable"}

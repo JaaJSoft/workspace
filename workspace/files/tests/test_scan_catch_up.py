@@ -11,7 +11,7 @@ from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
 from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.scanning.base import ScanVerdict
-from workspace.files.services.scanning.scan import pending_scan_qs, scan_and_record
+from workspace.files.services.scanning.scan import pending_scan_qs, scan_for_catch_up
 
 from .catch_up import run_catch_up
 
@@ -49,7 +49,7 @@ class PendingScanTests(TestCase):
         return set(pending_scan_qs(**kwargs).values_list("pk", flat=True))
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("malware_scan").process, scan_and_record)
+        self.assertIs(get_catch_up("malware_scan").process, scan_for_catch_up)
 
     def test_a_never_scanned_file_is_pending(self):
         f = self._file("new.txt")
@@ -97,8 +97,20 @@ class PendingScanTests(TestCase):
     @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
     def test_nothing_is_pending_when_scanning_is_disabled(self):
         self._file("new.txt")
-        self.assertEqual(self._pending(), set())
-        self.assertEqual(self._pending(reanalyze=True), set())
+        reader = get_catch_up("malware_scan")
+
+        self.assertFalse(reader.enabled())
+        self.assertFalse(reader.pending_files().exists())
+        self.assertFalse(reader.pending_files(reanalyze=True).exists())
+
+    def test_no_scanner_writes_no_verdict(self):
+        f = self._file("new.txt")
+        with patch(
+            "workspace.files.services.scanning.registry.get_scanner",
+            return_value=None,
+        ):
+            self.assertFalse(scan_for_catch_up(f))
+        self.assertFalse(FileScan.objects.exists())
 
     def test_the_catch_up_writes_the_missing_verdicts(self):
         f = self._file("new.txt")

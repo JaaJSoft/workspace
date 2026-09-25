@@ -15,6 +15,7 @@ from .analysis import (
     forget_media,
     is_media_candidate,
     pending_media_qs,
+    refresh_media_item,
 )
 
 
@@ -31,4 +32,4 @@ def analyze_media_for_event(event):
         forget_media(file_obj)
 
 
-register_catch_up("photos", pending=pending_media_qs, process=analyze_media)
+register_catch_up("photos", pending=pending_media_qs, process=refresh_media_item)

@@ -13,18 +13,16 @@ hourly catch-up too, which scans whatever that path missed.
 
 from __future__ import annotations
 
-from django.conf import settings
-
 from ...models import File, FileEvent
 from ..catch_up import register_catch_up
 from ..event_dispatch import on_file_event
-from .scan import pending_scan_qs, scan_and_record
+from .scan import pending_scan_qs, scan_for_catch_up, scanning_enabled
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
 def scan_file_for_event(event):
     """Queue a malware scan for the event's file."""
-    if not getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False):
+    if not scanning_enabled():
         return
     file = event.file
     if file.node_type != File.NodeType.FILE or file.deleted_at is not None:
@@ -35,4 +33,9 @@ def scan_file_for_event(event):
     scan_file.delay(str(event.file_id))
 
 
-register_catch_up("malware_scan", pending=pending_scan_qs, process=scan_and_record)
+register_catch_up(
+    "malware_scan",
+    pending=pending_scan_qs,
+    process=scan_for_catch_up,
+    enabled=scanning_enabled,
+)

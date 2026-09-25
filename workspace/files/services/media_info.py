@@ -63,15 +63,6 @@ def pending_qs(*, reanalyze=False):
     )
 
 
-def _catch_up_pending(*, reanalyze=False):
-    # Without ffprobe nothing can be probed: queueing the files would only
-    # churn the broker every hour, and they stay pending for when it is
-    # installed.
-    if not ffmpeg.FFPROBE:
-        return File.objects.none()
-    return pending_qs(reanalyze=reanalyze)
-
-
 def parse_report(report):
     """The MediaInfo fields an ffprobe report describes."""
     return {
@@ -132,6 +123,17 @@ def probe_file(file_obj):
     return info
 
 
+def refresh_media_info(file_obj):
+    """Probe *file_obj* for the catch-up; True when its row was written."""
+    return probe_file(file_obj) is not None
+
+
+def _ffprobe_installed():
+    # Read at call time: the probe binary is looked up once at import, but
+    # tests switch it off per case.
+    return bool(ffmpeg.FFPROBE)
+
+
 def forget(file_obj):
     """Drop the row of a file that stopped being an audio or video file."""
     MediaInfo.objects.filter(file_id=file_obj.pk).delete()
@@ -149,4 +151,9 @@ def probe_file_for_event(event):
         forget(file_obj)
 
 
-register_catch_up("media_info", pending=_catch_up_pending, process=probe_file)
+register_catch_up(
+    "media_info",
+    pending=pending_qs,
+    process=refresh_media_info,
+    enabled=_ffprobe_installed,
+)

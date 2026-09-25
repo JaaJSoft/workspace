@@ -152,6 +152,11 @@ def analyze_media(file_obj):
     return item
 
 
+def refresh_media_item(file_obj):
+    """Analyze *file_obj* for the catch-up; True when its row was written."""
+    return analyze_media(file_obj) is not None
+
+
 def _cannot_read(file_obj, exc):
     logger.warning(
         "Media analysis cannot read the blob of %s: %s",

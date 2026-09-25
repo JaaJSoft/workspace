@@ -80,9 +80,9 @@ def pending_hash_qs(*, reanalyze=False):
 
 
 def refresh_content_hash(file_obj):
-    """Hash *file_obj*'s blob into its row; return the digest, or None.
+    """Hash *file_obj*'s blob into its row; True when the hash was written.
 
-    None when the blob cannot be read, or when the row's hash changed while
+    False when the blob cannot be read, or when the row's hash changed while
     the blob was being read: the content write that changed it stored the
     digest of the new bytes, which must not be overwritten.
     """
@@ -94,11 +94,11 @@ def refresh_content_hash(file_obj):
             scrub(file_obj.content.name),
             scrub(str(exc)),
         )
-        return None
+        return False
     written = File.objects.filter(
         pk=file_obj.pk, content_hash=file_obj.content_hash
     ).update(content_hash=digest)
-    return digest if written else None
+    return bool(written)
 
 
 register_catch_up("content_hash", pending=pending_hash_qs, process=refresh_content_hash)

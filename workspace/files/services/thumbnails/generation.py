@@ -255,9 +255,9 @@ def pending_thumbnails_qs(*, reanalyze=False):
 
 
 def refresh_thumbnail(file_obj):
-    """Generate *file_obj*'s thumbnail and flag the row; return True or None."""
+    """Generate *file_obj*'s thumbnail and flag the row; True on success."""
     if not generate_thumbnail(file_obj):
-        return None
+        return False
     if not file_obj.has_thumbnail:
         file_obj.has_thumbnail = True
         file_obj.save(update_fields=["has_thumbnail"])

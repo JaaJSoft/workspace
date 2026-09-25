@@ -20,6 +20,7 @@ from workspace.files.services.media_info import (
     pending_qs,
     probe_file,
     probe_file_for_event,
+    refresh_media_info,
 )
 from workspace.files.tasks import catch_up_file
 from workspace.files.templatetags.file_filters import codec_name, media_duration
@@ -174,7 +175,7 @@ class PendingTests(MediaInfoTestCase):
 @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
 class CatchUpTests(MediaInfoTestCase):
     def test_registered_with_the_catch_up(self, _probe):
-        self.assertIs(get_catch_up("media_info").process, probe_file)
+        self.assertIs(get_catch_up("media_info").process, refresh_media_info)
 
     def test_fills_in_every_pending_file_and_is_idempotent(self, _probe):
         webm = self._upload("clip.webm")

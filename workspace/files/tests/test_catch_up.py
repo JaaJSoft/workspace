@@ -13,7 +13,12 @@ from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services import catch_up as registry
-from workspace.files.services.catch_up import pending_ids, register_catch_up
+from workspace.files.services.catch_up import (
+    pending_ids,
+    queue_pending,
+    register_catch_up,
+    resolve,
+)
 from workspace.files.tasks import CATCH_UP_EXPIRES, catch_up, catch_up_file
 
 User = get_user_model()
@@ -36,7 +41,7 @@ class FakeReader:
 
     def process(self, file_obj):
         self.processed.append(file_obj.pk)
-        return file_obj
+        return True
 
 
 def run_catch_up():
@@ -123,6 +128,57 @@ class CatchUpTaskTests(CatchUpTestCase):
             self.assertEqual(set(pending_ids(registry.get_catch_up("fake"))), uploaded)
 
 
+class RegistryTests(CatchUpTestCase):
+    def test_resolve_takes_every_reader_by_default(self):
+        other = FakeReader("other")
+        register_catch_up("other", pending=other.pending, process=other.process)
+
+        readers, unknown = resolve(None)
+
+        self.assertEqual([r.name for r in readers], ["fake", "other"])
+        self.assertEqual(unknown, [])
+
+    def test_resolve_keeps_the_order_asked_and_reports_unknown_names(self):
+        other = FakeReader("other")
+        register_catch_up("other", pending=other.pending, process=other.process)
+
+        readers, unknown = resolve(["other", "gone", "fake", "other"])
+
+        self.assertEqual([r.name for r in readers], ["other", "fake"])
+        self.assertEqual(unknown, ["gone"])
+
+    def test_queue_pending_queues_one_low_priority_task_per_file(self):
+        a = self._upload("a.txt")
+
+        with patch.object(catch_up_file, "apply_async") as queue:
+            queued = queue_pending(
+                registry.get_catch_up("fake"), reanalyze=True, expires=60
+            )
+
+        self.assertEqual(queued, 1)
+        queue.assert_called_once_with(
+            args=["fake", str(a.pk)],
+            kwargs={"reanalyze": True},
+            priority=BACKGROUND_PRIORITY,
+            expires=60,
+        )
+
+    def test_a_disabled_reader_has_nothing_pending(self):
+        register_catch_up(
+            "off",
+            pending=self.reader.pending,
+            process=self.reader.process,
+            enabled=lambda: False,
+        )
+        f = self._upload("a.txt")
+
+        self.assertEqual(run_catch_up()[0], {"fake": 1, "off": 0})
+        self.assertEqual(
+            catch_up_file.apply(args=["off", str(f.pk)]).get(), {"status": "skipped"}
+        )
+        self.assertEqual(self.reader.processed, [f.pk])
+
+
 class CatchUpFileTaskTests(CatchUpTestCase):
     def test_processes_a_pending_file(self):
         f = self._upload("a.txt")
@@ -154,7 +210,7 @@ class CatchUpFileTaskTests(CatchUpTestCase):
         self.assertEqual(self.reader.processed, [f.pk, f.pk])
 
     def test_nothing_written_is_skipped(self):
-        register_catch_up("noop", pending=self.reader.pending, process=lambda f: None)
+        register_catch_up("noop", pending=self.reader.pending, process=lambda f: False)
         f = self._upload("a.txt")
 
         status = catch_up_file.apply(args=["noop", str(f.pk)]).get()
@@ -237,6 +293,19 @@ class CatchUpCommandTests(CatchUpTestCase):
     def test_unknown_reader(self):
         with self.assertRaisesMessage(CommandError, "Unknown reader(s): gone"):
             self._run("gone")
+
+    def test_a_disabled_reader_is_reported_and_skipped(self):
+        register_catch_up(
+            "off",
+            pending=self.reader.pending,
+            process=self.reader.process,
+            enabled=lambda: False,
+        )
+
+        output = self._run("off", "--sync")
+
+        self.assertIn("off: disabled on this deployment.", output)
+        self.assertEqual(self.reader.processed, [])
 
 
 class CatchUpScheduleTests(SimpleTestCase):

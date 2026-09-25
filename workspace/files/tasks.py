@@ -10,7 +10,6 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
-from workspace.common.task_priority import BACKGROUND_PRIORITY
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -159,27 +158,17 @@ def catch_up(self, names=None):
 
     Returns how many files were queued per reader.
     """
-    from workspace.files.services.catch_up import (
-        get_catch_up,
-        pending_ids,
-        registered_catch_ups,
-    )
+    from workspace.files.services.catch_up import queue_pending, resolve
 
-    if names is None:
-        readers = registered_catch_ups()
-    else:
-        readers = [r for r in map(get_catch_up, names) if r is not None]
-    stats = {}
-    for reader in readers:
-        queued = 0
-        for uuid in pending_ids(reader, limit=CATCH_UP_LIMIT):
-            catch_up_file.apply_async(
-                args=[reader.name, str(uuid)],
-                priority=BACKGROUND_PRIORITY,
-                expires=CATCH_UP_EXPIRES,
-            )
-            queued += 1
-        stats[reader.name] = queued
+    readers, unknown = resolve(names)
+    if unknown:
+        logger.warning("Catch-up skips unknown reader(s): %s", ", ".join(unknown))
+    stats = {
+        reader.name: queue_pending(
+            reader, limit=CATCH_UP_LIMIT, expires=CATCH_UP_EXPIRES
+        )
+        for reader in readers
+    }
     logger.info("Catch-up queued %s", stats)
     return stats
 
@@ -206,7 +195,7 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
         return {"status": "skipped"}
     try:
         file_obj = (
-            reader.pending(reanalyze=reanalyze)
+            reader.pending_files(reanalyze=reanalyze)
             .select_related("owner")
             .get(uuid=file_uuid)
         )

@@ -378,7 +378,7 @@ class ContentHashCatchUpTests(TestCase):
         self.assertIn(
             f.pk, pending_hash_qs(reanalyze=True).values_list("pk", flat=True)
         )
-        self.assertEqual(refresh_content_hash(f), HELLO_SHA256)
+        self.assertTrue(refresh_content_hash(f))
         f.refresh_from_db()
         self.assertEqual(f.content_hash, HELLO_SHA256)
 
@@ -394,7 +394,7 @@ class ContentHashCatchUpTests(TestCase):
             "workspace.files.services.content_hash.hash_storage_file",
             side_effect=written_meanwhile,
         ):
-            self.assertIsNone(refresh_content_hash(f))
+            self.assertFalse(refresh_content_hash(f))
         f.refresh_from_db()
         self.assertEqual(f.content_hash, _sha256(b"fresh"))
 
@@ -403,5 +403,5 @@ class ContentHashCatchUpTests(TestCase):
         f.content.storage.delete(f.content.name)
 
         with self.assertLogs("workspace.files.services.content_hash", "WARNING"):
-            self.assertIsNone(refresh_content_hash(f))
+            self.assertFalse(refresh_content_hash(f))
         self.assertIn(f.pk, pending_hash_qs().values_list("pk", flat=True))

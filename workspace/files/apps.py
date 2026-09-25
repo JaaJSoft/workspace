@@ -140,7 +140,9 @@ class FilesConfig(AppConfig):
         from workspace.files import checks  # noqa: F401
 
         # Register file-event handlers and catch-up readers (import for the
-        # @on_file_event and register_catch_up side effects).
+        # @on_file_event and register_catch_up side effects). content_hash has
+        # no event handler - every content write hashes inline - and is here
+        # for its catch-up alone.
         from workspace.files.services import (  # noqa: F401
             content_hash,
             link_events,

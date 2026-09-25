@@ -19,6 +19,12 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+# Each worker process reserves at most one task beyond the one it runs, instead
+# of four: a task that turns up while a background backlog is draining (sent at
+# BACKGROUND_PRIORITY) then waits behind one reserved task at most. Acks stay
+# early - acks_late would re-run a task whose worker died, which every task
+# would then have to tolerate.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 # In development, run tasks synchronously in the current thread (no worker needed)
 if DEBUG:

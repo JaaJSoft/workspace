@@ -171,3 +171,10 @@ class QueueLengthCollectorTests(TestCase):
         # We yielded a (possibly empty) family — the scrape must not crash.
         self.assertEqual(len(families), 1)
         self.assertEqual(list(families[0].samples), [])
+
+
+class WorkerPrefetchTests(TestCase):
+    def test_a_worker_process_reserves_one_task_ahead(self):
+        """Read through the Celery app, so the CELERY_ namespace wiring is
+        what is checked, not only the setting."""
+        self.assertEqual(celery_app_module.app.conf.worker_prefetch_multiplier, 1)

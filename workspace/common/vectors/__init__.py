@@ -8,7 +8,6 @@ applies - the partition narrows the search, it does not authorize it.
 
 from django.db import DEFAULT_DB_ALIAS, connections
 
-from workspace.common.rowids import adapt_pk
 from workspace.common.uuids import parse_uuid_or_none
 
 from .encoding import normalize
@@ -46,7 +45,7 @@ def nearest(index, query, *, partition=None, k, using=DEFAULT_DB_ALIAS):
     vector = normalize(query, index.dims)
     conn = connections[using]
     if partition is not None:
-        partition = adapt_pk(partition, conn)
+        partition = _bind_partition(partition, conn)
     rows = active_backend(index, conn).nearest(
         index, conn, vector, partition=partition, k=k
     )
@@ -80,6 +79,21 @@ def _pgvector_version(conn):  # pragma: no cover - exercised on PG only
         if cached is not None:
             _pgvector_version_cache[conn.alias] = cached
     return cached
+
+
+def bind_uuid(value, conn):
+    """A UUID bound the way *conn* stores it (char(32) hex on SQLite)."""
+    parsed = parse_uuid_or_none(value)
+    if parsed is None:
+        raise ValueError(f"not a UUID: {value!r}")
+    return parsed if conn.features.has_native_uuid_field else parsed.hex
+
+
+def _bind_partition(value, conn):
+    parsed = parse_uuid_or_none(value)
+    if parsed is None:
+        return value
+    return parsed if conn.features.has_native_uuid_field else parsed.hex
 
 
 def _as_pk(value):

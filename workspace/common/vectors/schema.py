@@ -9,14 +9,15 @@ float32. Everything else is derived from it and can be rebuilt at any time
 - PostgreSQL with pgvector: a ``vector(dims)`` column next to the source,
   under an HNSW index.
 - SQLite with sqlite-vec: a ``vec0`` virtual table with the partition as a
-  partition key, keyed on ``rowid_column`` for the same table-rebuild reason
-  as a ``DerivedFulltextIndex``.
+  partition key, keyed on the row's UUID. Never on the implicit rowid: Django
+  rebuilds a SQLite table for many operations (any AddField with a default)
+  and SQLite reassigns implicit rowids on the copy, so an index keyed on them
+  keeps answering - with the wrong rows.
 - Anything else: nothing - the fallback reads the source column directly.
 
-The source column is an ordinary model field (a ``BinaryField``), and so is
-``rowid_column`` (a nullable unique ``BigIntegerField``). Both are added by
-the owning app's migrations like any other field; only the derived structures
-are created from the SQL here.
+The source column is an ordinary model field (a ``BinaryField``) added by the
+owning app's migrations like any other; only the derived structures are
+created from the SQL here.
 
 Derived names, never chosen: vec0 table ``<table>_<source_column>_vec``, PG
 column ``<source_column>_vec``, HNSW index ``<table>_<source_column>_hnsw``.
@@ -57,14 +58,12 @@ class VectorIndex:
     dims: int
     # BinaryField holding the vector: `dims` little-endian float32, unit length.
     source_column: str
-    # Nullable unique BigIntegerField the vec0 rowid is keyed on. Claimed from
-    # the uuid on first write, so `pk_column` must be a UUID.
-    rowid_column: str
     # Column every query is scoped to (an owner). None for a global index.
     partition_column: str | None = None
     # How SQLite stores the partition column: "integer" for an integer
     # foreign key, "text" for a UUID one (char(32) hex on SQLite).
     partition_type: str = "integer"
+    # A UUID primary key (char(32) hex on SQLite): the vec0 table is keyed on it.
     pk_column: str = "uuid"
     metric: str = "cosine"
 
@@ -72,7 +71,6 @@ class VectorIndex:
         names = (
             self.table,
             self.source_column,
-            self.rowid_column,
             self.pk_column,
             *((self.partition_column,) if self.partition_column else ()),
         )
@@ -156,11 +154,9 @@ class VectorIndex:
         )
 
     def sqlite_forward_sql(self):
-        """Create the vec0 table and fill it from every row already keyed.
+        """Create the vec0 table and fill it from every row carrying a vector.
 
-        Only runs where sqlite-vec is loaded (RunVectorIndexSQL checks). Rows
-        without a key yet are picked up by rebuild_vector_index, which claims
-        keys first.
+        Only runs where sqlite-vec is loaded (RunVectorIndexSQL checks).
         """
         metric = _METRICS[self.metric][0]
         partition = (
@@ -172,6 +168,7 @@ class VectorIndex:
             f"{self.sqlite_reverse_sql()}\n"
             f"\n"
             f"CREATE VIRTUAL TABLE {self.vec_table} USING vec0(\n"
+            f"  {self.pk_column} text primary key,\n"
             f"{partition}"
             f"  {SQLITE_VECTOR_COLUMN} float[{self.dims}] distance_metric={metric}\n"
             f");\n"
@@ -188,8 +185,8 @@ class VectorIndex:
         return f"{self.partition_column}, " if self.partitioned else ""
 
     def _indexable_where(self):
-        """Rows the vec0 table can hold: a vector, a key and, if any, a partition."""
-        where = f"{self.source_column} IS NOT NULL AND {self.rowid_column} IS NOT NULL"
+        """Rows the vec0 table can hold: a vector and, if any, a partition."""
+        where = f"{self.source_column} IS NOT NULL"
         if self.partitioned:
             where += f" AND {self.partition_column} IS NOT NULL"
         return where
@@ -198,8 +195,8 @@ class VectorIndex:
         """Copy every indexable row's vector into the vec0 table."""
         return (
             f"INSERT INTO {self.vec_table}"
-            f"(rowid, {self._partition_select()}{SQLITE_VECTOR_COLUMN})\n"
-            f"  SELECT {self.rowid_column}, {self._partition_select()}{self.source_column} "
+            f"({self.pk_column}, {self._partition_select()}{SQLITE_VECTOR_COLUMN})\n"
+            f"  SELECT {self.pk_column}, {self._partition_select()}{self.source_column} "
             f"FROM {self.table}\n"
             f"  WHERE {self._indexable_where()}"
         )
@@ -214,25 +211,8 @@ class VectorIndex:
         return f"{self.sqlite_backfill_sql()} AND {self.pk_column} = %s"
 
     def sqlite_delete_sql(self):
-        return f"DELETE FROM {self.vec_table} WHERE rowid = %s"
-
-    def sqlite_read_rowid_sql(self):
-        return (
-            f"SELECT {self.rowid_column} FROM {self.table} WHERE {self.pk_column} = %s"
-        )
-
-    def sqlite_assign_rowid_sql(self):
-        """Claim a key for a row that has none. No-op if one is already set."""
-        return (
-            f"UPDATE {self.table} SET {self.rowid_column} = %s "
-            f"WHERE {self.pk_column} = %s AND {self.rowid_column} IS NULL"
-        )
-
-    def sqlite_unkeyed_pks_sql(self):
-        return (
-            f"SELECT {self.pk_column} FROM {self.table} "
-            f"WHERE {self.source_column} IS NOT NULL AND {self.rowid_column} IS NULL"
-        )
+        """Binds the pk. Needs nothing from the row, so it works after a delete."""
+        return f"DELETE FROM {self.vec_table} WHERE {self.pk_column} = %s"
 
     def sqlite_nearest_sql(self):
         """KNN on the vec0 table, mapped back to primary keys.
@@ -245,11 +225,11 @@ class VectorIndex:
         partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
         return (
             f"WITH knn AS (\n"
-            f"  SELECT rowid, distance FROM {self.vec_table}\n"
+            f"  SELECT {self.pk_column}, distance FROM {self.vec_table}\n"
             f"  WHERE {SQLITE_VECTOR_COLUMN} MATCH %s AND k = %s{partition}\n"
             f")\n"
             f"SELECT t.{self.pk_column}, knn.distance FROM knn\n"
-            f"JOIN {self.table} AS t ON t.{self.rowid_column} = knn.rowid\n"
+            f"JOIN {self.table} AS t ON t.{self.pk_column} = knn.{self.pk_column}\n"
             f"WHERE t.{self.source_column} IS NOT NULL\n"
             f"ORDER BY knn.distance"
         )

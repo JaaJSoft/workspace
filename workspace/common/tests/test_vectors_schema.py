@@ -21,7 +21,6 @@ FACES = VectorIndex(
     table="photos_face",
     dims=512,
     source_column="embedding",
-    rowid_column="vec_rowid",
     partition_column="owner_id",
 )
 
@@ -29,7 +28,6 @@ GLOBAL_L2 = VectorIndex(
     table="photos_scene",
     dims=3,
     source_column="signature",
-    rowid_column="vec_rowid",
     metric="l2",
 )
 
@@ -43,34 +41,28 @@ class DeclarationTests(SimpleTestCase):
     def test_identifiers_are_validated(self):
         # Every name is interpolated into SQL.
         with self.assertRaises(ValueError):
-            VectorIndex(
-                table="x; DROP TABLE y", dims=3, source_column="e", rowid_column="r"
-            )
+            VectorIndex(table="x; DROP TABLE y", dims=3, source_column="e")
         with self.assertRaises(ValueError):
             VectorIndex(
                 table="t",
                 dims=3,
                 source_column="e",
-                rowid_column="r",
                 partition_column="a b",
             )
 
     def test_dims_are_bounded(self):
         for dims in (0, MAX_DIMS + 1, 3.0, True):
             with self.subTest(dims=dims), self.assertRaises(ValueError):
-                VectorIndex(table="t", dims=dims, source_column="e", rowid_column="r")
+                VectorIndex(table="t", dims=dims, source_column="e")
 
     def test_metric_and_partition_type_are_checked(self):
         with self.assertRaises(ValueError):
-            VectorIndex(
-                table="t", dims=3, source_column="e", rowid_column="r", metric="dot"
-            )
+            VectorIndex(table="t", dims=3, source_column="e", metric="dot")
         with self.assertRaises(ValueError):
             VectorIndex(
                 table="t",
                 dims=3,
                 source_column="e",
-                rowid_column="r",
                 partition_type="blob",
             )
 
@@ -130,15 +122,15 @@ class SqliteSqlTests(SimpleTestCase):
 
     def test_forward_backfills_from_the_source_column(self):
         sql = FACES.sqlite_forward_sql()
-        self.assertIn("SELECT vec_rowid, owner_id, embedding FROM photos_face", sql)
-        self.assertIn("vec_rowid IS NOT NULL", sql)
+        self.assertIn("SELECT uuid, owner_id, embedding FROM photos_face", sql)
 
     def test_insert_reads_the_vector_off_the_row(self):
         # The only bind is the pk: the vector and the partition are the row's.
         self.assertEqual(FACES.sqlite_insert_sql().count("%s"), 1)
 
-    def test_knn_is_keyed_on_the_rowid_column_not_the_implicit_rowid(self):
-        self.assertIn("t.vec_rowid = knn.rowid", FACES.sqlite_nearest_sql())
+    def test_vec0_is_keyed_on_the_uuid_not_the_implicit_rowid(self):
+        self.assertIn("uuid text primary key", FACES.sqlite_forward_sql())
+        self.assertIn("t.uuid = knn.uuid", FACES.sqlite_nearest_sql())
 
 
 class VectorSqlCommandTests(SimpleTestCase):

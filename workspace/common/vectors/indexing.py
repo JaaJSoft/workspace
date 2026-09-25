@@ -10,9 +10,7 @@ owns the read path and stays free of a dependency on this one.
 
 from django.db import DEFAULT_DB_ALIAS, connections, transaction
 
-from workspace.common.rowids import adapt_pk, claim_rowid
-
-from . import active_backend, sqlite_vec_available
+from . import active_backend, bind_uuid, sqlite_vec_available
 from .encoding import from_bytes, normalize, pg_literal, to_bytes
 from .postgres import PgvectorNearest, pgvector_available, vector_column_exists
 from .sqlite import SqliteVecNearest
@@ -30,7 +28,7 @@ def index_vector(index, pk, vector, *, using=DEFAULT_DB_ALIAS):
     stored = normalize(vector, index.dims)
     blob = to_bytes(stored)
     conn = connections[using]
-    param = adapt_pk(pk, conn)
+    param = bind_uuid(pk, conn)
     backend = active_backend(index, conn)
     with transaction.atomic(using=using), conn.cursor() as cursor:
         if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
@@ -38,28 +36,26 @@ def index_vector(index, pk, vector, *, using=DEFAULT_DB_ALIAS):
             return
         cursor.execute(index.update_source_sql(), [blob, param])
         if isinstance(backend, SqliteVecNearest):
-            _reindex_sqlite_row(index, cursor, pk, param)
+            cursor.execute(index.sqlite_delete_sql(), [param])
+            cursor.execute(index.sqlite_insert_sql(), [param])
 
 
 def drop_vector(index, pk, *, using=DEFAULT_DB_ALIAS):
     """Remove row *pk*'s vector: the source and whatever is derived from it.
 
-    On SQLite the vec0 table is a separate table, so call this while the row
-    still exists when the row itself is about to be deleted - the key is read
-    off it. An entry left behind is harmless to results (the KNN joins back to
-    live rows) but takes a slot among the k until the next rebuild.
+    On SQLite the vec0 table is a separate table, so a deleted row's entry
+    stays there until this runs - before or after the delete, the entry is
+    keyed on the pk alone. Call it from a pre_delete or post_delete receiver.
     """
     conn = connections[using]
-    param = adapt_pk(pk, conn)
+    param = bind_uuid(pk, conn)
     backend = active_backend(index, conn)
     with transaction.atomic(using=using), conn.cursor() as cursor:
         if isinstance(backend, PgvectorNearest):  # pragma: no cover - PG only
             cursor.execute(index.pg_clear_sql(), [param])
             return
         if isinstance(backend, SqliteVecNearest):
-            rowid = _read_rowid(index, cursor, param)
-            if rowid is not None:
-                cursor.execute(index.sqlite_delete_sql(), [rowid])
+            cursor.execute(index.sqlite_delete_sql(), [param])
         cursor.execute(index.update_source_sql(), [None, param])
 
 
@@ -84,45 +80,9 @@ def rebuild_vector_index(index, *, using=DEFAULT_DB_ALIAS):
                     _backfill_pg(index, conn)
     elif conn.vendor == "sqlite":
         if sqlite_vec_available(conn):
-            _claim_missing_rowids(index, conn)
             with transaction.atomic(using=using):
                 _run_script(conn, index.sqlite_forward_sql())
     return active_backend(index, conn).name
-
-
-def _reindex_sqlite_row(index, cursor, pk, param):
-    if not claim_rowid(
-        cursor,
-        read_sql=index.sqlite_read_rowid_sql(),
-        assign_sql=index.sqlite_assign_rowid_sql(),
-        pk=pk,
-        param=param,
-    ):
-        return
-    rowid = _read_rowid(index, cursor, param)
-    cursor.execute(index.sqlite_delete_sql(), [rowid])
-    cursor.execute(index.sqlite_insert_sql(), [param])
-
-
-def _read_rowid(index, cursor, param):
-    cursor.execute(index.sqlite_read_rowid_sql(), [param])
-    row = cursor.fetchone()
-    return None if row is None else row[0]
-
-
-def _claim_missing_rowids(index, conn):
-    with conn.cursor() as cursor:
-        cursor.execute(index.sqlite_unkeyed_pks_sql())
-        pks = [row[0] for row in cursor.fetchall()]
-    for pk in pks:
-        with transaction.atomic(using=conn.alias), conn.cursor() as cursor:
-            claim_rowid(
-                cursor,
-                read_sql=index.sqlite_read_rowid_sql(),
-                assign_sql=index.sqlite_assign_rowid_sql(),
-                pk=pk,
-                param=pk,
-            )
 
 
 def _backfill_pg(index, conn):  # pragma: no cover - exercised on PG only

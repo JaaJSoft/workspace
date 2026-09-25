@@ -9,7 +9,7 @@ from django.db import connection, models
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.test.utils import isolate_apps
 
-from workspace.common import rowids
+from workspace.common.uuids import uuid_v7_or_v4
 from workspace.common.vectors import active_backend, checks, nearest
 from workspace.common.vectors import sqlite as sqlite_backend
 from workspace.common.vectors.encoding import from_bytes, normalize
@@ -29,13 +29,10 @@ VECTORS = VectorIndex(
     table=TABLE,
     dims=DIMS,
     source_column="embedding",
-    rowid_column="vec_rowid",
     partition_column="owner_id",
 )
 
-GLOBAL_VECTORS = VectorIndex(
-    table=TABLE, dims=DIMS, source_column="embedding", rowid_column="vec_rowid"
-)
+GLOBAL_VECTORS = VectorIndex(table=TABLE, dims=DIMS, source_column="embedding")
 
 OWNER, OTHER = 1, 2
 
@@ -44,12 +41,12 @@ def _create_table(cursor):
     if connection.vendor == "postgresql":
         cursor.execute(
             f"CREATE TABLE {TABLE} (uuid uuid PRIMARY KEY, owner_id integer, "
-            f"embedding bytea, vec_rowid bigint UNIQUE)"
+            f"embedding bytea)"
         )
     else:
         cursor.execute(
             f"CREATE TABLE {TABLE} (uuid char(32) PRIMARY KEY, owner_id integer, "
-            f"embedding blob, vec_rowid bigint UNIQUE)"
+            f"embedding blob)"
         )
 
 
@@ -134,15 +131,14 @@ class _FixtureTestCase(TestCase):
     def _stored(self, pk):
         param = pk if connection.vendor == "postgresql" else pk.hex
         with connection.cursor() as cursor:
-            cursor.execute(
-                f"SELECT embedding, vec_rowid FROM {TABLE} WHERE uuid = %s", [param]
-            )
-            return cursor.fetchone()
+            cursor.execute(f"SELECT embedding FROM {TABLE} WHERE uuid = %s", [param])
+            row = cursor.fetchone()
+        return None if row is None else row[0]
 
-    def _vec_rowids(self):
+    def _vec_keys(self):
         with connection.cursor() as cursor:
-            cursor.execute(f"SELECT rowid FROM {VECTORS.vec_table}")
-            return {row[0] for row in cursor.fetchall()}
+            cursor.execute(f"SELECT uuid FROM {VECTORS.vec_table}")
+            return {uuid.UUID(row[0]) for row in cursor.fetchall()}
 
     def _require_derived_index(self):
         if not _derived_index_available():
@@ -172,14 +168,14 @@ class WriteTests(_FixtureTestCase):
     def test_the_source_column_holds_the_normalized_float32(self):
         pk = self._row()
         index_vector(VECTORS, pk, [2] + [0] * (DIMS - 1))
-        blob, _ = self._stored(pk)
+        blob = self._stored(pk)
         np.testing.assert_array_equal(from_bytes(blob, DIMS), [1] + [0] * (DIMS - 1))
 
     def test_drop_clears_the_vector(self):
         pk = self._row()
         index_vector(VECTORS, pk, _fixture_vectors(1)[0])
         drop_vector(VECTORS, pk)
-        self.assertIsNone(self._stored(pk)[0])
+        self.assertIsNone(self._stored(pk))
         self.assertEqual(
             nearest(VECTORS, _fixture_vectors(1)[0], partition=OWNER, k=5), []
         )
@@ -195,7 +191,7 @@ class WriteTests(_FixtureTestCase):
         pk = self._row()
         with self.assertRaises(ValueError):
             index_vector(VECTORS, pk, [1, 2])
-        self.assertIsNone(self._stored(pk)[0])
+        self.assertIsNone(self._stored(pk))
 
 
 class NearestTests(_FixtureTestCase):
@@ -260,24 +256,9 @@ class SqliteVecTests(_FixtureTestCase):
             self.skipTest("SQLite + sqlite-vec required")
         super().setUp()
 
-    def test_the_key_is_derived_from_the_uuid(self):
+    def test_the_entry_is_keyed_on_the_uuid(self):
         pk = self._rows_with_vectors(_fixture_vectors(1))[0]
-        self.assertEqual(self._stored(pk)[1], pk.int & rowids.ROWID_MASK)
-        self.assertEqual(self._vec_rowids(), {pk.int & rowids.ROWID_MASK})
-
-    def test_a_taken_key_is_stepped_over_not_shared(self):
-        victim = self._rows_with_vectors(_fixture_vectors(1))[0]
-        pk = self._row()
-        with connection.cursor() as cursor:
-            cursor.execute(
-                f"UPDATE {TABLE} SET vec_rowid = %s WHERE uuid = %s",
-                [pk.int & rowids.ROWID_MASK, victim.hex],
-            )
-        vector = _fixture_vectors(2)[1]
-        index_vector(VECTORS, pk, vector)
-        self.assertEqual(self._stored(pk)[1], (pk.int + 1) & rowids.ROWID_MASK)
-        [(found, _)] = nearest(VECTORS, vector, partition=OWNER, k=1)
-        self.assertEqual(found, pk)
+        self.assertEqual(self._vec_keys(), {pk})
 
     def test_the_partition_is_the_rows_own(self):
         pk = self._rows_with_vectors(_fixture_vectors(1), owner=OWNER)[0]
@@ -286,7 +267,7 @@ class SqliteVecTests(_FixtureTestCase):
                 f"UPDATE {TABLE} SET owner_id = %s WHERE uuid = %s", [OTHER, pk.hex]
             )
         # Stale until reindexed, which re-derives the partition from the row.
-        blob, _ = self._stored(pk)
+        blob = self._stored(pk)
         index_vector(VECTORS, pk, from_bytes(blob, DIMS))
         query = from_bytes(blob, DIMS)
         self.assertEqual(nearest(VECTORS, query, partition=OWNER, k=5), [])
@@ -297,7 +278,16 @@ class SqliteVecTests(_FixtureTestCase):
     def test_drop_removes_the_vec0_entry(self):
         pk = self._rows_with_vectors(_fixture_vectors(1))[0]
         drop_vector(VECTORS, pk)
-        self.assertEqual(self._vec_rowids(), set())
+        self.assertEqual(self._vec_keys(), set())
+
+    def test_drop_after_the_row_is_gone_still_removes_the_entry(self):
+        # A post_delete receiver, or a cleanup after a bulk delete, only has
+        # the pk left: the entry must not need the row to be found.
+        pk = self._rows_with_vectors(_fixture_vectors(1))[0]
+        with connection.cursor() as cursor:
+            cursor.execute(f"DELETE FROM {TABLE} WHERE uuid = %s", [pk.hex])
+        drop_vector(VECTORS, pk)
+        self.assertEqual(self._vec_keys(), set())
 
     def test_an_entry_whose_row_is_gone_is_not_returned(self):
         vectors = _fixture_vectors(2)
@@ -308,21 +298,20 @@ class SqliteVecTests(_FixtureTestCase):
             [pk for pk, _ in nearest(VECTORS, vectors[0], partition=OWNER, k=5)], [kept]
         )
 
-    def test_rebuild_purges_orphans_and_indexes_unkeyed_rows(self):
+    def test_rebuild_purges_orphans_and_indexes_missed_rows(self):
         vectors = _fixture_vectors(3)
         gone, kept = self._rows_with_vectors(vectors[:2])
-        # Written while sqlite-vec was missing: a source, no key, no entry.
+        # Written while sqlite-vec was missing: a source, no entry.
         late = self._row()
         with _without_sqlite_vec():
             index_vector(VECTORS, late, vectors[2])
-        self.assertIsNone(self._stored(late)[1])
+        self.assertEqual(self._vec_keys(), {gone, kept})
         with connection.cursor() as cursor:
             cursor.execute(f"DELETE FROM {TABLE} WHERE uuid = %s", [gone.hex])
 
         self.assertEqual(rebuild_vector_index(VECTORS), "sqlite-vec")
 
-        expected = {kept.int & rowids.ROWID_MASK, self._stored(late)[1]}
-        self.assertEqual(self._vec_rowids(), expected)
+        self.assertEqual(self._vec_keys(), {kept, late})
         [(found, _)] = nearest(VECTORS, vectors[2], partition=OWNER, k=1)
         self.assertEqual(found, late)
 
@@ -341,7 +330,7 @@ class SqliteVecTests(_FixtureTestCase):
         )
 
         self.assertIn(f"{TABLE}.embedding: sqlite-vec", out.getvalue())
-        self.assertEqual(self._vec_rowids(), {pk.int & rowids.ROWID_MASK})
+        self.assertEqual(self._vec_keys(), {pk})
 
 
 class FallbackTests(_FixtureTestCase):
@@ -386,9 +375,7 @@ class FallbackMathTests(SimpleTestCase):
         )
 
     def test_l2_metric(self):
-        index = VectorIndex(
-            table="t", dims=2, source_column="e", rowid_column="r", metric="l2"
-        )
+        index = VectorIndex(table="t", dims=2, source_column="e", metric="l2")
         rows = [
             ("a", normalize([1, 0], 2).tobytes()),
             ("b", normalize([0, 1], 2).tobytes()),
@@ -398,7 +385,7 @@ class FallbackMathTests(SimpleTestCase):
         self.assertAlmostEqual(results[1][1], float(np.sqrt(2)), places=5)
 
     def test_a_zero_vector_ranks_last_instead_of_poisoning_the_ranking(self):
-        index = VectorIndex(table="t", dims=2, source_column="e", rowid_column="r")
+        index = VectorIndex(table="t", dims=2, source_column="e")
         rows = [
             ("zero", np.zeros(2, dtype="<f4").tobytes()),
             ("far", normalize([-1, 0], 2).tobytes()),
@@ -426,10 +413,9 @@ class SurvivesATableRebuildTests(TransactionTestCase):
             self.skipTest("SQLite + sqlite-vec required")
 
         class Face(models.Model):
-            uuid = models.UUIDField(primary_key=True, default=uuid.uuid4)
+            uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4)
             owner_id = models.IntegerField(null=True)
             embedding = models.BinaryField(null=True)
-            vec_rowid = models.BigIntegerField(null=True, unique=True)
 
             class Meta:
                 app_label = "common"

@@ -2,7 +2,7 @@
 
 import hashlib
 import os
-from io import BytesIO, StringIO
+from io import BytesIO
 from unittest.mock import patch
 
 from django.conf import settings
@@ -11,23 +11,23 @@ from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
-from django.core.management.base import CommandError
-from django.db import connection
 from django.test import TestCase
-from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.content_hash import (
     find_duplicates,
     hash_storage_file,
     hash_stream,
+    pending_hash_qs,
+    refresh_content_hash,
 )
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource
 
+from .catch_up import run_catch_up
 from .test_webdav import _make_environ
 
 User = get_user_model()
@@ -334,7 +334,7 @@ class UploadDuplicateApiTests(APITestCase):
         self.assertNotIn("duplicates", response.data)
 
 
-class BackfillFileHashesTests(TestCase):
+class ContentHashCatchUpTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="backfill", password="pass")
 
@@ -346,13 +346,16 @@ class BackfillFileHashesTests(TestCase):
         f.refresh_from_db()
         return f
 
+    def test_registered_with_the_catch_up(self):
+        self.assertIs(get_catch_up("content_hash").process, refresh_content_hash)
+
     def test_fills_missing_hashes_from_storage(self):
         f = self._legacy_file("old.txt", HELLO)
-        out = StringIO()
-        call_command("backfill_file_hashes", stdout=out)
+
+        self.assertEqual(run_catch_up("content_hash"), 1)
         f.refresh_from_db()
         self.assertEqual(f.content_hash, HELLO_SHA256)
-        self.assertIn("Updated: 1", out.getvalue())
+        self.assertEqual(run_catch_up("content_hash"), 0)
 
     def test_leaves_existing_hashes_and_folders_alone(self):
         f = FileService.create_file(
@@ -360,91 +363,45 @@ class BackfillFileHashesTests(TestCase):
         )
         File.objects.filter(pk=f.pk).update(content_hash="f" * 64)
         FileService.create_folder(self.user, "Docs")
-        call_command("backfill_file_hashes", stdout=StringIO())
+
+        self.assertEqual(run_catch_up("content_hash"), 0)
         f.refresh_from_db()
         self.assertEqual(f.content_hash, "f" * 64)
 
-    def test_dry_run_writes_nothing(self):
-        f = self._legacy_file("old.txt", HELLO)
-        out = StringIO()
-        call_command("backfill_file_hashes", "--dry-run", stdout=out)
+    def test_reanalyze_corrects_a_wrong_hash(self):
+        f = FileService.create_file(
+            self.user, "new.txt", content=ContentFile(HELLO, name="new.txt")
+        )
+        File.objects.filter(pk=f.pk).update(content_hash="f" * 64)
         f.refresh_from_db()
-        self.assertEqual(f.content_hash, "")
-        self.assertIn("Would update: 1", out.getvalue())
 
-    def test_rejects_batch_size_below_one(self):
-        for value in ("0", "-1"):
-            with self.assertRaises(CommandError):
-                call_command("backfill_file_hashes", "--batch-size", value)
-
-    def test_rejects_negative_limit_and_honours_zero(self):
-        f = self._legacy_file("old.txt", HELLO)
-        with self.assertRaises(CommandError):
-            call_command("backfill_file_hashes", "--limit", "-1")
-        call_command("backfill_file_hashes", "--limit", "0", stdout=StringIO())
-        f.refresh_from_db()
-        self.assertEqual(f.content_hash, "")
-        call_command("backfill_file_hashes", "--limit", "1", stdout=StringIO())
+        self.assertIn(
+            f.pk, pending_hash_qs(reanalyze=True).values_list("pk", flat=True)
+        )
+        self.assertTrue(refresh_content_hash(f))
         f.refresh_from_db()
         self.assertEqual(f.content_hash, HELLO_SHA256)
 
-    def test_blob_vanishing_after_the_existence_check_counts_as_missing(self):
-        self._legacy_file("gone.txt", HELLO)
-        later = self._legacy_file("still-there.txt", b"still")
-        with patch(
-            "workspace.files.management.commands.backfill_file_hashes.hash_storage_file",
-            side_effect=[FileNotFoundError("gone"), _sha256(b"still")],
-        ):
-            out = StringIO()
-            call_command("backfill_file_hashes", stdout=out)
-        later.refresh_from_db()
-        self.assertEqual(later.content_hash, _sha256(b"still"))
-        self.assertIn("Updated: 1, missing: 1", out.getvalue())
-
-    def test_reads_candidates_in_closed_pages_never_across_a_flush(self):
-        # A streaming iterator keeps a read cursor open while _flush() opens
-        # a write transaction; on SQLite (WAL, BEGIN IMMEDIATE) that raises
-        # "database is locked" as soon as the app commits meanwhile. Pin the
-        # page-by-page shape: every candidate SELECT is bounded to the batch
-        # size and there are as many of them as pages, so no cursor outlives
-        # the page it belongs to.
-        for i in range(5):
-            self._legacy_file(f"f{i}.txt", f"data-{i}".encode())
-        with CaptureQueriesContext(connection) as ctx:
-            call_command("backfill_file_hashes", "--batch-size", "2", stdout=StringIO())
-        candidate_selects = [
-            q["sql"]
-            for q in ctx.captured_queries
-            if q["sql"].startswith("SELECT") and "content_hash" in q["sql"]
-        ]
-        # 5 rows in pages of 2: three full/partial pages plus the empty tail.
-        self.assertEqual(len(candidate_selects), 4)
-        self.assertTrue(all("LIMIT 2" in sql for sql in candidate_selects))
-        self.assertEqual(File.objects.filter(content_hash="").count(), 0)
-
     def test_does_not_overwrite_a_hash_written_meanwhile(self):
         f = self._legacy_file("old.txt", HELLO)
-        original = File.objects.filter
 
-        def rewrite_then_filter(*args, **kwargs):
-            # A concurrent content write lands between hashing and the flush.
-            if kwargs.get("content_hash") == "" and "pk" in kwargs:
-                original(pk=f.pk).update(content_hash=_sha256(b"fresh"))
-                File.objects.filter = original
-            return original(*args, **kwargs)
+        def written_meanwhile(storage, name):
+            # A concurrent content write lands while the blob is being read.
+            File.objects.filter(pk=f.pk).update(content_hash=_sha256(b"fresh"))
+            return HELLO_SHA256
 
-        out = StringIO()
-        with patch.object(File.objects, "filter", side_effect=rewrite_then_filter):
-            call_command("backfill_file_hashes", stdout=out)
+        with patch(
+            "workspace.files.services.content_hash.hash_storage_file",
+            side_effect=written_meanwhile,
+        ):
+            self.assertFalse(refresh_content_hash(f))
         f.refresh_from_db()
         self.assertEqual(f.content_hash, _sha256(b"fresh"))
-        self.assertIn("Updated: 0", out.getvalue())
 
-    def test_counts_missing_blobs(self):
+    def test_a_missing_blob_leaves_the_file_pending(self):
         f = self._legacy_file("gone.txt", HELLO)
         f.content.storage.delete(f.content.name)
-        out = StringIO()
-        call_command("backfill_file_hashes", stdout=out)
-        f.refresh_from_db()
-        self.assertEqual(f.content_hash, "")
-        self.assertIn("missing: 1", out.getvalue())
+
+        with self.assertLogs("workspace.files.services.content_hash", "WARNING"):
+            self.assertFalse(refresh_content_hash(f))
+        self.assertIn(f.pk, pending_hash_qs().values_list("pk", flat=True))

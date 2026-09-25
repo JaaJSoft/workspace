@@ -139,33 +139,74 @@ def purge_trash(self):
     }
 
 
-@shared_task(name="files.generate_thumbnails", bind=True, max_retries=0)
-def generate_thumbnails(self, retry_failed=False):
-    """Generate thumbnails for image files that don't have one yet."""
-    from workspace.files.services.thumbnails.generation import (
-        generate_missing_thumbnails,
+# Each pass queues one catch_up_file task per pending file of every
+# registered reader (services/catch_up.py), so the work spreads over every
+# worker. The bound, per reader, caps what one pass puts on the broker; a
+# larger backlog drains over the following passes.
+CATCH_UP_LIMIT = 20_000
+
+# The tasks of a pass expire at this share of FILES_CATCH_UP_INTERVAL, counted
+# from the start of the pass, so each one has run or been dropped by the time
+# the next pass queues the files still pending: a file that keeps failing is
+# attempted once per pass, not twice. The worker checks the expiry when it
+# pops a message, so an expired one stays in Redis until then - at most one
+# pass's worth.
+CATCH_UP_EXPIRY_SHARE = 0.9
+
+
+@shared_task(name="files.catch_up", bind=True, max_retries=0)
+def catch_up(self, names=None):
+    """Queue the pending files of every reader, or of the readers in *names*.
+
+    Returns how many files were queued per reader.
+    """
+    from workspace.files.services.catch_up import queue_pending, resolve
+
+    readers, unknown = resolve(names)
+    if unknown:
+        logger.warning("Catch-up skips unknown reader(s): %s", ", ".join(unknown))
+    expires = timezone.now() + timedelta(
+        seconds=settings.FILES_CATCH_UP_INTERVAL * CATCH_UP_EXPIRY_SHARE
     )
-
-    logger.info("Starting thumbnail generation (retry_failed=%s)...", retry_failed)
-    stats = generate_missing_thumbnails(retry_failed=retry_failed)
-    logger.info("Thumbnail generation complete: %s", stats)
+    stats = {
+        reader.name: queue_pending(
+            reader, limit=CATCH_UP_LIMIT, expires=expires, resume=True
+        )
+        for reader in readers
+    }
+    logger.info("Catch-up queued %s", stats)
     return stats
 
 
-# The hourly pass is there for the uploads whose event dispatch was lost, not
-# for backfills: bounded, it finishes well inside the hour even on the first
-# run over an existing library.
-PROBE_CATCH_UP_LIMIT = 2000
+@shared_task(name="files.catch_up_file", bind=True, max_retries=0, ignore_result=True)
+def catch_up_file(self, name, file_uuid, reanalyze=False):
+    """Run reader *name* on one file.
 
+    Unless *reanalyze*, a file that is no longer pending is skipped without
+    reading its blob: its upload event may have processed it while this task
+    waited in the queue.
 
-@shared_task(name="files.probe_media", bind=True, max_retries=0)
-def probe_media(self):
-    """Catch-up pass: probe audio and video files missing or stale MediaInfo."""
-    from workspace.files.services.media_info import probe_pending
+    max_retries=0 on purpose: a blob that cannot be read now will not be read
+    on a retry a few seconds later either, and the hourly catch-up already
+    comes back for it.
+    """
+    from django.core.exceptions import ValidationError
 
-    stats = probe_pending(limit=PROBE_CATCH_UP_LIMIT)
-    logger.info("Media probe catch-up complete: %s", stats)
-    return stats
+    from workspace.files.models import File
+    from workspace.files.services.catch_up import get_catch_up
+
+    reader = get_catch_up(name)
+    if reader is None:
+        return {"status": "skipped"}
+    try:
+        file_obj = (
+            reader.pending_files(reanalyze=reanalyze)
+            .select_related("owner")
+            .get(uuid=file_uuid)
+        )
+    except File.DoesNotExist, ValidationError, ValueError, TypeError:
+        return {"status": "skipped"}
+    return {"status": "ok" if reader.process(file_obj) else "skipped"}
 
 
 @shared_task(name="files.sync_folder", bind=True, max_retries=0)
@@ -210,8 +251,8 @@ def index_search_document(self, file_uuid, include_descendants=False):
 
     max_retries=0 on purpose: an extractor that cannot read a blob will not
     read it on the next attempt either, and a permanently unindexable file
-    must never turn into a retry loop. The file stays findable by name once
-    the backfill command runs.
+    must never turn into a retry loop. The hourly catch-up comes back for a
+    file whose document is missing or stale.
     """
     from django.core.exceptions import ValidationError
 
@@ -236,7 +277,7 @@ def index_search_document(self, file_uuid, include_descendants=False):
         # duplicated subtree would otherwise never be indexed. Paged by
         # keyset rather than streamed: a read cursor held open across the
         # write transactions below is what makes SQLite raise "database is
-        # locked" (see reindex_files_search for the full reason).
+        # locked" (see services/catch_up.py).
         descendants = File.objects.filter(path__startswith=f"{file_obj.path}/")
         last_uuid = None
         while True:
@@ -261,22 +302,14 @@ def scan_file(self, file_uuid):
 
     max_retries=0 on purpose: a daemon that is down will be down on the next
     attempt too, and a permanently unscannable file must never turn into a
-    retry loop. The scan_files management command is the recovery path.
+    retry loop. The hourly catch-up comes back for a file left without a
+    current verdict.
     """
-    import time
-
     from django.core.exceptions import ValidationError
 
-    from workspace.files.metrics import (
-        FILES_MALWARE_SCAN_DURATION,
-        FILES_MALWARE_SCAN_RESULT,
-    )
-    from workspace.files.models import File, FileScan
-    from workspace.files.services.scanning.base import ScanVerdict
-    from workspace.files.services.scanning.capped import CappedReader
-    from workspace.files.services.scanning.policy import blocked_statuses
+    from workspace.files.models import File
     from workspace.files.services.scanning.registry import get_scanner
-    from workspace.files.services.search_index import unindex_file
+    from workspace.files.services.scanning.scan import scan_and_record
 
     scanner = get_scanner()
     if scanner is None:
@@ -287,116 +320,7 @@ def scan_file(self, file_uuid):
     except File.DoesNotExist, ValidationError, ValueError, TypeError:
         # Hard-deleted between the event and this task, or a malformed id.
         return {"status": "not_found"}
-
-    if file_obj.node_type != File.NodeType.FILE or not file_obj.content:
-        return {"status": "not_applicable"}
-
-    # Identifies the bytes this run is about to look at. Re-read just before
-    # the verdict is written, it is what tells a slow scan of the old content
-    # apart from a verdict about what the row holds now.
-    scanned_hash = file_obj.content_hash
-
-    max_bytes = int(getattr(settings, "FILES_MALWARE_SCAN_MAX_BYTES", 25 * 1024 * 1024))
-
-    if (file_obj.size or 0) > max_bytes:
-        verdict = ScanVerdict(
-            status=FileScan.Status.SKIPPED, detail="larger than the scan size cap"
-        )
-    else:
-        started = time.monotonic()
-        try:
-            handle = file_obj.content.open("rb")
-        except (FileNotFoundError, OSError) as exc:
-            logger.warning(
-                "Malware scan cannot read blob for %s: %s",
-                scrub(file_obj.content.name),
-                scrub(str(exc)),
-            )
-            verdict = ScanVerdict(status=FileScan.Status.ERROR, detail=str(exc)[:500])
-        else:
-            try:
-                reader = CappedReader(handle, max_bytes)
-                verdict = scanner.scan(reader, name=file_obj.name)
-                if reader.truncated and verdict.status == FileScan.Status.CLEAN:
-                    # Clean as far as we looked is not the same as clean.
-                    verdict = ScanVerdict(
-                        status=FileScan.Status.SKIPPED,
-                        detail="larger than the scan size cap",
-                    )
-            finally:
-                handle.close()
-            FILES_MALWARE_SCAN_DURATION.observe(time.monotonic() - started)
-
-    # The content may have been replaced while this scan was running: a large
-    # infected upload takes longer to scan than the clean file that replaced
-    # it, so the two verdicts can land out of order. Writing the older one
-    # would quarantine content it never read, and permanently - max_retries=0
-    # and scan_files without --rescan both leave an existing row alone.
-    current_hash = (
-        File.objects.filter(pk=file_obj.pk)
-        .values_list("content_hash", flat=True)
-        .first()
-    )
-    if current_hash is None:
-        # Hard-deleted mid-scan; the FK would fail anyway.
-        return {"status": "not_found"}
-    if current_hash != scanned_hash:
-        logger.info(
-            "Discarding a stale malware verdict for %s: its content changed mid-scan",
-            scrub(file_obj.name),
-        )
-        return {"status": "stale"}
-
-    blocked = blocked_statuses()
-    # Read before the write: only a blocked -> readable transition has a
-    # document to restore. Re-indexing every clean verdict would extract the
-    # same text a second time for the same upload and put this task in a race
-    # with the indexing one over a single FTS row.
-    existing = (
-        FileScan.objects.filter(file=file_obj).values("status", "content_hash").first()
-        or {}
-    )
-    was_blocked = existing.get("status") in blocked
-
-    defaults = {
-        "status": verdict.status,
-        "signature": verdict.signature,
-        "detail": verdict.detail,
-        # The hash captured before the blob was opened, not a fresh read:
-        # it is the one the verdict actually describes, and the staleness
-        # check above has just confirmed the row still holds it.
-        "content_hash": scanned_hash,
-        "scanned_at": timezone.now(),
-    }
-    # An administrator's clearance is pinned to the hash on this row, and the
-    # line above moves that pin. Leaving the columns alone would hand a verdict
-    # about bytes nobody vouched for the clearance granted to the previous
-    # ones. A rescan of the same bytes keeps it, which is the whole point of
-    # the action - scan_files would otherwise undo every clearance it passes.
-    if existing.get("content_hash") != scanned_hash:
-        defaults["overridden_at"] = None
-        defaults["overridden_by"] = None
-        defaults["override_reason"] = ""
-
-    FileScan.objects.update_or_create(file=file_obj, defaults=defaults)
-    FILES_MALWARE_SCAN_RESULT.labels(result=verdict.status).inc()
-
-    if verdict.status in blocked:
-        unindex_file(file_obj)
-        if file_obj.has_thumbnail:
-            from workspace.files.services.thumbnails.generation import (
-                delete_thumbnail,
-            )
-
-            delete_thumbnail(file_obj.uuid)
-            file_obj.has_thumbnail = False
-            file_obj.save(update_fields=["has_thumbnail"])
-    elif was_blocked:
-        from workspace.files.services.scanning.override import restore_after_unblock
-
-        restore_after_unblock(file_obj)
-
-    return {"status": verdict.status, "signature": verdict.signature}
+    return scan_and_record(file_obj, scanner)
 
 
 @shared_task(name="files.notify_share_link_uploads")

@@ -1,9 +1,9 @@
 """Probe audio and video files for their length and codecs (MediaInfo rows).
 
 Runs off-request: from the file-event handler once an upload or a content
-replacement has committed, and from the hourly catch-up for whatever a lost
-dispatch left behind. Nothing is written on a deployment without ffprobe, so
-the files become pending again as soon as it is installed.
+replacement has committed, and from the hourly catch-up (services/catch_up.py)
+for whatever that path missed. Nothing is written on a deployment without
+ffprobe, so the files are probed as soon as it is installed.
 """
 
 import logging
@@ -15,6 +15,7 @@ from workspace.common.logging import scrub
 
 from ..models import File, FileEvent, MediaInfo
 from . import ffmpeg
+from .catch_up import register_catch_up
 from .event_dispatch import on_file_event
 from .scanning.policy import exclude_blocked, is_blocked
 from .thumbnails.generation import VIDEO_LABELS
@@ -26,11 +27,6 @@ AUDIO_LABELS = frozenset({"mp3", "ogg", "flac", "wav", "wma", "au"})
 MEDIA_INFO_LABELS = AUDIO_LABELS | VIDEO_LABELS
 
 CODEC_FIELD_LENGTH = MediaInfo._meta.get_field("video_codec").max_length
-
-# Rows fetched per keyset page by probe_pending: a read cursor held open
-# across the write transactions of the loop makes SQLite raise "database is
-# locked", so the selection is paged rather than streamed.
-_PAGE_SIZE = 200
 
 
 def is_probe_candidate(file_obj):
@@ -47,27 +43,23 @@ def is_probe_candidate(file_obj):
     )
 
 
-def pending_qs():
+def pending_qs(*, reanalyze=False):
     """Live audio and video files whose MediaInfo row is missing or stale.
+
+    With *reanalyze*, every live audio and video file, up to date or not.
 
     A file whose own hash is empty (registered before hashes existed) only
     counts when it has no row at all: comparing an empty hash would mark it
     stale on every pass, forever.
     """
-    # Both content exclusions are needed: Django renders exclude(content="")
-    # as NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    return exclude_blocked(
-        File.objects.filter(
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-            type__in=MEDIA_INFO_LABELS,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-        .filter(
-            Q(media_info__isnull=True)
-            | (~Q(content_hash="") & ~Q(media_info__content_hash=F("content_hash")))
-        )
+    qs = exclude_blocked(
+        File.objects.alive().with_blob().filter(type__in=MEDIA_INFO_LABELS)
+    )
+    if reanalyze:
+        return qs
+    return qs.filter(
+        Q(media_info__isnull=True)
+        | (~Q(content_hash="") & ~Q(media_info__content_hash=F("content_hash")))
     )
 
 
@@ -131,36 +123,20 @@ def probe_file(file_obj):
     return info
 
 
+def refresh_media_info(file_obj):
+    """Probe *file_obj* for the catch-up; True when its row was written."""
+    return probe_file(file_obj) is not None
+
+
+def _ffprobe_installed():
+    # Read at call time: the probe binary is looked up once at import, but
+    # tests switch it off per case.
+    return bool(ffmpeg.FFPROBE)
+
+
 def forget(file_obj):
     """Drop the row of a file that stopped being an audio or video file."""
     MediaInfo.objects.filter(file_id=file_obj.pk).delete()
-
-
-def probe_pending(*, limit=None):
-    """Probe pending files inline, up to *limit*; return counts for the logs."""
-    stats = {"probed": 0, "skipped": 0}
-    if not ffmpeg.FFPROBE:
-        return stats
-    produced = 0
-    last_uuid = None
-    while limit is None or produced < limit:
-        page_qs = pending_qs().order_by("uuid")
-        if last_uuid is not None:
-            page_qs = page_qs.filter(uuid__gt=last_uuid)
-        page = list(page_qs.values_list("uuid", flat=True)[:_PAGE_SIZE])
-        if not page:
-            break
-        last_uuid = page[-1]
-        for uuid in page:
-            if limit is not None and produced >= limit:
-                break
-            produced += 1
-            file_obj = File.objects.filter(uuid=uuid).first()
-            if file_obj is not None and probe_file(file_obj) is not None:
-                stats["probed"] += 1
-            else:
-                stats["skipped"] += 1
-    return stats
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
@@ -173,3 +149,11 @@ def probe_file_for_event(event):
         probe_file(file_obj)
     elif event.action == FileEvent.Action.CONTENT_REPLACED:
         forget(file_obj)
+
+
+register_catch_up(
+    "media_info",
+    pending=pending_qs,
+    process=refresh_media_info,
+    enabled=_ffprobe_installed,
+)

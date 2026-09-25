@@ -2,14 +2,21 @@
 
 Registered with the file-event dispatcher, so it runs off-request (the
 files.run_file_event_handlers task) once an upload or a content replacement
-has committed. The hourly photos.analyze_pending task catches whatever a lost
-dispatch left behind.
+has committed. Registered with the hourly catch-up too (files.catch_up), which
+analyzes whatever that path missed.
 """
 
 from workspace.files.models import FileEvent
+from workspace.files.services.catch_up import register_catch_up
 from workspace.files.services.event_dispatch import on_file_event
 
-from .analysis import analyze_media, forget_media, is_media_candidate
+from .analysis import (
+    analyze_media,
+    forget_media,
+    is_media_candidate,
+    pending_media_qs,
+    refresh_media_item,
+)
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
@@ -23,3 +30,6 @@ def analyze_media_for_event(event):
     elif event.action == FileEvent.Action.CONTENT_REPLACED:
         # A photo overwritten with something else is no longer a photo.
         forget_media(file_obj)
+
+
+register_catch_up("photos", pending=pending_media_qs, process=refresh_media_item)

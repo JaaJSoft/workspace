@@ -31,7 +31,7 @@ MEDIA_LABELS = RASTER_LABELS | VIDEO_LABELS
 # number when its reader starts filling a new field: rows written by an older
 # version count as pending again, so existing libraries fill in on their own,
 # without a manual --reanalyze (at CATCH_UP_LIMIT files per hourly pass, see
-# tasks.py, so a large library takes several passes).
+# files/tasks.py, so a very large library takes several passes).
 ANALYSIS_VERSIONS = {
     # 2: lens, exposure settings and GPS position.
     MediaItem.MediaType.PHOTO: 2,
@@ -47,11 +47,6 @@ _EMPTY_METADATA = {
     **dataclasses.asdict(PhotoMetadata()),
     **dataclasses.asdict(video.VideoMetadata()),
 }
-
-# Rows fetched per keyset page by analyze_pending. A read cursor held open
-# across the write transactions of the loop is what makes SQLite raise
-# "database is locked", so the selection is paged rather than streamed.
-_PAGE_SIZE = 200
 
 
 def library_candidates(files):
@@ -96,13 +91,7 @@ def pending_media_qs(*, reanalyze=False):
     Quarantined files are left out: reading their bytes is exactly what the
     malware policy forbids, and they are hidden from the timeline anyway.
     """
-    # Both content exclusions are needed: Django renders exclude(content="")
-    # as NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    qs = exclude_blocked(
-        library_candidates(File.objects.filter(deleted_at__isnull=True))
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
+    qs = exclude_blocked(library_candidates(File.objects.alive().with_blob()))
     if reanalyze:
         return qs
     pending = Q(media_item__isnull=True) | (
@@ -163,6 +152,11 @@ def analyze_media(file_obj):
     return item
 
 
+def refresh_media_item(file_obj):
+    """Analyze *file_obj* for the catch-up; True when its row was written."""
+    return analyze_media(file_obj) is not None
+
+
 def _cannot_read(file_obj, exc):
     logger.warning(
         "Media analysis cannot read the blob of %s: %s",
@@ -209,35 +203,3 @@ def _read_video(file_obj, default_tz):
 def forget_media(file_obj):
     """Drop the row of a file that stopped being a photo or a video."""
     MediaItem.objects.filter(file_id=file_obj.pk).delete()
-
-
-def pending_media_ids(*, reanalyze=False, limit=None):
-    """Yield the uuids of pending files, paged by keyset."""
-    queryset = pending_media_qs(reanalyze=reanalyze)
-    produced = 0
-    last_uuid = None
-    while True:
-        page_qs = queryset.order_by("uuid")
-        if last_uuid is not None:
-            page_qs = page_qs.filter(uuid__gt=last_uuid)
-        page = list(page_qs.values_list("uuid", flat=True)[:_PAGE_SIZE])
-        if not page:
-            return
-        last_uuid = page[-1]
-        for uuid in page:
-            if limit is not None and produced >= limit:
-                return
-            yield uuid
-            produced += 1
-
-
-def analyze_pending(*, limit=None):
-    """Analyze every pending file inline; return counts for the logs."""
-    stats = {"analyzed": 0, "skipped": 0}
-    for uuid in pending_media_ids(limit=limit):
-        file_obj = File.objects.select_related("owner").filter(uuid=uuid).first()
-        if file_obj is not None and analyze_media(file_obj) is not None:
-            stats["analyzed"] += 1
-        else:
-            stats["skipped"] += 1
-    return stats

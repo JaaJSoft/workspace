@@ -139,8 +139,10 @@ class FilesConfig(AppConfig):
         # Deployment-time configuration validation (import registers the check).
         from workspace.files import checks  # noqa: F401
 
-        # Register file-event handlers (import for the @on_file_event side effect).
+        # Register file-event handlers and catch-up readers (import for the
+        # @on_file_event and register_catch_up side effects).
         from workspace.files.services import (  # noqa: F401
+            content_hash,
             link_events,
             media_info,
             search_events,

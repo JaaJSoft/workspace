@@ -1,8 +1,14 @@
 """Content hashing for file rows and the duplicate lookup built on it."""
 
 import hashlib
+import logging
+
+from workspace.common.logging import scrub
 
 from ..models import File
+from .catch_up import register_catch_up
+
+logger = logging.getLogger(__name__)
 
 HASH_ALGORITHM = "sha256"
 _CHUNK_SIZE = 64 * 1024
@@ -61,3 +67,44 @@ def find_duplicates(file_obj):
     else:
         qs = qs.filter(owner_id=file_obj.owner_id, group__isnull=True)
     return qs.name_ordered()
+
+
+def pending_hash_qs(*, reanalyze=False):
+    """File rows holding a blob but no hash: registered before hashes existed,
+    or by the disk sync while their blob was unreadable.
+
+    With *reanalyze*, every file row holding a blob.
+    """
+    # Both exclusions are needed: Django renders exclude(content="") as
+    # NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
+    qs = (
+        File.objects.filter(node_type=File.NodeType.FILE)
+        .exclude(content="")
+        .exclude(content__isnull=True)
+    )
+    return qs if reanalyze else qs.filter(content_hash="")
+
+
+def refresh_content_hash(file_obj):
+    """Hash *file_obj*'s blob into its row; return the digest, or None.
+
+    None when the blob cannot be read, or when the row's hash changed while
+    the blob was being read: the content write that changed it stored the
+    digest of the new bytes, which must not be overwritten.
+    """
+    try:
+        digest = hash_storage_file(file_obj.content.storage, file_obj.content.name)
+    except OSError as exc:
+        logger.warning(
+            "Cannot hash the blob of %s: %s",
+            scrub(file_obj.content.name),
+            scrub(str(exc)),
+        )
+        return None
+    written = File.objects.filter(
+        pk=file_obj.pk, content_hash=file_obj.content_hash
+    ).update(content_hash=digest)
+    return digest if written else None
+
+
+register_catch_up("content_hash", pending=pending_hash_qs, process=refresh_content_hash)

@@ -238,7 +238,7 @@ class ScanTaskTests(TestCase):
         self.assertEqual(scan.override_reason, "")
 
     def test_a_clearance_survives_a_rescan_of_the_very_same_bytes(self):
-        """Otherwise the next scan_files pass undoes every clearance."""
+        """Otherwise the next catch-up pass undoes every clearance."""
         f = self._file()
         File.objects.filter(pk=f.pk).update(content_hash="h1")
         f.refresh_from_db()
@@ -281,9 +281,8 @@ class ScanTaskTests(TestCase):
     def test_a_late_verdict_does_not_overwrite_the_newer_one(self):
         """The scan of v1 outlives the scan of v2 and returns last.
 
-        Without the hash guard it quarantines content it never read, and the
-        quarantine is permanent: max_retries=0, and scan_files skips a file
-        that already has a row unless it is run with --rescan.
+        Without the hash guard it quarantines content it never read, and
+        max_retries=0 means nothing but the next catch-up pass releases it.
         """
         f = self._file()
         f.content_hash = "v1"

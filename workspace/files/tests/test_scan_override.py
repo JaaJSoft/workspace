@@ -87,7 +87,7 @@ class OverridePolicyTests(TestCase):
 
         Adding the override columns to scan_file's ``defaults`` would break
         this - and would make the admin action pointless, since the next
-        scan_files pass re-blocks everything it just cleared.
+        catch-up pass re-blocks everything it just cleared.
         """
         self._override()
         FileScan.objects.update_or_create(

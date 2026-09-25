@@ -3,7 +3,7 @@
 The content itself never reaches the database: extract_text() reads the blob,
 index_document() binds the text as a statement parameter, and only the
 resulting lexemes are stored. Nothing here can be rebuilt from the database
-alone, which is why reindex_files_search exists.
+alone.
 
 Writes happen off-request, from the files.index_search_document task, so a
 rename or an edit shows up in search a moment later rather than instantly.

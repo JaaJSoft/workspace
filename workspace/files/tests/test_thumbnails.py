@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
-from PIL import Image
+from PIL import ExifTags, Image
 
 from workspace.files.services import FileService
 from workspace.files.services.thumbnails.generation import (
@@ -80,6 +80,26 @@ class GenerateThumbnailOutputTests(TestCase):
         self.assertEqual(img.format, "WEBP")
         self.assertLessEqual(max(img.size), max(THUMBNAIL_MAX_SIZE))
         self.assertEqual(img.size, (512, 384))
+
+    def test_the_source_exif_is_not_carried_over(self):
+        # The original keeps its GPS position; the thumbnail, which every
+        # file grid and the photo timeline serve, must not.
+        exif = Image.Exif()
+        gps = exif.get_ifd(ExifTags.IFD.GPSInfo)
+        gps[ExifTags.GPS.GPSLatitudeRef] = "N"
+        gps[ExifTags.GPS.GPSLatitude] = (48.0, 51.0, 30.0)
+        gps[ExifTags.GPS.GPSLongitudeRef] = "E"
+        gps[ExifTags.GPS.GPSLongitude] = (2.0, 17.0, 40.0)
+        exif[ExifTags.Base.Model] = "iPhone 15 Pro"
+        buf = io.BytesIO()
+        Image.new("RGB", (800, 600), (10, 120, 200)).save(buf, "JPEG", exif=exif)
+        f = self._make_file("gps.jpg", buf.getvalue(), "jpeg", "image/jpeg")
+
+        self.assertTrue(generate_thumbnail(f))
+
+        img = self._open_thumb(f.uuid)
+        self.assertNotIn("exif", img.info)
+        self.assertEqual(dict(img.getexif()), {})
 
     def test_landscape_png_aspect_ratio_preserved(self):
         data = _image_bytes("RGB", (1000, 500), "PNG", (0, 80, 0))

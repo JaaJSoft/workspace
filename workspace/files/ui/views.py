@@ -11,6 +11,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.files.properties_sections import render_properties_sections
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.public_links import resolve_within, scope_q
@@ -566,6 +567,7 @@ def properties(request, uuid):
         request,
         "files/ui/partials/properties_content.html",
         {
+            "sections": render_properties_sections(request, request.user, file_obj),
             "file": file_obj,
             "is_owner": is_owner,
             "is_favorite": is_favorite,

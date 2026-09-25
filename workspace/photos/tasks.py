@@ -8,7 +8,10 @@ logger = logging.getLogger(__name__)
 
 # The hourly pass is there for the uploads whose event dispatch was lost, not
 # for backfills (the analyze_photos command does those): bounded, it finishes
-# well inside the hour even on the first run over an existing library.
+# well inside the hour even on the first run over an existing library. When a
+# new reader version marks every existing row as pending (ANALYSIS_VERSIONS in
+# services/analysis.py), a library larger than this fills in over several
+# passes.
 CATCH_UP_LIMIT = 2000
 
 

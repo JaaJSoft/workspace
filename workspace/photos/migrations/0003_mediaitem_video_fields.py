@@ -13,16 +13,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddField(
             model_name="mediaitem",
-            name="codec",
-            field=models.CharField(blank=True, default="", max_length=32),
-        ),
-        migrations.AddField(
-            model_name="mediaitem",
-            name="duration",
-            field=models.FloatField(blank=True, null=True),
-        ),
-        migrations.AddField(
-            model_name="mediaitem",
             name="latitude",
             field=models.FloatField(blank=True, null=True),
         ),

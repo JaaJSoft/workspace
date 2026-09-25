@@ -9,6 +9,34 @@ register = template.Library()
 
 
 @register.filter
+def media_duration(seconds):
+    """A length as a player shows it: "0:07", "12:34", "1:02:03"."""
+    total = max(round(seconds), 1)
+    hours, rest = divmod(total, 3600)
+    minutes, seconds = divmod(rest, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes}:{seconds:02d}"
+
+
+_CODEC_NAMES = {
+    "h264": "H.264",
+    "hevc": "HEVC",
+    "vp8": "VP8",
+    "vp9": "VP9",
+    "av1": "AV1",
+    "mpeg4": "MPEG-4",
+    "prores": "ProRes",
+}
+
+
+@register.filter
+def codec_name(codec):
+    """ffprobe's codec name as people know it: "hevc" reads "HEVC"."""
+    return _CODEC_NAMES.get(codec, str(codec or "").upper())
+
+
+@register.filter
 def type_to_icon(file_type):
     from workspace.files.services.filetype import get_icon
 

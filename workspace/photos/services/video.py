@@ -1,4 +1,7 @@
-"""Read the recording metadata of a video: date, duration, size, codec, place.
+"""Read the recording metadata of a video: date, size, camera, place.
+
+Its length and codecs are a property of the file, not of the library: the
+files module probes them (``files.services.media_info``).
 
 ffprobe reads the container header only, so a long recording costs about as
 much to analyze as a short one.
@@ -38,7 +41,6 @@ _LOCATION_KEYS = (_APPLE + "location.iso6709", "location", "location-eng")
 _MAKE_KEYS = (_APPLE + "make", "com.android.manufacturer", "make")
 _MODEL_KEYS = (_APPLE + "model", "com.android.model", "model")
 _EARLIEST_RECORDING = datetime(1971, 1, 1, tzinfo=UTC)
-CODEC_FIELD_LENGTH = 32
 
 
 @dataclass(frozen=True)
@@ -48,8 +50,6 @@ class VideoMetadata:
     height: int | None = None
     camera_make: str = ""
     camera_model: str = ""
-    duration: float | None = None
-    codec: str = ""
     latitude: float | None = None
     longitude: float | None = None
 
@@ -69,7 +69,7 @@ def parse_report(report, *, default_tz=UTC):
     *default_tz* reads a QuickTime creation date written without an offset.
     """
     tags = _lowercase_keys(report.get("format", {}).get("tags"))
-    stream = _video_stream(report.get("streams") or [])
+    stream = ffmpeg.video_stream(report)
     stream_tags = _lowercase_keys(stream.get("tags"))
 
     width, height = _positive(stream.get("width")), _positive(stream.get("height"))
@@ -83,8 +83,6 @@ def parse_report(report, *, default_tz=UTC):
         height=height,
         camera_make=_first(tags, _MAKE_KEYS)[:CAMERA_FIELD_LENGTH],
         camera_model=_first(tags, _MODEL_KEYS)[:CAMERA_FIELD_LENGTH],
-        duration=ffmpeg.duration(report),
-        codec=str(stream.get("codec_name") or "")[:CODEC_FIELD_LENGTH],
         latitude=latitude,
         longitude=longitude,
     )
@@ -102,17 +100,6 @@ def _first(tags, keys):
         if isinstance(value, str) and value.strip():
             return value.replace("\x00", "").strip()
     return ""
-
-
-def _video_stream(streams):
-    """The first real video stream: an embedded cover picture is not one."""
-    for stream in streams:
-        if not isinstance(stream, dict) or stream.get("codec_type") != "video":
-            continue
-        if (stream.get("disposition") or {}).get("attached_pic"):
-            continue
-        return stream
-    return {}
 
 
 def _positive(value):

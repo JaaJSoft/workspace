@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.db import connection
-from django.test import SimpleTestCase, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
@@ -15,7 +15,6 @@ from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, T
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import MediaItem
-from workspace.photos.templatetags.photos_filters import clip_duration
 from workspace.users.services.settings import set_setting
 
 from .images import make_photo, make_video, upload
@@ -250,7 +249,9 @@ class VideoTests(PhotosViewTestCase):
 
     def _badges(self, response):
         return re.findall(
-            r"data-video-badge.*?<span>([^<]+)</span>", response.content.decode(), re.S
+            r"data-duration-badge.*?<span>([^<]+)</span>",
+            response.content.decode(),
+            re.S,
         )
 
     def test_videos_sit_in_the_timeline_with_the_photos(self):
@@ -309,19 +310,6 @@ class CountLabelTests(PhotosViewTestCase):
 
         self.assertContains(response, "2 videos")
         self.assertNotContains(response, "0 photos")
-
-
-class ClipDurationTests(SimpleTestCase):
-    def test_as_a_player_shows_it(self):
-        for seconds, shown in (
-            (0.2, "0:01"),
-            (3.0, "0:03"),
-            (59.6, "1:00"),
-            (754.4, "12:34"),
-            (3723, "1:02:03"),
-        ):
-            with self.subTest(seconds=seconds):
-                self.assertEqual(clip_duration(seconds), shown)
 
 
 class DateTests(PhotosViewTestCase):

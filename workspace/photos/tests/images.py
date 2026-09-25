@@ -6,6 +6,7 @@ from django.core.files.base import ContentFile
 from django.utils import timezone
 from PIL import ExifTags, Image
 
+from workspace.files.models import MediaInfo
 from workspace.files.services import FileService
 from workspace.files.tests.videos import clip_bytes
 from workspace.photos.models import MediaItem
@@ -77,21 +78,36 @@ def make_photo(owner, name, taken_at, *, parent=None, **fields):
 
 
 def make_video(
-    owner, name, taken_at, *, clip="clip.webm", duration=3.0, parent=None, **fields
+    owner,
+    name,
+    taken_at,
+    *,
+    clip="clip.webm",
+    duration=3.0,
+    video_codec="vp9",
+    parent=None,
+    **fields,
 ):
-    """An uploaded clip (see files/tests/videos.py) with its MediaItem row
-    written directly."""
+    """An uploaded clip (see files/tests/videos.py) with its MediaItem and
+    MediaInfo rows written directly."""
     file_obj = upload(owner, name, clip_bytes(clip), parent=parent)
     MediaItem.objects.update_or_create(
         file=file_obj,
         defaults={
             "media_type": MediaItem.MediaType.VIDEO,
             "taken_at": taken_at,
-            "duration": duration,
-            "codec": "vp9",
             "content_hash": file_obj.content_hash,
             "analyzed_at": timezone.now(),
             **fields,
+        },
+    )
+    MediaInfo.objects.update_or_create(
+        file=file_obj,
+        defaults={
+            "duration": duration,
+            "video_codec": video_codec,
+            "content_hash": file_obj.content_hash,
+            "probed_at": timezone.now(),
         },
     )
     return file_obj

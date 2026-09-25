@@ -226,7 +226,7 @@ class AnalyzeVideoTests(TestCase):
         return upload(self.user, name, clip_bytes(name) if data is None else data)
 
     @requires_ffmpeg
-    def test_writes_recording_date_size_duration_codec_and_place(self):
+    def test_writes_recording_date_size_camera_and_place(self):
         f = self._video()
 
         item = analyze_media(f)
@@ -234,7 +234,6 @@ class AnalyzeVideoTests(TestCase):
         self.assertEqual(item.media_type, MediaItem.MediaType.VIDEO)
         self.assertEqual(item.taken_at, datetime(2024, 7, 14, 10, 30, 1, tzinfo=UTC))
         self.assertEqual((item.width, item.height), (54, 96))
-        self.assertEqual((item.duration, item.codec), (3.0, "h264"))
         self.assertEqual((item.latitude, item.longitude), (48.8584, 2.2945))
         self.assertEqual((item.camera_make, item.camera_model), ("Apple", "iPhone 15"))
         self.assertEqual(item.content_hash, f.content_hash)
@@ -250,7 +249,7 @@ class AnalyzeVideoTests(TestCase):
 
         self.assertEqual(item.media_type, MediaItem.MediaType.VIDEO)
         self.assertIsNone(item.taken_at)
-        self.assertIsNone(item.duration)
+        self.assertIsNone(item.width)
 
     @patch("workspace.files.services.ffmpeg.FFPROBE", None)
     def test_without_ffprobe_the_video_goes_to_undated(self):

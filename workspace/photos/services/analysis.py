@@ -126,8 +126,6 @@ def analyze_media(file_obj):
         file_id=file_obj.pk,
         defaults={
             "media_type": media_type,
-            "duration": None,
-            "codec": "",
             "latitude": None,
             "longitude": None,
             **dataclasses.asdict(metadata),

@@ -1,4 +1,5 @@
 <!-- Media Viewer (Video / Audio) -->
+{% load file_filters %}
 <div class="flex flex-col h-full bg-base-200">
 
   {% if is_video %}
@@ -35,7 +36,14 @@
         </div>
         <p class="font-medium">This browser can't play this video</p>
         <p class="text-sm text-base-content/60 max-w-sm">
-          It is probably recorded in a format only some browsers can decode. Download it to watch it in a video player.
+          {% with codec=file.media_info.video_codec %}
+            {% if codec %}
+              It is encoded in {{ codec|codec_name }}, which only some browsers can decode.
+            {% else %}
+              It is probably recorded in a format only some browsers can decode.
+            {% endif %}
+          {% endwith %}
+          Download it to watch it in a video player.
         </p>
         <a
           href="{{ content_url }}"

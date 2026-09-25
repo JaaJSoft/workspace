@@ -50,18 +50,7 @@
     {% endif %}
   </button>
   {% if file.media_item.media_type == "video" %}
-    {# Bottom left: the menu button takes the bottom right corner on hover, the star the top right one. #}
-    <span
-      class="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white pointer-events-none"
-      data-video-badge
-    >
-      <i data-lucide="play" class="w-3 h-3 fill-current" aria-hidden="true"></i>
-      {% if file.media_item.duration is not None %}
-        <span>{{ file.media_item.duration|clip_duration }}</span>
-      {% else %}
-        <span class="sr-only">Video</span>
-      {% endif %}
-    </span>
+    {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
   {% endif %}
   {% comment %}
     The two overlay buttons are the Files mosaic cards' own: a filled star

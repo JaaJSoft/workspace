@@ -133,10 +133,11 @@ def parse_date_position(raw, tz):
 
 
 def with_timeline_fields(files_qs, user):
-    """Load what a tile shows: the MediaItem row, the favorite star, and whether
-    the file's folder is one the user can browse in Files (their own or one
-    of their groups') or only the file itself was shared with them."""
-    return files_qs.select_related("media_item").annotate(
+    """Load what a tile shows: the MediaItem and MediaInfo rows, the favorite
+    star, and whether the file's folder is one the user can browse in Files
+    (their own or one of their groups') or only the file itself was shared
+    with them."""
+    return files_qs.select_related("media_item", "media_info").annotate(
         is_favorite=Exists(
             FileFavorite.objects.filter(owner=user, file_id=OuterRef("pk"))
         ),

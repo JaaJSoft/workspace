@@ -35,10 +35,6 @@ class MediaItem(models.Model):
     height = models.PositiveIntegerField(null=True, blank=True)
     camera_make = models.CharField(max_length=128, blank=True, default="")
     camera_model = models.CharField(max_length=128, blank=True, default="")
-    # Videos only: the length in seconds, and ffprobe's name for the video
-    # codec ("h264", "hevc", "vp9"...), which decides where it plays.
-    duration = models.FloatField(null=True, blank=True)
-    codec = models.CharField(max_length=32, blank=True, default="")
     # Signed decimal degrees, where the file says it was taken.
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)

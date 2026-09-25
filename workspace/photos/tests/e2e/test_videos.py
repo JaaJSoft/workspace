@@ -40,7 +40,7 @@ class PhotosVideoTests(PlaywrightTestCase):
     def test_a_video_tile_plays_in_the_viewer_among_the_photos(self):
         self._open()
         expect(self.page.locator("header")).to_contain_text("1 photo, 1 video")
-        expect(self._tile(self.video).locator("[data-video-badge]")).to_have_text(
+        expect(self._tile(self.video).locator("[data-duration-badge]")).to_have_text(
             "0:03"
         )
 
@@ -65,6 +65,7 @@ class PhotosVideoTests(PlaywrightTestCase):
             "iphone.mp4",
             datetime(2024, 7, 14, 18, tzinfo=UTC),
             clip="clip_hevc.mp4",
+            video_codec="hevc",
         )
         self._open()
 
@@ -73,6 +74,7 @@ class PhotosVideoTests(PlaywrightTestCase):
         fallback = self.page.locator("[data-video-unplayable]")
         expect(fallback).to_be_visible()
         expect(fallback).to_contain_text("This browser can't play this video")
+        expect(fallback).to_contain_text("It is encoded in HEVC")
         expect(fallback.get_by_role("link", name="Download")).to_have_attribute(
             "download", "iphone.mp4"
         )

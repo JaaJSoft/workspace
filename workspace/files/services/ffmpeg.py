@@ -103,6 +103,33 @@ def duration(report):
     return value if value > 0 else None
 
 
+def video_stream(report):
+    """The first real video stream of a :func:`probe` report, or ``{}``.
+
+    An embedded cover picture (an album art, a thumbnail track) is reported
+    as a video stream too, and is not one.
+    """
+    for stream in _streams(report):
+        if stream.get("codec_type") != "video":
+            continue
+        if (stream.get("disposition") or {}).get("attached_pic"):
+            continue
+        return stream
+    return {}
+
+
+def audio_stream(report):
+    """The first audio stream of a :func:`probe` report, or ``{}``."""
+    for stream in _streams(report):
+        if stream.get("codec_type") == "audio":
+            return stream
+    return {}
+
+
+def _streams(report):
+    return [s for s in report.get("streams") or [] if isinstance(s, dict)]
+
+
 def extract_frame(path, *, at, max_size, timeout=FRAME_TIMEOUT):
     """One frame of the video at *path*, *at* seconds in, as PNG bytes.
 

@@ -141,12 +141,6 @@ class DimensionsTests(SimpleTestCase):
 
 
 class StreamTests(SimpleTestCase):
-    def test_codec_and_duration(self):
-        meta = parse_report(_report())
-
-        self.assertEqual(meta.codec, "h264")
-        self.assertEqual(meta.duration, 12.5)
-
     def test_cover_picture_is_not_the_video(self):
         meta = parse_report(
             _report(
@@ -169,15 +163,14 @@ class StreamTests(SimpleTestCase):
             )
         )
 
-        self.assertEqual((meta.codec, meta.width, meta.height), ("hevc", 3840, 2160))
+        self.assertEqual((meta.width, meta.height), (3840, 2160))
 
     def test_no_video_stream(self):
         meta = parse_report(
             _report(streams=[{"codec_type": "audio", "codec_name": "opus"}])
         )
 
-        self.assertEqual((meta.codec, meta.width, meta.height), ("", None, None))
-        self.assertEqual(meta.duration, 12.5)
+        self.assertEqual((meta.width, meta.height), (None, None))
 
     def test_an_empty_report(self):
         self.assertEqual(parse_report({}), VideoMetadata())
@@ -265,8 +258,6 @@ class ReadMetadataTests(TestCase):
                 height=96,
                 camera_make="Apple",
                 camera_model="iPhone 15",
-                duration=3.0,
-                codec="h264",
                 latitude=48.8584,
                 longitude=2.2945,
             ),

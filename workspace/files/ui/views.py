@@ -253,11 +253,13 @@ def _build_context(request, folder=None, is_trash_view=False):
         file_id=OuterRef("pk"),
     )
     nodes = with_scan(
-        nodes.annotate(
+        nodes.select_related("media_info")
+        .annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
-        ).prefetch_related(
+        )
+        .prefetch_related(
             # Scoped to the viewer's own tags: the shared-with-me listing shows
             # other people's files, and their tags must never leak into it.
             Prefetch(

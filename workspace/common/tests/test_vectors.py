@@ -341,6 +341,20 @@ class SqliteVecTests(_FixtureTestCase):
         results = nearest(VECTORS, vectors[0], partition=OWNER, k=5)
         self.assertEqual([pk for pk, _ in results], [kept])
 
+    def test_a_small_partition_does_not_reserve_a_large_chunk(self):
+        # Every partition value gets its own chunk, zero-filled to chunk_size
+        # vectors and never reclaimed: at sqlite-vec's default of 1024 that is
+        # 2 MB per user at 512 dimensions, whatever they actually store.
+        def pages():
+            with connection.cursor() as cursor:
+                cursor.execute("PRAGMA page_count")
+                return cursor.fetchone()[0]
+
+        before = pages()
+        for owner, vector in enumerate(_fixture_vectors(50)):
+            self._rows_with_vectors([vector], owner=owner)
+        self.assertLess(pages() - before, 150)
+
     def test_rebuild_creates_a_table_the_migration_could_not(self):
         with connection.cursor() as cursor:
             cursor.execute(VECTORS.sqlite_reverse_sql())

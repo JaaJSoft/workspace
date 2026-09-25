@@ -55,6 +55,11 @@ class DeclarationTests(SimpleTestCase):
             with self.subTest(dims=dims), self.assertRaises(ValueError):
                 VectorIndex(table="t", dims=dims, source_column="e")
 
+    def test_chunk_size_is_what_vec0_accepts(self):
+        for chunk_size in (0, 12, 4104, True):
+            with self.subTest(chunk_size=chunk_size), self.assertRaises(ValueError):
+                VectorIndex(table="t", dims=3, source_column="e", chunk_size=chunk_size)
+
     def test_metric_and_partition_type_are_checked(self):
         with self.assertRaises(ValueError):
             VectorIndex(table="t", dims=3, source_column="e", metric="dot")
@@ -113,6 +118,7 @@ class SqliteSqlTests(SimpleTestCase):
         self.assertIn("CREATE VIRTUAL TABLE photos_face_embedding_vec USING vec0(", sql)
         self.assertIn("owner_id integer partition key", sql)
         self.assertIn("embedding float[512] distance_metric=cosine", sql)
+        self.assertIn("chunk_size=64", sql)
 
     def test_unpartitioned_table_has_no_partition_key(self):
         sql = GLOBAL_L2.sqlite_forward_sql()

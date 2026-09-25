@@ -66,6 +66,11 @@ class VectorIndex:
     # A UUID primary key (char(32) hex on SQLite): the vec0 table is keyed on it.
     pk_column: str = "uuid"
     metric: str = "cosine"
+    # Vectors per vec0 chunk. Every partition value gets its own chunk,
+    # zero-filled to this size and never reclaimed, so sqlite-vec's default of
+    # 1024 costs 2 MB per user at 512 dimensions however few vectors they own.
+    # 64 keeps a small partition small for ~13% slower KNN on a large one.
+    chunk_size: int = 64
 
     def __post_init__(self):
         names = (
@@ -84,6 +89,16 @@ class VectorIndex:
         if self.metric not in _METRICS:
             raise ValueError(
                 f"metric must be one of {sorted(_METRICS)}, got {self.metric!r}"
+            )
+        chunk_size = self.chunk_size
+        if (
+            isinstance(chunk_size, bool)
+            or not isinstance(chunk_size, int)
+            or not 8 <= chunk_size <= 4096
+            or chunk_size % 8
+        ):
+            raise ValueError(
+                f"chunk_size must be a multiple of 8 up to 4096, got {chunk_size!r}"
             )
         if self.partition_type not in _PARTITION_TYPES:
             raise ValueError(
@@ -170,7 +185,8 @@ class VectorIndex:
             f"CREATE VIRTUAL TABLE {self.vec_table} USING vec0(\n"
             f"  {self.pk_column} text primary key,\n"
             f"{partition}"
-            f"  {SQLITE_VECTOR_COLUMN} float[{self.dims}] distance_metric={metric}\n"
+            f"  {SQLITE_VECTOR_COLUMN} float[{self.dims}] distance_metric={metric},\n"
+            f"  chunk_size={self.chunk_size}\n"
             f");\n"
             f"\n"
             f"{self.sqlite_backfill_sql()};"

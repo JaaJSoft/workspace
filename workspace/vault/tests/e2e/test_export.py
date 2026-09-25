@@ -215,8 +215,11 @@ class ExportWalkTests(VaultBrowserCase):
         box.get_by_test_id("export-generate").click()
         preview.wait_for(timeout=15000)
         drawn = preview.inner_text()
+        # Counted on the capitals, not the hyphens: the list holds 'yo-yo',
+        # which a split on "-" reads as two words.
+        words = re.findall(r"(?:^|-)[A-Z]", drawn)
         self.assertEqual(
-            len(drawn.split("-")), 8, f"the dialog opened on {drawn!r}, not eight words"
+            len(words), 8, f"the dialog opened on {drawn!r}, not eight words"
         )
 
         reported = box.get_by_text(re.compile(r"^\d+ bits")).inner_text()

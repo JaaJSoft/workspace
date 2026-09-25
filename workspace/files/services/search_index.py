@@ -59,8 +59,10 @@ def build_document(file_obj):
 def index_file(file_obj):
     """(Re)index one file. Never raises - indexing is a side effect."""
     try:
+        # Read outside the transaction, for the reason build_documents gives.
+        document = build_document(file_obj)
         with transaction.atomic():
-            index_document(FILES_FTS, file_obj.pk, build_document(file_obj))
+            index_document(FILES_FTS, file_obj.pk, document)
             if File.objects.filter(pk=file_obj.pk).exists():
                 _record_state(file_obj)
     except Exception:

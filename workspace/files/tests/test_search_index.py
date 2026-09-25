@@ -280,6 +280,24 @@ class PendingSearchTests(TestCase):
         self.assertEqual(len(existence_checks), 1)
         self.assertEqual(SearchIndexState.objects.count(), 4)
 
+    def test_the_blob_is_read_outside_the_write_transaction(self):
+        """SQLite opens transactions IMMEDIATE: extracting inside one would
+        hold the write lock for as long as the blob takes to read."""
+        note = self._note()
+        outer = len(connection.atomic_blocks)
+        depth_while_reading = []
+
+        def read(file_obj):
+            depth_while_reading.append(len(connection.atomic_blocks))
+            return ""
+
+        with mock.patch(
+            "workspace.files.services.search_index.extract_text", side_effect=read
+        ):
+            self.assertTrue(index_file(note))
+
+        self.assertEqual(depth_while_reading, [outer])
+
     def test_a_failed_index_records_no_state(self):
         note = self._note()
         with mock.patch(

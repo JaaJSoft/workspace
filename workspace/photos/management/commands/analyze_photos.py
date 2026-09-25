@@ -6,6 +6,7 @@ second run finds nothing left to do.
 
 from django.core.management.base import BaseCommand
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.photos.services.analysis import pending_media_ids, pending_media_qs
 
 
@@ -36,7 +37,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from workspace.photos.tasks import ANALYSIS_PRIORITY, analyze_photo
+        from workspace.photos.tasks import analyze_photo
 
         limit = options["limit"]
         if options["dry_run"]:
@@ -55,7 +56,7 @@ class Command(BaseCommand):
                 analyze_photo.apply_async(
                     args=[str(uuid)],
                     kwargs={"reanalyze": reanalyze},
-                    priority=ANALYSIS_PRIORITY,
+                    priority=BACKGROUND_PRIORITY,
                 )
             dispatched += 1
 

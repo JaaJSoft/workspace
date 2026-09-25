@@ -5,9 +5,9 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import analyze_media
-from workspace.photos.tasks import ANALYSIS_PRIORITY
 
 from .images import jpeg_bytes, png_bytes, upload
 
@@ -71,7 +71,7 @@ class AnalyzePhotosCommandTests(TestCase):
         )
         for call in queue.call_args_list:
             self.assertEqual(call.kwargs["kwargs"], {"reanalyze": False})
-            self.assertEqual(call.kwargs["priority"], ANALYSIS_PRIORITY)
+            self.assertEqual(call.kwargs["priority"], BACKGROUND_PRIORITY)
 
     def test_queued_reanalysis_reads_up_to_date_rows(self):
         analyze_media(self.dated)

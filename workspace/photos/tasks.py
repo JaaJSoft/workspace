@@ -4,26 +4,23 @@ import logging
 
 from celery import shared_task
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY
+
 logger = logging.getLogger(__name__)
 
 # The hourly pass catches the uploads whose event dispatch was lost, and the
 # rows a new reader version marks as pending again (ANALYSIS_VERSIONS in
 # services/analysis.py), which on a large library is a whole backfill. It
 # queues one analyze_photo task per file, so the reading spreads over every
-# worker. The bound caps what one pass puts on the broker; a larger backlog
-# drains over the following passes.
+# worker, at BACKGROUND_PRIORITY so the backlog never delays other tasks. The
+# bound caps what one pass puts on the broker; a larger backlog drains over
+# the following passes.
 CATCH_UP_LIMIT = 20_000
 
 # One beat interval (the analyze-photos entry of CELERY_BEAT_SCHEDULE). A task
 # no worker reached by the next pass is dropped, and that pass queues the file
 # again, so a backlog larger than the workers' throughput never piles up.
 CATCH_UP_EXPIRES = 3600.0
-
-# The lowest Redis priority: every other task queued meanwhile runs first, so
-# a backlog of thousands of files never holds up a thumbnail or a mail sync.
-# On Redis a lower number is consumed first, and a task sent without a
-# priority gets 0.
-ANALYSIS_PRIORITY = 9
 
 
 @shared_task(name="photos.analyze_pending", bind=True, max_retries=0)
@@ -34,7 +31,7 @@ def analyze_pending(self):
     queued = 0
     for uuid in pending_media_ids(limit=CATCH_UP_LIMIT):
         analyze_photo.apply_async(
-            args=[str(uuid)], priority=ANALYSIS_PRIORITY, expires=CATCH_UP_EXPIRES
+            args=[str(uuid)], priority=BACKGROUND_PRIORITY, expires=CATCH_UP_EXPIRES
         )
         queued += 1
     logger.info("Media analysis catch-up queued %d file(s)", queued)

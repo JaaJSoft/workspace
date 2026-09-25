@@ -27,8 +27,8 @@ MEDIA_INFO_LABELS = AUDIO_LABELS | VIDEO_LABELS
 
 CODEC_FIELD_LENGTH = MediaInfo._meta.get_field("video_codec").max_length
 
-# Rows fetched per keyset page by probe_pending: a read cursor held open
-# across the write transactions of the loop makes SQLite raise "database is
+# Rows fetched per keyset page by pending_ids: a read cursor held open across
+# the write transactions of a loop over it makes SQLite raise "database is
 # locked", so the selection is paged rather than streamed.
 _PAGE_SIZE = 200
 
@@ -136,31 +136,23 @@ def forget(file_obj):
     MediaInfo.objects.filter(file_id=file_obj.pk).delete()
 
 
-def probe_pending(*, limit=None):
-    """Probe pending files inline, up to *limit*; return counts for the logs."""
-    stats = {"probed": 0, "skipped": 0}
-    if not ffmpeg.FFPROBE:
-        return stats
+def pending_ids(*, limit=None):
+    """Yield the uuids of pending files, up to *limit*, paged by keyset."""
     produced = 0
     last_uuid = None
-    while limit is None or produced < limit:
+    while True:
         page_qs = pending_qs().order_by("uuid")
         if last_uuid is not None:
             page_qs = page_qs.filter(uuid__gt=last_uuid)
         page = list(page_qs.values_list("uuid", flat=True)[:_PAGE_SIZE])
         if not page:
-            break
+            return
         last_uuid = page[-1]
         for uuid in page:
             if limit is not None and produced >= limit:
-                break
+                return
+            yield uuid
             produced += 1
-            file_obj = File.objects.filter(uuid=uuid).first()
-            if file_obj is not None and probe_file(file_obj) is not None:
-                stats["probed"] += 1
-            else:
-                stats["skipped"] += 1
-    return stats
 
 
 @on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)

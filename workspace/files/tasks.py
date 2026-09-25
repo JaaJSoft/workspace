@@ -10,6 +10,7 @@ from django.db.models import Count, F, Q
 from django.utils import timezone
 
 from workspace.common.logging import scrub
+from workspace.common.task_priority import BACKGROUND_PRIORITY
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -152,20 +153,64 @@ def generate_thumbnails(self, retry_failed=False):
     return stats
 
 
-# The hourly pass is there for the uploads whose event dispatch was lost, not
-# for backfills: bounded, it finishes well inside the hour even on the first
-# run over an existing library.
-PROBE_CATCH_UP_LIMIT = 2000
+# The hourly pass is there for the uploads whose event dispatch was lost, and
+# for the whole library the first time ffprobe is installed. It queues one
+# probe_media_file task per file, so the probing spreads over every worker, at
+# BACKGROUND_PRIORITY so the backlog never delays other tasks. The bound caps
+# what one pass puts on the broker; a larger backlog drains over the following
+# passes.
+PROBE_CATCH_UP_LIMIT = 20_000
+
+# One beat interval (the probe-media entry of CELERY_BEAT_SCHEDULE). A task no
+# worker reached by the next pass is dropped, and that pass queues the file
+# again, so a backlog larger than the workers' throughput never piles up.
+PROBE_CATCH_UP_EXPIRES = 3600.0
 
 
 @shared_task(name="files.probe_media", bind=True, max_retries=0)
 def probe_media(self):
-    """Catch-up pass: probe audio and video files missing or stale MediaInfo."""
-    from workspace.files.services.media_info import probe_pending
+    """Catch-up pass: queue the probe of audio and video files missing or stale MediaInfo."""
+    from workspace.files.services import ffmpeg
+    from workspace.files.services.media_info import pending_ids
 
-    stats = probe_pending(limit=PROBE_CATCH_UP_LIMIT)
-    logger.info("Media probe catch-up complete: %s", stats)
-    return stats
+    queued = 0
+    # Without ffprobe every task would be a no-op and the files stay pending
+    # anyway; queueing them would only churn the broker every hour.
+    if ffmpeg.FFPROBE:
+        for uuid in pending_ids(limit=PROBE_CATCH_UP_LIMIT):
+            probe_media_file.apply_async(
+                args=[str(uuid)],
+                priority=BACKGROUND_PRIORITY,
+                expires=PROBE_CATCH_UP_EXPIRES,
+            )
+            queued += 1
+    logger.info("Media probe catch-up queued %d file(s)", queued)
+    return {"queued": queued}
+
+
+@shared_task(
+    name="files.probe_media_file", bind=True, max_retries=0, ignore_result=True
+)
+def probe_media_file(self, file_uuid):
+    """Probe one file, queued by the catch-up pass.
+
+    A file that is no longer pending is skipped without reading its blob: its
+    upload event may have probed it while this task waited in the queue.
+
+    max_retries=0 on purpose: a blob that cannot be read now will not be read
+    on a retry a few seconds later either, and the hourly catch-up already
+    comes back for it.
+    """
+    from django.core.exceptions import ValidationError
+
+    from workspace.files.models import File
+    from workspace.files.services.media_info import pending_qs, probe_file
+
+    try:
+        file_obj = pending_qs().get(uuid=file_uuid)
+    except File.DoesNotExist, ValidationError, ValueError, TypeError:
+        return {"status": "skipped"}
+    return {"status": "ok" if probe_file(file_obj) is not None else "skipped"}
 
 
 @shared_task(name="files.sync_folder", bind=True, max_retries=0)

@@ -4,10 +4,10 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 
+from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import pending_media_qs
 from workspace.photos.tasks import (
-    ANALYSIS_PRIORITY,
     CATCH_UP_EXPIRES,
     analyze_pending,
     analyze_photo,
@@ -53,7 +53,7 @@ class AnalyzePendingTaskTests(TestCase):
 
         self.assertEqual({c.kwargs["args"][0] for c in calls}, {str(a.pk), str(b.pk)})
         for call in calls:
-            self.assertEqual(call.kwargs["priority"], ANALYSIS_PRIORITY)
+            self.assertEqual(call.kwargs["priority"], BACKGROUND_PRIORITY)
             self.assertEqual(call.kwargs["expires"], CATCH_UP_EXPIRES)
 
     def test_rows_from_an_older_reader_are_read_again_once(self):

@@ -100,7 +100,7 @@ class FilesSearchTests(TestCase):
     """File search reads the full-text index, which the indexing task writes.
 
     Celery is not eager under test, so each fixture indexes itself - the same
-    thing manage.py reindex_files_search does for an existing install.
+    thing the hourly catch-up does for an existing install.
     """
 
     def setUp(self):

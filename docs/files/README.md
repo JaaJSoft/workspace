@@ -34,16 +34,15 @@ Markdown, plain text, CSV, HTML, JSON, XML and source code. Anything else - PDFs
 documents, images, archives - stays searchable by name.
 
 The index holds only the extracted words, never a copy of the file: the blob on disk
-remains the single copy of the content. Because nothing in the database can rebuild it,
-an existing installation needs one backfill after upgrading:
+remains the single copy of the content. Files are indexed as they are created, renamed or
+edited, and the hourly catch-up indexes whatever that missed: files already there when
+the feature was installed, an edit whose indexing was lost, and every file once more after
+a change to how text is extracted. To queue the whole backlog at once rather than 20,000
+files per pass:
 
 ```bash
-python manage.py reindex_files_search
+python manage.py catch_up search_index
 ```
-
-A fresh installation needs nothing - files are indexed as they are created. Run the same
-command again only after a change to how text is extracted, so already-indexed files pick
-up the new extraction.
 
 ## Office Documents
 
@@ -117,11 +116,11 @@ its own limit and the file is recorded as `skipped`, exactly as before. To
 actually scan larger files, raise `StreamMaxLength` in `clamd.conf` as well and
 restart the daemon.
 
-**Relaxing the policy does not undo the search exclusion.** Quarantining a file
-drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION` from
-`block` back to `flag` makes those files readable again, but re-scanning them
-does not put their documents back, so they stay findable by nothing but a
-browse. Run `python manage.py reindex_files_search` after relaxing the policy.
+**Relaxing the policy restores the search exclusion gradually.** Quarantining a
+file drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION`
+from `block` back to `flag` makes those files readable again, and the hourly
+catch-up puts their documents back. Run `python manage.py catch_up search_index`
+after relaxing the policy to do it at once.
 
 ### Monitoring
 

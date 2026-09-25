@@ -30,7 +30,8 @@ class CatchUp:
     # whose derived data is missing or stale; with it, every file the reader
     # reads, up to date or not.
     pending: Callable[..., QuerySet]
-    # (file) -> anything. Computes and stores the file's derived data.
+    # (file) -> truthy when it stored the file's derived data, falsy when it
+    # could not (the file stays pending for the next pass).
     process: Callable
 
 

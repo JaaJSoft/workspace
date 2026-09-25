@@ -212,7 +212,7 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
         )
     except File.DoesNotExist, ValidationError, ValueError, TypeError:
         return {"status": "skipped"}
-    return {"status": "ok" if reader.process(file_obj) is not None else "skipped"}
+    return {"status": "ok" if reader.process(file_obj) else "skipped"}
 
 
 @shared_task(name="files.sync_folder", bind=True, max_retries=0)
@@ -257,8 +257,8 @@ def index_search_document(self, file_uuid, include_descendants=False):
 
     max_retries=0 on purpose: an extractor that cannot read a blob will not
     read it on the next attempt either, and a permanently unindexable file
-    must never turn into a retry loop. The file stays findable by name once
-    the backfill command runs.
+    must never turn into a retry loop. The hourly catch-up comes back for a
+    file whose document is missing or stale.
     """
     from django.core.exceptions import ValidationError
 
@@ -283,7 +283,7 @@ def index_search_document(self, file_uuid, include_descendants=False):
         # duplicated subtree would otherwise never be indexed. Paged by
         # keyset rather than streamed: a read cursor held open across the
         # write transactions below is what makes SQLite raise "database is
-        # locked" (see reindex_files_search for the full reason).
+        # locked" (see services/catch_up.py).
         descendants = File.objects.filter(path__startswith=f"{file_obj.path}/")
         last_uuid = None
         while True:

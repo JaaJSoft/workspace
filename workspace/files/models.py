@@ -1035,6 +1035,27 @@ class MediaInfo(models.Model):
         return f"MediaInfo: {self.file_id}"
 
 
+class SearchIndexState(models.Model):
+    """What a file's full-text search document was built from.
+
+    Written with the document itself (see ``services/search_index.py``). A file
+    whose row is missing, or whose name, content or extractor version no
+    longer match it, is indexed again by the hourly catch-up.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="search_state"
+    )
+    name = models.CharField(max_length=255)
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    extractor_version = models.PositiveSmallIntegerField()
+    indexed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"SearchIndexState: {self.file_id}"
+
+
 class FileScan(models.Model):
     """The most recent malware-scan verdict for a file.
 

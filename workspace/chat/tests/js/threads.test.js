@@ -245,6 +245,7 @@ function buildSseApp({ openThreadRoot = null, showInline = false } = {}) {
       ...MIXIN_STUBS,
       getCSRFToken: () => 'csrf-token',
       document: { querySelectorAll: () => [], getElementById: () => null },
+      pageAttention: { isAttended: () => true },
       fetch: async () => ({ ok: true, json: async () => ({ cleared: 0 }) }),
       CustomEvent: class {
         constructor(type, init) {
@@ -390,6 +391,7 @@ function buildSseAppCapturingFetch({ openThreadRoot = null } = {}) {
       ...MIXIN_STUBS,
       getCSRFToken: () => 'csrf-token',
       document: { querySelectorAll: () => [], getElementById: () => null },
+      pageAttention: { isAttended: () => true },
       fetch: async (url, opts) => {
         urls.push([url, opts.method]);
         return { ok: true, json: async () => ({ cleared: 0 }) };
@@ -440,6 +442,7 @@ test('switching conversations closes the thread panel', async () => {
       ...MIXIN_STUBS,
       getCSRFToken: () => 'csrf-token',
       document: { querySelectorAll: () => [], getElementById: () => null },
+      pageAttention: { isAttended: () => true },
       fetch: async () => ({ ok: true, json: async () => ({}) }),
       localStorage: { getItem: () => '', setItem() {}, removeItem() {} },
       history: { pushState() {} },

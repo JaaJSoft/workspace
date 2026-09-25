@@ -117,6 +117,10 @@ function chatApp(currentUserId) {
         }
       });
 
+      // Messages that arrived while nobody was looking stay unread until the
+      // user actually comes back to them.
+      window.addEventListener('page:attended', () => this.catchUpUnreadOnReturn());
+
       // Save draft on page unload
       window.addEventListener('beforeunload', () => this._saveDraft());
 

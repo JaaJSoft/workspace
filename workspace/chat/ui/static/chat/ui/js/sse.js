@@ -6,6 +6,32 @@ window.chatSseMixin = function chatSseMixin() {
     // can land before a conversation is selected, and selectConversation
     // reads this back once it has one.
     generatingConversations: new Set(),
+    // Conversation that received messages while it was open but nobody was
+    // looking at the page. Marked read by catchUpUnreadOnReturn.
+    unreadWhileAway: null,
+
+    // An open tab is not someone reading: marking a message read clears its
+    // notification, and the push task drops read notifications, so a tab left
+    // open on an idle PC would silence the phone.
+    _pageIsWatched() {
+      return window.pageAttention.isAttended();
+    },
+
+    async catchUpUnreadOnReturn() {
+      const convId = this.unreadWhileAway;
+      if (!convId || !this._pageIsWatched()) return;
+      // Claimed before the await so a second trigger does not post twice.
+      this.unreadWhileAway = null;
+      if (this.activeConversation?.uuid !== convId) return;
+      if (!(await this.markAsRead(convId))) {
+        // Kept for the next return to the page to retry.
+        this.unreadWhileAway ??= convId;
+        return;
+      }
+      const conv = this.conversations.find(c => c.uuid === convId);
+      if (conv) conv.unread_count = 0;
+      this.refreshConversationItems([convId], { bump: false });
+    },
 
     async handleSSEMessage(detail) {
       const isViewing = this.activeConversation && detail.conversation_id === this.activeConversation.uuid;
@@ -52,7 +78,13 @@ window.chatSseMixin = function chatSseMixin() {
           await this._refreshCurrentMessages();
           this._animateMessageEntry(detail.message.uuid);
           if (wasAtBottom) this.scrollToBottom();
-          await this.markAsRead(detail.conversation_id);
+          if (this._pageIsWatched()) {
+            await this.markAsRead(detail.conversation_id);
+          } else {
+            this.unreadWhileAway = detail.conversation_id;
+            const conv = this.conversations.find(c => c.uuid === detail.conversation_id);
+            if (conv) conv.unread_count = (conv.unread_count || 0) + 1;
+          }
         }
       }
 
@@ -132,7 +164,10 @@ window.chatSseMixin = function chatSseMixin() {
 
       for (const conv of this.conversations) {
         const count = detail.conversations[conv.uuid] || 0;
-        if (this.activeConversation && conv.uuid === this.activeConversation.uuid) {
+        // The open conversation reads as caught up, unless its read is
+        // waiting for the user to come back.
+        const isOpen = this.activeConversation && conv.uuid === this.activeConversation.uuid;
+        if (isOpen && conv.uuid !== this.unreadWhileAway) {
           conv.unread_count = 0;
         } else {
           conv.unread_count = count;

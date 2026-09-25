@@ -76,15 +76,19 @@ def _on_task_retry(sender=None, **kwargs):
 # ---------------------------------------------------------------------------
 # Custom Collector — queue length sampled at scrape time via Redis LLEN.
 # ---------------------------------------------------------------------------
-def _priority_lists(queue_name):
+def _priority_lists(queue_name, transport_options):
     """The Redis lists holding *queue_name*'s messages, one per priority step.
 
     A message sent with a priority is pushed to its own list, which the worker
-    drains after the default one; LLEN on the queue name alone misses it.
+    drains after the default one; LLEN on the queue name alone misses it. The
+    steps and the separator are kombu's, unless the transport options change
+    them.
     """
     from kombu.transport.redis import PRIORITY_STEPS, Channel
 
-    return [queue_name] + [f"{queue_name}{Channel.sep}{p}" for p in PRIORITY_STEPS if p]
+    steps = transport_options.get("priority_steps", PRIORITY_STEPS)
+    sep = transport_options.get("sep", Channel.sep)
+    return [queue_name] + [f"{queue_name}{sep}{p}" for p in steps if p]
 
 
 class _CeleryQueueLengthCollector:
@@ -113,11 +117,17 @@ class _CeleryQueueLengthCollector:
 
             import redis
 
+            transport_options = (
+                getattr(settings, "CELERY_BROKER_TRANSPORT_OPTIONS", None) or {}
+            )
             client = redis.Redis.from_url(broker)
             try:
                 for name in queue_names:
                     try:
-                        length = sum(client.llen(key) for key in _priority_lists(name))
+                        pipe = client.pipeline(transaction=False)
+                        for key in _priority_lists(name, transport_options):
+                            pipe.llen(key)
+                        length = sum(pipe.execute())
                     except Exception:
                         logger.exception("LLEN failed for celery queue '%s'", name)
                         continue

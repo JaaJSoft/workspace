@@ -8,7 +8,7 @@ Covers:
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from prometheus_client import REGISTRY
@@ -64,6 +64,35 @@ class TaskSignalTests(TestCase):
         )
 
 
+class _FakeRedis:
+    """Answers LLEN through a pipeline, the way the collector reads it."""
+
+    def __init__(self, lengths=None, error=None):
+        self.lengths = lengths or {}
+        self.error = error
+
+    def pipeline(self, transaction=True):
+        return _FakePipeline(self)
+
+    def close(self):
+        pass
+
+
+class _FakePipeline:
+    def __init__(self, client):
+        self.client = client
+        self.keys = []
+
+    def llen(self, key):
+        self.keys.append(key)
+        return self
+
+    def execute(self):
+        if self.client.error:
+            raise self.client.error
+        return [self.client.lengths.get(key, 0) for key in self.keys]
+
+
 class QueueLengthCollectorTests(TestCase):
     def test_collector_emits_no_sample_for_non_redis_broker(self):
         collector = celery_app_module._CeleryQueueLengthCollector()
@@ -75,10 +104,7 @@ class QueueLengthCollectorTests(TestCase):
     def test_collector_emits_one_sample_per_queue_via_llen(self):
         collector = celery_app_module._CeleryQueueLengthCollector()
 
-        fake_client = MagicMock()
-        fake_client.llen.side_effect = lambda name: {"celery": 3, "priority": 7}.get(
-            name, 0
-        )
+        fake_client = _FakeRedis({"celery": 3, "priority": 7})
 
         import kombu
 
@@ -104,11 +130,7 @@ class QueueLengthCollectorTests(TestCase):
         """Redis keeps them in a list of their own, next to the queue's."""
         collector = celery_app_module._CeleryQueueLengthCollector()
 
-        fake_client = MagicMock()
-        fake_client.llen.side_effect = lambda name: {
-            "celery": 3,
-            "celery\x06\x169": 40,
-        }.get(name, 0)
+        fake_client = _FakeRedis({"celery": 3, "celery\x06\x169": 40})
 
         with (
             self.settings(CELERY_BROKER_URL="redis://localhost:6379/0"),
@@ -119,11 +141,26 @@ class QueueLengthCollectorTests(TestCase):
         samples = {s.labels["queue"]: s.value for s in families[0].samples}
         self.assertEqual(samples, {"celery": 43.0})
 
+    def test_collector_follows_the_transport_priority_options(self):
+        collector = celery_app_module._CeleryQueueLengthCollector()
+        fake_client = _FakeRedis({"celery": 1, "celery:5": 2, "celery\x06\x169": 40})
+
+        with (
+            self.settings(
+                CELERY_BROKER_URL="redis://localhost:6379/0",
+                CELERY_BROKER_TRANSPORT_OPTIONS={"priority_steps": [0, 5], "sep": ":"},
+            ),
+            patch("redis.Redis.from_url", return_value=fake_client),
+        ):
+            families = list(collector.collect())
+
+        samples = {s.labels["queue"]: s.value for s in families[0].samples}
+        self.assertEqual(samples, {"celery": 3.0})
+
     def test_collector_swallows_redis_errors(self):
         collector = celery_app_module._CeleryQueueLengthCollector()
 
-        fake_client = MagicMock()
-        fake_client.llen.side_effect = RuntimeError("redis down")
+        fake_client = _FakeRedis(error=RuntimeError("redis down"))
 
         with (
             self.settings(CELERY_BROKER_URL="redis://localhost:6379/0"),

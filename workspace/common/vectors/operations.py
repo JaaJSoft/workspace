@@ -15,50 +15,75 @@ Either way the migration applies, so the schema history is the same on every
 installation.
 """
 
+from django.db import router
 from django.db.migrations.operations.base import Operation
 
+from .indexing import backfill_pg_vectors
 from .sqlite import sqlite_vec_loaded
 
 
 class RunVectorIndexSQL(Operation):
-    reduces_to_sql = False
-    reversible = True
+    """Everything ``manage.py vector_sql`` prints, applied where it can be.
 
-    def __init__(self, *, pg_forward, pg_reverse, sqlite_forward, sqlite_reverse):
+    On PostgreSQL the forward readies the column, fills whatever vectors are
+    missing from their source (``pg_backfill``: the literal names and size,
+    as printed), then builds the index over the filled column - so a replay
+    on a populated table, a rollback then re-apply included, leaves the index
+    whole.
+    """
+
+    reduces_to_sql = False
+
+    def __init__(
+        self,
+        *,
+        pg_forward,
+        pg_backfill,
+        pg_index,
+        pg_reverse,
+        sqlite_forward,
+        sqlite_reverse,
+        hints=None,
+    ):
         self.pg_forward = pg_forward
+        self.pg_backfill = pg_backfill
+        self.pg_index = pg_index
         self.pg_reverse = pg_reverse
         self.sqlite_forward = sqlite_forward
         self.sqlite_reverse = sqlite_reverse
-
-    def deconstruct(self):
-        return (
-            self.__class__.__qualname__,
-            [],
-            {
-                "pg_forward": self.pg_forward,
-                "pg_reverse": self.pg_reverse,
-                "sqlite_forward": self.sqlite_forward,
-                "sqlite_reverse": self.sqlite_reverse,
-            },
-        )
+        self.hints = hints or {}
 
     def state_forwards(self, app_label, state):
         pass
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
-        self._run(schema_editor, pg=self.pg_forward, sqlite=self.sqlite_forward)
+        if not router.allow_migrate(
+            schema_editor.connection.alias, app_label, **self.hints
+        ):
+            return
+        conn = schema_editor.connection
+        if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
+            schema_editor.execute(self.pg_forward, params=None)
+            backfill_pg_vectors(conn, **self.pg_backfill)
+            schema_editor.execute(self.pg_index, params=None)
+        elif conn.vendor == "sqlite" and sqlite_vec_loaded(conn):
+            self._run_script(schema_editor, self.sqlite_forward)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):
-        self._run(schema_editor, pg=self.pg_reverse, sqlite=self.sqlite_reverse)
+        if not router.allow_migrate(
+            schema_editor.connection.alias, app_label, **self.hints
+        ):
+            return
+        conn = schema_editor.connection
+        if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
+            schema_editor.execute(self.pg_reverse, params=None)
+        elif conn.vendor == "sqlite" and sqlite_vec_loaded(conn):
+            self._run_script(schema_editor, self.sqlite_reverse)
 
     def describe(self):
         return "Create a vector index (pgvector or sqlite-vec, when available)"
 
     @staticmethod
-    def _run(schema_editor, *, pg, sqlite):
-        conn = schema_editor.connection
-        if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-            schema_editor.execute(pg, params=None)
-        elif conn.vendor == "sqlite" and sqlite_vec_loaded(conn):
-            for statement in conn.ops.prepare_sql_script(sqlite):
-                schema_editor.execute(statement, params=None)
+    def _run_script(schema_editor, sql):
+        for statement in schema_editor.connection.ops.prepare_sql_script(sql):
+            schema_editor.execute(statement, params=None)

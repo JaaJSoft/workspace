@@ -12,12 +12,7 @@ from workspace.common.uuids import parse_uuid_or_none
 
 from .encoding import normalize
 from .fallback import NumpyNearest
-from .postgres import (
-    ITERATIVE_SCAN_VERSION,
-    PgvectorNearest,
-    pgvector_version,
-    vector_column_exists,
-)
+from .postgres import PgvectorNearest, pgvector_version, vector_column_exists
 from .schema import MAX_K
 from .sqlite import SqliteVecNearest, sqlite_vec_loaded, vec_table_exists
 
@@ -56,8 +51,7 @@ def active_backend(index, conn):
     """The backend serving *index* on *conn* right now."""
     if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
         if vector_column_exists(conn, index):
-            version = _pgvector_version(conn) or ()
-            return PgvectorNearest(iterative_scan=version >= ITERATIVE_SCAN_VERSION)
+            return PgvectorNearest(version=_pgvector_version(conn) or ())
     elif conn.vendor == "sqlite":
         if sqlite_vec_available(conn) and vec_table_exists(conn, index):
             return SqliteVecNearest()

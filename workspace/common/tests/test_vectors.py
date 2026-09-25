@@ -9,7 +9,7 @@ from unittest import mock
 
 import numpy as np
 from django.core.management import call_command
-from django.db import connection, connections, models
+from django.db import connection, connections, models, transaction
 from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.test.utils import isolate_apps
 
@@ -54,19 +54,16 @@ def _create_table(cursor):
         )
 
 
-def _run_forward(index):
-    """What RunVectorIndexSQL does in a migration, on the test connection."""
-    sql = (
-        index.pg_forward_sql()
-        if connection.vendor == "postgresql"
-        else index.sqlite_forward_sql()
+def _migration(index):
+    """The operation a migration would carry, built from vector_sql's blocks."""
+    return RunVectorIndexSQL(
+        pg_forward=index.pg_forward_sql(),
+        pg_backfill=index.pg_backfill,
+        pg_index=index.pg_index_sql(),
+        pg_reverse=index.pg_reverse_sql(),
+        sqlite_forward=index.sqlite_forward_sql(),
+        sqlite_reverse=index.sqlite_reverse_sql(),
     )
-    with connection.cursor() as cursor:
-        if connection.vendor == "postgresql":
-            cursor.execute(sql)
-        else:
-            for statement in connection.ops.prepare_sql_script(sql):
-                cursor.execute(statement)
 
 
 def _without_sqlite_vec():
@@ -113,7 +110,7 @@ class _FixtureTestCase(TestCase):
     def setUp(self):
         with connection.cursor() as cursor:
             _create_table(cursor)
-        _run_forward(VECTORS)
+        rebuild_vector_index(VECTORS)
 
     def _row(self, owner=OWNER):
         pk = uuid.uuid4()
@@ -395,6 +392,163 @@ class SqliteVecTests(_FixtureTestCase):
         self.assertEqual(self._vec_keys(), {pk})
 
 
+class PgvectorTests(_FixtureTestCase):
+    """The pgvector backend, against a real server (the CI pgvector job)."""
+
+    def setUp(self):
+        if connection.vendor != "postgresql" or not _derived_index_available():
+            self.skipTest("PostgreSQL + pgvector required")
+        super().setUp()
+        self.assertEqual(active_backend(VECTORS, connection).name, "pgvector")
+
+    @staticmethod
+    def _version():
+        from workspace.common.vectors.postgres import pgvector_version
+
+        return pgvector_version(connection)
+
+    @staticmethod
+    def _set(setting):
+        with connection.cursor() as cursor:
+            cursor.execute(f"SET LOCAL {setting}")
+
+    @staticmethod
+    def _show(setting):
+        with connection.cursor() as cursor:
+            cursor.execute(f"SHOW {setting}")
+            return cursor.fetchone()[0]
+
+    @staticmethod
+    def _apply(operation, direction):
+        with connection.schema_editor() as editor:
+            getattr(operation, f"database_{direction}")("common", editor, None, None)
+
+    def _pks(self, query, *, k=5, index=VECTORS, partition=OWNER):
+        return [pk for pk, _ in nearest(index, query, partition=partition, k=k)]
+
+    def test_replaying_the_migration_keeps_the_index_filled(self):
+        vectors = _fixture_vectors(60)
+        self._rows_with_vectors(vectors)
+        query = _fixture_vectors(1, seed=11)[0]
+        with _fallback():
+            expected = self._pks(query)
+        l2 = VectorIndex(
+            table=TABLE,
+            dims=DIMS,
+            source_column="embedding",
+            partition_column="owner_id",
+            metric="l2",
+        )
+        scenarios = {
+            "same forward again": [(_migration(VECTORS), "forwards")],
+            "a later migration changing the metric": [(_migration(l2), "forwards")],
+            "rollback then re-apply": [
+                (_migration(VECTORS), "backwards"),
+                (_migration(VECTORS), "forwards"),
+            ],
+        }
+        for name, steps in scenarios.items():
+            with self.subTest(name):
+                for operation, direction in steps:
+                    self._apply(operation, direction)
+                self.assertEqual(self._pks(query), expected)
+
+    def test_a_small_partition_among_nearer_rows_gets_its_k_results(self):
+        # An HNSW scan filters only the tuples it visits (hnsw.max_scan_tuples
+        # with iterative scans, 20,000 by default; lowered here to keep the
+        # fixture small). When every visited tuple belongs to someone else, a
+        # scan-and-filter answers nothing.
+        if (self._version() or ()) < (0, 8):
+            self.skipTest("pgvector 0.8+ required")
+        query = _fixture_vectors(1, seed=5)[0]
+        rng = np.random.default_rng(6)
+        self._rows_with_vectors(
+            [query + rng.normal(scale=0.05, size=DIMS) for _ in range(300)],
+            owner=OTHER,
+        )
+        mine = self._rows_with_vectors(
+            [-query + rng.normal(scale=0.5, size=DIMS) for _ in range(20)]
+        )
+        self._set("hnsw.max_scan_tuples = 50")
+        self._set("enable_seqscan = off")
+
+        found = self._pks(query)
+
+        self.assertEqual(len(found), 5)
+        self.assertLessEqual(set(found), set(mine))
+
+    def test_a_global_query_returns_k_rows_past_ef_search(self):
+        # An HNSW scan stops at hnsw.ef_search rows (40) unless told otherwise.
+        vectors = _fixture_vectors(150)
+        self._rows_with_vectors(vectors)
+        self._set("enable_seqscan = off")
+        self.assertEqual(
+            len(self._pks(vectors[0], k=100, index=GLOBAL_VECTORS, partition=None)), 100
+        )
+
+        with mock.patch.dict(
+            "workspace.common.vectors._pgvector_version_cache",
+            {connection.alias: (0, 6, 0)},
+        ):
+            found = self._pks(vectors[0], k=100, index=GLOBAL_VECTORS, partition=None)
+        self.assertEqual(len(found), 100)
+
+    def test_a_row_whose_source_was_cleared_is_not_returned(self):
+        # Cleared outside drop_vector - .update(embedding=None), a stale save,
+        # a data migration: the vector column still holds the old vector.
+        vectors = _fixture_vectors(2)
+        cleared, kept = self._rows_with_vectors(vectors)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"UPDATE {TABLE} SET embedding = NULL WHERE uuid = %s", [cleared]
+            )
+        self.assertEqual(self._pks(vectors[0]), [kept])
+
+    def test_no_scan_setting_outlives_the_query(self):
+        # Inside a caller's atomic() the query's own block is a savepoint,
+        # and releasing one keeps what SET LOCAL did.
+        vectors = _fixture_vectors(60)
+        self._rows_with_vectors(vectors)
+        defaults = {
+            s: self._show(s)
+            for s in ("enable_indexscan", "hnsw.iterative_scan", "hnsw.ef_search")
+        }
+        with transaction.atomic():
+            self._pks(vectors[0])
+            self._pks(vectors[0], k=50, index=GLOBAL_VECTORS, partition=None)
+            with mock.patch.dict(
+                "workspace.common.vectors._pgvector_version_cache",
+                {connection.alias: (0, 6, 0)},
+            ):
+                self._pks(vectors[0], k=50, index=GLOBAL_VECTORS, partition=None)
+            self.assertEqual({s: self._show(s) for s in defaults}, defaults)
+
+
+class ScanSettingTests(SimpleTestCase):
+    """Which HNSW setting a query gets, per pgvector version."""
+
+    def _setting(self, version, index, k):
+        from workspace.common.vectors.postgres import PgvectorNearest
+
+        return PgvectorNearest(version)._scan_setting(index, k)
+
+    def test_a_partitioned_query_is_exact_whatever_the_version(self):
+        for version in ((0, 6, 0), (0, 8, 1)):
+            with self.subTest(version=version):
+                self.assertIsNone(self._setting(version, VECTORS, 5))
+
+    def test_a_global_query_scans_iteratively_from_0_8(self):
+        self.assertIn("iterative_scan", self._setting((0, 8, 1), GLOBAL_VECTORS, 4096))
+
+    def test_before_0_8_ef_search_follows_k_up_to_its_ceiling(self):
+        self.assertIsNone(self._setting((0, 6, 0), GLOBAL_VECTORS, 40))
+        self.assertEqual(
+            self._setting((0, 6, 0), GLOBAL_VECTORS, 100),
+            "SET LOCAL hnsw.ef_search = 100",
+        )
+        self.assertIsNone(self._setting((0, 6, 0), GLOBAL_VECTORS, 1001))
+
+
 class FallbackTests(_FixtureTestCase):
     def test_without_sqlite_vec_the_source_column_is_scanned(self):
         if connection.vendor != "sqlite":
@@ -489,7 +643,7 @@ class SurvivesATableRebuildTests(TransactionTestCase):
         self.Face = Face
         with connection.schema_editor() as editor:
             editor.create_model(Face)
-        _run_forward(VECTORS)
+        rebuild_vector_index(VECTORS)
 
     def tearDown(self):
         with connection.cursor() as cursor:
@@ -529,13 +683,6 @@ class SurvivesATableRebuildTests(TransactionTestCase):
 class RunVectorIndexSQLTests(TransactionTestCase):
     """The migration applies with and without the extension, both ways."""
 
-    OPERATION = RunVectorIndexSQL(
-        pg_forward=VECTORS.pg_forward_sql(),
-        pg_reverse=VECTORS.pg_reverse_sql(),
-        sqlite_forward=VECTORS.sqlite_forward_sql(),
-        sqlite_reverse=VECTORS.sqlite_reverse_sql(),
-    )
-
     def setUp(self):
         with connection.cursor() as cursor:
             _create_table(cursor)
@@ -550,7 +697,7 @@ class RunVectorIndexSQLTests(TransactionTestCase):
 
     def _apply(self, direction):
         with connection.schema_editor() as editor:
-            method = getattr(self.OPERATION, f"database_{direction}")
+            method = getattr(_migration(VECTORS), f"database_{direction}")
             method("common", editor, None, None)
 
     def _has_derived_structure(self):
@@ -599,10 +746,11 @@ class RunVectorIndexSQLTests(TransactionTestCase):
             self._apply("backwards")
 
     def test_deconstructs_to_its_sql(self):
-        name, args, kwargs = self.OPERATION.deconstruct()
+        operation = _migration(VECTORS)
+        name, args, kwargs = operation.deconstruct()
         self.assertEqual(name, "RunVectorIndexSQL")
         self.assertEqual(kwargs["sqlite_forward"], VECTORS.sqlite_forward_sql())
-        self.assertIn("vector", self.OPERATION.describe())
+        self.assertIn("vector", operation.describe())
 
 
 class WriteDuringRebuildTests(TransactionTestCase):

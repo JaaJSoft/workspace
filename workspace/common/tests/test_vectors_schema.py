@@ -92,11 +92,33 @@ class PostgresSqlTests(SimpleTestCase):
         sql = FACES.pg_forward_sql()
         self.assertIn("pg_available_extensions WHERE name = 'vector'", sql)
         self.assertIn("CREATE EXTENSION IF NOT EXISTS vector", sql)
-        self.assertIn("ADD COLUMN embedding_vec vector(512)", sql)
-        self.assertIn("USING hnsw (embedding_vec vector_cosine_ops)", sql)
         self.assertIn("EXCEPTION WHEN insufficient_privilege", sql)
-        # Re-runnable: rebuild_vector_index replays it on a migrated table.
-        self.assertTrue(sql.startswith(FACES.pg_reverse_sql()))
+
+    def test_forward_keeps_a_column_of_the_right_size(self):
+        # Replayed on a populated table (a later migration, a rollback then
+        # re-apply, a rebuild), it must not throw the vectors away.
+        sql = FACES.pg_forward_sql()
+        self.assertIn("ADD COLUMN IF NOT EXISTS embedding_vec vector(512)", sql)
+        self.assertIn("atttypmod <> 512", sql)
+        self.assertFalse(sql.startswith(FACES.pg_reverse_sql()))
+
+    def test_the_index_is_built_separately_and_tolerates_an_old_pgvector(self):
+        sql = FACES.pg_index_sql()
+        self.assertIn("USING hnsw (embedding_vec vector_cosine_ops)", sql)
+        self.assertIn("EXCEPTION WHEN undefined_object", sql)
+        self.assertNotIn("hnsw", FACES.pg_forward_sql().split("DROP INDEX")[0])
+
+    def test_backfill_carries_literals(self):
+        self.assertEqual(
+            FACES.pg_backfill,
+            {
+                "table": "photos_face",
+                "pk_column": "uuid",
+                "source_column": "embedding",
+                "column": "embedding_vec",
+                "dims": 512,
+            },
+        )
 
     def test_reverse_leaves_the_extension_and_the_source(self):
         sql = FACES.pg_reverse_sql()
@@ -104,12 +126,18 @@ class PostgresSqlTests(SimpleTestCase):
         self.assertNotIn("COLUMN IF EXISTS embedding;", sql)
 
     def test_l2_uses_the_l2_operator_class(self):
-        self.assertIn("vector_l2_ops", GLOBAL_L2.pg_forward_sql())
-        self.assertIn("<->", GLOBAL_L2.pg_nearest_sql())
+        self.assertIn("vector_l2_ops", GLOBAL_L2.pg_index_sql())
+        self.assertIn("<->", GLOBAL_L2.pg_nearest_sql(exact=False))
 
     def test_nearest_binds_vector_partition_then_k(self):
-        self.assertEqual(FACES.pg_nearest_sql().count("%s"), 3)
-        self.assertEqual(GLOBAL_L2.pg_nearest_sql().count("%s"), 2)
+        for exact in (True, False):
+            with self.subTest(exact=exact):
+                self.assertEqual(FACES.pg_nearest_sql(exact=exact).count("%s"), 3)
+                self.assertEqual(GLOBAL_L2.pg_nearest_sql(exact=exact).count("%s"), 2)
+
+    def test_an_exact_query_is_fenced_from_the_hnsw_index(self):
+        self.assertIn("AS MATERIALIZED", FACES.pg_nearest_sql(exact=True))
+        self.assertNotIn("MATERIALIZED", FACES.pg_nearest_sql(exact=False))
 
 
 class SqliteSqlTests(SimpleTestCase):
@@ -155,6 +183,8 @@ class VectorSqlCommandTests(SimpleTestCase):
             self.assertIn(marker, text)
         self.assertIn("USING vec0(", text)
         self.assertIn("vector(512)", text)
+        self.assertIn("-- PG_INDEX", text)
+        self.assertIn("'column': 'embedding_vec'", text)
 
     def test_bad_path_raises_command_error(self):
         with self.assertRaises(CommandError):

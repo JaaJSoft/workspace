@@ -135,31 +135,80 @@ class VectorIndex:
     # -- migration SQL ---------------------------------------------------
 
     def pg_forward_sql(self):
-        """Add the vector column and its HNSW index, when pgvector allows it.
+        """Ready the vector column, without destroying one already filled.
 
         Conditional on purpose: a stock PostgreSQL image has no pgvector, and
         the migration must still apply there - the fallback serves queries
         from the source column. The same goes for a role that may not create
         the extension. The source column is untouched either way.
+
+        Re-runnable: a later migration, a rollback then re-apply, or a rebuild
+        replays it on a populated table. A column already of the right size
+        keeps its vectors; only one of another size is dropped. The HNSW index
+        is dropped here and recreated by pg_index_sql once the column is
+        filled - its operator class carries the metric, and building it over a
+        filled column is several times faster than maintaining it row by row.
         """
-        opclass = _METRICS[self.metric][2]
         return (
-            f"{self.pg_reverse_sql()}\n"
-            f"\n"
             f"DO $$\n"
             f"BEGIN\n"
-            f"  IF EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN\n"
-            f"    CREATE EXTENSION IF NOT EXISTS vector;\n"
-            f"    ALTER TABLE {self.table} ADD COLUMN {self.pg_column} vector({self.dims});\n"
-            f"    CREATE INDEX {self.hnsw_index} ON {self.table}\n"
-            f"      USING hnsw ({self.pg_column} {opclass});\n"
+            f"  IF NOT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'vector') THEN\n"
+            f"    RETURN;\n"
             f"  END IF;\n"
+            f"  CREATE EXTENSION IF NOT EXISTS vector;\n"
+            f"  DROP INDEX IF EXISTS {self.hnsw_index};\n"
+            f"  IF EXISTS (\n"
+            f"    SELECT 1 FROM pg_attribute\n"
+            f"    WHERE attrelid = to_regclass('{self.table}') AND attname = '{self.pg_column}'\n"
+            f"      AND NOT attisdropped\n"
+            f"      AND (atttypid <> 'vector'::regtype OR atttypmod <> {self.dims})\n"
+            f"  ) THEN\n"
+            f"    ALTER TABLE {self.table} DROP COLUMN {self.pg_column};\n"
+            f"  END IF;\n"
+            f"  ALTER TABLE {self.table} ADD COLUMN IF NOT EXISTS {self.pg_column} vector({self.dims});\n"
             f"EXCEPTION WHEN insufficient_privilege THEN\n"
             f"  RAISE NOTICE 'pgvector is installed but may not be enabled by this role; "
             f"{self.table}.{self.source_column} is searched without an index';\n"
             f"END\n"
             f"$$;"
         )
+
+    def pg_index_sql(self):
+        """Build the HNSW index, once the column is filled.
+
+        A pgvector older than 0.5 has no hnsw access method: the column then
+        serves exact scans, which are correct, only slower.
+        """
+        opclass = _METRICS[self.metric][2]
+        return (
+            f"DO $$\n"
+            f"BEGIN\n"
+            f"  IF to_regtype('vector') IS NULL OR NOT EXISTS (\n"
+            f"    SELECT 1 FROM pg_attribute\n"
+            f"    WHERE attrelid = to_regclass('{self.table}') AND attname = '{self.pg_column}'\n"
+            f"      AND NOT attisdropped\n"
+            f"  ) THEN\n"
+            f"    RETURN;\n"
+            f"  END IF;\n"
+            f"  CREATE INDEX IF NOT EXISTS {self.hnsw_index} ON {self.table}\n"
+            f"    USING hnsw ({self.pg_column} {opclass});\n"
+            f"EXCEPTION WHEN undefined_object THEN\n"
+            f"  RAISE NOTICE 'this pgvector has no hnsw index; "
+            f"{self.table}.{self.pg_column} is searched exactly';\n"
+            f"END\n"
+            f"$$;"
+        )
+
+    @property
+    def pg_backfill(self):
+        """What RunVectorIndexSQL needs to fill the column, as literals."""
+        return {
+            "table": self.table,
+            "pk_column": self.pk_column,
+            "source_column": self.source_column,
+            "column": self.pg_column,
+            "dims": self.dims,
+        }
 
     def pg_reverse_sql(self):
         # The extension stays: other indexes, or other applications, may use it.
@@ -270,14 +319,30 @@ class VectorIndex:
         """Write the vector column. Binds the literal (or None), then the pk."""
         return f"UPDATE {self.table} SET {self.pg_column} = %s::vector WHERE {self.pk_column} = %s"
 
-    def pg_nearest_sql(self):
-        """Binds the vector literal, the partition, then k."""
+    def pg_nearest_sql(self, *, exact):
+        """Binds the vector literal, the partition, then k.
+
+        *exact* computes every distance inside a MATERIALIZED CTE, which the
+        planner cannot turn into an HNSW scan: it reads the rows the WHERE
+        clause leaves (a partition, through the owner's btree) and sorts them.
+        An HNSW scan filters only the candidates it visits - hnsw.ef_search of
+        them, or hnsw.max_scan_tuples with iterative scans - so a small
+        partition among many nearer rows of other owners comes back short, or
+        empty.
+        """
         partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
-        return (
+        candidates = (
             f"SELECT {self.pk_column}, {self.pg_column} {self.pg_operator} %s::vector "
             f"AS distance\n"
             f"FROM {self.table}\n"
-            f"WHERE {self.pg_column} IS NOT NULL{partition}\n"
+            f"WHERE {self.pg_column} IS NOT NULL"
+            f" AND octet_length({self.source_column}) = {self.byte_length}{partition}\n"
+        )
+        if not exact:
+            return f"{candidates}ORDER BY distance\nLIMIT %s"
+        return (
+            f"WITH candidates AS MATERIALIZED (\n{candidates})\n"
+            f"SELECT {self.pk_column}, distance FROM candidates\n"
             f"ORDER BY distance\n"
             f"LIMIT %s"
         )
@@ -292,19 +357,6 @@ class VectorIndex:
         return (
             f"SELECT {self.pk_column}, {self.source_column} FROM {self.table} "
             f"WHERE {self.source_column} IS NOT NULL{partition}"
-        )
-
-    def pg_source_rows_page_sql(self):
-        """One keyset page of (pk, vector bytes). Binds after, after, limit.
-
-        `after` is the last pk of the previous page, None for the first one.
-        """
-        return (
-            f"SELECT {self.pk_column}, {self.source_column} FROM {self.table}\n"
-            f"WHERE {self.source_column} IS NOT NULL "
-            f"AND (%s::uuid IS NULL OR {self.pk_column} > %s)\n"
-            f"ORDER BY {self.pk_column}\n"
-            f"LIMIT %s"
         )
 
 

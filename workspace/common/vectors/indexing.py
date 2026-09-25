@@ -8,11 +8,12 @@ Imported from the submodule, not from the package: `workspace.common.vectors`
 owns the read path and stays free of a dependency on this one.
 """
 
+import numpy as np
 from django.db import DEFAULT_DB_ALIAS, connections, transaction
 
 from . import active_backend, bind_uuid, sqlite_vec_available
 from .encoding import from_bytes, normalize, pg_literal, to_bytes
-from .postgres import PgvectorNearest, pgvector_available, vector_column_exists
+from .postgres import PgvectorNearest
 from .sqlite import SqliteVecNearest
 
 _REBUILD_BATCH = 500
@@ -68,20 +69,20 @@ def rebuild_vector_index(index, *, using=DEFAULT_DB_ALIAS):
 
     Returns the backend now serving the index ("pgvector", "sqlite-vec" or
     "numpy"). Creates the structure when the migration could not - pgvector or
-    sqlite-vec installed after the fact - and purges entries left behind by
-    rows deleted without drop_vector. Nothing to do on the fallback, which
-    reads the source column directly.
+    sqlite-vec installed after the fact - rederives every vector from its
+    source, and purges entries left behind by rows deleted without
+    drop_vector. Nothing to do on the fallback, which reads the source column
+    directly.
+
+    One transaction: writers wait for it on the lock the DDL takes, and pick
+    their backend once it has committed (see index_vector).
     """
     conn = connections[using]
     if conn.vendor == "postgresql":  # pragma: no cover - exercised on PG only
-        if pgvector_available(conn):
-            # One transaction: the column is dropped and refilled under an
-            # exclusive lock, so a concurrent search waits instead of finding
-            # an empty index.
-            with transaction.atomic(using=using):
-                _run_script(conn, index.pg_forward_sql())
-                if vector_column_exists(conn, index):
-                    _backfill_pg(index, conn)
+        with transaction.atomic(using=using):
+            _run_script(conn, index.pg_forward_sql())
+            backfill_pg_vectors(conn, **index.pg_backfill, refill=True)
+            _run_script(conn, index.pg_index_sql())
     elif conn.vendor == "sqlite":
         if sqlite_vec_available(conn):
             with transaction.atomic(using=using):
@@ -89,25 +90,58 @@ def rebuild_vector_index(index, *, using=DEFAULT_DB_ALIAS):
     return active_backend(index, conn).name
 
 
-def _backfill_pg(index, conn):  # pragma: no cover - exercised on PG only
-    """Derive the vector column from the source, one keyset page at a time."""
-    after = None
-    while True:
-        with conn.cursor() as cursor:
-            cursor.execute(
-                index.pg_source_rows_page_sql(), [after, after, _REBUILD_BATCH]
-            )
-            rows = cursor.fetchall()
-        if not rows:
+def backfill_pg_vectors(
+    conn, *, table, pk_column, source_column, column, dims, refill=False
+):  # pragma: no cover - exercised on PG only
+    """Derive a pgvector column from its source, one keyset page at a time.
+
+    Takes literals rather than a VectorIndex: RunVectorIndexSQL calls it with
+    the values frozen into a migration. By default only rows whose vector is
+    missing are filled; *refill* rederives every row, and clears the vector of
+    a row whose source no longer holds one. A source of the wrong size, or
+    with a non-finite component, gets no vector: pgvector would reject the
+    literal and abort the whole transaction with it.
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "SELECT 1 FROM pg_attribute "
+            "WHERE attrelid = to_regclass(%s) AND attname = %s AND NOT attisdropped",
+            [table, column],
+        )
+        if cursor.fetchone() is None:
             return
-        batch = []
-        for pk, blob in rows:
-            vector = from_bytes(blob, index.dims)
-            if vector is not None:
-                batch.append([pg_literal(vector), pk])
-        with conn.cursor() as cursor:
-            cursor.executemany(index.pg_set_vector_sql(), batch)
-        after = rows[-1][0]
+        valid = f"octet_length({source_column}) = {dims * 4}"
+        if refill:
+            cursor.execute(
+                f"UPDATE {table} SET {column} = NULL "
+                f"WHERE {column} IS NOT NULL AND ({source_column} IS NULL OR NOT {valid})"
+            )
+        pending = "" if refill else f" AND {column} IS NULL"
+        page = (
+            f"SELECT {pk_column}, {source_column} FROM {table} WHERE {valid}{pending}"
+        )
+        update = f"UPDATE {table} SET {column} = %s::vector WHERE {pk_column} = %s"
+        after = None
+        while True:
+            if after is None:
+                cursor.execute(
+                    f"{page} ORDER BY {pk_column} LIMIT %s", [_REBUILD_BATCH]
+                )
+            else:
+                cursor.execute(
+                    f"{page} AND {pk_column} > %s ORDER BY {pk_column} LIMIT %s",
+                    [after, _REBUILD_BATCH],
+                )
+            rows = cursor.fetchall()
+            if not rows:
+                return
+            batch = []
+            for pk, blob in rows:
+                vector = from_bytes(blob, dims)
+                finite = vector is not None and np.isfinite(vector).all()
+                batch.append([pg_literal(vector) if finite else None, pk])
+            cursor.executemany(update, batch)
+            after = rows[-1][0]
 
 
 def _run_script(conn, sql):

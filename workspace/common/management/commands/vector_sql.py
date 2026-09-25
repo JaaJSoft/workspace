@@ -27,6 +27,8 @@ class Command(BaseCommand):
             raise CommandError(f"{options['dotted_path']} is not a VectorIndex")
         blocks = (
             ("PG_FORWARD", index.pg_forward_sql()),
+            ("PG_INDEX", index.pg_index_sql()),
+            ("PG_BACKFILL", repr(index.pg_backfill)),
             ("PG_REVERSE", index.pg_reverse_sql()),
             ("SQLITE_FORWARD", index.sqlite_forward_sql()),
             ("SQLITE_REVERSE", index.sqlite_reverse_sql()),

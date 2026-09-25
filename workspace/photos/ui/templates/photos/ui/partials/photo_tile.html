@@ -1,0 +1,89 @@
+{% load file_filters photos_filters %}
+{% comment %}
+  A square tile of the timeline, a fixed size so that day groups line up: the
+  --photo-tile width the size slider sets on the page root. On a phone it is a
+  third of the screen (the drawer is off-canvas there, and the page padding
+  plus two gaps come to 1.5rem).
+
+  The data-* attributes on the tile are the ones the Files viewer modal walks
+  for its previous/next navigation, so the viewer pages through the timeline
+  in the order it is shown; the context menu reads the rest, "Open in Files"
+  included (see the files_url filter).
+{% endcomment %}
+<div
+  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square overflow-hidden rounded-lg bg-base-200"
+  data-uuid="{{ file.uuid }}"
+  data-node-type="file"
+  data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
+  data-display-name="{{ file.name }}"
+  data-file-type="{{ file.type }}"
+  data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
+  data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"
+  data-files-url="{{ file|files_url }}"
+  @contextmenu.prevent="openCtxMenu($event, $el)"
+>
+  <button
+    type="button"
+    class="absolute inset-0 w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-module"
+    title="{{ file.name }}"
+    data-name-title
+    @click="openPhoto($el.closest('[data-uuid]'))"
+  >
+    {% if file.has_thumbnail %}
+      <img
+        src="{{ file|thumbnail_url }}"
+        alt="{{ file.name }}"
+        class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+      />
+    {% else %}
+      <span
+        class="absolute inset-0 flex items-center justify-center text-base-content/30"
+      >
+        <i data-lucide="image" class="w-8 h-8"></i>
+      </span>
+    {% endif %}
+  </button>
+  {% comment %}
+    The two overlay buttons are the Files mosaic cards' own: a filled star
+    that stays on a favorite, an empty one on hover otherwise, and the menu
+    button. The star follows data-favorite, so a toggle from either place
+    only flips the attribute. Nothing hovers on a touch screen: the empty
+    star stays away there (the menu has the toggle) and the menu button
+    stays in view.
+  {% endcomment %}
+  {% if file.can_favorite %}
+    <div class="absolute top-2 right-2 z-10">
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hidden group-data-[favorite='1']:inline-flex"
+        title="Remove from favorites"
+        aria-label="Remove from favorites"
+        @click.stop="toggleTileFavorite($el)"
+      >
+        <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 focus:opacity-100 group-data-[favorite='1']:hidden [@media(hover:none)]:hidden"
+        title="Add to favorites"
+        aria-label="Add to favorites"
+        @click.stop="toggleTileFavorite($el)"
+      >
+        <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
+      </button>
+    </div>
+  {% endif %}
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+    title="More actions"
+    aria-label="More actions for {{ file.name }}"
+    aria-haspopup="menu"
+    @click.stop="openCtxMenu($event, $el.closest('[data-uuid]'), $el)"
+  >
+    <i data-lucide="more-vertical" class="w-4 h-4"></i>
+  </button>
+</div>

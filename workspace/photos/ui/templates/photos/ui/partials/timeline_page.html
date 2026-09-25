@@ -1,0 +1,77 @@
+{% comment %}
+  One page of the timeline: the entries of services/timeline.py in a single
+  wrapping row, followed by the sentinel that fetches the next page.
+
+  The index renders it inline; the timeline endpoint returns it alone, and
+  alpine-ajax appends its #timeline-grid children to the live one (x-merge)
+  while its #timeline-more replaces the spent sentinel. Month headers take a
+  whole line; day groups sit side by side while they fit, so a day of two
+  photos does not cost a row of its own. Undated photos are direct children,
+  which lets the next page go on filling the row this one stopped on.
+{% endcomment %}
+<div
+  id="timeline-grid"
+  x-merge="append"
+  class="flex flex-wrap items-start gap-1"
+>
+  {% for entry in entries %}
+    {% if entry.kind == "month" %}
+      <h2
+        class="basis-full px-1 pt-5 first:pt-0 text-xl font-bold"
+        data-month="{{ entry.date|date:'Y-m' }}"
+      >
+        {{ entry.date|date:"F Y" }}
+      </h2>
+    {% elif entry.kind == "day" %}
+      {# No margin on a phone: three tiles and their gaps fill the line exactly, as in a grid. #}
+      <section
+        class="max-w-full sm:max-w-[calc(100%-1rem)] sm:mr-4 mb-3"
+        data-day="{{ entry.date|date:'Y-m-d' }}"
+      >
+        {% if entry.continued %}
+          {# The rest of a day a previous page began: aligned under nothing. #}
+          <div class="h-7" aria-hidden="true"></div>
+        {% else %}
+          <h3
+            class="h-7 px-1 text-sm font-medium leading-7 text-base-content/70 whitespace-nowrap"
+            title="{{ entry.date|date:'l j F Y' }}"
+          >
+            {{ entry.date|date:"D j M" }}
+          </h3>
+        {% endif %}
+        <div class="flex flex-wrap gap-1">
+          {% for file in entry.photos %}
+            {% include "photos/ui/partials/photo_tile.html" %}
+          {% endfor %}
+        </div>
+      </section>
+    {% elif entry.kind == "undated" %}
+      <div class="basis-full px-1 pt-5 first:pt-0 pb-2" data-undated>
+        <h2 class="text-xl font-bold">Undated</h2>
+        <p class="text-sm text-base-content/60">No capture date in these pictures. Most recent upload first.</p>
+      </div>
+    {% else %}
+      {% include "photos/ui/partials/photo_tile.html" with file=entry.file %}
+    {% endif %}
+  {% endfor %}
+</div>
+<div id="timeline-more">
+  {% if next_url %}
+    <div
+      x-data="timelineSentinel('{{ next_url|escapejs }}')"
+      class="flex justify-center py-6"
+    >
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm gap-2"
+        @click="load()"
+        :disabled="loading"
+      >
+        <span class="inline-flex" x-show="loading" x-cloak>
+          <span class="loading loading-spinner loading-sm"></span>
+        </span>
+        Load more
+      </button>
+    </div>
+  {% endif %}
+</div>

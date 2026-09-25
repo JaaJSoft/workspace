@@ -48,6 +48,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `notes` | Markdown notes built on the files module |
 | `notifications` | Web push, in-app notifications |
 | `people` | Address book: persons and contact lists per user or group, linked workspace accounts, section registry for other modules |
+| `photos` | Photo library built on the files module: capture-date timeline, EXIF metadata read off-request (preview) |
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
 | `vault` | End-to-end encrypted password vault (preview) |
@@ -487,6 +488,24 @@ users = project_users(project)
 ```
 
 Task-level queries filter with `project_id__in=user_project_ids(user)` - see `tasks_due_between` / `assigned_open_tasks` in the same module for the canonical pattern (they also exclude archived projects and done statuses).
+
+#### Photos - `workspace.photos.queries`
+
+```python
+from workspace.photos.queries import (
+    ALL, MINE, SHARED, has_shared_photos, library_files, library_groups, library_tags,
+)
+
+files = library_files(user)          # the user's personal analyzed photos, as live File rows
+files = library_files(user, SHARED)  # photos other people shared with the user (directly, via a group or a project)
+files = library_files(user, ALL)     # every photo the user can open (FileService.accessible_file_ids)
+files = library_files(user, group)   # one group's folder; empty for a group the user is not in
+tags = library_tags(user, scope)     # the user's tags carried by a photo in scope, with photo_count
+groups = library_groups(user)        # the user's groups whose folder holds a photo
+shared = has_shared_photos(user)     # whether the Shared with me tab has anything to show
+```
+
+The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `Photo` row, and quarantined files are excluded. A raster image without a `Photo` row has not been analyzed yet; it is not in the library.
 
 #### Vault - `workspace.vault.queries`
 
@@ -1028,6 +1047,7 @@ Use the `dialogs` partial for modal dialogs instead of inline modal HTML.
 - `app_logo.html` - Application logo
 - `breadcrumbs.html` - Breadcrumb navigation
 - `comments.html` - comment thread (list + collapsed-until-focused composer + inline edit) backed by `commentsComponent()` from `common/static/ui/js/comments.js`. Params: `list_url` (collection endpoint; item endpoints are `<list_url>/<uuid>`), `current_user_id`, `can_comment`. Used by the files properties panel and the task panel - reuse it for any new commentable entity instead of copying the markup.
+- `size_slider.html` - the 1-5 tile size range of a grid view (Files mosaic, Photos timeline). Params: `model` (Alpine expression bound with `x-model.number`), `change` (run on release, to save), optional `initial_value`. What a step measures is the caller's business.
 - `refresh_button.html` - Alpine-AJAX refresh button (spins while `loading` is truthy). Params: `url_expr`, `target`, optional `loading_expr` / `title` / `size`.
 - `user_chip.html` - removable avatar+name chip for "selected users" lists (guests, invitees, assignees, member pickers). Params are Alpine expression fragments: `user_id_expr`, `username_expr`, optional `remove_expr` (omit for read-only) and `remove_show_expr`. Never hand-roll this chip again - every hand-rolled copy has ended up with an off-center avatar.
 - `group_selector.html` - search-as-you-type group picker dispatching a custom event on select (see the comment block at the top of the file for params). Its user counterpart is `users/ui/partials/user_selector.html`, and the `<user-avatar>` element comes from `users/ui/js/user_avatar.js` - both loaded for every page by `base.html`

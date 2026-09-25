@@ -51,6 +51,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.generate_thumbnails",
         "schedule": 3600.0,  # Hourly backfill; primary path is event-driven
     },
+    "analyze-photos": {
+        "task": "photos.analyze_pending",
+        "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
+        "options": {"expires": 3600.0},
+    },
     "purge-trash": {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM

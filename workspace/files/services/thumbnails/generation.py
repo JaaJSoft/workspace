@@ -30,9 +30,9 @@ def _label_family(content_label):
     return content_label if content_label in _KNOWN_IMAGE_LABELS else "other"
 
 
-_RASTER_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif"})
+RASTER_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif"})
 _SVG_LABELS = frozenset({"svg"})
-THUMBNAIL_LABELS = _RASTER_LABELS | _SVG_LABELS
+THUMBNAIL_LABELS = RASTER_LABELS | _SVG_LABELS
 
 THUMBNAIL_MAX_SIZE = (512, 512)
 THUMBNAIL_QUALITY = 80

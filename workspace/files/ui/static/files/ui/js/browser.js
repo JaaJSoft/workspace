@@ -42,49 +42,13 @@ window.fileBrowser = function fileBrowser() {
       }
     },
 
-    // Properties panel state
-    showPropertiesPanel: false,
-    propertiesUuid: null,
-    propertiesNodeType: 'file',
-    propertiesLoading: false,
-    propertiesError: null,
-    // Current panel target for the tags mixin ({ uuid, tags }), seeded by
-    // the properties partial's x-init when the file is taggable.
-    selectedFile: null,
+    // Properties panel state and loading (properties_panel.js). Its
+    // `selectedFile` is also the tags mixin's target.
+    ...window.propertiesPanelMixin(),
 
     get currentFolder() {
       const folderEl = document.getElementById('folder-browser');
       return folderEl?.dataset.folder || '';
-    },
-
-    openPropertiesPanel(uuid, nodeType) {
-      // If same file and panel is already open, toggle close
-      if (this.showPropertiesPanel && this.propertiesUuid === uuid) {
-        this.closePropertiesPanel();
-        return;
-      }
-
-      this.propertiesUuid = uuid;
-      this.propertiesNodeType = nodeType || 'file';
-      this.propertiesError = null;
-      this.propertiesLoading = true;
-      this.showPropertiesPanel = true;
-      // Reset the tags target — the incoming partial reseeds it (taggable
-      // files only), so a previous file's tags can't leak into this one.
-      this.selectedFile = null;
-
-      const onError = () => { this.propertiesError = 'Failed to load properties'; };
-      const onAfter = () => { this.propertiesLoading = false; };
-      this.$el.addEventListener('ajax:error', onError, { once: true });
-      this.$el.addEventListener('ajax:after', onAfter, { once: true });
-      this.$ajax(`/files/properties/${uuid}`, { target: 'properties-content' });
-    },
-
-    closePropertiesPanel() {
-      this.showPropertiesPanel = false;
-      this.propertiesUuid = null;
-      this.propertiesError = null;
-      this.selectedFile = null;
     },
 
     _initFileActions() {
@@ -1555,11 +1519,7 @@ window.fileBrowser = function fileBrowser() {
         this.openPropertiesPanel(uuid, nodeType);
       });
 
-      window.addEventListener('shares-changed', () => {
-        if (this.showPropertiesPanel && this.propertiesUuid) {
-          this.openPropertiesPanel(this.propertiesUuid, this.propertiesNodeType);
-        }
-      });
+      window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
 
       // alpine-ajax marks every swap target aria-busy for the life of its
       // request. Listening on the document, that attribute is what tells a

@@ -524,6 +524,24 @@ class SettingDetailTests(UserTestMixin, APITestCase):
         )
         self.assertIn(resp.status_code, (200, 201))
 
+    def test_put_rejects_a_photo_tile_size_off_the_slider(self):
+        for value in [0, 6, -1, "3", 2.5, True]:
+            resp = self.client.put(
+                self._url("photos", "tile_size"),
+                {"value": value},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 400, value)
+
+    def test_put_accepts_every_photo_tile_size_of_the_slider(self):
+        for value in [1, 2, 3, 4, 5]:
+            resp = self.client.put(
+                self._url("photos", "tile_size"),
+                {"value": value},
+                format="json",
+            )
+            self.assertIn(resp.status_code, (200, 201), value)
+
     def test_put_rejects_a_lock_delay_that_is_not_a_delay(self):
         """A vault that never locks is the failure this setting can cause, so
         the value is checked here rather than trusted from the page."""

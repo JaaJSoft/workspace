@@ -22,6 +22,7 @@ function makeBrowser({ clipboard = {} } = {}) {
   const calls = [];
   const ctx = loadScript('workspace/files/ui/static/files/ui/js/browser.js', {
     tagsMixin: () => ({ toggleFileTag: async () => {} }),
+    propertiesPanelMixin: () => ({}),
     // cut/copy stamp each item with the current folder, read off the DOM.
     document: { getElementById: () => null },
   });

@@ -160,6 +160,20 @@ class NearestArgumentTests(SimpleTestCase):
             with self.subTest(k=k), self.assertRaises(ValueError):
                 nearest(VECTORS, [1] * DIMS, partition=OWNER, k=k)
 
+    def test_a_partition_of_the_wrong_type_is_refused(self):
+        for partition in ("abc", 1.5, True, uuid.uuid4()):
+            with self.subTest(partition=partition), self.assertRaises(ValueError):
+                nearest(VECTORS, [1] * DIMS, partition=partition, k=3)
+        by_uuid = VectorIndex(
+            table=TABLE,
+            dims=DIMS,
+            source_column="embedding",
+            partition_column="group_id",
+            partition_type="uuid",
+        )
+        with self.assertRaises(ValueError):
+            nearest(by_uuid, [1] * DIMS, partition=7, k=3)
+
     def test_query_of_the_wrong_size_is_refused(self):
         with self.assertRaises(ValueError):
             nearest(VECTORS, [1] * (DIMS + 1), partition=OWNER, k=3)
@@ -388,6 +402,19 @@ class SqliteVecTests(_FixtureTestCase):
         self.assertEqual([pk for pk, _ in results][:2], [pks[0], pks[1]])
         self.assertEqual(results[2][0], zero)
         self.assertEqual(results[2][1], float("inf"))
+
+    def test_a_partition_given_as_a_string_finds_the_same_rows(self):
+        # vec0 compares partition keys by type too: "1" matched nothing on an
+        # integer key while numpy and PostgreSQL returned the rows. An owner
+        # id read off a URL is a string.
+        vectors = _fixture_vectors(3)
+        self._rows_with_vectors(vectors)
+        expected = nearest(VECTORS, vectors[0], partition=OWNER, k=3)
+        for partition in (str(OWNER), f" {OWNER}", f"0{OWNER}"):
+            with self.subTest(partition=partition):
+                self.assertEqual(
+                    nearest(VECTORS, vectors[0], partition=partition, k=3), expected
+                )
 
     def test_rebuild_creates_a_table_the_migration_could_not(self):
         with connection.cursor() as cursor:

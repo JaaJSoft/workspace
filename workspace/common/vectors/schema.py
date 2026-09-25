@@ -46,7 +46,9 @@ _METRICS = {
     "cosine": ("cosine", "<=>", "vector_cosine_ops"),
     "l2": ("l2", "<->", "vector_l2_ops"),
 }
-_PARTITION_TYPES = ("integer", "text")
+# partition_type -> the vec0 partition key's column type. A UUID is stored as
+# char(32) hex on SQLite.
+_PARTITION_TYPES = {"integer": "integer", "uuid": "text"}
 
 # Every name below is interpolated into SQL, so every name is checked.
 _IDENTIFIER_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
@@ -60,8 +62,8 @@ class VectorIndex:
     source_column: str
     # Column every query is scoped to (an owner). None for a global index.
     partition_column: str | None = None
-    # How SQLite stores the partition column: "integer" for an integer
-    # foreign key, "text" for a UUID one (char(32) hex on SQLite).
+    # "integer" for an integer foreign key, "uuid" for a UUID one. The
+    # partition a query passes is converted to it, on every backend alike.
     partition_type: str = "integer"
     # A UUID primary key (char(32) hex on SQLite): the vec0 table is keyed on it.
     pk_column: str = "uuid"
@@ -102,7 +104,7 @@ class VectorIndex:
             )
         if self.partition_type not in _PARTITION_TYPES:
             raise ValueError(
-                f"partition_type must be one of {_PARTITION_TYPES}, "
+                f"partition_type must be one of {tuple(_PARTITION_TYPES)}, "
                 f"got {self.partition_type!r}"
             )
 
@@ -224,7 +226,8 @@ class VectorIndex:
         """
         metric = _METRICS[self.metric][0]
         partition = (
-            f"  {self.partition_column} {self.partition_type} partition key,\n"
+            f"  {self.partition_column} {_PARTITION_TYPES[self.partition_type]} "
+            f"partition key,\n"
             if self.partitioned
             else ""
         )

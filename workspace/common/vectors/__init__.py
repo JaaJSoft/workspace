@@ -40,7 +40,7 @@ def nearest(index, query, *, partition=None, k, using=DEFAULT_DB_ALIAS):
     vector = normalize(query, index.dims)
     conn = connections[using]
     if partition is not None:
-        partition = _bind_partition(partition, conn)
+        partition = _bind_partition(index, partition, conn)
     rows = active_backend(index, conn).nearest(
         index, conn, vector, partition=partition, k=k
     )
@@ -83,11 +83,24 @@ def bind_uuid(value, conn):
     return parsed if conn.features.has_native_uuid_field else parsed.hex
 
 
-def _bind_partition(value, conn):
-    parsed = parse_uuid_or_none(value)
-    if parsed is None:
+def _bind_partition(index, value, conn):
+    """*value* as the declared partition type, or ValueError.
+
+    Converted here rather than left to each backend: vec0 compares partition
+    keys by type too, so "1" matched nothing on an integer key while numpy
+    and PostgreSQL returned the rows - and an owner id read off a URL is a
+    string.
+    """
+    if index.partition_type == "uuid":
+        return bind_uuid(value, conn)
+    if isinstance(value, int) and not isinstance(value, bool):
         return value
-    return parsed if conn.features.has_native_uuid_field else parsed.hex
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            pass
+    raise ValueError(f"{index.table}: not an integer partition: {value!r}")
 
 
 def _as_pk(value):

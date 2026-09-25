@@ -46,7 +46,8 @@ class GenerateThumbnailsView(APIView):
         },
     )
     def post(self, request):
-        from workspace.files.services.thumbnails.failures import clear_all_failures
+        from workspace.files.models import ThumbnailFailure
+        from workspace.files.services.thumbnails.failures import retry_failures
         from workspace.files.tasks import catch_up
 
         retry_failed = is_truthy(request.data.get("retry_failed"))
@@ -56,6 +57,6 @@ class GenerateThumbnailsView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
         if retry_failed:
-            clear_all_failures()
+            retry_failures(ThumbnailFailure.objects.all())
         result = catch_up.delay(names=["thumbnails"])
         return Response({"task_id": result.id}, status=status.HTTP_202_ACCEPTED)

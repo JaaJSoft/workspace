@@ -139,8 +139,6 @@ def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None, resume
     With *resume*, start after the last file the previous resumed call queued
     for this reader (see _CURSOR_KEY).
     """
-    from ..tasks import catch_up_file
-
     cursor_key = _CURSOR_KEY.format(catch_up.name)
     start_after = parse_uuid_or_none(cache.get(cursor_key)) if resume else None
     queued = 0
@@ -148,12 +146,7 @@ def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None, resume
     for uuid in pending_ids(
         catch_up, reanalyze=reanalyze, limit=limit, start_after=start_after
     ):
-        catch_up_file.apply_async(
-            args=[catch_up.name, str(uuid)],
-            kwargs={"reanalyze": reanalyze},
-            priority=BACKGROUND_PRIORITY,
-            expires=expires,
-        )
+        _queue(catch_up, uuid, reanalyze=reanalyze, expires=expires)
         queued += 1
         last_uuid = uuid
     if resume:
@@ -162,3 +155,27 @@ def queue_pending(catch_up, *, reanalyze=False, limit=None, expires=None, resume
         else:
             cache.set(cursor_key, str(last_uuid), timeout=None)
     return queued
+
+
+def queue_files(catch_up, file_ids):
+    """Queue one files.catch_up_file task per file in *file_ids*; return how many.
+
+    For files someone asked for by name: they are queued whatever their place
+    in the backlog, which a bounded pass does not promise. A file that is no
+    longer pending by the time its task runs is skipped there.
+    """
+    file_ids = list(file_ids)
+    for uuid in file_ids:
+        _queue(catch_up, uuid, reanalyze=False, expires=None)
+    return len(file_ids)
+
+
+def _queue(catch_up, uuid, *, reanalyze, expires):
+    from ..tasks import catch_up_file
+
+    catch_up_file.apply_async(
+        args=[catch_up.name, str(uuid)],
+        kwargs={"reanalyze": reanalyze},
+        priority=BACKGROUND_PRIORITY,
+        expires=expires,
+    )

@@ -18,6 +18,7 @@ from workspace.files.services import FileService
 from workspace.files.services import catch_up as registry
 from workspace.files.services.catch_up import (
     pending_ids,
+    queue_files,
     queue_pending,
     register_catch_up,
     resolve,
@@ -205,6 +206,21 @@ class RegistryTests(CatchUpTestCase):
             kwargs={"reanalyze": True},
             priority=BACKGROUND_PRIORITY,
             expires=60,
+        )
+
+    def test_queue_files_queues_each_file_asked_for(self):
+        a = self._upload("a.txt")
+        self.reader.processed.append(a.pk)
+
+        with patch.object(catch_up_file, "apply_async") as queue:
+            queued = queue_files(registry.get_catch_up("fake"), [a.pk])
+
+        self.assertEqual(queued, 1)
+        queue.assert_called_once_with(
+            args=["fake", str(a.pk)],
+            kwargs={"reanalyze": False},
+            priority=BACKGROUND_PRIORITY,
+            expires=None,
         )
 
     def test_a_disabled_reader_has_nothing_pending(self):

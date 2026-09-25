@@ -79,13 +79,12 @@ def parked_count():
 
 
 def retry_failures(failures):
-    """Unpark the files behind *failures* (a queryset) and queue a generation pass.
+    """Unpark the files behind *failures* (a queryset) and queue each of them.
 
     Returns the number of files unparked.
     """
-    from workspace.files.tasks import catch_up
+    from ..catch_up import get_catch_up, queue_files
 
-    count = failures.count()
-    failures.delete()
-    catch_up.delay(names=["thumbnails"])
-    return count
+    file_ids = list(failures.values_list("file_id", flat=True))
+    ThumbnailFailure.objects.filter(file_id__in=file_ids).delete()
+    return queue_files(get_catch_up("thumbnails"), file_ids)

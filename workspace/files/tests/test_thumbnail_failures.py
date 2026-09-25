@@ -7,6 +7,7 @@ transiently - or gets repaired - must still be picked up.
 
 import io
 import logging
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -529,11 +530,46 @@ class RetryFailedTests(ThumbnailFailureTestCase):
         self.assertTrue(f.has_thumbnail)
 
 
+class RetryQueuesTheUnparkedFilesTests(ThumbnailFailureTestCase):
+    @patch("workspace.files.tasks.CATCH_UP_LIMIT", 1)
+    def test_unparked_files_are_queued_even_behind_a_larger_backlog(self):
+        """A pass is bounded: a retry that only queued one could leave the
+        files the operator asked for behind the rest of the backlog."""
+        from workspace.files.services.thumbnails.failures import (
+            MAX_THUMBNAIL_ATTEMPTS,
+            record_failure,
+            retry_failures,
+        )
+        from workspace.files.tasks import catch_up, catch_up_file
+
+        self._make_valid_image("older.jpg")
+        parked = self._make_broken_image()
+        for _ in range(MAX_THUMBNAIL_ATTEMPTS):
+            record_failure(parked, ValueError("boom"))
+
+        with (
+            patch.object(catch_up_file, "apply_async") as queue,
+            patch.object(
+                catch_up, "delay", side_effect=lambda **kw: catch_up.apply(kwargs=kw)
+            ),
+        ):
+            self.assertEqual(
+                retry_failures(ThumbnailFailure.objects.filter(file=parked)), 1
+            )
+
+        self.assertIn(
+            ["thumbnails", str(parked.pk)],
+            [c.kwargs["args"] for c in queue.call_args_list],
+        )
+        self.assertFalse(ThumbnailFailure.objects.exists())
+
+
 class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
     def _post(self, *args, **kwargs):
-        from unittest.mock import patch
-
-        with patch("workspace.files.tasks.catch_up.delay") as delay:
+        with (
+            patch("workspace.files.tasks.catch_up.delay") as delay,
+            patch("workspace.files.tasks.catch_up_file.apply_async") as self.queue,
+        ):
             delay.return_value.id = "task-1"
             resp = self.client.post("/api/v1/thumbnails/generate", *args, **kwargs)
         return resp, delay
@@ -552,13 +588,17 @@ class RetryFailedEndpointTests(ThumbnailFailureAPITestCase):
     def test_staff_caller_unparks_every_file_and_queues_the_catch_up(self):
         from rest_framework import status
 
-        self._park()
+        parked = self._park()
         self.client.force_authenticate(user=self.staff)
 
         resp, delay = self._post({"retry_failed": True}, format="json")
 
         self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
         self.assertFalse(ThumbnailFailure.objects.exists())
+        self.assertEqual(
+            [c.kwargs["args"] for c in self.queue.call_args_list],
+            [["thumbnails", str(parked.pk)]],
+        )
         delay.assert_called_once_with(names=["thumbnails"])
 
     def test_non_staff_caller_may_not_unpark(self):

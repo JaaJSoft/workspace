@@ -52,16 +52,8 @@ def pending_qs(*, reanalyze=False):
     counts when it has no row at all: comparing an empty hash would mark it
     stale on every pass, forever.
     """
-    # Both content exclusions are needed: Django renders exclude(content="")
-    # as NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
     qs = exclude_blocked(
-        File.objects.filter(
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-            type__in=MEDIA_INFO_LABELS,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
+        File.objects.alive().with_blob().filter(type__in=MEDIA_INFO_LABELS)
     )
     if reanalyze:
         return qs

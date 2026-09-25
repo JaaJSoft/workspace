@@ -118,15 +118,7 @@ def pending_links_qs(*, reanalyze=False):
 
     With *reanalyze*, every live note.
     """
-    # Both exclusions are needed: Django renders exclude(content="") as
-    # NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    qs = exclude_blocked(
-        File.objects.filter(
-            node_type=File.NodeType.FILE, type="markdown", deleted_at__isnull=True
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
+    qs = exclude_blocked(File.objects.alive().with_blob().filter(type="markdown"))
     if reanalyze:
         return qs
     return qs.filter(

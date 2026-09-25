@@ -75,13 +75,7 @@ def pending_hash_qs(*, reanalyze=False):
 
     With *reanalyze*, every file row holding a blob.
     """
-    # Both exclusions are needed: Django renders exclude(content="") as
-    # NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    qs = (
-        File.objects.filter(node_type=File.NodeType.FILE)
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
+    qs = File.objects.with_blob()
     return qs if reanalyze else qs.filter(content_hash="")
 
 

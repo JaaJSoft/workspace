@@ -91,13 +91,7 @@ def pending_media_qs(*, reanalyze=False):
     Quarantined files are left out: reading their bytes is exactly what the
     malware policy forbids, and they are hidden from the timeline anyway.
     """
-    # Both content exclusions are needed: Django renders exclude(content="")
-    # as NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
-    qs = exclude_blocked(
-        library_candidates(File.objects.filter(deleted_at__isnull=True))
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
+    qs = exclude_blocked(library_candidates(File.objects.alive().with_blob()))
     if reanalyze:
         return qs
     pending = Q(media_item__isnull=True) | (

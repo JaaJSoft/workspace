@@ -26,14 +26,7 @@ def pending_scan_qs(*, reanalyze=False):
     """
     if not getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False):
         return File.objects.none()
-    # Both exclusions are needed. Django renders exclude(content="") as
-    # NOT (content = '' AND content IS NOT NULL), so a NULL content makes
-    # the inner AND false and the row survives.
-    qs = (
-        File.objects.filter(node_type=File.NodeType.FILE, deleted_at__isnull=True)
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
+    qs = File.objects.alive().with_blob()
     if reanalyze:
         return qs
     # "Needs scanning" is not the same as "never scanned". A file whose

@@ -244,13 +244,9 @@ def pending_thumbnails_qs(*, reanalyze=False):
     # infected image reappears at the next pass. It also means a file leaving
     # quarantine becomes pending again on its own.
     qs = exclude_blocked(
-        File.objects.filter(
-            node_type=File.NodeType.FILE,
-            deleted_at__isnull=True,
-            type__in=generatable_labels(),
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
+        File.objects.alive()
+        .with_blob()
+        .filter(type__in=generatable_labels())
         .exclude(type__in=VIDEO_LABELS, viewer=_audio_viewer_slug())
     )
     if reanalyze:

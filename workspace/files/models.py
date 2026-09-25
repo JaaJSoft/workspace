@@ -46,6 +46,20 @@ class FileQuerySet(models.QuerySet):
         """
         return self.order_by(*prefix_fields, Lower("name"))
 
+    def alive(self):
+        """Rows not in the trash."""
+        return self.filter(deleted_at__isnull=True)
+
+    def with_blob(self):
+        """File nodes that hold a blob in storage."""
+        # Both exclusions are needed: Django renders exclude(content="") as
+        # NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
+        return (
+            self.filter(node_type=File.NodeType.FILE)
+            .exclude(content="")
+            .exclude(content__isnull=True)
+        )
+
 
 class File(models.Model):
     """Model representing a file or folder in a tree structure."""

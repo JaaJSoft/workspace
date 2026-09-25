@@ -39,7 +39,7 @@ class FilesAdminTests(TestCase):
             file=other_file, attempts=1, last_attempt_at=timezone.now()
         )
 
-        with patch("workspace.files.tasks.generate_thumbnails.delay") as delay:
+        with patch("workspace.files.tasks.catch_up_file.apply_async") as queue:
             response = self.client.post(
                 reverse("admin:files_thumbnailfailure_changelist"),
                 {
@@ -49,7 +49,10 @@ class FilesAdminTests(TestCase):
             )
         self.assertEqual(response.status_code, 302)
         self.assertQuerySetEqual(ThumbnailFailure.objects.all(), [other_failure])
-        delay.assert_called_once()
+        self.assertEqual(
+            [c.kwargs["args"] for c in queue.call_args_list],
+            [["thumbnails", str(self.failure.file_id)]],
+        )
 
     def test_failure_rows_cannot_be_added_by_hand(self):
         self.assertEqual(

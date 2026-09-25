@@ -34,16 +34,15 @@ Markdown, plain text, CSV, HTML, JSON, XML and source code. Anything else - PDFs
 documents, images, archives - stays searchable by name.
 
 The index holds only the extracted words, never a copy of the file: the blob on disk
-remains the single copy of the content. Because nothing in the database can rebuild it,
-an existing installation needs one backfill after upgrading:
+remains the single copy of the content. Files are indexed as they are created, renamed or
+edited, and the hourly catch-up indexes whatever that missed: files already there when
+the feature was installed, an edit whose indexing was lost, and every file once more after
+a change to how text is extracted. To queue the whole backlog at once rather than 20,000
+files per pass:
 
 ```bash
-python manage.py reindex_files_search
+python manage.py catch_up search_index
 ```
-
-A fresh installation needs nothing - files are indexed as they are created. Run the same
-command again only after a change to how text is extracted, so already-indexed files pick
-up the new extraction.
 
 ## Office Documents
 
@@ -117,11 +116,11 @@ its own limit and the file is recorded as `skipped`, exactly as before. To
 actually scan larger files, raise `StreamMaxLength` in `clamd.conf` as well and
 restart the daemon.
 
-**Relaxing the policy does not undo the search exclusion.** Quarantining a file
-drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION` from
-`block` back to `flag` makes those files readable again, but re-scanning them
-does not put their documents back, so they stay findable by nothing but a
-browse. Run `python manage.py reindex_files_search` after relaxing the policy.
+**Relaxing the policy restores the search exclusion gradually.** Quarantining a
+file drops its full-text search document. Switching `FILES_MALWARE_ON_DETECTION`
+from `block` back to `flag` makes those files readable again, and the hourly
+catch-up puts their documents back. Run `python manage.py catch_up search_index`
+after relaxing the policy to do it at once.
 
 ### Monitoring
 
@@ -156,7 +155,7 @@ exact bytes and nothing else. Replace the content and the file blocks again at
 once, before the new bytes have even been scanned - and the scan of those new
 bytes drops the clearance rather than inheriting it, so an infected upload
 never lands on a cleared row. A re-scan of the *same* bytes keeps it, which is
-what stops the next `scan_files` pass from undoing every clearance it walks
+what stops the next catch-up pass from undoing every clearance it walks
 over. For the same reason the action refuses a verdict
 that does not describe the file's current content, and says so: re-scan first,
 then clear the verdict that comes back.
@@ -171,24 +170,29 @@ refuses to start rather than running unprotected. Should it reach a worker
 anyway, every scan is recorded as an error, so `FILES_MALWARE_ON_ERROR` decides
 what happens and the scanner card says what is wrong.
 
-### Backfilling an existing library
+### Catching up on an existing library
+
+Every hour, the catch-up queues a scan for each file that needs one, at a lower
+priority than everything else, so enabling scanning on an existing library
+works through it on its own, 20,000 files per pass. To queue the whole backlog
+at once, or to re-scan everything after a signature update:
 
 ```bash
-python manage.py scan_files              # queue every file that needs a scan
-python manage.py scan_files --rescan     # re-scan everything
-python manage.py scan_files --dry-run    # count without queueing
+python manage.py catch_up malware_scan              # queue every file that needs a scan now
+python manage.py catch_up malware_scan --reanalyze  # re-scan everything
+python manage.py catch_up malware_scan --dry-run    # count without queueing
 ```
 
 "Needs a scan" is wider than "never scanned". Each verdict records the hash of
-the bytes it describes, so the default run also picks up a file whose content
+the bytes it describes, so the catch-up also picks up a file whose content
 changed after its verdict was written. That normally cannot happen - saving new
 content queues a scan - but the queued scan can be lost if a worker is killed
 or the broker is flushed, and without this the file would keep a verdict about
-bytes it no longer holds until somebody ran `--rescan` over the whole library.
+bytes it no longer holds.
 
 The **Up to date** column on **Files > Malware scans** shows the same
 comparison per row. A verdict written before the hash was recorded reads as out
-of date, so the first default run after upgrading re-scans the library once.
+of date, so the catch-up re-scans such files once after upgrading.
 
 ### Verifying a real engine
 

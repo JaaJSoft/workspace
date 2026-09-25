@@ -1,13 +1,11 @@
-from io import StringIO
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.db import connection
 from django.test import TestCase, TransactionTestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.test import APITestCase
 
@@ -15,15 +13,22 @@ from workspace.common.documents import extraction
 from workspace.common.search import apply_fulltext, fts5_available
 from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
-from workspace.files.models import File, FileEvent
+from workspace.files.models import File, FileEvent, SearchIndexState
 from workspace.files.services import FileService
+from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.search_index import (
+    EXTRACTOR_VERSION,
     FILES_FTS,
     build_document,
+    build_documents,
     index_file,
+    pending_search_qs,
     unindex_file,
+    write_documents,
 )
 from workspace.files.services.wopi.tokens import mint_access_token
+
+from .catch_up import run_catch_up
 
 User = get_user_model()
 
@@ -163,79 +168,144 @@ class IndexWriteTests(_FtsTestCase):
             self.assertFalse(index_file(note))
 
 
-class ReindexCommandTests(_FtsTestCase):
-    def test_backfills_existing_files(self):
+class SearchCatchUpTests(_FtsTestCase):
+    def test_indexes_existing_files(self):
         note = self._note("old.md", b"forgotten wisdom")
-        out = StringIO()
-        call_command("reindex_files_search", stdout=out)
-        self.assertEqual(self._matches('"wisdom"'), {self._rowid(note)})
-        self.assertIn("Indexed:", out.getvalue())
 
-    def test_dry_run_writes_nothing(self):
-        note = self._note("old.md", b"forgotten wisdom")
-        out = StringIO()
-        call_command("reindex_files_search", "--dry-run", stdout=out)
-        self.assertEqual(self._matches('"wisdom"'), set())
-        self.assertIn("Dry run", out.getvalue())
-        note.refresh_from_db()
-        self.assertIsNone(note.fts_rowid)
+        run_catch_up("search_index")
 
-    def test_limit_stops_early(self):
-        for i in range(5):
-            self._note(f"n{i}.md", f"needle{i}".encode())
-        call_command(
-            "reindex_files_search",
-            "--limit",
-            "2",
-            "--batch-size",
-            "1",
-            stdout=StringIO(),
-        )
-        found = sum(1 for i in range(5) if self._matches(f'"needle{i}"'))
-        self.assertEqual(found, 2)
-
-    def test_a_bad_batch_size_is_rejected(self):
-        with self.assertRaises(CommandError):
-            call_command("reindex_files_search", "--batch-size", "0")
-        with self.assertRaises(CommandError):
-            call_command("reindex_files_search", "--limit", "-1")
-
-    def test_every_page_is_covered(self):
-        # The backfill pages by keyset rather than streaming a cursor, so it
-        # is worth pinning that the paging itself walks the whole table: an
-        # off-by-one in the "uuid > last" bound silently skips or repeats.
-        notes = [self._note(f"n{i}.md", f"needle{i}".encode()) for i in range(7)]
-        call_command("reindex_files_search", "--batch-size", "2", stdout=StringIO())
-        for i, note in enumerate(notes):
-            with self.subTest(i=i):
-                self.assertEqual(self._matches(f'"needle{i}"'), {self._rowid(note)})
-
-    def test_trashed_files_are_skipped_by_default(self):
-        note = self._note("old.md", b"forgotten wisdom")
-        note.soft_delete()
-        call_command("reindex_files_search", stdout=StringIO())
-        self.assertEqual(self._matches('"wisdom"'), set())
-
-    def test_include_trashed_covers_them(self):
-        note = self._note("old.md", b"forgotten wisdom")
-        note.soft_delete()
-        call_command("reindex_files_search", "--include-trashed", stdout=StringIO())
         self.assertEqual(self._matches('"wisdom"'), {self._rowid(note)})
 
-    def test_owner_filter_narrows_the_backfill(self):
-        mine = self._note("mine.md", b"alpha secret")
-        other = User.objects.create_user(username="bob", password="pw")
-        theirs = File.objects.create(
-            name="theirs.md",
-            node_type=File.NodeType.FILE,
-            mime_type="text/markdown",
-            owner=other,
-            content=ContentFile(b"beta secret", name="theirs.md"),
+    def test_a_rename_its_event_missed_is_indexed_again(self):
+        note = self._note("old.md", b"x")
+        index_file(note)
+        File.objects.filter(pk=note.pk).update(name="renamed.md")
+
+        self.assertEqual(run_catch_up("search_index"), 1)
+
+        self.assertEqual(self._matches('"renamed"'), {self._rowid(note)})
+        self.assertEqual(run_catch_up("search_index"), 0)
+
+
+class PendingSearchTests(TestCase):
+    """What the catch-up indexes, read from SearchIndexState alone."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+
+    def _note(self, name="old.md", body=b"x"):
+        return FileService.create_file(
+            self.user, name, content=ContentFile(body, name=name)
         )
-        call_command("reindex_files_search", "--owner", "alice", stdout=StringIO())
-        self.assertEqual(self._matches('"alpha"'), {self._rowid(mine)})
-        self.assertEqual(self._matches('"beta"'), set())
-        self.assertTrue(theirs.pk)
+
+    def _pending(self, **kwargs):
+        return set(pending_search_qs(**kwargs).values_list("pk", flat=True))
+
+    def test_registered_with_the_catch_up(self):
+        self.assertIs(get_catch_up("search_index").process, index_file)
+
+    def test_a_never_indexed_file_is_pending(self):
+        note = self._note()
+        self.assertEqual(self._pending(), {note.pk})
+
+    def test_an_indexed_file_is_not_pending(self):
+        note = self._note()
+        self.assertTrue(index_file(note))
+
+        self.assertEqual(self._pending(), set())
+        self.assertEqual(self._pending(reanalyze=True), {note.pk})
+
+    def test_a_rename_is_pending(self):
+        note = self._note()
+        index_file(note)
+        File.objects.filter(pk=note.pk).update(name="renamed.md")
+        self.assertEqual(self._pending(), {note.pk})
+
+    def test_an_edit_is_pending(self):
+        note = self._note()
+        index_file(note)
+        File.objects.filter(pk=note.pk).update(content_hash="f" * 64)
+        self.assertEqual(self._pending(), {note.pk})
+
+    def test_a_newer_extractor_makes_every_document_pending(self):
+        note = self._note()
+        index_file(note)
+
+        with mock.patch(
+            "workspace.files.services.search_index.EXTRACTOR_VERSION",
+            EXTRACTOR_VERSION + 1,
+        ):
+            self.assertEqual(self._pending(), {note.pk})
+
+    def test_folders_are_indexed_by_name(self):
+        folder = FileService.create_folder(self.user, "Docs")
+        self.assertEqual(self._pending(), {folder.pk})
+
+    def test_trashed_files_are_not_pending(self):
+        note = self._note()
+        note.soft_delete()
+        self.assertEqual(self._pending(), set())
+
+    def test_unindexing_makes_the_file_pending_again(self):
+        note = self._note()
+        index_file(note)
+
+        self.assertTrue(unindex_file(note))
+
+        self.assertEqual(self._pending(), {note.pk})
+
+    def test_the_state_records_what_the_document_was_built_from(self):
+        note = self._note("groceries.md")
+
+        index_file(note)
+
+        state = SearchIndexState.objects.get(file=note)
+        self.assertEqual(state.name, "groceries.md")
+        self.assertEqual(state.content_hash, note.content_hash)
+        self.assertEqual(state.extractor_version, EXTRACTOR_VERSION)
+
+    def test_a_batch_checks_its_rows_exist_in_one_query(self):
+        notes = [self._note(f"n{i}.md") for i in range(4)]
+        documents = build_documents(notes)
+
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertEqual(write_documents(documents), 4)
+
+        existence_checks = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if q["sql"].startswith("SELECT")
+            and 'FROM "files_file" WHERE "files_file"."uuid" ' in q["sql"]
+        ]
+        self.assertEqual(len(existence_checks), 1)
+        self.assertEqual(SearchIndexState.objects.count(), 4)
+
+    def test_the_blob_is_read_outside_the_write_transaction(self):
+        """SQLite opens transactions IMMEDIATE: extracting inside one would
+        hold the write lock for as long as the blob takes to read."""
+        note = self._note()
+        outer = len(connection.atomic_blocks)
+        depth_while_reading = []
+
+        def read(file_obj):
+            depth_while_reading.append(len(connection.atomic_blocks))
+            return ""
+
+        with mock.patch(
+            "workspace.files.services.search_index.extract_text", side_effect=read
+        ):
+            self.assertTrue(index_file(note))
+
+        self.assertEqual(depth_while_reading, [outer])
+
+    def test_a_failed_index_records_no_state(self):
+        note = self._note()
+        with mock.patch(
+            "workspace.files.services.search_index.index_document",
+            side_effect=RuntimeError("boom"),
+        ):
+            self.assertFalse(index_file(note))
+        self.assertFalse(SearchIndexState.objects.exists())
 
 
 class EventHandlerTests(TestCase):
@@ -406,8 +476,12 @@ class SurvivesATableRebuildTests(TransactionTestCase):
 
     @staticmethod
     def _rebuild_files_file():
-        """What Django's SQLite backend does for an AddField, in miniature."""
-        with connection.cursor() as c:
+        """What Django's SQLite backend does for an AddField, in miniature.
+
+        Foreign keys off, as the schema editor has them: rows in other tables
+        point at files_file, and dropping it with the checks on would fail.
+        """
+        with connection.constraint_checks_disabled(), connection.cursor() as c:
             c.execute("SELECT sql FROM sqlite_master WHERE name = 'files_file'")
             create_sql = c.fetchone()[0].replace("files_file", "new__files_file", 1)
             c.execute("SELECT name FROM pragma_table_info('files_file')")
@@ -484,7 +558,7 @@ class KeyAssignmentTests(_FtsTestCase):
 
 
 class DocumentBackfillTests(_FtsTestCase):
-    """Files uploaded before an extractor existed are picked up by the backfill."""
+    """Files uploaded before an extractor existed are picked up by the catch-up."""
 
     def _document(self, name, mime, payload):
         return File.objects.create(
@@ -496,29 +570,29 @@ class DocumentBackfillTests(_FtsTestCase):
             content=ContentFile(payload, name=name),
         )
 
-    def test_backfill_indexes_a_pdf_uploaded_before_the_extractor_existed(self):
+    def test_catch_up_indexes_a_pdf_uploaded_before_the_extractor_existed(self):
         report = self._document(
             "report.pdf", "application/pdf", make_pdf(["quarterly budget"])
         )
         self.assertEqual(self._matches('"budget"'), set())
 
-        call_command("reindex_files_search", stdout=StringIO())
+        run_catch_up("search_index")
 
         self.assertEqual(self._matches('"budget"'), {self._rowid(report)})
 
-    def test_backfill_indexes_office_documents(self):
+    def test_catch_up_indexes_office_documents(self):
         minutes = self._document(
             "minutes.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
         )
-        call_command("reindex_files_search", stdout=StringIO())
+        run_catch_up("search_index")
         self.assertEqual(self._matches('"treasurer"'), {self._rowid(minutes)})
 
-    def test_an_unreadable_document_does_not_stop_the_backfill(self):
+    def test_an_unreadable_document_does_not_stop_the_catch_up(self):
         self._document("broken.pdf", "application/pdf", b"%PDF-1.4 truncated")
         readable = self._document(
             "good.docx", extraction.DOCX, make_docx(["the treasurer resigned"])
         )
-        call_command("reindex_files_search", stdout=StringIO())
+        run_catch_up("search_index")
         self.assertEqual(self._matches('"treasurer"'), {self._rowid(readable)})
 
 

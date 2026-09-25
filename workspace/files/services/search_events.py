@@ -7,6 +7,8 @@ every other handler for the same event (thumbnails, link previews).
 Trashing needs no handler - the row and its document both stay, and the access
 querysets already hide a trashed file from search. Hard deletion is handled by
 the pre_delete receiver in models.py, which still has a resolvable row.
+Registered with the hourly catch-up too, which indexes whatever that path
+missed.
 """
 
 from __future__ import annotations
@@ -14,7 +16,9 @@ from __future__ import annotations
 import logging
 
 from workspace.files.models import FileEvent
+from workspace.files.services.catch_up import register_catch_up
 from workspace.files.services.event_dispatch import on_file_event
+from workspace.files.services.search_index import index_file, pending_search_qs
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +37,6 @@ def index_search_document_for_event(event):
     # action leaves descendant names and contents untouched.
     include_descendants = event.action == FileEvent.Action.CREATED
     index_search_document.delay(str(event.file_id), include_descendants)
+
+
+register_catch_up("search_index", pending=pending_search_qs, process=index_file)

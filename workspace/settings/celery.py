@@ -19,6 +19,12 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
+# Each worker process reserves at most one task beyond the one it runs, instead
+# of four: a task that turns up while a background backlog is draining (sent at
+# BACKGROUND_PRIORITY) then waits behind one reserved task at most. Acks stay
+# early - acks_late would re-run a task whose worker died, which every task
+# would then have to tolerate.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 
 # In development, run tasks synchronously in the current thread (no worker needed)
 if DEBUG:
@@ -31,6 +37,11 @@ if DEBUG:
 # (rsync, restore, direct SSH copy). Large deployments can widen it further
 # - the trade-off is how long such a change stays invisible in the UI.
 FILES_SYNC_INTERVAL = float(os.getenv("FILES_SYNC_INTERVAL", "1800"))
+
+# Cadence of the files catch-up (files/services/catch_up.py): how long a file
+# whose event-driven processing was lost waits before the catch-up takes it,
+# and how often a backlog drains another CATCH_UP_LIMIT files per reader.
+FILES_CATCH_UP_INTERVAL = float(os.getenv("FILES_CATCH_UP_INTERVAL", "3600"))
 
 # How stale an account's last successful sync must be before the dispatcher
 # claims it again. Doubles as the beat cadence: the dispatcher runs on this
@@ -47,19 +58,11 @@ CELERY_BEAT_SCHEDULE = {
         # so a backed-up broker cannot accumulate stale fan-outs.
         "options": {"expires": FILES_SYNC_INTERVAL},
     },
-    "generate-thumbnails": {
-        "task": "files.generate_thumbnails",
-        "schedule": 3600.0,  # Hourly backfill; primary path is event-driven
-    },
-    "probe-media": {
-        "task": "files.probe_media",
-        "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
-        "options": {"expires": 3600.0},
-    },
-    "analyze-photos": {
-        "task": "photos.analyze_pending",
-        "schedule": 3600.0,  # Hourly catch-up; primary path is event-driven
-        "options": {"expires": 3600.0},
+    "catch-up-readers": {
+        "task": "files.catch_up",
+        # The primary path is event-driven; this catches what it missed.
+        "schedule": FILES_CATCH_UP_INTERVAL,
+        "options": {"expires": FILES_CATCH_UP_INTERVAL},
     },
     "purge-trash": {
         "task": "files.purge_trash",

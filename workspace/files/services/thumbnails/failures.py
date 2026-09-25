@@ -2,8 +2,8 @@
 
 A file that can never produce a thumbnail - truncated bytes, an unsupported
 variant of a supported label, a blob missing from storage - would otherwise be
-re-decoded by every hourly backfill pass, forever. Recording attempts lets the
-backfill park such a file once it has burned its budget.
+re-decoded by every hourly catch-up pass, forever. Recording attempts lets the
+catch-up park such a file once it has burned its budget.
 
 The counter is scoped to the file's current content: callers drop the row when
 the content is replaced, so repaired bytes get a fresh budget.
@@ -55,21 +55,13 @@ def parked_file_ids():
 
     A row past PARKED_RETRY_AFTER drops out, so the file is attempted once more
     and, if it fails again, parked for another window. Its ``attempts`` keeps
-    climbing past the budget on purpose: both this filter and count_parked_since
-    match with ``__gte``, so an overshooting row stays parked and stays counted.
+    climbing past the budget on purpose: this filter matches with ``__gte``, so
+    an overshooting row stays parked.
     """
     return ThumbnailFailure.objects.filter(
         attempts__gte=MAX_THUMBNAIL_ATTEMPTS,
         last_attempt_at__gte=timezone.now() - PARKED_RETRY_AFTER,
     ).values("file_id")
-
-
-def count_parked_since(moment):
-    """How many files reached the attempt budget at or after *moment*."""
-    return ThumbnailFailure.objects.filter(
-        last_attempt_at__gte=moment,
-        attempts__gte=MAX_THUMBNAIL_ATTEMPTS,
-    ).count()
 
 
 def clear_all_failures():
@@ -87,13 +79,12 @@ def parked_count():
 
 
 def retry_failures(failures):
-    """Unpark the files behind *failures* (a queryset) and queue a generation pass.
+    """Unpark the files behind *failures* (a queryset) and queue each of them.
 
     Returns the number of files unparked.
     """
-    from workspace.files.tasks import generate_thumbnails
+    from ..catch_up import get_catch_up, queue_files
 
-    count = failures.count()
-    failures.delete()
-    generate_thumbnails.delay()
-    return count
+    file_ids = list(failures.values_list("file_id", flat=True))
+    ThumbnailFailure.objects.filter(file_id__in=file_ids).delete()
+    return queue_files(get_catch_up("thumbnails"), file_ids)

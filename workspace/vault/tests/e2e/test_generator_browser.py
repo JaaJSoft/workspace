@@ -10,6 +10,8 @@ a plaintext held outside any entry, so a lock has to take it back the way it
 takes a draft back.
 """
 
+import re
+
 from django.core.cache import cache
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -177,7 +179,10 @@ class GeneratorWalkTests(PlaywrightTestCase):
             timeout=10000,
         )
         phrase = self.page.inner_text(PREVIEW)
-        self.assertGreaterEqual(len(phrase.split("-")), 6)
+        # Counted on the capitals, not the hyphens: the list holds 'yo-yo',
+        # which a split on "-" reads as two words.
+        words = re.findall(r"(?:^|-)[A-Z]", phrase)
+        self.assertEqual(len(words), 6, f"the generator drew {phrase!r}, not six words")
 
     def test_enter_inside_the_generator_does_not_save_the_entry(self):
         # The panel is embedded in the entry form, and Chromium submits

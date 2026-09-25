@@ -15,11 +15,11 @@ from workspace.files.services import FileService, ffmpeg
 from workspace.files.services.thumbnails import poster
 from workspace.files.services.thumbnails.generation import (
     can_generate_thumbnail,
-    generate_missing_thumbnails,
     generate_thumbnail,
     get_thumbnail_path,
 )
 
+from .catch_up import run_catch_up
 from .videos import clip_bytes, requires_ffmpeg
 
 User = get_user_model()
@@ -114,7 +114,7 @@ class GenerationTests(VideoThumbnailTestCase):
         self.assertFalse(can_generate_thumbnail("mp4"))
         self.assertTrue(can_generate_thumbnail("jpeg"))
         self.assertFalse(generate_thumbnail(f))
-        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+        self.assertEqual(run_catch_up("thumbnails"), 0)
         self.assertFalse(ThumbnailFailure.objects.exists())
 
     @patch("workspace.files.services.thumbnails.generation.poster_frame")
@@ -122,7 +122,7 @@ class GenerationTests(VideoThumbnailTestCase):
         f = self._video(viewer="audio")
 
         self.assertFalse(generate_thumbnail(f))
-        self.assertEqual(generate_missing_thumbnails()["total"], 0)
+        self.assertEqual(run_catch_up("thumbnails"), 0)
         frame.assert_not_called()
 
     @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
@@ -140,13 +140,11 @@ class GenerationTests(VideoThumbnailTestCase):
         frame.assert_not_called()
 
     @patch("workspace.files.services.thumbnails.generation.poster_frame")
-    def test_the_backfill_takes_videos(self, frame):
+    def test_the_catch_up_takes_videos(self, frame):
         frame.return_value = Image.new("RGB", (64, 36))
         f = self._video()
 
-        stats = generate_missing_thumbnails()
-
-        self.assertEqual(stats["generated"], 1)
+        self.assertEqual(run_catch_up("thumbnails"), 1)
         f.refresh_from_db()
         self.assertTrue(f.has_thumbnail)
 

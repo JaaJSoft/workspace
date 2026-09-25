@@ -3,7 +3,9 @@
 Today the only producer of links is the ``[[`` wikilink autocomplete in the
 markdown editor, which inserts ``[Title](/notes?file=UUID)`` into a note's
 content. ``extract_link_targets`` parses those references and
-``reconcile_file_links`` syncs them into FileLink rows for a source file.
+``reconcile_file_links`` syncs them into FileLink rows for a source file, and
+records what it read in FileLinkState so the hourly catch-up
+(services/catch_up.py) can tell which notes still need it.
 """
 
 from __future__ import annotations
@@ -11,15 +13,23 @@ from __future__ import annotations
 import re
 
 from django.db import transaction
+from django.db.models import F, Q
+from django.utils import timezone
 
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import File, FileLink
+from ..models import File, FileLink, FileLinkState
 from ._content import read_text_content
+from .scanning.policy import exclude_blocked
 
 # Matches the ``?file=<uuid>`` / ``&file=<uuid>`` token the autocomplete emits.
 # 36 chars covers the canonical hyphenated UUID form Django serializes.
 _LINK_RE = re.compile(r"[?&]file=([0-9a-fA-F-]{36})")
+
+# Raise when extract_link_targets() starts finding links it did not before:
+# every note reconciled by an older version becomes pending, and the catch-up
+# re-reads them on its own.
+EXTRACTOR_VERSION = 1
 
 
 def extract_link_targets(markdown_text) -> set[str]:
@@ -78,15 +88,46 @@ def reconcile_file_links(file):
 
     to_remove = existing - targets
     to_add = targets - existing
-    if to_remove or to_add:
-        # One transaction so a single reconcile is all-or-nothing: a failed
-        # create can never leave the prior edges already deleted.
-        with transaction.atomic():
-            if to_remove:
-                FileLink.objects.filter(source=file, target_id__in=to_remove).delete()
-            if to_add:
-                FileLink.objects.bulk_create(
-                    [FileLink(source=file, target_id=t) for t in to_add],
-                    ignore_conflicts=True,  # tolerate a racing concurrent reconcile
-                )
+    # One transaction so a single reconcile is all-or-nothing: a failed create
+    # can never leave the prior edges already deleted, nor the state claiming
+    # edges that were never written.
+    with transaction.atomic():
+        if to_remove:
+            FileLink.objects.filter(source=file, target_id__in=to_remove).delete()
+        if to_add:
+            FileLink.objects.bulk_create(
+                [FileLink(source=file, target_id=t) for t in to_add],
+                ignore_conflicts=True,  # tolerate a racing concurrent reconcile
+            )
+        # The hash the text was read under, not a fresh read: an edit landing
+        # meanwhile leaves the row behind the file, which is what makes the
+        # catch-up reconcile it again.
+        FileLinkState.objects.update_or_create(
+            file_id=file.pk,
+            defaults={
+                "content_hash": file.content_hash,
+                "extractor_version": EXTRACTOR_VERSION,
+                "reconciled_at": timezone.now(),
+            },
+        )
     return targets
+
+
+def pending_links_qs(*, reanalyze=False):
+    """Live notes whose outgoing links were never extracted, or from other bytes.
+
+    With *reanalyze*, every live note.
+    """
+    qs = exclude_blocked(File.objects.alive().with_blob().filter(type="markdown"))
+    if reanalyze:
+        return qs
+    return qs.filter(
+        Q(link_state__isnull=True)
+        | ~Q(link_state__content_hash=F("content_hash"))
+        | Q(link_state__extractor_version__lt=EXTRACTOR_VERSION)
+    )
+
+
+def refresh_file_links(file):
+    """Reconcile *file*'s links; True when its content could be read."""
+    return reconcile_file_links(file) is not None

@@ -10,6 +10,7 @@ from workspace.files.models import MediaInfo
 from workspace.files.services import FileService
 from workspace.files.tests.videos import clip_bytes
 from workspace.photos.models import MediaItem
+from workspace.photos.services.analysis import ANALYSIS_VERSIONS
 
 
 def jpeg_bytes(
@@ -21,8 +22,14 @@ def jpeg_bytes(
     make=None,
     model=None,
     color=(200, 60, 40),
+    exif_tags=None,
+    gps=None,
 ):
-    """A JPEG carrying exactly the EXIF tags that were asked for."""
+    """A JPEG carrying exactly the EXIF tags that were asked for.
+
+    *exif_tags* go to the Exif IFD and *gps* to the GPS IFD, both keyed by
+    tag number (``ExifTags.Base`` / ``ExifTags.GPS``).
+    """
     exif = Image.Exif()
     if make is not None:
         exif[ExifTags.Base.Make] = make
@@ -36,6 +43,10 @@ def jpeg_bytes(
             exif_ifd[ExifTags.Base.DateTimeOriginal] = taken
         if offset is not None:
             exif_ifd[ExifTags.Base.OffsetTimeOriginal] = offset
+    if exif_tags:
+        exif.get_ifd(ExifTags.IFD.Exif).update(exif_tags)
+    if gps:
+        exif.get_ifd(ExifTags.IFD.GPSInfo).update(gps)
     buf = io.BytesIO()
     Image.new("RGB", size, color).save(buf, format="JPEG", exif=exif)
     return buf.getvalue()
@@ -70,6 +81,7 @@ def make_photo(owner, name, taken_at, *, parent=None, **fields):
         defaults={
             "taken_at": taken_at,
             "content_hash": file_obj.content_hash,
+            "analysis_version": ANALYSIS_VERSIONS[MediaItem.MediaType.PHOTO],
             "analyzed_at": timezone.now(),
             **fields,
         },
@@ -97,6 +109,7 @@ def make_video(
             "media_type": MediaItem.MediaType.VIDEO,
             "taken_at": taken_at,
             "content_hash": file_obj.content_hash,
+            "analysis_version": ANALYSIS_VERSIONS[MediaItem.MediaType.VIDEO],
             "analyzed_at": timezone.now(),
             **fields,
         },

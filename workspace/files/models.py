@@ -46,6 +46,20 @@ class FileQuerySet(models.QuerySet):
         """
         return self.order_by(*prefix_fields, Lower("name"))
 
+    def alive(self):
+        """Rows not in the trash."""
+        return self.filter(deleted_at__isnull=True)
+
+    def with_blob(self):
+        """File nodes that hold a blob in storage."""
+        # Both exclusions are needed: Django renders exclude(content="") as
+        # NOT (content = '' AND content IS NOT NULL), which keeps NULL rows.
+        return (
+            self.filter(node_type=File.NodeType.FILE)
+            .exclude(content="")
+            .exclude(content__isnull=True)
+        )
+
 
 class File(models.Model):
     """Model representing a file or folder in a tree structure."""
@@ -80,9 +94,9 @@ class File(models.Model):
     # renderer applies, e.g. an audio-only MP4 container.
     viewer = models.CharField(max_length=32, blank=True, default="")
     # SHA-256 hex digest of the blob, refreshed on every content write. Empty
-    # for folders and for rows registered before the hash existed (see the
-    # backfill_file_hashes command). Only used to spot duplicate uploads;
-    # rows never share a blob on the strength of it.
+    # for folders, and for rows registered before the hash existed until the
+    # hourly catch-up hashes them (services/content_hash.py). Rows never share
+    # a blob on the strength of it.
     content_hash = models.CharField(
         max_length=64, blank=True, default="", db_index=True
     )
@@ -1033,6 +1047,47 @@ class MediaInfo(models.Model):
 
     def __str__(self):
         return f"MediaInfo: {self.file_id}"
+
+
+class FileLinkState(models.Model):
+    """What a note's outgoing links (FileLink rows) were extracted from.
+
+    Written with every reconcile (see ``services/links.py``). A note whose row
+    is missing, or whose content or extractor version no longer match it, is
+    reconciled again by the hourly catch-up.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="link_state"
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    extractor_version = models.PositiveSmallIntegerField()
+    reconciled_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"FileLinkState: {self.file_id}"
+
+
+class SearchIndexState(models.Model):
+    """What a file's full-text search document was built from.
+
+    Written with the document itself (see ``services/search_index.py``). A file
+    whose row is missing, or whose name, content or extractor version no
+    longer match it, is indexed again by the hourly catch-up.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="search_state"
+    )
+    name = models.CharField(max_length=255)
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    extractor_version = models.PositiveSmallIntegerField()
+    indexed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"SearchIndexState: {self.file_id}"
 
 
 class FileScan(models.Model):

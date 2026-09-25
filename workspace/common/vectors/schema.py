@@ -244,13 +244,14 @@ class VectorIndex:
         return f"DELETE FROM {self.vec_table} WHERE {self.pk_column} = %s"
 
     def sqlite_nearest_sql(self):
-        """KNN on the vec0 table, mapped back to primary keys.
+        """KNN on the vec0 table, each entry flagged live or not.
 
         Binds the query blob, k, then the partition. The KNN is the CTE, as
         sqlite-vec requires: its MATCH/k constraints must reach the virtual
-        table untouched by the join. A vec0 entry whose row is gone, or whose
-        row has since lost its vector (or holds one the fallback would skip),
-        is dropped by the join.
+        table untouched by the join. An entry is live while its row exists and
+        still holds a vector the fallback would read; the others come back
+        flagged rather than filtered, so the caller can tell a short answer
+        from one that dead entries crowded out.
         """
         partition = f" AND {self.partition_column} = %s" if self.partitioned else ""
         return (
@@ -258,9 +259,10 @@ class VectorIndex:
             f"  SELECT {self.pk_column}, distance FROM {self.vec_table}\n"
             f"  WHERE {SQLITE_VECTOR_COLUMN} MATCH %s AND k = %s{partition}\n"
             f")\n"
-            f"SELECT t.{self.pk_column}, knn.distance FROM knn\n"
-            f"JOIN {self.table} AS t ON t.{self.pk_column} = knn.{self.pk_column}\n"
-            f"WHERE {self._sqlite_valid_source('t.')}\n"
+            f"SELECT knn.{self.pk_column}, knn.distance,\n"
+            f"  t.{self.pk_column} IS NOT NULL AND {self._sqlite_valid_source('t.')}\n"
+            f"FROM knn\n"
+            f"LEFT JOIN {self.table} AS t ON t.{self.pk_column} = knn.{self.pk_column}\n"
             f"ORDER BY knn.distance"
         )
 

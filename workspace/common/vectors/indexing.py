@@ -45,7 +45,9 @@ def drop_vector(index, pk, *, using=DEFAULT_DB_ALIAS):
 
     On SQLite the vec0 table is a separate table, so a deleted row's entry
     stays there until this runs - before or after the delete, the entry is
-    keyed on the pk alone. Call it from a pre_delete or post_delete receiver.
+    keyed on the pk alone. Call it from a pre_delete or post_delete receiver:
+    an entry left behind never reaches a result, but costs the KNN a wider
+    search until the next rebuild_vector_index purges it.
     """
     conn = connections[using]
     param = bind_uuid(pk, conn)

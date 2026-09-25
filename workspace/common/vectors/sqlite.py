@@ -6,6 +6,7 @@ import sqlite3
 from django.db import OperationalError
 
 from .encoding import to_bytes
+from .schema import MAX_K
 
 logger = logging.getLogger(__name__)
 
@@ -85,9 +86,25 @@ class SqliteVecNearest:
     name = "sqlite-vec"
 
     def nearest(self, index, conn, query, *, partition, k):
-        params = [to_bytes(query), k]
-        if index.partitioned:
-            params.append(partition)
-        with conn.cursor() as cursor:
-            cursor.execute(index.sqlite_nearest_sql(), params)
-            return cursor.fetchall()
+        """The k nearest live rows, widening the KNN past dead entries.
+
+        An entry outlives its row when the row goes without drop_vector (a
+        data migration deleting through apps.get_model, a process that could
+        not load sqlite-vec). Such entries are, by construction, often the
+        query's nearest neighbours, so a KNN of exactly k could come back
+        empty with k live rows left: while dead entries crowd live ones out,
+        ask for twice as many, up to MAX_K.
+        """
+        blob = to_bytes(query)
+        fetch = k
+        while True:
+            params = [blob, fetch]
+            if index.partitioned:
+                params.append(partition)
+            with conn.cursor() as cursor:
+                cursor.execute(index.sqlite_nearest_sql(), params)
+                entries = cursor.fetchall()
+            live = [(pk, distance) for pk, distance, alive in entries if alive]
+            if len(live) >= k or len(entries) < fetch or fetch == MAX_K:
+                return live[:k]
+            fetch = min(fetch * 2, MAX_K)

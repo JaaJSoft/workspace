@@ -298,6 +298,24 @@ class SqliteVecTests(_FixtureTestCase):
             [pk for pk, _ in nearest(VECTORS, vectors[0], partition=OWNER, k=5)], [kept]
         )
 
+    def test_orphans_do_not_take_the_k_slots(self):
+        # Rows deleted behind drop_vector's back (a data migration through
+        # apps.get_model, a process that could not load sqlite-vec) leave
+        # entries that are, by construction, the query's nearest neighbours.
+        query = _fixture_vectors(1, seed=3)[0]
+        rng = np.random.default_rng(4)
+        near = [query + rng.normal(scale=0.01, size=DIMS) for _ in range(5)]
+        far = [-query + rng.normal(scale=0.5, size=DIMS) for _ in range(5)]
+        gone = self._rows_with_vectors(near)
+        kept = self._rows_with_vectors(far)
+        with connection.cursor() as cursor:
+            for pk in gone:
+                cursor.execute(f"DELETE FROM {TABLE} WHERE uuid = %s", [pk.hex])
+
+        results = nearest(VECTORS, query, partition=OWNER, k=5)
+
+        self.assertEqual({pk for pk, _ in results}, set(kept))
+
     def test_rebuild_purges_orphans_and_indexes_missed_rows(self):
         vectors = _fixture_vectors(3)
         gone, kept = self._rows_with_vectors(vectors[:2])

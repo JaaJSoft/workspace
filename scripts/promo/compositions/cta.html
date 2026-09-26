@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - cta</title>
+</head>
+<body>
+  <template id="cta">
+    <div id="cta-root" data-composition-id="cta" data-width="1920" data-height="1080">
+      <style>
+        #cta-root { position: absolute; inset: 0; }
+        .cta .arm { position: absolute; left: 50%; top: 40%; width: 0; height: 0; }
+        .cta .arm .app-tile { left: -60px; top: -60px; width: 120px; height: 120px; border-radius: 30px; }
+        .cta .arm .app-tile svg { width: 56px; height: 56px; }
+        .cta .cta-logo { position: absolute; left: 50%; top: 40%; width: 200px; height: 200px; margin: -100px 0 0 -100px; }
+        .cta .ring { position: absolute; inset: -6px; border-radius: 30%; border: 4px solid #ff4fa3; opacity: 0; }
+        .cta .title { position: absolute; left: 0; right: 0; top: 55%; text-align: center; font-size: 170px; }
+        .cta .tag { position: absolute; left: 0; right: 0; top: 76%; text-align: center; font-size: 60px; }
+        .cta .url { position: absolute; left: 0; right: 0; top: 88%; text-align: center; }
+        .cta .url .chip { font-size: 30px; }
+        @media (orientation: portrait) {
+          .cta .arm, .cta .cta-logo { top: 36%; }
+          .cta .title { top: 46%; font-size: 150px; }
+          .cta .tag { top: 57%; font-size: 56px; padding: 0 60px; }
+          .cta .url { top: 70%; }
+        }
+      </style>
+      <div class="scene cta">
+        <div class="arm"><div class="app-tile" style="--tile: #a78bfa"><i data-lucide="home"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #818cf8"><i data-lucide="hard-drive"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #a3e635"><i data-lucide="images"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #34d399"><i data-lucide="notebook-pen"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #38bdf8"><i data-lucide="message-circle"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #f472b6"><i data-lucide="sparkles"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #fbbf24"><i data-lucide="mail"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #2dd4bf"><i data-lucide="calendar"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #fb923c"><i data-lucide="square-kanban"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #fb7185"><i data-lucide="contact"></i></div></div>
+        <div class="arm"><div class="app-tile" style="--tile: #c084fc"><i data-lucide="key-round"></i></div></div>
+        <div class="logo cta-logo"><i data-lucide="users"></i><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+        <div class="slam title">Workspace</div>
+        <div class="slam tag">One app. Every tool. <em>Yours.</em></div>
+        <div class="url"><span class="chip"><i data-lucide="git-fork"></i>github.com/JaaJSoft/workspace</span></div>
+      </div>
+      <script>
+        (() => {
+          // logo-assemble-lockup: every module orbits the centre, the system
+          // collapses into the mark on the drop, then the lockup builds and holds.
+          const { $, $$, at, PORTRAIT } = window.promo.scene("cta");
+          const { slam, pop } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          const arms = $$(".arm");
+          const radius = PORTRAIT ? 330 : 420;
+          arms.forEach((arm, i) => {
+            const base = (i / arms.length) * 360;
+            const tile = arm.firstElementChild;
+            // The arm turns and the tile turns back by as much: icons stay upright.
+            tl.fromTo(arm, { rotation: base }, { rotation: base + 150, duration: at(6), ease: "power1.in" }, 0);
+            tl.fromTo(tile, { rotation: -base }, { rotation: -base - 150, duration: at(6), ease: "power1.in" }, 0);
+            tl.fromTo(tile, { x: radius * 0.6, scale: 0, opacity: 0 }, { x: radius, scale: 1, opacity: 1, duration: 0.6, ease: "back.out(2)" }, at(0) + i * 0.06);
+            tl.to(tile, { x: 0, scale: 0.3, duration: 0.7, ease: "power3.in" }, at(4.5));
+            tl.to(tile, { opacity: 0, duration: 0.15, ease: "none" }, at(6) - 0.15);
+          });
+          pop(tl, $(".cta-logo"), at(6), { duration: 0.7 });
+          $$(".ring").forEach((ring, i) => {
+            tl.fromTo(ring, { scale: 1, opacity: 0.9 }, { scale: 2.8, opacity: 0, duration: 1.2, ease: "power3.out" }, at(6 + i * 0.5));
+          });
+          slam(tl, $(".title"), at(8), "scale");
+          slam(tl, $(".tag"), at(10), "rise");
+          slam(tl, $(".url"), at(13), "drop");
+          window.__timelines["cta"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

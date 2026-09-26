@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - files</title>
+</head>
+<body>
+  <template id="files">
+    <div id="files-root" data-composition-id="files" data-width="1920" data-height="1080">
+      <style>
+        #files-root { position: absolute; inset: 0; }
+        .files .win { left: 420px; top: 80px; width: 1400px; height: 919px; }
+        .files .plate { position: absolute; left: 60px; top: 560px; padding: 44px 56px; border-radius: 28px; background: rgb(14 10 22 / .88); box-shadow: 0 40px 80px -20px rgb(0 0 0 / .7); }
+        .files .plate .slam { font-size: 120px; }
+        .files .label { position: absolute; left: 80px; top: 90px; }
+        @media (orientation: portrait) {
+          .files .win { left: 40px; top: 360px; width: 1000px; height: 669px; }
+          .files .plate { left: 60px; top: 1120px; }
+          .files .plate .slam { font-size: 112px; }
+          .files .label { left: 80px; top: 250px; }
+        }
+      </style>
+      <div class="scene files">
+        <div class="win">
+          <div class="win-bar"><i></i><i></i><i></i><span>workspace.example.com/<b>files</b></span></div>
+          <div class="win-screen">
+            <video id="files-take" data-hf-media-start-basis="local" src="assets/clips/files-0.mp4" muted playsinline data-start="0.3" data-duration="4.05" data-media-start="1.4" data-playback-rate="1.6" data-track-index="4"></video>
+          </div>
+        </div>
+        <div class="label">03 &middot; Files &amp; photos</div>
+        <div class="plate">
+          <div class="slam f1">Every file.</div>
+          <div class="slam f2"><em>Every photo.</em></div>
+        </div>
+      </div>
+      <script>
+        (() => {
+          // device-surface-showcase: one held surface completing its loop,
+          // a slow push-in carrying it while the words land over it.
+          const { $, at, end } = window.promo.scene("files");
+          const { slam, drift } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo($(".win"), { scale: 0.94, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "expo.out" }, at(0) - 0.1);
+          tl.to($(".win"), { scale: 1.05, duration: end - at(1.5), ease: "none" }, at(1.5));
+          slam(tl, $(".label"), at(0), "left");
+          tl.fromTo($(".plate"), { x: -120, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: "expo.out" }, at(1));
+          slam(tl, $(".f1"), at(1), "left");
+          slam(tl, $(".f2"), at(3), "scale");
+          window.__timelines["files"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

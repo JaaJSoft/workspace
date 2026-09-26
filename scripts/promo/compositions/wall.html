@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - wall</title>
+</head>
+<body>
+  <template id="wall">
+    <div id="wall-root" data-composition-id="wall" data-width="1920" data-height="1080">
+      <style>
+        #wall-root { position: absolute; inset: 0; }
+        .wall .grid-wall { position: absolute; left: 154px; top: 26px; width: 1612px; height: 1027px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 26px; }
+        .wall .cell { position: relative; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 0 0 2px rgb(255 255 255 / .14), 0 30px 60px -20px rgb(0 0 0 / .7); }
+        .wall .cell video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+        .wall .shade { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, rgb(14 10 22 / .88) 20%, rgb(14 10 22 / .55) 70%); opacity: 0; }
+        .wall .w1 { position: absolute; left: 0; right: 0; top: 36%; text-align: center; font-size: 170px; }
+        .wall .w2 { position: absolute; left: 0; right: 0; top: 55%; text-align: center; font-size: 110px; }
+        @media (orientation: portrait) {
+          .wall .grid-wall { left: 30px; top: 560px; width: 1020px; height: 800px; gap: 15px; }
+          .wall .w1 { top: 38%; font-size: 150px; }
+          .wall .w2 { top: 49%; font-size: 100px; }
+        }
+      </style>
+      <div class="scene wall">
+        <div class="grid-wall">
+          <div class="cell"><video id="wall-mail" data-hf-media-start-basis="local" src="assets/clips/mail-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="2.0" data-track-index="4"></video></div>
+          <div class="cell"><video id="wall-files" data-hf-media-start-basis="local" src="assets/clips/files-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="3.4" data-track-index="5"></video></div>
+          <div class="cell"><video id="wall-calendar" data-hf-media-start-basis="local" src="assets/clips/calendar-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="2.4" data-track-index="6"></video></div>
+          <div class="cell"><video id="wall-chat" data-hf-media-start-basis="local" src="assets/clips/chat-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="1.6" data-track-index="7"></video></div>
+          <div class="cell"><video id="wall-dashboard" data-hf-media-start-basis="local" src="assets/clips/dashboard-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="1.8" data-track-index="8"></video></div>
+          <div class="cell"><video id="wall-projects" data-hf-media-start-basis="local" src="assets/clips/projects-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="0.8" data-track-index="9"></video></div>
+          <div class="cell"><video id="wall-notes" data-hf-media-start-basis="local" src="assets/clips/notes-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="2.2" data-track-index="11"></video></div>
+          <div class="cell"><video id="wall-photos" data-hf-media-start-basis="local" src="assets/clips/photos-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="2.6" data-track-index="12"></video></div>
+          <div class="cell"><video id="wall-vault" data-hf-media-start-basis="local" src="assets/clips/vault-0.mp4" muted playsinline data-start="0" data-duration="4.35" data-media-start="2.4" data-track-index="13"></video></div>
+        </div>
+        <div class="shade"></div>
+        <div class="slam w1">All of it.</div>
+        <div class="slam w2"><em>One app.</em></div>
+      </div>
+      <script>
+        (() => {
+          // grid-card-assemble, zoom-out variant: the camera starts inside the
+          // centre cell and pulls back until every take plays at once.
+          const { $, at } = window.promo.scene("wall");
+          const { slam } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          tl.fromTo($(".grid-wall"), { scale: 2.9 }, { scale: 1, duration: 1.6, ease: "expo.inOut" }, 0);
+          tl.to($(".shade"), { opacity: 1, duration: 0.3, ease: "power2.out" }, at(4) - 0.2);
+          slam(tl, $(".w1"), at(4), "scale");
+          slam(tl, $(".w2"), at(5.5), "rise");
+          window.__timelines["wall"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

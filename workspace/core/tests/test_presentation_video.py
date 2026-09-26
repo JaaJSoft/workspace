@@ -88,3 +88,34 @@ class PresentationVideoTests(SimpleTestCase):
                 self.assertIn(
                     f'window.__timelines["scene-{section["key"]}"] = tl;', scene
                 )
+
+
+class PromoVideoTests(SimpleTestCase):
+    def test_every_scene_has_a_composition_filling_its_timeline(self):
+        from scripts.promo_video import SCENES, SOURCE
+
+        for scene in SCENES:
+            with self.subTest(scene["id"]):
+                path = SOURCE / "compositions" / f"{scene['id']}.html"
+                html = path.read_text(encoding="utf-8")
+                self.assertIn(f'data-composition-id="{scene["id"]}"', html)
+                self.assertIn(f'window.promo.scene("{scene["id"]}")', html)
+                self.assertIn(f'window.__timelines["{scene["id"]}"] = tl;', html)
+
+    def test_the_promo_stays_an_ad(self):
+        from scripts.promo_video import timeline
+
+        self.assertLessEqual(timeline()["duration"], 90)
+
+    def test_every_take_a_scene_plays_is_filmed_by_the_presentation(self):
+        from scripts.promo_video import SOURCE, TAKE_NAMES
+
+        played = set()
+        for path in (SOURCE / "compositions").glob("*.html"):
+            played |= set(
+                re.findall(
+                    r"assets/clips/([a-z]+)-0\.mp4", path.read_text(encoding="utf-8")
+                )
+            )
+        self.assertLessEqual(played, set(TAKE_NAMES))
+        self.assertLessEqual(set(TAKE_NAMES), {s["slug"] for s in SCENES})

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - yours</title>
+</head>
+<body>
+  <template id="yours">
+    <div id="yours-root" data-composition-id="yours" data-width="1920" data-height="1080">
+      <style>
+        #yours-root { position: absolute; inset: 0; }
+        .yours .lines { position: absolute; left: 130px; top: 130px; }
+        .yours .y { font-size: 150px; }
+        .yours .chips { position: absolute; left: 130px; top: 740px; width: 1680px; display: flex; flex-wrap: wrap; gap: 22px; }
+        .yours .rule { position: absolute; left: 130px; top: 700px; width: 1660px; height: 4px; background: #ff4fa3; transform-origin: 0 50%; }
+        @media (orientation: portrait) {
+          .yours .lines { left: 70px; top: 330px; }
+          .yours .y { font-size: 124px; }
+          .yours .rule { left: 70px; top: 880px; width: 940px; }
+          .yours .chips { left: 70px; top: 930px; width: 940px; flex-direction: column; align-items: flex-start; }
+        }
+      </style>
+      <div class="scene yours">
+        <div class="lines">
+          <div class="slam y">Your <em>server.</em></div>
+          <div class="slam y">Your <em>data.</em></div>
+          <div class="slam y">Your <em>rules.</em></div>
+        </div>
+        <div class="rule"></div>
+        <div class="chips">
+          <div class="chip"><i data-lucide="git-fork"></i>Open source</div>
+          <div class="chip"><i data-lucide="server"></i>Self-hosted</div>
+          <div class="chip"><i data-lucide="database"></i>SQLite or PostgreSQL</div>
+          <div class="chip"><i data-lucide="cpu"></i>Raspberry Pi to Kubernetes</div>
+          <div class="chip"><i data-lucide="lock"></i>End-to-end encrypted vault</div>
+        </div>
+      </div>
+      <script>
+        (() => {
+          // kinetic-beat-slam over the breakdown: three claims, three different
+          // entrances on one grid, then the proof chips pop on the beats.
+          const { $, $$, at } = window.promo.scene("yours");
+          const { slam, pop } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          const kinds = ["rise", "left", "scale"];
+          $$(".y").forEach((line, i) => slam(tl, line, at(1 + i * 2), kinds[i]));
+          tl.fromTo($(".rule"), { scaleX: 0 }, { scaleX: 1, duration: 0.6, ease: "expo.inOut" }, at(7));
+          $$(".chip").forEach((chip, i) => pop(tl, chip, at(8 + i)));
+          window.__timelines["yours"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

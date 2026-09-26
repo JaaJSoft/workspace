@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - intro</title>
+</head>
+<body>
+  <template id="intro">
+    <div id="intro-root" data-composition-id="intro" data-width="1920" data-height="1080">
+      <style>
+        #intro-root { position: absolute; inset: 0; }
+        .intro .intro-tile { position: absolute; left: 50%; top: 42%; width: 150px; height: 150px; margin: -75px 0 0 -75px; border-radius: 36px; }
+        .intro .intro-tile svg { width: 60px; height: 60px; }
+        .intro .intro-logo { position: absolute; left: 50%; top: 30%; width: 190px; height: 190px; margin: -95px 0 0 -95px; }
+        .intro .intro-ring { position: absolute; inset: -6px; border-radius: 30%; border: 4px solid #ff4fa3; opacity: 0; }
+        .intro .intro-title { position: absolute; left: 0; right: 0; top: 47%; text-align: center; font-size: 190px; }
+        .intro .intro-sub { position: absolute; left: 0; right: 0; top: 73%; text-align: center; }
+        @media (orientation: portrait) {
+          .intro .intro-logo { top: 36%; width: 170px; height: 170px; margin: -85px 0 0 -85px; }
+          .intro .intro-title { top: 44%; font-size: 150px; }
+          .intro .intro-sub { top: 58%; }
+        }
+      </style>
+      <div class="scene intro">
+        <div class="app-tile intro-tile" style="--tile: #818cf8"><i data-lucide="hard-drive"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #38bdf8"><i data-lucide="message-circle"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #fbbf24"><i data-lucide="mail"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #2dd4bf"><i data-lucide="calendar"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #34d399"><i data-lucide="notebook-pen"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #fb923c"><i data-lucide="square-kanban"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #fb7185"><i data-lucide="contact"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #a3e635"><i data-lucide="images"></i></div>
+        <div class="app-tile intro-tile" style="--tile: #c084fc"><i data-lucide="key-round"></i></div>
+        <div class="logo intro-logo"><i data-lucide="users"></i><div class="intro-ring"></div><div class="intro-ring"></div></div>
+        <div class="slam intro-title">Workspace</div>
+        <div class="slam intro-sub" style="font-size: 64px">One app. <em>Everything.</em></div>
+      </div>
+      <script>
+        (() => {
+          // logo-assemble-lockup: the scattered apps are pulled into one mark,
+          // then the name slams and the promise lands on the next beats.
+          const { $, $$, at } = window.promo.scene("intro");
+          const { slam, pop } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+
+          const tiles = $$(".intro-tile");
+          tiles.forEach((tile, i) => {
+            const angle = (i / tiles.length) * Math.PI * 2;
+            tl.fromTo(
+              tile,
+              { x: Math.cos(angle) * 720, y: Math.sin(angle) * 420, rotation: i * 40, scale: 1, opacity: 1 },
+              { x: 0, y: 0, rotation: 0, scale: 0.2, opacity: 0, duration: 0.7, ease: "power3.in" },
+              at(0) - 0.25 + i * 0.03,
+            );
+          });
+          const logo = $(".intro-logo");
+          pop(tl, logo, at(1.2), { rotation: -90, duration: 0.7 });
+          $$(".intro-ring").forEach((ring, i) => {
+            tl.fromTo(ring, { scale: 1, opacity: 0.9 }, { scale: 2.6, opacity: 0, duration: 1.1, ease: "power3.out" }, at(1.5 + i * 0.5));
+          });
+          slam(tl, $(".intro-title"), at(2.5), "scale");
+          slam(tl, $(".intro-sub"), at(4.5), "rise");
+          window.__timelines["intro"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - cycle</title>
+</head>
+<body>
+  <template id="cycle">
+    <div id="cycle-root" data-composition-id="cycle" data-width="1920" data-height="1080">
+      <style>
+        #cycle-root { position: absolute; inset: 0; }
+        .cycle .anchor { position: absolute; left: 100px; top: 330px; font-size: 92px; }
+        .cycle .slot { position: absolute; left: 100px; top: 450px; width: 820px; height: 150px; }
+        .cycle .word { position: absolute; left: 0; top: 0; font-size: 112px; white-space: nowrap; color: #ff4fa3; opacity: 0; }
+        .cycle .word.final { font-size: 124px; }
+        .cycle .win { left: 940px; top: 237px; width: 900px; height: 606px; }
+        .cycle .win-screen video { opacity: 1; }
+        @media (orientation: portrait) {
+          .cycle .anchor { left: 70px; top: 230px; font-size: 84px; }
+          .cycle .slot { left: 70px; top: 340px; width: 940px; }
+          .cycle .word { font-size: 104px; }
+          .cycle .word.final { font-size: 112px; }
+          .cycle .win { left: 40px; top: 760px; width: 1000px; height: 669px; }
+        }
+      </style>
+      <div class="scene cycle">
+        <div class="slam anchor">One app for your</div>
+        <div class="slot">
+          <div class="slam word">notes.</div>
+          <div class="slam word">mail.</div>
+          <div class="slam word">calendar.</div>
+          <div class="slam word">contacts.</div>
+          <div class="slam word">passwords.</div>
+          <div class="slam word">photos.</div>
+          <div class="slam word">tasks.</div>
+          <div class="slam word">chats.</div>
+          <div class="slam word final">everything.</div>
+        </div>
+        <div class="win">
+          <div class="win-bar"><i></i><i></i><i></i><span>workspace.example.com</span></div>
+          <div class="win-screen">
+            <video id="cycle-notes" data-hf-media-start-basis="local" src="assets/clips/notes-0.mp4" muted playsinline data-start="0.300" data-duration="0.938" data-media-start="4.5" data-track-index="4"></video>
+            <video id="cycle-mail" data-hf-media-start-basis="local" src="assets/clips/mail-0.mp4" muted playsinline data-start="1.238" data-duration="0.937" data-media-start="5.4" data-track-index="5"></video>
+            <video id="cycle-calendar" data-hf-media-start-basis="local" src="assets/clips/calendar-0.mp4" muted playsinline data-start="2.175" data-duration="0.938" data-media-start="3.2" data-track-index="4"></video>
+            <video id="cycle-people" data-hf-media-start-basis="local" src="assets/clips/people-0.mp4" muted playsinline data-start="3.112" data-duration="0.938" data-media-start="4.3" data-track-index="5"></video>
+            <video id="cycle-vault" data-hf-media-start-basis="local" src="assets/clips/vault-0.mp4" muted playsinline data-start="4.050" data-duration="0.469" data-media-start="4.4" data-track-index="4"></video>
+            <video id="cycle-photos" data-hf-media-start-basis="local" src="assets/clips/photos-0.mp4" muted playsinline data-start="4.519" data-duration="0.352" data-media-start="3.0" data-track-index="5"></video>
+            <video id="cycle-projects" data-hf-media-start-basis="local" src="assets/clips/projects-0.mp4" muted playsinline data-start="4.870" data-duration="0.352" data-media-start="2.2" data-track-index="4"></video>
+            <video id="cycle-chat" data-hf-media-start-basis="local" src="assets/clips/chat-0.mp4" muted playsinline data-start="5.222" data-duration="0.469" data-media-start="2.6" data-track-index="5"></video>
+            <video id="cycle-dashboard" data-hf-media-start-basis="local" src="assets/clips/dashboard-0.mp4" muted playsinline data-start="5.691" data-duration="2.409" data-media-start="0.4" data-track-index="4"></video>
+          </div>
+        </div>
+      </div>
+      <script>
+        (() => {
+          // fixed-anchor-cycle, sub-shape A: the anchor line pins, the word
+          // slot beside it hard-cuts through the modules at a steady beat,
+          // accelerates into a flurry, then holds on the weightiest word.
+          // The takes cut in lockstep (their windows are on the same grid).
+          const { $, $$, at } = window.promo.scene("cycle");
+          const { slam, windowIn } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          slam(tl, $(".anchor"), at(0) - 0.15, "left");
+          windowIn(tl, $(".win"), at(0) - 0.1, 1);
+
+          const beats = [0, 2, 4, 6, 8, 9, 9.75, 10.5, 11.5];
+          const words = $$(".word");
+          words.forEach((word, i) => {
+            if (i) tl.set(words[i - 1], { opacity: 0 }, at(beats[i]));
+            tl.set(word, { opacity: 1 }, at(beats[i]));
+            tl.fromTo(word, { scale: 1.18, y: -12 }, { scale: 1, y: 0, duration: 0.22, ease: "power4.out" }, at(beats[i]));
+            // the window kicks with every swap (the first is its entrance)
+            if (i) tl.fromTo($(".win"), { scale: 1.035 }, { scale: 1, duration: 0.25, ease: "power3.out", immediateRender: false }, at(beats[i]));
+          });
+          window.__timelines["cycle"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

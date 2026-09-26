@@ -99,6 +99,16 @@ class UnnamedQueueTests(ReviewTestCase):
 
         self.assertIsNone(item.suggestion)
 
+    def test_a_named_centroid_of_another_size_is_left_out(self):
+        # What a backend switch leaves until the rebuild: a vector of the
+        # other backend's size.
+        FaceCluster.objects.filter(pk=self.alice.pk).update(centroid=b"\0" * 12)
+
+        (item,) = unnamed_queue(self.user)
+
+        self.assertEqual(item.cluster.pk, self.bob.pk)
+        self.assertIsNone(item.suggestion)
+
 
 class DoubtfulFacesTests(ReviewTestCase):
     def test_a_face_far_from_its_named_cluster_is_to_check(self):

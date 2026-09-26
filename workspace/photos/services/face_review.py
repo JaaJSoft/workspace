@@ -98,20 +98,26 @@ def _suggester(user):
     whose person is in none of the cluster's photos: naming it after them
     would be refused.
     """
-    named = [
-        cluster
-        for cluster in user_face_clusters(user)
+    clusters = list(
+        user_face_clusters(user)
         .filter(person__isnull=False, photo_count__gt=0)
         .select_related("person")
-        if cluster.centroid
+    )
+    # A centroid of another size (a backend switch not rebuilt yet) has no
+    # direction to compare.
+    decoded = [
+        (cluster, vector)
+        for cluster in clusters
+        if (vector := _unit(cluster.centroid)) is not None
     ]
-    if not named:
+    if not decoded:
         return lambda cluster, files: None
-    cards = {card.person.pk: card for card in person_cards(named)}
-    centroids = np.stack([_unit(c.centroid) for c in named])
+    named = [cluster for cluster, _ in decoded]
+    centroids = np.stack([vector for _, vector in decoded])
+    cards = {card.person.pk: card for card in person_cards(clusters)}
     person_files = defaultdict(set)
     for person_id, file_id in Face.objects.filter(
-        cluster__in=[c.pk for c in named]
+        cluster__in=[c.pk for c in clusters]
     ).values_list("cluster__person_id", "file_id"):
         person_files[person_id].add(file_id)
     threshold = max_distance()

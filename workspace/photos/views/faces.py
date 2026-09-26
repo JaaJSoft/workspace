@@ -101,7 +101,8 @@ class FaceClusterViewSet(
 
     def get_queryset(self):
         _require_faces()
-        clusters = user_face_clusters(self.request.user)
+        # The serializer names each cluster after its person.
+        clusters = user_face_clusters(self.request.user).select_related("person")
         if self.action == "list":
             clusters = clusters.filter(
                 hidden=is_truthy(self.request.query_params.get("hidden"))

@@ -41,7 +41,8 @@ def merge_clusters(target, sources, *, person_id=None):
     A photo already in *target*, or in another cluster of the person the
     merged cluster ends up named after, keeps its face there; the source's
     face of that photo goes back to ungrouped rather than breaking the one
-    face per photo per person rule.
+    face per photo per person rule. So does a face of *target* itself, when
+    the merge gives it a person already in that photo.
 
     When the clusters are named after different people, *person_id* says
     which one the merged cluster keeps; without it the merge is refused.
@@ -60,10 +61,20 @@ def merge_clusters(target, sources, *, person_id=None):
             if person_id is not None
             else FaceCluster.objects.none()
         )
-        taken = set(
-            Face.objects.filter(cluster__in=[target.pk, *same_person]).values_list(
+        same_person_files = set(
+            Face.objects.filter(cluster__in=same_person).values_list(
                 "file_id", flat=True
             )
+        )
+        if target.person_id != person_id:
+            # The target takes a name it did not have: its faces of a photo
+            # that person is already in go back to ungrouped, as the
+            # sources' do below.
+            Face.objects.filter(cluster=target, file_id__in=same_person_files).update(
+                cluster=None, assignment=Face.Assignment.AUTO
+            )
+        taken = same_person_files | set(
+            Face.objects.filter(cluster=target).values_list("file_id", flat=True)
         )
         for face in (
             Face.objects.filter(cluster__in=sources)

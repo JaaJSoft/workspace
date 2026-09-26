@@ -3,6 +3,8 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.storage import default_storage
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
@@ -234,6 +236,30 @@ class MergeNamedTests(FaceApiTestCase):
         self.assertEqual(response.json()["person_name"], "Bea")
 
 
+class MergeIntoPersonTests(FaceApiTestCase):
+    def test_a_target_taking_a_name_never_puts_that_person_twice_in_a_photo(self):
+        # Bea is the Bob cluster (it has a face in pair.png) and a Carol one.
+        # Merging that Carol cluster into the unnamed Alice cluster names it
+        # Bea too, and the Alice cluster also has a face in pair.png.
+        bea = create_person(owner=self.user, display_name="Bea")
+        library_photo(self.user, "carol.png", (CAROL, (40, 50, 100)))
+        cluster_owner(self.user.pk)
+        carol = FaceCluster.objects.get(faces__file__name="carol.png")
+        FaceCluster.objects.filter(pk__in=[self.bob.pk, carol.pk]).update(person=bea)
+
+        response = self.client.post(
+            f"{CLUSTERS}/{self.alice.pk}/merge",
+            {"clusters": [str(carol.pk)]},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        in_pair = Face.objects.filter(
+            file=self.photos["pair.png"], cluster__person=bea
+        ).count()
+        self.assertEqual(in_pair, 1)
+
+
 class PersonsEndpointTests(FaceApiTestCase):
     def test_lists_named_people_with_every_cluster_counted(self):
         contact = create_person(owner=self.user, display_name="Alice")
@@ -295,3 +321,23 @@ class AvatarTests(FaceApiTestCase):
         response = self.client.post(f"{CLUSTERS}/{self.bob.pk}/avatar")
 
         self.assertEqual(response.status_code, 400)
+
+
+class ClusterListQueryTests(FaceApiTestCase):
+    def _queries(self):
+        # Warmed up first: the first request of a session records presence.
+        self.client.get(CLUSTERS)
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(self.client.get(CLUSTERS).status_code, 200)
+        return len(queries)
+
+    def test_naming_clusters_adds_no_query_per_cluster(self):
+        FaceCluster.objects.filter(pk=self.alice.pk).update(
+            person=create_person(owner=self.user, display_name="Ann")
+        )
+        one_named = self._queries()
+        FaceCluster.objects.filter(pk=self.bob.pk).update(
+            person=create_person(owner=self.user, display_name="Bea")
+        )
+
+        self.assertEqual(self._queries(), one_named)

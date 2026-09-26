@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
+from workspace.files.services.purge import purge_queryset
 
 TRASH_RETENTION_DAYS = getattr(settings, "TRASH_RETENTION_DAYS", 30)
 
@@ -152,9 +153,7 @@ class TrashMixin:
         # not the cascaded total (which inflates the number with related
         # rows like FileShare, comments, etc).
         file_count = queryset.count()
-        # select_related('owner') avoids N+1 in the pre_delete signal,
-        # which reads instance.owner.username for each File.
-        queryset.select_related("owner").delete()
+        purge_queryset(queryset)
         return Response(
             {
                 "deleted": file_count,

@@ -109,6 +109,7 @@ def sync_user_files(self, user_id):
 def purge_trash(self):
     """Hard-delete files that have been in trash longer than TRASH_RETENTION_DAYS."""
     from workspace.files.models import File
+    from workspace.files.services.purge import purge_queryset
 
     retention_days = getattr(settings, "TRASH_RETENTION_DAYS", 30)
     cutoff = timezone.now() - timedelta(days=retention_days)
@@ -138,9 +139,7 @@ def purge_trash(self):
         folders_count,
         retention_days,
     )
-    # select_related('owner') avoids N+1 in the pre_delete signal,
-    # which reads instance.owner.username for each File.
-    qs.select_related("owner").delete()
+    purge_queryset(qs)
 
     logger.info("Trash purge complete.")
     return {

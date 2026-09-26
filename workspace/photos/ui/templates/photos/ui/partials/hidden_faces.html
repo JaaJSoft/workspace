@@ -1,0 +1,26 @@
+{% comment %}
+  The faces the user hid, on the Hidden page: picked, they are unhidden or
+  said to be someone from the selection bar. State in the faceBoard() the
+  page opens around it (faces.js).
+{% endcomment %}
+<section aria-labelledby="hidden-faces-title" x-show="total">
+  <h2
+    id="hidden-faces-title"
+    class="mb-3 text-sm font-semibold uppercase tracking-wider text-base-content/60"
+  >
+    Hidden faces <span class="tabular-nums" x-text="total">{{ hidden_faces.total }}</span>
+  </h2>
+  <div
+    class="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-2"
+  >
+    <template x-for="face in faces" :key="face.uuid">
+      {% include "photos/ui/partials/face_tile.html" %}
+    </template>
+  </div>
+  <p
+    x-show="total > faces.length"
+    x-cloak
+    class="mt-3 text-xs text-base-content/60"
+    x-text="'The next ' + (total - faces.length) + ' come once these are settled.'"
+  ></p>
+</section>

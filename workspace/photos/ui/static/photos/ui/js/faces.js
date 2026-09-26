@@ -948,6 +948,42 @@ function settleFaces(faces, total, done) {
   return { faces: kept, total: total - (faces.length - kept.length) };
 }
 
+// A plain board: the faces embedded under `dataId` ({ faces, total }), each
+// leaving once corrected, except by the actions in `stays`, which only
+// change its assignment (a confirmed face stays on its person's page).
+window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
+  return {
+    ...window.faceSelectionMixin(),
+    faces: [],
+    total: 0,
+
+    init() {
+      const data = facesJson(dataId) || {};
+      this.faces = data.faces || [];
+      this.total = data.total || 0;
+      this.initFaceSelection();
+    },
+
+    facesSettled(done, action) {
+      if (stays.includes(action)) {
+        const changed = new Set(done);
+        this.faces = this.faces.map((face) => (changed.has(face.uuid) ? { ...face, assignment: 'confirmed' } : face));
+        return;
+      }
+      const { faces, total } = settleFaces(this.faces, this.total, done);
+      this.faces = faces;
+      this.total = total;
+      if (!faces.length && total > 0) {
+        // The next faces were left out of the page.
+        this.$ajax(window.location.pathname + window.location.search, {
+          targets: ['photos-nav', 'photos-content'],
+          focus: false,
+        });
+      }
+    },
+  };
+};
+
 // `blocks` of faces ({ faces: [...], total }) without the faces in `done`:
 // a block loses them from its count too, and goes once it has none left.
 // `reload` tells whether an emptied block had more faces than the page held.

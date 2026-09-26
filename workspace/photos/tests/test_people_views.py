@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.photos.models import FaceCluster
+from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services.face_corrections import hide_face
 from workspace.photos.services.face_grouping import cluster_owner
 
 from .faces import FacesTestMixin, faces_on, opt_in
@@ -53,6 +54,22 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         self.assertEqual(visible.context["unnamed"], [])
         self.assertEqual(visible.context["hidden_count"], 1)
         self.assertEqual(len(hidden.context["unnamed"]), 1)
+
+    def test_hidden_faces_are_listed_with_the_hidden_people(self):
+        opt_in(self.user)
+        photo = library_photo(self.user, "bob.png", (BOB, (100, 100, 100)))
+        face = Face.objects.get(file=photo)
+        hide_face(face)
+
+        visible = self.client.get("/photos/people")
+        hidden = self.client.get("/photos/people", {"hidden": "1"})
+
+        self.assertEqual(visible.context["hidden_count"], 1)
+        self.assertIsNone(visible.context["hidden_faces"])
+        self.assertEqual(hidden.context["hidden_faces"]["total"], 1)
+        (item,) = hidden.context["hidden_faces"]["faces"]
+        self.assertEqual(item["uuid"], str(face.pk))
+        self.assertContains(hidden, "photos-hidden-faces-data")
 
     def test_shows_the_progress_while_photos_wait(self):
         opt_in(self.user)

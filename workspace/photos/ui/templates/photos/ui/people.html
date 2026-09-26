@@ -8,7 +8,7 @@
       {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
       <i data-lucide="scan-face" class="w-5 h-5 text-module shrink-0"></i>
       <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-        <h1 class="text-lg font-semibold truncate">{% if show_hidden %}Hidden people{% else %}People{% endif %}</h1>
+        <h1 class="text-lg font-semibold truncate">{% if show_hidden %}Hidden{% else %}People{% endif %}</h1>
         {% if faces_enabled %}
           <span
             class="text-sm text-base-content/60"
@@ -57,7 +57,7 @@
             href="{{ people_hidden_url }}"
             x-target.push="photos-nav photos-content"
             class="btn btn-ghost btn-sm gap-1"
-            title="People you hid"
+            title="People and faces you hid"
           >
             <i data-lucide="eye-off" class="w-4 h-4"></i>
             <span class="max-sm:hidden">Hidden</span>
@@ -138,8 +138,15 @@
         Turn on face grouping
       </button>
     </div>
-  {% elif named or unnamed %}
-    <div id="people-grid" class="space-y-6 p-4">
+  {% elif named or unnamed or hidden_faces.total %}
+    {% if hidden_faces.total %}
+      {{ hidden_faces|json_script:"photos-hidden-faces-data" }}
+    {% endif %}
+    <div
+      id="people-grid"
+      class="space-y-6 p-4{% if hidden_faces.total %} min-h-full flex flex-col{% endif %}"
+      {% if hidden_faces.total %}x-data="faceBoard('photos-hidden-faces-data')"{% endif %}
+    >
       {% if named %}
         <section aria-label="Named people">
           <div
@@ -170,6 +177,12 @@
           </div>
         </section>
       {% endif %}
+      {% if hidden_faces.total %}
+        {% include "photos/ui/partials/hidden_faces.html" %}
+        <div class="flex-1" aria-hidden="true"></div>
+        {% include "photos/ui/partials/face_selection_bar.html" %}
+        {% include "photos/ui/partials/face_assign_dialog.html" %}
+      {% endif %}
     </div>
   {% else %}
     <div
@@ -180,7 +193,7 @@
       </div>
       {% if show_hidden %}
         <h2 class="text-lg font-semibold">No one is hidden</h2>
-        <p class="text-sm text-base-content/60 max-w-sm">People you hide from the list show up here.</p>
+        <p class="text-sm text-base-content/60 max-w-sm">People and faces you hide show up here.</p>
       {% else %}
         <h2 class="text-lg font-semibold">No one yet</h2>
         <p class="text-sm text-base-content/60 max-w-sm">

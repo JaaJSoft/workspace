@@ -563,3 +563,31 @@ test('faces taken out on the check queue join the unassigned count', () => {
   assert.equal(component.unassignedCount(), 2);
   assert.equal(component.doubtCount(), 1);
 });
+
+function plainBoard(data, options) {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: (id) => (id === 'board-data' ? { textContent: JSON.stringify(data) } : null) },
+  });
+  const component = ctx.faceBoard('board-data', options);
+  component.$watch = () => {};
+  component.init();
+  return component;
+}
+
+test('a board lets corrected faces go', () => {
+  const component = plainBoard({ total: 3, faces: [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }] });
+
+  component.facesSettled(['b'], 'unhide');
+
+  assert.deepEqual(Array.from(component.faces, (f) => f.uuid), ['a', 'c']);
+  assert.equal(component.total, 2);
+});
+
+test('on a person\'s board, a confirmed face stays and shows as confirmed', () => {
+  const component = plainBoard({ total: 2, faces: [{ uuid: 'a', assignment: 'auto' }, { uuid: 'b', assignment: 'auto' }] }, { stays: ['confirm'] });
+
+  component.facesSettled(['a'], 'confirm');
+
+  assert.deepEqual(Array.from(component.faces, (f) => f.assignment), ['confirmed', 'auto']);
+  assert.equal(component.total, 2);
+});

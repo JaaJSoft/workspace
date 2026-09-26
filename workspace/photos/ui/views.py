@@ -38,6 +38,7 @@ from workspace.photos.services.face_review import (
     REJECTED,
     UNGROUPED,
     doubtful_faces,
+    hidden_faces,
     unassigned_counts,
     unassigned_faces,
     unnamed_queue,
@@ -611,8 +612,11 @@ def people(request):
         for cluster in clusters
         if cluster.person_id is None and cluster.hidden == show_hidden
     ]
-    hidden_count = sum(card.hidden for card in persons) + sum(
-        c.hidden for c in clusters if c.person_id is None
+    hidden = hidden_faces(request.user)
+    hidden_count = (
+        sum(card.hidden for card in persons)
+        + sum(c.hidden for c in clusters if c.person_id is None)
+        + hidden.total
     )
     progress = face_progress(request.user) if enabled else None
     context = {
@@ -622,6 +626,11 @@ def people(request):
         "people_count": len(named) + len(unnamed),
         "unnamed_count": sum(not c.hidden for c in clusters if c.person_id is None),
         "show_hidden": show_hidden,
+        "hidden_faces": (
+            {"faces": _face_items(hidden.face_ids), "total": hidden.total}
+            if show_hidden
+            else None
+        ),
         "hidden_count": hidden_count if enabled else 0,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
         "review_url": reverse("photos_ui:people_review"),

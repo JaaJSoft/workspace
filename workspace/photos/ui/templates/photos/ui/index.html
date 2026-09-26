@@ -94,24 +94,47 @@
           </a>
         {% endif %}
       </div>
-      {% if scope_tabs %}
-        {# Which folders the library reads. The view filters above (favorites, a tag) carry over; the date does not. #}
-        <nav
-          class="tabs tabs-boxed tabs-sm mx-4 mb-2 w-fit max-w-[calc(100%-2rem)] grid-flow-col auto-cols-max overflow-x-auto"
-          aria-label="Library"
-        >
-          {% for tab in scope_tabs %}
-            <a
-              href="{{ tab.url }}"
-              x-target.push="photos-nav photos-content"
-              class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
-              {% if tab.active %}aria-current="page"{% endif %}
+      {% if scope_tabs or type_tabs %}
+        <div class="flex flex-wrap items-center gap-2 px-4 pb-2">
+          {% if scope_tabs %}
+            {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
+            <nav
+              class="tabs tabs-boxed tabs-sm max-w-full grid-flow-col auto-cols-max overflow-x-auto"
+              aria-label="Library"
             >
-              <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
-              <span class="max-w-40 truncate leading-5">{{ tab.label }}</span>
-            </a>
-          {% endfor %}
-        </nav>
+              {% for tab in scope_tabs %}
+                <a
+                  href="{{ tab.url }}"
+                  x-target.push="photos-nav photos-content"
+                  class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+                  {% if tab.active %}aria-current="page"{% endif %}
+                >
+                  <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span class="max-w-40 truncate leading-5">{{ tab.label }}</span>
+                </a>
+              {% endfor %}
+            </nav>
+          {% endif %}
+          {% if type_tabs %}
+            {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. #}
+            <nav
+              class="tabs tabs-boxed tabs-sm grid-flow-col auto-cols-max sm:ml-auto"
+              aria-label="Media type"
+            >
+              {% for tab in type_tabs %}
+                <a
+                  href="{{ tab.url }}"
+                  x-target.push="photos-nav photos-content"
+                  class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+                  {% if tab.active %}aria-current="page"{% endif %}
+                >
+                  <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+                  <span class="leading-5">{{ tab.label }}</span>
+                </a>
+              {% endfor %}
+            </nav>
+          {% endif %}
+        </div>
       {% endif %}
     </header>
 
@@ -124,7 +147,7 @@
         <div class="rounded-full bg-module/10 p-5">
           <i data-lucide="images" class="w-10 h-10 text-module"></i>
         </div>
-        {% if is_timeline_view and not date_param %}
+        {% if is_timeline_view and not date_param and not media_type %}
           <h2 class="text-lg font-semibold">No photos yet</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
             Photos and videos you upload to Files show up here, by the day they were taken.
@@ -133,7 +156,7 @@
         {% else %}
           <h2 class="text-lg font-semibold">Nothing here</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
-            {% if is_videos_view %}No video matches this view.{% else %}Nothing in your library matches this view.{% endif %}
+            {% if media_type == "video" %}No video matches this view.{% elif media_type == "photo" %}No photo matches this view.{% else %}Nothing in your library matches this view.{% endif %}
           </p>
         {% endif %}
       </div>

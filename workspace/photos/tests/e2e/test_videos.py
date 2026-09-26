@@ -79,3 +79,26 @@ class PhotosVideoTests(PlaywrightTestCase):
             "download", "iphone.mp4"
         )
         expect(self.page.locator("#viewer-panel video")).to_be_hidden()
+
+    def test_the_header_narrows_the_timeline_to_one_media_type(self):
+        self._open()
+        tabs = self.page.locator("nav[aria-label='Media type'] a")
+        expect(tabs).to_have_text(["All", "Photos", "Videos"])
+
+        tabs.nth(2).click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?type=video")
+        expect(self.page.locator(TILES)).to_have_count(1)
+        expect(self._tile(self.video)).to_be_visible()
+        expect(self.page.locator("header")).to_contain_text("1 video")
+        expect(tabs.nth(2)).to_have_attribute("aria-current", "page")
+
+        self.page.locator("#photos-nav a", has_text="Favorites").click()
+
+        expect(self.page).to_have_url(
+            f"{self.live_server_url}/photos?favorites=1&type=video"
+        )
+
+        tabs.nth(0).click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")

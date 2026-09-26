@@ -16,6 +16,11 @@ MIDDLEWARE = [
     # is computed (the 304 copies Cache-Control from the full response)
     "workspace.common.middleware.HtmlCacheControlMiddleware",
     "django.middleware.common.CommonMiddleware",
+    # A preview module refuses users outside its audience, as an absent URL
+    # would: ahead of the CSRF check, which an absent URL never reaches. The
+    # session user it reads is set by AuthenticationMiddleware below, whose
+    # request pass runs before any view hook.
+    "workspace.core.module_guard.PreviewModuleMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "workspace.users.middleware.TimezoneMiddleware",

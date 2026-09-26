@@ -49,9 +49,11 @@ TEST_RUNNER = "workspace.test_runner.MediaRootTestRunner"
 # Application version (from env, defaults to 'dev')
 APP_VERSION = os.getenv("APP_VERSION") or "dev"
 
-# Audience that may see modules flagged preview=True on the home page, nav,
-# command palette and search. One of: all, staff, admin, none (default staff).
-# Validated/normalized at read time in workspace.core.services.module_visibility.
+# Audience that may reach modules flagged preview=True. Outside it a preview
+# module is hidden from the home page, nav, command palette and search, and its
+# pages and API answer 404 (workspace.core.module_guard). One of: all, staff,
+# admin, none (default staff). Validated/normalized at read time in
+# workspace.core.services.module_visibility.
 PREVIEW_VISIBILITY = os.getenv("PREVIEW_VISIBILITY", "staff")
 
 # Internationalization

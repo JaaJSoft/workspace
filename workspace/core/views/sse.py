@@ -7,6 +7,7 @@ from django.http import StreamingHttpResponse
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
+from ..module_guard import is_hidden_from
 from ..sse_registry import sse_registry
 
 logger = logging.getLogger(__name__)
@@ -136,10 +137,16 @@ def _incoming_cursors(request):
 
 
 def _init_providers(user, cursors):
-    """Instantiate one provider per registered app."""
+    """Instantiate one provider per registered app the user may see.
+
+    The stream is served here, in core, so the preview-module guard never
+    judges it: a provider whose module is hidden from the user is skipped.
+    """
     providers_info = sse_registry.get_all()
     providers = {}
     for slug, info in providers_info.items():
+        if is_hidden_from(user, info.provider_cls.__module__):
+            continue
         try:
             providers[slug] = info.provider_cls(user, cursors.get(slug))
         except Exception:

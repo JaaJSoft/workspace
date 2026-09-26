@@ -1,20 +1,23 @@
+import importlib.util
 from dataclasses import asdict
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.db import connection
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 
 from workspace.core.context_processors import workspace_modules
-from workspace.core.module_registry import CommandInfo, ModuleInfo
+from workspace.core.module_registry import CommandInfo, ModuleInfo, registry
 from workspace.core.services.module_visibility import (
     current_module,
     filter_visible_commands,
     hidden_module_slugs,
     is_module_slug_visible,
+    owning_module,
     user_can_see_module,
     visible_modules,
 )
@@ -303,3 +306,37 @@ class ContextProcessorVisibilityTests(TestCase):
                 for q in capture.captured_queries
             )
         )
+
+
+class OwningModuleTests(SimpleTestCase):
+    def test_a_view_module_resolves_to_the_module_of_its_package(self):
+        self.assertEqual(owning_module("workspace.vault.views.entries").slug, "vault")
+        self.assertEqual(owning_module("workspace.vault.ui.views").slug, "vault")
+
+    def test_the_package_name_must_match_exactly(self):
+        self.assertIsNone(owning_module("workspace.vaultish.views"))
+
+    def test_code_outside_a_registered_module_has_no_owner(self):
+        self.assertIsNone(owning_module("workspace.core.views.health"))
+        self.assertIsNone(owning_module("rest_framework.views"))
+        self.assertIsNone(owning_module("workspace"))
+
+    def test_every_preview_module_lives_in_the_package_named_after_its_slug(self):
+        """owning_module() maps a package to a slug. A preview module whose
+        slug differs from its package would be owned by nothing, and so
+        guarded by nothing."""
+        previews = [m for m in registry.get_all() if m.preview]
+        self.assertTrue(previews)
+        for module in previews:
+            with self.subTest(module=module.slug):
+                self.assertIsNotNone(
+                    importlib.util.find_spec(f"workspace.{module.slug}")
+                )
+
+
+class SuiteDefaultTests(SimpleTestCase):
+    def test_the_suite_opens_preview_modules_to_everyone(self):
+        """Fixture users are regular users: under the production default a
+        preview module's own tests would all be refused. Tests of the audience
+        override it back."""
+        self.assertEqual(settings.PREVIEW_VISIBILITY, "all")

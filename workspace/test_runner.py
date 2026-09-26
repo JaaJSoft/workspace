@@ -9,6 +9,11 @@ session; a test class needs one of its own only when it reads the tree back
 It also arms the full-row-write guard over ``File``, the model the app mutates
 from the most places at once (``workspace.common.tests.row_writes`` explains
 what it catches and why nothing else can).
+
+And it opens preview modules to everyone. Fixture users are regular users, and
+under the production audience (``staff``) a preview module refuses every
+request they make, so its own tests would test nothing but the refusal. The
+tests of the audience itself override the setting back.
 """
 
 import os
@@ -65,21 +70,37 @@ class MediaRootTestRunner(DiscoverRunner):
         )
 
         self._media_root = tempfile.mkdtemp(prefix="workspace-test-media-")
-        # The settings module reads MEDIA_ROOT from the environment, and
-        # --parallel workers re-import it from scratch (the default start
-        # method is no longer fork), so the override alone would not reach
-        # them. Both halves are needed: the env var for processes that import
-        # settings after this point, override_settings for the current one.
-        self._previous_env = os.environ.get("MEDIA_ROOT")
-        os.environ["MEDIA_ROOT"] = self._media_root
-        self._media_override = override_settings(MEDIA_ROOT=self._media_root)
-        self._media_override.enable()
+        self._restore_settings = [
+            _override_from_env("MEDIA_ROOT", self._media_root),
+            _override_from_env("PREVIEW_VISIBILITY", "all"),
+        ]
 
     def teardown_test_environment(self, **kwargs):
-        self._media_override.disable()
-        if self._previous_env is None:
-            os.environ.pop("MEDIA_ROOT", None)
-        else:
-            os.environ["MEDIA_ROOT"] = self._previous_env
+        for restore in reversed(self._restore_settings):
+            restore()
         shutil.rmtree(self._media_root, ignore_errors=True)
         super().teardown_test_environment(**kwargs)
+
+
+def _override_from_env(name, value):
+    """Set a setting the settings module reads from the environment.
+
+    --parallel workers re-import settings from scratch (the default start
+    method is no longer fork), so override_settings alone would not reach
+    them. Both halves are needed: the env var for processes that import
+    settings after this point, override_settings for the current one.
+    Returns the function that undoes both.
+    """
+    previous = os.environ.get(name)
+    os.environ[name] = value
+    override = override_settings(**{name: value})
+    override.enable()
+
+    def restore():
+        override.disable()
+        if previous is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = previous
+
+    return restore

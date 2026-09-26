@@ -4,6 +4,8 @@ from collections import defaultdict
 from celery import shared_task
 from django.utils import timezone
 
+from workspace.common.task_priority import NORMAL_PRIORITY
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_REMINDER_HOUR = 8
@@ -52,7 +54,9 @@ def _claim_reminder(task, user_id, kind):
     )
 
 
-@shared_task(name="projects.notify_due_tasks", ignore_result=True)
+@shared_task(
+    name="projects.notify_due_tasks", priority=NORMAL_PRIORITY, ignore_result=True
+)
 def notify_due_tasks():
     """Send each assignee and each non-muted watcher one reminder when a
     task falls due and one more when it becomes overdue - never a daily

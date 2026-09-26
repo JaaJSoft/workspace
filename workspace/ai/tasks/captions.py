@@ -13,6 +13,7 @@ from django.conf import settings
 from django.core.cache import cache
 
 from workspace.common.logging import scrub
+from workspace.common.task_priority import LOW_PRIORITY
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ CAPTION_SYSTEM_PROMPT = (
 )
 
 
-@shared_task
+@shared_task(priority=LOW_PRIORITY)
 def generate_attachment_caption(attachment_uuid):
     """Caption one image attachment. Idempotent: no-op if already captioned."""
     from workspace.ai.services.llm import call_llm

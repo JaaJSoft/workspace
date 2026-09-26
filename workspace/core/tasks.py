@@ -7,6 +7,8 @@ import time
 from celery import shared_task
 from django.db import connection
 
+from workspace.common.task_priority import LOW_PRIORITY
+
 logger = logging.getLogger(__name__)
 
 
@@ -117,7 +119,12 @@ def _run_maintenance(skip_vacuum=False, skip_integrity_check=False):
     return result
 
 
-@shared_task(name="core.db_maintenance", bind=True, max_retries=0)
+# LOW rather than BACKGROUND: behind a catch-up backlog the nightly pass would
+# start once the backlog drains, possibly in office hours - and VACUUM locks
+# every writer out while it runs.
+@shared_task(
+    name="core.db_maintenance", priority=LOW_PRIORITY, bind=True, max_retries=0
+)
 def db_maintenance(self, skip_vacuum=False, skip_integrity_check=False):
     """Run SQLite maintenance: optimize, WAL checkpoint, VACUUM, integrity check.
 

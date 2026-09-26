@@ -26,11 +26,21 @@ from workspace.ai.services.responses import (
     produced_media,
 )
 from workspace.common.logging import scrub
+from workspace.common.task_priority import (
+    INTERACTIVE_PRIORITY,
+    LOW_PRIORITY,
+    NORMAL_PRIORITY,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="ai.generate_chat_response", bind=True, max_retries=0)
+@shared_task(
+    name="ai.generate_chat_response",
+    priority=INTERACTIVE_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def generate_chat_response(
     self, conversation_id: str, message_id: str, bot_user_id: int
 ):
@@ -171,7 +181,12 @@ def generate_chat_response(
         return {"status": "error", "error": str(e)}
 
 
-@shared_task(name="ai.update_conversation_summary", bind=True, max_retries=0)
+@shared_task(
+    name="ai.update_conversation_summary",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def update_conversation_summary(self, conversation_id: str):
     """Update the rolling summary for a bot conversation."""
     from workspace.ai.services.chat_summary import update_summary
@@ -179,7 +194,12 @@ def update_conversation_summary(self, conversation_id: str):
     return update_summary(conversation_id)
 
 
-@shared_task(name="ai.generate_conversation_title", bind=True, max_retries=0)
+@shared_task(
+    name="ai.generate_conversation_title",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
 def generate_conversation_title(self, conversation_id: str, force: bool = False):
     """Generate a short title for *conversation_id* based on its first messages.
 

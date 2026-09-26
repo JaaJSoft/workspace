@@ -10,6 +10,7 @@ from workspace.calendar.models import Calendar, Event
 from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.recurrence import occurrences_in_range
 from workspace.calendar.services.ics_sync import sync_external_calendar
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
 User = get_user_model()
 
@@ -672,7 +673,6 @@ class ExternalCalendarAPITests(APITestCase):
 
     @patch("workspace.calendar.views.external.sync_external_calendar_task")
     def test_create_external_calendar(self, mock_task):
-        mock_task.delay = MagicMock()
 
         self.client.force_authenticate(self.user)
         resp = self.client.post(
@@ -687,7 +687,10 @@ class ExternalCalendarAPITests(APITestCase):
         self.assertEqual(resp.data["name"], "My External")
         self.assertTrue(resp.data["is_external"])
         self.assertIn("external_source", resp.data)
-        mock_task.delay.assert_called_once()
+        ext = ExternalCalendar.objects.get(calendar__owner=self.user)
+        mock_task.apply_async.assert_called_once_with(
+            [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        )
 
     def test_list_external_calendars(self):
         cal = Calendar.objects.create(name="Ext1", owner=self.user)
@@ -740,7 +743,6 @@ class ExternalCalendarAPITests(APITestCase):
 
     @patch("workspace.calendar.views.external.sync_external_calendar_task")
     def test_manual_sync(self, mock_task):
-        mock_task.delay = MagicMock()
         cal = Calendar.objects.create(name="SyncMe", owner=self.user)
         ext = ExternalCalendar.objects.create(
             calendar=cal, url="https://example.com/sync.ics"
@@ -749,7 +751,9 @@ class ExternalCalendarAPITests(APITestCase):
         self.client.force_authenticate(self.user)
         resp = self.client.post(f"{self.url}/{ext.uuid}/sync")
         self.assertEqual(resp.status_code, http_status.HTTP_202_ACCEPTED)
-        mock_task.delay.assert_called_once_with(str(ext.uuid))
+        mock_task.apply_async.assert_called_once_with(
+            [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        )
 
 
 # ─── Event Card View Tests ───────────────────────────────────

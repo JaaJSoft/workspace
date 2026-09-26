@@ -18,6 +18,7 @@ from workspace.ai.services.llm import (
     serialize_response,
 )
 from workspace.common.logging import scrub
+from workspace.common.task_priority import INTERACTIVE_PRIORITY, NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,9 @@ class ClassifiedEmails(BaseModel):
     results: list[LabelAssignment]
 
 
-@shared_task(name="ai.summarize", bind=True, max_retries=0)
+@shared_task(
+    name="ai.summarize", priority=INTERACTIVE_PRIORITY, bind=True, max_retries=0
+)
 def summarize(self, task_id: str):
     """Summarize a single mail message and persist the result.
 
@@ -90,7 +93,9 @@ def summarize(self, task_id: str):
         return {"status": "error", "error": str(e)}
 
 
-@shared_task(name="ai.compose_email", bind=True, max_retries=0)
+@shared_task(
+    name="ai.compose_email", priority=INTERACTIVE_PRIORITY, bind=True, max_retries=0
+)
 def compose_email(self, task_id: str):
     """Compose a new email or generate a reply to an existing one.
 
@@ -254,7 +259,9 @@ def _classify_payload(message, account_email, user_tz):
     }
 
 
-@shared_task(name="ai.classify_mail", bind=True, max_retries=0)
+@shared_task(
+    name="ai.classify_mail", priority=NORMAL_PRIORITY, bind=True, max_retries=0
+)
 def classify_mail_messages(self, task_id: str):
     """Classify a batch of mail messages by assigning labels.
 

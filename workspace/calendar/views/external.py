@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
+
 from ..models import Calendar
 from ..models_external import ExternalCalendar
 from ..serializers_external import (
@@ -51,7 +53,9 @@ class ExternalCalendarListView(APIView):
         )
         ext = ExternalCalendar.objects.select_related("calendar").get(pk=ext.pk)
 
-        sync_external_calendar_task.delay(str(ext.uuid))
+        sync_external_calendar_task.apply_async(
+            [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        )
 
         return Response(
             ExternalCalendarSerializer(ext).data,
@@ -116,5 +120,7 @@ class ExternalCalendarSyncView(APIView):
         except ExternalCalendar.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        sync_external_calendar_task.delay(str(ext.uuid))
+        sync_external_calendar_task.apply_async(
+            [str(ext.uuid)], priority=INTERACTIVE_PRIORITY
+        )
         return Response({"detail": "Sync started."}, status=status.HTTP_202_ACCEPTED)

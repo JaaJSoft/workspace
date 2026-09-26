@@ -11,11 +11,14 @@ from workspace.ai.services.llm import (
     serialize_response,
 )
 from workspace.common.logging import scrub
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(name="ai.editor_action", bind=True, max_retries=0)
+@shared_task(
+    name="ai.editor_action", priority=INTERACTIVE_PRIORITY, bind=True, max_retries=0
+)
 def editor_action(self, task_id: str):
     """Run an AI action on editor content (improve, explain, summarize, custom).
 

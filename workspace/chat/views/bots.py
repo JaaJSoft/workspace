@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
+
 from ..models import Message
 from ..services.conversations import get_active_membership, is_bot_conversation
 
@@ -122,5 +124,7 @@ class ConversationRegenerateTitleView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        generate_conversation_title.delay(str(conversation_id), force=True)
+        generate_conversation_title.apply_async(
+            [str(conversation_id)], {"force": True}, priority=INTERACTIVE_PRIORITY
+        )
         return Response({"status": "ok"}, status=status.HTTP_202_ACCEPTED)

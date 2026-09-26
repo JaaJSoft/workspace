@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Protocol
 
 from django.core.cache import cache
 
-from workspace.common.task_priority import BACKGROUND_PRIORITY
 from workspace.common.uuids import parse_uuid_or_none
 
 if TYPE_CHECKING:
@@ -176,6 +175,5 @@ def _queue(catch_up, uuid, *, reanalyze, expires):
     catch_up_file.apply_async(
         args=[catch_up.name, str(uuid)],
         kwargs={"reanalyze": reanalyze},
-        priority=BACKGROUND_PRIORITY,
         expires=expires,
     )

@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
+from workspace.common.task_priority import NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -50,7 +51,9 @@ def _lock_horizon():
     return timedelta(seconds=_lock_horizon_seconds())
 
 
-@shared_task(name="mail.sync_all_accounts", bind=True, max_retries=0)
+@shared_task(
+    name="mail.sync_all_accounts", priority=NORMAL_PRIORITY, bind=True, max_retries=0
+)
 def sync_all_accounts(self):
     """Dispatch a sync task for every active account that is due.
 
@@ -96,7 +99,9 @@ def sync_all_accounts(self):
     return outcome.as_dict()
 
 
-@shared_task(name="mail.sync_account", bind=True, max_retries=0)
+@shared_task(
+    name="mail.sync_account", priority=NORMAL_PRIORITY, bind=True, max_retries=0
+)
 def sync_single_account(self, account_uuid, claim_token=None):
     """Sync a single mail account.
 

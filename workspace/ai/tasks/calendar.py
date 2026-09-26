@@ -25,6 +25,7 @@ from workspace.ai.services.llm import call_llm_structured
 from workspace.calendar.models import Event
 from workspace.calendar.services.event_creation import create_event_from_payload
 from workspace.common.logging import scrub
+from workspace.common.task_priority import NORMAL_PRIORITY
 from workspace.mail.models import MailExtraction, MailMessage
 from workspace.mail.services.threads import get_thread
 
@@ -48,7 +49,9 @@ class ExtractedEvents(BaseModel):
     events: list[ExtractedEvent]
 
 
-@shared_task(name="ai.extract_from_mail", bind=True, max_retries=0)
+@shared_task(
+    name="ai.extract_from_mail", priority=NORMAL_PRIORITY, bind=True, max_retries=0
+)
 def extract_from_mail_messages(self, task_id: str):
     """Run LLM event extraction over the messages referenced by `task_id`.
 

@@ -275,20 +275,24 @@ test('adding a name is not offered when a contact has exactly that name', () => 
   assert.deepEqual(options.map((o) => o.kind), ['person']);
 });
 
-test('confirming a person sends one request per cluster, the marked faces rejected', () => {
+test('settled faces leave their person, and a person with none left goes', () => {
   const { ctx } = review();
-  const faces = [
-    { uuid: 'f1', cluster: 'c1' },
-    { uuid: 'f2', cluster: 'c1' },
-    { uuid: 'f3', cluster: 'c2' },
+  const blocks = [
+    { person: NINA, total: 2, faces: [{ uuid: 'f1' }, { uuid: 'f2' }] },
+    { person: NOAH, total: 1, faces: [{ uuid: 'f3' }] },
   ];
 
-  const requests = JSON.parse(JSON.stringify(ctx.reviewRequests(faces, { f2: true, f3: false })));
+  const { blocks: kept, reload } = ctx.settleBlocks(blocks, ['f1', 'f3']);
 
-  assert.deepEqual(requests, [
-    { cluster: 'c1', body: { confirmed: ['f1'], rejected: ['f2'] } },
-    { cluster: 'c2', body: { confirmed: ['f3'], rejected: [] } },
-  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(kept)), [{ person: NINA, total: 1, faces: [{ uuid: 'f2' }] }]);
+  assert.equal(reload, false);
+});
+
+test('a person whose shown faces are all settled but has more reloads the page', () => {
+  const { ctx } = review();
+  const blocks = [{ person: NINA, total: 5, faces: [{ uuid: 'f1' }] }];
+
+  assert.equal(ctx.settleBlocks(blocks, ['f1']).reload, true);
 });
 
 test('the queues are read from the embedded JSON', () => {
@@ -299,6 +303,7 @@ test('the queues are read from the embedded JSON', () => {
     },
   });
   component.searchReviewNames = () => {};
+  component.$watch = () => {};
 
   component.init();
 
@@ -306,15 +311,15 @@ test('the queues are read from the embedded JSON', () => {
   assert.equal(component.doubtCount(), 5);
 });
 
-test('the confirm button says how many faces go each way', () => {
+test('a person\'s button confirms the faces left out of the selection', () => {
   const { component } = review();
-  const block = { faces: [{ uuid: 'f1' }, { uuid: 'f2' }] };
+  const block = { faces: [{ uuid: 'f1' }, { uuid: 'f2' }, { uuid: 'f3' }] };
 
-  assert.equal(component.settleLabel(block), 'Confirm all');
-  component.toggleMark(block.faces[0]);
-  assert.equal(component.settleLabel(block), 'Confirm 1, remove 1');
-  component.toggleMark(block.faces[1]);
-  assert.equal(component.settleLabel(block), 'Remove 2');
+  assert.equal(component.confirmLabel(block), 'Confirm all');
+  component.selectedFaces = ['f1'];
+  assert.equal(component.confirmLabel(block), 'Confirm the other 2');
+  component.selectedFaces = ['f1', 'f2', 'f3'];
+  assert.equal(component.unpickedCount(block), 0);
 });
 
 test('skipping goes round the queue', () => {
@@ -389,4 +394,140 @@ test('a failed reload after not this person is reported, not swallowed', async (
   await faces.rejectSelectionFromCluster();
 
   assert.deepEqual(errors, ['offline']);
+});
+
+// ── Face boards ─────────────────────────────────────
+
+function board({ responses = {}, alerts = [] } = {}) {
+  const requests = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 'token',
+    fetch: async (url, options) => {
+      const body = options.body ? JSON.parse(options.body) : null;
+      requests.push({ url, method: options.method, body });
+      const answer = responses[url];
+      const data = typeof answer === 'function' ? answer(body) : answer;
+      return { ok: true, status: 200, json: async () => data };
+    },
+    AppAlert: {
+      success: (message, options) => alerts.push({ type: 'success', message, options }),
+      warning: (message) => alerts.push({ type: 'warning', message }),
+      error: (message) => alerts.push({ type: 'error', message }),
+    },
+  });
+  const component = { ...ctx.faceSelectionMixin(), settled: [] };
+  component.facesSettled = (done, action) => component.settled.push([Array.from(done), action]);
+  return { ctx, component, requests, alerts };
+}
+
+const action = (id, bulk = true) => ({ id, bulk });
+
+test('the selection offers what every picked face offers, in the registry order', () => {
+  const { ctx } = board();
+
+  const offered = ctx.faceSelectionActions([
+    [action('confirm'), action('assign'), action('reject'), action('hide')],
+    [action('assign'), action('reject'), action('hide')],
+    [action('assign'), action('hide'), action('reject')],
+  ]);
+
+  assert.deepEqual(Array.from(offered, (a) => a.id), ['assign', 'reject', 'hide']);
+  assert.deepEqual(Array.from(ctx.faceSelectionActions([])), []);
+});
+
+test('the toast says what was done and why the rest was left', () => {
+  const { ctx } = board();
+
+  assert.equal(
+    ctx.faceBatchMessage('assign', { done: ['a', 'b'], skipped: [] }, 'Nina'),
+    '2 faces moved to Nina',
+  );
+  assert.equal(
+    ctx.faceBatchMessage('hide', { done: ['a'], skipped: [{ face: 'b', reason: 'already_in_photo' }] }),
+    '1 face hidden. 1 face left as it was: that person is already in their photo',
+  );
+  assert.equal(
+    ctx.faceBatchMessage('confirm', { done: [], skipped: [{ face: 'a', reason: 'unavailable' }, { face: 'b', reason: 'missing' }] }),
+    '2 faces left as they were',
+  );
+});
+
+test('shift picks every face between the last one picked and this one', () => {
+  const { component } = board();
+  component._faceUuids = () => ['a', 'b', 'c', 'd', 'e'];
+
+  component.toggleFace('b');
+  component.toggleFace('d', { shiftKey: true });
+
+  assert.deepEqual(Array.from(component.selectedFaces), ['b', 'c', 'd']);
+  component.toggleFace('c');
+  assert.deepEqual(Array.from(component.selectedFaces), ['b', 'd']);
+});
+
+test('the actions are asked once per face, and the selection keeps the shared ones', async () => {
+  const { component, requests } = board({
+    responses: {
+      '/api/v1/photos/faces/actions': (body) => Object.fromEntries(body.uuids.map((uuid) => [
+        uuid, uuid === 'a' ? [action('confirm'), action('assign')] : [action('assign')],
+      ])),
+    },
+  });
+
+  component.selectedFaces = ['a', 'b'];
+  await component._loadFaceActions();
+  component.selectedFaces = ['a'];
+  await component._loadFaceActions();
+
+  assert.equal(requests.length, 1);
+  assert.equal(component.faceAllows('confirm'), true);
+  assert.equal(component.faceAllows('reject'), false);
+});
+
+test('a batch settles the done faces, keeps the skipped ones picked and offers the undo', async () => {
+  const alerts = [];
+  const { component, requests } = board({
+    alerts,
+    responses: {
+      '/api/v1/photos/faces/batch': { done: ['a'], skipped: [{ face: 'b', reason: 'already_in_photo' }], undo: 'tok' },
+    },
+  });
+  component.selectedFaces = ['a', 'b'];
+
+  await component.applyFaceBatch({ action: 'hide' });
+
+  assert.deepEqual(requests[0].body, { action: 'hide', faces: ['a', 'b'] });
+  assert.deepEqual(component.settled, [[['a'], 'hide']]);
+  assert.deepEqual(Array.from(component.selectedFaces), ['b']);
+  assert.equal(alerts[0].type, 'success');
+  assert.equal(alerts[0].options.actions[0].label, 'Undo');
+});
+
+test('a batch that changed nothing warns and offers no undo', async () => {
+  const alerts = [];
+  const { component } = board({
+    alerts,
+    responses: {
+      '/api/v1/photos/faces/batch': { done: [], skipped: [{ face: 'a', reason: 'unavailable' }], undo: null },
+    },
+  });
+  component.selectedFaces = ['a'];
+
+  await component.applyFaceBatch({ action: 'confirm' });
+
+  assert.deepEqual(component.settled, []);
+  assert.equal(alerts[0].type, 'warning');
+});
+
+test('assigning to a new name sends it with the picked faces', async () => {
+  const { component, requests } = board({
+    responses: { '/api/v1/photos/faces/batch': { done: ['a'], skipped: [], undo: 't' } },
+  });
+  component.closeAssignDialog = () => {};
+  component.selectedFaces = ['a'];
+  component.assignDialog.query = '  Léa ';
+
+  await component.assignToNewPerson();
+
+  assert.deepEqual(requests[0].body, { action: 'assign', new_person: 'Léa', faces: ['a'] });
 });

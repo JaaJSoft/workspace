@@ -206,6 +206,18 @@ test('the ✕ slides the toast out before removing it', () => {
   assert.equal(container.children.length, 0);
 });
 
+test('an action button runs its handler and dismisses the toast', () => {
+  const { AppAlert, container } = makeEnv();
+  let clicked = 0;
+  const el = AppAlert.success('Hidden', { duration: 0, actions: [{ label: 'Undo', onClick: () => { clicked += 1; } }] });
+  const undo = buttons(el).find((b) => b.textContent === 'Undo');
+  assert.ok(undo);
+  undo.click();
+  assert.equal(clicked, 1);
+  el.dispatch('animationend');
+  assert.equal(container.children.length, 0);
+});
+
 test('shorthands set the type; error lingers 8s, the others 5s', () => {
   const { AppAlert, timers } = makeEnv();
   const cases = [

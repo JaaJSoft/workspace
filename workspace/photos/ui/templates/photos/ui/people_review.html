@@ -46,10 +46,14 @@
       </div>
     </header>
 
-    {% if review.queue == "name" %}
-      {% include "photos/ui/partials/review_name.html" %}
-    {% else %}
-      {% include "photos/ui/partials/review_check.html" %}
-    {% endif %}
+    <div class="flex-1">
+      {% if review.queue == "name" %}
+        {% include "photos/ui/partials/review_name.html" %}
+      {% else %}
+        {% include "photos/ui/partials/review_check.html" %}
+      {% endif %}
+    </div>
+    {% include "photos/ui/partials/face_selection_bar.html" %}
+    {% include "photos/ui/partials/face_assign_dialog.html" %}
   </div>
 {% endblock %}

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from urllib.parse import urlencode
+from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
@@ -13,7 +14,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
 from workspace.people.queries import reachable_person
-from workspace.photos.models import Album, MediaItem
+from workspace.photos.models import Album, Face, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -664,19 +665,34 @@ def _unnamed_item(item):
     }
 
 
-def _doubts_item(doubts):
+def _face_items(face_ids):
+    """What a board shows of each of *face_ids*, in that order: the crop, and
+    the photo it was found in, for the tile to open it."""
+    rows = {
+        pk: (file_id, name, file_type)
+        for pk, file_id, name, file_type in Face.objects.filter(
+            pk__in=face_ids
+        ).values_list("pk", "file_id", "file__name", "file__type")
+    }
+    return [
+        {
+            "uuid": str(pk),
+            "crop_url": _crop_url(pk),
+            "file": str(rows[pk][0]),
+            "file_name": rows[pk][1],
+            "file_type": rows[pk][2],
+        }
+        for pk in face_ids
+        if pk in rows
+    ]
+
+
+def _doubts_item(doubts, faces):
     return {
         "person": _person_summary(doubts.card)
         | {"url": _url_with({"person": str(doubts.card.person.pk)})},
         "total": doubts.total,
-        "faces": [
-            {
-                "uuid": str(face.face_id),
-                "cluster": str(face.cluster_id),
-                "crop_url": _crop_url(face.face_id),
-            }
-            for face in doubts.faces
-        ],
+        "faces": [faces[face.face_id] for face in doubts.faces],
     }
 
 
@@ -694,7 +710,12 @@ def people_review(request):
         # The opt-in card lives on the People tab.
         return redirect("photos_ui:people")
     unnamed = [_unnamed_item(item) for item in unnamed_queue(request.user)]
-    doubts = [_doubts_item(item) for item in doubtful_faces(request.user)]
+    doubtful = doubtful_faces(request.user)
+    faces = {
+        UUID(item["uuid"]): item
+        for item in _face_items([f.face_id for d in doubtful for f in d.faces])
+    }
+    doubts = [_doubts_item(item, faces) for item in doubtful]
     queue = request.GET.get("queue")
     if queue not in ("name", "check"):
         queue = "check" if doubts and not unnamed else "name"

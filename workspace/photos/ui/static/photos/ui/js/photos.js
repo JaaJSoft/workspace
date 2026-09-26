@@ -173,6 +173,8 @@ window.photosApp = function photosApp() {
       window.addEventListener('tags-changed', () => {
         this._refresh(['photos-nav']);
       });
+      // An undone face correction: whatever board is on screen is stale.
+      window.addEventListener('photos-faces-changed', () => this._reloadView());
       window.addEventListener('keydown', (e) => {
         if (document.querySelector('dialog[open]')) return;
         if (e.key === 'Escape' && this.selection.length) {

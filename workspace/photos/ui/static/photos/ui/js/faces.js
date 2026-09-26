@@ -414,6 +414,7 @@ window.photosFacesMixin = function photosFacesMixin() {
       if (cluster) return `Unnamed, ${photoCount(cluster.photo_count)}`;
       if (face.cluster) return 'Hidden person';
       if (face.assignment === 'rejected') return 'Left out of grouping';
+      if (face.assignment === 'hidden') return 'Hidden face';
       return 'Not grouped yet';
     },
 
@@ -655,6 +656,272 @@ window.facesProgress = function facesProgress(analyzed, total) {
   };
 };
 
+// ── Face boards ─────────────────────────────────────
+// A board is a grid of face tiles the user picks from, then corrects in one
+// go from the bar under it: the review queues, the hidden faces, a person's
+// faces. Every correction goes through the batch endpoint, whose undo token
+// the toast offers back.
+
+const FACE_ACTIONS_BATCH = 500;
+
+const FACE_DONE = {
+  confirm: 'confirmed',
+  reject: 'taken out',
+  hide: 'hidden',
+  unhide: 'unhidden',
+  assign: 'moved',
+};
+
+function faceCount(count) {
+  return `${count} face${count === 1 ? '' : 's'}`;
+}
+
+// The bulk actions every face of the selection offers, in the registry's
+// order. `lists` holds the registry's answer for each selected face.
+function faceSelectionActions(lists) {
+  if (!lists.length) return [];
+  return lists[0].filter((action) => action.bulk && lists.every((list) => list.some((a) => a.id === action.id)));
+}
+
+// What the toast says once a batch is back. `target` names who the faces
+// went to, for an assign.
+function faceBatchMessage(action, result, target) {
+  const done = result.done.length;
+  const skipped = result.skipped.length;
+  let message = '';
+  if (done) {
+    message = action === 'assign' && target
+      ? `${faceCount(done)} moved to ${target}`
+      : `${faceCount(done)} ${FACE_DONE[action] || 'corrected'}`;
+  }
+  if (skipped) {
+    const inPhoto = result.skipped.every((s) => s.reason === 'already_in_photo');
+    const why = inPhoto ? ': that person is already in their photo' : '';
+    const left = `${faceCount(skipped)} left as ${skipped === 1 ? 'it was' : 'they were'}${why}`;
+    message = message ? `${message}. ${left}` : left;
+  }
+  return message;
+}
+
+// The uuids of `uuids` from `from` to `to` included, in page order; empty
+// when either is missing.
+function faceRange(uuids, from, to) {
+  const start = uuids.indexOf(from);
+  const end = uuids.indexOf(to);
+  if (start < 0 || end < 0) return [];
+  return uuids.slice(Math.min(start, end), Math.max(start, end) + 1);
+}
+
+// The photosApp() root reloads the page once it hears the event: an undo can
+// put faces back anywhere, and the board that asked may be gone by then.
+async function undoFaceBatch(token) {
+  try {
+    const result = await facesRequest(`${FACES_API}/faces/undo`, { method: 'POST', body: { token } });
+    window.AppAlert.success(`${faceCount(result.restored)} put back`, { duration: 2500 });
+  } catch (err) {
+    window.AppAlert.error(err.message || 'Could not undo');
+  }
+  window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+}
+
+// Spread into a board component, whose init() calls initFaceSelection().
+// The board defines facesSettled(done, action), which takes the corrected
+// faces off its own lists.
+window.faceSelectionMixin = function faceSelectionMixin() {
+  return {
+    selectedFaces: [],
+    // null while the registry has not answered for the whole selection.
+    faceActions: [],
+    faceBusy: false,
+    assignDialog: { query: '', results: [], clusters: [], loading: false },
+    _faceActionsCache: {},
+    _faceActionsGeneration: 0,
+    _assignGeneration: 0,
+    _faceAnchor: null,
+
+    initFaceSelection() {
+      this.$watch('selectedFaces', () => this._loadFaceActions());
+    },
+
+    // Every tile of the board, in page order.
+    _faceUuids() {
+      return Array.from(this.$root.querySelectorAll('[data-face-uuid]'), (el) => el.dataset.faceUuid);
+    },
+
+    isFaceSelected(uuid) {
+      return this.selectedFaces.includes(uuid);
+    },
+
+    // Shift extends from the last face picked, as with photos.
+    toggleFace(uuid, event) {
+      const anchor = this._faceAnchor;
+      if (event && event.shiftKey && anchor && anchor !== uuid && this.isFaceSelected(anchor)) {
+        const range = faceRange(this._faceUuids(), anchor, uuid);
+        if (range.length) {
+          this.selectFaces(range);
+          this._faceAnchor = uuid;
+          return;
+        }
+      }
+      if (this.isFaceSelected(uuid)) {
+        this.selectedFaces = this.selectedFaces.filter((u) => u !== uuid);
+        if (anchor === uuid) this._faceAnchor = null;
+      } else {
+        this.selectedFaces = this.selectedFaces.concat([uuid]);
+        this._faceAnchor = uuid;
+      }
+    },
+
+    selectFaces(uuids) {
+      const added = uuids.filter((u) => !this.isFaceSelected(u));
+      if (added.length) this.selectedFaces = this.selectedFaces.concat(added);
+    },
+
+    selectAllFaces() {
+      this.selectFaces(this._faceUuids());
+    },
+
+    clearFaceSelection() {
+      this.selectedFaces = [];
+      this._faceAnchor = null;
+    },
+
+    openFacePhoto(face) {
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: { uuid: face.file, name: face.file_name, type: face.file_type },
+      }));
+    },
+
+    // Asks the registry about the faces it has not answered for yet; the
+    // generation drops an answer about a selection that changed since.
+    async _loadFaceActions() {
+      const uuids = this.selectedFaces.slice();
+      const generation = ++this._faceActionsGeneration;
+      const missing = uuids.filter((uuid) => !(uuid in this._faceActionsCache));
+      if (missing.length) {
+        this.faceActions = null;
+        try {
+          for (let i = 0; i < missing.length; i += FACE_ACTIONS_BATCH) {
+            const data = await facesRequest(`${FACES_API}/faces/actions`, {
+              method: 'POST',
+              body: { uuids: missing.slice(i, i + FACE_ACTIONS_BATCH) },
+            });
+            Object.assign(this._faceActionsCache, data);
+          }
+        } catch (_) {
+          if (generation === this._faceActionsGeneration) this.faceActions = [];
+          return;
+        }
+      }
+      if (generation !== this._faceActionsGeneration) return;
+      this.faceActions = faceSelectionActions(uuids.map((uuid) => this._faceActionsCache[uuid] || []));
+    },
+
+    faceAllows(id) {
+      return !this.faceBusy && (this.faceActions || []).some((a) => a.id === id);
+    },
+
+    runFaceAction(id) {
+      if (!this.faceAllows(id)) return null;
+      if (id === 'assign') return this.openAssignDialog();
+      return this.applyFaceBatch({ action: id });
+    },
+
+    // Applies `body` to `uuids`, the selection by default. Returns the
+    // batch's answer, or null when it failed.
+    async applyFaceBatch(body, uuids = this.selectedFaces.slice(), target = null) {
+      if (!uuids.length || this.faceBusy) return null;
+      this.faceBusy = true;
+      let result;
+      try {
+        result = await facesRequest(`${FACES_API}/faces/batch`, {
+          method: 'POST',
+          body: { ...body, faces: uuids },
+        });
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not correct the faces');
+        return null;
+      } finally {
+        this.faceBusy = false;
+      }
+      result.done.forEach((uuid) => { delete this._faceActionsCache[uuid]; });
+      const done = new Set(result.done);
+      this.selectedFaces = this.selectedFaces.filter((uuid) => !done.has(uuid));
+      if (result.done.length) this.facesSettled(result.done, body.action);
+      const message = faceBatchMessage(body.action, result, target);
+      if (!result.done.length) {
+        window.AppAlert.warning(message);
+      } else {
+        window.AppAlert.success(message, {
+          duration: 8000,
+          actions: result.undo ? [{ label: 'Undo', onClick: () => undoFaceBatch(result.undo) }] : [],
+        });
+      }
+      return result;
+    },
+
+    // ── "This is..." ─────────────────────────────────────
+
+    async openAssignDialog() {
+      this.assignDialog = { query: '', results: [], clusters: [], loading: true };
+      document.getElementById('face-assign-dialog').showModal();
+      try {
+        const [results, clusters] = await Promise.all([
+          facesRequest(personsUrl('')),
+          facesRequest(`${FACES_API}/clusters`),
+        ]);
+        this.assignDialog.results = results;
+        this.assignDialog.clusters = clusters.filter((c) => !c.person);
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not load people');
+      } finally {
+        this.assignDialog.loading = false;
+      }
+    },
+
+    async searchAssign() {
+      const generation = ++this._assignGeneration;
+      try {
+        const results = await facesRequest(personsUrl(this.assignDialog.query));
+        if (generation === this._assignGeneration) this.assignDialog.results = results;
+      } catch (_) {
+        if (generation === this._assignGeneration) this.assignDialog.results = [];
+      }
+    },
+
+    canCreateAssign() {
+      const name = this.assignDialog.query.trim().toLowerCase();
+      return !!name && !this.assignDialog.results.some((r) => r.name.toLowerCase() === name);
+    },
+
+    closeAssignDialog() {
+      document.getElementById('face-assign-dialog').close();
+    },
+
+    _assign(body, target) {
+      this.closeAssignDialog();
+      return this.applyFaceBatch({ action: 'assign', ...body }, undefined, target);
+    },
+
+    assignToPerson(person) {
+      return this._assign({ person: person.uuid }, person.name);
+    },
+
+    assignToNewPerson() {
+      const name = this.assignDialog.query.trim();
+      return name ? this._assign({ new_person: name }, name) : null;
+    },
+
+    assignToCluster(cluster) {
+      return this._assign({ cluster: cluster.uuid }, 'an unnamed person');
+    },
+
+    assignToSomeoneNew() {
+      return this._assign({ new_cluster: true }, 'someone new');
+    },
+  };
+};
+
 // The options of the naming list: the suggested person first while nothing
 // is typed, the contacts found, then "Add ... to People" unless a contact
 // has exactly the typed name.
@@ -672,15 +939,21 @@ function reviewOptions(query, results, suggestion) {
   return options;
 }
 
-// What one "Confirm" of the check queue sends: the faces of a person, split
-// by the cluster they are in, the marked ones rejected.
-function reviewRequests(faces, marked) {
-  const byCluster = new Map();
-  for (const face of faces) {
-    if (!byCluster.has(face.cluster)) byCluster.set(face.cluster, { confirmed: [], rejected: [] });
-    byCluster.get(face.cluster)[marked[face.uuid] ? 'rejected' : 'confirmed'].push(face.uuid);
+// `blocks` of faces ({ faces: [...], total }) without the faces in `done`:
+// a block loses them from its count too, and goes once it has none left.
+// `reload` tells whether an emptied block had more faces than the page held.
+function settleBlocks(blocks, done) {
+  const gone = new Set(done);
+  let reload = false;
+  const kept = [];
+  for (const block of blocks) {
+    const faces = block.faces.filter((face) => !gone.has(face.uuid));
+    const removed = block.faces.length - faces.length;
+    const total = block.total - removed;
+    if (!faces.length && total > 0) reload = true;
+    if (faces.length) kept.push({ ...block, faces, total });
   }
-  return Array.from(byCluster, ([cluster, body]) => ({ cluster, body }));
+  return { blocks: kept, reload };
 }
 
 // The review page: naming the unnamed clusters one after the other, and
@@ -688,6 +961,7 @@ function reviewRequests(faces, marked) {
 // in photosApp(): a navigation away tears it down.
 window.facesReview = function facesReview() {
   return {
+    ...window.faceSelectionMixin(),
     unnamed: [],
     doubts: [],
     position: 0,
@@ -697,13 +971,12 @@ window.facesReview = function facesReview() {
     searching: false,
     saving: false,
     _searchGeneration: 0,
-    marked: {},
-    settling: null,
 
     init() {
       const data = facesJson('photos-review-data') || {};
       this.unnamed = data.unnamed || [];
       this.doubts = data.doubts || [];
+      this.initFaceSelection();
       if (this.unnamed.length) this.searchReviewNames();
     },
 
@@ -804,51 +1077,43 @@ window.facesReview = function facesReview() {
 
     // ── To check ────────────────────────────────────────
 
-    isMarked(face) {
-      return !!this.marked[face.uuid];
-    },
-
-    toggleMark(face) {
-      this.marked = { ...this.marked, [face.uuid]: !this.marked[face.uuid] };
-    },
-
-    markedCount(block) {
-      return block.faces.filter((face) => this.marked[face.uuid]).length;
-    },
-
     doubtCount() {
       return this.doubts.reduce((sum, block) => sum + block.total, 0);
     },
 
-    settleLabel(block) {
-      const rejected = this.markedCount(block);
-      if (!rejected) return 'Confirm all';
-      const confirmed = block.faces.length - rejected;
-      return confirmed ? `Confirm ${confirmed}, remove ${rejected}` : `Remove ${rejected}`;
+    // The faces of `block` left out of the selection: what its button confirms.
+    _unpicked(block) {
+      return block.faces.filter((face) => !this.isFaceSelected(face.uuid));
     },
 
-    async settle(block) {
-      if (this.settling) return;
-      this.settling = block.person.uuid;
-      try {
-        for (const { cluster, body } of reviewRequests(block.faces, this.marked)) {
-          await facesRequest(`${FACES_API}/clusters/${cluster}/review`, { method: 'POST', body });
-        }
-      } catch (err) {
-        window.AppAlert.error(err.message || 'Could not save');
-        return;
-      } finally {
-        this.settling = null;
-      }
-      if (block.total > block.faces.length) {
-        // The next faces of this person were left out of the page.
+    unpickedCount(block) {
+      return this._unpicked(block).length;
+    },
+
+    confirmLabel(block) {
+      const count = this.unpickedCount(block);
+      return count && count < block.faces.length ? `Confirm the other ${count}` : 'Confirm all';
+    },
+
+    confirmBlock(block) {
+      const uuids = this._unpicked(block).map((face) => face.uuid);
+      return this.applyFaceBatch({ action: 'confirm' }, uuids);
+    },
+
+    selectBlock(block) {
+      this.selectFaces(block.faces.map((face) => face.uuid));
+    },
+
+    facesSettled(done) {
+      const { blocks, reload } = settleBlocks(this.doubts, done);
+      this.doubts = blocks;
+      if (reload) {
+        // The next faces of a person were left out of the page.
         this.$ajax(`${window.location.pathname}?queue=check`, {
           targets: ['photos-nav', 'photos-content'],
           focus: false,
         });
-        return;
       }
-      this.doubts = this.doubts.filter((b) => b !== block);
     },
   };
 };

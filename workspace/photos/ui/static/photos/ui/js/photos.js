@@ -428,7 +428,10 @@ window.photosApp = function photosApp() {
 
     _markSelected(uuid, selected) {
       const tile = this._tile(uuid);
-      if (tile) tile.dataset.selected = selected ? '1' : '0';
+      if (!tile) return;
+      tile.dataset.selected = selected ? '1' : '0';
+      const box = tile.querySelector && tile.querySelector('[data-select]');
+      if (box) box.checked = selected;
     },
 
     isSelected(uuid) {

@@ -71,15 +71,16 @@
     {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
   {% endif %}
   {% comment %}
-    Selection. The check mark shows on hover, and on every tile once
-    something is selected (data-selecting on the page root), when a click on
-    the tile selects it too instead of opening the viewer. A touch screen
-    has no hover: a long press starts the selection there. The ring and the
-    filled mark follow data-selected, which the script flips, so a selection
-    of hundreds costs no Alpine binding per tile.
+    Selection, with the Files mosaic cards' checkbox and ring, in the module's color. The
+    checkbox shows on hover, and on every tile once something is selected
+    (data-selecting on the page root), when a click on the tile selects it
+    too instead of opening the viewer. A touch screen has no hover: a long
+    press starts the selection there. The ring follows data-selected and the
+    checkbox its checked state, both set by the script, so a selection of
+    hundreds costs no Alpine binding per tile.
   {% endcomment %}
   <span
-    class="pointer-events-none absolute inset-0 rounded-lg ring-4 ring-inset ring-module hidden group-data-[selected='1']:block"
+    class="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset ring-module hidden group-data-[selected='1']:block"
     aria-hidden="true"
   ></span>
   {% if manual_order %}
@@ -93,16 +94,17 @@
       aria-hidden="true"
     ></span>
   {% endif %}
-  <button
-    type="button"
-    class="absolute top-2 left-2 z-10 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white/90 bg-black/20 text-transparent shadow opacity-0 group-hover:opacity-100 focus:opacity-100 [[data-selecting]_&]:opacity-100 group-data-[selected='1']:bg-module group-data-[selected='1']:border-module group-data-[selected='1']:text-module-content [@media(hover:none)]:hidden [@media(hover:none)]:[[data-selecting]_&]:flex"
-    title="Select"
-    aria-label="Select {{ file.name }}"
-    data-select
-    @click.stop="toggleTileSelection($el.closest('[data-uuid]'), $event)"
+  <div
+    class="absolute top-2 left-2 z-10 flex opacity-0 group-hover:opacity-100 focus-within:opacity-100 [[data-selecting]_&]:opacity-100 [@media(hover:none)]:hidden [@media(hover:none)]:[[data-selecting]_&]:flex"
   >
-    <i data-lucide="check" class="w-3.5 h-3.5" stroke-width="3"></i>
-  </button>
+    <input
+      type="checkbox"
+      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm"
+      aria-label="Select {{ file.name }}"
+      data-select
+      @click.stop="toggleTileSelection($el.closest('[data-uuid]'), $event)"
+    />
+  </div>
   {% comment %}
     The two overlay buttons are the Files mosaic cards' own: a filled star
     that stays on a favorite, an empty one on hover otherwise, and the menu

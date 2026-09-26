@@ -856,3 +856,23 @@ test('a failed refresh does not block the next one', async () => {
 
   assert.equal(calls, 2);
 });
+
+test('the tile checkbox follows the selection, ranges and clearing included', () => {
+  const page = grid(['a', 'b', 'c']);
+  const boxes = {};
+  for (const [uuid, t] of Object.entries(page.tiles)) {
+    boxes[uuid] = { checked: false };
+    t.querySelector = (sel) => (sel === '[data-select]' ? boxes[uuid] : null);
+  }
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.c, { shiftKey: true });
+  assert.deepEqual(Object.values(boxes).map((b) => b.checked), [true, true, true]);
+
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+  assert.deepEqual(Object.values(boxes).map((b) => b.checked), [true, false, true]);
+
+  app.clearSelection();
+  assert.deepEqual(Object.values(boxes).map((b) => b.checked), [false, false, false]);
+});

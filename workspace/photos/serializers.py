@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework import serializers
 
-from .models import Album
+from .models import Album, Face, FaceCluster
 
 
 class AlbumSerializer(serializers.Serializer):
@@ -38,3 +38,98 @@ class AlbumWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Album
         fields = ["title", "description", "sort_mode"]
+
+
+def _crop_url(face_id):
+    return reverse("photos-face-crop", kwargs={"pk": face_id}) if face_id else None
+
+
+class FaceClusterSerializer(serializers.ModelSerializer):
+    photo_count = serializers.IntegerField(
+        read_only=True, help_text="Photos in the library showing this person."
+    )
+    cover = serializers.PrimaryKeyRelatedField(
+        queryset=Face.objects.none(),
+        allow_null=False,
+        help_text="The face shown for the cluster: one of its own.",
+    )
+    cover_url = serializers.SerializerMethodField(help_text="URL of the cover crop.")
+
+    class Meta:
+        model = FaceCluster
+        fields = [
+            "uuid",
+            "hidden",
+            "photo_count",
+            "face_count",
+            "cover",
+            "cover_url",
+            "created_at",
+        ]
+        read_only_fields = ["uuid", "face_count", "created_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        cluster = self.instance if isinstance(self.instance, FaceCluster) else None
+        if cluster is not None:
+            self.fields["cover"].queryset = Face.objects.filter(cluster=cluster)
+
+    def get_cover_url(self, cluster):
+        return _crop_url(cluster.cover_id)
+
+
+class FaceClusterMergeSerializer(serializers.Serializer):
+    clusters = serializers.ListField(
+        child=serializers.UUIDField(),
+        allow_empty=False,
+        max_length=100,
+        help_text="The clusters to fold into this one; they are deleted.",
+    )
+
+
+class FaceSerializer(serializers.ModelSerializer):
+    file = serializers.UUIDField(source="file_id", read_only=True)
+    box = serializers.SerializerMethodField(
+        help_text="x, y, width, height as fractions of the displayed photo."
+    )
+    cluster = serializers.UUIDField(
+        source="cluster_id",
+        allow_null=True,
+        required=False,
+        help_text=(
+            "Write a cluster to say this face is that person (the assignment "
+            "becomes 'confirmed'); write null to say it is not the person of "
+            "its current cluster (it becomes 'rejected')."
+        ),
+    )
+    crop_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Face
+        fields = ["uuid", "file", "box", "quality", "cluster", "assignment", "crop_url"]
+        read_only_fields = ["uuid", "quality"]
+        extra_kwargs = {
+            "assignment": {
+                "help_text": (
+                    "Write 'confirmed' to pin the face in its current cluster."
+                ),
+            },
+        }
+
+    def get_box(self, face):
+        return {
+            "x": face.box_x,
+            "y": face.box_y,
+            "width": face.box_width,
+            "height": face.box_height,
+        }
+
+    def get_crop_url(self, face):
+        return _crop_url(face.pk)
+
+    def validate_assignment(self, value):
+        if value != Face.Assignment.CONFIRMED:
+            raise serializers.ValidationError(
+                "Only 'confirmed' can be written; write cluster: null to reject."
+            )
+        return value

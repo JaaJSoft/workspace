@@ -13,6 +13,10 @@ Albums are a second way in, never a wider one: an album lists its items that
 the viewer can already open (``ALL``), so an item whose file went to the
 trash, was quarantined or stopped being shared with the viewer drops out of
 the album instead of leaking through it.
+
+Faces and their clusters are the user's own and only ever in their personal
+photos (see services/face_analysis.py); the helpers at the end narrow them
+to the photos the library still shows.
 """
 
 from django.contrib.auth.models import Group
@@ -22,8 +26,10 @@ from django.db.models.functions import Lower, RowNumber
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
-from workspace.photos.models import Album, AlbumItem, MediaItem
+from workspace.files.services.thumbnails.generation import RASTER_LABELS
+from workspace.photos.models import Album, AlbumItem, Face, FaceCluster, MediaItem
 from workspace.photos.services.analysis import library_candidates
+from workspace.photos.services.face_preferences import faces_enabled
 
 MINE = "mine"
 SHARED = "shared"
@@ -230,3 +236,64 @@ def album_date_range(files):
         first=Min("media_item__taken_at"), last=Max("media_item__taken_at")
     )
     return bounds["first"], bounds["last"]
+
+
+def user_face_clusters(user):
+    """The user's face clusters, with ``photo_count``: live photos only.
+
+    Empty while face grouping is off for the user, whatever rows a pending
+    purge has not reached yet.
+    """
+    clusters = FaceCluster.objects.filter(owner=user)
+    if not faces_enabled(user):
+        clusters = clusters.none()
+    live = Q(faces__file__in=library_files(user).values("pk"))
+    return clusters.annotate(photo_count=Count("faces", filter=live))
+
+
+def user_faces(user):
+    """The faces the user may see and correct: those of their live photos."""
+    if not faces_enabled(user):
+        return Face.objects.none()
+    return Face.objects.filter(owner=user, file__in=library_files(user).values("pk"))
+
+
+def cluster_photos(user, cluster):
+    """The live photos of the user's library holding a face of *cluster*."""
+    return library_files(user).filter(faces__cluster=cluster)
+
+
+def person_photos(user, person):
+    """The live photos of the user's library showing *person*, through any
+    of the user's clusters named after them. Another user's clusters of the
+    same contact are theirs alone."""
+    return (
+        library_files(user)
+        .filter(
+            faces__cluster__in=user_face_clusters(user)
+            .filter(person=person)
+            .values("pk")
+        )
+        .distinct()
+    )
+
+
+def has_photos_of_person(user, person):
+    """Whether *person* is in any photo of the user's library, face grouping on."""
+    return faces_enabled(user) and person_photos(user, person).exists()
+
+
+def face_progress(user):
+    """How far the analysis of the user's photos has come, as a dict."""
+    from workspace.photos.services.face_analysis import pending_faces_qs
+
+    photos = (
+        _media(FileService.user_files_qs(user))
+        .filter(type__in=RASTER_LABELS)
+        .with_blob()
+    )
+    total = photos.count()
+    pending = (
+        pending_faces_qs().filter(owner=user).count() if faces_enabled(user) else total
+    )
+    return {"total": total, "analyzed": total - pending}

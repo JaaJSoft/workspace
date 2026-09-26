@@ -1,0 +1,201 @@
+{% comment %}
+  "People in this photo": each face found in a photo, the person it was
+  grouped with, and the corrections - confirm, not this person, or say who
+  it is: a named person, a contact from People, a new name, or an unnamed
+  cluster. State lives in photosFacesMixin() (faces.js).
+{% endcomment %}
+<dialog id="photo-faces-dialog" class="modal" @close="facesDialogClosed()">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="scan-face" class="w-5 h-5 text-module"></i>
+      People in this photo
+    </h3>
+    <p
+      class="text-sm text-base-content/60 mb-4 truncate"
+      x-text="facesDialog.photo?.name"
+    ></p>
+
+    <div x-show="facesDialog.loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md"></span>
+    </div>
+    <p
+      x-show="!facesDialog.loading && facesDialog.faces.length === 0"
+      x-cloak
+      class="text-sm text-base-content/60 py-6 text-center"
+    >
+      No face was found in this photo, or it has not been read yet.
+    </p>
+
+    <ul class="space-y-2" x-show="!facesDialog.loading">
+      <template x-for="face in facesDialog.faces" :key="face.uuid">
+        <li class="rounded-lg border border-base-300 p-2">
+          <div class="flex items-center gap-3">
+            <img
+              :src="face.crop_url"
+              alt="Face"
+              class="w-12 h-12 rounded-full object-cover shrink-0 bg-base-200"
+            />
+            <i
+              data-lucide="arrow-right"
+              class="w-4 h-4 text-base-content/40 shrink-0"
+            ></i>
+            <div class="min-w-0 flex-1 flex items-center gap-2">
+              <template x-if="clusterOf(face)">
+                <img
+                  :src="clusterOf(face).cover_url"
+                  alt=""
+                  class="w-8 h-8 rounded-full object-cover shrink-0 bg-base-200"
+                />
+              </template>
+              <span
+                class="text-sm truncate"
+                :class="face.cluster ? '' : 'text-base-content/60'"
+                x-text="faceLabel(face)"
+              ></span>
+              <span
+                x-show="face.assignment === 'confirmed'"
+                class="badge badge-sm badge-success badge-outline shrink-0"
+              >Confirmed</span>
+            </div>
+          </div>
+          <div class="flex flex-wrap justify-end gap-1 mt-2">
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              x-show="face.cluster && face.assignment === 'auto'"
+              :disabled="facesDialog.busy"
+              @click="confirmFace(face)"
+            >
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              That's right
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs text-error"
+              x-show="face.cluster"
+              :disabled="facesDialog.busy"
+              @click="rejectFace(face)"
+            >
+              <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+              Not this person
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost btn-xs"
+              :disabled="facesDialog.busy"
+              @click="togglePicker(face)"
+            >
+              <i data-lucide="users-round" class="w-3.5 h-3.5"></i>
+              Change person
+            </button>
+          </div>
+          <div
+            x-show="facesDialog.picking === face.uuid"
+            x-cloak
+            class="mt-2 space-y-2 rounded-lg bg-base-200 p-2"
+          >
+            <label
+              class="input input-bordered input-sm flex items-center gap-2 w-full bg-base-100"
+            >
+              <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+              <input
+                type="text"
+                class="grow"
+                placeholder="Who is it?"
+                autocomplete="off"
+                x-model="facesDialog.query"
+                @input.debounce.250ms="searchFacePersons()"
+                @keydown.enter.prevent="canCreateFacePerson() && newPersonForFace(face)"
+                :disabled="facesDialog.busy"
+              />
+            </label>
+            <ul class="menu menu-sm p-0 max-h-48 flex-nowrap overflow-y-auto">
+              <template x-for="person in pickablePersons(face)" :key="person.uuid">
+                <li>
+                  <button
+                    type="button"
+                    class="gap-3 rounded"
+                    :disabled="facesDialog.busy"
+                    @click="assignFaceToPerson(face, person)"
+                  >
+                    <template x-if="person.cover_url">
+                      <img
+                        :src="person.cover_url"
+                        alt=""
+                        class="w-7 h-7 rounded-full object-cover"
+                      />
+                    </template>
+                    <template x-if="!person.cover_url">
+                      <span
+                        class="flex w-7 h-7 items-center justify-center rounded-full bg-base-100 text-base-content/50"
+                      >
+                        <i data-lucide="contact" class="w-3.5 h-3.5"></i>
+                      </span>
+                    </template>
+                    <span class="flex-1 truncate" x-text="person.name"></span>
+                  </button>
+                </li>
+              </template>
+              <li x-show="canCreateFacePerson()" x-cloak>
+                <button
+                  type="button"
+                  class="gap-3 rounded text-module"
+                  :disabled="facesDialog.busy"
+                  @click="newPersonForFace(face)"
+                >
+                  <span
+                    class="flex w-7 h-7 items-center justify-center rounded-full border-2 border-dashed border-current"
+                  >
+                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  </span>
+                  <span class="flex-1 truncate">
+                    Add “<span x-text="facesDialog.query.trim()"></span>” to People
+                  </span>
+                </button>
+              </li>
+            </ul>
+            <div x-show="!facesDialog.query.trim()">
+              <p
+                class="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/60"
+              >
+                Not named yet
+              </p>
+              <div class="grid grid-cols-6 gap-2">
+                {# Someone who has no name yet and no cluster either: the face starts one of its own. #}
+                <button
+                  type="button"
+                  class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                  title="New person"
+                  aria-label="New person"
+                  :disabled="facesDialog.busy"
+                  @click="startCluster(face)"
+                >
+                  <i data-lucide="user-plus" class="w-5 h-5"></i>
+                </button>
+                <template x-for="cluster in pickableClusters(face)" :key="cluster.uuid">
+                  <button
+                    type="button"
+                    class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-200 hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                    :title="cluster.photo_count + ' photos'"
+                    :aria-label="'Unnamed person with ' + cluster.photo_count + ' photos'"
+                    :disabled="facesDialog.busy"
+                    @click="assignFace(face, cluster)"
+                  >
+                    <img :src="cluster.cover_url" alt="" class="w-full h-full object-cover" />
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <div class="modal-action">
+      <button type="button" class="btn btn-sm" @click="closeFacesDialog()">Done</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

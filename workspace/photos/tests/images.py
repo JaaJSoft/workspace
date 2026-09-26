@@ -124,3 +124,24 @@ def make_video(
         },
     )
     return file_obj
+
+
+# Identities the fake face backend tells apart: its faces are patches of one
+# saturated colour, and the colour is the person.
+ALICE = (220, 30, 30)
+BOB = (30, 30, 220)
+CAROL = (30, 200, 30)
+
+
+def faces_png(*faces, size=(400, 300)):
+    """A PNG on a grey background with one square per ``(colour, (x, y, side))``.
+
+    PNG, not JPEG: compression noise would blur the colours the fake backend
+    reads identities from.
+    """
+    image = Image.new("RGB", size, (128, 128, 128))
+    for colour, (x, y, side) in faces:
+        image.paste(colour, (x, y, x + side, y + side))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()

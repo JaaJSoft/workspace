@@ -173,3 +173,151 @@ class AlbumItem(models.Model):
 
     def __str__(self):
         return f"AlbumItem: {self.file_id} in {self.album_id}"
+
+
+class FaceAnalysis(models.Model):
+    """That a photo was read for faces: which bytes, by which backend, for whom.
+
+    A photo with no face gets a row too, so the catch-up does not read it
+    again every hour. Any mismatch with the file (new bytes, another backend,
+    another owner, an older pipeline) makes the photo pending again.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="face_analysis"
+    )
+    # Whose library the faces went to: the file's owner when it was read.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    backend = models.CharField(max_length=32)
+    version = models.PositiveSmallIntegerField()
+    face_count = models.PositiveSmallIntegerField(default=0)
+    analyzed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"FaceAnalysis: {self.file_id}"
+
+
+class FaceCluster(models.Model):
+    """Faces the grouping believes are one person, in one user's library.
+
+    Deliberately not called a person: a cluster may still be two look-alikes,
+    and one person often spans several clusters (a child growing up, a beard,
+    glasses), each kept compact so its centroid stays useful. Naming links a
+    cluster to a ``people.Person``; several clusters may link to the same one.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="face_clusters",
+    )
+    # The face shown for the cluster. Picked as the best one when the cluster
+    # is created, or by the user; re-picked when it leaves the cluster.
+    cover = models.ForeignKey(
+        "Face", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # When the user picked the cover; null while it is the automatic one. A
+    # person of several clusters shows the most recently picked cover.
+    cover_chosen_at = models.DateTimeField(null=True, blank=True)
+    # Who the faces are. Two clusters of one person are one person for the
+    # one-face-per-photo rule too, which the services enforce: the database
+    # constraint on Face only spans one cluster.
+    person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    hidden = models.BooleanField(default=False)
+    # Quality-weighted mean of the members' embeddings, unit length, float32.
+    centroid = models.BinaryField(null=True, blank=True)
+    face_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["owner", "hidden", "-face_count"],
+                name="face_cluster_listing_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"FaceCluster: {self.uuid}"
+
+
+class Face(models.Model):
+    """One face found in one photo of its owner's library."""
+
+    class Assignment(models.TextChoices):
+        # The grouping's call: it may move the face.
+        AUTO = "auto", "Automatic"
+        # The user put the face in its cluster: never moved automatically.
+        CONFIRMED = "confirmed", "Confirmed"
+        # The user took the face out of automatic grouping: it stays out
+        # until they place it themselves.
+        REJECTED = "rejected", "Rejected"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="faces")
+    # The vector index partition: grouping never looks past one user's faces.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    # The box, as fractions of the photo as displayed (EXIF orientation
+    # applied), so it holds at any rendering size.
+    box_x = models.FloatField()
+    box_y = models.FloatField()
+    box_width = models.FloatField()
+    box_height = models.FloatField()
+    # Eyes, nose tip, mouth corners: [[x, y], ...] as fractions, like the box.
+    landmarks = models.JSONField(default=list)
+    detector_score = models.FloatField()
+    # 0 to 1, from the detector score, the face's size and its sharpness.
+    # A low-quality face never seeds a cluster and weighs less in a centroid.
+    quality = models.FloatField()
+    # The source of the photos.indexes.FACE_EMBEDDINGS vector index.
+    embedding = models.BinaryField(null=True, blank=True)
+    cluster = models.ForeignKey(
+        FaceCluster,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="faces",
+    )
+    assignment = models.CharField(
+        max_length=10, choices=Assignment.choices, default=Assignment.AUTO
+    )
+    # The cluster the user said this face is not: never proposed again.
+    rejected_cluster = models.ForeignKey(
+        FaceCluster,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Storage path of the square WebP crop shown for the face.
+    crop = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # Two faces of one photo are two people, whatever the embeddings
+            # say. NULLs are distinct, so any number of faces may be ungrouped.
+            models.UniqueConstraint(
+                fields=["file", "cluster"], name="face_one_per_photo_per_cluster"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["owner", "cluster"], name="face_owner_cluster_idx"),
+        ]
+
+    def __str__(self):
+        return f"Face: {self.uuid}"

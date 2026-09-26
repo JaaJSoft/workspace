@@ -1,0 +1,118 @@
+{% comment %}
+  Merge face clusters: pick the people who are in fact the one the dialog
+  was opened on. State lives in facesMixin() (faces.js).
+{% endcomment %}
+<dialog id="merge-clusters-dialog" class="modal">
+  <div class="modal-box max-w-lg">
+    <h3 class="font-bold text-lg flex items-center gap-2 mb-1">
+      <i data-lucide="combine" class="w-5 h-5 text-module"></i>
+      Merge people
+    </h3>
+    <p class="text-sm text-base-content/60 mb-4">
+      Pick the people who are the same person as this one. Their photos move here, and the people you pick disappear from the list.
+    </p>
+    <div class="flex items-center gap-3 mb-4">
+      <img
+        :src="mergeDialog.target?.cover_url"
+        alt=""
+        class="w-12 h-12 rounded-full object-cover bg-base-200"
+      />
+      <span class="text-sm font-medium">This person</span>
+    </div>
+
+    <div x-show="mergeDialog.loading" class="flex justify-center py-8">
+      <span class="loading loading-spinner loading-md"></span>
+    </div>
+    <p
+      x-show="!mergeDialog.loading && mergeDialog.clusters.length === 0"
+      x-cloak
+      class="text-sm text-base-content/60 py-6 text-center"
+    >
+      There is no one else to merge with.
+    </p>
+    <div
+      x-show="!mergeDialog.loading"
+      class="grid grid-cols-4 sm:grid-cols-5 gap-3 max-h-80 overflow-y-auto p-1"
+    >
+      <template x-for="cluster in mergeDialog.clusters" :key="cluster.uuid">
+        <button
+          type="button"
+          class="relative flex flex-col items-center gap-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+          :aria-pressed="isMergeSelected(cluster) ? 'true' : 'false'"
+          @click="toggleMergeSelection(cluster)"
+        >
+          <span
+            class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition"
+            :class="{ 'ring-2 ring-module': isMergeSelected(cluster) }"
+          >
+            <img :src="cluster.cover_url" alt="" class="w-full h-full object-cover" />
+          </span>
+          <span
+            class="max-w-full truncate text-xs font-medium"
+            x-show="cluster.person_name"
+            x-text="cluster.person_name"
+          ></span>
+          <span
+            class="text-xs text-base-content/60 tabular-nums"
+            x-text="cluster.photo_count + (cluster.photo_count === 1 ? ' photo' : ' photos')"
+          ></span>
+          <span
+            x-show="isMergeSelected(cluster)"
+            class="absolute top-0 right-0 flex w-5 h-5 items-center justify-center rounded-full bg-module text-module-content"
+          >
+            <i data-lucide="check" class="w-3 h-3"></i>
+          </span>
+        </button>
+      </template>
+    </div>
+
+    {# Asked once the server refused a merge of two names. #}
+    <div
+      x-show="mergeDialog.choices"
+      x-cloak
+      class="mt-4 rounded-lg border border-warning/40 bg-warning/10 p-3"
+    >
+      <p class="text-sm mb-2">These are named after different people. Which name should stay?</p>
+      <template x-for="choice in mergeDialog.choices || []" :key="choice.uuid">
+        <label class="flex items-center gap-2 py-1 cursor-pointer">
+          <input
+            type="radio"
+            name="merge-person"
+            class="radio radio-sm"
+            :value="choice.uuid"
+            x-model="mergeDialog.person"
+          />
+          <span class="text-sm" x-text="choice.name"></span>
+        </label>
+      </template>
+    </div>
+
+    <div class="modal-action">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm"
+        @click="closeMergeDialog()"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-module btn-sm"
+        :disabled="mergeDialog.saving || mergeDialog.selected.length === 0"
+        @click="submitMerge()"
+      >
+        <span
+          x-show="mergeDialog.saving"
+          x-cloak
+          class="loading loading-spinner loading-xs"
+        ></span>
+        <span
+          x-text="mergeDialog.selected.length > 1 ? 'Merge ' + mergeDialog.selected.length + ' people' : 'Merge'"
+        ></span>
+      </button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

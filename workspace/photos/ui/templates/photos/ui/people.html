@@ -1,0 +1,176 @@
+{% extends "photos/ui/base.html" %}
+
+{% block photos_content %}
+  <header
+    class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
+  >
+    <div class="flex items-center gap-3 px-4 py-3">
+      {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
+      <i data-lucide="scan-face" class="w-5 h-5 text-module shrink-0"></i>
+      <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+        <h1 class="text-lg font-semibold truncate">{% if show_hidden %}Hidden people{% else %}People{% endif %}</h1>
+        {% if faces_enabled %}
+          <span
+            class="text-sm text-base-content/60"
+          >{{ people_count }} {% if people_count == 1 %}person{% else %}people{% endif %}</span>
+        {% endif %}
+      </div>
+      {% if analyzing %}
+        {# Polls the progress, and reloads the grid once the last photo is read. #}
+        <span
+          class="badge badge-ghost gap-1.5 max-sm:hidden"
+          x-data="facesProgress({{ progress.analyzed }}, {{ progress.total }})"
+          title="Photos are read for faces in the background, a few at a time."
+        >
+          <span class="loading loading-spinner loading-xs"></span>
+          <span>Looking for faces: <span class="tabular-nums" x-text="analyzed">{{ progress.analyzed }}</span> of <span class="tabular-nums" x-text="total">{{ progress.total }}</span> photos</span>
+        </span>
+      {% endif %}
+      {% if faces_enabled %}
+        {% if show_hidden %}
+          <a
+            href="{{ people_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-ghost btn-sm gap-1"
+          >
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">All people</span>
+          </a>
+        {% elif hidden_count %}
+          <a
+            href="{{ people_hidden_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-ghost btn-sm gap-1"
+            title="People you hid"
+          >
+            <i data-lucide="eye-off" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">Hidden</span>
+            <span class="badge badge-sm badge-ghost tabular-nums">{{ hidden_count }}</span>
+          </a>
+        {% endif %}
+        <div class="dropdown dropdown-end">
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="Face grouping options"
+          >
+            <i data-lucide="more-vertical" class="w-4 h-4"></i>
+          </button>
+          <ul
+            tabindex="0"
+            class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+          >
+            <li>
+              <button
+                type="button"
+                class="rounded text-error"
+                @click="document.activeElement.blur(); turnFacesOff()"
+              >
+                <i data-lucide="power-off" class="w-4 h-4"></i>
+                Turn off face grouping
+              </button>
+            </li>
+          </ul>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if not faces_enabled %}
+    <div
+      class="max-w-xl mx-auto px-6 py-16 flex flex-col items-center gap-4 text-center"
+    >
+      <div class="rounded-full bg-module/10 p-5">
+        <i data-lucide="scan-face" class="w-10 h-10 text-module"></i>
+      </div>
+      <h2 class="text-lg font-semibold">Find the people in your photos</h2>
+      <p class="text-sm text-base-content/70">
+        Turn this on and Workspace looks for faces in your photos, then groups the ones that look like the same person, so every photo of someone is one click away.
+      </p>
+      <ul
+        class="w-full space-y-3 rounded-box bg-base-200 p-4 text-left text-sm"
+      >
+        <li class="flex gap-3">
+          <i data-lucide="scan-face" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
+          <span><strong>What is computed:</strong> where each face is in a photo, a small picture of it, and a numeric description of its features that lets faces be compared. That description is biometric data.</span>
+        </li>
+        <li class="flex gap-3">
+          <i data-lucide="server" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
+          <span><strong>Where:</strong> on this server only. No photo and no face is sent anywhere.</span>
+        </li>
+        <li class="flex gap-3">
+          <i data-lucide="images" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
+          <span><strong>Which photos:</strong> your own photos in Files. Group folders and photos shared with you are left out.</span>
+        </li>
+        <li class="flex gap-3">
+          <i data-lucide="trash-2" class="w-4 h-4 mt-0.5 shrink-0 text-module"></i>
+          <span><strong>Turning it off</strong> deletes every face, every group and every face picture right away. Your photos are not touched.</span>
+        </li>
+      </ul>
+      <button
+        type="button"
+        class="btn btn-module btn-sm"
+        :disabled="facesSaving"
+        @click="setFacesEnabled(true)"
+      >
+        <span
+          x-show="facesSaving"
+          x-cloak
+          class="loading loading-spinner loading-xs"
+        ></span>
+        Turn on face grouping
+      </button>
+    </div>
+  {% elif named or unnamed %}
+    <div id="people-grid" class="space-y-6 p-4">
+      {% if named %}
+        <section aria-label="Named people">
+          <div
+            class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5"
+          >
+            {% for card in named %}
+              {% include "photos/ui/partials/person_card.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+      {% if unnamed %}
+        <section aria-labelledby="people-unnamed-title">
+          {% if named %}
+            <h2
+              id="people-unnamed-title"
+              class="mb-3 text-sm font-semibold uppercase tracking-wider text-base-content/60"
+            >
+              Not named yet
+            </h2>
+          {% endif %}
+          <div
+            class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5"
+          >
+            {% for card in unnamed %}
+              {% include "photos/ui/partials/person_card.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    </div>
+  {% else %}
+    <div
+      class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+    >
+      <div class="rounded-full bg-module/10 p-5">
+        <i data-lucide="scan-face" class="w-10 h-10 text-module"></i>
+      </div>
+      {% if show_hidden %}
+        <h2 class="text-lg font-semibold">No one is hidden</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">People you hide from the list show up here.</p>
+      {% else %}
+        <h2 class="text-lg font-semibold">No one yet</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          {% if analyzing %}People show up here as your photos are read for faces.{% else %}No face was found in your photos so far.{% endif %}
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+{% endblock %}

@@ -9,4 +9,5 @@ urlpatterns = [
     path("/timeline", views.timeline, name="timeline"),
     path("/albums/<uuid:uuid>", views.album, name="album"),
     path("/albums/<uuid:uuid>/timeline", views.album_timeline, name="album_timeline"),
+    path("/people", views.people, name="people"),
 ]

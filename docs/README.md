@@ -10,6 +10,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 | [Chat](chat/) | Direct and group messaging, real-time updates, AI bots, audio calls |
 | [Calendar](calendar/) | Multiple views, recurring events, RSVP, scheduling polls, iCalendar |
 | [Mail](mail/) | IMAP/SMTP client with OAuth2, AI summaries, folders and labels |
+| [Photos](photos/) | Timeline of your photos and videos; opt-in face detection and grouping (preview) |
 | [Notes](notes/) | Markdown notes with journal mode, folders, tags, full-text search |
 | [Projects](projects/) | Kanban boards with backlog, task references, labels, comments, activity |
 | [People](people/) | Address book with group books, lists, linked accounts, and vCard import/export |

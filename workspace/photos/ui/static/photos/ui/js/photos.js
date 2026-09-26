@@ -93,6 +93,7 @@ window.photosApp = function photosApp() {
     // tags mixin works on `selectedFile`, which the panel seeds.
     ...tags,
     ...window.propertiesPanelMixin(),
+    ...window.photosFacesMixin(),
 
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,

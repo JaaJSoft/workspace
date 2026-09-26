@@ -1,0 +1,28 @@
+{% comment %}
+Rows of the menu a right-click on a tile of a multiple selection opens: the
+selection bar's actions, for the whole selection. The panel around them is
+`ui/partials/context_menu_panel.html`, included from base.html.
+
+The file rows wait for the registry's answer about every selected photo
+(selectionActions is null meanwhile) and show only what all of them offer.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <li class="menu-title py-1">
+    <span x-text="countLabel(selection.length) + ' selected'"></span>
+  </li>
+  {% include "ui/partials/context_menu_item.html" with icon="book-plus" label="Add to album" click="closeSelectionMenu(); openAlbumPicker(selection)" only %}
+  {% include "ui/partials/context_menu_item.html" with show="albumAllows('remove_items')" icon="image-minus" label="Remove from album" click="closeSelectionMenu(); removeFromAlbum(selection)" only %}
+  <li x-show="selectionActions === null">
+    <span class="gap-3 rounded pointer-events-none">
+      <span class="loading loading-spinner loading-xs"></span>
+      <span>Loading…</span>
+    </span>
+  </li>
+  {% include "ui/partials/context_menu_item.html" with show="selectionAllows('toggle_favorite')" li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="star" icon_alt="star-off" icon_toggle="selectionFavoriteAdds()" label_expr="selectionFavoriteAdds() ? 'Add to favorites' : 'Remove from favorites'" click="favoriteSelection()" only %}
+  {% include "ui/partials/context_menu_item.html" with show="selectionAllows('download')" icon="download" label="Download as ZIP" click="downloadSelection()" only %}
+  <template x-if="selectionMenu.open && currentCluster()">
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="user-x" label="Not this person" click="rejectSelectionFromCluster()" only %}
+  </template>
+  {% include "ui/partials/context_menu_item.html" with show="selectionAllows('delete')" li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="trash-2" label="Move to trash" tone="error" click="trashSelection()" only %}
+  {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="x" label="Clear selection" click="clearSelection()" only %}
+</ul>

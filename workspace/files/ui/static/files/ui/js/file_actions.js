@@ -144,4 +144,46 @@ window.fileActions = {
             return resp.json();
         });
     },
+
+    // Saves the files as one ZIP archive. Nothing shows until the whole
+    // archive has arrived, which takes a while for a large selection: the
+    // notice waits a moment so a small one does not flash it.
+    downloadArchive: async function(uuids, filename = 'download.zip') {
+        if (!uuids || uuids.length === 0) return;
+        let noticeEl = null;
+        const noticeTimer = setTimeout(function() {
+            noticeEl = window.AppAlert.show({
+                message: `Preparing an archive of ${uuids.length} item${uuids.length > 1 ? 's' : ''}...`,
+                type: 'info',
+                duration: 0,
+                dismissible: false,
+            });
+        }, 1000);
+        try {
+            const resp = await fetch('/api/v1/files/bulk-download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+                body: JSON.stringify({ uuids: uuids }),
+            });
+            if (!resp.ok) {
+                const data = await resp.json().catch(function() { return {}; });
+                window.AppAlert.error(data.detail || 'Failed to download selected files');
+                return;
+            }
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            window.AppAlert.error('Failed to download selected files');
+        } finally {
+            clearTimeout(noticeTimer);
+            if (noticeEl) window.AppAlert.dismiss(noticeEl);
+        }
+    },
 };

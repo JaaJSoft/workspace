@@ -99,6 +99,7 @@
   {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
   {% include "files/ui/partials/tag_dialog.html" %}
   {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="photos-context-menu" %}
+  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/selection_menu.html" open="selectionMenu.open" close="closeSelectionMenu()" x="selectionMenu.x" y="selectionMenu.y" id="photos-selection-menu" %}
   {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/album_menu.html" open="albumMenu.open" close="albumMenu.open = false" x="albumMenu.x" y="albumMenu.y" id="photos-album-menu" %}
   {% include "photos/ui/partials/album_picker.html" %}
   {% include "files/ui/partials/rename_dialog.html" %}

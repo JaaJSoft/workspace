@@ -581,16 +581,42 @@ window.photosFacesMixin = function photosFacesMixin() {
       window.AppAlert.success(`Also the contact photo of ${person.name} in People`, { duration: 2500 });
     },
 
+    async _rejectFace(photo) {
+      const face = await this._faceInCurrentCluster(photo);
+      if (!face) return;
+      await facesRequest(`${FACES_API}/faces/${face.uuid}`, { method: 'PATCH', body: { cluster: null } });
+    },
+
     async rejectFromCluster(photo) {
       this.closeCtxMenu();
       try {
-        const face = await this._faceInCurrentCluster(photo);
-        if (!face) return;
-        await facesRequest(`${FACES_API}/faces/${face.uuid}`, { method: 'PATCH', body: { cluster: null } });
+        await this._rejectFace(photo);
         await this._reloadView();
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not remove the photo');
       }
+    },
+
+    // One photo after the other: each is read before its face is detached,
+    // and a failure leaves the rest of the selection to go on.
+    async rejectSelectionFromCluster() {
+      this.closeSelectionMenu();
+      if (!this.currentCluster() || this.selectionBusy) return;
+      const uuids = this.selection.slice();
+      this.selectionBusy = true;
+      let failed = 0;
+      for (const uuid of uuids) {
+        try {
+          await this._rejectFace({ uuid });
+        } catch (_) {
+          failed += 1;
+        }
+      }
+      this.selectionBusy = false;
+      if (failed) window.AppAlert.error(`Could not remove ${failed === 1 ? '1 photo' : `${failed} photos`}`);
+      await this._reloadView().catch((err) => {
+        window.AppAlert.error(err.message || 'Could not refresh the page');
+      });
     },
   };
 };

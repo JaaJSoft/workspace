@@ -237,3 +237,39 @@ test('an unnamed cluster has no contact to offer its cover to', async () => {
   assert.deepEqual(asked, []);
   assert.deepEqual(requests, []);
 });
+
+test('not this person detaches the face of every selected photo, past a failure', async () => {
+  const requests = [];
+  const errors = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: {
+      getElementById: (id) => (id === 'photos-cluster-data' ? { textContent: JSON.stringify({ clusters: ['c1'] }) } : null),
+    },
+    getCSRFToken: () => 't',
+    AppAlert: { error: (m) => errors.push(m) },
+    fetch: async (url, opts) => {
+      requests.push([opts.method, url]);
+      const photo = /files\/([^/]+)\/faces/.exec(url);
+      if (photo) {
+        return { ok: true, json: async () => [{ uuid: `face-${photo[1]}`, cluster: 'c1' }] };
+      }
+      return { ok: !url.endsWith('face-p2'), status: 500, json: async () => ({}) };
+    },
+  });
+  const faces = ctx.photosFacesMixin();
+  let reloads = 0;
+  faces.selection = ['p1', 'p2', 'p3'];
+  faces.selectionBusy = false;
+  faces.closeSelectionMenu = () => {};
+  faces._reloadView = async () => { reloads += 1; };
+
+  await faces.rejectSelectionFromCluster();
+
+  assert.deepEqual(
+    requests.filter(([method]) => method === 'PATCH').map(([, url]) => url),
+    ['/api/v1/photos/faces/face-p1', '/api/v1/photos/faces/face-p2', '/api/v1/photos/faces/face-p3'],
+  );
+  assert.deepEqual(errors, ['Could not remove 1 photo']);
+  assert.equal(faces.selectionBusy, false);
+  assert.equal(reloads, 1);
+});

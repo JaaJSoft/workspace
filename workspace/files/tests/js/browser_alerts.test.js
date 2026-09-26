@@ -2,7 +2,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 // Spy on the global alert entry point, normalizing every AppAlert method to
 // a (type, message) pair so assertions don't depend on which one the
@@ -20,7 +20,10 @@ function alertSpy(calls) {
 
 function makeBrowser({ clipboard = {} } = {}) {
   const calls = [];
-  const ctx = loadScript('workspace/files/ui/static/files/ui/js/browser.js', {
+  const ctx = loadScripts([
+    'workspace/files/ui/static/files/ui/js/file_actions.js',
+    'workspace/files/ui/static/files/ui/js/browser.js',
+  ], {
     tagsMixin: () => ({ toggleFileTag: async () => {} }),
     propertiesPanelMixin: () => ({}),
     // cut/copy stamp each item with the current folder, read off the DOM.

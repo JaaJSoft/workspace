@@ -654,3 +654,201 @@ window.facesProgress = function facesProgress(analyzed, total) {
     },
   };
 };
+
+// The options of the naming list: the suggested person first while nothing
+// is typed, the contacts found, then "Add ... to People" unless a contact
+// has exactly the typed name.
+function reviewOptions(query, results, suggestion) {
+  const name = (query || '').trim();
+  const options = [];
+  if (!name && suggestion) options.push({ kind: 'person', person: suggestion, suggested: true });
+  for (const person of results) {
+    if (!name && suggestion && person.uuid === suggestion.uuid) continue;
+    options.push({ kind: 'person', person, suggested: false });
+  }
+  if (name && !results.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+    options.push({ kind: 'create', name });
+  }
+  return options;
+}
+
+// What one "Confirm" of the check queue sends: the faces of a person, split
+// by the cluster they are in, the marked ones rejected.
+function reviewRequests(faces, marked) {
+  const byCluster = new Map();
+  for (const face of faces) {
+    if (!byCluster.has(face.cluster)) byCluster.set(face.cluster, { confirmed: [], rejected: [] });
+    byCluster.get(face.cluster)[marked[face.uuid] ? 'rejected' : 'confirmed'].push(face.uuid);
+  }
+  return Array.from(byCluster, ([cluster, body]) => ({ cluster, body }));
+}
+
+// The review page: naming the unnamed clusters one after the other, and
+// checking the faces the grouping was not sure of. Its own component, nested
+// in photosApp(): a navigation away tears it down.
+window.facesReview = function facesReview() {
+  return {
+    unnamed: [],
+    doubts: [],
+    position: 0,
+    query: '',
+    results: [],
+    active: 0,
+    searching: false,
+    saving: false,
+    _searchGeneration: 0,
+    marked: {},
+    settling: null,
+
+    init() {
+      const data = facesJson('photos-review-data') || {};
+      this.unnamed = data.unnamed || [];
+      this.doubts = data.doubts || [];
+      if (this.unnamed.length) this.searchReviewNames();
+    },
+
+    // ── To name ─────────────────────────────────────────
+
+    current() {
+      return this.unnamed[this.position] || null;
+    },
+
+    photoLabel(count) {
+      return photoCount(count);
+    },
+
+    options() {
+      const current = this.current();
+      return reviewOptions(this.query, this.results, current ? current.suggestion : null);
+    },
+
+    async searchReviewNames() {
+      const generation = ++this._searchGeneration;
+      this.searching = true;
+      try {
+        const results = await facesRequest(personsUrl(this.query));
+        if (generation === this._searchGeneration) {
+          this.results = results;
+          this.active = 0;
+        }
+      } catch (_) {
+        if (generation === this._searchGeneration) this.results = [];
+      } finally {
+        if (generation === this._searchGeneration) this.searching = false;
+      }
+    },
+
+    moveActive(step) {
+      const count = this.options().length;
+      if (count) this.active = (this.active + step + count) % count;
+    },
+
+    pickActive() {
+      const option = this.options()[this.active];
+      if (option) this.pick(option);
+    },
+
+    async pick(option) {
+      const current = this.current();
+      if (!current || this.saving) return;
+      const body = option.kind === 'create' ? { new_person: option.name } : { person: option.person.uuid };
+      const name = option.kind === 'create' ? option.name : option.person.name;
+      if (await this._settleCurrent(body)) {
+        window.AppAlert.success(`Named ${name}`, { duration: 1500 });
+      }
+    },
+
+    hideCurrent() {
+      return this._settleCurrent({ hidden: true });
+    },
+
+    // True once the cluster on screen is settled and left the queue.
+    async _settleCurrent(body) {
+      const current = this.current();
+      if (!current || this.saving) return false;
+      this.saving = true;
+      try {
+        await facesRequest(`${FACES_API}/clusters/${current.uuid}`, { method: 'PATCH', body });
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not save');
+        return false;
+      } finally {
+        this.saving = false;
+      }
+      this.unnamed.splice(this.position, 1);
+      if (this.position >= this.unnamed.length) this.position = 0;
+      this._nextPerson();
+      return true;
+    },
+
+    skip() {
+      if (!this.unnamed.length) return;
+      this.position = (this.position + 1) % this.unnamed.length;
+      this._nextPerson();
+    },
+
+    previous() {
+      if (!this.unnamed.length) return;
+      this.position = (this.position - 1 + this.unnamed.length) % this.unnamed.length;
+      this._nextPerson();
+    },
+
+    _nextPerson() {
+      this.query = '';
+      this.active = 0;
+      if (this.unnamed.length) this.searchReviewNames();
+      this.$nextTick(() => {
+        if (this.$refs.reviewInput) this.$refs.reviewInput.focus();
+      });
+    },
+
+    // ── To check ────────────────────────────────────────
+
+    isMarked(face) {
+      return !!this.marked[face.uuid];
+    },
+
+    toggleMark(face) {
+      this.marked = { ...this.marked, [face.uuid]: !this.marked[face.uuid] };
+    },
+
+    markedCount(block) {
+      return block.faces.filter((face) => this.marked[face.uuid]).length;
+    },
+
+    doubtCount() {
+      return this.doubts.reduce((sum, block) => sum + block.total, 0);
+    },
+
+    settleLabel(block) {
+      const rejected = this.markedCount(block);
+      if (!rejected) return 'Confirm all';
+      const confirmed = block.faces.length - rejected;
+      return confirmed ? `Confirm ${confirmed}, remove ${rejected}` : `Remove ${rejected}`;
+    },
+
+    async settle(block) {
+      if (this.settling) return;
+      this.settling = block.person.uuid;
+      try {
+        for (const { cluster, body } of reviewRequests(block.faces, this.marked)) {
+          await facesRequest(`${FACES_API}/clusters/${cluster}/review`, { method: 'POST', body });
+        }
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not save');
+        return;
+      } finally {
+        this.settling = null;
+      }
+      if (block.total > block.faces.length) {
+        // The next faces of this person were left out of the page.
+        this.$ajax(`${window.location.pathname}?queue=check`, {
+          targets: ['photos-nav', 'photos-content'],
+          focus: false,
+        });
+        return;
+      }
+      this.doubts = this.doubts.filter((b) => b !== block);
+    },
+  };
+};

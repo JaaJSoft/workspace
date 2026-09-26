@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
 from django.http import Http404, HttpResponseBadRequest
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import dateformat, timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -33,6 +33,7 @@ from workspace.photos.queries import (
 from workspace.photos.services.album_cards import album_cards, user_album_cards
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
+from workspace.photos.services.face_review import doubtful_faces, unnamed_queue
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -607,25 +608,100 @@ def people(request):
     )
     progress = face_progress(request.user) if enabled else None
     context = {
+        **_people_shell_context(request.user),
+        "named": named,
+        "unnamed": unnamed,
+        "people_count": len(named) + len(unnamed),
+        "unnamed_count": sum(not c.hidden for c in clusters if c.person_id is None),
+        "show_hidden": show_hidden,
+        "hidden_count": hidden_count if enabled else 0,
+        "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
+        "review_url": reverse("photos_ui:people_review"),
+        "progress": progress,
+        "analyzing": progress is not None and progress["analyzed"] < progress["total"],
+    }
+    return render(request, "photos/ui/people.html", context)
+
+
+def _people_shell_context(user):
+    """The sidebar and shell of a page under the People tab."""
+    return {
         "active_view": "people",
         "is_people_view": True,
         "title": "People",
         "tags": [
             {"tag": t, "url": _url_with({"tag": str(t.uuid)}), "active": False}
-            for t in library_tags(request.user, MINE)
+            for t in library_tags(user, MINE)
         ],
         "timeline_url": _url_with({}),
         "favorites_url": _url_with({"favorites": "1"}),
-        "albums": _sidebar_albums(request.user),
-        **_faces_context(request.user),
-        **_display_context(request.user),
-        "named": named,
-        "unnamed": unnamed,
-        "people_count": len(named) + len(unnamed),
-        "show_hidden": show_hidden,
-        "hidden_count": hidden_count if enabled else 0,
-        "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
-        "progress": progress,
-        "analyzing": progress is not None and progress["analyzed"] < progress["total"],
+        "albums": _sidebar_albums(user),
+        **_faces_context(user),
+        **_display_context(user),
     }
-    return render(request, "photos/ui/people.html", context)
+
+
+def _person_summary(card):
+    return {
+        "uuid": str(card.person.pk),
+        "name": card.person.display_name,
+        "cover_url": _crop_url(card.cover_cluster.cover_id),
+        "photo_count": card.photo_count,
+    }
+
+
+def _unnamed_item(item):
+    cluster = item.cluster
+    return {
+        "uuid": str(cluster.pk),
+        "photo_count": cluster.photo_count,
+        "cover_url": _crop_url(cluster.cover_id),
+        "samples": [_crop_url(pk) for pk in item.sample_face_ids],
+        "url": _url_with({"cluster": str(cluster.pk)}),
+        "suggestion": (
+            _person_summary(item.suggestion) if item.suggestion is not None else None
+        ),
+    }
+
+
+def _doubts_item(doubts):
+    return {
+        "person": _person_summary(doubts.card)
+        | {"url": _url_with({"person": str(doubts.card.person.pk)})},
+        "total": doubts.total,
+        "faces": [
+            {
+                "uuid": str(face.face_id),
+                "cluster": str(face.cluster_id),
+                "crop_url": _crop_url(face.face_id),
+            }
+            for face in doubts.faces
+        ],
+    }
+
+
+@login_required
+@ensure_csrf_cookie
+def people_review(request):
+    """Naming people and checking faces one after the other.
+
+    Two queues: the unnamed clusters, and the faces the grouping put under a
+    named person without being sure. ``?queue=check`` opens the second.
+    """
+    if not faces_available():
+        raise Http404
+    if not faces_enabled(request.user):
+        # The opt-in card lives on the People tab.
+        return redirect("photos_ui:people")
+    unnamed = [_unnamed_item(item) for item in unnamed_queue(request.user)]
+    doubts = [_doubts_item(item) for item in doubtful_faces(request.user)]
+    queue = request.GET.get("queue")
+    if queue not in ("name", "check"):
+        queue = "check" if doubts and not unnamed else "name"
+    context = {
+        **_people_shell_context(request.user),
+        "review": {"queue": queue, "unnamed": unnamed, "doubts": doubts},
+        "doubt_count": sum(item["total"] for item in doubts),
+        "review_url": reverse("photos_ui:people_review"),
+    }
+    return render(request, "photos/ui/people_review.html", context)

@@ -125,6 +125,30 @@ class FaceClusterMergeSerializer(serializers.Serializer):
     )
 
 
+class FaceClusterReviewSerializer(serializers.Serializer):
+    confirmed = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        max_length=500,
+        help_text="Faces of the cluster that are this person.",
+    )
+    rejected = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        default=list,
+        max_length=500,
+        help_text="Faces of the cluster that are not this person.",
+    )
+
+    def validate(self, data):
+        if set(data["confirmed"]) & set(data["rejected"]):
+            raise serializers.ValidationError(
+                "A face cannot be both confirmed and rejected."
+            )
+        return data
+
+
 class FaceSerializer(serializers.ModelSerializer):
     file = serializers.UUIDField(source="file_id", read_only=True)
     box = serializers.SerializerMethodField(

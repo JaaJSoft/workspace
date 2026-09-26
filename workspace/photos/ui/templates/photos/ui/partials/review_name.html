@@ -1,0 +1,192 @@
+{% comment %}
+  The "To name" queue of the review page: one unnamed person at a time, the
+  name field focused. State and actions in facesReview() (faces.js).
+{% endcomment %}
+<template x-if="current()">
+  <div
+    class="w-full max-w-md mx-auto px-4 py-6 flex flex-col items-center gap-4"
+  >
+    <div class="w-full flex items-center gap-3 text-xs text-base-content/60">
+      <span
+        class="tabular-nums shrink-0"
+        x-text="(position + 1) + ' of ' + unnamed.length"
+      ></span>
+      <div class="h-1 flex-1 rounded-full bg-base-300 overflow-hidden">
+        <div
+          class="h-full bg-module transition-[width]"
+          :style="{ width: ((position + 1) / unnamed.length * 100) + '%' }"
+        ></div>
+      </div>
+    </div>
+
+    <a
+      :href="current().url"
+      target="_blank"
+      rel="noopener"
+      class="block w-36 h-36 sm:w-44 sm:h-44 overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module"
+      title="See the photos in a new tab"
+    >
+      <img :src="current().cover_url" alt="" class="w-full h-full object-cover" />
+    </a>
+    <div
+      class="flex items-center justify-center gap-2"
+      x-show="current().samples.length"
+    >
+      <template x-for="sample in current().samples" :key="sample">
+        <img
+          :src="sample"
+          alt=""
+          class="w-10 h-10 rounded-full object-cover bg-base-200"
+        />
+      </template>
+    </div>
+    <a
+      :href="current().url"
+      target="_blank"
+      rel="noopener"
+      class="inline-flex items-center gap-1 text-sm text-base-content/60 hover:text-module"
+    >
+      <span x-text="photoLabel(current().photo_count)"></span>
+      <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+    </a>
+
+    <div class="w-full">
+      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+        <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+        <input
+          type="text"
+          class="grow"
+          placeholder="Who is this?"
+          autocomplete="off"
+          aria-label="Name"
+          x-ref="reviewInput"
+          x-init="$nextTick(() => $el.focus())"
+          x-model="query"
+          @input.debounce.250ms="searchReviewNames()"
+          @keydown.arrow-down.prevent="moveActive(1)"
+          @keydown.arrow-up.prevent="moveActive(-1)"
+          @keydown.enter.prevent="pickActive()"
+          :disabled="saving"
+        />
+        <span x-show="saving" x-cloak class="loading loading-spinner loading-xs"></span>
+      </label>
+
+      <ul
+        class="menu menu-sm p-0 mt-2 max-h-64 flex-nowrap overflow-y-auto"
+        role="listbox"
+        aria-label="Contacts"
+      >
+        <template
+          x-for="(option, i) in options()"
+          :key="option.kind === 'create' ? 'create' : (option.suggested ? 'suggested' : option.person.uuid)"
+        >
+          <li role="option" :aria-selected="i === active">
+            <button
+              type="button"
+              class="gap-3 rounded"
+              :class="{ 'bg-base-content/10': i === active, 'text-module': option.kind === 'create' }"
+              :disabled="saving"
+              @mouseenter="active = i"
+              @click="pick(option)"
+            >
+              <template x-if="option.kind === 'person' && option.person.cover_url">
+                <img
+                  :src="option.person.cover_url"
+                  alt=""
+                  class="w-8 h-8 rounded-full object-cover"
+                />
+              </template>
+              <template x-if="option.kind === 'person' && !option.person.cover_url">
+                <span
+                  class="flex w-8 h-8 items-center justify-center rounded-full bg-base-200 text-base-content/50"
+                >
+                  <i data-lucide="contact" class="w-4 h-4"></i>
+                </span>
+              </template>
+              <template x-if="option.kind === 'create'">
+                <span
+                  class="flex w-8 h-8 items-center justify-center rounded-full border-2 border-dashed border-current"
+                >
+                  <i data-lucide="user-plus" class="w-4 h-4"></i>
+                </span>
+              </template>
+              <span class="flex-1 truncate text-left">
+                <template x-if="option.kind === 'create'">
+                  <span>Add “<span x-text="option.name"></span>” to People</span>
+                </template>
+                <template x-if="option.kind === 'person'">
+                  <span x-text="option.person.name"></span>
+                </template>
+              </span>
+              <span
+                x-show="option.suggested"
+                class="badge badge-sm border-0 bg-module/10 text-module shrink-0"
+              >Looks like them</span>
+              <span
+                x-show="!option.suggested && option.kind === 'person' && option.person.photo_count"
+                class="text-xs text-base-content/60 tabular-nums"
+                x-text="option.kind === 'person' ? photoLabel(option.person.photo_count) : ''"
+              ></span>
+            </button>
+          </li>
+        </template>
+        <li
+          x-show="!searching && !options().length"
+          x-cloak
+          class="px-3 py-4 text-sm text-base-content/60"
+        >
+          No contact yet: type a name to add one to People.
+        </li>
+      </ul>
+    </div>
+
+    <div class="w-full flex items-center gap-2 pt-2 border-t border-base-300">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm gap-1"
+        :disabled="saving || unnamed.length < 2"
+        @click="previous()"
+      >
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        Previous
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm gap-1 ml-auto"
+        :disabled="saving"
+        title="Leave this person out of the list"
+        @click="hideCurrent()"
+      >
+        <i data-lucide="eye-off" class="w-4 h-4"></i>
+        Hide
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm gap-1"
+        :disabled="saving || unnamed.length < 2"
+        @click="skip()"
+      >
+        Skip
+        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+</template>
+
+<template x-if="!current()">
+  <div
+    class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+  >
+    <div class="rounded-full bg-module/10 p-5">
+      <i data-lucide="user-check" class="w-10 h-10 text-module"></i>
+    </div>
+    <h2 class="text-lg font-semibold">Everyone has a name</h2>
+    <p class="text-sm text-base-content/60 max-w-sm">New people show up here as more photos are read for faces.</p>
+    <a
+      href="{{ review_url }}?queue=check"
+      x-target.push="photos-nav photos-content"
+      class="btn btn-module btn-sm"
+      x-show="doubtCount()"
+    >Check the faces to confirm</a>
+  </div>
+</template>

@@ -7,6 +7,7 @@ user's (see queries.py).
 """
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
@@ -123,6 +124,26 @@ def reject_face(face):
     face.rejected_cluster_id = previous
     face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     refresh_clusters([previous])
+
+
+def review_cluster(cluster, *, confirmed=(), rejected=()):
+    """Confirm the *confirmed* faces in *cluster*, reject the *rejected* ones.
+
+    Only faces still in *cluster* move: one a clustering run or another
+    correction took elsewhere since the user looked is left where it is.
+    """
+    faces = Face.objects.filter(cluster=cluster)
+    with transaction.atomic():
+        faces.filter(pk__in=confirmed).update(assignment=Face.Assignment.CONFIRMED)
+        # The SET clauses read the row as it was: rejected_cluster takes the
+        # cluster the face is leaving.
+        left = faces.filter(pk__in=rejected).update(
+            rejected_cluster=F("cluster"),
+            cluster=None,
+            assignment=Face.Assignment.REJECTED,
+        )
+    if left:
+        refresh_clusters([cluster.pk])
 
 
 def confirm_face(face, cluster):

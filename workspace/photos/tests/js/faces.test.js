@@ -273,3 +273,27 @@ test('not this person detaches the face of every selected photo, past a failure'
   assert.equal(faces.selectionBusy, false);
   assert.equal(reloads, 1);
 });
+
+test('a failed reload after not this person is reported, not swallowed', async () => {
+  const errors = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: {
+      getElementById: (id) => (id === 'photos-cluster-data' ? { textContent: JSON.stringify({ clusters: ['c1'] }) } : null),
+    },
+    getCSRFToken: () => 't',
+    AppAlert: { error: (m) => errors.push(m) },
+    fetch: async (url) => ({
+      ok: true,
+      json: async () => (url.includes('/files/') ? [{ uuid: 'f1', cluster: 'c1' }] : {}),
+    }),
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.selection = ['p1'];
+  faces.selectionBusy = false;
+  faces.closeSelectionMenu = () => {};
+  faces._reloadView = () => Promise.reject(new Error('offline'));
+
+  await faces.rejectSelectionFromCluster();
+
+  assert.deepEqual(errors, ['offline']);
+});

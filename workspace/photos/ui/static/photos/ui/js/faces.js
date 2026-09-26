@@ -614,7 +614,9 @@ window.photosFacesMixin = function photosFacesMixin() {
       }
       this.selectionBusy = false;
       if (failed) window.AppAlert.error(`Could not remove ${failed === 1 ? '1 photo' : `${failed} photos`}`);
-      await this._reloadView().catch(() => {});
+      await this._reloadView().catch((err) => {
+        window.AppAlert.error(err.message || 'Could not refresh the page');
+      });
     },
   };
 };

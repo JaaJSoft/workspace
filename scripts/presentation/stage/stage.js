@@ -298,8 +298,6 @@
     const shots = s.shots.map((shot, i) => {
       const img = h('img', null, screen);
       img.src = shot.src;
-      const [fx, fy, zoom] = shot.focus || [T.capture.width / 2, T.capture.height / 2, 1.08];
-      img.style.transformOrigin = `${((fx / T.capture.width) * 100).toFixed(2)}% ${((fy / T.capture.height) * 100).toFixed(2)}%`;
       let callout = null;
       if (shot.callout) {
         const [cx, cy, cw, ch] = shot.callout;
@@ -313,7 +311,7 @@
         callout.style.backgroundSize = `${T.capture.width * size}px ${T.capture.height * size}px`;
         callout.style.backgroundPosition = `${-cx * size}px ${-cy * size}px`;
       }
-      return { img, zoom, callout, start: i * shotDur, path: shot.path };
+      return { img, callout, start: i * shotDur, path: shot.path };
     });
 
     return lt => {
@@ -345,10 +343,13 @@
       const rotY = dir * (lerp(-40, -13, w) + (lt / s.dur) * 6 - out * 22);
       const tx = dir * ((1 - w) * 560 + out * 460);
       const tz = (1 - w) * -380 - out * 650;
+      // The page itself is never cropped or zoomed: the whole window
+      // breathes a little instead, so the app always reads as the app.
+      const breathe = lerp(1, 1.03, E.inOutSine(prog(lt, 0.8, s.dur - 0.8)));
       style(
         win,
         clamp(w * 2.5) * (1 - out),
-        `translate3d(${tx.toFixed(1)}px, ${float.toFixed(1)}px, ${tz.toFixed(1)}px) rotateY(${rotY.toFixed(2)}deg) rotateX(${lerp(8, 3, w).toFixed(2)}deg)`,
+        `translate3d(${tx.toFixed(1)}px, ${float.toFixed(1)}px, ${tz.toFixed(1)}px) rotateY(${rotY.toFixed(2)}deg) rotateX(${lerp(8, 3, w).toFixed(2)}deg) scale(${breathe.toFixed(4)})`,
         out * 10,
       );
       style(glow, w * (1 - out) * 0.9, `translateX(${(tx * 0.8).toFixed(1)}px) scaleX(${lerp(0.5, 1, w).toFixed(3)})`);
@@ -359,10 +360,7 @@
         const reveal = i === 0 ? 1 : tw(lt, shot.start, 0.9);
         const next = shots[i + 1];
         const covered = next ? tw(lt, next.start, 0.9) : 0;
-        const life = E.inOutSine(prog(lt, shot.start - (i ? 0 : 0.2), (next ? next.start : s.dur) - shot.start + 0.9));
-        const zoom = lerp(1.0, shot.zoom, life) * lerp(1, 0.94, covered);
         shot.img.style.clipPath = i === 0 ? 'none' : `inset(${((1 - reveal) * 100).toFixed(2)}% 0 0 0)`;
-        shot.img.style.transform = `scale(${zoom.toFixed(4)})`;
         shot.img.style.filter = covered > 0.001 ? `brightness(${(1 - covered * 0.5).toFixed(3)})` : 'none';
         if (shot.callout) {
           const at = shot.start + Math.min(2.2, (next ? next.start - shot.start : s.dur - shot.start) * 0.3);
@@ -378,7 +376,8 @@
       });
       const cur = shots[current];
       const typed = Math.floor(tw(lt, cur.start + (current ? 0.1 : 0.4), 0.5, E.linear) * cur.path.length);
-      urlPath.textContent = cur.path.slice(0, Math.max(1, typed));
+      // The previous address stays up until the new one starts typing.
+      urlPath.textContent = current && !typed ? shots[current - 1].path : cur.path.slice(0, Math.max(1, typed));
     };
   }
 

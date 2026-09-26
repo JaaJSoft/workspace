@@ -7,13 +7,10 @@ rename or a new icon reaches the video on the next render. ``tagline`` and
 four bars a scene lasts.
 
 Each shot is a page of the seeded demo (``scripts/_screenshot_seed.py``),
-captured at ``CAPTURE_VIEWPORT``. Coordinates (``focus``, ``callout``) are CSS
-pixels of that viewport:
-
-- ``focus``: ``(x, y, zoom)`` the camera slowly pushes into while the shot is
-  on screen. Omit it for a gentle push toward the centre.
-- ``callout``: ``(x, y, w, h)`` a detail lifted out of the page and floated
-  in front of the window, enlarged. Omit it when nothing deserves one.
+captured at ``CAPTURE_VIEWPORT`` and always shown whole: the window moves,
+the page inside it is never cropped. To draw the eye to a detail, give the
+shot a ``callout``: ``(x, y, w, h)`` in CSS pixels of that viewport, lifted
+out of the page and floated in front of the window, enlarged.
 
 A module on the home dashboard with no scene here still gets a generic one
 (its registry description and a capture of its page), and the build prints a
@@ -132,9 +129,7 @@ SCENES = [
             ("layout-grid", "Every module one click away"),
             ("search", "Unified search with Ctrl K"),
         ],
-        "shots": [
-            {"path": "/", "focus": (720, 330, 1.18), "callout": (324, 270, 792, 112)}
-        ],
+        "shots": [{"path": "/", "callout": (324, 270, 792, 112)}],
     },
     {
         "slug": "files",
@@ -149,12 +144,10 @@ SCENES = [
             {
                 "path": "/files/{photos_uuid}",
                 "prep": _files_view("Mosaic"),
-                "focus": (860, 420, 1.2),
             },
             {
                 "path": "/files",
                 "prep": _files_view("List"),
-                "focus": (800, 300, 1.15),
             },
         ],
     },
@@ -166,9 +159,7 @@ SCENES = [
             ("book-image", "Albums for every trip"),
             ("scan-face", "Faces grouped and named"),
         ],
-        "shots": [
-            {"path": "/photos", "prep": _photos_timeline, "focus": (900, 380, 1.15)}
-        ],
+        "shots": [{"path": "/photos", "prep": _photos_timeline}],
     },
     {
         "slug": "notes",
@@ -182,7 +173,6 @@ SCENES = [
             {
                 "path": "/notes",
                 "prep": _open_text("Project kickoff"),
-                "focus": (960, 380, 1.2),
             }
         ],
     },
@@ -197,7 +187,6 @@ SCENES = [
         "shots": [
             {
                 "path": "/chat/{conversation_uuid}",
-                "focus": (900, 480, 1.18),
                 "callout": (1016, 324, 420, 66),
             }
         ],
@@ -213,7 +202,7 @@ SCENES = [
             ("image", "Vision, tools and image generation"),
             ("brain", "Memory across conversations"),
         ],
-        "shots": [{"path": "/chat/{bot_conversation_uuid}", "focus": (900, 450, 1.2)}],
+        "shots": [{"path": "/chat/{bot_conversation_uuid}"}],
     },
     {
         "slug": "mail",
@@ -227,7 +216,6 @@ SCENES = [
             {
                 "path": "/mail",
                 "prep": _open_text("Palette variants for the hero"),
-                "focus": (1000, 380, 1.18),
                 "callout": (288, 180, 383, 80),
             }
         ],
@@ -241,12 +229,11 @@ SCENES = [
             ("vote", "Scheduling polls and invitations"),
         ],
         "shots": [
-            {"path": "/calendar", "settle_ms": 3000, "focus": (820, 450, 1.15)},
+            {"path": "/calendar", "settle_ms": 3000},
             {
                 "path": "/calendar",
                 "settle_ms": 3000,
                 "prep": _calendar_agenda,
-                "focus": (820, 360, 1.15),
             },
         ],
     },
@@ -261,13 +248,11 @@ SCENES = [
         "shots": [
             {
                 "path": "/projects/{project_uuid}/board",
-                "focus": (760, 420, 1.15),
                 "callout": (314, 207, 346, 122),
             },
             {
                 "path": "/projects/{project_uuid}/timeline?scale=month",
                 "settle_ms": 2500,
-                "focus": (820, 420, 1.15),
             },
         ],
     },
@@ -283,7 +268,6 @@ SCENES = [
             {
                 "path": "/people?person={person_uuid}",
                 "prep": _person_panel,
-                "focus": (1000, 400, 1.15),
             }
         ],
     },
@@ -300,7 +284,6 @@ SCENES = [
                 "path": "/vault",
                 "prep": _unlock_vault,
                 "settle_ms": 2500,
-                "focus": (800, 300, 1.15),
                 "callout": (306, 104, 310, 44),
             }
         ],

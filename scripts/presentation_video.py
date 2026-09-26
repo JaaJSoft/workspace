@@ -126,7 +126,6 @@ def build_timeline(scenes, fps):
                 "src": f"shots/{shot_filename(scene['key'], i)}",
                 # What the address bar shows: no query, no uuid placeholders.
                 "path": re.sub(r"/\{[^}]+\}", "", shot["path"].split("?")[0]) or "/",
-                "focus": shot.get("focus"),
                 "callout": shot.get("callout"),
             }
             for i, shot in enumerate(scene["shots"])

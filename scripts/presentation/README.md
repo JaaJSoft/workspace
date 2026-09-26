@@ -21,7 +21,7 @@ git ignores.
 
 | File | Role |
 |---|---|
-| `scenes.py` | What the video says and shows: one entry per module (tagline, features, pages to capture, camera focus, callouts), plus the intro, platform and outro cards |
+| `scenes.py` | What the video says and shows: one entry per module (tagline, features, pages to capture, callouts), plus the intro, platform and outro cards |
 | `capture.py` | Seeds a throwaway demo (the one `scripts/screenshots.py` uses, plus a vault) and screenshots every shot |
 | `stage/` | The animation: an HTML page whose `render(t)` paints any instant. The live player and the mp4 are the same page |
 | `soundtrack.py` | The music: a synthwave loop rendered with numpy from the timeline, so every cut lands on a phrase and the drums follow `drumBars` |
@@ -38,7 +38,7 @@ keeps picture and music in sync: change a duration in one place and both move.
   `core.tests.test_presentation_video` fails until it gets a proper entry in
   `SCENES`.
 - **New feature worth showing**: edit the module's `features`, or add a shot.
-  Coordinates (`focus`, `callout`) are CSS pixels of the 1440x900 capture.
+  `callout` coordinates are CSS pixels of the 1440x900 capture.
 - **Animation work**: build the player once (`--skip-capture --player-only`),
   open `build/presentation/index.html`, and reload after each edit of
   `stage/` (rerun the command to copy it over). Space plays and pauses, the

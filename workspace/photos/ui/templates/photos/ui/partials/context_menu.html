@@ -46,7 +46,8 @@ rows, offered while the user has face grouping on.
   <template x-if="ctxMenu.actions !== null && facesEnabled()">
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this photo" click="openFacesDialog(ctxMenu.photo)" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && currentCluster()">
+  {# The cover is one cluster's: on a named person's page, the one shown is their largest cluster's. #}
+  <template x-if="ctxMenu.actions !== null && currentCluster()?.uuid">
     {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
   </template>
   <template x-if="ctxMenu.actions !== null && currentCluster()">

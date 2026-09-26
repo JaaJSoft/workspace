@@ -11,7 +11,7 @@ from workspace.photos.models import Face, FaceCluster
 from workspace.photos.services.face_grouping import cluster_owner
 from workspace.photos.services.face_people import person_clusters
 
-from .images import ALICE, BOB, CAROL
+from .images import ALICE, CAROL
 from .test_face_api import CLUSTERS, FaceApiTestCase, library_photo
 
 User = get_user_model()
@@ -44,13 +44,17 @@ class NamingTests(FaceApiTestCase):
         self.user.groups.add(group)
         shared = create_person(group=group, display_name="Grandma")
 
-        response = _patch(self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(shared.pk)})
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(shared.pk)}
+        )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["person_name"], "Grandma")
 
     def test_naming_after_a_new_name_creates_a_personal_contact(self):
-        response = _patch(self.client, f"{CLUSTERS}/{self.bob.pk}", {"new_person": "Bob"})
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.bob.pk}", {"new_person": "Bob"}
+        )
 
         self.assertEqual(response.status_code, 200)
         bob = Person.objects.get(display_name="Bob")
@@ -72,7 +76,9 @@ class NamingTests(FaceApiTestCase):
         other = User.objects.create_user(username="eve", password="p")
         theirs = create_person(owner=other, display_name="Mallory")
 
-        response = _patch(self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(theirs.pk)})
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(theirs.pk)}
+        )
 
         self.assertEqual(response.status_code, 400)
         self.alice.refresh_from_db()
@@ -85,7 +91,9 @@ class NamingTests(FaceApiTestCase):
         self.alice.save(update_fields=["person"])
 
         response = _patch(
-            self.client, f"{CLUSTERS}/{self.bob.pk}", {"person": str(self.alice_contact.pk)}
+            self.client,
+            f"{CLUSTERS}/{self.bob.pk}",
+            {"person": str(self.alice_contact.pk)},
         )
 
         self.assertEqual(response.status_code, 400)
@@ -118,7 +126,9 @@ class FaceToPersonTests(FaceApiTestCase):
         face = self.face("alice-2.png")
         _patch(self.client, self.url(face), {"cluster": None})
 
-        response = _patch(self.client, self.url(face), {"to_person": str(self.alice_contact.pk)})
+        response = _patch(
+            self.client, self.url(face), {"to_person": str(self.alice_contact.pk)}
+        )
 
         self.assertEqual(response.status_code, 200)
         face.refresh_from_db()
@@ -130,7 +140,9 @@ class FaceToPersonTests(FaceApiTestCase):
         # the user says is Alice: a new look, in a cluster of its own.
         face = self.face("bob.png")
 
-        response = _patch(self.client, self.url(face), {"to_person": str(self.alice_contact.pk)})
+        response = _patch(
+            self.client, self.url(face), {"to_person": str(self.alice_contact.pk)}
+        )
 
         self.assertEqual(response.status_code, 200)
         face.refresh_from_db()
@@ -141,7 +153,9 @@ class FaceToPersonTests(FaceApiTestCase):
     def test_a_person_already_in_the_photo_is_refused(self):
         face = self.face("pair.png", self.bob)
 
-        response = _patch(self.client, self.url(face), {"to_person": str(self.alice_contact.pk)})
+        response = _patch(
+            self.client, self.url(face), {"to_person": str(self.alice_contact.pk)}
+        )
 
         self.assertEqual(response.status_code, 400)
         face.refresh_from_db()
@@ -165,7 +179,9 @@ class PersonLevelGroupingTests(FaceApiTestCase):
         library_photo(self.user, "carol-2.png", (CAROL, (200, 80, 90)))
         cluster_owner(self.user.pk)
         carol = FaceCluster.objects.get(faces__file__name="carol-1.png")
-        FaceCluster.objects.filter(pk__in=[self.alice.pk, carol.pk]).update(person=contact)
+        FaceCluster.objects.filter(pk__in=[self.alice.pk, carol.pk]).update(
+            person=contact
+        )
 
         both = library_photo(
             self.user, "both-looks.png", (ALICE, (20, 50, 100)), (CAROL, (250, 50, 100))
@@ -224,13 +240,17 @@ class PersonsEndpointTests(FaceApiTestCase):
         library_photo(self.user, "carol.png", (CAROL, (40, 50, 100)))
         cluster_owner(self.user.pk)
         carol = FaceCluster.objects.get(faces__file__name="carol.png")
-        FaceCluster.objects.filter(pk__in=[self.alice.pk, carol.pk]).update(person=contact)
+        FaceCluster.objects.filter(pk__in=[self.alice.pk, carol.pk]).update(
+            person=contact
+        )
 
         (alice,) = self.client.get(PERSONS).json()
 
         self.assertEqual(alice["name"], "Alice")
         self.assertEqual(alice["photo_count"], 4)
-        self.assertEqual(sorted(alice["clusters"]), sorted([str(self.alice.pk), str(carol.pk)]))
+        self.assertEqual(
+            sorted(alice["clusters"]), sorted([str(self.alice.pk), str(carol.pk)])
+        )
 
     def test_a_search_offers_contacts_without_a_cluster_too(self):
         create_person(owner=self.user, display_name="Alicia")

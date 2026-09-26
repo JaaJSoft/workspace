@@ -25,7 +25,7 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         self.assertContains(response, "biometric data")
         self.assertContains(response, "on this server only")
 
-    def test_lists_the_clusters_largest_first(self):
+    def test_lists_the_unnamed_clusters_largest_first(self):
         opt_in(self.user)
         library_photo(self.user, "alice-1.png", (ALICE, (40, 50, 100)))
         library_photo(self.user, "alice-2.png", (ALICE, (200, 80, 90)))
@@ -36,7 +36,7 @@ class PeoplePageTests(FacesTestMixin, TestCase):
 
         response = self.client.get("/photos/people")
 
-        cards = [card["uuid"] for card in response.context["clusters"]]
+        cards = [card["uuid"] for card in response.context["unnamed"]]
         self.assertEqual(cards, [str(alice.pk), str(bob.pk)])
         self.assertContains(response, f"/photos?cluster={alice.pk}")
         self.assertNotContains(response, "Turn on face grouping")
@@ -50,9 +50,9 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         visible = self.client.get("/photos/people")
         hidden = self.client.get("/photos/people", {"hidden": "1"})
 
-        self.assertEqual(visible.context["clusters"], [])
+        self.assertEqual(visible.context["unnamed"], [])
         self.assertEqual(visible.context["hidden_count"], 1)
-        self.assertEqual(len(hidden.context["clusters"]), 1)
+        self.assertEqual(len(hidden.context["unnamed"]), 1)
 
     def test_shows_the_progress_while_photos_wait(self):
         opt_in(self.user)

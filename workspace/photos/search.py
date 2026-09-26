@@ -8,19 +8,55 @@ from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 from workspace.photos.models import MediaItem
-from workspace.photos.queries import ALL, library_files, user_albums
+from workspace.photos.queries import (
+    ALL,
+    library_files,
+    user_albums,
+    user_face_clusters,
+)
+from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.timeline import UNDATED
 from workspace.users.services.settings import get_user_timezone
 
 
 def search_photos(query, user, limit):
-    """Albums whose title matches, then photos and videos whose name does.
+    """People named in the photos, albums whose title matches, then photos
+    and videos whose name does.
 
-    Albums come first: a title is something the user wrote to find the
-    photos again, and there are few of them.
+    People and albums come first: a name or a title is something the user
+    wrote to find the photos again, and there are few of them.
     """
-    albums = search_albums(query, user, limit)
-    return albums + _search_media(query, user, limit - len(albums))
+    people = search_people(query, user, limit)
+    albums = search_albums(query, user, limit - len(people))
+    return (
+        people + albums + _search_media(query, user, limit - len(people) - len(albums))
+    )
+
+
+def search_people(query, user, limit):
+    """The people named in the user's photos whose name holds *query*, each
+    opening their photos. The contacts themselves are People's to find."""
+    needle = (query or "").strip().lower()
+    if limit <= 0 or not needle:
+        return []
+    clusters = (
+        user_face_clusters(user)
+        .filter(person__search_text__contains=needle, photo_count__gt=0)
+        .select_related("person")
+    )
+    return [
+        SearchResult(
+            uuid=str(card.person.pk),
+            name=card.person.display_name,
+            url=f"{reverse('photos_ui:index')}?{urlencode({'person': card.person.pk})}",
+            matched_value=card.person.display_name,
+            match_type="name",
+            type_icon="scan-face",
+            module_slug="photos",
+            tags=(SearchTag("Person", "info"),),
+        )
+        for card in person_cards(clusters)[:limit]
+    ]
 
 
 def search_albums(query, user, limit):

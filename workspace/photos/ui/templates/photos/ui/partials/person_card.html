@@ -1,0 +1,64 @@
+{% comment %}
+  One card of the People grid: a named person (every cluster of theirs) or
+  an unnamed cluster. `card` comes from _person_card / _cluster_card in
+  photos/ui/views.py; the data-* attributes are what the card's menu reads
+  (see openClusterMenu in faces.js).
+{% endcomment %}
+<div
+  class="group relative flex flex-col items-center gap-1"
+  data-cluster="{{ card.uuid|default:'' }}"
+  data-clusters="{{ card.clusters|join:',' }}"
+  data-person="{{ card.person.uuid|default:'' }}"
+  data-person-name="{{ card.person.name|default:'' }}"
+  data-person-url="{{ card.person.url|default:'' }}"
+  data-hidden="{{ card.hidden|yesno:'1,0' }}"
+  @contextmenu.prevent="openClusterMenu($event, $el)"
+>
+  <a
+    href="{{ card.url }}"
+    x-target.push="photos-nav photos-content"
+    class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+    title="{% if card.person %}{{ card.person.name }}, {% endif %}{{ card.photo_count }} photo{{ card.photo_count|pluralize }}"
+  >
+    {% if card.cover_url %}
+      <img
+        src="{{ card.cover_url }}"
+        alt=""
+        class="w-full h-full object-cover"
+        loading="lazy"
+        decoding="async"
+        draggable="false"
+      />
+    {% else %}
+      <span
+        class="flex w-full h-full items-center justify-center text-base-content/30"
+      >
+        <i data-lucide="user-round" class="w-8 h-8"></i>
+      </span>
+    {% endif %}
+  </a>
+  {% if card.person %}
+    <span class="mt-1 max-w-full truncate text-sm font-medium">{{ card.person.name }}</span>
+  {% else %}
+    <button
+      type="button"
+      class="mt-1 text-sm font-medium text-module hover:underline focus-visible:outline-none focus-visible:underline"
+      @click="openNameDialog({ uuid: '{{ card.uuid }}', cover_url: '{{ card.cover_url|default:''|escapejs }}' })"
+    >
+      Add a name
+    </button>
+  {% endif %}
+  <span class="text-xs text-base-content/60 tabular-nums">
+    {{ card.photo_count }} photo{{ card.photo_count|pluralize }}
+  </span>
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
+    title="More actions"
+    aria-label="More actions"
+    aria-haspopup="menu"
+    @click.stop="openClusterMenu($event, $el.closest('[data-clusters]'), $el)"
+  >
+    <i data-lucide="more-vertical" class="w-4 h-4"></i>
+  </button>
+</div>

@@ -1,0 +1,109 @@
+{% comment %}
+  Naming a person: pick a contact from People (personal or group address
+  book), or create one from the typed name. State lives in the naming
+  section of photosFacesMixin() (faces.js).
+{% endcomment %}
+<dialog id="name-person-dialog" class="modal">
+  <div class="modal-box max-w-md">
+    <div class="flex items-center gap-3 mb-4">
+      <img
+        :src="nameDialog.target?.cover_url"
+        x-show="nameDialog.target?.cover_url"
+        alt=""
+        class="w-12 h-12 rounded-full object-cover bg-base-200 shrink-0"
+      />
+      <div class="min-w-0">
+        <h3
+          class="font-bold text-lg"
+          x-text="nameDialog.target?.person ? 'Change name' : 'Who is this?'"
+        ></h3>
+        <p class="text-sm text-base-content/60">Pick a contact, or type a new name to add one to People.</p>
+      </div>
+    </div>
+
+    <form @submit.prevent="canCreateName() ? createName() : null">
+      <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+        <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+        <input
+          type="text"
+          class="grow"
+          placeholder="Name"
+          autocomplete="off"
+          x-model="nameDialog.query"
+          @input.debounce.250ms="searchNames()"
+          :disabled="nameDialog.saving"
+        />
+      </label>
+    </form>
+
+    <ul class="menu menu-sm p-0 mt-3 max-h-72 flex-nowrap overflow-y-auto">
+      <template x-for="person in nameDialog.results" :key="person.uuid">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            :disabled="nameDialog.saving"
+            @click="chooseName(person)"
+          >
+            <template x-if="person.cover_url">
+              <img
+                :src="person.cover_url"
+                alt=""
+                class="w-8 h-8 rounded-full object-cover"
+              />
+            </template>
+            <template x-if="!person.cover_url">
+              <span
+                class="flex w-8 h-8 items-center justify-center rounded-full bg-base-200 text-base-content/50"
+              >
+                <i data-lucide="contact" class="w-4 h-4"></i>
+              </span>
+            </template>
+            <span class="flex-1 truncate" x-text="person.name"></span>
+            <span
+              class="text-xs text-base-content/60 tabular-nums"
+              x-show="person.photo_count"
+              x-text="person.photo_count + (person.photo_count === 1 ? ' photo' : ' photos')"
+            ></span>
+          </button>
+        </li>
+      </template>
+      <li x-show="canCreateName()" x-cloak>
+        <button
+          type="button"
+          class="gap-3 rounded text-module"
+          :disabled="nameDialog.saving"
+          @click="createName()"
+        >
+          <span
+            class="flex w-8 h-8 items-center justify-center rounded-full border-2 border-dashed border-current"
+          >
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+          </span>
+          <span class="flex-1 truncate">
+            Add “<span x-text="nameDialog.query.trim()"></span>” to People
+          </span>
+        </button>
+      </li>
+      <li
+        x-show="!nameDialog.loading && !nameDialog.results.length && !canCreateName()"
+        x-cloak
+        class="px-3 py-4 text-sm text-base-content/60"
+      >
+        Type a name to find a contact.
+      </li>
+    </ul>
+
+    <div class="modal-action">
+      <span
+        x-show="nameDialog.saving"
+        x-cloak
+        class="loading loading-spinner loading-sm mr-auto self-center"
+      ></span>
+      <button type="button" class="btn btn-ghost btn-sm" @click="closeNameDialog()">Cancel</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

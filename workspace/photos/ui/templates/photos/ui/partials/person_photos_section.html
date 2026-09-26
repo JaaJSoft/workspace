@@ -1,0 +1,31 @@
+{% comment %}
+  The "Photos" section of a contact's page in People, contributed through
+  people.sections (registered in PhotosConfig.ready()). Only the viewer's
+  own face clusters count, so a shared contact shows each viewer their own
+  photos.
+{% endcomment %}
+{% load file_filters photos_filters %}
+{% photos_of_person user person as strip %}
+<div class="grid grid-cols-4 gap-1">
+  {% for photo in strip.photos %}
+    <a
+      href="{{ strip.url }}&open={{ photo.uuid }}"
+      class="block aspect-square overflow-hidden rounded-md bg-base-200"
+      title="{{ photo.name }}"
+    >
+      {% if photo.has_thumbnail %}
+        <img
+          src="{{ photo|thumbnail_url }}"
+          alt="{{ photo.name }}"
+          class="w-full h-full object-cover"
+          loading="lazy"
+          decoding="async"
+        />
+      {% endif %}
+    </a>
+  {% endfor %}
+</div>
+<a href="{{ strip.url }}" class="btn btn-ghost btn-sm gap-2 w-full">
+  <i data-lucide="images" class="w-4 h-4"></i>
+  See all {{ strip.count }} photo{{ strip.count|pluralize }} in Photos
+</a>

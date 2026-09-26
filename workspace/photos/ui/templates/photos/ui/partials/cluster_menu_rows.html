@@ -1,10 +1,44 @@
 {% comment %}
-  The actions on one face cluster, as menu rows: the People grid's context
+  The actions on one People card, as menu rows: the People grid's context
   menu and a person's page header both list them. `cluster_expr` is an
-  Alpine expression giving { uuid, hidden } (see facesMixin() in faces.js).
+  Alpine expression giving the card: { uuid, clusters, person, hidden }
+  (see openClusterMenu in faces.js). A named person gathers several
+  clusters and has no uuid of its own; an unnamed cluster has no person.
   Written out rather than built on context_menu_item.html: every row binds
   the same caller expression, which that partial's params cannot compose.
 {% endcomment %}
+<li x-show="({{ cluster_expr }})?.person">
+  <a
+    class="gap-3 rounded"
+    :href="({{ cluster_expr }})?.person?.url"
+    @click="closeClusterMenu()"
+  >
+    <i data-lucide="contact" class="w-4 h-4"></i>
+    <span>Open in People</span>
+  </a>
+</li>
+<li>
+  <button
+    type="button"
+    class="gap-3 rounded"
+    @click="runClusterAction('name', {{ cluster_expr }})"
+  >
+    <i data-lucide="pencil" class="w-4 h-4"></i>
+    <span
+      x-text="({{ cluster_expr }})?.person ? 'Change name…' : 'Add a name…'"
+    ></span>
+  </button>
+</li>
+<li x-show="({{ cluster_expr }})?.person" x-cloak>
+  <button
+    type="button"
+    class="gap-3 rounded"
+    @click="runClusterAction('avatar', {{ cluster_expr }})"
+  >
+    <i data-lucide="circle-user-round" class="w-4 h-4"></i>
+    <span>Use as contact photo</span>
+  </button>
+</li>
 <li x-show="!({{ cluster_expr }})?.hidden">
   <button
     type="button"
@@ -25,7 +59,7 @@
     <span>Show in People</span>
   </button>
 </li>
-<li>
+<li x-show="!({{ cluster_expr }})?.person">
   <button
     type="button"
     class="gap-3 rounded"
@@ -35,7 +69,24 @@
     <span>Merge with…</span>
   </button>
 </li>
-<li class="mt-0.5 pt-0.5 border-t border-base-300">
+<li
+  x-show="({{ cluster_expr }})?.person"
+  x-cloak
+  class="mt-0.5 pt-0.5 border-t border-base-300"
+>
+  <button
+    type="button"
+    class="gap-3 rounded text-error"
+    @click="runClusterAction('unname', {{ cluster_expr }})"
+  >
+    <i data-lucide="user-minus" class="w-4 h-4"></i>
+    <span>Remove name</span>
+  </button>
+</li>
+<li
+  x-show="!({{ cluster_expr }})?.person"
+  class="mt-0.5 pt-0.5 border-t border-base-300"
+>
   <button
     type="button"
     class="gap-3 rounded text-error"

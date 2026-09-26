@@ -1,10 +1,15 @@
-// Photos: face grouping - the People tab, a person's page, the "People in
-// this photo" and merge dialogs. Spread into photosApp() (photos.js), so it
-// holds methods only: a getter would be frozen by the spread.
+// Photos: face grouping - the People tab, a person's page, the naming,
+// "People in this photo" and merge dialogs. Spread into photosApp()
+// (photos.js), so it holds methods only: a getter would be frozen by the
+// spread.
+//
+// A "card" is what the People grid shows: a named person gathering every
+// cluster of theirs ({ uuid: null, clusters: [...], person: {...} }) or an
+// unnamed cluster ({ uuid, clusters: [uuid], person: null }).
 
 const FACES_API = '/api/v1/photos';
 const CLUSTER_MENU_WIDTH = 224;
-const CLUSTER_MENU_HEIGHT = 180;
+const CLUSTER_MENU_HEIGHT = 260;
 const FACES_POLL_MS = 10000;
 
 function facesJson(id) {
@@ -17,6 +22,8 @@ function facesJson(id) {
   }
 }
 
+// Rejects with an Error whose `data` is the parsed error body, when there is
+// one: a refused merge names the people to choose between there.
 async function facesRequest(url, { method = 'GET', body } = {}) {
   const response = await fetch(url, {
     method,
@@ -27,26 +34,44 @@ async function facesRequest(url, { method = 'GET', body } = {}) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
+    let data = null;
     let detail = '';
     try {
-      const data = await response.json();
+      data = await response.json();
       detail = data.detail || Object.values(data).flat().join(' ');
     } catch (_) {
       // Not JSON: the status says enough.
     }
-    throw new Error(detail || `Request failed (${response.status})`);
+    const error = new Error(detail || `Request failed (${response.status})`);
+    error.data = data;
+    throw error;
   }
   return response.status === 204 ? null : response.json();
+}
+
+function personsUrl(query) {
+  const q = (query || '').trim();
+  return q ? `${FACES_API}/persons?q=${encodeURIComponent(q)}` : `${FACES_API}/persons`;
+}
+
+function photoCount(count) {
+  return `${count} photo${count === 1 ? '' : 's'}`;
 }
 
 window.photosFacesMixin = function photosFacesMixin() {
   return {
     facesSaving: false,
     clusterMenu: { open: false, x: 0, y: 0, cluster: null },
+    nameDialog: { target: null, query: '', results: [], loading: false, saving: false },
+    _nameGeneration: 0,
     facesDialog: {
-      photo: null, faces: [], clusters: [], loading: false, busy: false, picking: null, changed: false,
+      photo: null, faces: [], clusters: [], persons: [], results: null, query: '',
+      loading: false, busy: false, picking: null, changed: false,
     },
-    mergeDialog: { target: null, clusters: [], selected: [], loading: false, saving: false },
+    _facesGeneration: 0,
+    mergeDialog: {
+      target: null, clusters: [], selected: [], loading: false, saving: false, choices: null, person: null,
+    },
 
     // Both read from the page each time: a sidebar navigation swaps the
     // content they are embedded in.
@@ -54,6 +79,7 @@ window.photosFacesMixin = function photosFacesMixin() {
       return facesJson('photos-faces-enabled') === true;
     },
 
+    // The card of the person or cluster on screen, or null.
     currentCluster() {
       return facesJson('photos-cluster-data');
     },
@@ -64,6 +90,11 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     _peopleUrl() {
       return '/photos/people';
+    },
+
+    _isOnPageOf(card) {
+      const current = this.currentCluster();
+      return !!current && current.clusters[0] === card.clusters[0];
     },
 
     // ── Turning it on and off ───────────────────────────
@@ -86,7 +117,7 @@ window.photosFacesMixin = function photosFacesMixin() {
     async turnFacesOff() {
       const ok = await AppDialog.confirm({
         title: 'Turn off face grouping',
-        message: 'Every face, every group of people and every face picture is deleted right away. Your photos are not touched. Turning it back on reads your photos again from the start.',
+        message: 'Every face, every group of people and every face picture is deleted right away. Your photos and your contacts are not touched. Turning it back on reads your photos again from the start.',
         okLabel: 'Turn off and delete',
         okClass: 'btn-error',
         icon: 'power-off',
@@ -95,7 +126,7 @@ window.photosFacesMixin = function photosFacesMixin() {
       if (ok) await this.setFacesEnabled(false);
     },
 
-    // ── Cluster menu and actions ────────────────────────
+    // ── Card menu and actions ───────────────────────────
 
     openClusterMenu(event, card, anchor) {
       let x = event.clientX;
@@ -108,13 +139,18 @@ window.photosFacesMixin = function photosFacesMixin() {
       x = Math.max(4, Math.min(x, window.innerWidth - CLUSTER_MENU_WIDTH - 4));
       y = Math.max(4, Math.min(y, window.innerHeight - CLUSTER_MENU_HEIGHT - 4));
       const cover = card.querySelector('img');
+      const data = card.dataset;
       this.clusterMenu = {
         open: true,
         x,
         y,
         cluster: {
-          uuid: card.dataset.cluster,
-          hidden: card.dataset.hidden === '1',
+          uuid: data.cluster || null,
+          clusters: (data.clusters || '').split(',').filter(Boolean),
+          person: data.person
+            ? { uuid: data.person, name: data.personName, url: data.personUrl }
+            : null,
+          hidden: data.hidden === '1',
           cover_url: cover ? cover.getAttribute('src') : null,
         },
       };
@@ -124,21 +160,49 @@ window.photosFacesMixin = function photosFacesMixin() {
       this.clusterMenu.open = false;
     },
 
-    async runClusterAction(action, cluster) {
+    _patchClusters(card, body) {
+      return Promise.all(card.clusters.map((uuid) => facesRequest(
+        `${FACES_API}/clusters/${uuid}`, { method: 'PATCH', body },
+      )));
+    },
+
+    async runClusterAction(action, card) {
       this.closeClusterMenu();
       if (document.activeElement) document.activeElement.blur();
-      if (!cluster) return;
-      const url = `${FACES_API}/clusters/${cluster.uuid}`;
-      const onItsPage = this.currentCluster()?.uuid === cluster.uuid;
+      if (!card) return;
+      const onItsPage = this._isOnPageOf(card);
       try {
         switch (action) {
           case 'hide':
           case 'show':
-            await facesRequest(url, { method: 'PATCH', body: { hidden: action === 'hide' } });
+            await this._patchClusters(card, { hidden: action === 'hide' });
             await this._reloadView();
             break;
+          case 'name':
+            await this.openNameDialog(card);
+            break;
+          case 'avatar':
+            // The first cluster of a person is the one whose cover stands
+            // for them.
+            await facesRequest(`${FACES_API}/clusters/${card.clusters[0]}/avatar`, { method: 'POST' });
+            window.AppAlert.success(`Contact photo of ${card.person.name} updated`, { duration: 2500 });
+            break;
+          case 'unname': {
+            const ok = await AppDialog.confirm({
+              title: 'Remove name',
+              message: `These faces are no longer ${card.person.name}. The contact itself stays in People.`,
+              okLabel: 'Remove name',
+              okClass: 'btn-error',
+              icon: 'user-minus',
+              iconClass: 'bg-error/10 text-error',
+            });
+            if (!ok) return;
+            await this._patchClusters(card, { person: null });
+            await this._reloadView(onItsPage ? this._peopleUrl() : window.location.href);
+            break;
+          }
           case 'merge':
-            await this.openMergeDialog(cluster);
+            await this.openMergeDialog(card);
             break;
           case 'ungroup': {
             const ok = await AppDialog.confirm({
@@ -150,7 +214,7 @@ window.photosFacesMixin = function photosFacesMixin() {
               iconClass: 'bg-error/10 text-error',
             });
             if (!ok) return;
-            await facesRequest(url, { method: 'DELETE' });
+            await facesRequest(`${FACES_API}/clusters/${card.uuid}`, { method: 'DELETE' });
             await this._reloadView(onItsPage ? this._peopleUrl() : window.location.href);
             break;
           }
@@ -160,16 +224,90 @@ window.photosFacesMixin = function photosFacesMixin() {
       }
     },
 
+    // ── Naming dialog ───────────────────────────────────
+
+    async openNameDialog(card) {
+      const target = { ...card, clusters: card.clusters || [card.uuid] };
+      this.nameDialog = { target, query: '', results: [], loading: false, saving: false };
+      document.getElementById('name-person-dialog').showModal();
+      await this.searchNames();
+    },
+
+    // Race-protected: an older answer never replaces a newer one.
+    async searchNames() {
+      const generation = ++this._nameGeneration;
+      this.nameDialog.loading = true;
+      try {
+        const results = await facesRequest(personsUrl(this.nameDialog.query));
+        if (generation === this._nameGeneration) this.nameDialog.results = results;
+      } catch (_) {
+        if (generation === this._nameGeneration) this.nameDialog.results = [];
+      } finally {
+        if (generation === this._nameGeneration) this.nameDialog.loading = false;
+      }
+    },
+
+    // Offered unless a contact already has exactly that name.
+    canCreateName() {
+      const name = this.nameDialog.query.trim().toLowerCase();
+      return !!name && !this.nameDialog.results.some((r) => r.name.toLowerCase() === name);
+    },
+
+    closeNameDialog() {
+      document.getElementById('name-person-dialog').close();
+    },
+
+    async chooseName(person) {
+      await this._name(async (target) => {
+        await this._patchClusters(target, { person: person.uuid });
+        return person.uuid;
+      });
+    },
+
+    async createName() {
+      const name = this.nameDialog.query.trim();
+      if (!name) return;
+      await this._name(async (target) => {
+        const [first, ...rest] = target.clusters;
+        const named = await facesRequest(`${FACES_API}/clusters/${first}`, {
+          method: 'PATCH',
+          body: { new_person: name },
+        });
+        await this._patchClusters({ clusters: rest }, { person: named.person });
+        return named.person;
+      });
+    },
+
+    async _name(apply) {
+      const target = this.nameDialog.target;
+      if (!target) return;
+      this.nameDialog.saving = true;
+      try {
+        const personUuid = await apply(target);
+        this.closeNameDialog();
+        // On the page of what was just named, follow it to its new name.
+        await this._reloadView(
+          this._isOnPageOf(target) ? `/photos?person=${encodeURIComponent(personUuid)}` : window.location.href,
+        );
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not name this person');
+      } finally {
+        this.nameDialog.saving = false;
+      }
+    },
+
     // ── Merge dialog ────────────────────────────────────
 
-    async openMergeDialog(cluster) {
-      this.mergeDialog = { target: cluster, clusters: [], selected: [], loading: true, saving: false };
+    async openMergeDialog(card) {
+      this.mergeDialog = {
+        target: card, clusters: [], selected: [], loading: true, saving: false, choices: null, person: null,
+      };
       document.getElementById('merge-clusters-dialog').showModal();
       try {
         const clusters = await facesRequest(`${FACES_API}/clusters`);
-        const target = clusters.find((c) => c.uuid === cluster.uuid);
+        const target = clusters.find((c) => c.uuid === card.uuid);
         if (target) this.mergeDialog.target = target;
-        this.mergeDialog.clusters = clusters.filter((c) => c.uuid !== cluster.uuid);
+        this.mergeDialog.clusters = clusters.filter((c) => c.uuid !== card.uuid);
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not load people');
       } finally {
@@ -186,6 +324,9 @@ window.photosFacesMixin = function photosFacesMixin() {
       this.mergeDialog.selected = selected.includes(cluster.uuid)
         ? selected.filter((uuid) => uuid !== cluster.uuid)
         : [...selected, cluster.uuid];
+      // A new selection may name other people: ask again if it does.
+      this.mergeDialog.choices = null;
+      this.mergeDialog.person = null;
     },
 
     closeMergeDialog() {
@@ -196,15 +337,21 @@ window.photosFacesMixin = function photosFacesMixin() {
       const target = this.mergeDialog.target;
       if (!target || !this.mergeDialog.selected.length) return;
       this.mergeDialog.saving = true;
+      const body = { clusters: this.mergeDialog.selected };
+      if (this.mergeDialog.person) body.person = this.mergeDialog.person;
       try {
-        await facesRequest(`${FACES_API}/clusters/${target.uuid}/merge`, {
-          method: 'POST',
-          body: { clusters: this.mergeDialog.selected },
-        });
+        await facesRequest(`${FACES_API}/clusters/${target.uuid}/merge`, { method: 'POST', body });
         this.closeMergeDialog();
         await this._reloadView();
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not merge');
+        const persons = err.data && err.data.persons;
+        if (persons && persons.length) {
+          // Named after different people: the user picks the name to keep.
+          this.mergeDialog.choices = persons;
+          this.mergeDialog.person = persons[0].uuid;
+        } else {
+          window.AppAlert.error(err.message || 'Could not merge');
+        }
       } finally {
         this.mergeDialog.saving = false;
       }
@@ -215,21 +362,29 @@ window.photosFacesMixin = function photosFacesMixin() {
     async openFacesDialog(photo) {
       this.closeCtxMenu();
       this.facesDialog = {
-        photo, faces: [], clusters: [], loading: true, busy: false, picking: null, changed: false,
+        photo, faces: [], clusters: [], persons: [], results: null, query: '',
+        loading: true, busy: false, picking: null, changed: false,
       };
       document.getElementById('photo-faces-dialog').showModal();
       try {
-        const [faces, clusters] = await Promise.all([
-          facesRequest(`${FACES_API}/files/${photo.uuid}/faces`),
-          facesRequest(`${FACES_API}/clusters`),
-        ]);
-        this.facesDialog.faces = faces;
-        this.facesDialog.clusters = clusters;
+        await this._loadFacesDialog();
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not load the faces');
       } finally {
         this.facesDialog.loading = false;
       }
+    },
+
+    async _loadFacesDialog() {
+      const photo = this.facesDialog.photo;
+      const [faces, clusters, persons] = await Promise.all([
+        facesRequest(`${FACES_API}/files/${photo.uuid}/faces`),
+        facesRequest(`${FACES_API}/clusters`),
+        facesRequest(personsUrl('')),
+      ]);
+      this.facesDialog.faces = faces;
+      this.facesDialog.clusters = clusters;
+      this.facesDialog.persons = persons;
     },
 
     clusterOf(face) {
@@ -238,27 +393,78 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     faceLabel(face) {
       const cluster = this.clusterOf(face);
-      if (cluster) return `${cluster.photo_count} photo${cluster.photo_count === 1 ? '' : 's'}`;
+      if (cluster && cluster.person_name) return cluster.person_name;
+      if (cluster) return `Unnamed, ${photoCount(cluster.photo_count)}`;
       if (face.cluster) return 'Hidden person';
       if (face.assignment === 'rejected') return 'Left out of grouping';
       return 'Not grouped yet';
     },
 
-    // Someone else than the face's own cluster, and never a cluster that
-    // already holds another face of this photo: the server refuses those.
+    // The people other faces of this photo already are: never offered.
+    _personsInPhoto(face) {
+      return new Set(
+        this.facesDialog.faces
+          .filter((f) => f.uuid !== face.uuid)
+          .map((f) => this.clusterOf(f))
+          .filter((c) => c && c.person)
+          .map((c) => c.person),
+      );
+    },
+
+    pickablePersons(face) {
+      const own = this.clusterOf(face);
+      const taken = this._personsInPhoto(face);
+      const source = this.facesDialog.results || this.facesDialog.persons;
+      return source.filter((p) => !taken.has(p.uuid) && !(own && own.person === p.uuid));
+    },
+
+    // Unnamed clusters, while no name is typed: someone who has no name yet.
     pickableClusters(face) {
+      if (this.facesDialog.query.trim()) return [];
       const taken = new Set(
         this.facesDialog.faces.filter((f) => f.uuid !== face.uuid && f.cluster).map((f) => f.cluster),
       );
-      return this.facesDialog.clusters.filter((c) => c.uuid !== face.cluster && !taken.has(c.uuid));
+      return this.facesDialog.clusters.filter(
+        (c) => !c.person && c.uuid !== face.cluster && !taken.has(c.uuid),
+      );
     },
 
-    async _correctFace(face, body) {
+    async searchFacePersons() {
+      const query = this.facesDialog.query.trim();
+      const generation = ++this._facesGeneration;
+      if (!query) {
+        this.facesDialog.results = null;
+        return;
+      }
+      try {
+        const results = await facesRequest(personsUrl(query));
+        if (generation === this._facesGeneration) this.facesDialog.results = results;
+      } catch (_) {
+        if (generation === this._facesGeneration) this.facesDialog.results = [];
+      }
+    },
+
+    canCreateFacePerson() {
+      const name = this.facesDialog.query.trim().toLowerCase();
+      const results = this.facesDialog.results || [];
+      return !!name && !results.some((r) => r.name.toLowerCase() === name);
+    },
+
+    togglePicker(face) {
+      const opening = this.facesDialog.picking !== face.uuid;
+      this.facesDialog.picking = opening ? face.uuid : null;
+      this.facesDialog.query = '';
+      this.facesDialog.results = null;
+    },
+
+    async _correctFace(face, request) {
       this.facesDialog.busy = true;
       try {
-        const updated = await facesRequest(`${FACES_API}/faces/${face.uuid}`, { method: 'PATCH', body });
-        this.facesDialog.faces = this.facesDialog.faces.map((f) => (f.uuid === face.uuid ? updated : f));
+        await request();
+        await this._loadFacesDialog();
         this.facesDialog.picking = null;
+        this.facesDialog.query = '';
+        this.facesDialog.results = null;
         this.facesDialog.changed = true;
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not correct the face');
@@ -267,37 +473,41 @@ window.photosFacesMixin = function photosFacesMixin() {
       }
     },
 
+    _patchFace(face, body) {
+      return this._correctFace(face, () => facesRequest(
+        `${FACES_API}/faces/${face.uuid}`, { method: 'PATCH', body },
+      ));
+    },
+
     confirmFace(face) {
-      return this._correctFace(face, { assignment: 'confirmed' });
+      return this._patchFace(face, { assignment: 'confirmed' });
     },
 
     rejectFace(face) {
-      return this._correctFace(face, { cluster: null });
+      return this._patchFace(face, { cluster: null });
     },
 
     assignFace(face, cluster) {
-      return this._correctFace(face, { cluster: cluster.uuid });
+      return this._patchFace(face, { cluster: cluster.uuid });
     },
 
-    // Someone who has no cluster yet: the face starts one, confirmed.
-    async startCluster(face) {
-      this.facesDialog.busy = true;
-      try {
-        const cluster = await facesRequest(`${FACES_API}/clusters`, {
-          method: 'POST',
-          body: { face: face.uuid },
-        });
-        this.facesDialog.clusters = [...this.facesDialog.clusters, cluster];
-        this.facesDialog.faces = this.facesDialog.faces.map((f) => (
-          f.uuid === face.uuid ? { ...f, cluster: cluster.uuid, assignment: 'confirmed' } : f
-        ));
-        this.facesDialog.picking = null;
-        this.facesDialog.changed = true;
-      } catch (err) {
-        window.AppAlert.error(err.message || 'Could not create the person');
-      } finally {
-        this.facesDialog.busy = false;
-      }
+    assignFaceToPerson(face, person) {
+      return this._patchFace(face, { to_person: person.uuid });
+    },
+
+    newPersonForFace(face) {
+      const name = this.facesDialog.query.trim();
+      if (!name) return null;
+      return this._patchFace(face, { new_person: name });
+    },
+
+    // Someone who has no cluster yet, and no name either: the face starts
+    // an unnamed cluster, confirmed.
+    startCluster(face) {
+      return this._correctFace(face, () => facesRequest(`${FACES_API}/clusters`, {
+        method: 'POST',
+        body: { face: face.uuid },
+      }));
     },
 
     closeFacesDialog() {
@@ -314,10 +524,10 @@ window.photosFacesMixin = function photosFacesMixin() {
     // ── A person's page ─────────────────────────────────
 
     async _faceInCurrentCluster(photo) {
-      const cluster = this.currentCluster();
-      if (!cluster) return null;
+      const current = this.currentCluster();
+      if (!current) return null;
       const faces = await facesRequest(`${FACES_API}/files/${photo.uuid}/faces`);
-      return faces.find((f) => f.cluster === cluster.uuid) || null;
+      return faces.find((f) => current.clusters.includes(f.cluster)) || null;
     },
 
     async useAsCover(photo) {

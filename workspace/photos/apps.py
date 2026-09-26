@@ -17,6 +17,10 @@ class PhotosConfig(AppConfig):
             PropertiesSection,
             properties_section_registry,
         )
+        from workspace.people.sections import PersonSection
+        from workspace.people.sections import (
+            section_registry as person_section_registry,
+        )
         from workspace.photos import signals  # noqa: F401
 
         # The album actions register on import. Imported here rather than
@@ -24,6 +28,7 @@ class PhotosConfig(AppConfig):
         # answering "no actions" forever.
         from workspace.photos.actions import album as album_actions  # noqa: F401
         from workspace.photos.indexes import FACE_EMBEDDINGS
+        from workspace.photos.queries import has_photos_of_person
         from workspace.photos.search import search_photos
 
         # Imported for the @on_file_event side effect, here rather than
@@ -56,6 +61,19 @@ class PhotosConfig(AppConfig):
                 module_slug="photos",
                 search_fn=search_photos,
                 refines=("files",),
+            )
+        )
+
+        # A contact's page in People lists the photos they are in, through
+        # the viewer's own face clusters: people never learns about faces.
+        person_section_registry.register(
+            PersonSection(
+                slug="photos",
+                label="Photos",
+                icon="images",
+                template="photos/ui/partials/person_photos_section.html",
+                order=50,
+                is_visible=has_photos_of_person,
             )
         )
 

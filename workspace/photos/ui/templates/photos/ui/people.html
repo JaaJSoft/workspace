@@ -12,7 +12,7 @@
         {% if faces_enabled %}
           <span
             class="text-sm text-base-content/60"
-          >{{ clusters|length }} {% if clusters|length == 1 %}person{% else %}people{% endif %}</span>
+          >{{ people_count }} {% if people_count == 1 %}person{% else %}people{% endif %}</span>
         {% endif %}
       </div>
       {% if analyzing %}
@@ -122,56 +122,38 @@
         Turn on face grouping
       </button>
     </div>
-  {% elif clusters %}
-    <div
-      id="people-grid"
-      class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5 p-4"
-    >
-      {% for cluster in clusters %}
-        <div
-          class="group relative flex flex-col items-center gap-2"
-          data-cluster="{{ cluster.uuid }}"
-          data-hidden="{{ cluster.hidden|yesno:'1,0' }}"
-          @contextmenu.prevent="openClusterMenu($event, $el)"
-        >
-          <a
-            href="{{ cluster.url }}"
-            x-target.push="photos-nav photos-content"
-            class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
-            title="{{ cluster.photo_count }} photo{{ cluster.photo_count|pluralize }}"
+  {% elif named or unnamed %}
+    <div id="people-grid" class="space-y-6 p-4">
+      {% if named %}
+        <section aria-label="Named people">
+          <div
+            class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5"
           >
-            {% if cluster.cover_url %}
-              <img
-                src="{{ cluster.cover_url }}"
-                alt=""
-                class="w-full h-full object-cover"
-                loading="lazy"
-                decoding="async"
-                draggable="false"
-              />
-            {% else %}
-              <span
-                class="flex w-full h-full items-center justify-center text-base-content/30"
-              >
-                <i data-lucide="user-round" class="w-8 h-8"></i>
-              </span>
-            {% endif %}
-          </a>
-          <span class="text-sm text-base-content/70 tabular-nums">
-            {{ cluster.photo_count }} photo{{ cluster.photo_count|pluralize }}
-          </span>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 [@media(hover:none)]:opacity-100"
-            title="More actions"
-            aria-label="More actions"
-            aria-haspopup="menu"
-            @click.stop="openClusterMenu($event, $el.closest('[data-cluster]'), $el)"
+            {% for card in named %}
+              {% include "photos/ui/partials/person_card.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+      {% if unnamed %}
+        <section aria-labelledby="people-unnamed-title">
+          {% if named %}
+            <h2
+              id="people-unnamed-title"
+              class="mb-3 text-sm font-semibold uppercase tracking-wider text-base-content/60"
+            >
+              Not named yet
+            </h2>
+          {% endif %}
+          <div
+            class="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-x-4 gap-y-5"
           >
-            <i data-lucide="more-vertical" class="w-4 h-4"></i>
-          </button>
-        </div>
-      {% endfor %}
+            {% for card in unnamed %}
+              {% include "photos/ui/partials/person_card.html" %}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
     </div>
   {% else %}
     <div

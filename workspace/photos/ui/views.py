@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
@@ -11,6 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
+from workspace.people.queries import reachable_person
 from workspace.photos.models import Album, MediaItem
 from workspace.photos.queries import (
     ALL,
@@ -29,6 +31,7 @@ from workspace.photos.queries import (
     user_face_clusters,
 )
 from workspace.photos.services.album_cards import album_cards, user_album_cards
+from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
 from workspace.photos.services.timeline import (
     START,
@@ -112,31 +115,62 @@ def _filters(request):
     return favorites, media_type, tag
 
 
-def _cluster(request):
-    """The face cluster ``?cluster=`` asks for, or None; 404 on one not the user's."""
-    raw = request.GET.get("cluster")
-    if not raw:
-        return None
-    cluster_uuid = parse_uuid_or_none(raw)
-    cluster = (
-        user_face_clusters(request.user).filter(pk=cluster_uuid).first()
-        if cluster_uuid is not None
-        else None
-    )
-    if cluster is None:
-        raise Http404
-    return cluster
+@dataclass(frozen=True)
+class _Who:
+    """Whom a timeline is narrowed to: a named person, through every one of
+    the user's clusters named after them, or one unnamed cluster."""
+
+    clusters: tuple
+    person: object = None
+
+    @property
+    def params(self):
+        if self.person is not None:
+            return {"person": str(self.person.pk)}
+        return {"cluster": str(self.clusters[0].pk)}
 
 
-def _filtered_library(user, scope, favorites, tag, cluster=None):
+def _who(request):
+    """The ``?person=`` or ``?cluster=`` of the request, or None for neither.
+
+    404 on a contact the user cannot see or whose face is in none of their
+    clusters, and on a cluster not theirs.
+    """
+    clusters = user_face_clusters(request.user).select_related("person")
+    if request.GET.get("person"):
+        person_uuid = parse_uuid_or_none(request.GET["person"])
+        person = (
+            reachable_person(request.user, person_uuid)
+            if person_uuid is not None
+            else None
+        )
+        named = tuple(clusters.filter(person=person)) if person is not None else ()
+        if not named:
+            raise Http404
+        return _Who(clusters=named, person=person)
+    if request.GET.get("cluster"):
+        cluster_uuid = parse_uuid_or_none(request.GET["cluster"])
+        cluster = (
+            clusters.filter(pk=cluster_uuid).first()
+            if cluster_uuid is not None
+            else None
+        )
+        if cluster is None:
+            raise Http404
+        return _Who(clusters=(cluster,))
+    return None
+
+
+def _filtered_library(user, scope, favorites, tag, who=None):
     """The library in *scope* narrowed by the sidebar view, every media type."""
     files = library_files(user, scope)
     if favorites:
         files = files.filter(favorites__owner=user)
     if tag is not None:
         files = files.filter(file_tags__tag=tag)
-    if cluster is not None:
-        files = files.filter(faces__cluster=cluster)
+    if who is not None:
+        # A photo is never in two clusters of one person: no duplicates.
+        files = files.filter(faces__cluster__in=[c.pk for c in who.clusters])
     return files
 
 
@@ -146,14 +180,14 @@ def _of_type(files, media_type):
     return files.filter(media_item__media_type=media_type)
 
 
-def _view_filter_params(favorites, tag, cluster=None):
+def _view_filter_params(favorites, tag, who=None):
     params = {}
     if favorites:
         params["favorites"] = "1"
     if tag is not None:
         params["tag"] = str(tag.uuid)
-    if cluster is not None:
-        params["cluster"] = str(cluster.pk)
+    if who is not None:
+        params |= who.params
     return params
 
 
@@ -316,19 +350,51 @@ def _faces_context(user):
     }
 
 
+def _crop_url(face_id):
+    return reverse("photos-face-crop", kwargs={"pk": face_id}) if face_id else None
+
+
+def _person_ref(person):
+    query = urlencode({"person": person.pk})
+    return {
+        "uuid": str(person.pk),
+        "name": person.display_name,
+        "url": f"{reverse('people_ui:index')}?{query}",
+        "has_avatar": person.has_avatar,
+    }
+
+
 def _cluster_card(cluster):
-    """What a page shows of a cluster: its cover, its size, where it links."""
+    """What a page shows of an unnamed cluster, or of one cluster alone."""
     return {
         "uuid": str(cluster.pk),
+        "person": _person_ref(cluster.person) if cluster.person_id else None,
+        "clusters": [str(cluster.pk)],
         "hidden": cluster.hidden,
         "photo_count": cluster.photo_count,
-        "cover_url": (
-            reverse("photos-face-crop", kwargs={"pk": cluster.cover_id})
-            if cluster.cover_id
-            else None
-        ),
+        "cover_url": _crop_url(cluster.cover_id),
         "url": _url_with({"cluster": str(cluster.pk)}),
     }
+
+
+def _person_card(card):
+    """What a page shows of a named person: all their clusters, together."""
+    return {
+        "uuid": None,
+        "person": _person_ref(card.person),
+        "clusters": [str(c.pk) for c in card.clusters],
+        "hidden": card.hidden,
+        "photo_count": card.photo_count,
+        "cover_url": _crop_url(card.cover_cluster.cover_id),
+        "url": _url_with({"person": str(card.person.pk)}),
+    }
+
+
+def _who_card(who):
+    if who.person is None:
+        return _cluster_card(who.clusters[0])
+    (card,) = person_cards(who.clusters)
+    return _person_card(card)
 
 
 @login_required
@@ -336,12 +402,12 @@ def _cluster_card(cluster):
 def index(request):
     """The timeline, opened at its newest photo or at ``?date=``.
 
-    ``?cluster=`` narrows it to the photos of one face cluster: a person's
-    page is their timeline.
+    ``?person=`` narrows it to the photos of one person, ``?cluster=`` to
+    those of one unnamed face cluster: a person's page is their timeline.
     """
-    cluster = _cluster(request)
+    who = _who(request)
     # Faces are only ever found in the user's personal photos.
-    scope = MINE if cluster is not None else _scope(request)
+    scope = MINE if who is not None else _scope(request)
     favorites, media_type, tag = _filters(request)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
@@ -352,12 +418,12 @@ def index(request):
         except ValueError:
             return HttpResponseBadRequest("Invalid date.")
 
-    view_files = _filtered_library(request.user, scope, favorites, tag, cluster)
+    view_files = _filtered_library(request.user, scope, favorites, tag, who)
     files = _of_type(view_files, media_type)
     counts = media_type_counts(view_files)
     scope_params = _scope_params(scope)
     type_params = _type_params(media_type)
-    view_filter_params = _view_filter_params(favorites, tag, cluster)
+    view_filter_params = _view_filter_params(favorites, tag, who)
     filter_params = view_filter_params | type_params
     view_params = scope_params | filter_params
     years = [
@@ -372,8 +438,9 @@ def index(request):
         for year, count in year_counts(files, tz)
     ]
 
-    if cluster is not None:
-        active_view, title, icon = "people", "Unnamed person", "scan-face"
+    if who is not None:
+        active_view, icon = "people", "scan-face"
+        title = who.person.display_name if who.person else "Unnamed person"
     elif tag is not None:
         active_view, title, icon = f"tag:{tag.uuid}", tag.name, tag.icon or "tag"
     elif favorites:
@@ -389,7 +456,7 @@ def index(request):
         "media_type": media_type,
         "title": title,
         "title_icon": icon,
-        "cluster": _cluster_card(cluster) if cluster is not None else None,
+        "cluster": _who_card(who) if who is not None else None,
         "count_label": _count_label(counts, media_type),
         "pending": (
             unanalyzed_count(request.user, scope)
@@ -399,7 +466,7 @@ def index(request):
         "date_param": date_param,
         "latest_url": _url_with(view_params),
         "scope_tabs": (
-            _scope_tabs(request.user, scope, filter_params) if cluster is None else []
+            _scope_tabs(request.user, scope, filter_params) if who is None else []
         ),
         "type_tabs": _type_tabs(counts, media_type, scope_params | view_filter_params),
         "years": years,
@@ -424,15 +491,15 @@ def index(request):
 @login_required
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
-    cluster = _cluster(request)
-    scope = MINE if cluster is not None else _scope(request)
+    who = _who(request)
+    scope = MINE if who is not None else _scope(request)
     favorites, media_type, tag = _filters(request)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
     files = _of_type(
-        _filtered_library(request.user, scope, favorites, tag, cluster), media_type
+        _filtered_library(request.user, scope, favorites, tag, who), media_type
     )
     context = _timeline_page_context(
         request,
@@ -440,7 +507,7 @@ def timeline(request):
         position,
         get_user_timezone(request.user),
         _scope_params(scope)
-        | _view_filter_params(favorites, tag, cluster)
+        | _view_filter_params(favorites, tag, who)
         | _type_params(media_type),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)
@@ -515,13 +582,22 @@ def people(request):
         raise Http404
     show_hidden = is_truthy(request.GET.get("hidden"))
     enabled = faces_enabled(request.user)
-    clusters = user_face_clusters(request.user)
-    cards = [
+    clusters = list(
+        user_face_clusters(request.user)
+        .filter(photo_count__gt=0)
+        .select_related("person")
+        .order_by("-photo_count", "-face_count", "created_at")
+    )
+    persons = person_cards(clusters)
+    named = [_person_card(card) for card in persons if card.hidden == show_hidden]
+    unnamed = [
         _cluster_card(cluster)
-        for cluster in clusters.filter(hidden=show_hidden, photo_count__gt=0).order_by(
-            "-photo_count", "-face_count", "created_at"
-        )
+        for cluster in clusters
+        if cluster.person_id is None and cluster.hidden == show_hidden
     ]
+    hidden_count = sum(card.hidden for card in persons) + sum(
+        c.hidden for c in clusters if c.person_id is None
+    )
     progress = face_progress(request.user) if enabled else None
     context = {
         "active_view": "people",
@@ -536,11 +612,11 @@ def people(request):
         "albums": _sidebar_albums(request.user),
         **_faces_context(request.user),
         **_display_context(request.user),
-        "clusters": cards,
+        "named": named,
+        "unnamed": unnamed,
+        "people_count": len(named) + len(unnamed),
         "show_hidden": show_hidden,
-        "hidden_count": (
-            clusters.filter(hidden=True, photo_count__gt=0).count() if enabled else 0
-        ),
+        "hidden_count": hidden_count if enabled else 0,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
         "progress": progress,
         "analyzing": progress is not None and progress["analyzed"] < progress["total"],

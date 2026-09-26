@@ -1,7 +1,8 @@
 {% comment %}
   "People in this photo": each face found in a photo, the person it was
-  grouped with, and the corrections - confirm, not this person, or move it
-  to someone else. State lives in facesMixin() (faces.js).
+  grouped with, and the corrections - confirm, not this person, or say who
+  it is: a named person, a contact from People, a new name, or an unnamed
+  cluster. State lives in photosFacesMixin() (faces.js).
 {% endcomment %}
 <dialog id="photo-faces-dialog" class="modal" @close="facesDialogClosed()">
   <div class="modal-box max-w-lg">
@@ -82,7 +83,7 @@
               type="button"
               class="btn btn-ghost btn-xs"
               :disabled="facesDialog.busy"
-              @click="facesDialog.picking = facesDialog.picking === face.uuid ? null : face.uuid"
+              @click="togglePicker(face)"
             >
               <i data-lucide="users-round" class="w-3.5 h-3.5"></i>
               Change person
@@ -91,31 +92,100 @@
           <div
             x-show="facesDialog.picking === face.uuid"
             x-cloak
-            class="mt-2 grid grid-cols-6 gap-2 rounded-lg bg-base-200 p-2"
+            class="mt-2 space-y-2 rounded-lg bg-base-200 p-2"
           >
-            {# Someone who has no cluster yet: the face starts one of its own. #}
-            <button
-              type="button"
-              class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
-              title="New person"
-              aria-label="New person"
-              :disabled="facesDialog.busy"
-              @click="startCluster(face)"
+            <label
+              class="input input-bordered input-sm flex items-center gap-2 w-full bg-base-100"
             >
-              <i data-lucide="user-plus" class="w-5 h-5"></i>
-            </button>
-            <template x-for="cluster in pickableClusters(face)" :key="cluster.uuid">
-              <button
-                type="button"
-                class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-200 hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
-                :title="cluster.photo_count + ' photos'"
-                :aria-label="'Person with ' + cluster.photo_count + ' photos'"
+              <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+              <input
+                type="text"
+                class="grow"
+                placeholder="Who is it?"
+                autocomplete="off"
+                x-model="facesDialog.query"
+                @input.debounce.250ms="searchFacePersons()"
+                @keydown.enter.prevent="canCreateFacePerson() && newPersonForFace(face)"
                 :disabled="facesDialog.busy"
-                @click="assignFace(face, cluster)"
+              />
+            </label>
+            <ul class="menu menu-sm p-0 max-h-48 flex-nowrap overflow-y-auto">
+              <template x-for="person in pickablePersons(face)" :key="person.uuid">
+                <li>
+                  <button
+                    type="button"
+                    class="gap-3 rounded"
+                    :disabled="facesDialog.busy"
+                    @click="assignFaceToPerson(face, person)"
+                  >
+                    <template x-if="person.cover_url">
+                      <img
+                        :src="person.cover_url"
+                        alt=""
+                        class="w-7 h-7 rounded-full object-cover"
+                      />
+                    </template>
+                    <template x-if="!person.cover_url">
+                      <span
+                        class="flex w-7 h-7 items-center justify-center rounded-full bg-base-100 text-base-content/50"
+                      >
+                        <i data-lucide="contact" class="w-3.5 h-3.5"></i>
+                      </span>
+                    </template>
+                    <span class="flex-1 truncate" x-text="person.name"></span>
+                  </button>
+                </li>
+              </template>
+              <li x-show="canCreateFacePerson()" x-cloak>
+                <button
+                  type="button"
+                  class="gap-3 rounded text-module"
+                  :disabled="facesDialog.busy"
+                  @click="newPersonForFace(face)"
+                >
+                  <span
+                    class="flex w-7 h-7 items-center justify-center rounded-full border-2 border-dashed border-current"
+                  >
+                    <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                  </span>
+                  <span class="flex-1 truncate">
+                    Add “<span x-text="facesDialog.query.trim()"></span>” to People
+                  </span>
+                </button>
+              </li>
+            </ul>
+            <div x-show="!facesDialog.query.trim()">
+              <p
+                class="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-base-content/60"
               >
-                <img :src="cluster.cover_url" alt="" class="w-full h-full object-cover" />
-              </button>
-            </template>
+                Not named yet
+              </p>
+              <div class="grid grid-cols-6 gap-2">
+                {# Someone who has no name yet and no cluster either: the face starts one of its own. #}
+                <button
+                  type="button"
+                  class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                  title="New person"
+                  aria-label="New person"
+                  :disabled="facesDialog.busy"
+                  @click="startCluster(face)"
+                >
+                  <i data-lucide="user-plus" class="w-5 h-5"></i>
+                </button>
+                <template x-for="cluster in pickableClusters(face)" :key="cluster.uuid">
+                  <button
+                    type="button"
+                    class="aspect-square overflow-hidden rounded-full ring-offset-2 ring-offset-base-200 hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+                    :title="cluster.photo_count + ' photos'"
+                    :aria-label="'Unnamed person with ' + cluster.photo_count + ' photos'"
+                    :disabled="facesDialog.busy"
+                    @click="assignFace(face, cluster)"
+                  >
+                    <img :src="cluster.cover_url" alt="" class="w-full h-full object-cover" />
+                  </button>
+                </template>
+              </div>
+            </div>
           </div>
         </li>
       </template>

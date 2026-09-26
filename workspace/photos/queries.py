@@ -278,6 +278,11 @@ def person_photos(user, person):
     )
 
 
+def has_photos_of_person(user, person):
+    """Whether *person* is in any photo of the user's library, face grouping on."""
+    return faces_enabled(user) and person_photos(user, person).exists()
+
+
 def face_progress(user):
     """How far the analysis of the user's photos has come, as a dict."""
     from workspace.photos.services.face_analysis import pending_faces_qs

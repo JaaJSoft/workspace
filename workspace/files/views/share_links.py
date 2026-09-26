@@ -5,7 +5,7 @@ from django.contrib.auth.hashers import check_password
 from django.core import signing
 from django.core.files.storage import default_storage
 from django.db.models import F
-from django.http import FileResponse, HttpResponse
+from django.http import FileResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -286,20 +286,7 @@ class SharedFileContentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        if f.category in ("code", "text"):
-            try:
-                handle = f.content.open("rb")
-                content = handle.read().decode("utf-8")
-                handle.close()
-                resp = HttpResponse(content, content_type=f.mime_type)
-                resp["Content-Disposition"] = f'inline; filename="{f.name}"'
-                return resp
-            except UnicodeDecodeError:
-                pass  # fall through to binary streaming
-            except FileNotFoundError:
-                return Response(status=status.HTTP_404_NOT_FOUND)
-
-        # Binary files: stream with Range support so shared videos can seek.
+        # Streamed with Range support, text included: shared videos can seek.
         try:
             fh = f.content.open("rb")
         except FileNotFoundError:

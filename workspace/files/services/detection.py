@@ -1,17 +1,32 @@
 """Content-based file type detection using Google Magika."""
 
+import io
 import json
 import os
+import threading
 from dataclasses import dataclass
+from importlib.util import find_spec
 
-import magika as magika_pkg
-from magika import Magika
-
-_magika = Magika()
-
+# Located without importing magika: the package pulls in onnxruntime and
+# numpy, which every process importing the name helpers below would carry.
 _KB_PATH = os.path.join(
-    os.path.dirname(magika_pkg.__file__), "config", "content_types_kb.min.json"
+    os.path.dirname(find_spec("magika").origin), "config", "content_types_kb.min.json"
 )
+
+_magika = None
+_magika_lock = threading.Lock()
+
+
+def _get_magika():
+    """The process's Magika model, loaded on the first content detection."""
+    global _magika
+    if _magika is None:
+        with _magika_lock:
+            if _magika is None:
+                from magika import Magika
+
+                _magika = Magika()
+    return _magika
 
 
 def _load_kb():
@@ -41,7 +56,7 @@ class DetectionResult:
 
 
 def detect_from_bytes(content: bytes) -> DetectionResult:
-    result = _magika.identify_bytes(content)
+    result = _get_magika().identify_bytes(content)
     return DetectionResult(
         label=result.output.label,
         mime_type=result.output.mime_type,
@@ -50,25 +65,34 @@ def detect_from_bytes(content: bytes) -> DetectionResult:
     )
 
 
+def _buffered_stream(stream):
+    """The io.BufferedIOBase under *stream*'s ``.file`` wrappers, or None.
+
+    Magika's identify_stream only accepts a buffered binary stream, and a
+    Django upload wraps one twice: TemporaryUploadedFile -> tempfile wrapper
+    -> BufferedRandom.
+    """
+    for _ in range(3):
+        if isinstance(stream, io.BufferedIOBase):
+            return stream
+        stream = getattr(stream, "file", None)
+    return stream if isinstance(stream, io.BufferedIOBase) else None
+
+
 def detect_from_stream(stream) -> DetectionResult:
-    # Magika's identify_stream performs a strict isinstance(stream, BinaryIO)
-    # check that rejects Django file wrappers (ContentFile,
-    # TemporaryUploadedFile, etc.).  Try the raw inner stream first; if that
-    # still fails, fall back to reading bytes and restoring the position.
-    raw = getattr(stream, "file", stream)
+    # identify_stream samples the head and tail of the file; identify_bytes
+    # needs the whole of it in memory, so it is the last resort.
+    raw = _buffered_stream(stream)
+    seekable = hasattr(stream, "seek")
     pos = stream.tell() if hasattr(stream, "tell") else 0
-    try:
-        result = _magika.identify_stream(raw)
-    except TypeError:
-        if hasattr(stream, "seek"):
-            stream.seek(pos)
-        data = stream.read()
-        if hasattr(stream, "seek"):
-            stream.seek(pos)
-        result = _magika.identify_bytes(data)
+    if raw is not None and raw.readable():
+        result = _get_magika().identify_stream(raw)
     else:
-        if hasattr(stream, "seek"):
+        if seekable:
             stream.seek(pos)
+        result = _get_magika().identify_bytes(stream.read())
+    if seekable:
+        stream.seek(pos)
     return DetectionResult(
         label=result.output.label,
         mime_type=result.output.mime_type,

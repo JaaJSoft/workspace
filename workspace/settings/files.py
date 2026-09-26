@@ -21,6 +21,12 @@ FILES_EXTRACT_MAX_BYTES = int(
 # Max number of entries allowed when extracting an archive.
 FILES_EXTRACT_MAX_ENTRIES = int(os.getenv("FILES_EXTRACT_MAX_ENTRIES", "10000"))
 
+# Largest text or Markdown file the viewer embeds in its page; a larger one
+# is offered as raw content in a new tab instead of being read into the page.
+FILES_TEXT_VIEWER_MAX_BYTES = int(
+    os.getenv("FILES_TEXT_VIEWER_MAX_BYTES", str(5 * 1024 * 1024))
+)  # 5 MiB
+
 # WebDAV lock storage
 # Use dedicated Redis DB when available so locks are shared across gunicorn
 # workers; otherwise fall back to in-process storage (dev / single worker).

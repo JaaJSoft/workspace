@@ -1,11 +1,21 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.conf import settings
-from openai import OpenAI
+
+# openai is imported where a client is built: the SDK weighs ~30 MB and a web
+# worker, which imports this module through the task modules, rarely calls it.
+if TYPE_CHECKING:
+    from openai import OpenAI
 
 
 def get_ai_client() -> OpenAI | None:
     """Return a configured OpenAI client, or None if AI is not configured."""
     if not settings.AI_API_KEY:
         return None
+    from openai import OpenAI
+
     return OpenAI(
         api_key=settings.AI_API_KEY,
         base_url=settings.AI_BASE_URL,
@@ -21,6 +31,8 @@ def get_image_client() -> OpenAI | None:
     """
     if not settings.AI_API_KEY:
         return None
+    from openai import OpenAI
+
     return OpenAI(
         api_key=settings.AI_API_KEY,
         base_url=settings.AI_IMAGE_BASE_URL or settings.AI_BASE_URL,
@@ -40,6 +52,8 @@ def get_speech_client() -> OpenAI | None:
     base_url = settings.AI_TTS_BASE_URL or settings.AI_BASE_URL
     if not base_url:
         return None
+    from openai import OpenAI
+
     return OpenAI(
         api_key=settings.AI_API_KEY or "unused",
         base_url=base_url,
@@ -60,6 +74,8 @@ def get_transcription_client() -> OpenAI | None:
     base_url = settings.AI_ASR_BASE_URL or settings.AI_BASE_URL
     if not base_url:
         return None
+    from openai import OpenAI
+
     return OpenAI(
         api_key=settings.AI_API_KEY or "unused",
         base_url=base_url,

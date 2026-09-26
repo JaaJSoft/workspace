@@ -62,6 +62,34 @@ class DetectFromStreamTest(TestCase):
         result = detect_from_stream(stream)
         self.assertIsNotNone(result.label)
 
+    def test_large_upload_is_not_read_into_memory(self):
+        """Django spools an upload over 2.5 MB to a temp file whose wrapper
+        Magika rejects; detection must still read only the bytes it samples."""
+        import tracemalloc
+
+        from django.core.files.uploadedfile import TemporaryUploadedFile
+
+        from workspace.files.services.detection import (
+            detect_from_bytes,
+            detect_from_stream,
+        )
+
+        upload = TemporaryUploadedFile("big.py", "text/x-python", 0, "utf-8")
+        self.addCleanup(upload.close)
+        upload.write(b'import os\nprint("hi")\n' * 1_000_000)  # 22 MB
+        upload.seek(5)
+        # Loads the process-wide model now, so the peak below is the detection.
+        detect_from_bytes(b"")
+
+        tracemalloc.start()
+        self.addCleanup(tracemalloc.stop)
+        result = detect_from_stream(upload)
+        peak = tracemalloc.get_traced_memory()[1]
+
+        self.assertEqual(result.label, "python")
+        self.assertLess(peak, 2 * 1024 * 1024)
+        self.assertEqual(upload.tell(), 5)
+
 
 class LabelFromNameTest(TestCase):
     def test_known_extension(self):

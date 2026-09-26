@@ -57,7 +57,7 @@ class SendPushNotificationTests(TestCase):
         notif = _make_notification(self.user)
         _make_subscription(self.user)
         with (
-            mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
+            mock.patch("pywebpush.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
         ):
             notif_tasks.send_push_notification.run(str(notif.uuid))
@@ -65,7 +65,7 @@ class SendPushNotificationTests(TestCase):
 
     @override_settings(**VALID_SETTINGS)
     def test_skips_unknown_notification(self):
-        with mock.patch("workspace.notifications.tasks.webpush") as webpush_mock:
+        with mock.patch("pywebpush.webpush") as webpush_mock:
             notif_tasks.send_push_notification.run(str(uuid4()))
         webpush_mock.assert_not_called()
 
@@ -74,7 +74,7 @@ class SendPushNotificationTests(TestCase):
         notif = _make_notification(self.user)
         _make_subscription(self.user)
         with (
-            mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
+            mock.patch("pywebpush.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=True),
             # Keep the deferred retry from running inline under eager Celery.
             mock.patch.object(notif_tasks.send_push_notification, "apply_async"),
@@ -86,7 +86,7 @@ class SendPushNotificationTests(TestCase):
     def test_noop_when_user_has_no_subscription(self):
         notif = _make_notification(self.user)
         with (
-            mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
+            mock.patch("pywebpush.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
         ):
             notif_tasks.send_push_notification.run(str(notif.uuid))
@@ -100,7 +100,7 @@ class SendPushNotificationTests(TestCase):
         notif = _make_notification(self.user)
         _make_subscription(self.user)
         with (
-            mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
+            mock.patch("pywebpush.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
         ):
             notif_tasks.send_push_notification.run(str(notif.uuid))
@@ -117,7 +117,7 @@ class SendPushNotificationTests(TestCase):
         sub2 = _make_subscription(self.user, endpoint="https://push.example.com/b")
 
         with (
-            mock.patch("workspace.notifications.tasks.webpush") as webpush_mock,
+            mock.patch("pywebpush.webpush") as webpush_mock,
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
         ):
             notif_tasks.send_push_notification.run(str(notif.uuid))
@@ -155,7 +155,7 @@ class SendPushNotificationTests(TestCase):
 
         with (
             mock.patch(
-                "workspace.notifications.tasks.webpush",
+                "pywebpush.webpush",
                 side_effect=exc,
             ),
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
@@ -174,7 +174,7 @@ class SendPushNotificationTests(TestCase):
 
         with (
             mock.patch(
-                "workspace.notifications.tasks.webpush",
+                "pywebpush.webpush",
                 side_effect=exc,
             ),
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
@@ -193,7 +193,7 @@ class SendPushNotificationTests(TestCase):
 
         with (
             mock.patch(
-                "workspace.notifications.tasks.webpush",
+                "pywebpush.webpush",
                 side_effect=exc,
             ),
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),
@@ -209,7 +209,7 @@ class SendPushNotificationTests(TestCase):
 
         with (
             mock.patch(
-                "workspace.notifications.tasks.webpush",
+                "pywebpush.webpush",
                 side_effect=RuntimeError("boom"),
             ),
             mock.patch("workspace.notifications.tasks.is_active", return_value=False),

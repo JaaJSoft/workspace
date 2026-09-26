@@ -4,7 +4,6 @@ import orjson
 from celery import shared_task
 from django.conf import settings
 from django.core.cache import cache
-from pywebpush import WebPushException, webpush
 
 from workspace.common.logging import scrub
 from workspace.common.task_priority import BACKGROUND_PRIORITY, INTERACTIVE_PRIORITY
@@ -77,6 +76,10 @@ def send_push_notification(notification_uuid: str, is_retry: bool = False):
             "Push skipped: WEBPUSH_VAPID_MAILTO is not configured (vapid_claims.sub is empty)"
         )
         return
+
+    # pywebpush pulls in aiohttp; the web process imports this module to
+    # queue the task and never sends a push itself.
+    from pywebpush import WebPushException, webpush
 
     from workspace.notifications.models import Notification, PushSubscription
 

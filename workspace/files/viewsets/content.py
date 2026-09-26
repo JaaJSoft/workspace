@@ -158,29 +158,8 @@ class ContentMixin:
         if not_modified:
             return not_modified
 
-        if file_obj.category in ("code", "text"):
-            file_handle = None
-            try:
-                file_handle = file_obj.content.open("rb")
-                content = file_handle.read().decode("utf-8")
-                response = HttpResponse(content, content_type=content_type)
-                response["Content-Disposition"] = (
-                    f'inline; filename="{safe_filename(file_obj.name)}"'
-                )
-                response["Accept-Ranges"] = "bytes"
-                self._set_file_cache_headers(response, file_obj)
-                if file_obj.size:
-                    FILES_DOWNLOAD_BYTES.inc(file_obj.size)
-                return response
-            except Exception:
-                # Fallback to binary if UTF-8 fails
-                pass
-            finally:
-                if file_handle:
-                    file_handle.close()
-
-        # For other files, use FileResponse with proper streaming
-        # FileResponse will close the file handle when done
+        # Streamed whatever the type, text included: FileResponse closes the
+        # handle once the body is sent.
         file_handle = file_obj.content.open("rb")
         response = FileResponse(
             file_handle, content_type=content_type, as_attachment=False

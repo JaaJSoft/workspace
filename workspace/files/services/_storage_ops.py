@@ -12,7 +12,6 @@ import posixpath
 import shutil
 import uuid
 
-from django.core.files.base import ContentFile
 from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
 
@@ -242,6 +241,15 @@ def _delete_folder_storage(node):
         logger.warning("Could not delete folder %s: %s", scrub(node.name), scrub(e))
 
 
+def _copy_blob(source, destination):
+    """Save *source* under *destination* a chunk at a time; the name the
+    storage picked comes back, as from ``default_storage.save``."""
+    with default_storage.open(source, "rb") as handle:
+        saved = default_storage.save(destination, handle)
+    gc.collect()  # release handles on Windows
+    return saved
+
+
 def rename_file_storage(file_obj, new_name):
     """Rename a single file on disk."""
     old_path = file_obj.content.name
@@ -258,16 +266,7 @@ def rename_file_storage(file_obj, new_name):
         logger.warning("Old file does not exist: '%s'", scrub(old_path))
         return
 
-    file_handle = None
-    try:
-        file_handle = default_storage.open(old_path, "rb")
-        content = file_handle.read()
-    finally:
-        if file_handle:
-            file_handle.close()
-            gc.collect()  # release handles on Windows
-
-    saved_path = default_storage.save(new_path, ContentFile(content))
+    saved_path = _copy_blob(old_path, new_path)
     file_obj.content.name = saved_path
 
     if old_path != saved_path:
@@ -421,15 +420,7 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
         if not default_storage.exists(old_path):
             logger.warning("File does not exist on storage: '%s'", scrub(old_path))
             return
-        file_handle = None
-        try:
-            file_handle = default_storage.open(old_path, "rb")
-            data = file_handle.read()
-        finally:
-            if file_handle:
-                file_handle.close()
-                gc.collect()
-        saved_path = default_storage.save(new_path, ContentFile(data))
+        saved_path = _copy_blob(old_path, new_path)
         file_obj.content.name = saved_path
         if old_path != saved_path:
             try:
@@ -484,15 +475,7 @@ def _relocate_without_paths(source, destination):
     """Fallback for backends with no local filesystem paths (object storage)."""
     if not default_storage.exists(source):
         return False
-    handle = None
-    try:
-        handle = default_storage.open(source, "rb")
-        data = handle.read()
-    finally:
-        if handle:
-            handle.close()
-            gc.collect()  # release handles on Windows
-    saved = default_storage.save(destination, ContentFile(data))
+    saved = _copy_blob(source, destination)
     if saved != destination:
         # The backend picked a different name, so the caller's stored path
         # would be wrong; undo and fail loudly rather than lose the bytes.

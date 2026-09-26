@@ -69,6 +69,8 @@ services:
     build: .
     command: celery -A workspace worker -l info
     environment:
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-}
+      - CELERY_WORKER_MAX_MEMORY_PER_CHILD=${CELERY_WORKER_MAX_MEMORY_PER_CHILD:-}
       - DEBUG=0
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
       - DATABASE_URL=sqlite:////app/data/db.sqlite3

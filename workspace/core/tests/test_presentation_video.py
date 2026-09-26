@@ -92,12 +92,16 @@ class PresentationVideoTests(SimpleTestCase):
 
 class PromoVideoTests(SimpleTestCase):
     def test_every_scene_has_a_composition_filling_its_timeline(self):
-        from scripts.promo_video import SCENES, SOURCE
+        from scripts.promo_video import SCENES, SOURCE, render_feature, timeline
 
+        plan = {s["id"]: s for s in timeline()["scenes"]}
         for scene in SCENES:
             with self.subTest(scene["id"]):
-                path = SOURCE / "compositions" / f"{scene['id']}.html"
-                html = path.read_text(encoding="utf-8")
+                if "feature" in scene:
+                    html = render_feature(plan[scene["id"]])
+                else:
+                    path = SOURCE / "compositions" / f"{scene['id']}.html"
+                    html = path.read_text(encoding="utf-8")
                 self.assertIn(f'data-composition-id="{scene["id"]}"', html)
                 self.assertIn(f'window.promo.scene("{scene["id"]}")', html)
                 self.assertIn(f'window.__timelines["{scene["id"]}"] = tl;', html)
@@ -108,9 +112,9 @@ class PromoVideoTests(SimpleTestCase):
         self.assertLessEqual(timeline()["duration"], 90)
 
     def test_every_take_a_scene_plays_is_filmed_by_the_presentation(self):
-        from scripts.promo_video import SOURCE, TAKE_NAMES
+        from scripts.promo_video import SCENES, SOURCE, TAKE_NAMES
 
-        played = set()
+        played = {s["feature"]["take"] for s in SCENES if "feature" in s}
         for path in (SOURCE / "compositions").glob("*.html"):
             played |= set(
                 re.findall(
@@ -118,4 +122,3 @@ class PromoVideoTests(SimpleTestCase):
                 )
             )
         self.assertLessEqual(played, set(TAKE_NAMES))
-        self.assertLessEqual(set(TAKE_NAMES), {s["slug"] for s in SCENES})

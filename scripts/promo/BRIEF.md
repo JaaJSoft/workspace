@@ -2,22 +2,24 @@
 workflow: general-video
 flow: companion
 storyboard: no
-message: "The tools your team juggles fit in one app you host yourself."
-angle: "One app to replace them all"
+message: "Your files, projects, chats and data, in one Workspace of your own."
+angle: "Your everything, your Workspace"
 destination: "YouTube, website, README (16:9) and Shorts, Reels, TikTok (9:16)"
 aspect: "16:9 + 9:16"
 language: en
-length: "~60s"
+length: "~50s"
 ---
 
 # Workspace promo
 
 ## Intent
 
-An ad, not a tour: very dynamic, cut to the beat, many transitions. It opens
-on the pain of juggling nine apps, collapses them into Workspace on the drop,
-blitzes through the real product filmed in use, lands the self-hosting claim
-on the breakdown and closes on the logo and the repository.
+An ad, not a tour: very dynamic, colourful, cut to the beat. It opens on
+"your files, your projects, your chats, your data" as full-bleed colour
+panels that fuse into "your Workspace", then gives every module the same
+beat - a title card in its colour, its real take full screen - through
+full-screen cuts, lands "self-hosted, open source" on the breakdown and
+closes on the logo and the repository.
 
 ## Assets
 
@@ -27,6 +29,8 @@ on the breakdown and closes on the logo and the repository.
 ## Customizations
 
 - Both formats come from the same scenes; their CSS switches layout on orientation.
+- Flat and full screen: no 3D, no shadows, no tilted fake windows next to text.
+- Module colours carry the cuts; no comparison with other products.
 - The long presentation video stays as it is; this is its trailer.
 
 ## Notes

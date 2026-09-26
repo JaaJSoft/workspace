@@ -1,6 +1,7 @@
 # Promo video
 
-A one-minute ad for Workspace, cut to 128 BPM, in 16:9 and 9:16. It is the
+A fifty-second ad for Workspace, cut to 128 BPM, in 16:9 and 9:16: flat,
+colourful, full screen, every module in its own colour. It is the
 trailer of the long presentation video (`scripts/presentation/`), and reuses
 its filmed takes, its soundtrack synthesizer and its pinned HyperFrames
 toolchain.
@@ -21,9 +22,10 @@ pipeline films it first (see its README for the requirements).
 | File | Role |
 |---|---|
 | `../promo_video.py` | The timing: scene order and length in bars, the cut into each scene, the part of the music each sits on. Assembles one HyperFrames project per format and renders it |
-| `compositions/*.html` | One hand-written sub-composition per scene; each fills its own paused GSAP timeline, entrances only (the cut is the exit) |
-| `promo.js` | The shared motion vocabulary (beat-grid slams, pops, window entrances) and the root timeline: backdrop pulsing on the kick, every cut, the fades |
-| `promo.css` | Palette, type, the app window, and the portrait overrides shared by the scenes |
+| `feature.html` | The template of a module's scene: a title card in its colour, then its take full screen. One line per module in `SCENES` fills it |
+| `compositions/*.html` | The hand-written scenes: the opening, the wall of takes, the breakdown, the close |
+| `promo.js` | The shared motion vocabulary (beat-grid slams, pops, the module beat) and the root timeline: every full-screen cut, the fades |
+| `promo.css` | Palette, type, the module scene layout, and the portrait overrides |
 | `BRIEF.md`, `STORYBOARD.md` | The brief and the frame plan, in HyperFrames' formats |
 
 Scenes are authored once at 1920x1080 and switch layout with
@@ -33,10 +35,11 @@ so a scene follows a tempo change without edits.
 
 ## Updating it
 
-- **Copy or a scene's motion**: edit its file in `compositions/`.
+- **A module**: its line in `SCENES` (colour, icon, title, take, the moment
+  and speed of the take). A new module is a new line; the build warns when a
+  take is too short for its scene.
+- **The other scenes**: their file in `compositions/`.
 - **Order, lengths, cuts**: `SCENES` in `promo_video.py`. The music follows
   the bars; `core.tests.test_presentation_video` checks every scene has its
   file and the whole stays under 90 seconds.
-- **Footage**: rerun `scripts/presentation_video.py` to refilm the takes; a
-  scene picks its moment in a take with `data-media-start` and its speed with
-  `data-playback-rate`.
+- **Footage**: rerun `scripts/presentation_video.py` to refilm the takes.

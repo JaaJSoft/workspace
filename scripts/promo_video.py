@@ -10,19 +10,24 @@ around one message: the tools a team juggles fit in one app it hosts itself.
     uv run python scripts/promo_video.py --preview        # HyperFrames Studio (16:9)
     uv run python scripts/promo_video.py --stills 3 12 40 # snapshots only
 
-The scenes are hand-written HyperFrames sub-compositions in
-``scripts/promo/compositions/``; this script owns the timing (scene lengths in
-bars, the transitions between them, the music) and assembles one project per
-format under ``build/promo/``. The takes come from ``build/presentation/clips``;
-when they are missing, the presentation pipeline films them first.
+Every module gets the same beat: a full-bleed title card in its colour, then
+its filmed take full screen, then a full-screen cut into the next colour. Those
+scenes come from one template (``scripts/promo/feature.html``) and a line each
+in ``SCENES``; the opening, the wall, the breakdown and the close are
+hand-written HyperFrames sub-compositions in ``scripts/promo/compositions/``.
+This script owns the timing (lengths in bars, cuts, music) and assembles one
+project per format under ``build/promo/``. The takes come from
+``build/presentation/clips``; missing ones are filmed first.
 """
 
 import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+from string import Template
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE = REPO_ROOT / "scripts" / "promo"
@@ -34,27 +39,51 @@ BEATS_PER_BAR = 4
 # Scenes overlap by this much, so a transition has both sides on screen.
 OVERLAP = 0.3
 
+# The display face ships with the project: the renderer only embeds the
+# families it finds written out in a font-family, not behind a CSS variable.
+PROMO_VENDOR = {
+    "fonts/archivo-black-latin-400-normal.woff2": REPO_ROOT
+    / "scripts/presentation/node_modules/@fontsource/archivo-black/files"
+    / "archivo-black-latin-400-normal.woff2",
+}
+
 FORMATS = {
     "landscape": {"width": 1920, "height": 1080, "suffix": "16x9"},
     "portrait": {"width": 1080, "height": 1920, "suffix": "9x16"},
 }
 
-# In playing order: the sub-composition, its length in bars, how it is cut
-# in, and the part of the music it sits on (see soundtrack.py: "intro" has
-# no drums and ends on a riser, "module" plays the full groove, "platform"
-# is the breakdown, "outro" drops back in and rings out).
+# In playing order: the sub-composition, its length in bars, the full-screen
+# cut into it, and the part of the music it sits on (see soundtrack.py:
+# "module" plays the full groove, "platform" is the breakdown ending on a
+# riser, "outro" drops back in and rings out). A scene with a `feature` is
+# built from the feature template: its title card lasts `card` beats, then its
+# take plays full screen from `media` seconds at `rate` times its speed.
 SCENES = [
-    {"id": "hook", "bars": 4, "cut": None, "music": "module"},
-    {"id": "intro", "bars": 2, "cut": "hard", "music": "intro"},
-    {"id": "search", "bars": 2, "cut": "flash", "music": "module"},
-    {"id": "projects", "bars": 2, "cut": "whip-left", "music": "module"},
-    {"id": "talk", "bars": 2, "cut": "whip-right", "music": "module"},
-    {"id": "files", "bars": 2, "cut": "zoom", "music": "module"},
-    {"id": "cycle", "bars": 4, "cut": "blocks", "music": "module"},
-    {"id": "wall", "bars": 2, "cut": "zoom-back", "music": "module"},
-    {"id": "yours", "bars": 4, "cut": "blur", "music": "platform"},
-    {"id": "cta", "bars": 6, "cut": "zoom", "music": "outro"},
-]
+    {"id": "open", "bars": 3, "cut": None, "music": "module", "color": "#4338ca"},
+    {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#6d28d9",
+     "feature": {"icon": "search", "title": ["Search", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
+    {"id": "files", "bars": 2, "cut": "push-left", "music": "module", "color": "#4338ca",
+     "feature": {"icon": "hard-drive", "title": ["Every file,", "every photo."], "take": "files", "media": 1.1, "rate": 1.5, "card": 2}},
+    {"id": "chat", "bars": 2, "cut": "blocks", "music": "module", "color": "#0369a1",
+     "feature": {"icon": "message-circle", "title": ["Chat", "in real time."], "take": "chat", "media": 0.9, "rate": 1.7, "card": 2}},
+    {"id": "ai", "bars": 2, "cut": "split", "music": "module", "color": "#be185d",
+     "feature": {"icon": "sparkles", "title": ["Ask", "your AI."], "take": "ai", "media": 1.2, "rate": 1.9, "card": 2}},
+    {"id": "projects", "bars": 2, "cut": "push-up", "music": "module", "color": "#c2410c",
+     "feature": {"icon": "square-kanban", "title": ["Ship", "your projects."], "take": "projects", "media": 0.5, "rate": 1.5, "card": 2}},
+    {"id": "notes", "bars": 1, "cut": "iris", "music": "module", "color": "#047857",
+     "feature": {"icon": "notebook-pen", "title": ["Write."], "take": "notes", "media": 3.4, "rate": 1.7, "card": 1}},
+    {"id": "mail", "bars": 1, "cut": "push-left", "music": "module", "color": "#b45309",
+     "feature": {"icon": "mail", "title": ["Mail."], "take": "mail", "media": 4.4, "rate": 1.5, "card": 1}},
+    {"id": "calendar", "bars": 1, "cut": "push-up", "music": "module", "color": "#0f766e",
+     "feature": {"icon": "calendar", "title": ["Plan."], "take": "calendar", "media": 1.3, "rate": 1.8, "card": 1}},
+    {"id": "people", "bars": 1, "cut": "push-left", "music": "module", "color": "#be123c",
+     "feature": {"icon": "contact", "title": ["Contacts."], "take": "people", "media": 1.3, "rate": 1.7, "card": 1}},
+    {"id": "vault", "bars": 1, "cut": "split", "music": "module", "color": "#7e22ce",
+     "feature": {"icon": "key-round", "title": ["Passwords."], "take": "vault", "media": 2.6, "rate": 1.6, "card": 1}},
+    {"id": "wall", "bars": 2, "cut": "blocks", "music": "module", "color": "#6d28d9"},
+    {"id": "yours", "bars": 2, "cut": "push-up", "music": "platform", "color": "#1e1b4b"},
+    {"id": "cta", "bars": 4, "cut": "flash", "music": "outro", "color": "#0e0a16"},
+]  # fmt: skip
 
 # The takes each scene plays, from the presentation pipeline.
 TAKE_NAMES = [
@@ -150,7 +179,7 @@ def write_project(out_dir: Path, fmt, plan, audio: Path):
     if out_dir.exists():
         shutil.rmtree(out_dir)
     (out_dir / "compositions").mkdir(parents=True)
-    for name, src in VENDOR.items():
+    for name, src in {**VENDOR, **PROMO_VENDOR}.items():
         target = out_dir / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
@@ -161,9 +190,12 @@ def write_project(out_dir: Path, fmt, plan, audio: Path):
 
     width, height = fmt["width"], fmt["height"]
     for scene in plan["scenes"]:
-        html = (SOURCE / "compositions" / f"{scene['id']}.html").read_text(
-            encoding="utf-8"
-        )
+        if "feature" in scene:
+            html = render_feature(scene)
+        else:
+            html = (SOURCE / "compositions" / f"{scene['id']}.html").read_text(
+                encoding="utf-8"
+            )
         # The scenes are authored at 1920x1080; their CSS switches layout on
         # orientation, only the declared canvas changes per format.
         html = html.replace(
@@ -177,6 +209,53 @@ def write_project(out_dir: Path, fmt, plan, audio: Path):
     (out_dir / "index.html").write_text(
         render_index(fmt, plan, audio.name), encoding="utf-8"
     )
+
+
+def render_feature(scene):
+    """A module's scene: its title card, then its take full screen."""
+    feature = scene["feature"]
+    beat = 60 / BPM
+    clip_at = scene["lead"] + feature["card"] * beat
+    # The take plays until the slot closes, through the cut out of it.
+    clip_duration = scene["lead"] + scene["duration"] + OVERLAP - clip_at
+    needed = feature["media"] + clip_duration * feature["rate"]
+    length = take_length(feature["take"])
+    if length is not None and needed > length:
+        print(
+            f"  ! {scene['id']}: the take ends at {length:.1f}s, the scene reads it "
+            f"up to {needed:.1f}s: lower its media start or raise its rate"
+        )
+    title = feature["title"]
+    lines = "".join(
+        f'<div class="ln">{"<em>" + line + "</em>" if i else line}</div>'
+        for i, line in enumerate(title)
+    )
+    return Template((SOURCE / "feature.html").read_text(encoding="utf-8")).substitute(
+        id=scene["id"],
+        color=scene["color"],
+        icon=feature["icon"],
+        lines=lines,
+        label=" ".join(title),
+        take=feature["take"],
+        clip_at=f"{clip_at:.3f}",
+        clip_duration=f"{clip_duration:.3f}",
+        media=feature["media"],
+        rate=feature["rate"],
+        card=feature["card"],
+    )
+
+
+def take_length(name):
+    """The take's length in seconds, or None when it is not filmed yet."""
+    take = TAKES / f"{name}-0.mp4"
+    if not take.is_file():
+        return None
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(take)],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    return float(out.stdout.strip())
 
 
 def render_index(fmt, plan, audio_name):
@@ -195,7 +274,7 @@ def render_index(fmt, plan, audio_name):
         "duration": duration,
         "orientation": "portrait" if height > width else "landscape",
         "scenes": [
-            {k: s[k] for k in ("id", "start", "duration", "lead", "cut")}
+            {k: s[k] for k in ("id", "start", "duration", "lead", "cut", "color")}
             for s in plan["scenes"]
         ],
         "sections": plan["sections"],
@@ -218,8 +297,6 @@ def render_index(fmt, plan, audio_name):
   <div id="root" data-composition-id="main" data-start="0" data-duration="{duration:.3f}" data-width="{width}" data-height="{height}">
     <div id="backdrop" class="layer">
       <div class="glow a"></div><div class="glow b"></div>
-      <div class="ghost" data-layout-ignore>WORKSPACE</div>
-      <div class="layer grid"></div>
     </div>
     {slots}
     <div id="cover" class="layer"><div class="block a"></div><div class="block b"></div><div class="block c"></div></div>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - $id</title>
+</head>
+<body>
+  <!--
+    Template for a module's scene, filled per entry of SCENES in
+    scripts/promo_video.py: a full-bleed title card in the module's colour,
+    then its filmed take full screen (cursor-ui-demo, flat).
+  -->
+  <template id="$id">
+    <div id="$id-root" data-composition-id="$id" data-width="1920" data-height="1080">
+      <style>
+        #$id-root { position: absolute; inset: 0; }
+      </style>
+      <div class="scene feature on-colour" style="--mc: $color">
+        <div class="field layer"></div>
+        <div class="shot layer">
+          <div class="tag"><i data-lucide="$icon"></i><span class="tag-text">$label</span></div>
+          <div class="clip-frame">
+            <video id="$id-take" data-hf-media-start-basis="local" src="assets/clips/$take-0.mp4" muted playsinline data-start="$clip_at" data-duration="$clip_duration" data-media-start="$media" data-playback-rate="$rate" data-track-index="4"></video>
+          </div>
+        </div>
+        <div class="card layer">
+          <div class="card-icon"><i data-lucide="$icon"></i></div>
+          <div class="slam card-title">$lines</div>
+        </div>
+      </div>
+      <script>
+        (() => {
+          const s = window.promo.scene("$id");
+          const tl = gsap.timeline({ paused: true });
+          window.promo.feature(tl, s, $card);
+          window.__timelines["$id"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

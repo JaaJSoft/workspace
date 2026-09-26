@@ -117,5 +117,20 @@ only leaves its groups unnamed.
   in a group address book shows every member their own.
 - **Search**: a person's name in the global search opens their photos.
 
+### Reviewing people
+
+*Review* on the People tab settles the grouping in a row, in two queues:
+
+- **To name**: the unnamed groups, largest first, one at a time with the name
+  field focused. Enter picks the highlighted contact, or adds the typed name
+  to People. A group whose centroid is within the grouping threshold of a
+  named person's suggests that person first, unless they are already in one
+  of its photos.
+- **To check**: faces the grouping put under a named person on its own and
+  that sit further than half the threshold from their group's centroid, most
+  doubtful first. The user marks the ones that are someone else; one click
+  confirms the rest and takes the marked ones out, as "Not this person" does.
+  A confirmed face never comes back to this list.
+
 Photos analyzed by the pipeline are listed, read-only, in the admin under
 *Face analyses*; faces and groups themselves are not browsable there.

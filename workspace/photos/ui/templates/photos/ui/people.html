@@ -27,6 +27,22 @@
         </span>
       {% endif %}
       {% if faces_enabled %}
+        {% if not show_hidden and people_count %}
+          <a
+            href="{{ review_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-module btn-sm gap-1"
+            title="Name people and check faces one after the other"
+          >
+            <i data-lucide="user-pen" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">Review</span>
+            {% if unnamed_count %}
+              <span
+                class="badge badge-sm tabular-nums border-0 bg-module-content/20 text-module-content"
+              >{{ unnamed_count }}</span>
+            {% endif %}
+          </a>
+        {% endif %}
         {% if show_hidden %}
           <a
             href="{{ people_url }}"

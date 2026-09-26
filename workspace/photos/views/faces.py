@@ -36,6 +36,7 @@ from ..queries import (
 from ..serializers import (
     FaceClusterCreateSerializer,
     FaceClusterMergeSerializer,
+    FaceClusterReviewSerializer,
     FaceClusterSerializer,
     FaceSerializer,
 )
@@ -205,6 +206,24 @@ class FaceClusterViewSet(
                 }
             ) from None
         return Response(self.get_serializer(self.get_object()).data)
+
+    @extend_schema(
+        summary="Confirm or reject faces of this cluster",
+        description=(
+            "Settles several faces at once. A face no longer in the cluster "
+            "is left as it is. Rejected faces leave automatic grouping, as "
+            "with 'not this person'."
+        ),
+        request=FaceClusterReviewSerializer,
+        responses={204: None},
+    )
+    @action(detail=True, methods=["post"])
+    def review(self, request, pk=None):
+        cluster = self.get_object()
+        serializer = FaceClusterReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        face_corrections.review_cluster(cluster, **serializer.validated_data)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="Use the cover as the contact photo",

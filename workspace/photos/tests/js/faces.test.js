@@ -237,3 +237,96 @@ test('an unnamed cluster has no contact to offer its cover to', async () => {
   assert.deepEqual(asked, []);
   assert.deepEqual(requests, []);
 });
+
+function review(documentData = {}) {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: {
+      getElementById: (id) => (id in documentData ? { textContent: JSON.stringify(documentData[id]) } : null),
+    },
+  });
+  return { ctx, component: ctx.facesReview() };
+}
+
+const NINA = { uuid: 'n', name: 'Nina Petit', photo_count: 4 };
+const NOAH = { uuid: 'o', name: 'Noah', photo_count: 0 };
+
+test('with nothing typed, the suggested person comes first and only once', () => {
+  const { ctx } = review();
+
+  const options = Array.from(ctx.reviewOptions('', [NOAH, NINA], NINA));
+
+  assert.deepEqual(options.map((o) => [o.person.uuid, o.suggested]), [['n', true], ['o', false]]);
+});
+
+test('a typed name hides the suggestion and offers to add the name', () => {
+  const { ctx } = review();
+
+  const options = Array.from(ctx.reviewOptions('Léa', [NINA], NINA));
+
+  assert.deepEqual(options.map((o) => o.kind), ['person', 'create']);
+  assert.equal(options[1].name, 'Léa');
+});
+
+test('adding a name is not offered when a contact has exactly that name', () => {
+  const { ctx } = review();
+
+  const options = Array.from(ctx.reviewOptions(' nina petit ', [NINA], null));
+
+  assert.deepEqual(options.map((o) => o.kind), ['person']);
+});
+
+test('confirming a person sends one request per cluster, the marked faces rejected', () => {
+  const { ctx } = review();
+  const faces = [
+    { uuid: 'f1', cluster: 'c1' },
+    { uuid: 'f2', cluster: 'c1' },
+    { uuid: 'f3', cluster: 'c2' },
+  ];
+
+  const requests = JSON.parse(JSON.stringify(ctx.reviewRequests(faces, { f2: true, f3: false })));
+
+  assert.deepEqual(requests, [
+    { cluster: 'c1', body: { confirmed: ['f1'], rejected: ['f2'] } },
+    { cluster: 'c2', body: { confirmed: ['f3'], rejected: [] } },
+  ]);
+});
+
+test('the queues are read from the embedded JSON', () => {
+  const { component } = review({
+    'photos-review-data': {
+      unnamed: [{ uuid: 'c1', suggestion: null }],
+      doubts: [{ person: NINA, total: 3, faces: [] }, { person: NOAH, total: 2, faces: [] }],
+    },
+  });
+  component.searchReviewNames = () => {};
+
+  component.init();
+
+  assert.equal(component.current().uuid, 'c1');
+  assert.equal(component.doubtCount(), 5);
+});
+
+test('the confirm button says how many faces go each way', () => {
+  const { component } = review();
+  const block = { faces: [{ uuid: 'f1' }, { uuid: 'f2' }] };
+
+  assert.equal(component.settleLabel(block), 'Confirm all');
+  component.toggleMark(block.faces[0]);
+  assert.equal(component.settleLabel(block), 'Confirm 1, remove 1');
+  component.toggleMark(block.faces[1]);
+  assert.equal(component.settleLabel(block), 'Remove 2');
+});
+
+test('skipping goes round the queue', () => {
+  const { component } = review();
+  component.unnamed = [{ uuid: 'a' }, { uuid: 'b' }];
+  component.searchReviewNames = () => {};
+  component.$nextTick = () => {};
+
+  component.skip();
+  assert.equal(component.current().uuid, 'b');
+  component.skip();
+  assert.equal(component.current().uuid, 'a');
+  component.previous();
+  assert.equal(component.current().uuid, 'b');
+});

@@ -13,6 +13,10 @@ the position it starts from, never repeated.
 
 The Undated bucket has no days to group by. Its photos are laid out one by
 one, so its pages simply go on filling the row the previous one stopped on.
+
+An album sorted by hand is paged the same way on another key, its items'
+``position`` (see ``manual_page``): no dates, no groups, one flat run of
+tiles in the order the album holds them.
 """
 
 import re
@@ -27,6 +31,7 @@ from django.db.models import (
     Exists,
     OuterRef,
     Q,
+    Subquery,
     Value,
     When,
 )
@@ -36,6 +41,7 @@ from django.utils import timezone
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileFavorite
 from workspace.files.services import FileService
+from workspace.photos.models import AlbumItem
 
 PAGE_SIZE = 60
 DAY_OVERFLOW = 500
@@ -46,6 +52,7 @@ _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _CURSOR_RE = re.compile(
     r"^(?P<bucket>[du])(?P<micros>-?\d{1,20})\.(?P<uuid>[0-9a-f-]{36})$"
 )
+_MANUAL_CURSOR_RE = re.compile(r"^m(?P<position>-?\d{1,20})\.(?P<uuid>[0-9a-f-]{36})$")
 _DATE_RE = re.compile(r"^(?P<year>\d{4})(?:-(?P<month>\d{2})(?:-(?P<day>\d{2}))?)?$")
 
 
@@ -294,3 +301,51 @@ def year_counts(files_qs, tz):
     if undated:
         counts.append((None, undated))
     return counts
+
+
+def with_album_positions(files_qs, album):
+    """Annotate each file of *album* with ``album_position``, its manual rank."""
+    return files_qs.annotate(
+        album_position=Subquery(
+            AlbumItem.objects.filter(album=album, file_id=OuterRef("pk")).values(
+                "position"
+            )[:1]
+        )
+    )
+
+
+def parse_manual_cursor(raw):
+    """Decode a ``manual_page`` cursor as ``(position, uuid)``; ValueError
+    when it is not one."""
+    match = _MANUAL_CURSOR_RE.match(raw or "")
+    if match is None:
+        raise ValueError("malformed cursor")
+    return int(match["position"]), uuid.UUID(match["uuid"])
+
+
+def manual_page(files_qs, after=None, *, page_size=None):
+    """The page of *files_qs* in album order, starting after *after*.
+
+    *files_qs* carries ``album_position`` (``with_album_positions``) and the
+    tile fields. *after* is a decoded cursor, None for the first page. Ties
+    on a position, left by two concurrent adds, break on the file's uuid.
+    """
+    page_size = page_size or PAGE_SIZE
+    ordered = files_qs.order_by("album_position", "uuid")
+    if after is not None:
+        position, after_uuid = after
+        ordered = ordered.filter(
+            Q(album_position__gt=position)
+            | Q(album_position=position, uuid__gt=after_uuid)
+        )
+    rows = list(ordered[: page_size + 1])
+    photos = rows[:page_size]
+    next_cursor = None
+    if len(rows) > page_size:
+        last = photos[-1]
+        next_cursor = f"m{last.album_position}.{last.uuid}"
+    return TimelinePage(
+        entries=[{"kind": "photo", "file": photo} for photo in photos],
+        next_cursor=next_cursor,
+        photos=photos,
+    )

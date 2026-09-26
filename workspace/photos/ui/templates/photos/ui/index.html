@@ -20,7 +20,9 @@
   x-data="photosApp()"
   style="--photo-tile: {{ tile_width }}px"
   :style="tileStyle()"
+  :data-selecting="selection.length > 0"
   @ajax:missing="keepMissingTarget($event)"
+  @ajax:merged="onMerged($event)"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -64,13 +66,22 @@
     <header
       class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
     >
-      <div class="flex items-center gap-3 px-4 py-3">
+      {# Its own swap target: an album edit refreshes the counts and the cover without reloading the grid. #}
+      <div
+        id="photos-header"
+        class="flex {% if album %}items-start{% else %}items-center{% endif %} gap-3 px-4 py-3"
+      >
         {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
-        <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
-        <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-          <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-          <span class="text-sm text-base-content/60">{{ count_label }}</span>
-        </div>
+        {% if album %}
+          {{ album_data|json_script:"album-data" }}
+          {% include "photos/ui/partials/album_header.html" %}
+        {% else %}
+          <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
+          <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+            <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+            <span class="text-sm text-base-content/60">{{ count_label }}</span>
+          </div>
+        {% endif %}
         {% if pending %}
           <span
             class="badge badge-ghost gap-1.5 max-sm:hidden"
@@ -80,7 +91,7 @@
             {{ pending }} being analyzed
           </span>
         {% endif %}
-        <div class="max-sm:hidden">
+        <div class="max-sm:hidden self-center">
           {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
         </div>
         {% if date_param %}
@@ -151,9 +162,23 @@
         class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
       >
         <div class="rounded-full bg-module/10 p-5">
-          <i data-lucide="images" class="w-10 h-10 text-module"></i>
+          <i
+            data-lucide="{% if album %}book-image{% else %}images{% endif %}"
+            class="w-10 h-10 text-module"
+          ></i>
         </div>
-        {% if is_timeline_view and not date_param and not media_type %}
+        {% if album %}
+          <h2 class="text-lg font-semibold">This album is empty</h2>
+          <p class="text-sm text-base-content/60 max-w-sm">
+            An album gathers photos from anywhere in your library without moving them in Files.
+            Select photos in the timeline, then choose Add to album.
+          </p>
+          <a
+            href="{{ timeline_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-module btn-sm"
+          >Go to the timeline</a>
+        {% elif is_timeline_view and not date_param and not media_type %}
           <h2 class="text-lg font-semibold">No photos yet</h2>
           <p class="text-sm text-base-content/60 max-w-sm">
             Photos and videos you upload to Files show up here, by the day they were taken.
@@ -189,9 +214,13 @@
     <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>
   </div>
 
+  {% include "photos/ui/partials/selection_bar.html" %}
+
   {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
   {% include "files/ui/partials/tag_dialog.html" %}
   {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="photos-context-menu" %}
+  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/album_menu.html" open="albumMenu.open" close="albumMenu.open = false" x="albumMenu.x" y="albumMenu.y" id="photos-album-menu" %}
+  {% include "photos/ui/partials/album_picker.html" %}
   {% include "files/ui/partials/rename_dialog.html" %}
   {% include "files/ui/partials/share_modal.html" %}
   {% include "files/ui/partials/file_viewer_modal.html" %}

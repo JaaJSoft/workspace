@@ -1,0 +1,19 @@
+{% comment %}
+Rows of an album's menu, from `POST /api/v1/photos/albums/actions` narrowed
+to the ones that act on the album as a whole (ALBUM_MENU_ACTIONS in
+photos.js). The panel is `ui/partials/context_menu_panel.html`.
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  <li x-show="albumMenu.actions === null">
+    <span class="gap-3 rounded pointer-events-none">
+      <span class="loading loading-spinner loading-xs"></span>
+      <span>Loading…</span>
+    </span>
+  </li>
+  <li x-show="albumMenu.actions !== null && albumMenu.actions.length === 0">
+    <span class="rounded pointer-events-none text-base-content/60">Nothing you can change here</span>
+  </li>
+  <template x-for="(action, idx) in (albumMenu.actions || [])" :key="action.id">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="idx > 0 && action.category !== albumMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''" icon_expr="action.icon" label_expr="action.label" class_expr="action.css_class || ''" click="runAlbumAction(action)" only %}
+  </template>
+</ul>

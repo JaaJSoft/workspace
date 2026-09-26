@@ -14,7 +14,8 @@ from django.utils import timezone
 from workspace.files.models import FileFavorite, FileScan, FileShare, FileTag, Tag
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
-from workspace.photos.models import MediaItem
+from workspace.photos.models import Album, MediaItem
+from workspace.photos.services.albums import create_album
 from workspace.users.services.settings import set_setting
 
 from .images import make_photo, make_video, upload
@@ -717,3 +718,137 @@ class TileSizeTests(PhotosViewTestCase):
 
                 self.assertEqual(self._tile(response)["size"], 3)
                 self.assertContains(response, 'style="--photo-tile: 144px"')
+
+
+class AlbumPageTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.first = make_photo(self.user, "first.jpg", _at(2024, 7, 14, 12))
+        self.second = make_photo(self.user, "second.jpg", _at(2024, 8, 2, 12))
+        self.outside = make_photo(self.user, "outside.jpg", _at(2024, 8, 3, 12))
+        self.album = create_album(self.user, "Summer", files=[self.first, self.second])
+        self.url = f"/photos/albums/{self.album.uuid}"
+
+    def test_login_required(self):
+        self.client.logout()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login", response["Location"])
+
+    def test_the_album_by_capture_date(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            self._tiles(response), [str(self.second.uuid), str(self.first.uuid)]
+        )
+        self.assertContains(response, "August 2024")
+        self.assertContains(response, "2 photos")
+        self.assertContains(response, "14 Jul - 2 Aug 2024")
+        self.assertContains(response, "By capture date")
+        self.assertContains(response, 'id="album-data"')
+        self.assertNotContains(response, 'draggable="true"')
+
+    def test_someone_elses_album_is_not_found(self):
+        bob = User.objects.create_user(username="bob", password="p")
+        bobs = create_album(bob, "Bob's", files=[])
+
+        self.assertEqual(
+            self.client.get(f"/photos/albums/{bobs.uuid}").status_code, 404
+        )
+        self.assertEqual(
+            self.client.get(
+                f"/photos/albums/{bobs.uuid}/timeline?cursor=x"
+            ).status_code,
+            404,
+        )
+
+    def test_a_trashed_photo_drops_out_of_the_album(self):
+        FileService.soft_delete(self.first, acting_user=self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(self._tiles(response), [str(self.second.uuid)])
+        self.assertContains(response, "1 photo")
+
+    def test_manual_order(self):
+        self.album.sort_mode = Album.SortMode.MANUAL
+        self.album.save(update_fields=["sort_mode"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            self._tiles(response), [str(self.first.uuid), str(self.second.uuid)]
+        )
+        self.assertContains(response, "Manual order")
+        self.assertContains(response, 'draggable="true"')
+        self.assertNotContains(response, "data-month")
+
+    def test_empty_album(self):
+        empty = create_album(self.user, "Empty")
+
+        response = self.client.get(f"/photos/albums/{empty.uuid}")
+
+        self.assertContains(response, "This album is empty")
+        self.assertEqual(self._tiles(response), [])
+
+    def test_the_sidebar_lists_the_albums_and_marks_the_open_one(self):
+        other = create_album(self.user, "Autumn", files=[self.outside])
+
+        response = self.client.get(self.url)
+
+        albums = re.findall(r'data-album="([0-9a-f-]{36})"', response.content.decode())
+        self.assertEqual(albums, [str(other.uuid), str(self.album.uuid)])
+        self.assertRegex(
+            response.content.decode(),
+            rf'aria-current="page"\s+data-album="{self.album.uuid}"',
+        )
+
+    def test_the_timeline_lists_the_albums_too(self):
+        response = self.client.get("/photos")
+
+        self.assertContains(response, f'data-album="{self.album.uuid}"')
+        self.assertContains(response, "New album")
+
+
+@patch("workspace.photos.services.timeline.PAGE_SIZE", 2)
+class AlbumPaginationTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.photos = [
+            make_photo(self.user, f"p{day}.jpg", _at(2024, 7, day, 12))
+            for day in range(1, 6)
+        ]
+        self.album = create_album(self.user, "Trip", files=self.photos)
+        self.url = f"/photos/albums/{self.album.uuid}"
+
+    def _walk(self):
+        response = self.client.get(self.url)
+        tiles = self._tiles(response)
+        next_url = _next_url(response)
+        while next_url:
+            response = self.client.get(next_url)
+            self.assertEqual(response.status_code, 200)
+            tiles += self._tiles(response)
+            next_url = _next_url(response)
+        return tiles
+
+    def test_capture_date_pages(self):
+        self.assertEqual(self._walk(), [str(p.uuid) for p in reversed(self.photos)])
+
+    def test_manual_pages(self):
+        self.album.sort_mode = Album.SortMode.MANUAL
+        self.album.save(update_fields=["sort_mode"])
+
+        tiles = self._walk()
+
+        self.assertEqual(tiles, [str(p.uuid) for p in self.photos])
+
+    def test_a_cursor_of_the_other_sort_mode_is_refused(self):
+        response = self.client.get(
+            f"{self.url}/timeline?cursor=m65536.{self.photos[0].uuid}"
+        )
+
+        self.assertEqual(response.status_code, 400)

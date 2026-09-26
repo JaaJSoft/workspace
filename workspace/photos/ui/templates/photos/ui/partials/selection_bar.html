@@ -1,0 +1,50 @@
+{% comment %}
+  What the selected tiles can have done to them. Floats over the bottom of
+  the listing while something is selected; outside #photos-content, which a
+  navigation replaces (and the selection with it, see onMerged).
+{% endcomment %}
+<div
+  x-show="selection.length > 0"
+  x-cloak
+  x-transition.opacity
+  class="absolute bottom-4 inset-x-0 z-20 flex justify-center px-4 pointer-events-none"
+  data-selection-bar
+>
+  <div
+    class="pointer-events-auto flex items-center gap-1 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
+    role="toolbar"
+    aria-label="Selected photos"
+  >
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Clear selection"
+      aria-label="Clear selection"
+      @click="clearSelection()"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+    <span
+      class="text-sm font-medium whitespace-nowrap px-1"
+      x-text="selection.length === 1 ? '1 selected' : selection.length + ' selected'"
+      data-selection-count
+    ></span>
+    <button
+      type="button"
+      class="btn btn-module btn-sm rounded-full gap-1.5"
+      @click="openAlbumPicker(selection)"
+    >
+      <i data-lucide="book-plus" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Add to album</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm rounded-full gap-1.5"
+      x-show="albumAllows('remove_items')"
+      @click="removeFromAlbum(selection)"
+    >
+      <i data-lucide="image-minus" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Remove from album</span>
+    </button>
+  </div>
+</div>

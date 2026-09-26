@@ -13,6 +13,7 @@ from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
 from workspace.photos.search import search_photos
+from workspace.photos.services.albums import create_album
 from workspace.users.services.settings import set_setting
 
 from .images import make_photo as _make_photo
@@ -173,4 +174,31 @@ class RegistrationTests(TestCase):
                 "/photos?type=video",
                 "/photos?date=undated",
             },
+        )
+
+
+class SearchAlbumsTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_albums_by_title_come_first_and_open_the_album(self):
+        album = create_album(self.user, "Sunset walks")
+        make_photo(self.user, "sunset-beach.jpg", datetime(2024, 7, 14, tzinfo=UTC))
+        create_album(User.objects.create_user(username="bob", password="p"), "Sunset")
+
+        hits = search_photos("sunset", self.user, 10)
+
+        self.assertEqual([h.name for h in hits], ["Sunset walks", "sunset-beach.jpg"])
+        self.assertEqual(hits[0].url, f"/photos/albums/{album.uuid}")
+        self.assertEqual(hits[0].type_icon, "book-image")
+
+    def test_albums_count_against_the_limit(self):
+        create_album(self.user, "Sunset walks")
+        make_photo(self.user, "sunset-beach.jpg", datetime(2024, 7, 14, tzinfo=UTC))
+
+        self.assertEqual(
+            [h.name for h in search_photos("sunset", self.user, 1)], ["Sunset walks"]
         )

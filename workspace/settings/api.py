@@ -175,6 +175,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Personal and group address book.",
         },
         {
+            "name": "Photos - Albums",
+            "description": "Albums gathering photos and videos from the library.",
+        },
+        {
             "name": "Projects",
             "description": "Collaborative projects: settings, members, archiving, and actions.",
         },

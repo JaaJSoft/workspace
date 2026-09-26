@@ -6,7 +6,8 @@ The file actions come from `POST /api/v1/files/actions`, narrowed to the ones
 that make sense on a photo (see PHOTO_ACTIONS in photos.js), so a row is only
 ever offered when the registry says the user may do it. Download is a link
 rather than a button, to carry the download attribute. "Open in Files" is
-not a file action: it is written out here, as in the notes menu.
+not a file action: it is written out here, as in the notes menu, and so are
+the album rows, which the album action registry gates instead.
 {% endcomment %}
 <ul class="menu menu-sm p-0">
   <li x-show="ctxMenu.actions === null">
@@ -25,5 +26,19 @@ not a file action: it is written out here, as in the notes menu.
   </template>
   <template x-if="ctxMenu.actions !== null">
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
+  </template>
+  {% comment %}
+    Album rows. Add to album is offered on every photo: the picker lists
+    the albums the viewer may add to. The two others act on the album on
+    screen, as its action registry allows (albumAllows).
+  {% endcomment %}
+  <template x-if="ctxMenu.actions !== null">
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="book-plus" label="Add to album" click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
+  </template>
+  <template x-if="ctxMenu.actions !== null && albumAllows('set_cover')">
+    {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
+  </template>
+  <template x-if="ctxMenu.actions !== null && albumAllows('remove_items')">
+    {% include "ui/partials/context_menu_item.html" with icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
   </template>
 </ul>

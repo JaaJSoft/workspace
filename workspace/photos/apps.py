@@ -16,6 +16,11 @@ class PhotosConfig(AppConfig):
             PropertiesSection,
             properties_section_registry,
         )
+
+        # The album actions register on import. Imported here rather than
+        # lazily so a broken import fails the boot instead of a worker
+        # answering "no actions" forever.
+        from workspace.photos.actions import album as album_actions  # noqa: F401
         from workspace.photos.search import search_photos
 
         # Imported for the @on_file_event side effect, here rather than

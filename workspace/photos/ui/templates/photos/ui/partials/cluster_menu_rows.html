@@ -1,0 +1,47 @@
+{% comment %}
+  The actions on one face cluster, as menu rows: the People grid's context
+  menu and a person's page header both list them. `cluster_expr` is an
+  Alpine expression giving { uuid, hidden } (see facesMixin() in faces.js).
+  Written out rather than built on context_menu_item.html: every row binds
+  the same caller expression, which that partial's params cannot compose.
+{% endcomment %}
+<li x-show="!({{ cluster_expr }})?.hidden">
+  <button
+    type="button"
+    class="gap-3 rounded"
+    @click="runClusterAction('hide', {{ cluster_expr }})"
+  >
+    <i data-lucide="eye-off" class="w-4 h-4"></i>
+    <span>Hide from People</span>
+  </button>
+</li>
+<li x-show="({{ cluster_expr }})?.hidden" x-cloak>
+  <button
+    type="button"
+    class="gap-3 rounded"
+    @click="runClusterAction('show', {{ cluster_expr }})"
+  >
+    <i data-lucide="eye" class="w-4 h-4"></i>
+    <span>Show in People</span>
+  </button>
+</li>
+<li>
+  <button
+    type="button"
+    class="gap-3 rounded"
+    @click="runClusterAction('merge', {{ cluster_expr }})"
+  >
+    <i data-lucide="combine" class="w-4 h-4"></i>
+    <span>Merge with…</span>
+  </button>
+</li>
+<li class="mt-0.5 pt-0.5 border-t border-base-300">
+  <button
+    type="button"
+    class="gap-3 rounded text-error"
+    @click="runClusterAction('ungroup', {{ cluster_expr }})"
+  >
+    <i data-lucide="ungroup" class="w-4 h-4"></i>
+    <span>Ungroup</span>
+  </button>
+</li>

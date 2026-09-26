@@ -1,240 +1,175 @@
-{% extends "base_with_navbar.html" %}
+{% extends "photos/ui/base.html" %}
 
-{% load static %}
-
-{% block title %}Photos - Workspace{% endblock %}
-
-{% block navbar %}
-  {% include "core/partials/navbar.html" with navbar_full_width=True %}
-{% endblock %}
-
-{% block drawer_class %}lg:drawer-open{% endblock %}
-{% block drawer_id %}photos-drawer{% endblock %}
-{% block main_class %}relative p-0 flex h-full overflow-hidden{% endblock %}
-
-{% comment %}
-  The tile width is a custom property on the root, so it outlives every swap
-  of the timeline; the server renders the stored one for the first paint.
-{% endcomment %}
-{% block drawer_attrs %}
-  x-data="photosApp()"
-  style="--photo-tile: {{ tile_width }}px"
-  :style="tileStyle()"
-  :data-selecting="selection.length > 0"
-  @ajax:missing="keepMissingTarget($event)"
-  @ajax:merged="onMerged($event)"
-{% endblock %}
-
-{% block drawer_sidebar %}
-  <div class="drawer-side z-40 h-full !overflow-visible">
-    <label for="photos-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
-
-    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
-    <aside
-      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
-      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
+{% block photos_content %}
+  {{ cluster|json_script:"photos-cluster-data" }}
+  <header
+    class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
+  >
+    {# Its own swap target: an album edit refreshes the counts and the cover without reloading the grid. #}
+    <div
+      id="photos-header"
+      class="flex {% if album %}items-start{% else %}items-center{% endif %} gap-3 px-4 py-3"
     >
-      <!-- Sidebar header -->
-      <div class="lg:border-b border-base-300 py-4 px-3 relative">
-        <div
-          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
-          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
+      {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
+      {% if album %}
+        {{ album_data|json_script:"album-data" }}
+        {% include "photos/ui/partials/album_header.html" %}
+      {% elif cluster %}
+        <a
+          href="{{ people_url }}"
+          x-target.push="photos-nav photos-content"
+          class="btn btn-ghost btn-sm btn-square shrink-0"
+          title="All people"
+          aria-label="All people"
         >
-          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
-        </div>
-      </div>
-      {% include "photos/ui/partials/sidebar_nav.html" %}
-      <!-- Bottom action: collapse on desktop -->
-      <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
-        <ul class="menu p-0">
-          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
-        </ul>
-      </div>
-    </aside>
-  </div>
-{% endblock %}
-
-{% block content %}
-  {{ viewer_prefs|json_script:"viewer-prefs-data" }}
-  {{ tile|json_script:"photo-tile-data" }}
-  {% comment %}
-    The scroll container is the swap target itself: a sidebar navigation
-    replaces it whole, so the new listing starts at the top instead of
-    inheriting the previous one's scroll offset.
-  {% endcomment %}
-  <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
-    <header
-      class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
-    >
-      {# Its own swap target: an album edit refreshes the counts and the cover without reloading the grid. #}
-      <div
-        id="photos-header"
-        class="flex {% if album %}items-start{% else %}items-center{% endif %} gap-3 px-4 py-3"
-      >
-        {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
-        {% if album %}
-          {{ album_data|json_script:"album-data" }}
-          {% include "photos/ui/partials/album_header.html" %}
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        </a>
+        {% if cluster.cover_url %}
+          <img
+            src="{{ cluster.cover_url }}"
+            alt=""
+            class="w-9 h-9 rounded-full object-cover shrink-0"
+          />
         {% else %}
           <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
-          <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
-            <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
-            <span class="text-sm text-base-content/60">{{ count_label }}</span>
-          </div>
         {% endif %}
-        {% if pending %}
-          <span
-            class="badge badge-ghost gap-1.5 max-sm:hidden"
-            title="New photos and videos show up here once their capture date has been read."
-          >
-            <span class="loading loading-spinner loading-xs"></span>
-            {{ pending }} being analyzed
-          </span>
-        {% endif %}
-        <div class="max-sm:hidden self-center">
-          {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
+        <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+          <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+          <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
-        {% if date_param %}
-          <a
-            href="{{ latest_url }}"
-            x-target.push="photos-nav photos-content"
-            class="btn btn-ghost btn-sm gap-1"
-          >
-            <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Back to latest</span>
-          </a>
-        {% endif %}
-      </div>
-      {% if scope_tabs or type_tabs %}
-        {# One row at every width: the header is sticky, so a second one would cost the grid its height for the whole scroll. #}
-        <div class="flex items-center gap-2 px-4 pb-2">
-          {% if scope_tabs %}
-            {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
-            <nav
-              class="tabs tabs-boxed tabs-sm min-w-0 grid-flow-col auto-cols-max overflow-x-auto"
-              aria-label="Library"
-            >
-              {% for tab in scope_tabs %}
-                <a
-                  href="{{ tab.url }}"
-                  x-target.push="photos-nav photos-content"
-                  class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
-                  {% if tab.active %}aria-current="page"{% endif %}
-                >
-                  <i
-                    data-lucide="{{ tab.icon }}"
-                    class="w-3.5 h-3.5 shrink-0 max-sm:hidden"
-                  ></i>
-                  <span class="max-w-40 truncate leading-5">{{ tab.label }}</span>
-                </a>
-              {% endfor %}
-            </nav>
-          {% endif %}
-          {% if type_tabs %}
-            {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. Icons only on phones. #}
-            <nav
-              class="tabs tabs-boxed tabs-sm shrink-0 ml-auto grid-flow-col auto-cols-max"
-              aria-label="Media type"
-            >
-              {% for tab in type_tabs %}
-                <a
-                  href="{{ tab.url }}"
-                  x-target.push="photos-nav photos-content"
-                  class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
-                  title="{{ tab.title }}"
-                  aria-label="{{ tab.title }}"
-                  {% if tab.active %}aria-current="page"{% endif %}
-                >
-                  <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
-                  <span class="leading-5 max-sm:hidden">{{ tab.label }}</span>
-                </a>
-              {% endfor %}
-            </nav>
-          {% endif %}
+      {% else %}
+        <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
+        <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+          <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+          <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
       {% endif %}
-    </header>
-
-    {% if entries %}
-      <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
-    {% else %}
-      <div
-        class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
-      >
-        <div class="rounded-full bg-module/10 p-5">
-          <i
-            data-lucide="{% if album %}book-image{% else %}images{% endif %}"
-            class="w-10 h-10 text-module"
-          ></i>
+      {% if pending %}
+        <span
+          class="badge badge-ghost gap-1.5 max-sm:hidden"
+          title="New photos and videos show up here once their capture date has been read."
+        >
+          <span class="loading loading-spinner loading-xs"></span>
+          {{ pending }} being analyzed
+        </span>
+      {% endif %}
+      <div class="max-sm:hidden self-center">
+        {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
+      </div>
+      {% if date_param %}
+        <a
+          href="{{ latest_url }}"
+          x-target.push="photos-nav photos-content"
+          class="btn btn-ghost btn-sm gap-1"
+        >
+          <i data-lucide="arrow-up-to-line" class="w-4 h-4"></i>
+          <span class="max-sm:hidden">Back to latest</span>
+        </a>
+      {% endif %}
+      {% if cluster %}
+        <div class="dropdown dropdown-end self-center">
+          <button
+            type="button"
+            tabindex="0"
+            class="btn btn-ghost btn-sm btn-square"
+            aria-label="Person options"
+          >
+            <i data-lucide="more-vertical" class="w-4 h-4"></i>
+          </button>
+          <ul
+            tabindex="0"
+            class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+          >
+            {% include "photos/ui/partials/cluster_menu_rows.html" with cluster_expr="currentCluster()" %}
+          </ul>
         </div>
-        {% if album %}
-          <h2 class="text-lg font-semibold">This album is empty</h2>
-          <p class="text-sm text-base-content/60 max-w-sm">
-            An album gathers photos from anywhere in your library without moving them in Files.
-            Select photos in the timeline, then choose Add to album.
-          </p>
-          <a
-            href="{{ timeline_url }}"
-            x-target.push="photos-nav photos-content"
-            class="btn btn-module btn-sm"
-          >Go to the timeline</a>
-        {% elif is_timeline_view and not date_param and not media_type %}
-          <h2 class="text-lg font-semibold">No photos yet</h2>
-          <p class="text-sm text-base-content/60 max-w-sm">
-            Photos and videos you upload to Files show up here, by the day they were taken.
-          </p>
-          <a href="{% url 'files_ui:index' %}" class="btn btn-module btn-sm">Go to Files</a>
-        {% else %}
-          <h2 class="text-lg font-semibold">Nothing here</h2>
-          <p class="text-sm text-base-content/60 max-w-sm">
-            {% if media_type == "video" %}No video matches this view.{% elif media_type == "photo" %}No photo matches this view.{% else %}Nothing in your library matches this view.{% endif %}
-          </p>
+      {% endif %}
+    </div>
+    {% if scope_tabs or type_tabs %}
+      {# One row at every width: the header is sticky, so a second one would cost the grid its height for the whole scroll. #}
+      <div class="flex items-center gap-2 px-4 pb-2">
+        {% if scope_tabs %}
+          {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
+          <nav
+            class="tabs tabs-boxed tabs-sm min-w-0 grid-flow-col auto-cols-max overflow-x-auto"
+            aria-label="Library"
+          >
+            {% for tab in scope_tabs %}
+              <a
+                href="{{ tab.url }}"
+                x-target.push="photos-nav photos-content"
+                class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+                {% if tab.active %}aria-current="page"{% endif %}
+              >
+                <i
+                  data-lucide="{{ tab.icon }}"
+                  class="w-3.5 h-3.5 shrink-0 max-sm:hidden"
+                ></i>
+                <span class="max-w-40 truncate leading-5">{{ tab.label }}</span>
+              </a>
+            {% endfor %}
+          </nav>
+        {% endif %}
+        {% if type_tabs %}
+          {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. Icons only on phones. #}
+          <nav
+            class="tabs tabs-boxed tabs-sm shrink-0 ml-auto grid-flow-col auto-cols-max"
+            aria-label="Media type"
+          >
+            {% for tab in type_tabs %}
+              <a
+                href="{{ tab.url }}"
+                x-target.push="photos-nav photos-content"
+                class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+                title="{{ tab.title }}"
+                aria-label="{{ tab.title }}"
+                {% if tab.active %}aria-current="page"{% endif %}
+              >
+                <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+                <span class="leading-5 max-sm:hidden">{{ tab.label }}</span>
+              </a>
+            {% endfor %}
+          </nav>
         {% endif %}
       </div>
     {% endif %}
-  </div>
+  </header>
 
-  {% comment %}
-    The Files properties panel, as is: same partial, same endpoint, same
-    mixin. It sits outside #photos-content so a sidebar navigation leaves it
-    open. Full-coverage overlay on mobile, in-flow 320 px panel on md+.
-  {% endcomment %}
-  <div
-    id="properties-sidebar"
-    x-show="showPropertiesPanel"
-    x-cloak
-    x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
-    x-transition:enter-start="max-md:opacity-0 md:!w-0"
-    x-transition:enter-end="max-md:opacity-100 md:!w-80"
-    x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
-    x-transition:leave-start="max-md:opacity-100 md:!w-80"
-    x-transition:leave-end="max-md:opacity-0 md:!w-0"
-    class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 shrink-0 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
-  >
-    <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>
-  </div>
-
-  {% include "photos/ui/partials/selection_bar.html" %}
-
-  {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
-  {% include "files/ui/partials/tag_dialog.html" %}
-  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="photos-context-menu" %}
-  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/album_menu.html" open="albumMenu.open" close="albumMenu.open = false" x="albumMenu.x" y="albumMenu.y" id="photos-album-menu" %}
-  {% include "photos/ui/partials/album_picker.html" %}
-  {% include "files/ui/partials/rename_dialog.html" %}
-  {% include "files/ui/partials/share_modal.html" %}
-  {% include "files/ui/partials/file_viewer_modal.html" %}
-{% endblock %}
-
-{% block extra_scripts %}
-  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
-  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
-  <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
-  <script src="{% static 'files/ui/js/tags.js' %}"></script>
-  {# The share modal's link password generator, as on the Files page. #}
-  <script src="{% static 'ui/js/password_wordlist.js' %}"></script>
-  <script src="{% static 'ui/js/password_generator.js' %}"></script>
-  <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
-  <script src="{% static 'ui/js/comments.js' %}"></script>
-  <script src="{% static 'photos/ui/js/photos.js' %}"></script>
+  {% if entries %}
+    <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
+  {% else %}
+    <div
+      class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+    >
+      <div class="rounded-full bg-module/10 p-5">
+        <i
+          data-lucide="{% if album %}book-image{% else %}images{% endif %}"
+          class="w-10 h-10 text-module"
+        ></i>
+      </div>
+      {% if album %}
+        <h2 class="text-lg font-semibold">This album is empty</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          An album gathers photos from anywhere in your library without moving them in Files.
+          Select photos in the timeline, then choose Add to album.
+        </p>
+        <a
+          href="{{ timeline_url }}"
+          x-target.push="photos-nav photos-content"
+          class="btn btn-module btn-sm"
+        >Go to the timeline</a>
+      {% elif is_timeline_view and not date_param and not media_type %}
+        <h2 class="text-lg font-semibold">No photos yet</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          Photos and videos you upload to Files show up here, by the day they were taken.
+        </p>
+        <a href="{% url 'files_ui:index' %}" class="btn btn-module btn-sm">Go to Files</a>
+      {% else %}
+        <h2 class="text-lg font-semibold">Nothing here</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          {% if media_type == "video" %}No video matches this view.{% elif media_type == "photo" %}No photo matches this view.{% else %}Nothing in your library matches this view.{% endif %}
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
 {% endblock %}

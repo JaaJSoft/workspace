@@ -179,6 +179,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Albums gathering photos and videos from the library.",
         },
         {
+            "name": "Photos - Faces",
+            "description": "Face grouping: the people found in your photos, and their corrections.",
+        },
+        {
             "name": "Projects",
             "description": "Collaborative projects: settings, members, archiving, and actions.",
         },

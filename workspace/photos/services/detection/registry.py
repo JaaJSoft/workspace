@@ -67,9 +67,17 @@ class MisconfiguredBackend(FaceBackend):
         return BackendHealth(ok=False, detail=self._message())
 
 
-def get_face_backend():
-    """The configured FaceBackend; never None, even when misconfigured."""
-    key = settings.PHOTOS_FACE_BACKEND
+def backend_keys():
+    """The keys PHOTOS_FACE_BACKEND accepts, the tests-only fake aside."""
+    return sorted(key for key in _BACKENDS if key != "fake")
+
+
+def get_face_backend(key=None):
+    """The FaceBackend *key* names, the configured one by default.
+
+    Never None, even when misconfigured.
+    """
+    key = settings.PHOTOS_FACE_BACKEND if key is None else key
     factory = _BACKENDS.get(key)
     if factory is None:
         logger.error("Unknown face backend %s", scrub(key))

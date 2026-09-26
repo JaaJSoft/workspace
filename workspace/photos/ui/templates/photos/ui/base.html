@@ -1,0 +1,126 @@
+{% extends "base_with_navbar.html" %}
+
+{% load static %}
+
+{% block title %}Photos - Workspace{% endblock %}
+
+{% comment %}
+  The module shell every Photos page shares: the sidebar, the properties
+  panel, the dialogs. A page fills #photos-content, the swap target of
+  every sidebar link together with #photos-nav.
+{% endcomment %}
+
+{% block navbar %}
+  {% include "core/partials/navbar.html" with navbar_full_width=True %}
+{% endblock %}
+
+{% block drawer_class %}lg:drawer-open{% endblock %}
+{% block drawer_id %}photos-drawer{% endblock %}
+{% block main_class %}relative p-0 flex h-full overflow-hidden{% endblock %}
+
+{% comment %}
+  The tile width is a custom property on the root, so it outlives every swap
+  of the timeline; the server renders the stored one for the first paint.
+{% endcomment %}
+{% block drawer_attrs %}
+  x-data="photosApp()"
+  style="--photo-tile: {{ tile_width }}px"
+  :style="tileStyle()"
+  :data-selecting="selection.length > 0"
+  @ajax:missing="keepMissingTarget($event)"
+  @ajax:merged="onMerged($event)"
+{% endblock %}
+
+{% block drawer_sidebar %}
+  <div class="drawer-side z-40 h-full !overflow-visible">
+    <label for="photos-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
+
+    {# Width server-rendered so the first paint, before Alpine binds, is already the final one. #}
+    <aside
+      class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 max-lg:pt-14 {% if workspace_sidebar_collapsed %}w-16{% else %}w-72{% endif %}"
+      :class="{ 'w-16': sidebarCollapsed(), 'w-72': !sidebarCollapsed() }"
+    >
+      <!-- Sidebar header -->
+      <div class="lg:border-b border-base-300 py-4 px-3 relative">
+        <div
+          class="flex items-center {% if workspace_sidebar_collapsed %}justify-center{% else %}justify-between{% endif %}"
+          :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
+        >
+          {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+        </div>
+      </div>
+      {% include "photos/ui/partials/sidebar_nav.html" %}
+      <!-- Bottom action: collapse on desktop -->
+      <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
+        <ul class="menu p-0">
+          {% include "ui/partials/drawer_item.html" with icon_expr="collapsed" icon_true="panel-left-open" icon_false="panel-left-close" label="Collapse" color="module" onclick="toggleCollapse()" title_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" aria_label_binding="collapsed ? 'Expand sidebar' : 'Collapse sidebar'" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False icon_initial=workspace_sidebar_collapsed %}
+        </ul>
+      </div>
+    </aside>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {{ viewer_prefs|json_script:"viewer-prefs-data" }}
+  {{ tile|json_script:"photo-tile-data" }}
+  {% comment %}
+    The scroll container is the swap target itself: a sidebar navigation
+    replaces it whole, so the new listing starts at the top instead of
+    inheriting the previous one's scroll offset.
+  {% endcomment %}
+  <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
+    {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
+    {{ faces_enabled|json_script:"photos-faces-enabled" }}
+    {% block photos_content %}{% endblock %}
+  </div>
+
+  {% comment %}
+    The Files properties panel, as is: same partial, same endpoint, same
+    mixin. It sits outside #photos-content so a sidebar navigation leaves it
+    open. Full-coverage overlay on mobile, in-flow 320 px panel on md+.
+  {% endcomment %}
+  <div
+    id="properties-sidebar"
+    x-show="showPropertiesPanel"
+    x-cloak
+    x-transition:enter="max-md:transition-opacity max-md:duration-150 md:transition-[width] md:ease-out md:duration-200"
+    x-transition:enter-start="max-md:opacity-0 md:!w-0"
+    x-transition:enter-end="max-md:opacity-100 md:!w-80"
+    x-transition:leave="max-md:transition-opacity max-md:duration-100 md:transition-[width] md:ease-in md:duration-150"
+    x-transition:leave-start="max-md:opacity-100 md:!w-80"
+    x-transition:leave-end="max-md:opacity-0 md:!w-0"
+    class="max-md:absolute max-md:inset-0 max-md:z-30 md:w-80 shrink-0 border-l border-base-300 bg-base-100 flex flex-col overflow-hidden"
+  >
+    <div class="md:w-80 flex-1 overflow-y-auto">{% include "files/ui/partials/properties_panel.html" %}</div>
+  </div>
+
+  {% include "photos/ui/partials/selection_bar.html" %}
+
+  {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
+  {% include "files/ui/partials/tag_dialog.html" %}
+  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/context_menu.html" open="ctxMenu.open" close="closeCtxMenu()" x="ctxMenu.x" y="ctxMenu.y" id="photos-context-menu" %}
+  {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/album_menu.html" open="albumMenu.open" close="albumMenu.open = false" x="albumMenu.x" y="albumMenu.y" id="photos-album-menu" %}
+  {% include "photos/ui/partials/album_picker.html" %}
+  {% include "files/ui/partials/rename_dialog.html" %}
+  {% include "files/ui/partials/share_modal.html" %}
+  {% include "files/ui/partials/file_viewer_modal.html" %}
+  {% if faces_available %}
+    {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/cluster_menu.html" open="clusterMenu.open" close="closeClusterMenu()" x="clusterMenu.x" y="clusterMenu.y" id="photos-cluster-menu" %}
+    {% include "photos/ui/partials/faces_dialog.html" %}
+    {% include "photos/ui/partials/merge_dialog.html" %}
+  {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/tags.js' %}"></script>
+  {# The share modal's link password generator, as on the Files page. #}
+  <script src="{% static 'ui/js/password_wordlist.js' %}"></script>
+  <script src="{% static 'ui/js/password_generator.js' %}"></script>
+  <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
+  <script src="{% static 'ui/js/comments.js' %}"></script>
+  <script src="{% static 'photos/ui/js/faces.js' %}"></script>
+  <script src="{% static 'photos/ui/js/photos.js' %}"></script>
+{% endblock %}

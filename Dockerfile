@@ -30,7 +30,19 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-# Stage 3: Runtime
+# Stage 3 (optional content): face detection weights
+# Empty unless FACE_MODELS names backends, e.g.
+#   docker build --build-arg FACE_MODELS=yunet_sface .
+# Without it the weights download on the first analysis, into
+# PHOTOS_MODEL_DIR on the data volume. Baked in, they are checked against
+# the same pinned hashes and ship with the image (~40 MB for yunet_sface).
+FROM builder AS face-models
+ARG FACE_MODELS=""
+COPY manage.py ./
+COPY workspace/ ./workspace/
+RUN mkdir -p /models     && for backend in $FACE_MODELS; do         SECRET_KEY=build-secret DEBUG=0 PHOTOS_MODEL_DIR=/models         .venv/bin/python manage.py download_face_models --backend "$backend" || exit 1;     done
+
+# Stage 4: Runtime
 FROM python:3.14-slim
 
 # OCI metadata — static labels
@@ -98,6 +110,14 @@ RUN chown appuser:appuser /app
 # with the correct owner. FILE_UPLOAD_DIRECTORY_PERMISSIONS=0o700 means a
 # directory created by root cannot be read by appuser at runtime.
 USER appuser
+
+# Face detection weights baked in by the face-models stage, if any. The
+# directory is outside the /app/data volume, which would hide it. Without
+# FACE_MODELS the variable stays empty and the weights download on first use
+# to the default under MEDIA_ROOT, where they survive a redeploy.
+ARG FACE_MODELS=""
+COPY --from=face-models --chown=appuser:appuser /models /opt/face-models
+ENV PHOTOS_MODEL_DIR=${FACE_MODELS:+/opt/face-models}
 
 # Collect static files in the image
 ENV DJANGO_SETTINGS_MODULE=workspace.settings

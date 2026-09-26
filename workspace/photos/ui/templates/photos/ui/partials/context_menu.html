@@ -7,7 +7,8 @@ that make sense on a photo (see PHOTO_ACTIONS in photos.js), so a row is only
 ever offered when the registry says the user may do it. Download is a link
 rather than a button, to carry the download attribute. "Open in Files" is
 not a file action: it is written out here, as in the notes menu, and so are
-the album rows, which the album action registry gates instead.
+the album rows, which the album action registry gates instead, and the face
+rows, offered while the user has face grouping on.
 {% endcomment %}
 <ul class="menu menu-sm p-0">
   <li x-show="ctxMenu.actions === null">
@@ -40,5 +41,15 @@ the album rows, which the album action registry gates instead.
   </template>
   <template x-if="ctxMenu.actions !== null && albumAllows('remove_items')">
     {% include "ui/partials/context_menu_item.html" with icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
+  </template>
+  {# Face rows: only the owner's photos have faces, so a photo of someone else's opens an empty dialog at worst. #}
+  <template x-if="ctxMenu.actions !== null && facesEnabled()">
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this photo" click="openFacesDialog(ctxMenu.photo)" only %}
+  </template>
+  <template x-if="ctxMenu.actions !== null && currentCluster()">
+    {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
+  </template>
+  <template x-if="ctxMenu.actions !== null && currentCluster()">
+    {% include "ui/partials/context_menu_item.html" with icon="user-x" label="Not this person" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
   </template>
 </ul>

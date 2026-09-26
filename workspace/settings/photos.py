@@ -21,8 +21,8 @@ PHOTOS_FACE_BACKEND = os.getenv("PHOTOS_FACE_BACKEND", "yunet_sface")
 # Where model weights are downloaded on first use, each checked against a
 # pinned sha256. Under MEDIA_ROOT by default, so a container keeps them on its
 # data volume; the Dockerfile's `face-models` stage bakes them into the image
-# and points this elsewhere.
-PHOTOS_MODEL_DIR = os.getenv("PHOTOS_MODEL_DIR", str(Path(MEDIA_ROOT) / "models"))
+# and points this elsewhere (empty counts as unset).
+PHOTOS_MODEL_DIR = os.getenv("PHOTOS_MODEL_DIR") or str(Path(MEDIA_ROOT) / "models")
 
 # Threads per onnxruntime session. 1 by default so several Celery worker
 # processes on one host do not each claim every core.
@@ -37,7 +37,7 @@ PHOTOS_FACES_MAX_FILE_BYTES = int(
 )
 # Faces whose shorter side is under this many px (at the decode size) are
 # dropped: too small to tell anyone apart.
-PHOTOS_FACES_MIN_SIZE = int(os.getenv("PHOTOS_FACES_MIN_SIZE", "36"))
+PHOTOS_FACES_MIN_SIZE = int(os.getenv("PHOTOS_FACES_MIN_SIZE", "24"))
 # The most faces kept per photo, the most confident first (a stadium crowd
 # would otherwise fill a library with strangers).
 PHOTOS_FACES_MAX_PER_PHOTO = int(os.getenv("PHOTOS_FACES_MAX_PER_PHOTO", "40"))

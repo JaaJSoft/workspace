@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+import numpy as np
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
@@ -199,3 +202,80 @@ class CandidateTests(FacesTestMixin, TestCase):
             ),
             [],
         )
+
+
+@faces_on
+class AnalysisFailureTests(FacesTestMixin, TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        opt_in(self.user)
+        self.photo = upload(self.user, "alice.png", faces_png((ALICE, (40, 50, 100))))
+
+    def test_a_failing_backend_stores_nothing_and_leaves_the_photo_pending(self):
+        with (
+            patch(
+                "workspace.photos.services.detection.fake.FakeFaceBackend.detect",
+                side_effect=RuntimeError("model crashed"),
+            ),
+            self.assertLogs("workspace.photos.services.face_analysis", "ERROR"),
+        ):
+            self.assertIsNone(analyze_faces(self.photo))
+
+        self.assertFalse(FaceAnalysis.objects.exists())
+        self.assertIn(self.photo, pending_faces_qs())
+
+    @override_settings(PHOTOS_FACE_BACKEND="yunet-sface")
+    def test_a_misconfigured_backend_leaves_the_photo_pending(self):
+        with self.assertLogs("workspace.photos.services.face_analysis", "ERROR"):
+            self.assertIsNone(analyze_faces(self.photo))
+
+        self.assertFalse(FaceAnalysis.objects.exists())
+
+    def test_a_photo_replaced_while_it_was_read_keeps_nothing(self):
+        written = []
+        real_save = default_storage.save
+
+        def save_then_replace(name, content):
+            written.append(real_save(name, content))
+            File.objects.filter(pk=self.photo.pk).update(content_hash="f" * 64)
+            return written[-1]
+
+        with patch.object(default_storage, "save", side_effect=save_then_replace):
+            self.assertIsNone(analyze_faces(self.photo))
+
+        self.assertFalse(Face.objects.exists())
+        self.assertFalse(FaceAnalysis.objects.exists())
+        self.assertTrue(written)
+        self.assertFalse(any(default_storage.exists(name) for name in written))
+
+    @override_settings(PHOTOS_FACES_MAX_FILE_BYTES=10)
+    def test_an_oversized_original_is_recorded_without_reading_it(self):
+        with patch(
+            "workspace.photos.services.detection.fake.FakeFaceBackend.detect"
+        ) as detect:
+            self.assertEqual(analyze_faces(self.photo), [])
+
+        detect.assert_not_called()
+        self.assertEqual(FaceAnalysis.objects.get(file=self.photo).face_count, 0)
+
+    def test_a_blob_that_cannot_be_opened_is_tried_again_later(self):
+        with (
+            patch.object(type(self.photo.content), "open", side_effect=OSError("gone")),
+            self.assertLogs("workspace.photos.services.face_analysis", "WARNING"),
+        ):
+            self.assertIsNone(analyze_faces(self.photo))
+
+        self.assertIn(self.photo, pending_faces_qs())
+
+
+class SharpnessTests(TestCase):
+    def test_a_blurred_face_scores_lower_than_a_sharp_one(self):
+        from workspace.photos.services.detection.yunet_sface import YuNetSFaceBackend
+
+        rng = np.random.default_rng(0)
+        sharp = rng.integers(0, 255, (112, 112, 3), dtype=np.uint8)
+        flat = np.full((112, 112, 3), 128, dtype=np.uint8)
+        backend = YuNetSFaceBackend()
+
+        self.assertEqual(backend.sharpness(sharp), 1.0)
+        self.assertEqual(backend.sharpness(flat), 0.0)

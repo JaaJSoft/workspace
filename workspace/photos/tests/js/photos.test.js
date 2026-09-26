@@ -20,6 +20,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
     [
       // The real mixin: photos.js spreads it, and the menu drives it.
       'workspace/files/ui/static/files/ui/js/properties_panel.js',
+      'workspace/photos/ui/static/photos/ui/js/faces.js',
       'workspace/photos/ui/static/photos/ui/js/photos.js',
     ],
     {

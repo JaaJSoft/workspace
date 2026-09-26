@@ -49,7 +49,7 @@ def _correction(fn, *args):
         raise ValidationError({"detail": str(exc)}) from exc
 
 
-@extend_schema(tags=["Photos"])
+@extend_schema(tags=["Photos - Faces"])
 class FaceClusterViewSet(
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -146,7 +146,7 @@ class FaceClusterViewSet(
         )
 
 
-@extend_schema(tags=["Photos"])
+@extend_schema(tags=["Photos - Faces"])
 class FaceViewSet(
     mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet
 ):
@@ -186,7 +186,7 @@ class FaceViewSet(
             _correction(face_corrections.confirm_face, face, face.cluster)
 
 
-@extend_schema(tags=["Photos"])
+@extend_schema(tags=["Photos - Faces"])
 class FaceCropView(CacheControlMixin, APIView):
     """The square WebP of a face.
 
@@ -218,7 +218,7 @@ class FaceCropView(CacheControlMixin, APIView):
         return FileResponse(handle, content_type="image/webp")
 
 
-@extend_schema(tags=["Photos"])
+@extend_schema(tags=["Photos - Faces"])
 class PhotoFacesView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -231,7 +231,7 @@ class PhotoFacesView(APIView):
         return Response(FaceSerializer(faces, many=True).data)
 
 
-@extend_schema(tags=["Photos"])
+@extend_schema(tags=["Photos - Faces"])
 class FaceStatusView(APIView):
     """Whether face grouping is on for the user, and how far it has come."""
 

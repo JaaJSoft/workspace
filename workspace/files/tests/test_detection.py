@@ -69,12 +69,17 @@ class DetectFromStreamTest(TestCase):
 
         from django.core.files.uploadedfile import TemporaryUploadedFile
 
-        from workspace.files.services.detection import detect_from_stream
+        from workspace.files.services.detection import (
+            detect_from_bytes,
+            detect_from_stream,
+        )
 
         upload = TemporaryUploadedFile("big.py", "text/x-python", 0, "utf-8")
         self.addCleanup(upload.close)
         upload.write(b'import os\nprint("hi")\n' * 1_000_000)  # 22 MB
         upload.seek(5)
+        # Loads the process-wide model now, so the peak below is the detection.
+        detect_from_bytes(b"")
 
         tracemalloc.start()
         self.addCleanup(tracemalloc.stop)

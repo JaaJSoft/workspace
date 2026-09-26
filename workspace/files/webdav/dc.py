@@ -58,10 +58,15 @@ class DjangoBasicDomainController(BaseDomainController):
         with _auth_lock:
             now = time.monotonic()
             # Only a miss writes, so expired entries go here or never: the
-            # cache lives as long as the worker.
-            for key, (_, cached_at) in list(_auth_cache.items()):
-                if now - cached_at >= _AUTH_TTL:
-                    del _auth_cache[key]
+            # cache lives as long as the worker. A key is only rewritten once
+            # expired, and so evicted below before its new insert: the dict
+            # stays in cache-time order and eviction stops at the first live
+            # entry instead of scanning them all.
+            while _auth_cache:
+                oldest = next(iter(_auth_cache))
+                if now - _auth_cache[oldest][1] < _AUTH_TTL:
+                    break
+                del _auth_cache[oldest]
             _auth_cache[cache_key] = (user, now)
         environ["workspace.user"] = user
         return True

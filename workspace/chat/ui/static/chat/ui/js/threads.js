@@ -124,6 +124,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     _messagesContainerId() { return 'thread-messages-container'; },
     _messageListId() { return 'thread-message-list'; },
     _messageIdPrefix() { return 'tmsg'; },
+    _messageMenuId() { return 'thread-message-context-menu'; },
     _messagesUrl(cursor) {
       const base = `/chat/threads/${this.threadRootUuid}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;
@@ -163,14 +164,14 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     },
 
     // The panel-only repaint, without the chat:refresh-messages echo above.
-    // Used by the chat:refresh-thread listener: a reaction toggled in the main
+    // Used by the chat:refresh-thread listener: a reaction or pin toggled in the main
     // flow already repainted the flow, so echoing back would fetch it twice.
     refreshPanelOnly() { return messages._refreshCurrentMessages.call(this); },
 
     // No-op on purpose: the panel's _refreshCurrentMessages already tells the
     // main flow to repaint, and dispatching chat:refresh-thread from the
     // panel would just make it fetch its own contents a second time.
-    _notifyReactionPeers() {},
+    _notifyPeerSurface() {},
 
     async init() {
       this.initRecorder?.();

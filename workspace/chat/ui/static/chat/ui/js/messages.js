@@ -11,6 +11,10 @@ window.chatMessagesMixin = function chatMessagesMixin() {
     editingMessageUuid: null,
     replyingTo: null,
     pinnedMessages: [],
+    msgMenu: {
+      open: false, x: 0, y: 0, uuid: null, authorName: '', body: '',
+      own: false, deletable: false, pinned: false,
+    },
 
     // ── Surface hooks ────────────────────────────────────────
     // The mixin is spread into more than one component per page (the
@@ -583,17 +587,17 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           await this._refreshCurrentMessages();
           // Then whatever other surface shows a copy of this message: the
           // refresh above only repaints the surface the click landed on.
-          this._notifyReactionPeers();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to toggle reaction', e);
       }
     },
 
-    // Reaction fan-out to the other surface. The main flow tells the thread
-    // panel; the panel overrides this to a no-op because its own
-    // _refreshCurrentMessages already asks the main flow to repaint.
-    _notifyReactionPeers() {
+    // Fan-out of a reaction or pin change to the other surface. The main flow
+    // tells the thread panel; the panel overrides this to a no-op because its
+    // own _refreshCurrentMessages already asks the main flow to repaint.
+    _notifyPeerSurface() {
       window.dispatchEvent(new CustomEvent('chat:refresh-thread'));
     },
 
@@ -638,6 +642,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok) {
           await this.loadPinnedMessages(this.activeConversation.uuid);
           await this._refreshCurrentMessages();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to pin message', e);
@@ -655,9 +660,88 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok || resp.status === 204) {
           await this.loadPinnedMessages(this.activeConversation.uuid);
           await this._refreshCurrentMessages();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to unpin message', e);
+      }
+    },
+
+    // ── Message context menu ─────────────────────────────────
+    // Bound once on the surface's messages container: bubbles are swapped in
+    // by alpine-ajax, so a per-bubble listener would have to be re-bound on
+    // every load. The bubble's data-* attributes (message_group.html) carry
+    // everything the menu needs.
+    openMessageContextMenu(event) {
+      const bubble = event.target.closest('[data-message-uuid]');
+      if (!bubble || !('authorName' in bubble.dataset)) return;
+      // The browser's own menu stays reachable where it does something ours
+      // cannot: links, media, a text selection, and Shift+right-click.
+      if (event.shiftKey || event.target.closest('a, img, video, audio')) return;
+      const selection = window.getSelection();
+      // containsNode(_, true), not the anchor: a drag started above the bubble
+      // anchors outside it yet still selects its text.
+      if (selection && !selection.isCollapsed && selection.containsNode(bubble, true)) return;
+      event.preventDefault();
+
+      // The main flow and the thread panel each own a menu; right-click does
+      // not trigger the other one's click-outside, so close it by hand.
+      const previous = window._chatMessageMenuOwner;
+      if (previous && previous !== this) previous.msgMenu.open = false;
+      window._chatMessageMenuOwner = this;
+
+      const data = bubble.dataset;
+      Object.assign(this.msgMenu, {
+        uuid: data.messageUuid,
+        authorName: data.authorName,
+        body: data.body || '',
+        own: 'own' in data,
+        deletable: 'deletable' in data,
+        pinned: 'pinned' in data,
+        x: event.clientX,
+        y: event.clientY,
+        open: true,
+      });
+
+      this.$nextTick(() => {
+        const menu = document.getElementById(this._messageMenuId());
+        if (!menu) return;
+        const rect = menu.getBoundingClientRect();
+        this.msgMenu.x = Math.max(8, Math.min(event.clientX, window.innerWidth - rect.width - 8));
+        this.msgMenu.y = Math.max(8, Math.min(event.clientY, window.innerHeight - rect.height - 8));
+      });
+    },
+
+    _messageMenuId() { return 'message-context-menu'; },
+
+    messageMenuAction(action, event) {
+      const { uuid, authorName, body } = this.msgMenu;
+      this.msgMenu.open = false;
+      switch (action) {
+        case 'reply':
+          // Same preview the hover toolbar passes (Django's truncatechars:100).
+          this.startReply(uuid, authorName, body.length > 100 ? `${body.slice(0, 99)}…` : body);
+          break;
+        case 'react':
+          this.openEmojiPicker('reaction', event, uuid);
+          break;
+        case 'copy':
+          navigator.clipboard.writeText(body)
+            .then(() => window.AppAlert?.success('Message copied', { duration: 2000 }))
+            .catch(() => window.AppAlert?.error('Failed to copy message'));
+          break;
+        case 'pin':
+          this.pinMessage(uuid);
+          break;
+        case 'unpin':
+          this.unpinMessage(uuid);
+          break;
+        case 'edit':
+          this.startEdit(uuid);
+          break;
+        case 'delete':
+          this.deleteMessage(uuid);
+          break;
       }
     },
 

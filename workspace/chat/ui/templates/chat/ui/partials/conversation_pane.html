@@ -241,6 +241,7 @@
               id="messages-container"
               :data-msg-animation="chatPrefs.messageAnimation"
               @ajax:merge="_vetoStaleMerge($event)"
+              @contextmenu="openMessageContextMenu($event)"
             >
               <div id="message-list"></div>
             </div>
@@ -487,6 +488,8 @@
 <div id="conv-context-menu">
   {% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/conversation_context_menu.html" open="ctxMenu.open" close="ctxMenu.open = false" x="ctxMenu.x" y="ctxMenu.y" %}
 </div>
+
+{% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/message_context_menu.html" open="msgMenu.open" close="msgMenu.open = false" x="msgMenu.x" y="msgMenu.y" id="message-context-menu" width="w-48" %}
 
 <!-- New conversation dialog -->
 {% include "chat/ui/partials/new_conversation_dialog.html" %}

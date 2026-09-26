@@ -573,6 +573,35 @@ test('a reaction in the panel does not echo back into a second panel fetch', asy
   assert.deepStrictEqual(dispatched, ['chat:refresh-messages']);
 });
 
+for (const action of ['pinMessage', 'unpinMessage']) {
+  test(`${action} in the main flow tells the panel to repaint`, async () => {
+    // The panel's copy of the message carries data-pinned, which its context
+    // menu reads to offer Pin or Unpin: left stale, it offers the wrong one.
+    const dispatched = [];
+    const ctx = loadScripts(
+      ['workspace/chat/ui/static/chat/ui/js/messages.js'],
+      {
+        getCSRFToken: () => 'csrf-token',
+        document: { querySelectorAll: () => [], getElementById: () => null },
+        fetch: async () => ({ ok: true, status: 200, json: async () => [] }),
+        CustomEvent: class {
+          constructor(type) {
+            this.type = type;
+          }
+        },
+        dispatchEvent: (e) => dispatched.push(e.type),
+      },
+    );
+    const app = ctx.chatMessagesMixin();
+    app.activeConversation = { uuid: 'c1' };
+    app._refreshCurrentMessages = async () => {};
+
+    await app[action]('m1');
+
+    assert.deepStrictEqual(dispatched, ['chat:refresh-thread']);
+  });
+}
+
 // ── Re-review findings ─────────────────────────────────────
 
 test('the edit shortcut resolves the panel surface prefix', () => {

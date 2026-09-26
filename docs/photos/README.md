@@ -96,5 +96,26 @@ one inherits its group and its confirmation.
   the user took out ("Not this person", "Ungroup") is never grouped again
   automatically.
 
+### Naming people
+
+A group is named after a contact from the **People** module: an existing one,
+from the user's own address book or a group's, or a new one created from the
+typed name. Naming never changes the contact itself, and deleting the contact
+only leaves its groups unnamed.
+
+- **One person, several groups.** The same person often spans several groups
+  (a child growing up, a beard, glasses); each stays compact, so the grouping
+  keeps matching new photos well, and they all show as one person. Saying a
+  face is someone ("Change person") puts it in that person's closest group,
+  or starts a new one of theirs when it looks like none of them.
+- **Two faces of one photo are two people** at the person level too: a photo
+  never shows one person twice, whichever of their groups the faces are in.
+- **Merging** two groups named after different people asks which name stays.
+- **On the contact's page** in People, a *Photos* section lists the photos
+  they are in, and *Use as contact photo* sets the contact's avatar from the
+  group's cover. Each user only ever sees their own photos: a contact shared
+  in a group address book shows every member their own.
+- **Search**: a person's name in the global search opens their photos.
+
 Photos analyzed by the pipeline are listed, read-only, in the admin under
 *Face analyses*; faces and groups themselves are not browsable there.

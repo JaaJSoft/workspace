@@ -38,7 +38,12 @@ from ..models import Face, FaceAnalysis, FaceCluster
 from .detection.base import FaceBackend
 from .detection.geometry import ALIGNED_SIZE, align
 from .detection.registry import get_face_backend, is_misconfigured
-from .face_preferences import faces_available, faces_enabled, opted_in_owner_ids
+from .face_preferences import (
+    faces_available,
+    faces_enabled,
+    lock_opt_in,
+    opted_in_owner_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +207,12 @@ def _analyze(file_obj, backend):
             if not current:
                 # Moved, replaced or trashed while it was read: whatever
                 # changed it queues its own analysis.
+                _delete_crops(crops)
+                return None
+            if not lock_opt_in(owner_id):
+                # Turned off while the models ran. The purge that follows
+                # the setting runs after this commits, but it must find
+                # nothing of this analysis to delete: none is written.
                 _delete_crops(crops)
                 return None
             faces = _replace_faces(file_obj, owner_id, found)

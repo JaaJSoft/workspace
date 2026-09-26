@@ -33,3 +33,19 @@ def opted_in_owner_ids():
     return UserSetting.objects.filter(
         module=MODULE, key=FACES_ENABLED, value=True
     ).values("user_id")
+
+
+def lock_opt_in(user_id):
+    """Whether *user_id* has face grouping on, locking the setting until commit.
+
+    For a write that must not outlive an opt-out: called inside the write's
+    transaction, it holds a concurrent opt-out back until the write commits
+    (PostgreSQL), or sees it if it committed first (SQLite serializes the
+    two). The setting's cache is bypassed: a stale "on" is the one answer
+    this must never give.
+    """
+    return (
+        UserSetting.objects.select_for_update()
+        .filter(user_id=user_id, module=MODULE, key=FACES_ENABLED, value=True)
+        .exists()
+    )

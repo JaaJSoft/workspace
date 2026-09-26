@@ -7,8 +7,9 @@ analyzes whatever that path missed.
 """
 
 from django.db import transaction
+from django.db.models import F, Q
 
-from workspace.files.models import FileEvent
+from workspace.files.models import File, FileEvent
 from workspace.files.services.catch_up import register_catch_up
 from workspace.files.services.event_dispatch import on_file_event
 
@@ -45,14 +46,28 @@ def analyze_media_for_event(event):
 
 @on_file_event(FileEvent.Action.MOVED)
 def follow_moved_photo(event):
-    """A photo moved into a group folder leaves its owner's face library."""
-    file_obj = event.file
-    analysis = getattr(file_obj, "face_analysis", None)
+    """A photo moved into a group folder, or given to another owner, leaves
+    its owner's face library.
+
+    A folder's move is one event for the whole subtree, so the photos under
+    it are looked up here. Those that become readable are left to the hourly
+    catch-up: one event must not queue a task per photo of a large folder.
+    """
+    moved = event.file
+    if moved.node_type == File.NodeType.FOLDER:
+        for photo in File.objects.filter(
+            moved._descendant_filter(),
+            Q(group__isnull=False) | ~Q(owner_id=F("face_analysis__owner_id")),
+            face_analysis__isnull=False,
+        ):
+            forget_faces(photo)
+        return
+    analysis = getattr(moved, "face_analysis", None)
     if analysis is not None and (
-        file_obj.group_id is not None or analysis.owner_id != file_obj.owner_id
+        moved.group_id is not None or analysis.owner_id != moved.owner_id
     ):
-        forget_faces(file_obj)
-    _queue_faces(file_obj)
+        forget_faces(moved)
+    _queue_faces(moved)
 
 
 def _queue_faces(file_obj):

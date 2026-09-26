@@ -13,7 +13,16 @@ from .face_grouping import refresh_clusters
 
 
 class CorrectionError(ValueError):
-    """A correction that cannot apply, with a message the user can read."""
+    """A correction that cannot apply. Each kind is its own subclass, so a
+    caller answers with its own wording rather than the exception's text."""
+
+
+class PhotoAlreadyInCluster(CorrectionError):
+    """Another face of the same photo is already in the target cluster."""
+
+
+class CoverNotInCluster(CorrectionError):
+    """The face chosen as cover is not one of the cluster's."""
 
 
 def merge_clusters(target, sources):
@@ -82,7 +91,7 @@ def confirm_face(face, cluster):
         .exclude(pk=face.pk)
         .exists()
     ):
-        raise CorrectionError("Another face of this photo is already in that group.")
+        raise PhotoAlreadyInCluster
     face.cluster = cluster
     face.assignment = Face.Assignment.CONFIRMED
     if face.rejected_cluster_id == cluster.pk:
@@ -91,9 +100,7 @@ def confirm_face(face, cluster):
         with transaction.atomic():
             face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     except IntegrityError as exc:
-        raise CorrectionError(
-            "Another face of this photo is already in that group."
-        ) from exc
+        raise PhotoAlreadyInCluster from exc
     refresh_clusters({cluster.pk, previous} - {None})
 
 
@@ -107,6 +114,6 @@ def start_cluster(face):
 
 def set_cover(cluster, face):
     if face.cluster_id != cluster.pk:
-        raise CorrectionError("The cover must be one of the group's faces.")
+        raise CoverNotInCluster
     cluster.cover = face
     cluster.save(update_fields=["cover", "updated_at"])

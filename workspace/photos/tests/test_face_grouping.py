@@ -6,6 +6,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
 from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services import face_grouping
 from workspace.photos.services.face_analysis import analyze_faces
 from workspace.photos.services.face_grouping import (
     LOW_QUALITY,
@@ -95,6 +96,25 @@ class ClusteringTests(FacesTestMixin, TestCase):
 
         clusters = [Face.objects.get(pk=face.pk).cluster_id for face in faces]
         self.assertEqual(clusters.count(FaceCluster.objects.get().pk), 1)
+
+    def test_a_run_offers_only_the_newest_ungrouped_faces_again(self):
+        faces = []
+        for name in ("a.png", "b.png", "c.png"):
+            faces += self._photo(name, (ALICE, (40, 50, 30)))
+        Face.objects.update(cluster=None)
+        newest = max(faces, key=lambda face: face.created_at)
+
+        with (
+            patch("workspace.photos.services.face_grouping._MAX_REVOTED", 1),
+            patch(
+                "workspace.photos.services.face_grouping.assign_faces",
+                wraps=face_grouping.assign_faces,
+            ) as assign,
+        ):
+            cluster_owner(self.user.pk)
+
+        offered = [pk for call in assign.call_args_list for pk in call.args[1]]
+        self.assertEqual(offered, [newest.pk])
 
     def test_a_confirmed_face_survives_a_clustering_run(self):
         (bob,) = self._photo("bob.png", (BOB, (40, 50, 100)))

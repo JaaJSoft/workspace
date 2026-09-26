@@ -89,3 +89,18 @@ test('a face starting a new person joins it, confirmed, and the list grows', asy
   assert.deepEqual(Array.from(faces.facesDialog.clusters, (c) => c.uuid), ['a', 'new']);
   assert.equal(faces.facesDialog.changed, true);
 });
+
+test('the progress badge follows the total, which moves while the page is open', async () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 'token',
+    fetch: async () => ({ ok: true, status: 200, json: async () => ({ enabled: true, analyzed: 12, total: 15 }) }),
+  });
+  const progress = ctx.facesProgress(10, 10);
+  progress.$ajax = () => {};
+
+  await progress.poll();
+
+  assert.equal(progress.analyzed, 12);
+  assert.equal(progress.total, 15);
+});

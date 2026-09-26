@@ -152,6 +152,27 @@ class MovedPhotoTests(FacesTestMixin, TestCase):
         self.assertFalse(FaceAnalysis.objects.exists())
         self.assertFalse(default_storage.exists(self.crop))
 
+    def test_a_folder_moved_to_a_group_folder_takes_its_photos_faces_away(self):
+        folder = FileService.create_folder(owner=self.user, name="Holidays")
+        FileService.move(self.photo, folder, acting_user=self.user)
+        group = Group.objects.create(name="Team")
+        self.user.groups.add(group)
+        team = FileService.create_folder(owner=self.user, name="Team", group=group)
+        folder.refresh_from_db()
+        FileService.move(folder, team, acting_user=self.user)
+        folder.refresh_from_db()
+
+        self.photo.refresh_from_db()
+        self.assertEqual(self.photo.group_id, group.pk)
+
+        # One event, for the folder: its photos get none of their own.
+        with self.captureOnCommitCallbacks(execute=True):
+            follow_moved_photo(FileEvent(file=folder, action=FileEvent.Action.MOVED))
+
+        self.assertFalse(Face.objects.exists())
+        self.assertFalse(FaceAnalysis.objects.exists())
+        self.assertFalse(default_storage.exists(self.crop))
+
     def test_a_photo_given_to_another_owner_is_queued_for_them(self):
         other = User.objects.create_user(username="bob", password="p")
         opt_in(other)

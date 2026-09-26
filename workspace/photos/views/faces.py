@@ -44,10 +44,18 @@ def _require_faces():
 
 
 def _correction(fn, *args):
+    # Literal messages, never the exception's own text: what reaches the
+    # client is decided here.
     try:
         fn(*args)
-    except face_corrections.CorrectionError as exc:
-        raise ValidationError({"detail": str(exc)}) from exc
+    except face_corrections.PhotoAlreadyInCluster:
+        raise ValidationError(
+            {"detail": "Another face of this photo is already in that group."}
+        ) from None
+    except face_corrections.CoverNotInCluster:
+        raise ValidationError(
+            {"detail": "The cover must be one of the group's faces."}
+        ) from None
 
 
 @extend_schema(tags=["Photos - Faces"])

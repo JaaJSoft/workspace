@@ -23,7 +23,7 @@
           title="Photos are read for faces in the background, a few at a time."
         >
           <span class="loading loading-spinner loading-xs"></span>
-          <span>Looking for faces: <span class="tabular-nums" x-text="analyzed">{{ progress.analyzed }}</span> of <span class="tabular-nums">{{ progress.total }}</span> photos</span>
+          <span>Looking for faces: <span class="tabular-nums" x-text="analyzed">{{ progress.analyzed }}</span> of <span class="tabular-nums" x-text="total">{{ progress.total }}</span> photos</span>
         </span>
       {% endif %}
       {% if faces_enabled %}

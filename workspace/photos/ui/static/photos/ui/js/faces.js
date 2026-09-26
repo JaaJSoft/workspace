@@ -372,7 +372,9 @@ window.facesProgress = function facesProgress(analyzed, total) {
       } catch (_) {
         return;
       }
+      // The total moves too: an upload or a deletion while the page is open.
       this.analyzed = status.analyzed;
+      this.total = status.total;
       if (status.analyzed >= status.total) {
         clearInterval(this._timer);
         this.$ajax(window.location.href, { targets: ['photos-nav', 'photos-content'], focus: false });

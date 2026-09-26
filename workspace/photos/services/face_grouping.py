@@ -16,6 +16,7 @@ anyway).
 
 from __future__ import annotations
 
+import itertools
 import logging
 from collections import defaultdict
 
@@ -55,6 +56,12 @@ _BLOCK = 512
 _MAX_LINKS = 64
 # The most ungrouped faces one clustering run reads, the best first.
 _MAX_CLUSTERED = 20000
+# The most ungrouped faces a clustering run offers to the existing clusters
+# again, the newest first, and how many per vote pass. Blurred faces never
+# leave the ungrouped set, so without a bound every run would re-vote a pile
+# that only grows; the older ones were voted on by earlier runs already.
+_MAX_REVOTED = 2000
+_REVOTE_BATCH = 500
 
 _QUEUED_KEY = "photos:faces:clustering-queued:{}"
 _RUNNING_KEY = "photos:faces:clustering-running:{}"
@@ -191,7 +198,7 @@ def maybe_queue_clustering(owner_id):
 def cluster_owner(owner_id):
     """Group *owner_id*'s ungrouped faces; return the number of new clusters.
 
-    First every ungrouped face gets another chance to join an existing
+    First the newest ungrouped faces get another chance to join an existing
     cluster, then DBSCAN runs over what is left. One run per owner at a time:
     two would create the same clusters twice.
     """
@@ -206,7 +213,13 @@ def cluster_owner(owner_id):
             assignment=Face.Assignment.AUTO,
             embedding__isnull=False,
         )
-        assign_faces(owner_id, list(ungrouped.values_list("pk", flat=True)))
+        newest = list(
+            ungrouped.order_by("-created_at").values_list("pk", flat=True)[
+                :_MAX_REVOTED
+            ]
+        )
+        for batch in itertools.batched(newest, _REVOTE_BATCH, strict=False):
+            assign_faces(owner_id, batch)
         created = _cluster_remaining(owner_id, ungrouped)
         refresh_clusters(
             FaceCluster.objects.filter(owner_id=owner_id).values_list("pk", flat=True)

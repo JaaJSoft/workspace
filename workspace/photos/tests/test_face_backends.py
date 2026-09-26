@@ -174,7 +174,7 @@ class RuntimeTests(SimpleTestCase):
     @override_settings(PHOTOS_ONNX_THREADS=2)
     def test_one_session_per_model_with_the_configured_threads(self):
         fake_ort = types.SimpleNamespace(
-            SessionOptions=lambda: types.SimpleNamespace(),
+            SessionOptions=types.SimpleNamespace,
             InferenceSession=MagicMock(side_effect=lambda *a, **k: object()),
         )
         model = ModelFile(name="m.onnx", sha256="x", url="u")

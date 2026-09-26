@@ -211,6 +211,37 @@ class AnalysisFailureTests(FacesTestMixin, TestCase):
         opt_in(self.user)
         self.photo = upload(self.user, "alice.png", faces_png((ALICE, (40, 50, 100))))
 
+    def test_turning_faces_off_during_the_analysis_stores_nothing(self):
+        from workspace.photos.services.detection.fake import FakeFaceBackend
+        from workspace.photos.services.face_preferences import FACES_ENABLED, MODULE
+        from workspace.users.services.settings import set_setting
+
+        real_detect = FakeFaceBackend.detect
+        written = []
+        real_save = default_storage.save
+
+        def detect_then_opt_out(backend, image):
+            # The user turns it off while the models run: the purge that
+            # follows must not be undone by this analysis committing after it.
+            with patch("workspace.photos.tasks.purge_faces.delay"):
+                set_setting(self.user, MODULE, FACES_ENABLED, False)
+            return real_detect(backend, image)
+
+        def save(name, content):
+            written.append(real_save(name, content))
+            return written[-1]
+
+        with (
+            patch.object(FakeFaceBackend, "detect", detect_then_opt_out),
+            patch.object(default_storage, "save", side_effect=save),
+        ):
+            self.assertIsNone(analyze_faces(self.photo))
+
+        self.assertFalse(Face.objects.exists())
+        self.assertFalse(FaceAnalysis.objects.exists())
+        self.assertTrue(written)
+        self.assertFalse(any(default_storage.exists(name) for name in written))
+
     def test_a_failing_backend_stores_nothing_and_leaves_the_photo_pending(self):
         with (
             patch(

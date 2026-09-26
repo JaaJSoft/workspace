@@ -171,7 +171,7 @@ class RegistrationTests(TestCase):
             {
                 "/photos",
                 "/photos?favorites=1",
-                "/photos?videos=1",
+                "/photos?type=video",
                 "/photos?date=undated",
             },
         )

@@ -275,28 +275,121 @@ class VideoTests(PhotosViewTestCase):
         )
 
     def test_videos_view(self):
-        response = self.client.get("/photos?videos=1")
+        response = self.client.get("/photos?type=video")
 
         self.assertEqual(self._tiles(response), [str(self.surf.uuid)])
         self.assertContains(response, "1 video")
         self.assertNotContains(response, "1 photo")
+
+    def test_photos_view(self):
+        response = self.client.get("/photos?type=photo")
+
+        self.assertEqual(self._tiles(response), [str(self.beach.uuid)])
+        self.assertContains(response, "1 photo")
+        self.assertNotContains(response, "1 video")
 
     def test_videos_view_keeps_its_filter_on_the_next_page(self):
         for day in range(3):
             make_video(self.user, f"clip{day}.webm", _at(2024, 6, 1 + day, 9))
 
         with patch("workspace.photos.services.timeline.PAGE_SIZE", 2):
-            response = self.client.get("/photos?videos=1")
+            response = self.client.get("/photos?type=video")
             next_page = self.client.get(_next_url(response))
 
-        self.assertIn("videos=1", _next_url(response))
+        self.assertIn("type=video", _next_url(response))
         self.assertTrue(self._tiles(next_page))
         self.assertNotIn(str(self.beach.uuid), self._tiles(next_page))
 
-    def test_sidebar_offers_the_videos_view(self):
+    def test_unknown_media_type_is_400(self):
+        for value in ("audio", "videos", "1"):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.client.get(f"/photos?type={value}").status_code, 400
+                )
+                self.assertEqual(
+                    self.client.get(f"/photos/timeline?type={value}").status_code,
+                    400,
+                )
+
+    def test_the_sidebar_leaves_the_media_type_to_the_header(self):
+        html = self.client.get("/photos").content.decode()
+        sidebar = re.search(r'id="photos-nav".*?</nav>', html, re.S)[0]
+
+        self.assertNotIn("type=video", sidebar)
+        self.assertIn('href="/photos?type=video"', html)
+
+
+class MediaTypeTabsTests(PhotosViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.beach = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+        self.surf = make_video(self.user, "surf.webm", _at(2024, 7, 14, 15))
+
+    def test_tabs_offer_all_photos_and_videos(self):
+        response = self.client.get("/photos?type=video")
+
+        tabs = response.context["type_tabs"]
+        self.assertEqual([t["label"] for t in tabs], ["All", "Photos", "Videos"])
+        self.assertEqual([t["active"] for t in tabs], [False, False, True])
+        self.assertEqual(
+            [t["url"] for t in tabs],
+            ["/photos", "/photos?type=photo", "/photos?type=video"],
+        )
+        self.assertContains(response, 'aria-label="Media type"')
+
+    def test_the_type_stacks_on_the_view_and_the_scope(self):
+        FileFavorite.objects.create(owner=self.user, file=self.beach)
+        FileFavorite.objects.create(owner=self.user, file=self.surf)
+
+        response = self.client.get("/photos?scope=all&favorites=1&type=photo")
+
+        self.assertEqual(self._tiles(response), [str(self.beach.uuid)])
+        self.assertEqual(response.context["title"], "Favorites")
+        self.assertEqual(
+            [t["url"] for t in response.context["type_tabs"]],
+            [
+                "/photos?scope=all&favorites=1",
+                "/photos?scope=all&favorites=1&type=photo",
+                "/photos?scope=all&favorites=1&type=video",
+            ],
+        )
+
+    def test_the_type_drops_the_date(self):
+        response = self.client.get("/photos?date=2024")
+
+        self.assertEqual(response.context["type_tabs"][2]["url"], "/photos?type=video")
+
+    def test_the_sidebar_links_keep_the_type(self):
+        tag = Tag.objects.create(owner=self.user, name="Summer")
+        FileTag.objects.create(file=self.surf, tag=tag)
+
+        response = self.client.get("/photos?type=video")
+
+        self.assertEqual(response.context["timeline_url"], "/photos?type=video")
+        self.assertEqual(
+            response.context["favorites_url"], "/photos?favorites=1&type=video"
+        )
+        self.assertEqual(
+            response.context["tags"][0]["url"], f"/photos?tag={tag.uuid}&type=video"
+        )
+        self.assertContains(response, 'href="/photos?type=video&amp;date=2024"')
+
+    def test_no_tabs_while_the_view_holds_a_single_kind(self):
+        self.surf.soft_delete()
+
         response = self.client.get("/photos")
 
-        self.assertContains(response, 'href="/photos?videos=1"')
+        self.assertEqual(response.context["type_tabs"], [])
+        self.assertNotContains(response, 'aria-label="Media type"')
+
+    def test_the_tabs_stay_once_a_type_is_picked(self):
+        self.surf.soft_delete()
+
+        response = self.client.get("/photos?type=video")
+
+        self.assertEqual(self._tiles(response), [])
+        self.assertEqual(len(response.context["type_tabs"]), 3)
+        self.assertContains(response, "No video matches this view.")
 
 
 class CountLabelTests(PhotosViewTestCase):

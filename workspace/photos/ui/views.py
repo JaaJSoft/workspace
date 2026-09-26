@@ -1,6 +1,7 @@
 from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import BadRequest
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import render
 from django.urls import reverse
@@ -87,10 +88,17 @@ def _scope_params(scope):
 
 
 def _filters(request):
-    """The active filters as ``(favorites, videos, tag)``; 404 on a tag not the
-    user's."""
+    """The active filters as ``(favorites, media_type, tag)``.
+
+    404 on a tag not the user's, 400 on a ``?type=`` that is neither
+    ``photo`` nor ``video``.
+    """
     favorites = is_truthy(request.GET.get("favorites"))
-    videos = is_truthy(request.GET.get("videos"))
+    media_type = None
+    if request.GET.get("type"):
+        if request.GET["type"] not in MediaItem.MediaType.values:
+            raise BadRequest("Invalid media type.")
+        media_type = MediaItem.MediaType(request.GET["type"])
     tag = None
     if request.GET.get("tag"):
         tag_uuid = parse_uuid_or_none(request.GET["tag"])
@@ -98,29 +106,61 @@ def _filters(request):
             tag = Tag.objects.filter(owner=request.user, uuid=tag_uuid).first()
         if tag is None:
             raise Http404
-    return favorites, videos, tag
+    return favorites, media_type, tag
 
 
-def _filtered_library(user, scope, favorites, videos, tag):
+def _filtered_library(user, scope, favorites, tag):
+    """The library in *scope* narrowed by the sidebar view, every media type."""
     files = library_files(user, scope)
     if favorites:
         files = files.filter(favorites__owner=user)
-    if videos:
-        files = files.filter(media_item__media_type=MediaItem.MediaType.VIDEO)
     if tag is not None:
         files = files.filter(file_tags__tag=tag)
     return files
 
 
-def _filter_params(favorites, videos, tag):
+def _of_type(files, media_type):
+    if media_type is None:
+        return files
+    return files.filter(media_item__media_type=media_type)
+
+
+def _view_filter_params(favorites, tag):
     params = {}
     if favorites:
         params["favorites"] = "1"
-    if videos:
-        params["videos"] = "1"
     if tag is not None:
         params["tag"] = str(tag.uuid)
     return params
+
+
+def _type_params(media_type):
+    return {"type": media_type.value} if media_type is not None else {}
+
+
+def _type_tabs(counts, media_type, params):
+    """The media type switcher: All, Photos, Videos.
+
+    Hidden (empty) while the view holds a single kind, as there is nothing to
+    narrow: it stays up once a type is picked, so the way back is always there.
+    """
+    if media_type is None and not (counts["photos"] and counts["videos"]):
+        return []
+    choices = [
+        (None, "All", "Photos and videos", "image-play"),
+        (MediaItem.MediaType.PHOTO, "Photos", "Photos only", "image"),
+        (MediaItem.MediaType.VIDEO, "Videos", "Videos only", "video"),
+    ]
+    return [
+        {
+            "label": label,
+            "title": title,
+            "icon": icon,
+            "url": _url_with(params | _type_params(choice)),
+            "active": choice == media_type,
+        }
+        for choice, label, title, icon in choices
+    ]
 
 
 def _scope_tabs(user, scope, filter_params):
@@ -207,11 +247,16 @@ def _date_range_label(first, last, tz):
     return f"{dateformat.format(first, 'j M Y')} - {dateformat.format(last, 'j M Y')}"
 
 
-def _count_label(counts):
+def _count_label(counts, media_type):
     """What the listing holds, as "12 photos, 3 videos".
 
-    A kind it holds none of is left out, unless both are empty.
+    A kind it holds none of, or that *media_type* filters out, is left out,
+    unless both are.
     """
+    if media_type == MediaItem.MediaType.PHOTO:
+        counts = counts | {"videos": 0}
+    elif media_type == MediaItem.MediaType.VIDEO:
+        counts = counts | {"photos": 0}
     parts = [
         f"{count} {noun}{'s' if count != 1 else ''}"
         for noun, count in (("photo", counts["photos"]), ("video", counts["videos"]))
@@ -243,7 +288,7 @@ def _url_with(params):
 def index(request):
     """The timeline, opened at its newest photo or at ``?date=``."""
     scope = _scope(request)
-    favorites, videos, tag = _filters(request)
+    favorites, media_type, tag = _filters(request)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
     position = START
@@ -253,9 +298,13 @@ def index(request):
         except ValueError:
             return HttpResponseBadRequest("Invalid date.")
 
-    files = _filtered_library(request.user, scope, favorites, videos, tag)
+    view_files = _filtered_library(request.user, scope, favorites, tag)
+    files = _of_type(view_files, media_type)
+    counts = media_type_counts(view_files)
     scope_params = _scope_params(scope)
-    filter_params = _filter_params(favorites, videos, tag)
+    type_params = _type_params(media_type)
+    view_filter_params = _view_filter_params(favorites, tag)
+    filter_params = view_filter_params | type_params
     view_params = scope_params | filter_params
     years = [
         {
@@ -273,8 +322,6 @@ def index(request):
         active_view, title, icon = f"tag:{tag.uuid}", tag.name, tag.icon or "tag"
     elif favorites:
         active_view, title, icon = "favorites", "Favorites", "star"
-    elif videos:
-        active_view, title, icon = "videos", "Videos", "video"
     else:
         active_view, title, icon = "timeline", "Timeline", "images"
 
@@ -282,28 +329,30 @@ def index(request):
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
-        "is_videos_view": active_view == "videos",
+        "media_type": media_type,
         "title": title,
         "title_icon": icon,
-        "count_label": _count_label(media_type_counts(files)),
+        "count_label": _count_label(counts, media_type),
         "pending": (
-            unanalyzed_count(request.user, scope) if active_view == "timeline" else 0
+            unanalyzed_count(request.user, scope)
+            if active_view == "timeline" and media_type is None
+            else 0
         ),
         "date_param": date_param,
         "latest_url": _url_with(view_params),
         "scope_tabs": _scope_tabs(request.user, scope, filter_params),
+        "type_tabs": _type_tabs(counts, media_type, scope_params | view_filter_params),
         "years": years,
         "tags": [
             {
                 "tag": t,
-                "url": _url_with(scope_params | {"tag": str(t.uuid)}),
+                "url": _url_with(scope_params | {"tag": str(t.uuid)} | type_params),
                 "active": tag is not None and t.pk == tag.pk,
             }
             for t in library_tags(request.user, scope)
         ],
-        "timeline_url": _url_with(scope_params),
-        "favorites_url": _url_with(scope_params | {"favorites": "1"}),
-        "videos_url": _url_with(scope_params | {"videos": "1"}),
+        "timeline_url": _url_with(scope_params | type_params),
+        "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
         "albums": _sidebar_albums(request.user),
         **_display_context(request.user),
         **_timeline_page_context(request, files, position, tz, view_params),
@@ -315,18 +364,20 @@ def index(request):
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
     scope = _scope(request)
-    favorites, videos, tag = _filters(request)
+    favorites, media_type, tag = _filters(request)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
-    files = _filtered_library(request.user, scope, favorites, videos, tag)
+    files = _of_type(_filtered_library(request.user, scope, favorites, tag), media_type)
     context = _timeline_page_context(
         request,
         files,
         position,
         get_user_timezone(request.user),
-        _scope_params(scope) | _filter_params(favorites, videos, tag),
+        _scope_params(scope)
+        | _view_filter_params(favorites, tag)
+        | _type_params(media_type),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)
 
@@ -347,7 +398,7 @@ def album(request, uuid):
         "active_view": f"album:{album.uuid}",
         "title": album.title,
         "title_icon": "book-image",
-        "count_label": _count_label(media_type_counts(files)),
+        "count_label": _count_label(media_type_counts(files), None),
         "album": {
             "card": card,
             "manual": album.sort_mode == Album.SortMode.MANUAL,
@@ -365,7 +416,6 @@ def album(request, uuid):
         ],
         "timeline_url": library_url,
         "favorites_url": _url_with({"favorites": "1"}),
-        "videos_url": _url_with({"videos": "1"}),
         "albums": _sidebar_albums(request.user, album),
         **_display_context(request.user),
         **_album_page_context(request, album, files, None, tz),

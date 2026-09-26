@@ -95,7 +95,7 @@ class PhotosConfig(AppConfig):
                     name="Videos",
                     keywords=["videos", "movies", "clips", "recordings"],
                     icon="video",
-                    url="/photos?videos=1",
+                    url="/photos?type=video",
                     kind="navigate",
                     module_slug="photos",
                     order=14,

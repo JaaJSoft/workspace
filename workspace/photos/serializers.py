@@ -78,6 +78,12 @@ class FaceClusterSerializer(serializers.ModelSerializer):
         return _crop_url(cluster.cover_id)
 
 
+class FaceClusterCreateSerializer(serializers.Serializer):
+    face = serializers.UUIDField(
+        help_text="The face the new cluster starts from; it leaves its current one."
+    )
+
+
 class FaceClusterMergeSerializer(serializers.Serializer):
     clusters = serializers.ListField(
         child=serializers.UUIDField(),

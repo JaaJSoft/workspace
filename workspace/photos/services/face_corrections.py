@@ -97,6 +97,14 @@ def confirm_face(face, cluster):
     refresh_clusters({cluster.pk, previous} - {None})
 
 
+def start_cluster(face):
+    """This is someone new: a cluster of its own for *face*, confirmed."""
+    with transaction.atomic():
+        cluster = FaceCluster.objects.create(owner_id=face.owner_id)
+        confirm_face(face, cluster)
+    return cluster
+
+
 def set_cover(cluster, face):
     if face.cluster_id != cluster.pk:
         raise CorrectionError("The cover must be one of the group's faces.")

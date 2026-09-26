@@ -81,7 +81,7 @@
             <button
               type="button"
               class="btn btn-ghost btn-xs"
-              :disabled="facesDialog.busy || !pickableClusters(face).length"
+              :disabled="facesDialog.busy"
               @click="facesDialog.picking = facesDialog.picking === face.uuid ? null : face.uuid"
             >
               <i data-lucide="users-round" class="w-3.5 h-3.5"></i>
@@ -93,6 +93,17 @@
             x-cloak
             class="mt-2 grid grid-cols-6 gap-2 rounded-lg bg-base-200 p-2"
           >
+            {# Someone who has no cluster yet: the face starts one of its own. #}
+            <button
+              type="button"
+              class="flex aspect-square items-center justify-center rounded-full border-2 border-dashed border-base-content/30 text-base-content/60 hover:border-module hover:text-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+              title="New person"
+              aria-label="New person"
+              :disabled="facesDialog.busy"
+              @click="startCluster(face)"
+            >
+              <i data-lucide="user-plus" class="w-5 h-5"></i>
+            </button>
             <template x-for="cluster in pickableClusters(face)" :key="cluster.uuid">
               <button
                 type="button"

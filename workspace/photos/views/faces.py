@@ -29,6 +29,7 @@ from ..queries import (
     user_faces,
 )
 from ..serializers import (
+    FaceClusterCreateSerializer,
     FaceClusterMergeSerializer,
     FaceClusterSerializer,
     FaceSerializer,
@@ -90,6 +91,32 @@ class FaceClusterViewSet(
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        summary="Start a cluster from a face",
+        description=(
+            "The face is someone who has no cluster yet: it moves to a new "
+            "one, confirmed."
+        ),
+        request=FaceClusterCreateSerializer,
+        responses={201: FaceClusterSerializer},
+    )
+    def create(self, request):
+        _require_faces()
+        serializer = FaceClusterCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        face = (
+            user_faces(request.user)
+            .filter(pk=serializer.validated_data["face"])
+            .first()
+        )
+        if face is None:
+            raise ValidationError({"face": "No such face."})
+        cluster = face_corrections.start_cluster(face)
+        created = user_face_clusters(request.user).get(pk=cluster.pk)
+        return Response(
+            self.get_serializer(created).data, status=status.HTTP_201_CREATED
+        )
 
     def perform_update(self, serializer):
         cluster = serializer.instance

@@ -64,3 +64,28 @@ test('merge selection toggles', () => {
   assert.equal(faces.isMergeSelected(CAROL), true);
   assert.equal(faces.isMergeSelected(BOB), false);
 });
+
+test('a face starting a new person joins it, confirmed, and the list grows', async () => {
+  const requests = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null, cookie: '' },
+    getCSRFToken: () => 'token',
+    fetch: async (url, options) => {
+      requests.push([url, options.method, JSON.parse(options.body)]);
+      return { ok: true, status: 201, json: async () => ({ uuid: 'new', photo_count: 1, cover_url: '/n' }) };
+    },
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.facesDialog.clusters = [ALICE];
+  faces.facesDialog.faces = [{ uuid: 'f1', cluster: 'a', assignment: 'auto' }];
+
+  await faces.startCluster(faces.facesDialog.faces[0]);
+
+  assert.deepEqual(requests.map((r) => [r[0], r[1], { ...r[2] }]), [
+    ['/api/v1/photos/clusters', 'POST', { face: 'f1' }],
+  ]);
+  assert.equal(faces.facesDialog.faces[0].cluster, 'new');
+  assert.equal(faces.facesDialog.faces[0].assignment, 'confirmed');
+  assert.deepEqual(Array.from(faces.facesDialog.clusters, (c) => c.uuid), ['a', 'new']);
+  assert.equal(faces.facesDialog.changed, true);
+});

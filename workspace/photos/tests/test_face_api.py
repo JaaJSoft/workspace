@@ -201,6 +201,67 @@ class ClusterCorrectionTests(FaceApiTestCase):
         self.assertIsNone(bob_face.cluster_id)
 
 
+class NewClusterTests(FaceApiTestCase):
+    def test_a_face_starts_a_person_of_its_own(self):
+        face = self.face("alice-2.png")
+
+        response = self.client.post(
+            CLUSTERS, {"face": str(face.pk)}, content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["photo_count"], 1)
+        face.refresh_from_db()
+        self.assertEqual(str(face.cluster_id), response.json()["uuid"])
+        self.assertEqual(face.assignment, Face.Assignment.CONFIRMED)
+        self.assertEqual(self.alice.faces.count(), 2)
+
+    def test_the_new_person_survives_a_clustering_run(self):
+        face = self.face("alice-2.png")
+        self.client.post(
+            CLUSTERS, {"face": str(face.pk)}, content_type="application/json"
+        )
+        new_cluster = Face.objects.get(pk=face.pk).cluster_id
+
+        cluster_owner(self.user.pk)
+
+        self.assertEqual(Face.objects.get(pk=face.pk).cluster_id, new_cluster)
+
+    def test_the_last_face_leaving_a_cluster_takes_it_away(self):
+        face = self.face("bob.png")
+        self.face("pair.png", self.bob).delete()
+
+        self.client.post(
+            CLUSTERS, {"face": str(face.pk)}, content_type="application/json"
+        )
+
+        self.assertFalse(FaceCluster.objects.filter(pk=self.bob.pk).exists())
+
+    def test_refuses_someone_elses_face(self):
+        other = User.objects.create_user(username="bob", password="p")
+        opt_in(other)
+        self.client.force_login(other)
+
+        response = self.client.post(
+            CLUSTERS,
+            {"face": str(self.face("bob.png").pk)},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(FaceCluster.objects.filter(owner=other).count(), 0)
+
+    @override_settings(PHOTOS_FACES_ENABLED=False)
+    def test_missing_on_an_instance_without_faces(self):
+        response = self.client.post(
+            CLUSTERS,
+            {"face": str(self.face("bob.png").pk)},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+
 class FaceCorrectionTests(FaceApiTestCase):
     def url(self, face):
         return f"/api/v1/photos/faces/{face.pk}"

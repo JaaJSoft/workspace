@@ -279,6 +279,27 @@ window.photosFacesMixin = function photosFacesMixin() {
       return this._correctFace(face, { cluster: cluster.uuid });
     },
 
+    // Someone who has no cluster yet: the face starts one, confirmed.
+    async startCluster(face) {
+      this.facesDialog.busy = true;
+      try {
+        const cluster = await facesRequest(`${FACES_API}/clusters`, {
+          method: 'POST',
+          body: { face: face.uuid },
+        });
+        this.facesDialog.clusters = [...this.facesDialog.clusters, cluster];
+        this.facesDialog.faces = this.facesDialog.faces.map((f) => (
+          f.uuid === face.uuid ? { ...f, cluster: cluster.uuid, assignment: 'confirmed' } : f
+        ));
+        this.facesDialog.picking = null;
+        this.facesDialog.changed = true;
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not create the person');
+      } finally {
+        this.facesDialog.busy = false;
+      }
+    },
+
     closeFacesDialog() {
       document.getElementById('photo-faces-dialog').close();
     },

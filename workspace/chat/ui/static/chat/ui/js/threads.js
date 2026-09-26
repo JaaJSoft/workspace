@@ -124,6 +124,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     _messagesContainerId() { return 'thread-messages-container'; },
     _messageListId() { return 'thread-message-list'; },
     _messageIdPrefix() { return 'tmsg'; },
+    _messageMenuId() { return 'thread-message-context-menu'; },
     _messagesUrl(cursor) {
       const base = `/chat/threads/${this.threadRootUuid}/messages`;
       return cursor ? `${base}?before=${cursor}` : base;

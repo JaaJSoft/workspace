@@ -67,11 +67,17 @@
     </div>
     <!-- Placeholders the panel's first $ajax load replaces: the root message
          renders outside the paginated list so "load older" cannot sink it. -->
-    <div id="thread-messages-container" @ajax:merge="_vetoStaleMerge($event)">
+    <div
+      id="thread-messages-container"
+      @ajax:merge="_vetoStaleMerge($event)"
+      @contextmenu="openMessageContextMenu($event)"
+    >
       <div id="thread-root-message"></div>
       <div id="thread-message-list"></div>
     </div>
   </div>
 
   <div data-testid="thread-composer">{% include "chat/ui/partials/_composer.html" %}</div>
+
+  {% include "ui/partials/context_menu_panel.html" with items="chat/ui/partials/message_context_menu.html" open="msgMenu.open" close="msgMenu.open = false" x="msgMenu.x" y="msgMenu.y" id="thread-message-context-menu" width="w-48" %}
 </div>

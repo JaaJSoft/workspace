@@ -1,0 +1,16 @@
+{% comment %}
+Rows of the message context menu. The panel around them is
+`ui/partials/context_menu_panel.html`, included once per message surface
+(conversation_pane.html, thread_panel.html).
+{% endcomment %}
+<ul class="menu menu-sm p-0">
+  {% include "ui/partials/context_menu_item.html" with icon="reply" label="Reply" click="messageMenuAction('reply')" only %}
+  {% include "ui/partials/context_menu_item.html" with icon="smile-plus" label="Add reaction" click="messageMenuAction('react', $event)" only %}
+  {% include "ui/partials/context_menu_item.html" with show="msgMenu.body" icon="copy" label="Copy text" click="messageMenuAction('copy')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="!msgMenu.pinned" icon="pin" label="Pin message" click="messageMenuAction('pin')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="msgMenu.pinned" icon="pin-off" label="Unpin message" click="messageMenuAction('unpin')" only %}
+  {% include "ui/partials/context_menu_item.html" with show="msgMenu.own && msgMenu.body" icon="pencil" label="Edit" click="messageMenuAction('edit')" only %}
+
+  <hr x-show="msgMenu.deletable" class="my-1 border-base-300" />
+  {% include "ui/partials/context_menu_item.html" with show="msgMenu.deletable" icon="trash-2" label="Delete" tone="error" click="messageMenuAction('delete')" only %}
+</ul>

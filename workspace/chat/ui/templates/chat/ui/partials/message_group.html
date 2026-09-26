@@ -37,8 +37,10 @@
         The quoted message's thread root rides along (thread_root_id: reply_to is select_related, its FK column
         costs no query) so a quote pointing into a thread opens the panel instead of paging the main flow back
         forever looking for a reply that is not there.
+        data-author-name and the flags after it feed the right-click menu (openMessageContextMenu); a bubble
+        without data-author-name (optimistic, deleted) gets no menu.
       {% endcomment %}
-      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" {% if msg.body_html %}data-has-body{% endif %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% if msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.author.get_full_name|default:msg.reply_to.author.username }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
+      <div slot="message" id="{{ prefix }}-{{ msg.uuid }}" data-message-uuid="{{ msg.uuid }}" data-body="{{ msg.body }}" data-author-name="{{ msg.author.get_full_name|default:msg.author.username }}" {% if is_own %}data-own{% endif %} {% if is_own or is_bot %}data-deletable{% endif %} {% if msg.uuid in pinned_message_ids %}data-pinned{% endif %} {% if msg.body_html %}data-has-body{% endif %} {% if msg.reply_to and msg.reply_to.uuid != hide_quote_for %} data-reply-uuid="{{ msg.reply_to.uuid }}" {% if msg.reply_to.thread_root_id %}data-reply-thread-root="{{ msg.reply_to.thread_root_id }}"{% endif %} {% if msg.reply_to.deleted_at %} data-reply-deleted {% else %} data-reply-author="{{ msg.reply_to.author.get_full_name|default:msg.reply_to.author.username }}" data-reply-preview="{{ msg.reply_to.body|truncatechars:100 }}" {% endif %} {% endif %}>
 
         {% if msg.body_html %}
           {# Capped here, not on the bubble: attachments sit in it too #}

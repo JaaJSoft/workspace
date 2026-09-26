@@ -139,18 +139,19 @@ def _type_tabs(counts, media_type, params):
     if media_type is None and not (counts["photos"] and counts["videos"]):
         return []
     choices = [
-        (None, "All", "layers"),
-        (MediaItem.MediaType.PHOTO, "Photos", "image"),
-        (MediaItem.MediaType.VIDEO, "Videos", "video"),
+        (None, "All", "Photos and videos", "image-play"),
+        (MediaItem.MediaType.PHOTO, "Photos", "Photos only", "image"),
+        (MediaItem.MediaType.VIDEO, "Videos", "Videos only", "video"),
     ]
     return [
         {
             "label": label,
+            "title": title,
             "icon": icon,
             "url": _url_with(params | _type_params(choice)),
             "active": choice == media_type,
         }
-        for choice, label, icon in choices
+        for choice, label, title, icon in choices
     ]
 
 

@@ -95,11 +95,12 @@
         {% endif %}
       </div>
       {% if scope_tabs or type_tabs %}
-        <div class="flex flex-wrap items-center gap-2 px-4 pb-2">
+        {# One row at every width: the header is sticky, so a second one would cost the grid its height for the whole scroll. #}
+        <div class="flex items-center gap-2 px-4 pb-2">
           {% if scope_tabs %}
             {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
             <nav
-              class="tabs tabs-boxed tabs-sm max-w-full grid-flow-col auto-cols-max overflow-x-auto"
+              class="tabs tabs-boxed tabs-sm min-w-0 grid-flow-col auto-cols-max overflow-x-auto"
               aria-label="Library"
             >
               {% for tab in scope_tabs %}
@@ -109,16 +110,19 @@
                   class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
                   {% if tab.active %}aria-current="page"{% endif %}
                 >
-                  <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+                  <i
+                    data-lucide="{{ tab.icon }}"
+                    class="w-3.5 h-3.5 shrink-0 max-sm:hidden"
+                  ></i>
                   <span class="max-w-40 truncate leading-5">{{ tab.label }}</span>
                 </a>
               {% endfor %}
             </nav>
           {% endif %}
           {% if type_tabs %}
-            {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. #}
+            {# Photos, videos or both, on top of the sidebar view and the library; the date does not carry over. Icons only on phones. #}
             <nav
-              class="tabs tabs-boxed tabs-sm grid-flow-col auto-cols-max sm:ml-auto"
+              class="tabs tabs-boxed tabs-sm shrink-0 ml-auto grid-flow-col auto-cols-max"
               aria-label="Media type"
             >
               {% for tab in type_tabs %}
@@ -126,10 +130,12 @@
                   href="{{ tab.url }}"
                   x-target.push="photos-nav photos-content"
                   class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+                  title="{{ tab.title }}"
+                  aria-label="{{ tab.title }}"
                   {% if tab.active %}aria-current="page"{% endif %}
                 >
                   <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
-                  <span class="leading-5">{{ tab.label }}</span>
+                  <span class="leading-5 max-sm:hidden">{{ tab.label }}</span>
                 </a>
               {% endfor %}
             </nav>

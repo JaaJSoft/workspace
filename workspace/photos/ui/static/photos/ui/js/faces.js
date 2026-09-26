@@ -849,12 +849,10 @@ window.faceSelectionMixin = function faceSelectionMixin() {
       this.selectedFaces = this.selectedFaces.filter((uuid) => !done.has(uuid));
       if (result.done.length) this.facesSettled(result.done, body.action);
       const message = faceBatchMessage(body.action, result, target);
-      // Top right: the selection bar holds the bottom of the page.
       if (!result.done.length) {
-        window.AppAlert.warning(message, { position: 'top-right' });
+        window.AppAlert.warning(message);
       } else {
         window.AppAlert.success(message, {
-          position: 'top-right',
           duration: 8000,
           actions: result.undo ? [{ label: 'Undo', onClick: () => undoFaceBatch(result.undo) }] : [],
         });

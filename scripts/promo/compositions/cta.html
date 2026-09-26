@@ -9,16 +9,15 @@
     <div id="cta-root" data-composition-id="cta" data-width="1920" data-height="1080">
       <style>
         #cta-root { position: absolute; inset: 0; }
-        .cta .arm { position: absolute; left: 50%; top: 36%; width: 0; height: 0; }
+        .cta .arm { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
         .cta .arm .app-icon { left: 0; top: 0; width: 130px; height: 130px; margin: -65px 0 0 -65px; }
         .cta .arm .app-icon svg { width: 64px; height: 64px; }
-        .cta .cta-logo { position: absolute; left: 50%; top: 36%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
+        .cta .cta-logo { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
         .cta .ring { position: absolute; inset: -6px; border-radius: 30%; border: 6px solid #fff; opacity: 0; }
         .cta .title { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-size: 190px; }
         .cta .tag { position: absolute; left: 0; right: 0; top: 74%; text-align: center; font-size: 64px; }
         .cta .url { position: absolute; left: 0; right: 0; top: 87%; text-align: center; }
         @media (orientation: portrait) {
-          .cta .arm, .cta .cta-logo { top: 34%; }
           .cta .title { top: 44%; font-size: 150px; }
           .cta .tag { top: 55%; font-size: 60px; padding: 0 60px; }
           .cta .url { top: 68%; }
@@ -45,12 +44,15 @@
         (() => {
           // logo-assemble-lockup, flat: on the drop every module bursts out
           // of the centre, circles, and collapses back into the mark; the
-          // lockup then builds and holds while the last chord rings.
+          // mark then rises to the lockup, which holds while the last chord rings.
           const { $, $$, at, PORTRAIT } = window.promo.scene("cta");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
           const arms = $$(".arm");
-          const radius = PORTRAIT ? 360 : 400;
+          // Tile half-size 65 + a margin: the wheel never touches the frame edge.
+          const radius = 380;
+          // The wheel turns around the frame centre; the lockup sits higher.
+          const lift = PORTRAIT ? -0.16 * 1920 : -0.14 * 1080;
           arms.forEach((arm, i) => {
             const base = (i / arms.length) * 360;
             const icon = arm.firstElementChild;
@@ -62,6 +64,7 @@
             tl.to(icon, { opacity: 0, duration: 0.12, ease: "none" }, at(5) - 0.12);
           });
           pop(tl, $(".cta-logo"), at(5), { duration: 0.6 });
+          tl.to($(".cta-logo"), { y: lift, duration: 0.4, ease: "power3.inOut" }, at(6) - 0.25);
           $$(".ring").forEach((ring, i) => {
             tl.fromTo(ring, { scale: 1, opacity: 1 }, { scale: 2.6, opacity: 0, duration: 1.0, ease: "power3.out" }, at(5.2 + i));
           });

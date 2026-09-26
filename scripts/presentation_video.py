@@ -1,39 +1,40 @@
 """Render the Workspace presentation video.
 
-Captures every module from a seeded throwaway demo, lays the captures out on
-an animated stage (``scripts/presentation/stage/``), synthesizes a soundtrack
-locked to the same tempo, and encodes the whole thing with ffmpeg:
+Captures every module from a seeded throwaway demo, synthesizes a soundtrack
+locked to the video's tempo, and writes a HyperFrames composition that lays
+the captures out and animates them (``scripts/presentation/composition/``),
+then renders it with the HyperFrames CLI:
 
-    uv run python scripts/presentation_video.py               # full build
-    uv run python scripts/presentation_video.py --skip-capture
-    uv run python scripts/presentation_video.py --player-only # no mp4, just the player
+    uv run python scripts/presentation_video.py                 # full build
+    uv run python scripts/presentation_video.py --skip-capture  # reuse the captures
+    uv run python scripts/presentation_video.py --skip-capture --preview
+    uv run python scripts/presentation_video.py --skip-capture --stills 12 44.5
 
-Everything lands in ``build/presentation/`` (git-ignored). ``index.html`` in
-there is a self-contained player: open it in a browser to watch the video live
-with its music, scrub with the arrow keys - the fastest way to iterate on the
-animation, since the mp4 is rendered from the very same page frame by frame.
+Everything lands in ``build/presentation/`` (git-ignored), which is a plain
+HyperFrames project: ``--preview`` opens it in HyperFrames Studio to scrub the
+timeline with its music, and ``npx hyperframes <command> build/presentation``
+works on it as on any other.
 
 What the video says lives in ``scripts/presentation/scenes.py``; a new module
 on the home dashboard shows up on its own with a generic scene until it gets
 a proper entry there.
 
-Requirements: the ``dev`` dependency group (Playwright), a Chromium install
-(``uv run playwright install chromium``) and ``ffmpeg`` on the PATH.
+Requirements: the ``dev`` dependency group (Playwright) with a Chromium
+install (``uv run playwright install chromium``) for the captures, Node.js 22+
+and ``ffmpeg`` on the PATH. The HyperFrames toolchain is pinned in
+``scripts/presentation/package.json`` and installed on first run.
 """
 
 import argparse
-import json
 import os
 import re
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STAGE_DIR = Path(__file__).resolve().parent / "presentation" / "stage"
-LUCIDE_JS = REPO_ROOT / "workspace/common/static/ui/js/vendor/lucide/lucide.js"
+TOOLCHAIN = REPO_ROOT / "scripts" / "presentation"
 DEFAULT_OUT = REPO_ROOT / "build" / "presentation"
 
 WIDTH, HEIGHT = 1920, 1080
@@ -114,7 +115,8 @@ def build_timeline(scenes, fps):
 
     def add(kind, bars, **data):
         nonlocal cursor
-        sections.append({"kind": kind, "start": cursor * bar, "bars": bars, **data})
+        section = {"kind": kind, "key": kind, "start": cursor * bar, "bars": bars}
+        sections.append({**section, **data})
         cursor += bars
 
     # drumBars: how many bars from the section start the drums play. The
@@ -171,86 +173,26 @@ def build_timeline(scenes, fps):
     }
 
 
-def write_player(out_dir: Path, timeline):
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for src in STAGE_DIR.iterdir():
-        shutil.copy2(src, out_dir / src.name)
-    shutil.copy2(LUCIDE_JS, out_dir / "lucide.js")
-    # A script, not JSON: the player must also work straight from file://,
-    # where fetch() is refused.
-    (out_dir / "timeline.js").write_text(
-        "window.TIMELINE = " + json.dumps(timeline, indent=1) + ";\n",
-        encoding="utf-8",
+def hyperframes(*args):
+    """Run the pinned HyperFrames CLI, installing it on first use."""
+    npm = shutil.which("npm")
+    npx = shutil.which("npx")
+    if not npm or not npx:
+        sys.exit("Node.js 22+ is required (npm and npx on the PATH).")
+    if not (TOOLCHAIN / "node_modules" / "hyperframes").is_dir():
+        print("Installing the HyperFrames toolchain...")
+        subprocess.run(
+            [npm, "ci", "--no-fund", "--no-audit"], cwd=TOOLCHAIN, check=True
+        )
+    env = {
+        **os.environ,
+        # A repository script has no business reporting usage anywhere.
+        "HYPERFRAMES_NO_TELEMETRY": "1",
+        "HYPERFRAMES_SKIP_SKILLS": "1",
+    }
+    return subprocess.run(
+        [npx, "--no-install", "hyperframes", *args], cwd=TOOLCHAIN, env=env
     )
-
-
-def open_stage(p, out_dir: Path):
-    from scripts.screenshots import chromium_path
-
-    browser = p.chromium.launch(executable_path=chromium_path())
-    page = browser.new_page(viewport={"width": WIDTH, "height": HEIGHT})
-    errors = []
-    page.on("pageerror", lambda exc: errors.append(str(exc)))
-    page.goto((out_dir / "index.html").as_uri() + "?render")
-    page.wait_for_function("window.stage && window.stage.ready", timeout=60000)
-    if errors:
-        raise RuntimeError(f"stage failed to load: {errors}")
-    missing = page.evaluate("window.stage.missingIcons")
-    if missing:
-        print(f"  ! unknown lucide icons, fix scenes.py: {missing}")
-    return browser, page
-
-
-def render_stills(out_dir: Path, times):
-    from playwright.sync_api import sync_playwright
-
-    stills = out_dir / "stills"
-    stills.mkdir(exist_ok=True)
-    with sync_playwright() as p:
-        browser, page = open_stage(p, out_dir)
-        for t in times:
-            page.evaluate("t => window.stage.render(t)", t)
-            target = stills / f"t{t:06.2f}.png"
-            page.screenshot(path=target)
-            print(f"  {target}")
-        browser.close()
-
-
-def render_video(out_dir: Path, timeline, audio: Path, output: Path):
-    from playwright.sync_api import sync_playwright
-
-    fps = timeline["fps"]
-    frames = round(timeline["duration"] * fps)
-    ffmpeg = subprocess.Popen(
-        [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "image2pipe", "-framerate", str(fps), "-c:v", "mjpeg", "-i", "-",
-            "-i", str(audio),
-            "-c:v", "libx264", "-preset", "slow", "-crf", "18",
-            "-pix_fmt", "yuv420p", "-tune", "animation",
-            "-c:a", "aac", "-b:a", "192k",
-            "-shortest", "-movflags", "+faststart",
-            str(output),
-        ],
-        stdin=subprocess.PIPE,
-    )  # fmt: skip
-    started = time.monotonic()
-    with sync_playwright() as p:
-        browser, page = open_stage(p, out_dir)
-        for frame in range(frames):
-            page.evaluate("t => window.stage.render(t)", frame / fps)
-            ffmpeg.stdin.write(page.screenshot(type="jpeg", quality=94))
-            if frame % fps == 0:
-                elapsed = time.monotonic() - started
-                eta = elapsed / (frame + 1) * (frames - frame - 1)
-                print(
-                    f"\r  frame {frame}/{frames}  (eta {eta:4.0f}s)", end="", flush=True
-                )
-        browser.close()
-    ffmpeg.stdin.close()
-    if ffmpeg.wait() != 0:
-        raise RuntimeError("ffmpeg failed")
-    print()
 
 
 def main():
@@ -261,16 +203,21 @@ def main():
         help="reuse the screenshots of a previous run",
     )
     parser.add_argument(
-        "--player-only",
+        "--preview",
         action="store_true",
-        help="build the browser player, do not encode the mp4",
+        help="open the composition in HyperFrames Studio instead of rendering",
     )
     parser.add_argument(
         "--stills",
         nargs="+",
         type=float,
         metavar="SECONDS",
-        help="write still frames at these instants to stills/ instead of the mp4",
+        help="snapshot these instants instead of rendering the mp4",
+    )
+    parser.add_argument(
+        "--draft",
+        action="store_true",
+        help="fast, lower-quality render for iterating",
     )
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
@@ -310,9 +257,7 @@ def main():
     if missing:
         sys.exit(f"Missing captures (run without --skip-capture): {missing}")
 
-    print(f"Writing the player to {out_dir}/ ...")
-    write_player(out_dir, timeline)
-
+    out_dir.mkdir(parents=True, exist_ok=True)
     if args.music:
         audio = out_dir / ("soundtrack" + args.music.suffix)
         shutil.copy2(args.music, audio)
@@ -322,19 +267,34 @@ def main():
         print("Synthesizing the soundtrack...")
         audio = out_dir / "soundtrack.wav"
         render_soundtrack(timeline, audio)
-    (out_dir / "audio.js").write_text(
-        f"window.SOUNDTRACK = {json.dumps(audio.name)};\n", encoding="utf-8"
-    )
 
+    from scripts.presentation.composition import write_project
+
+    print(f"Writing the composition to {out_dir}/ ...")
+    write_project(out_dir, timeline, audio.name)
+
+    if args.preview:
+        hyperframes("preview", str(out_dir))
+        return
     if args.stills:
-        render_stills(out_dir, args.stills)
-        return
-    if args.player_only:
-        print(f"Done. Open {out_dir / 'index.html'}")
-        return
+        at = ",".join(f"{t:g}" for t in args.stills)
+        sys.exit(hyperframes("snapshot", str(out_dir), "--at", at).returncode)
+    if hyperframes("check", str(out_dir)).returncode:
+        sys.exit("The composition does not pass `hyperframes check`.")
     output = out_dir / "workspace.mp4"
     print(f"Rendering {output} ...")
-    render_video(out_dir, timeline, audio, output)
+    result = hyperframes(
+        "render",
+        str(out_dir),
+        "--output",
+        str(output),
+        "--fps",
+        str(args.fps),
+        "--quality",
+        "draft" if args.draft else "delivery",
+    )
+    if result.returncode:
+        sys.exit("The render failed.")
     print(f"Done. {output}")
 
 

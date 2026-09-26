@@ -21,6 +21,7 @@ LUCIDE = (
 if str(settings.BASE_DIR) not in sys.path:
     sys.path.insert(0, str(settings.BASE_DIR))
 
+from scripts.presentation.composition import render_index, render_scene  # noqa: E402
 from scripts.presentation.scenes import OUTRO, PLATFORM, SCENES  # noqa: E402
 from scripts.presentation_video import build_timeline, resolve_scenes  # noqa: E402
 
@@ -69,3 +70,21 @@ class PresentationVideoTests(SimpleTestCase):
             )
         last = sections[-1]
         self.assertAlmostEqual(last["start"] + last["bars"] * bar, timeline["duration"])
+
+    def test_every_scene_is_mounted_and_fills_its_timeline(self):
+        # A sub-composition whose script registers its timeline without
+        # building it still passes `hyperframes check`: the scene renders as
+        # its static end state, every animation silently gone.
+        timeline = build_timeline(resolve_scenes(), fps=30)
+        index = render_index(timeline, "soundtrack.wav")
+        self.assertIn('<audio id="soundtrack" src="soundtrack.wav"', index)
+        for i, section in enumerate(timeline["sections"]):
+            with self.subTest(section["key"]):
+                self.assertIn(
+                    f'data-composition-src="compositions/{section["key"]}.html"', index
+                )
+                scene = render_scene(timeline, i)
+                self.assertIn(f"window.presentation.scene(tl, el, {i});", scene)
+                self.assertIn(
+                    f'window.__timelines["scene-{section["key"]}"] = tl;', scene
+                )

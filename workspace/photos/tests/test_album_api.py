@@ -269,6 +269,7 @@ class AlbumItemsApiTests(AlbumApiTestCase):
         response = self._post(
             "/reorder", {"files": [str(self.c.uuid)], "after": str(self.b.uuid)}
         )
+        self.assertEqual(response.status_code, 204)
         self.assertEqual(self._order(self.album), [self.a.pk, self.b.pk, self.c.pk])
 
     def test_reorder_refuses_nonsense(self):

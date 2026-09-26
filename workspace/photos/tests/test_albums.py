@@ -179,7 +179,6 @@ class MoveItemsTests(TestCase):
         self.assertEqual(_order(self.album), [a, d, e, b, c])
 
     def test_tied_positions_left_by_concurrent_adds_still_order(self):
-        a, b, c, d, e = self.ids
         AlbumItem.objects.filter(album=self.album).update(position=POSITION_GAP)
         tied = sorted(self.ids)
 

@@ -94,7 +94,8 @@ one inherits its group and its confirmation.
   single clear face of someone is a group of its own.
 - Corrections always win: a face the user placed is never moved, and a face
   the user took out ("Not this person", "Ungroup") is never grouped again
-  automatically.
+  automatically. A face the user hid (a stranger, a poster) is out of the
+  grouping too, until unhidden.
 
 ### Naming people
 
@@ -119,7 +120,7 @@ only leaves its groups unnamed.
 
 ### Reviewing people
 
-*Review* on the People tab settles the grouping in a row, in two queues:
+*Review* on the People tab settles the grouping in a row, in three queues:
 
 - **To name**: the unnamed groups, largest first, one at a time with the name
   field focused. Enter picks the highlighted contact, or adds the typed name
@@ -128,9 +129,28 @@ only leaves its groups unnamed.
   of its photos.
 - **To check**: faces the grouping put under a named person on its own and
   that sit further than half the threshold from their group's centroid, most
-  doubtful first. The user marks the ones that are someone else; one click
-  confirms the rest and takes the marked ones out, as "Not this person" does.
-  A confirmed face never comes back to this list.
+  doubtful first. A person's button confirms the faces left unpicked. A
+  confirmed face never comes back to this list.
+- **Unassigned**: faces in no group, either taken out of one by the user or
+  never grouped (clear ones only: the blurred crowd behind a subject would
+  bury the rest). Look-alikes come side by side.
+
+### Correcting several faces at once
+
+The review queues, the *Faces* tab of a person's page and the hidden faces on
+the *Hidden* page are boards of face tiles: click to pick (Shift picks a
+range), then act from the bar under them:
+
+- **This is...** puts the faces with a contact (their closest group, or one
+  new group for all the faces that look like none of theirs), a new contact,
+  an unnamed person, or someone new with no name yet.
+- **That's right** confirms them where they are; **Not this person** takes
+  them out of their group; **Hide** takes them out of the grouping and puts
+  them on the *Hidden* page, where **Unhide** hands them back.
+
+A face the correction cannot apply to (its photo already holds that person)
+is left as it was, and the toast says so. Every correction can be undone from
+its toast for a few minutes, groups it emptied included.
 
 Photos analyzed by the pipeline are listed, read-only, in the admin under
 *Face analyses*; faces and groups themselves are not browsable there.

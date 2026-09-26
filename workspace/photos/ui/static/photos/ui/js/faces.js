@@ -224,7 +224,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           case 'ungroup': {
             const ok = await AppDialog.confirm({
               title: 'Ungroup',
-              message: 'This person leaves the list, and their faces stay out of automatic grouping. You can still put a face back with "People in this photo".',
+              message: 'This person leaves the list, and their faces stay out of automatic grouping. They wait in Review, under Unassigned, until you say who they are.',
               okLabel: 'Ungroup',
               okClass: 'btn-error',
               icon: 'ungroup',

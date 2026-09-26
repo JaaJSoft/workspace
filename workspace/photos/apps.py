@@ -6,6 +6,7 @@ class PhotosConfig(AppConfig):
     name = "workspace.photos"
 
     def ready(self):
+        from workspace.common.vectors.schema import register_vector_index
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,
@@ -16,11 +17,13 @@ class PhotosConfig(AppConfig):
             PropertiesSection,
             properties_section_registry,
         )
+        from workspace.photos import signals  # noqa: F401
 
         # The album actions register on import. Imported here rather than
         # lazily so a broken import fails the boot instead of a worker
         # answering "no actions" forever.
         from workspace.photos.actions import album as album_actions  # noqa: F401
+        from workspace.photos.indexes import FACE_EMBEDDINGS
         from workspace.photos.search import search_photos
 
         # Imported for the @on_file_event side effect, here rather than
@@ -31,6 +34,8 @@ class PhotosConfig(AppConfig):
             is_section_visible,
             section_context,
         )
+
+        register_vector_index(FACE_EMBEDDINGS)
 
         registry.register(
             ModuleInfo(

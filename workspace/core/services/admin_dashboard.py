@@ -139,6 +139,38 @@ def scanner_health_card(request):
     }
 
 
+# Checking the weights hashes them the first time a process looks, so the
+# answer is cached like the scanner's.
+_FACE_BACKEND_HEALTH_CACHE_KEY = "photos:faces:backend:health"
+_FACE_BACKEND_HEALTH_TTL = 60
+
+
+def face_backend_health_card(request):
+    """A health card for face detection, or None when the instance has it off."""
+    from django.core.cache import cache
+
+    from workspace.photos.services.detection.registry import get_face_backend
+    from workspace.photos.services.face_preferences import faces_available
+
+    if not faces_available():
+        return None
+
+    cached = cache.get(_FACE_BACKEND_HEALTH_CACHE_KEY)
+    if cached is None:
+        health = get_face_backend().health()
+        cached = {"ok": health.ok, "label": health.detail or "unavailable"}
+        cache.set(_FACE_BACKEND_HEALTH_CACHE_KEY, cached, _FACE_BACKEND_HEALTH_TTL)
+
+    return {
+        "title": "Face detection",
+        "icon": "face",
+        "description": "photos face backend and its weights",
+        "value": cached["label"],
+        "url": reverse("admin:photos_faceanalysis_changelist"),
+        "tone": "success" if cached["ok"] else "danger",
+    }
+
+
 def dashboard_callback(request, context):
     from workspace.files.services.scanning.policy import blocked_statuses
 
@@ -205,5 +237,8 @@ def dashboard_callback(request, context):
     health = scanner_health_card(request)
     if health is not None:
         cards.append(health)
+    face_health = face_backend_health_card(request)
+    if face_health is not None:
+        cards.append(face_health)
     context["health_cards"] = cards
     return context

@@ -64,6 +64,12 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": FILES_CATCH_UP_INTERVAL,
         "options": {"expires": FILES_CATCH_UP_INTERVAL},
     },
+    # Groups the faces still ungrouped, and deletes any face data a lost
+    # purge or move left behind.
+    "cluster-faces": {
+        "task": "photos.cluster_all_faces",
+        "schedule": crontab(hour=2, minute=45),  # Every day at 2:45 AM
+    },
     "purge-trash": {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM

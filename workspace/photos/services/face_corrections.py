@@ -7,6 +7,7 @@ user's (see queries.py).
 """
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from ..models import Face, FaceCluster
 from .face_grouping import photo_clusters, refresh_clusters
@@ -143,4 +144,5 @@ def set_cover(cluster, face):
     if face.cluster_id != cluster.pk:
         raise CoverNotInCluster
     cluster.cover = face
-    cluster.save(update_fields=["cover", "updated_at"])
+    cluster.cover_chosen_at = timezone.now()
+    cluster.save(update_fields=["cover", "cover_chosen_at", "updated_at"])

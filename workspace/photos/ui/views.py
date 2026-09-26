@@ -378,11 +378,18 @@ def _cluster_card(cluster):
 
 
 def _person_card(card):
-    """What a page shows of a named person: all their clusters, together."""
+    """What a page shows of a named person: all their clusters, together.
+
+    The cluster whose cover stands for the person comes first: it is the one
+    whose cover "Use as contact photo" gives the contact.
+    """
+    ordered = [card.cover_cluster] + [
+        c for c in card.clusters if c.pk != card.cover_cluster.pk
+    ]
     return {
         "uuid": None,
         "person": _person_ref(card.person),
-        "clusters": [str(c.pk) for c in card.clusters],
+        "clusters": [str(c.pk) for c in ordered],
         "hidden": card.hidden,
         "photo_count": card.photo_count,
         "cover_url": _crop_url(card.cover_cluster.cover_id),

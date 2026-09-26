@@ -148,7 +148,8 @@ class PersonCard:
     clusters: tuple
     # A photo is never in two clusters of one person, so the counts add up.
     photo_count: int
-    # The cluster whose cover stands for the person: their largest.
+    # The cluster whose cover stands for the person: the one whose cover the
+    # user picked last, their largest while they never picked one.
     cover_cluster: object
     hidden: bool
 
@@ -166,12 +167,15 @@ def person_cards(clusters):
     cards = []
     for group in by_person.values():
         group.sort(key=lambda c: (-c.photo_count, c.created_at))
+        chosen = [c for c in group if c.cover_chosen_at is not None]
         cards.append(
             PersonCard(
                 person=group[0].person,
                 clusters=tuple(group),
                 photo_count=sum(c.photo_count for c in group),
-                cover_cluster=group[0],
+                cover_cluster=(
+                    max(chosen, key=lambda c: c.cover_chosen_at) if chosen else group[0]
+                ),
                 hidden=all(c.hidden for c in group),
             )
         )

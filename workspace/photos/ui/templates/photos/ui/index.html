@@ -67,6 +67,16 @@
         </a>
       {% endif %}
       {% if cluster %}
+        {% if cluster.person %}
+          <a
+            href="{{ cluster.person.url }}"
+            class="btn btn-ghost btn-sm gap-1 self-center"
+            title="Open {{ cluster.person.name }} in People"
+          >
+            <i data-lucide="contact" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">Open in People</span>
+          </a>
+        {% endif %}
         <div class="dropdown dropdown-end self-center">
           <button
             type="button"

@@ -192,3 +192,48 @@ test('a merge offers each named person once, never the target itself', () => {
   const fromLea = Array.from(ctx.mergeCandidates(clusters, { uuid: 'lea', person: 'p-lea' }), (c) => c.uuid);
   assert.deepEqual(fromLea, ['t', 'nina-big', 'u1']);
 });
+
+function coverMixin(confirmAnswer) {
+  const requests = [];
+  const asked = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 'token',
+    fetch: async (url, options) => {
+      requests.push([url, options.method]);
+      return { ok: true, status: 204, json: async () => null };
+    },
+    AppDialog: { confirm: async (opts) => { asked.push(opts.title); return confirmAnswer; } },
+    AppAlert: { success() {}, error() {} },
+  });
+  return { faces: ctx.photosFacesMixin(), requests, asked };
+}
+
+test('a new cover becomes the contact photo at once when the contact has none', async () => {
+  const { faces, requests, asked } = coverMixin(false);
+
+  await faces._offerCoverToContact({ name: 'Ann', has_avatar: false }, 'c1');
+
+  assert.deepEqual(asked, []);
+  assert.deepEqual(requests, [['/api/v1/photos/clusters/c1/avatar', 'POST']]);
+});
+
+test('a contact who has a photo keeps it unless the user says to replace it', async () => {
+  const declined = coverMixin(false);
+  await declined.faces._offerCoverToContact({ name: 'Ann', has_avatar: true }, 'c1');
+  assert.equal(declined.asked.length, 1);
+  assert.deepEqual(declined.requests, []);
+
+  const accepted = coverMixin(true);
+  await accepted.faces._offerCoverToContact({ name: 'Ann', has_avatar: true }, 'c1');
+  assert.deepEqual(accepted.requests, [['/api/v1/photos/clusters/c1/avatar', 'POST']]);
+});
+
+test('an unnamed cluster has no contact to offer its cover to', async () => {
+  const { faces, requests, asked } = coverMixin(true);
+
+  await faces._offerCoverToContact(null, 'c1');
+
+  assert.deepEqual(asked, []);
+  assert.deepEqual(requests, []);
+});

@@ -400,8 +400,18 @@ def refresh_cluster(cluster):
     cluster.face_count = len(members)
     member_ids = {pk for pk, *_ in members}
     if cluster.cover_id not in member_ids:
-        # The best face whose photo is not in the trash, if there is one.
+        # The best face whose photo is not in the trash, if there is one. The
+        # user's pick left with its face: this one is automatic again.
         best = max(members, key=lambda m: (m[3] is None, m[1]))
         cluster.cover_id = best[0]
-    cluster.save(update_fields=["centroid", "face_count", "cover", "updated_at"])
+        cluster.cover_chosen_at = None
+    cluster.save(
+        update_fields=[
+            "centroid",
+            "face_count",
+            "cover",
+            "cover_chosen_at",
+            "updated_at",
+        ]
+    )
     return cluster

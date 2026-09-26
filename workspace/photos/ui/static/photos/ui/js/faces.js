@@ -556,10 +556,29 @@ window.photosFacesMixin = function photosFacesMixin() {
           method: 'PATCH',
           body: { cover: face.uuid },
         });
+        await this._offerCoverToContact(this.currentCluster().person, face.cluster);
         await this._reloadView();
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not change the cover');
       }
+    },
+
+    // The new cover of a named person may become their contact photo too:
+    // at once when they have none, after asking when they do - it may be a
+    // real photo, or a group address book's, seen by everyone in it.
+    async _offerCoverToContact(person, clusterUuid) {
+      if (!person) return;
+      if (person.has_avatar) {
+        const ok = await AppDialog.confirm({
+          title: 'Update the contact photo too?',
+          message: `${person.name} already has a photo in People. Replace it with this face?`,
+          okLabel: 'Replace',
+          icon: 'circle-user-round',
+        });
+        if (!ok) return;
+      }
+      await facesRequest(`${FACES_API}/clusters/${clusterUuid}/avatar`, { method: 'POST' });
+      window.AppAlert.success(`Also the contact photo of ${person.name} in People`, { duration: 2500 });
     },
 
     async rejectFromCluster(photo) {

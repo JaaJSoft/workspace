@@ -135,3 +135,49 @@ class SearchTests(NamedPeopleTestCase):
         names = [r.name for r in search_photos("martin", self.user, 10)]
 
         self.assertEqual(names, ["Alice Martin"])
+
+
+class PersonCoverTests(NamedPeopleTestCase):
+    def _named_card(self):
+        (card,) = self.client.get("/photos/people").context["named"]
+        return card
+
+    def test_a_person_shows_their_largest_cluster_until_a_cover_is_picked(self):
+        self.assertEqual(self._named_card()["clusters"][0], str(self.alice.pk))
+
+        carol_face = self.carol.faces.get()
+        response = self.client.patch(
+            f"/api/v1/photos/clusters/{self.carol.pk}",
+            {"cover": str(carol_face.pk)},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        card = self._named_card()
+        # The smaller cluster's picked cover now stands for the person.
+        self.assertEqual(card["clusters"][0], str(self.carol.pk))
+        self.assertTrue(card["cover_url"].endswith(f"/faces/{carol_face.pk}/crop"))
+
+    def test_a_picked_cover_leaving_its_cluster_is_forgotten(self):
+        face = self.alice.faces.order_by("quality").first()
+        self.client.patch(
+            f"/api/v1/photos/clusters/{self.alice.pk}",
+            {"cover": str(face.pk)},
+            content_type="application/json",
+        )
+
+        self.client.patch(
+            f"/api/v1/photos/faces/{face.pk}",
+            {"cluster": None},
+            content_type="application/json",
+        )
+
+        self.alice.refresh_from_db()
+        self.assertNotEqual(self.alice.cover_id, face.pk)
+        self.assertIsNone(self.alice.cover_chosen_at)
+
+    def test_the_persons_page_opens_them_in_people(self):
+        response = self.client.get("/photos", {"person": str(self.contact.pk)})
+
+        self.assertContains(response, f'href="/people?person={self.contact.pk}"')
+        self.assertContains(response, "Open in People")

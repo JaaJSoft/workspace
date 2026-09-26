@@ -221,6 +221,9 @@ class FaceCluster(models.Model):
     cover = models.ForeignKey(
         "Face", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    # When the user picked the cover; null while it is the automatic one. A
+    # person of several clusters shows the most recently picked cover.
+    cover_chosen_at = models.DateTimeField(null=True, blank=True)
     # Who the faces are. Two clusters of one person are one person for the
     # one-face-per-photo rule too, which the services enforce: the database
     # constraint on Face only spans one cluster.

@@ -42,6 +42,20 @@
             <span class="leading-5">To check</span>
             <span class="tabular-nums opacity-70" x-text="doubtCount()">{{ doubt_count }}</span>
           </a>
+          <a
+            href="{{ review_url }}?queue=unassigned"
+            x-target.push="photos-nav photos-content"
+            class="tab gap-1.5 {% if review.queue == 'unassigned' %}tab-active !bg-module !text-module-content{% endif %}"
+            {% if review.queue == 'unassigned' %}aria-current="page"{% endif %}
+            title="Faces in nobody's group: taken out of one, or never grouped"
+          >
+            <i
+              data-lucide="user-round-search"
+              class="w-3.5 h-3.5 shrink-0 max-sm:hidden"
+            ></i>
+            <span class="leading-5">Unassigned</span>
+            <span class="tabular-nums opacity-70" x-text="unassignedCount()">{{ unassigned_count }}</span>
+          </a>
         </nav>
       </div>
     </header>
@@ -49,8 +63,10 @@
     <div class="flex-1">
       {% if review.queue == "name" %}
         {% include "photos/ui/partials/review_name.html" %}
-      {% else %}
+      {% elif review.queue == "check" %}
         {% include "photos/ui/partials/review_check.html" %}
+      {% else %}
+        {% include "photos/ui/partials/review_unassigned.html" %}
       {% endif %}
     </div>
     {% include "photos/ui/partials/face_selection_bar.html" %}

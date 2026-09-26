@@ -531,3 +531,35 @@ test('assigning to a new name sends it with the picked faces', async () => {
 
   assert.deepEqual(requests[0].body, { action: 'assign', new_person: 'Léa', faces: ['a'] });
 });
+
+test('settled faces leave the unassigned queue, and its count follows', () => {
+  const { component } = review({
+    'photos-review-data': {
+      unassigned: { kind: 'rejected', counts: { rejected: 3, ungrouped: 4 }, total: 3, faces: [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }] },
+    },
+  });
+  component.$watch = () => {};
+  component.init();
+
+  component.facesSettled(['a', 'c'], 'assign');
+
+  assert.deepEqual(Array.from(component.unassigned, (f) => f.uuid), ['b']);
+  assert.equal(component.unassignedTotal, 1);
+  assert.equal(component.unassignedCount(), 5);
+});
+
+test('faces taken out on the check queue join the unassigned count', () => {
+  const { component } = review({
+    'photos-review-data': {
+      doubts: [{ person: NINA, total: 2, faces: [{ uuid: 'f1' }, { uuid: 'f2' }] }],
+      unassigned: { kind: 'rejected', counts: { rejected: 0, ungrouped: 1 }, total: 0, faces: [] },
+    },
+  });
+  component.$watch = () => {};
+  component.init();
+
+  component.facesSettled(['f1'], 'reject');
+
+  assert.equal(component.unassignedCount(), 2);
+  assert.equal(component.doubtCount(), 1);
+});

@@ -849,10 +849,12 @@ window.faceSelectionMixin = function faceSelectionMixin() {
       this.selectedFaces = this.selectedFaces.filter((uuid) => !done.has(uuid));
       if (result.done.length) this.facesSettled(result.done, body.action);
       const message = faceBatchMessage(body.action, result, target);
+      // Top right: the selection bar holds the bottom of the page.
       if (!result.done.length) {
-        window.AppAlert.warning(message);
+        window.AppAlert.warning(message, { position: 'top-right' });
       } else {
         window.AppAlert.success(message, {
+          position: 'top-right',
           duration: 8000,
           actions: result.undo ? [{ label: 'Undo', onClick: () => undoFaceBatch(result.undo) }] : [],
         });
@@ -939,6 +941,13 @@ function reviewOptions(query, results, suggestion) {
   return options;
 }
 
+// `faces` without those in `done`, and how many are left of `total`.
+function settleFaces(faces, total, done) {
+  const gone = new Set(done);
+  const kept = faces.filter((face) => !gone.has(face.uuid));
+  return { faces: kept, total: total - (faces.length - kept.length) };
+}
+
 // `blocks` of faces ({ faces: [...], total }) without the faces in `done`:
 // a block loses them from its count too, and goes once it has none left.
 // `reload` tells whether an emptied block had more faces than the page held.
@@ -964,6 +973,10 @@ window.facesReview = function facesReview() {
     ...window.faceSelectionMixin(),
     unnamed: [],
     doubts: [],
+    unassigned: [],
+    unassignedTotal: 0,
+    _unassignedKind: null,
+    _unassignedCounts: {},
     position: 0,
     query: '',
     results: [],
@@ -976,6 +989,11 @@ window.facesReview = function facesReview() {
       const data = facesJson('photos-review-data') || {};
       this.unnamed = data.unnamed || [];
       this.doubts = data.doubts || [];
+      const unassigned = data.unassigned || {};
+      this.unassigned = unassigned.faces || [];
+      this.unassignedTotal = unassigned.total || 0;
+      this._unassignedKind = unassigned.kind || null;
+      this._unassignedCounts = { ...(unassigned.counts || {}) };
       this.initFaceSelection();
       if (this.unnamed.length) this.searchReviewNames();
     },
@@ -1104,16 +1122,42 @@ window.facesReview = function facesReview() {
       this.selectFaces(block.faces.map((face) => face.uuid));
     },
 
-    facesSettled(done) {
-      const { blocks, reload } = settleBlocks(this.doubts, done);
+    // ── Unassigned ──────────────────────────────────────
+
+    // Of one kind, or of both without one.
+    unassignedCount(kind) {
+      if (kind) return this._unassignedCounts[kind] || 0;
+      return Object.values(this._unassignedCounts).reduce((sum, count) => sum + count, 0);
+    },
+
+    // ── Both boards ─────────────────────────────────────
+
+    facesSettled(done, action) {
+      const checked = this.doubts.reduce((sum, block) => sum + block.faces.length, 0);
+      const { blocks, reload: moreDoubts } = settleBlocks(this.doubts, done);
       this.doubts = blocks;
-      if (reload) {
-        // The next faces of a person were left out of the page.
-        this.$ajax(`${window.location.pathname}?queue=check`, {
-          targets: ['photos-nav', 'photos-content'],
-          focus: false,
-        });
+      if (action === 'reject') {
+        // Taken out of a person: they now wait in the unassigned queue.
+        const left = checked - blocks.reduce((sum, block) => sum + block.faces.length, 0);
+        this._unassignedCounts.rejected = (this._unassignedCounts.rejected || 0) + left;
       }
+      const before = this.unassigned.length;
+      const { faces, total } = settleFaces(this.unassigned, this.unassignedTotal, done);
+      this.unassigned = faces;
+      this.unassignedTotal = total;
+      if (this._unassignedKind in this._unassignedCounts) {
+        this._unassignedCounts[this._unassignedKind] -= before - faces.length;
+      }
+      const moreUnassigned = before > 0 && !faces.length && total > 0;
+      // The next faces were left out of the page.
+      if (moreDoubts || moreUnassigned) this._reloadQueue();
+    },
+
+    _reloadQueue() {
+      this.$ajax(window.location.pathname + window.location.search, {
+        targets: ['photos-nav', 'photos-content'],
+        focus: false,
+      });
     },
   };
 };

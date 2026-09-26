@@ -222,6 +222,42 @@ class ReviewPageTests(ReviewTestCase):
         self.assertEqual([f["uuid"] for f in block["faces"]], [str(stray.pk)])
         self.assertEqual(response.context["doubt_count"], 1)
 
+    def test_lists_the_faces_taken_out_of_a_group(self):
+        face = self.face("alice-2.png")
+        reject_face(face)
+
+        response = self.client.get(REVIEW, {"queue": "unassigned"})
+
+        unassigned = response.context["review"]["unassigned"]
+        self.assertEqual(unassigned["kind"], REJECTED)
+        (item,) = unassigned["faces"]
+        self.assertEqual(item["uuid"], str(face.pk))
+        self.assertEqual(item["file"], str(self.photos["alice-2.png"].pk))
+        self.assertEqual(item["file_name"], "alice-2.png")
+        self.assertEqual(response.context["unassigned_count"], 1)
+
+    def test_the_faces_never_grouped_are_one_filter_away(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(cluster=None)
+
+        response = self.client.get(REVIEW, {"queue": "unassigned", "kind": UNGROUPED})
+
+        unassigned = response.context["review"]["unassigned"]
+        self.assertEqual([f["uuid"] for f in unassigned["faces"]], [str(face.pk)])
+        kinds = {k["kind"]: k for k in response.context["unassigned_kinds"]}
+        self.assertTrue(kinds[UNGROUPED]["active"])
+        self.assertEqual(kinds[UNGROUPED]["count"], 1)
+
+    def test_opens_on_the_unassigned_faces_when_nothing_else_waits(self):
+        FaceCluster.objects.filter(pk=self.bob.pk).update(
+            person=create_person(owner=self.user, display_name="Bob")
+        )
+        reject_face(self.face("alice-2.png"))
+
+        response = self.client.get(REVIEW)
+
+        self.assertEqual(response.context["review"]["queue"], "unassigned")
+
     def test_the_people_tab_links_to_it(self):
         response = self.client.get("/photos/people")
 

@@ -34,7 +34,14 @@ from workspace.photos.queries import (
 from workspace.photos.services.album_cards import album_cards, user_album_cards
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
-from workspace.photos.services.face_review import doubtful_faces, unnamed_queue
+from workspace.photos.services.face_review import (
+    REJECTED,
+    UNGROUPED,
+    doubtful_faces,
+    unassigned_counts,
+    unassigned_faces,
+    unnamed_queue,
+)
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -701,8 +708,9 @@ def _doubts_item(doubts, faces):
 def people_review(request):
     """Naming people and checking faces one after the other.
 
-    Two queues: the unnamed clusters, and the faces the grouping put under a
-    named person without being sure. ``?queue=check`` opens the second.
+    Three queues: the unnamed clusters, the faces the grouping put under a
+    named person without being sure (``?queue=check``), and the faces in no
+    cluster at all (``?queue=unassigned``, narrowed by ``?kind=``).
     """
     if not faces_available():
         raise Http404
@@ -716,13 +724,43 @@ def people_review(request):
         for item in _face_items([f.face_id for d in doubtful for f in d.faces])
     }
     doubts = [_doubts_item(item, faces) for item in doubtful]
+    counts = unassigned_counts(request.user)
     queue = request.GET.get("queue")
-    if queue not in ("name", "check"):
-        queue = "check" if doubts and not unnamed else "name"
+    if queue not in ("name", "check", "unassigned"):
+        if unnamed or not (doubts or any(counts.values())):
+            queue = "name"
+        else:
+            queue = "check" if doubts else "unassigned"
+    kind = request.GET.get("kind")
+    if kind not in (REJECTED, UNGROUPED):
+        kind = REJECTED if counts[REJECTED] or not counts[UNGROUPED] else UNGROUPED
+    page = unassigned_faces(request.user, kind) if queue == "unassigned" else None
+    review_url = reverse("photos_ui:people_review")
     context = {
         **_people_shell_context(request.user),
-        "review": {"queue": queue, "unnamed": unnamed, "doubts": doubts},
+        "review": {
+            "queue": queue,
+            "unnamed": unnamed,
+            "doubts": doubts,
+            "unassigned": {
+                "kind": kind,
+                "counts": counts,
+                "total": page.total if page else 0,
+                "faces": _face_items(page.face_ids) if page else [],
+            },
+        },
         "doubt_count": sum(item["total"] for item in doubts),
-        "review_url": reverse("photos_ui:people_review"),
+        "unassigned_count": sum(counts.values()),
+        "unassigned_kinds": [
+            {
+                "kind": value,
+                "label": label,
+                "count": counts[value],
+                "url": f"{review_url}?queue=unassigned&kind={value}",
+                "active": value == kind,
+            }
+            for value, label in ((REJECTED, "Taken out"), (UNGROUPED, "Never grouped"))
+        ],
+        "review_url": review_url,
     }
     return render(request, "photos/ui/people_review.html", context)

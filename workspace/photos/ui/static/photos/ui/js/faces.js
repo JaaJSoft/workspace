@@ -49,9 +49,11 @@ async function facesRequest(url, { method = 'GET', body } = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+// Without a query, the named people then every other contact: a picker
+// opened empty lists who can be picked.
 function personsUrl(query) {
   const q = (query || '').trim();
-  return q ? `${FACES_API}/persons?q=${encodeURIComponent(q)}` : `${FACES_API}/persons`;
+  return q ? `${FACES_API}/persons?q=${encodeURIComponent(q)}` : `${FACES_API}/persons?contacts=1`;
 }
 
 // What a merge may take in: every unnamed cluster, and one entry per named

@@ -8,6 +8,7 @@ rows a pending purge has not reached yet are not theirs to see any more.
 from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.models import F
+from django.db.models.functions import Lower
 from django.http import FileResponse, HttpResponse
 from django.urls import reverse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -352,6 +353,7 @@ class FaceStatusView(APIView):
 
 
 _PERSON_SEARCH_LIMIT = 20
+_CONTACT_LIST_LIMIT = 50
 
 
 def _person_json(person, card=None):
@@ -378,7 +380,9 @@ class FacePersonsView(APIView):
     """The contacts the user's face clusters are named after.
 
     With ``?q=``, every contact the user can see whose name matches, those
-    with no cluster yet included: what the "this is..." picker offers.
+    with no cluster yet included: what the "this is..." picker offers. With
+    ``?contacts=1`` and no query, the other contacts follow the named people,
+    by name: a picker opened empty is a list to click in, not a blank field.
     """
 
     permission_classes = [IsAuthenticated]
@@ -386,7 +390,12 @@ class FacePersonsView(APIView):
     @extend_schema(
         summary="People found in the user's photos",
         parameters=[
-            OpenApiParameter("q", str, description="Search all contacts by name.")
+            OpenApiParameter("q", str, description="Search all contacts by name."),
+            OpenApiParameter(
+                "contacts",
+                bool,
+                description="Without q, list the other contacts after the named people.",
+            ),
         ],
     )
     def get(self, request):
@@ -399,7 +408,15 @@ class FacePersonsView(APIView):
         }
         query = (request.query_params.get("q") or "").strip().lower()
         if not query:
-            return Response([_person_json(c.person, c) for c in cards.values()])
+            named = [_person_json(c.person, c) for c in cards.values()]
+            if not is_truthy(request.query_params.get("contacts")):
+                return Response(named)
+            others = (
+                user_persons(request.user)
+                .exclude(pk__in=list(cards))
+                .order_by(Lower("display_name"), "uuid")[:_CONTACT_LIST_LIMIT]
+            )
+            return Response(named + [_person_json(p) for p in others])
         matches = user_persons(request.user).filter(search_text__contains=query)[
             :_PERSON_SEARCH_LIMIT
         ]

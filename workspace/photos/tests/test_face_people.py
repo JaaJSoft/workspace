@@ -260,6 +260,18 @@ class PersonsEndpointTests(FaceApiTestCase):
         self.assertEqual([r["name"] for r in results], ["Alicia"])
         self.assertEqual(results[0]["photo_count"], 0)
 
+    def test_an_empty_picker_lists_named_people_then_every_other_contact(self):
+        contact = create_person(owner=self.user, display_name="Zoé")
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=contact)
+        create_person(owner=self.user, display_name="bruno")
+        create_person(owner=self.user, display_name="Albert")
+
+        results = self.client.get(PERSONS, {"contacts": "1"}).json()
+
+        self.assertEqual([r["name"] for r in results], ["Zoé", "Albert", "bruno"])
+        self.assertEqual([r["photo_count"] for r in results], [3, 0, 0])
+        self.assertEqual([r["name"] for r in self.client.get(PERSONS).json()], ["Zoé"])
+
     def test_other_users_contacts_are_not_offered(self):
         other = User.objects.create_user(username="eve", password="p")
         create_person(owner=other, display_name="Alicia")

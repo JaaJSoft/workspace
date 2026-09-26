@@ -134,8 +134,14 @@ class PhotosAlbumsTests(PlaywrightTestCase):
         self._open(f"/photos/albums/{album.uuid}")
         expect(self.page.locator("#photos-header")).to_contain_text("3 photos")
 
-        tile = self._tile(2)
+        # The fallback cover is the last photo added. Pick another one, so
+        # the assertion below waits for the header to really re-render.
+        expect(self.page.locator("[data-album-cover]")).to_have_attribute(
+            "data-album-cover", str(self.photos[2].uuid)
+        )
+        tile = self._tile(0)
         cover_uuid = tile.get_attribute("data-uuid")
+        self.assertNotEqual(cover_uuid, str(self.photos[2].uuid))
         tile.hover()
         tile.get_by_role("button", name="More actions").click()
         self.page.locator("#photos-context-menu").get_by_text("Set as cover").click()
@@ -144,7 +150,7 @@ class PhotosAlbumsTests(PlaywrightTestCase):
             "data-album-cover", cover_uuid
         )
 
-        tile = self._tile(0)
+        tile = self._tile(1)
         removed = tile.get_attribute("data-uuid")
         tile.hover()
         tile.get_by_role("button", name="More actions").click()

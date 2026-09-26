@@ -117,6 +117,7 @@ window.photosApp = function photosApp() {
     picker: { open: false, loading: false, busy: false, albums: [], files: [] },
     _pickerGeneration: 0,
     _drag: null,
+    _refreshing: null,
 
     init() {
       window.addEventListener('open-properties', (e) => {
@@ -126,7 +127,7 @@ window.photosApp = function photosApp() {
       window.addEventListener('rename-item', (e) => this.renamePhoto(e.detail.uuid, e.detail.name));
       // Tag counts in the sidebar follow assignments made from the panel.
       window.addEventListener('tags-changed', () => {
-        this.$ajax(window.location.href, { target: 'photos-nav', focus: false });
+        this._refresh(['photos-nav']);
       });
       window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && this.selection.length && !document.querySelector('dialog[open]')) {
@@ -407,8 +408,15 @@ window.photosApp = function photosApp() {
       }
     },
 
+    // Re-renders parts of the page after a write. Chained, never concurrent:
+    // alpine-ajax hands a GET the response of an identical one still in
+    // flight, so a refresh sent while the previous one is out would receive
+    // a page rendered before its own write (a count off by the photos just
+    // removed).
     _refresh(targets) {
-      return this.$ajax(window.location.href, { targets, focus: false }).catch(() => {});
+      const run = () => this.$ajax(window.location.href, { targets, focus: false }).catch(() => {});
+      this._refreshing = (this._refreshing || Promise.resolve()).then(run);
+      return this._refreshing;
     },
 
     // ── Selection ───────────────────────────────────────

@@ -818,3 +818,41 @@ test('a long press the browser cancels does not swallow the next tap', () => {
 
   assert.equal(end.prevented, false);
 });
+
+test('a refresh waits for the one before it, so it never reuses a response rendered before its write', async () => {
+  const app = load({ location: { href: '/photos/albums/al1' } }).ctx.photosApp();
+  const sent = [];
+  const answers = [];
+  app.$ajax = (url, opts) => {
+    sent.push(Array.from(opts.targets));
+    return new Promise((resolve) => answers.push(resolve));
+  };
+
+  const first = app._refresh(['photos-nav', 'photos-header']);
+  const second = app._refresh(['photos-header']);
+  await flush();
+
+  // The second one is not on the wire while the first is: the page's ajax
+  // layer would hand it the first one's in-flight response.
+  assert.equal(sent.length, 1);
+  answers[0]();
+  await first;
+  await flush();
+  assert.deepEqual(sent, [['photos-nav', 'photos-header'], ['photos-header']]);
+  answers[1]();
+  await second;
+});
+
+test('a failed refresh does not block the next one', async () => {
+  const app = load({ location: { href: '/photos' } }).ctx.photosApp();
+  let calls = 0;
+  app.$ajax = () => {
+    calls += 1;
+    return calls === 1 ? Promise.reject(new Error('offline')) : Promise.resolve();
+  };
+
+  await app._refresh(['photos-nav']);
+  await app._refresh(['photos-nav']);
+
+  assert.equal(calls, 2);
+});

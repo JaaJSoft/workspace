@@ -17,20 +17,20 @@ from django.db.models.functions import Length
 
 from ..models import File
 
-PURGE_BATCH_SIZE = 500
+HARD_DELETE_BATCH_SIZE = 500
 
 
-def purge_queryset(queryset):
+def hard_delete_in_batches(queryset):
     """Permanently delete every row of *queryset*, deepest first."""
     # A descendant's path extends its ancestor's, so it is strictly longer.
     pks = queryset.order_by(Length("path").desc()).values_list("pk", flat=True)
-    _delete_in_batches(list(pks))
+    _delete_pks_in_batches(list(pks))
 
 
-def purge_node(node):
+def hard_delete_tree(node):
     """Permanently delete *node* and its subtree."""
     if node.node_type == File.NodeType.FOLDER:
-        _delete_in_batches(_descendant_pks_deepest_first(node))
+        _delete_pks_in_batches(_descendant_pks_deepest_first(node))
     # Through the instance, so the caller's object ends up like any deleted one.
     node.delete(hard=True)
 
@@ -43,7 +43,7 @@ def _descendant_pks_deepest_first(folder):
     while frontier:
         frontier = [
             pk
-            for chunk in batched(frontier, PURGE_BATCH_SIZE, strict=False)
+            for chunk in batched(frontier, HARD_DELETE_BATCH_SIZE, strict=False)
             for pk in File.objects.filter(parent_id__in=chunk).values_list(
                 "pk", flat=True
             )
@@ -52,7 +52,7 @@ def _descendant_pks_deepest_first(folder):
     return [pk for level in reversed(levels) for pk in level]
 
 
-def _delete_in_batches(pks):
-    for batch in batched(pks, PURGE_BATCH_SIZE, strict=False):
+def _delete_pks_in_batches(pks):
+    for batch in batched(pks, HARD_DELETE_BATCH_SIZE, strict=False):
         # The storage cleanup receiver reads owner.username on every row.
         File.objects.filter(pk__in=batch).select_related("owner").delete()

@@ -51,8 +51,8 @@ def collector_peak():
         post_delete.disconnect(on_post_delete, sender=File)
 
 
-@mock.patch("workspace.files.services.purge.PURGE_BATCH_SIZE", BATCH_SIZE)
-class PurgeBatchingTests(APITestCase):
+@mock.patch("workspace.files.services.hard_delete.HARD_DELETE_BATCH_SIZE", BATCH_SIZE)
+class HardDeleteBatchingTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="purger", password="pass")
         self.client.force_authenticate(user=self.user)

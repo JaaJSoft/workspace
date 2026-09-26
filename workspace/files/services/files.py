@@ -20,7 +20,7 @@ from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
-from .purge import purge_node
+from .hard_delete import hard_delete_tree
 from .quota import check_write_allowed, subtree_bytes
 from .scanning.policy import exclude_blocked
 from .thumbnails.failures import clear_failure
@@ -753,7 +753,7 @@ class FileService:
     def hard_delete(file_obj, *, acting_user=None):
         """Permanently delete a file or folder. No event - the row vanishes."""
         # The cascade also wipes any FileEvent rows on this file.
-        purge_node(file_obj)
+        hard_delete_tree(file_obj)
 
     # ------------------------------------------------------------------
     # Access control

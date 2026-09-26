@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from workspace.files.models import File
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
-from workspace.files.services.purge import purge_queryset
+from workspace.files.services.hard_delete import hard_delete_in_batches
 
 TRASH_RETENTION_DAYS = getattr(settings, "TRASH_RETENTION_DAYS", 30)
 
@@ -153,7 +153,7 @@ class TrashMixin:
         # not the cascaded total (which inflates the number with related
         # rows like FileShare, comments, etc).
         file_count = queryset.count()
-        purge_queryset(queryset)
+        hard_delete_in_batches(queryset)
         return Response(
             {
                 "deleted": file_count,

@@ -1346,6 +1346,25 @@ class WebDAVIntegrationTests(TestCase):
         code, _, body = self._request("PROPFIND", "/", headers={"Depth": "0"})
         self.assertEqual(code, 207)
 
+    def test_propfind_infinite_depth_is_refused(self):
+        """Depth: infinity would build the multistatus of the whole library
+        in the worker's memory; RFC 4918 lets a server refuse it."""
+        FileService.create_folder(self.user, "F1")
+        code, _, body = self._request("PROPFIND", "/", headers={"Depth": "infinity"})
+        self.assertEqual(code, 403)
+        self.assertIn(b"propfind-finite-depth", body)
+
+    def test_propfind_without_depth_is_refused_as_infinite(self):
+        """RFC 4918 9.1: a PROPFIND with no Depth header means infinity."""
+        code, _, body = self._request("PROPFIND", "/")
+        self.assertEqual(code, 403)
+        self.assertIn(b"propfind-finite-depth", body)
+
+    def test_propfind_infinite_depth_still_challenges_anonymous_clients(self):
+        self.auth = None
+        code, _, _ = self._request("PROPFIND", "/", headers={"Depth": "infinity"})
+        self.assertEqual(code, 401)
+
     def test_propfind_root_lists_members(self):
         FileService.create_folder(self.user, "F1")
         FileService.create_file(self.user, "a.txt", mime_type="text/plain")

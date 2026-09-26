@@ -4,7 +4,15 @@ import logging
 from urllib.parse import urlparse
 
 from django.conf import settings as django_settings
+from wsgidav.dav_error import (
+    HTTP_FORBIDDEN,
+    DAVError,
+    PRECONDITION_CODE_PropfindFiniteDepth,
+)
+from wsgidav.default_conf import DEFAULT_CONFIG
+from wsgidav.http_authenticator import HTTPAuthenticator
 from wsgidav.lock_man.lock_storage import LockStorageDict
+from wsgidav.mw.base_mw import BaseMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
 
 from .dc import DjangoBasicDomainController
@@ -99,11 +107,38 @@ class _LockContentTypeFix:
         return getattr(self._app, name)
 
 
+class _FiniteDepthPropfind(BaseMiddleware):
+    """Refuse PROPFIND at Depth: infinity, as RFC 4918 9.1 allows.
+
+    wsgidav answers it by collecting every descendant and building the whole
+    multistatus in memory, so one request on /dav/ holds the user's entire
+    library. A missing Depth header means infinity. Placed after the
+    authenticator so an anonymous client still gets its 401 challenge.
+    """
+
+    def __call__(self, environ, start_response):
+        if (
+            environ.get("REQUEST_METHOD") == "PROPFIND"
+            and environ.get("HTTP_DEPTH", "infinity").strip().lower() == "infinity"
+        ):
+            raise DAVError(
+                HTTP_FORBIDDEN, err_condition=PRECONDITION_CODE_PropfindFiniteDepth
+            )
+        return self.next_app(environ, start_response)
+
+
+def _middleware_stack():
+    stack = list(DEFAULT_CONFIG["middleware_stack"])
+    stack.insert(stack.index(HTTPAuthenticator) + 1, _FiniteDepthPropfind)
+    return stack
+
+
 def create_webdav_app():
     """Build and return a configured ``WsgiDAVApp``."""
     config = {
         "mount_path": "/dav",
         "provider_mapping": {"/": WorkspaceDAVProvider()},
+        "middleware_stack": _middleware_stack(),
         "http_authenticator": {
             "domain_controller": DjangoBasicDomainController,
             "accept_basic": True,

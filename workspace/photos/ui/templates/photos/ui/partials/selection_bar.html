@@ -2,6 +2,11 @@
   What the selected tiles can have done to them. Floats over the bottom of
   the listing while something is selected; outside #photos-content, which a
   navigation replaces (and the selection with it, see onMerged).
+
+  The file actions (favorite, download, trash) stay in place and are
+  disabled until the registry has answered for every selected photo, then
+  for good when one of them does not offer it (selectionAllows). The same
+  actions open from a right-click on a selected tile (selection_menu.html).
 {% endcomment %}
 <div
   x-show="selection.length > 0"
@@ -31,6 +36,16 @@
     ></span>
     <button
       type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Select all (Ctrl+A)"
+      aria-label="Select all"
+      @click="selectAll()"
+    >
+      <i data-lucide="check-check" class="w-4 h-4"></i>
+    </button>
+    <span class="w-px h-5 bg-base-300" aria-hidden="true"></span>
+    <button
+      type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
       @click="openAlbumPicker(selection)"
     >
@@ -45,6 +60,55 @@
     >
       <i data-lucide="image-minus" class="w-4 h-4"></i>
       <span class="max-sm:hidden">Remove from album</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      :title="selectionFavoriteAdds() ? 'Add to favorites' : 'Remove from favorites'"
+      :aria-label="selectionFavoriteAdds() ? 'Add to favorites' : 'Remove from favorites'"
+      :disabled="!selectionAllows('toggle_favorite')"
+      @click="favoriteSelection()"
+    >
+      <i data-lucide="star" class="w-4 h-4" x-show="selectionFavoriteAdds()"></i>
+      <i
+        data-lucide="star-off"
+        class="w-4 h-4"
+        x-show="!selectionFavoriteAdds()"
+        x-cloak
+      ></i>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Download"
+      aria-label="Download"
+      :disabled="!selectionAllows('download')"
+      @click="downloadSelection()"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+    </button>
+    {# currentCluster() reads the page, which Alpine does not track: the selection is what re-runs it. #}
+    <template x-if="selection.length && currentCluster()">
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-circle"
+        title="Not this person"
+        aria-label="Not this person"
+        :disabled="selectionBusy"
+        @click="rejectSelectionFromCluster()"
+      >
+        <i data-lucide="user-x" class="w-4 h-4"></i>
+      </button>
+    </template>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle text-error"
+      title="Move to trash"
+      aria-label="Move to trash"
+      :disabled="!selectionAllows('delete')"
+      @click="trashSelection()"
+    >
+      <i data-lucide="trash-2" class="w-4 h-4"></i>
     </button>
   </div>
 </div>

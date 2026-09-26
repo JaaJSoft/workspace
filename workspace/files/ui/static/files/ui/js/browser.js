@@ -1077,47 +1077,8 @@ window.fileBrowser = function fileBrowser() {
       this._stopLoading(...uuids);
     },
 
-    async bulkDownload(uuids) {
-      if (!uuids || uuids.length === 0) return;
-      // Nothing shows until the whole archive has arrived, which takes a
-      // while for a large selection. The notice waits a moment so a small
-      // one does not flash it.
-      let noticeEl = null;
-      const noticeTimer = setTimeout(() => {
-        noticeEl = window.AppAlert.show({
-          message: `Preparing an archive of ${uuids.length} item${uuids.length > 1 ? 's' : ''}...`,
-          type: 'info',
-          duration: 0,
-          dismissible: false,
-        });
-      }, 1000);
-      try {
-        const csrfToken = getCSRFToken();
-        const resp = await fetch('/api/v1/files/bulk-download', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ uuids }),
-        });
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}));
-          window.AppAlert.error(data.detail || 'Failed to download selected files');
-          return;
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'download.zip';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        window.AppAlert.error('Failed to download selected files');
-      } finally {
-        clearTimeout(noticeTimer);
-        if (noticeEl) window.AppAlert.dismiss(noticeEl);
-      }
+    bulkDownload(uuids) {
+      return window.fileActions.downloadArchive(uuids);
     },
 
     async bulkTogglePin(uuids, add) {

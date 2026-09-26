@@ -877,3 +877,256 @@ test('the tile checkbox follows the selection, ranges and clearing included', ()
   app.clearSelection();
   assert.deepEqual(Object.values(boxes).map((b) => b.checked), [false, false, false]);
 });
+
+// ── Selection actions ────────────────────────────────────
+
+const FAVORITE = (isFavorite) => ({ id: 'toggle_favorite', bulk: true, state: { is_favorite: isFavorite } });
+const BULK = (id) => ({ id, bulk: true });
+
+test('the selection offers the bulk actions every selected photo offers', () => {
+  const { ctx } = load();
+  const actions = ctx.photosSelectionActions([
+    [FAVORITE(false), BULK('download'), BULK('delete'), { id: 'rename', bulk: false }, BULK('cut')],
+    [FAVORITE(true), BULK('download')],
+  ]);
+
+  assert.deepEqual(Array.from(actions, (a) => a.id), ['toggle_favorite', 'download']);
+  assert.equal(actions[0].add, true);
+});
+
+test('the favorite toggle removes once every selected photo is a favorite', () => {
+  const { ctx } = load();
+  const [toggle] = ctx.photosSelectionActions([[FAVORITE(true)], [FAVORITE(true)]]);
+
+  assert.equal(toggle.add, false);
+  assert.equal(ctx.photosSelectionActions([]).length, 0);
+});
+
+test('the registry is asked in slices of 200, once per photo', async () => {
+  const uuids = Array.from({ length: 450 }, (_, i) => `u${i}`);
+  const calls = [];
+  const fileActions = {
+    fetchActions(batch) {
+      calls.push(batch.length);
+      return Promise.resolve(Object.fromEntries(batch.map((u) => [u, [BULK('download')]])));
+    },
+  };
+  const app = load({ fileActions }).ctx.photosApp();
+
+  app.selection = uuids;
+  const loading = app._loadSelectionActions();
+  assert.equal(app.selectionActions, null);
+  await loading;
+  assert.deepEqual(calls, [200, 200, 50]);
+  assert.equal(app.selectionAllows('download'), true);
+
+  app.selection = uuids.slice(0, 10);
+  await app._loadSelectionActions();
+  assert.deepEqual(calls, [200, 200, 50]);
+});
+
+test('an answer about a selection that has changed since is dropped', async () => {
+  const pending = [];
+  const fileActions = {
+    fetchActions: (batch) => new Promise((resolve) => pending.push(() => resolve(
+      Object.fromEntries(batch.map((u) => [u, u === 'a' ? [BULK('delete')] : [BULK('download')]])),
+    ))),
+  };
+  const app = load({ fileActions }).ctx.photosApp();
+
+  app.selection = ['a'];
+  const first = app._loadSelectionActions();
+  app.selection = ['b'];
+  const second = app._loadSelectionActions();
+  pending[1]();
+  await second;
+  pending[0]();
+  await first;
+
+  assert.deepEqual(Array.from(app.selectionActions, (a) => a.id), ['download']);
+});
+
+test('a refused answer offers nothing', async () => {
+  const app = load({ fileActions: { fetchActions: () => Promise.resolve(null) } }).ctx.photosApp();
+  app.selection = ['a'];
+  await app._loadSelectionActions();
+  assert.deepEqual(Array.from(app.selectionActions), []);
+});
+
+test('select all picks every loaded tile, in page order', () => {
+  const page = grid(['a', 'b', 'c']);
+  const app = load({ document: page.document }).ctx.photosApp();
+  app.toggleTileSelection(page.tiles.b, null);
+
+  app.selectAll();
+
+  assert.deepEqual(Array.from(app.selection), ['a', 'b', 'c']);
+  assert.ok(Object.values(page.tiles).every((t) => t.dataset.selected === '1'));
+});
+
+test('a right-click on a tile of a multiple selection opens the selection menu', () => {
+  const page = grid(['a', 'b', 'c']);
+  const { fileActions, calls } = fetchActionsReturning({});
+  const app = load({ document: page.document, fileActions }).ctx.photosApp();
+  app.toggleTileSelection(page.tiles.a, null);
+  app.toggleTileSelection(page.tiles.b, null);
+
+  app.openCtxMenu({ clientX: 50, clientY: 60 }, page.tiles.b);
+  assert.equal(app.selectionMenu.open, true);
+  assert.equal(app.ctxMenu.open, false);
+  assert.deepEqual(calls, []);
+
+  // A tile outside the selection keeps its own menu.
+  app.openCtxMenu({ clientX: 50, clientY: 60 }, page.tiles.c);
+  assert.equal(app.selectionMenu.open, false);
+  assert.equal(app.ctxMenu.open, true);
+  assert.equal(app.ctxMenu.photo.uuid, 'c');
+});
+
+test('a single selected tile keeps its own menu', () => {
+  const page = grid(['a']);
+  const { fileActions } = fetchActionsReturning({});
+  const app = load({ document: page.document, fileActions }).ctx.photosApp();
+  app.toggleTileSelection(page.tiles.a, null);
+
+  app.openCtxMenu({ clientX: 50, clientY: 60 }, page.tiles.a);
+
+  assert.equal(app.selectionMenu.open, false);
+  assert.equal(app.ctxMenu.open, true);
+});
+
+test('favoriting the selection flips the stars it could and reports the rest', async () => {
+  const page = grid(['a', 'b', 'c']);
+  const requests = [];
+  const alerts = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: (url, opts) => {
+      requests.push([opts.method, url]);
+      return Promise.resolve({ ok: !url.includes('/b/') });
+    },
+    AppAlert: { success: (m) => alerts.push(['success', m]), warning: (m) => alerts.push(['warning', m]) },
+  }).ctx.photosApp();
+  app.selectAll();
+  app.selectionActions = [{ ...FAVORITE(false), add: true }];
+  app._actionsCache = { a: [], b: [], c: [] };
+
+  await app.favoriteSelection();
+
+  assert.deepEqual(requests.map((r) => r[0]), ['POST', 'POST', 'POST']);
+  assert.equal(page.tiles.a.dataset.favorite, '1');
+  assert.equal(page.tiles.b.dataset.favorite, '0');
+  assert.deepEqual(Object.keys(app._actionsCache), ['b']);
+  assert.deepEqual(alerts, [['warning', 'Added 2 photos to favorites, 1 failed']]);
+  assert.equal(app.selection.length, 0);
+  assert.equal(app.selectionBusy, false);
+});
+
+test('unfavoriting the selection sends deletes', async () => {
+  const page = grid(['a']);
+  const requests = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: (url, opts) => { requests.push([opts.method, url]); return Promise.resolve({ ok: true }); },
+    AppAlert: { success() {} },
+  }).ctx.photosApp();
+  app.selectAll();
+  app.selectionActions = [{ ...FAVORITE(true), add: false }];
+
+  await app.favoriteSelection();
+
+  assert.deepEqual(requests, [['DELETE', '/api/v1/files/a/favorite']]);
+  assert.equal(page.tiles.a.dataset.favorite, '0');
+});
+
+test('nothing is sent for an action the registry did not offer the whole selection', async () => {
+  let called = false;
+  const page = grid(['a']);
+  const app = load({
+    document: page.document,
+    fetch: () => { called = true; return Promise.resolve({ ok: true }); },
+    AppDialog: { confirm: () => { called = true; return Promise.resolve(true); } },
+    fileActions: { downloadArchive: () => { called = true; } },
+  }).ctx.photosApp();
+  app.selectAll();
+  app.selectionActions = [];
+
+  await app.favoriteSelection();
+  await app.trashSelection();
+  await app.downloadSelection();
+
+  assert.equal(called, false);
+});
+
+test('downloading hands the selection to the archive helper', async () => {
+  const archives = [];
+  const page = grid(['a', 'b']);
+  const app = load({
+    document: page.document,
+    fileActions: { downloadArchive: (uuids, name) => { archives.push([Array.from(uuids), name]); } },
+  }).ctx.photosApp();
+  app.selectAll();
+  app.selectionActions = [BULK('download')];
+
+  await app.downloadSelection();
+
+  assert.deepEqual(archives, [[['a', 'b'], 'photos.zip']]);
+});
+
+test('trashing the selection removes the tiles the server accepted', async () => {
+  const page = grid(['a', 'b']);
+  const day = { querySelector: () => ({}), remove() {} };
+  for (const t of Object.values(page.tiles)) {
+    t.closest = () => day;
+    t.remove = () => { t.removed = true; };
+  }
+  // The grid still holds a tile: the header is refreshed, not the listing.
+  const byUuid = page.document.querySelector;
+  page.document.querySelector = (selector) => (
+    selector === '#timeline-grid [data-uuid]' ? page.tiles.b : byUuid(selector)
+  );
+  const requests = [];
+  const refreshed = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    AppDialog: { confirm: () => Promise.resolve(true) },
+    fetch: (url, opts) => { requests.push([opts.method, url]); return Promise.resolve({ ok: url.endsWith('/a') }); },
+    AppAlert: { warning() {} },
+    location: { href: '/photos' },
+  }).ctx.photosApp();
+  app.$ajax = (url, opts) => { refreshed.push(Array.from(opts.targets)); return Promise.resolve(); };
+  app.selectAll();
+  app.selectionActions = [BULK('delete')];
+  app.showPropertiesPanel = true;
+  app.propertiesUuid = 'a';
+
+  await app.trashSelection();
+  await app._refreshing;
+
+  assert.deepEqual(requests, [['DELETE', '/api/v1/files/a'], ['DELETE', '/api/v1/files/b']]);
+  assert.equal(page.tiles.a.removed, true);
+  assert.equal(page.tiles.b.removed, undefined);
+  assert.equal(app.showPropertiesPanel, false);
+  assert.equal(app.selection.length, 0);
+  assert.deepEqual(refreshed, [['photos-nav', 'photos-header']]);
+});
+
+test('trashing the selection asks first, and a cancel sends nothing', async () => {
+  let called = false;
+  const page = grid(['a']);
+  const app = load({
+    document: page.document,
+    AppDialog: { confirm: () => Promise.resolve(false) },
+    fetch: () => { called = true; return Promise.resolve({ ok: true }); },
+  }).ctx.photosApp();
+  app.selectAll();
+  app.selectionActions = [BULK('delete')];
+
+  await app.trashSelection();
+
+  assert.equal(called, false);
+  assert.equal(app.selection.length, 1);
+});

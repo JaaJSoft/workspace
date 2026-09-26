@@ -19,6 +19,15 @@ const PHOTO_ACTIONS = [
   'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename', 'delete',
 ];
 
+// The file actions the selection offers, when the registry offers them as
+// bulk actions on every selected photo.
+const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'download', 'delete'];
+
+// The actions endpoint refuses more than 200 uuids per call.
+const PHOTOS_ACTIONS_BATCH = 200;
+// Writes on a selection go out this many at a time.
+const PHOTOS_WRITE_BATCH = 6;
+
 // The album actions its header menu offers: the ones on the album as a whole.
 // The rest (add, remove, cover, reorder) gate controls elsewhere on the page.
 const ALBUM_MENU_ACTIONS = ['rename', 'edit_description', 'change_sort', 'delete'];
@@ -71,6 +80,32 @@ function photosCountLabel(count) {
   return count === 1 ? '1 photo' : `${count} photos`;
 }
 
+function photosBatches(items, size) {
+  const batches = [];
+  for (let i = 0; i < items.length; i += size) batches.push(items.slice(i, i + size));
+  return batches;
+}
+
+// What the selection can have done to it, out of the registry's answer for
+// each selected photo (`lists`, one per photo): the PHOTO_BULK_ACTIONS every
+// photo offers as a bulk action. The favorite toggle adds unless every photo
+// already is a favorite, as in Files.
+function photosSelectionActions(lists) {
+  if (!lists.length) return [];
+  const offered = (list, id) => list.find((a) => a.id === id && a.bulk);
+  return PHOTO_BULK_ACTIONS
+    .filter((id) => lists.every((list) => offered(list, id)))
+    .map((id) => {
+      const action = offered(lists[0], id);
+      if (id !== 'toggle_favorite') return action;
+      const allFavorite = lists.every((list) => {
+        const toggle = offered(list, id);
+        return !!(toggle.state && toggle.state.is_favorite);
+      });
+      return { ...action, add: !allFavorite };
+    });
+}
+
 // The size slider's step and the tile width in px of each step, as the page
 // was rendered with them.
 function photosTilePrefs() {
@@ -109,6 +144,14 @@ window.photosApp = function photosApp() {
     _longPressTimer: null,
     _longPressed: false,
     _touchAt: 0,
+    // The file actions the whole selection offers (photosSelectionActions),
+    // null while the registry is asked. Each photo's answer is kept until a
+    // write changes it.
+    selectionActions: [],
+    selectionBusy: false,
+    selectionMenu: { open: false, x: 0, y: 0 },
+    _selectionGeneration: 0,
+    _actionsCache: {},
 
     // The album on screen and what its registry lets the viewer do there.
     albumUuid: null,
@@ -131,10 +174,16 @@ window.photosApp = function photosApp() {
         this._refresh(['photos-nav']);
       });
       window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.selection.length && !document.querySelector('dialog[open]')) {
+        if (document.querySelector('dialog[open]')) return;
+        if (e.key === 'Escape' && this.selection.length) {
           this.clearSelection();
+        } else if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !this._typingIn(e.target)) {
+          if (!this._tileUuids().length) return;
+          e.preventDefault();
+          this.selectAll();
         }
       });
+      this.$watch('selection', () => this._loadSelectionActions());
       this.syncAlbum();
     },
 
@@ -260,6 +309,15 @@ window.photosApp = function photosApp() {
       x = Math.max(4, Math.min(x, window.innerWidth - PHOTOS_MENU_WIDTH - 4));
       y = Math.max(4, Math.min(y, window.innerHeight - PHOTOS_MENU_HEIGHT - 4));
 
+      // A tile of a multiple selection speaks for the whole selection. A
+      // single selected tile keeps its own menu: it has more to offer.
+      if (this.selection.length > 1 && this.isSelected(tile.dataset.uuid)) {
+        this.closeCtxMenu();
+        this.selectionMenu = { open: true, x, y };
+        return;
+      }
+      this.selectionMenu.open = false;
+
       const photo = {
         uuid: tile.dataset.uuid,
         name: tile.dataset.displayName,
@@ -349,6 +407,7 @@ window.photosApp = function photosApp() {
         if (!response.ok) throw new Error();
         const tile = this._tile(uuid);
         if (tile) tile.dataset.favorite = isFavorite ? '0' : '1';
+        this._forgetActions([uuid]);
       } catch (_) {
         window.AppAlert.error('Failed to update favorites');
       }
@@ -470,6 +529,158 @@ window.photosApp = function photosApp() {
       this.selection.forEach((uuid) => this._markSelected(uuid, false));
       this.selection = [];
       this._selectionAnchor = null;
+      this.selectionMenu.open = false;
+    },
+
+    // Every tile loaded so far, in page order: the timeline pages in as it
+    // scrolls, and what has not been rendered cannot be seen being picked.
+    selectAll() {
+      const uuids = this._tileUuids();
+      uuids.forEach((uuid) => this._markSelected(uuid, true));
+      this.selection = uuids;
+      this._selectionAnchor = uuids.length ? uuids[uuids.length - 1] : null;
+    },
+
+    // A tile's own checkbox is an input too, and the one focused right after
+    // picking a tile: it takes no text, so Ctrl+A there still selects tiles.
+    _typingIn(el) {
+      if (!el) return false;
+      if (el.tagName === 'INPUT') return !['checkbox', 'radio', 'button', 'range'].includes(el.type);
+      return el.isContentEditable || ['TEXTAREA', 'SELECT'].includes(el.tagName);
+    },
+
+    // Asks the registry about the selected photos it has not answered for
+    // yet, then keeps what all of them offer. The generation drops an answer
+    // about a selection that has changed since.
+    async _loadSelectionActions() {
+      const uuids = this.selection.slice();
+      const generation = ++this._selectionGeneration;
+      const missing = uuids.filter((uuid) => !(uuid in this._actionsCache));
+      if (missing.length) {
+        this.selectionActions = null;
+        try {
+          for (const batch of photosBatches(missing, PHOTOS_ACTIONS_BATCH)) {
+            const data = await window.fileActions.fetchActions(batch);
+            if (!data) throw new Error();
+            Object.assign(this._actionsCache, data);
+          }
+        } catch (_) {
+          if (generation === this._selectionGeneration) this.selectionActions = [];
+          return;
+        }
+      }
+      if (generation !== this._selectionGeneration) return;
+      this.selectionActions = photosSelectionActions(uuids.map((uuid) => this._actionsCache[uuid] || []));
+    },
+
+    _forgetActions(uuids) {
+      uuids.forEach((uuid) => { delete this._actionsCache[uuid]; });
+    },
+
+    // ── Selection actions ───────────────────────────────
+
+    _selectionAction(id) {
+      return (this.selectionActions || []).find((a) => a.id === id) || null;
+    },
+
+    selectionAllows(id) {
+      return !this.selectionBusy && this._selectionAction(id) !== null;
+    },
+
+    // Whether the selection's favorite toggle adds rather than removes.
+    selectionFavoriteAdds() {
+      const action = this._selectionAction('toggle_favorite');
+      return !action || action.add;
+    },
+
+    closeSelectionMenu() {
+      this.selectionMenu.open = false;
+    },
+
+    // One request per photo, a few at a time. Resolves to the uuids the
+    // server accepted.
+    async _eachPhoto(uuids, request) {
+      const done = [];
+      for (const batch of photosBatches(uuids, PHOTOS_WRITE_BATCH)) {
+        const accepted = await Promise.all(batch.map((uuid) => request(uuid).then((r) => r.ok, () => false)));
+        batch.forEach((uuid, i) => { if (accepted[i]) done.push(uuid); });
+      }
+      return done;
+    },
+
+    _reportEach(done, total, success, failure) {
+      if (done === total) {
+        window.AppAlert.success(success, { duration: 2500 });
+      } else if (done === 0) {
+        window.AppAlert.error(failure);
+      } else {
+        window.AppAlert.warning(`${success}, ${total - done} failed`);
+      }
+    },
+
+    async favoriteSelection() {
+      this.closeSelectionMenu();
+      const action = this._selectionAction('toggle_favorite');
+      if (!action || this.selectionBusy) return;
+      const uuids = this.selection.slice();
+      const add = action.add;
+      this.selectionBusy = true;
+      const done = await this._eachPhoto(uuids, (uuid) => fetch(`/api/v1/files/${uuid}/favorite`, {
+        method: add ? 'POST' : 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      }));
+      this.selectionBusy = false;
+      done.forEach((uuid) => {
+        const tile = this._tile(uuid);
+        if (tile) tile.dataset.favorite = add ? '1' : '0';
+      });
+      this._forgetActions(done);
+      const count = photosCountLabel(done.length);
+      this._reportEach(
+        done.length, uuids.length,
+        add ? `Added ${count} to favorites` : `Removed ${count} from favorites`,
+        'Failed to update favorites',
+      );
+      this.clearSelection();
+    },
+
+    downloadSelection() {
+      this.closeSelectionMenu();
+      if (!this.selectionAllows('download')) return Promise.resolve();
+      return window.fileActions.downloadArchive(this.selection.slice(), 'photos.zip');
+    },
+
+    async trashSelection() {
+      this.closeSelectionMenu();
+      if (!this.selectionAllows('delete')) return;
+      const uuids = this.selection.slice();
+      const ok = await AppDialog.confirm({
+        title: 'Move to trash',
+        message: `Move ${photosCountLabel(uuids.length)} to the trash? They can be restored from the Files trash.`,
+        okLabel: 'Move to trash',
+        okClass: 'btn-error',
+        icon: 'trash-2',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      this.selectionBusy = true;
+      const done = await this._eachPhoto(uuids, (uuid) => fetch(`/api/v1/files/${uuid}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRFToken': getCSRFToken() },
+      }));
+      this.selectionBusy = false;
+      if (done.includes(this.propertiesUuid)) this.closePropertiesPanel();
+      this._removeTiles(done);
+      this._reportEach(
+        done.length, uuids.length,
+        `Moved ${photosCountLabel(done.length)} to the trash`,
+        'Failed to move the photos to the trash',
+      );
+      this.clearSelection();
+      if (!done.length) return;
+      // Emptied: the whole listing, for its empty state.
+      const emptied = !document.querySelector('#timeline-grid [data-uuid]');
+      this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
     },
 
     startLongPress(tile) {

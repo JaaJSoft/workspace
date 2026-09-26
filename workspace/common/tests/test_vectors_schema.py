@@ -61,6 +61,17 @@ class DeclarationTests(SimpleTestCase):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 VectorIndex(table="t", dims=3, source_column="e", partition_column=name)
 
+    def test_a_name_postgresql_would_truncate_is_refused(self):
+        # PostgreSQL cuts identifiers at 63 bytes, silently: two declarations
+        # whose derived names share their first 63 bytes would end up on one
+        # HNSW index, or one vector column.
+        long_source = "s" * 60  # the source fits, `<source>_vec` does not
+        with self.assertRaises(ValueError):
+            VectorIndex(table="t", dims=3, source_column=long_source)
+        with self.assertRaises(ValueError):  # `<table>_<source>_hnsw`
+            VectorIndex(table="t" * 40, dims=3, source_column="e" * 20)
+        VectorIndex(table="t" * 40, dims=3, source_column="e" * 17)
+
     def test_an_empty_partition_column_is_refused_not_ignored(self):
         with self.assertRaises(ValueError):
             VectorIndex(table="t", dims=3, source_column="e", partition_column="")

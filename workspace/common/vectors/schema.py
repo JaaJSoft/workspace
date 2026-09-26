@@ -53,6 +53,7 @@ _PARTITION_TYPES = {"integer": "integer", "uuid": "text"}
 # Every name below is interpolated into SQL unquoted, so every name is checked,
 # and PostgreSQL's reserved words are refused: unquoted, `user` is CURRENT_USER.
 _IDENTIFIER_RE = re.compile(r"[a-z_][a-z0-9_]*")
+_MAX_IDENTIFIER_BYTES = 63
 _RESERVED = frozenset(
     """all analyse analyze and any array as asc asymmetric both case cast check
     collate column constraint create current_catalog current_date current_role
@@ -100,6 +101,15 @@ class VectorIndex:
                 or name in _RESERVED
             ):
                 raise ValueError(f"invalid SQL identifier: {name!r}")
+        # PostgreSQL cuts identifiers at 63 bytes without a word, so two
+        # declarations whose names share their first 63 bytes would share one
+        # vector column or one HNSW index. Names are ASCII, so bytes = chars.
+        for name in (*names, self.pg_column, self.hnsw_index):
+            if len(name) > _MAX_IDENTIFIER_BYTES:
+                raise ValueError(
+                    f"{name!r} is longer than PostgreSQL's "
+                    f"{_MAX_IDENTIFIER_BYTES}-byte identifier limit"
+                )
         if isinstance(self.dims, bool) or not isinstance(self.dims, int):
             raise ValueError(f"dims must be an integer, got {self.dims!r}")
         if not 1 <= self.dims <= MAX_DIMS:

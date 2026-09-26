@@ -20,6 +20,13 @@
     BAR = BEAT * 4;
     PORTRAIT = P.orientation === 'portrait';
   }
+  // Where the opening piles its app icons, [x, y, rotation]: the hook
+  // builds the pile, the intro pulls the same icons out of the same spots.
+  const PILE = {
+    landscape: [[380, 290, -12], [700, 190, 9], [1210, 200, -7], [1540, 320, 13], [300, 700, 11], [1640, 720, -9], [640, 860, 5], [1260, 870, -13], [1790, 470, 3]],
+    portrait: [[250, 420, -12], [560, 300, 9], [860, 450, -7], [220, 1440, 11], [540, 1560, -9], [860, 1420, 13], [240, 760, 5], [840, 1160, -13], [540, 620, 3]],
+  };
+
   const $ = (root, sel) => root.querySelector(sel);
   const $$ = (root, sel) => [...root.querySelectorAll(sel)];
 
@@ -40,7 +47,8 @@
     const el = document.querySelector(`[data-composition-id="${id}"]`);
     // `at(beats)` is a time on the beat grid, counted from the cut.
     const at = (beats) => data.lead + beats * BEAT;
-    return { el, $: (s) => $(el, s), $$: (s) => $$(el, s), at, BEAT, BAR, PORTRAIT, lead: data.lead, end: data.lead + data.duration };
+    const pile = PILE[PORTRAIT ? 'portrait' : 'landscape'];
+    return { el, $: (s) => $(el, s), $$: (s) => $$(el, s), at, BEAT, BAR, PORTRAIT, pile, lead: data.lead, end: data.lead + data.duration };
   }
 
   // -- vocabulary (kinetic-beat-slam: one beat grid, a distinct entrance per phrase)
@@ -90,7 +98,8 @@
     });
 
     const fade = document.getElementById('fade');
-    tl.fromTo(fade, { opacity: 1 }, { opacity: 0, duration: 0.5, ease: 'none' }, 0);
+    // An ad opens on its first frame: no fade in.
+    tl.set(fade, { opacity: 0 }, 0);
     tl.to(fade, { opacity: 1, duration: 1.4, ease: 'none' }, P.duration - 1.5);
 
     // Ambient layer painted from time, so it never depends on seek order:
@@ -108,6 +117,8 @@
         g.style.opacity = (0.75 + 0.25 * pulse).toFixed(3);
       });
       ghost.style.translate = `${(-((t * 40) % 1600)).toFixed(1)}px 0`;
+      // The brand stays out of the opening; it is the intro's reveal.
+      ghost.style.opacity = Math.min(1, Math.max(0, (t - P.scenes[2].start) / 0.6)).toFixed(3);
       grid.style.opacity = (0.5 + 0.5 * pulse).toFixed(3);
     };
     const clock = { t: 0 };
@@ -161,6 +172,11 @@
       case 'blur': // blur crossfade: the wind-down into the breakdown
         tl.to(out, { opacity: 0, filter: 'blur(24px)', duration: 0.6, ease: 'sine.inOut' }, T - 0.3);
         tl.fromTo(next, { opacity: 0, filter: 'blur(24px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.6, ease: 'sine.inOut' }, T - 0.3);
+        break;
+      case 'hard': // a straight cut on the beat, when the motion itself carries across
+        tl.set(next, { opacity: 0 }, T - 0.3);
+        tl.set(out, { opacity: 0 }, T);
+        tl.set(next, { opacity: 1 }, T);
         break;
       default:
         tl.fromTo(next, { opacity: 0 }, { opacity: 1, duration: 0.01 }, T);

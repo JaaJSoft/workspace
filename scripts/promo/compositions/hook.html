@@ -9,91 +9,87 @@
     <div id="hook-root" data-composition-id="hook" data-width="1920" data-height="1080">
       <style>
         #hook-root { position: absolute; inset: 0; }
-        .hook .hook-lines { position: absolute; left: 0; right: 0; top: 50%; height: 180px; margin-top: -90px; }
-        .hook .hook-line { position: absolute; left: 0; right: 0; text-align: center; font-size: 124px; white-space: nowrap; }
-        .hook .app-tile:nth-of-type(1) { left: 110px; top: 70px; --tile: #818cf8; }
-        .hook .app-tile:nth-of-type(2) { left: 560px; top: 40px; --tile: #38bdf8; }
-        .hook .app-tile:nth-of-type(3) { left: 1160px; top: 40px; --tile: #fbbf24; }
-        .hook .app-tile:nth-of-type(4) { left: 1610px; top: 70px; --tile: #2dd4bf; }
-        .hook .app-tile:nth-of-type(5) { left: 40px; top: 440px; --tile: #34d399; }
-        .hook .app-tile:nth-of-type(6) { left: 1680px; top: 440px; --tile: #fb923c; }
-        .hook .app-tile:nth-of-type(7) { left: 330px; top: 810px; --tile: #fb7185; }
-        .hook .app-tile:nth-of-type(8) { left: 860px; top: 840px; --tile: #a3e635; }
-        .hook .app-tile:nth-of-type(9) { left: 1390px; top: 810px; --tile: #c084fc; }
+        .hook .mega { position: absolute; left: 0; right: 0; top: 50%; opacity: 0; }
+        .hook .m0 { margin-top: -220px; font-size: 170px; }
+        .hook .m1, .hook .m2, .hook .m3 { margin-top: -110px; }
         @media (orientation: portrait) {
-          .hook .hook-line { font-size: 92px; }
-          .hook .app-tile { width: 170px; height: 170px; border-radius: 38px; font-size: 20px; }
-          .hook .app-tile svg { width: 60px; height: 60px; }
-          .hook .app-tile:nth-of-type(1) { left: 70px; top: 200px; }
-          .hook .app-tile:nth-of-type(2) { left: 455px; top: 170px; }
-          .hook .app-tile:nth-of-type(3) { left: 840px; top: 200px; }
-          .hook .app-tile:nth-of-type(4) { left: 250px; top: 460px; }
-          .hook .app-tile:nth-of-type(5) { left: 660px; top: 460px; }
-          .hook .app-tile:nth-of-type(6) { left: 70px; top: 1300px; }
-          .hook .app-tile:nth-of-type(7) { left: 455px; top: 1330px; }
-          .hook .app-tile:nth-of-type(8) { left: 840px; top: 1300px; }
-          .hook .app-tile:nth-of-type(9) { left: 455px; top: 1580px; }
+          .hook .m0 { margin-top: -130px; font-size: 100px; }
+          .hook .m1, .hook .m2, .hook .m3 { margin-top: -70px; }
         }
       </style>
       <div class="scene hook">
-        <div class="app-tile"><i data-lucide="hard-drive"></i><span>Drive</span></div>
-        <div class="app-tile"><i data-lucide="message-circle"></i><span>Chat</span></div>
-        <div class="app-tile"><i data-lucide="mail"></i><span>Mail</span></div>
-        <div class="app-tile"><i data-lucide="calendar"></i><span>Calendar</span></div>
-        <div class="app-tile"><i data-lucide="notebook-pen"></i><span>Notes</span></div>
-        <div class="app-tile"><i data-lucide="square-kanban"></i><span>Tasks</span></div>
-        <div class="app-tile"><i data-lucide="contact"></i><span>Contacts</span></div>
-        <div class="app-tile"><i data-lucide="images"></i><span>Photos</span></div>
-        <div class="app-tile"><i data-lucide="key-round"></i><span>Passwords</span></div>
-        <div class="hook-lines">
-          <div class="slam hook-line">Files <em>here.</em></div>
-          <div class="slam hook-line">Chat <em>there.</em></div>
-          <div class="slam hook-line">Mail? <em>Elsewhere.</em></div>
-          <div class="slam hook-line">Nine <em>apps.</em></div>
-          <div class="slam hook-line">Nine <em>logins.</em></div>
-          <div class="slam hook-line">Nine <em>bills.</em></div>
+        <div class="panel" style="--tile: #4f46e5"><div class="panel-icon"><i data-lucide="hard-drive"></i></div><div class="slam big">Your files,</div></div>
+        <div class="panel" style="--tile: #0369a1"><div class="panel-icon"><i data-lucide="message-circle"></i></div><div class="slam big">your chat,</div></div>
+        <div class="panel" style="--tile: #b45309"><div class="panel-icon"><i data-lucide="mail"></i></div><div class="slam big">your mail,</div></div>
+        <div class="panel" style="--tile: #c2410c"><div class="panel-icon"><i data-lucide="square-kanban"></i></div><div class="slam big">your tasks,</div></div>
+        <div class="panel" style="--tile: #7e22ce"><div class="panel-icon"><i data-lucide="key-round"></i></div><div class="slam big">your passwords</div></div>
+
+        <div class="pile layer">
+          <div class="app-icon" style="--tile: #6366f1"><i data-lucide="hard-drive"></i><span class="badge" data-layout-allow-overlap>12</span></div>
+          <div class="app-icon" style="--tile: #0ea5e9"><i data-lucide="message-circle"></i><span class="badge" data-layout-allow-overlap>38</span></div>
+          <div class="app-icon" style="--tile: #f59e0b"><i data-lucide="mail"></i><span class="badge" data-layout-allow-overlap>99+</span></div>
+          <div class="app-icon" style="--tile: #14b8a6"><i data-lucide="calendar"></i><span class="badge" data-layout-allow-overlap>4</span></div>
+          <div class="app-icon" style="--tile: #10b981"><i data-lucide="notebook-pen"></i><span class="badge" data-layout-allow-overlap>7</span></div>
+          <div class="app-icon" style="--tile: #f97316"><i data-lucide="square-kanban"></i><span class="badge" data-layout-allow-overlap>23</span></div>
+          <div class="app-icon" style="--tile: #f43f5e"><i data-lucide="contact"></i><span class="badge" data-layout-allow-overlap>2</span></div>
+          <div class="app-icon" style="--tile: #84cc16"><i data-lucide="images"></i><span class="badge" data-layout-allow-overlap>51</span></div>
+          <div class="app-icon" style="--tile: #a855f7"><i data-lucide="key-round"></i><span class="badge" data-layout-allow-overlap>1</span></div>
         </div>
+
+        <div class="slam mega m0"><div>&hellip;in nine</div><div><em>different apps.</em></div></div>
+        <div class="slam mega m1">9 logins.</div>
+        <div class="slam mega m2">9 tabs.</div>
+        <div class="slam mega m3"><em>0 overview.</em></div>
       </div>
       <script>
         (() => {
-          // overwhelm-surround (tools pile in around the viewer's attention)
-          // + kinetic-beat-slam (pain lines land alone, one per beat pair).
-          const { $$, at, PORTRAIT } = window.promo.scene("hook");
-          const { slam, pop, drift, prng } = window.promo;
+          // kinetic-beat-slam: five full-bleed hard cuts, one per beat, a
+          // distinct entrance each; then overwhelm-surround, the clutter
+          // variant: loud app icons pile up, badges and all, under the count.
+          const { $$, at, pile } = window.promo.scene("hook");
+          const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
 
-          const lines = $$(".hook-line");
-          const beats = [1, 3, 5, 8, 10, 12];
-          const kinds = ["scale", "left", "rise", "drop", "right", "scale"];
-          lines.forEach((line, i) => {
-            slam(tl, line, at(beats[i]), kinds[i]);
+          const panels = $$(".panel");
+          const kinds = ["scale", "left", "rise", "right", "drop"];
+          panels.forEach((panel, i) => {
+            tl.set(panel, { opacity: 1 }, at(i));
+            if (i) tl.set(panels[i - 1], { opacity: 0 }, at(i));
+            slam(tl, panel.querySelector(".big"), at(i), kinds[i]);
+            pop(tl, panel.querySelector(".panel-icon"), at(i), { rotation: i % 2 ? 18 : -18, duration: 0.4 });
+          });
+          tl.set(panels[panels.length - 1], { opacity: 0 }, at(5));
+
+          // The pile's spots are shared with the intro, which pulls the same
+          // icons out of them: resting positions, set once, never tweened.
+          const icons = $$(".app-icon");
+          icons.forEach((icon, i) => {
+            const [x, y, rotation] = pile[i];
+            icon.style.left = `${x}px`;
+            icon.style.top = `${y}px`;
+            tl.fromTo(icon, { scale: 0, opacity: 0, rotation: rotation * 3 }, { scale: 1, opacity: 1, rotation, duration: 0.4, ease: "back.out(2.4)" }, at(5.5 + i * 0.5));
+            pop(tl, icon.querySelector(".badge"), at(5.7 + i * 0.5), { duration: 0.35 });
+          });
+
+          const mega = $$(".mega");
+          const swaps = [5, 8, 9.5, 11];
+          const entrances = ["scale", "left", "right", "scale"];
+          mega.forEach((line, i) => {
+            slam(tl, line, at(swaps[i]), entrances[i]);
             if (!i) return;
-            // zoom-through swap: the old line rushes at the camera and cuts
-            const prev = lines[i - 1];
-            tl.to(prev, { scale: 1.2, filter: "blur(10px)", duration: 0.18, ease: "power3.in" }, at(beats[i]) - 0.18);
-            tl.to(prev, { opacity: 0, duration: 0.18, ease: "none" }, at(beats[i]) - 0.18);
+            // zoom-through swap: the old count rushes at the camera and cuts
+            tl.to(mega[i - 1], { scale: 1.25, filter: "blur(10px)", duration: 0.16, ease: "power3.in" }, at(swaps[i]) - 0.16);
+            tl.to(mega[i - 1], { opacity: 0, duration: 0.16, ease: "none" }, at(swaps[i]) - 0.16);
           });
 
-          const rand = prng(3);
-          const tiles = $$(".app-tile");
-          tiles.forEach((tile, i) => {
-            pop(tl, tile, at(1 + i * 1.2), { rotation: (rand() - 0.5) * 40 });
-            drift(tl, tile, at(2 + i * 1.2), at(14), { y: 10 + rand() * 8 }, 1.6 + rand());
+          // chromatic-glitch on the last count while the pile shakes loose
+          const last = mega[mega.length - 1];
+          tl.set(last, { textShadow: "9px 0 #ff4fa3, -9px 0 #22d3ee, 0 12px 60px rgb(14 10 22 / .9)" }, at(13));
+          tl.fromTo(last, { x: 0 }, { x: 16, duration: 0.05, ease: "steps(1)", yoyo: true, repeat: 11 }, at(13));
+          tl.set(last, { textShadow: "0 12px 60px rgb(14 10 22 / .9)" }, at(14.5));
+          icons.forEach((icon, i) => {
+            tl.fromTo(icon, { x: 0, y: 0 }, { x: i % 2 ? 14 : -14, y: i % 3 ? 10 : -10, duration: 0.06, ease: "steps(1)", yoyo: true, repeat: 19 }, at(13));
           });
-
-          // The pile closes in on the words, and the frame glitches.
-          const last = lines[lines.length - 1];
-          tiles.forEach((tile, i) => {
-            const style = getComputedStyle(tile);
-            const cx = parseFloat(style.left) + tile.offsetWidth / 2;
-            const cy = parseFloat(style.top) + tile.offsetHeight / 2;
-            const w = PORTRAIT ? 1080 : 1920;
-            const h = PORTRAIT ? 1920 : 1080;
-            tl.to(tile, { x: (w / 2 - cx) * 0.3, y: (h / 2 - cy) * 0.3, rotation: (rand() - 0.5) * 24, duration: 0.8, ease: "power2.in" }, at(14));
-          });
-          tl.set(last, { textShadow: "8px 0 #ff4fa3, -8px 0 #22d3ee" }, at(14));
-          tl.to(last, { x: 14, duration: 0.05, ease: "steps(1)", yoyo: true, repeat: 7 }, at(14));
-          tl.set(last, { textShadow: "none" }, at(15));
           window.__timelines["hook"] = tl;
         })();
       </script>

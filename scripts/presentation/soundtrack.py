@@ -246,6 +246,7 @@ def render_soundtrack(timeline, path: Path):
 
     total_bars = round(duration / bar)
     modules_seen = 0
+    previous = None
     for section in timeline["sections"]:
         kind = section["kind"]
         start = section["start"]
@@ -265,9 +266,11 @@ def render_soundtrack(timeline, path: Path):
 
         if kind in ("module", "platform", "outro") and start > 0:
             fx.add(start - 0.5, whoosh(rng), gain=0.35 if kind == "module" else 0.5)
-        if kind == "module" and modules_seen == 1 or kind == "outro":
+        # A drop: the groove comes back after a build, or opens the track.
+        if kind in ("module", "outro") and previous in (None, "intro", "platform"):
             fx.add(start, crash_sound, gain=0.5)
             fx.add(start, boom_sound, gain=0.55)
+        previous = kind
 
         for b in range(bars):
             t0 = start + b * bar

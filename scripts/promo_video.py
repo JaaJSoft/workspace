@@ -44,8 +44,8 @@ FORMATS = {
 # no drums and ends on a riser, "module" plays the full groove, "platform"
 # is the breakdown, "outro" drops back in and rings out).
 SCENES = [
-    {"id": "hook", "bars": 4, "cut": None, "music": "intro"},
-    {"id": "intro", "bars": 2, "cut": "zoom", "music": "intro"},
+    {"id": "hook", "bars": 4, "cut": None, "music": "module"},
+    {"id": "intro", "bars": 2, "cut": "hard", "music": "intro"},
     {"id": "search", "bars": 2, "cut": "flash", "music": "module"},
     {"id": "projects", "bars": 2, "cut": "whip-left", "music": "module"},
     {"id": "talk", "bars": 2, "cut": "whip-right", "music": "module"},

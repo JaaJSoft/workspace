@@ -6,24 +6,30 @@
 
   Context: album (card, manual, date_range), count_label.
 {% endcomment %}
-<div class="flex items-center gap-3 min-w-0 flex-1" data-album-header>
+{% comment %}
+  Top-aligned, not centered: on a phone the metadata wraps and the
+  description adds lines, and a centered cover (and drawer button, in the
+  row around it) would float halfway down the block. The title line is as
+  tall as the drawer button so the two stay level.
+{% endcomment %}
+<div class="flex items-start gap-3 min-w-0 flex-1" data-album-header>
   {% if album.card.cover_url %}
     <img
       src="{{ album.card.cover_url }}"
       alt=""
-      class="w-11 h-11 rounded-lg object-cover shrink-0"
+      class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg object-cover shrink-0"
       data-album-cover="{{ album.card.cover.uuid }}"
       draggable="false"
     />
   {% else %}
     <span
-      class="w-11 h-11 rounded-lg bg-module/10 text-module flex items-center justify-center shrink-0"
+      class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg bg-module/10 text-module flex items-center justify-center shrink-0"
     >
-      <i data-lucide="book-image" class="w-5 h-5"></i>
+      <i data-lucide="book-image" class="w-4 h-4 sm:w-5 sm:h-5"></i>
     </span>
   {% endif %}
   <div class="min-w-0 flex-1">
-    <div class="flex items-center gap-1 min-w-0">
+    <div class="flex items-center gap-1 min-w-0 min-h-8">
       <h1 class="text-lg font-semibold truncate">{{ album.card.album.title }}</h1>
       <button
         type="button"
@@ -37,15 +43,11 @@
       </button>
     </div>
     <div
-      class="flex flex-wrap items-center gap-x-2 text-sm text-base-content/60"
+      class="flex flex-wrap items-center gap-x-3 text-sm text-base-content/60"
     >
-      <span>{{ count_label }}</span>
-      {% if album.date_range %}
-        <span aria-hidden="true">·</span>
-        <span>{{ album.date_range }}</span>
-      {% endif %}
-      <span aria-hidden="true">·</span>
-      <span class="inline-flex items-center gap-1">
+      {# No dot before the sort mode: its icon separates it, and a wrapped line never starts or ends on a dot. #}
+      <span>{{ count_label }}{% if album.date_range %} · {{ album.date_range }}{% endif %}</span>
+      <span class="inline-flex items-center gap-1 whitespace-nowrap">
         {% if album.manual %}
           <i data-lucide="grip" class="w-3.5 h-3.5"></i>
           Manual order
@@ -56,11 +58,7 @@
       </span>
     </div>
     {% if album.card.album.description %}
-      <p
-        class="text-sm text-base-content/70 mt-0.5 line-clamp-2 whitespace-pre-line"
-      >
-        {{ album.card.album.description }}
-      </p>
+      <p class="text-sm text-base-content/70 mt-0.5 line-clamp-2">{{ album.card.album.description|linebreaksbr }}</p>
     {% endif %}
   </div>
 </div>

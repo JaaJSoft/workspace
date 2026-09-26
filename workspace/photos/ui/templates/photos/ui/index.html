@@ -67,7 +67,10 @@
       class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
     >
       {# Its own swap target: an album edit refreshes the counts and the cover without reloading the grid. #}
-      <div id="photos-header" class="flex items-center gap-3 px-4 py-3">
+      <div
+        id="photos-header"
+        class="flex {% if album %}items-start{% else %}items-center{% endif %} gap-3 px-4 py-3"
+      >
         {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
         {% if album %}
           {{ album_data|json_script:"album-data" }}
@@ -88,7 +91,7 @@
             {{ pending }} being analyzed
           </span>
         {% endif %}
-        <div class="max-sm:hidden">
+        <div class="max-sm:hidden self-center">
           {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
         </div>
         {% if date_param %}

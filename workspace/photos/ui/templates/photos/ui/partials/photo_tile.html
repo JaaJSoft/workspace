@@ -9,9 +9,13 @@
   for its previous/next navigation, so the viewer pages through the timeline
   in the order it is shown; the context menu reads the rest, "Open in Files"
   included (see the files_url filter).
+
+  isolate makes the tile its own stacking context: the overlays' z-10 then
+  ranks them within the tile only, never against the sticky header (z-10
+  too), which they would otherwise paint over while scrolling under it.
 {% endcomment %}
 <div
-  class="group relative shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square overflow-hidden rounded-lg bg-base-200"
+  class="group relative isolate shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square overflow-hidden rounded-lg bg-base-200"
   data-uuid="{{ file.uuid }}"
   data-node-type="file"
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"

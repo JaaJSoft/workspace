@@ -102,3 +102,32 @@ class PhotosVideoTests(PlaywrightTestCase):
         tabs.nth(0).click()
 
         expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")
+
+    def test_a_tile_scrolled_under_the_header_stays_under_it(self):
+        for day in range(1, 13):
+            for hour in range(9, 13):
+                make_photo(
+                    self.user,
+                    f"june{day}-{hour}.jpg",
+                    datetime(2024, 6, day, hour, tzinfo=UTC),
+                )
+        self._open()
+        badge = self._tile(self.video).locator("[data-duration-badge]")
+
+        on_top = badge.evaluate(
+            """(badge) => {
+                const scroller = document.getElementById('photos-content');
+                const header = scroller.querySelector('header');
+                const middle = r => r.top + r.height / 2;
+                scroller.scrollTop += middle(badge.getBoundingClientRect())
+                    - middle(header.getBoundingClientRect());
+                // elementFromPoint skips a pointer-events: none element,
+                // and hit testing otherwise follows the paint order.
+                badge.style.pointerEvents = 'auto';
+                const b = badge.getBoundingClientRect();
+                const hit = document.elementFromPoint(b.left + b.width / 2, middle(b));
+                return header.contains(hit) ? 'header' : hit.outerHTML.slice(0, 80);
+            }"""
+        )
+
+        self.assertEqual(on_top, "header")

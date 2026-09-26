@@ -133,3 +133,58 @@ class PersonTimelineTests(FacesTestMixin, TestCase):
         self.assertEqual(
             self.client.get("/photos", {"cluster": "nope"}).status_code, 404
         )
+
+
+@faces_on
+class PersonFacesTests(FacesTestMixin, TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        opt_in(self.user)
+        self.client.force_login(self.user)
+        for name, x in (("alice-1.png", 40), ("alice-2.png", 200), ("alice-3.png", 90)):
+            library_photo(self.user, name, (ALICE, (x, 50, 100)))
+        cluster_owner(self.user.pk)
+        self.alice = FaceCluster.objects.get(faces__file__name="alice-1.png")
+        self.confirmed = Face.objects.get(file__name="alice-3.png")
+        Face.objects.filter(pk=self.confirmed.pk).update(
+            assignment=Face.Assignment.CONFIRMED
+        )
+
+    def get(self, **params):
+        return self.client.get(
+            "/photos/people/faces", {"cluster": str(self.alice.pk), **params}
+        )
+
+    def test_lists_the_faces_unconfirmed_first(self):
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        faces = response.context["board"]["faces"]
+        self.assertEqual(len(faces), 3)
+        self.assertEqual(faces[-1]["uuid"], str(self.confirmed.pk))
+        self.assertEqual(faces[-1]["assignment"], "confirmed")
+
+    def test_narrows_to_the_confirmed_faces_or_the_others(self):
+        confirmed = self.get(show="confirmed").context["board"]["faces"]
+        others = self.get(show="check").context["board"]["faces"]
+
+        self.assertEqual([f["uuid"] for f in confirmed], [str(self.confirmed.pk)])
+        self.assertEqual(len(others), 2)
+
+    def test_the_timeline_and_the_faces_link_to_each_other(self):
+        timeline = self.client.get("/photos", {"cluster": str(self.alice.pk)})
+        faces = self.get()
+
+        self.assertContains(timeline, f"/photos/people/faces?cluster={self.alice.pk}")
+        self.assertContains(faces, f"/photos?cluster={self.alice.pk}")
+
+    def test_someone_elses_cluster_is_missing(self):
+        other = User.objects.create_user(username="eve", password="p")
+        theirs = FaceCluster.objects.create(owner=other)
+
+        response = self.client.get("/photos/people/faces", {"cluster": str(theirs.pk)})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_needs_a_person(self):
+        self.assertEqual(self.client.get("/photos/people/faces").status_code, 404)

@@ -95,9 +95,12 @@
         </div>
       {% endif %}
     </div>
-    {% if scope_tabs or type_tabs %}
+    {% if scope_tabs or type_tabs or person_views %}
       {# One row at every width: the header is sticky, so a second one would cost the grid its height for the whole scroll. #}
       <div class="flex items-center gap-2 px-4 pb-2">
+        {% if person_views %}
+          {% include "photos/ui/partials/person_view_tabs.html" %}
+        {% endif %}
         {% if scope_tabs %}
           {# Which folders the library reads. The view filters (favorites, a tag, the media type) carry over; the date does not. #}
           <nav

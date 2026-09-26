@@ -35,10 +35,14 @@ from workspace.photos.services.album_cards import album_cards, user_album_cards
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
 from workspace.photos.services.face_review import (
+    ALL_FACES,
+    CONFIRMED,
     REJECTED,
+    TO_CHECK,
     UNGROUPED,
     doubtful_faces,
     hidden_faces,
+    person_faces,
     unassigned_counts,
     unassigned_faces,
     unnamed_queue,
@@ -466,6 +470,7 @@ def index(request):
         active_view, title, icon = "timeline", "Timeline", "images"
 
     context = {
+        "person_views": _person_views(who, "photos") if who is not None else None,
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
@@ -685,18 +690,19 @@ def _face_items(face_ids):
     """What a board shows of each of *face_ids*, in that order: the crop, and
     the photo it was found in, for the tile to open it."""
     rows = {
-        pk: (file_id, name, file_type)
-        for pk, file_id, name, file_type in Face.objects.filter(
-            pk__in=face_ids
-        ).values_list("pk", "file_id", "file__name", "file__type")
+        row[0]: row
+        for row in Face.objects.filter(pk__in=face_ids).values_list(
+            "pk", "file_id", "file__name", "file__type", "assignment"
+        )
     }
     return [
         {
             "uuid": str(pk),
             "crop_url": _crop_url(pk),
-            "file": str(rows[pk][0]),
-            "file_name": rows[pk][1],
-            "file_type": rows[pk][2],
+            "file": str(rows[pk][1]),
+            "file_name": rows[pk][2],
+            "file_type": rows[pk][3],
+            "assignment": rows[pk][4],
         }
         for pk in face_ids
         if pk in rows
@@ -773,3 +779,63 @@ def people_review(request):
         "review_url": review_url,
     }
     return render(request, "photos/ui/people_review.html", context)
+
+
+def _person_views(who, active):
+    """The Photos and Faces tabs of a person's page."""
+    faces_url = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
+    return [
+        {
+            "label": "Photos",
+            "icon": "images",
+            "url": _url_with(who.params),
+            "active": active == "photos",
+        },
+        {
+            "label": "Faces",
+            "icon": "scan-face",
+            "url": faces_url,
+            "active": active == "faces",
+        },
+    ]
+
+
+@login_required
+@ensure_csrf_cookie
+def person_faces_view(request):
+    """A person's faces rather than their photos, to pick the ones that are
+    someone else. Same ``?person=`` or ``?cluster=`` as their timeline;
+    ``?show=check`` or ``?show=confirmed`` narrows the faces."""
+    if not faces_available():
+        raise Http404
+    if not faces_enabled(request.user):
+        return redirect("photos_ui:people")
+    who = _who(request)
+    if who is None:
+        raise Http404
+    show = request.GET.get("show")
+    if show not in (ALL_FACES, TO_CHECK, CONFIRMED):
+        show = ALL_FACES
+    page = person_faces(request.user, who.clusters, show)
+    base = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
+    context = {
+        **_people_shell_context(request.user),
+        "title": who.person.display_name if who.person else "Unnamed person",
+        "cluster": _who_card(who),
+        "person_views": _person_views(who, "faces"),
+        "board": {"faces": _face_items(page.face_ids), "total": page.total},
+        "face_count": page.total,
+        "shows": [
+            {
+                "label": label,
+                "url": base if value == ALL_FACES else f"{base}&show={value}",
+                "active": value == show,
+            }
+            for value, label in (
+                (ALL_FACES, "All"),
+                (TO_CHECK, "Not confirmed"),
+                (CONFIRMED, "Confirmed"),
+            )
+        ],
+    }
+    return render(request, "photos/ui/person_faces.html", context)

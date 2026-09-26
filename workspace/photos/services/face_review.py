@@ -256,3 +256,40 @@ def by_likeness(rows):
         order.append(following)
         left[following] = False
     return [ids[i] for i in order] + rest
+
+
+# What a person's faces page shows.
+ALL_FACES = "all"
+TO_CHECK = "check"
+CONFIRMED = "confirmed"
+PERSON_FACES_PER_PAGE = 300
+
+
+def person_faces(user, clusters, show=ALL_FACES):
+    """The faces of *clusters*, one person's, those most likely someone else
+    first: the unconfirmed ones farthest from their cluster's centroid, then
+    the confirmed ones. *show* narrows them to either half."""
+    faces = user_faces(user).filter(cluster__in=[c.pk for c in clusters])
+    if show == TO_CHECK:
+        faces = faces.filter(assignment=Face.Assignment.AUTO)
+    elif show == CONFIRMED:
+        faces = faces.filter(assignment=Face.Assignment.CONFIRMED)
+    centroids = {c.pk: _unit(c.centroid) for c in clusters}
+
+    def doubt(row):
+        pk, cluster_id, assignment, blob = row
+        vector, centroid = _unit(blob), centroids.get(cluster_id)
+        distance = (
+            1 - float(np.dot(vector, centroid))
+            if vector is not None and centroid is not None
+            else 0.0
+        )
+        return (assignment == Face.Assignment.CONFIRMED, -distance, str(pk))
+
+    rows = sorted(
+        faces.values_list("pk", "cluster_id", "assignment", "embedding"), key=doubt
+    )
+    return FacePage(
+        face_ids=tuple(row[0] for row in rows[:PERSON_FACES_PER_PAGE]),
+        total=len(rows),
+    )

@@ -11,4 +11,5 @@ urlpatterns = [
     path("/albums/<uuid:uuid>/timeline", views.album_timeline, name="album_timeline"),
     path("/people", views.people, name="people"),
     path("/people/review", views.people_review, name="people_review"),
+    path("/people/faces", views.person_faces_view, name="person_faces"),
 ]

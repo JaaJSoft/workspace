@@ -12,7 +12,7 @@
   @keydown.escape.window="if (!document.querySelector('dialog[open]')) clearFaceSelection()"
 >
   <div
-    class="pointer-events-auto flex items-center gap-1 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
+    class="pointer-events-auto flex items-center gap-0.5 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
     role="toolbar"
     aria-label="Selected faces"
   >
@@ -46,11 +46,12 @@
     <button
       type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
+      title="Say who they are"
       x-show="faceAllows('assign')"
       @click="runFaceAction('assign')"
     >
       <i data-lucide="user-round-pen" class="w-4 h-4"></i>
-      This is...
+      <span class="max-sm:hidden">This is...</span>
     </button>
     <button
       type="button"

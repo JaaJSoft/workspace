@@ -1,0 +1,17 @@
+{# A person's page as their photos or as their faces: person_views from the view. #}
+<nav
+  class="tabs tabs-boxed tabs-sm shrink-0 grid-flow-col auto-cols-max"
+  aria-label="Show"
+>
+  {% for tab in person_views %}
+    <a
+      href="{{ tab.url }}"
+      x-target.push="photos-nav photos-content"
+      class="tab gap-1.5 {% if tab.active %}tab-active !bg-module !text-module-content{% endif %}"
+      {% if tab.active %}aria-current="page"{% endif %}
+    >
+      <i data-lucide="{{ tab.icon }}" class="w-3.5 h-3.5 shrink-0"></i>
+      <span class="leading-5">{{ tab.label }}</span>
+    </a>
+  {% endfor %}
+</nav>

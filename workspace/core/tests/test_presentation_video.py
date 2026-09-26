@@ -1,0 +1,71 @@
+"""Keeps the presentation video (scripts/presentation_video.py) in step with the app.
+
+The video is rendered by hand before a release, so nothing else notices when
+it falls behind: a module added to the dashboard would only get a generic
+scene, and an icon renamed in a Lucide upgrade would render as an empty tile.
+"""
+
+import re
+import sys
+from itertools import pairwise
+
+from django.conf import settings
+from django.test import SimpleTestCase
+
+from workspace.core.module_registry import registry
+
+LUCIDE = (
+    settings.BASE_DIR / "workspace/common/static/ui/js/vendor/lucide/lucide.js"
+).read_text(encoding="utf-8")
+
+if str(settings.BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(settings.BASE_DIR))
+
+from scripts.presentation.scenes import OUTRO, PLATFORM, SCENES  # noqa: E402
+from scripts.presentation_video import build_timeline, resolve_scenes  # noqa: E402
+
+
+def _pascal(name):
+    return "".join(part[:1].upper() + part[1:] for part in name.split("-"))
+
+
+class PresentationVideoTests(SimpleTestCase):
+    def test_every_dashboard_module_has_a_scene(self):
+        covered = {scene["slug"] for scene in SCENES}
+        missing = sorted(
+            m.slug
+            for m in registry.get_all()
+            if m.show_on_dashboard and m.slug not in covered
+        )
+        self.assertEqual(
+            missing,
+            [],
+            "give these modules a scene in scripts/presentation/scenes.py",
+        )
+
+    def test_every_icon_exists_in_the_vendored_lucide(self):
+        icons = {OUTRO["url_icon"]}
+        icons |= {scene["icon"] for scene in resolve_scenes()}
+        icons |= {icon for scene in SCENES for icon, _ in scene["features"]}
+        icons |= {icon for icon, _, _ in PLATFORM["cards"]}
+        unknown = sorted(
+            name
+            for name in icons
+            if not re.search(rf"\.{re.escape(_pascal(name))}=", LUCIDE)
+        )
+        self.assertEqual(unknown, [])
+
+    def test_timeline_covers_every_scene_back_to_back(self):
+        timeline = build_timeline(resolve_scenes(), fps=30)
+        sections = timeline["sections"]
+        self.assertEqual(
+            [s["key"] for s in sections if s["kind"] == "module"],
+            [s["slug"] for s in SCENES],
+        )
+        bar = 60 / timeline["bpm"] * timeline["beatsPerBar"]
+        for before, after in pairwise(sections):
+            self.assertAlmostEqual(
+                before["start"] + before["bars"] * bar, after["start"]
+            )
+        last = sections[-1]
+        self.assertAlmostEqual(last["start"] + last["bars"] * bar, timeline["duration"])

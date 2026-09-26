@@ -54,18 +54,35 @@ def _photo_png(start, end):
     Flat fills read as placeholders in a thumbnail grid; a gradient gives
     the mosaic capture the texture a real photo library would have.
     """
+    buf = io.BytesIO()
+    _gradient(start, end).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _photo_jpeg(start, end, taken_at):
+    """The same gradient as a camera would write it: a JPEG whose EXIF
+    capture time files it under its day in the Photos timeline."""
+    from PIL import ExifTags, Image
+
+    exif = Image.Exif()
+    exif.get_ifd(ExifTags.IFD.Exif)[ExifTags.Base.DateTimeOriginal] = taken_at.strftime(
+        "%Y:%m:%d %H:%M:%S"
+    )
+    buf = io.BytesIO()
+    _gradient(start, end).save(buf, format="JPEG", quality=90, exif=exif)
+    return buf.getvalue()
+
+
+def _gradient(start, end):
     from PIL import Image
 
     vertical = Image.linear_gradient("L")
     diagonal = Image.blend(vertical, vertical.transpose(Image.Transpose.ROTATE_90), 0.5)
-    img = Image.composite(
+    return Image.composite(
         Image.new("RGB", diagonal.size, end),
         Image.new("RGB", diagonal.size, start),
         diagonal,
     ).resize((800, 600), Image.Resampling.BICUBIC)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
 
 
 _MINIMAL_PDF = (
@@ -178,18 +195,18 @@ def _seed_files(alex, sam, group, now):
     # The mosaic shot is taken inside Photos: a thumbnail grid is what the
     # view exists for, so it needs enough images to actually fill a grid.
     pictures = [
-        ("product-shot.png", (16, 185, 129), (5, 150, 105), 2),
-        ("team-offsite.png", (59, 130, 246), (14, 165, 233), 3),
-        ("keynote-stage.png", (99, 102, 241), (139, 92, 246), 4),
-        ("office-tour.png", (245, 158, 11), (249, 115, 22), 6),
-        ("conference-booth.png", (236, 72, 153), (219, 39, 119), 7),
-        ("workshop.png", (20, 184, 166), (6, 182, 212), 9),
-        ("launch-party.png", (168, 85, 247), (217, 70, 239), 11),
-        ("hero-banner.png", (239, 68, 68), (249, 115, 22), 13),
-        ("city-skyline.png", (30, 64, 175), (67, 56, 202), 15),
-        ("desk-setup.png", (100, 116, 139), (71, 85, 105), 17),
-        ("whiteboard.png", (34, 197, 94), (132, 204, 22), 19),
-        ("meetup-crowd.png", (2, 132, 199), (56, 189, 248), 22),
+        ("product-shot.jpg", (16, 185, 129), (5, 150, 105), 2),
+        ("team-offsite.jpg", (59, 130, 246), (14, 165, 233), 3),
+        ("keynote-stage.jpg", (99, 102, 241), (139, 92, 246), 4),
+        ("office-tour.jpg", (245, 158, 11), (249, 115, 22), 6),
+        ("conference-booth.jpg", (236, 72, 153), (219, 39, 119), 7),
+        ("workshop.jpg", (20, 184, 166), (6, 182, 212), 9),
+        ("launch-party.jpg", (168, 85, 247), (217, 70, 239), 11),
+        ("hero-banner.jpg", (239, 68, 68), (249, 115, 22), 13),
+        ("city-skyline.jpg", (30, 64, 175), (67, 56, 202), 15),
+        ("desk-setup.jpg", (100, 116, 139), (71, 85, 105), 17),
+        ("whiteboard.jpg", (34, 197, 94), (132, 204, 22), 19),
+        ("meetup-crowd.jpg", (2, 132, 199), (56, 189, 248), 22),
     ]
     files = [
         (documents, "Quarterly report.pdf", _MINIMAL_PDF, "application/pdf", 26),
@@ -203,7 +220,13 @@ def _seed_files(alex, sam, group, now):
         ),
         (None, "logo.svg", svg.encode(), "image/svg+xml", 5),
     ] + [
-        (photos, name, _photo_png(start, end), "image/png", days_ago)
+        (
+            photos,
+            name,
+            _photo_jpeg(start, end, now - timedelta(days=days_ago, hours=3)),
+            "image/jpeg",
+            days_ago,
+        )
         for name, start, end, days_ago in pictures
     ]
     created = {}
@@ -234,8 +257,8 @@ def _seed_files(alex, sam, group, now):
         ("budget-2026.csv", ["2026"]),
         ("Roadmap.md", ["draft"]),
         ("logo.svg", ["client"]),
-        ("hero-banner.png", ["draft"]),
-        ("product-shot.png", ["client"]),
+        ("hero-banner.jpg", ["draft"]),
+        ("product-shot.jpg", ["client"]),
     ]:
         for tag_name in tag_names:
             FileTag.objects.create(file=created[name], tag=tags[tag_name])

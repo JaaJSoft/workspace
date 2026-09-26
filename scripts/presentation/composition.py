@@ -9,6 +9,7 @@ timeline data.
 
 import json
 import shutil
+import subprocess
 from html import escape
 from pathlib import Path
 
@@ -33,7 +34,8 @@ WINDOW_TOP = 178
 
 
 def write_project(out_dir: Path, timeline, audio_name):
-    """Lay out *out_dir* as a HyperFrames project (shots/ is already there)."""
+    """Lay out *out_dir* as a HyperFrames project (the captures are there)."""
+    _prepare_clips(out_dir, timeline)
     for name, src in VENDOR.items():
         target = out_dir / name
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -57,6 +59,63 @@ def write_project(out_dir: Path, timeline, audio_name):
     (out_dir / "index.html").write_text(
         render_index(timeline, audio_name), encoding="utf-8"
     )
+
+
+# The first clip of a scene starts once the window has begun flying in.
+CLIP_LEAD = 0.3
+# Past this a sped-up take stops reading as someone using the app.
+MAX_RATE = 1.35
+
+
+def _prepare_clips(out_dir, timeline):
+    """Time every shot, and give each clip its first and last frames.
+
+    A clip is framed by stills of its own first and last frames, so the
+    window shows the page before the take starts and holds the result after
+    it ends, whatever the take's length.
+    """
+    bar = 60 / timeline["bpm"] * timeline["beatsPerBar"]
+    for section in timeline["sections"]:
+        if section["kind"] != "module":
+            continue
+        span = section["bars"] * bar / len(section["shots"])
+        for k, shot in enumerate(section["shots"]):
+            shot["at"] = k * span
+            shot["until"] = (k + 1) * span
+            if not shot["src"].endswith(".mp4"):
+                continue
+            clip = out_dir / shot["src"]
+            shot["at"] += CLIP_LEAD if k == 0 else 0.1
+            # A take a little longer than the window stays on screen plays a
+            # little faster, so its ending (the result of the act) is seen.
+            length = _duration(clip)
+            room = shot["until"] - shot["at"] - 0.55
+            shot["rate"] = max(1.0, length / room)
+            if shot["rate"] > MAX_RATE:
+                print(
+                    f"  ! {shot['src']} lasts {length:.1f}s, the scene shows "
+                    f"{room * MAX_RATE:.1f}s of it even sped up: shorten its act"
+                )
+                shot["rate"] = MAX_RATE
+            shot["plays"] = min(length / shot["rate"], shot["until"] - shot["at"])
+            for name, seek in (("first", ["-ss", "0"]), ("last", ["-sseof", "-0.05"])):
+                still = clip.with_name(f"{clip.stem}-{name}.jpg")
+                if not still.is_file() or still.stat().st_mtime < clip.stat().st_mtime:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-loglevel", "error", *seek, "-i", str(clip),
+                         "-frames:v", "1", "-q:v", "2", str(still)],
+                        check=True,
+                    )  # fmt: skip
+                shot[name] = still.relative_to(out_dir).as_posix()
+
+
+def _duration(clip):
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", str(clip)],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    return float(out.stdout.strip())
 
 
 # -- markup helpers ------------------------------------------------------------
@@ -131,11 +190,11 @@ def _module(s, timeline):
         f'<span class="p">{"".join(f"<span class=c>{escape(c)}</span>" for c in shot["path"])}</span>'
         for shot in s["shots"]
     )
-    images = "".join(f'<img src="{escape(shot["src"])}" alt="">' for shot in s["shots"])
+    shots = "".join(_shot(s, k, shot) for k, shot in enumerate(s["shots"]))
 
     callouts = []
     for k, shot in enumerate(s["shots"]):
-        if not shot.get("callout"):
+        if not shot.get("callout") or "plays" in shot:
             continue
         cx, cy, cw, ch = shot["callout"]
         size = scale * min(1.5, 560 / (cw * scale))
@@ -153,7 +212,7 @@ def _module(s, timeline):
 <div class="m-text" style="left: {text_x}px">
   <div class="m-counter"><span>{s["number"]:02d}</span><span class="bar"></span><span class="total">{total:02d}</span>{badge}</div>
   <div class="m-icon">{_tile(s["icon"], s["color"])}<div class="ring"></div></div>
-  <div class="m-name">{_letters(s["name"])}</div>
+  <div class="m-name" style="font-size: {_name_size(s["name"])}px">{_letters(s["name"])}</div>
   <div class="m-tagline">{_words(s["tagline"])}</div>
   <div class="m-features">{features}</div>
 </div>
@@ -164,9 +223,27 @@ def _module(s, timeline):
     <div class="url">{_icon("lock")}<span>{HOST}</span><span class="path">{paths}</span></div>
     <span class="spacer"></span>
   </div>
-  <div class="screen">{images}</div>
+  <div class="screen">{shots}</div>
 </div>
 {"".join(callouts)}"""
+
+
+def _name_size(name):
+    # 112px fits about nine letters in the text column; longer names shrink.
+    return round(max(72, min(112, 112 * 9.5 / max(1, len(name)))))
+
+
+def _shot(s, k, shot):
+    if "plays" not in shot:
+        return f'<div class="shot" data-shot="{k}"><img src="{escape(shot["src"])}" alt=""></div>'
+    return (
+        f'<div class="shot" data-shot="{k}" data-clip-end="{shot["at"] + shot["plays"]:.3f}">'
+        f'<img src="{escape(shot["first"])}" alt="">'
+        f'<video id="clip-{s["key"]}-{k}" src="{escape(shot["src"])}" muted playsinline '
+        f'data-start="{shot["at"]:.3f}" data-duration="{shot["plays"]:.3f}" '
+        f'data-playback-rate="{shot["rate"]:.3f}" data-track-index="{4 + k}"></video>'
+        f'<img class="last" src="{escape(shot["last"])}" alt=""></div>'
+    )
 
 
 def _platform(s, modules):

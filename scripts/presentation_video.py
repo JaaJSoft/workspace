@@ -1,26 +1,22 @@
 """Render the Workspace presentation video.
 
-Captures every module from a seeded throwaway demo, synthesizes a soundtrack
-locked to the video's tempo, and writes a HyperFrames composition that lays
-the captures out and animates them (``scripts/presentation/composition/``),
-then renders it with the HyperFrames CLI:
+Films real interactions in every module on a seeded throwaway demo (a visible
+cursor searching, dragging, typing), synthesizes a soundtrack locked to the
+video's tempo, and writes a HyperFrames composition that plays the takes in
+animated windows (``scripts/presentation/composition/``), then renders it:
 
     uv run python scripts/presentation_video.py                 # full build
-    uv run python scripts/presentation_video.py --skip-capture  # reuse the captures
+    uv run python scripts/presentation_video.py --skip-capture  # reuse the takes
     uv run python scripts/presentation_video.py --skip-capture --preview
-    uv run python scripts/presentation_video.py --skip-capture --stills 12 44.5
+    uv run python scripts/presentation_video.py --serve         # keep a demo up...
+    uv run python scripts/presentation_video.py --only chat     # ...and refilm on it
 
 Everything lands in ``build/presentation/`` (git-ignored), which is a plain
 HyperFrames project: ``--preview`` opens it in HyperFrames Studio to scrub the
-timeline with its music, and ``npx hyperframes <command> build/presentation``
-works on it as on any other.
-
-What the video says lives in ``scripts/presentation/scenes.py``; a new module
-on the home dashboard shows up on its own with a generic scene until it gets
-a proper entry there.
+timeline with its music. See ``scripts/presentation/README.md``.
 
 Requirements: the ``dev`` dependency group (Playwright) with a Chromium
-install (``uv run playwright install chromium``) for the captures, Node.js 22+
+install (``uv run playwright install chromium``) for the takes, Node.js 22+
 and ``ffmpeg`` on the PATH. The HyperFrames toolchain is pinned in
 ``scripts/presentation/package.json`` and installed on first run.
 """
@@ -125,7 +121,7 @@ def build_timeline(scenes, fps):
     for number, scene in enumerate(scenes, start=1):
         shots = [
             {
-                "src": f"shots/{shot_filename(scene['key'], i)}",
+                "src": shot_filename(scene["key"], i, shot),
                 # What the address bar shows: no query, no uuid placeholders.
                 "path": re.sub(r"/\{[^}]+\}", "", shot["path"].split("?")[0]) or "/",
                 "callout": shot.get("callout"),
@@ -150,10 +146,7 @@ def build_timeline(scenes, fps):
         title=PLATFORM["title"],
         tagline=PLATFORM["tagline"],
         cards=[list(c) for c in PLATFORM["cards"]],
-        shots={
-            name: f"shots/{shot_filename('platform', name)}"
-            for name in PLATFORM["shots"]
-        },
+        shots={name: shot_filename("platform", name) for name in PLATFORM["shots"]},
     )
     add("outro", OUTRO_BARS + TAIL_BARS, drumBars=2, color=HUES["brand"], **OUTRO)
 
@@ -200,7 +193,18 @@ def main():
     parser.add_argument(
         "--skip-capture",
         action="store_true",
-        help="reuse the screenshots of a previous run",
+        help="reuse the captures of a previous run",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="SCENE",
+        help="capture only these scenes (module slugs, or platform), keep the rest",
+    )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="keep a seeded demo running for later captures, until Ctrl+C",
     )
     parser.add_argument(
         "--preview",
@@ -231,28 +235,44 @@ def main():
     sys.path.insert(0, str(REPO_ROOT))
     os.chdir(REPO_ROOT)
     out_dir = args.out_dir.resolve()
-    shots_dir = out_dir / "shots"
 
-    if args.skip_capture:
+    from scripts.presentation import capture
+    from scripts.presentation.scenes import PLATFORM
+
+    if args.serve:
+        capture.serve(out_dir)
+        return
+
+    running = None if args.skip_capture else capture.running_demo(out_dir)
+    if args.skip_capture or running:
         import django
 
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
         django.setup()
         scenes = resolve_scenes()
+        if running:
+            # A demo left up by --serve: fast, but the takes act on the data
+            # the previous ones changed. Render the final video without it.
+            print(f"Capturing the running demo at {running[0]}...")
+            capture.capture_all(scenes, PLATFORM, out_dir, *running, only=args.only)
     else:
-        from scripts.presentation.capture import capture_all
-        from scripts.presentation.scenes import PLATFORM
-
-        print("Capturing the demo...")
-        scenes = capture_all(resolve_scenes, PLATFORM, shots_dir)
+        print("Capturing a fresh demo...")
+        with capture.demo() as (base_url, context):
+            scenes = resolve_scenes()
+            capture.capture_all(
+                scenes, PLATFORM, out_dir, base_url, context, only=args.only
+            )
 
     timeline = build_timeline(scenes, args.fps)
     missing = [
-        shot["src"]
+        src
         for section in timeline["sections"]
-        if section["kind"] == "module"
-        for shot in section["shots"]
-        if not (out_dir / shot["src"]).is_file()
+        for src in (
+            [shot["src"] for shot in section["shots"]]
+            if section["kind"] == "module"
+            else list(section.get("shots", {}).values())
+        )
+        if not (out_dir / src).is_file()
     ]
     if missing:
         sys.exit(f"Missing captures (run without --skip-capture): {missing}")

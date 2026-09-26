@@ -126,28 +126,29 @@
     tl.fromTo(glow, { x: dir * 450, scaleX: 0.5, opacity: 0 }, { x: 0, scaleX: 1, opacity: 0.9, duration: 1.5, ease: 'expo.out' }, 0.1);
     tl.to(glow, { opacity: 0, duration: 0.55, ease: 'power3.in' }, out);
 
-    // shots: each one wipes up over the previous, its address typed in
-    const shots = $$(el, '.screen img');
+    // shots: each one wipes up over the previous, its address typed in; a
+    // filmed shot holds its last frame once the take is over
+    const shots = $$(el, '.screen .shot');
     const paths = $$(el, '.url .p');
-    const shotDur = D / shots.length;
-    shots.forEach((img, k) => {
-      const start = k * shotDur;
-      const typeAt = start + (k ? 0.1 : 0.4);
+    shots.forEach((shot, k) => {
+      const { at, until } = s.shots[k];
+      const typeAt = at + (k ? 0.1 : 0.4);
       if (k) {
-        tl.fromTo(img, { clipPath: 'inset(100% 0% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.9, ease: 'expo.out' }, start);
-        tl.to(shots[k - 1], { filter: 'brightness(0.5)', duration: 0.9, ease: 'expo.out' }, start);
+        tl.fromTo(shot, { clipPath: 'inset(100% 0% 0% 0%)' }, { clipPath: 'inset(0% 0% 0% 0%)', duration: 0.9, ease: 'expo.out' }, at);
+        tl.to(shots[k - 1], { filter: 'brightness(0.5)', duration: 0.9, ease: 'expo.out' }, at);
         // the previous address stays up until the new one starts typing
         tl.set(paths[k - 1], { display: 'none' }, typeAt);
       }
-      tl.set(paths[k], { display: 'inline' }, start);
+      if (shot.dataset.clipEnd) tl.set($(shot, '.last'), { opacity: 1 }, Number(shot.dataset.clipEnd));
+      tl.set(paths[k], { display: 'inline' }, Math.min(at, until));
       const chars = $$(paths[k], '.c');
       chars.forEach((c, j) => tl.set(c, { display: 'inline' }, typeAt + (j * 0.5) / chars.length));
     });
 
     $$(el, '.callout').forEach((callout) => {
       const k = Number(callout.dataset.shot);
-      const start = k * shotDur;
-      const end = k < shots.length - 1 ? start + shotDur - 0.1 : out;
+      const start = s.shots[k].at;
+      const end = k < shots.length - 1 ? s.shots[k].until - 0.1 : out;
       const at = start + Math.min(2.2, (end - start) * 0.3);
       tl.fromTo(
         callout,

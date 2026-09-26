@@ -216,6 +216,44 @@ class FullMigrationTests(TestCase):
         self.assertEqual(loaddata_call[1]["database"], TARGET_ALIAS)
 
     @patch(f"{MODULE}.call_command")
+    def test_vector_indexes_are_rebuilt_on_the_target_after_the_import(self, mock_call):
+        cmd = Command()
+        cmd.stdout = StringIO()
+        cmd.stderr = StringIO()
+
+        mock_conns = MagicMock()
+        mock_conns.__getitem__ = MagicMock(
+            return_value=MagicMock(
+                settings_dict={"ENGINE": "django.db.backends.sqlite3"},
+            )
+        )
+        mock_conns.databases = {}
+
+        mock_call.side_effect = _empty_dump
+
+        with (
+            patch(f"{MODULE}.connections", mock_conns),
+            patch.object(cmd, "_pending_migrations", return_value=[]),
+            patch.object(cmd, "_truncate_target_tables", return_value=0),
+            patch.object(cmd, "_reset_sequences"),
+            patch.object(cmd, "_verify_counts", return_value=[]),
+        ):
+            cmd.handle(
+                database_url="postgres://u:p@host/db",
+                dry_run=False,
+                keep_dump=False,
+            )
+
+        call_names = [c[0][0] for c in mock_call.call_args_list]
+        self.assertGreater(
+            call_names.index("rebuild_vector_index"), call_names.index("loaddata")
+        )
+        rebuild_call = mock_call.call_args_list[
+            call_names.index("rebuild_vector_index")
+        ]
+        self.assertEqual(rebuild_call[1]["database"], TARGET_ALIAS)
+
+    @patch(f"{MODULE}.call_command")
     def test_keep_dump_preserves_file(self, mock_call):
         cmd = Command()
         cmd.stdout = StringIO()

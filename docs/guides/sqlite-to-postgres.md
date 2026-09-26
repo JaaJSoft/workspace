@@ -38,7 +38,8 @@ The command will:
 2. Apply all Django migrations on the target database
 3. Export all data from SQLite
 4. Import the data into PostgreSQL
-5. Verify record counts match between both databases
+5. Rebuild the vector indexes on the target (a no-op without pgvector, see [Deployments](../deployments/README.md#common-notes))
+6. Verify record counts match between both databases
 
 ### Options
 
@@ -93,7 +94,16 @@ DATABASE_URL=postgres://user:password@localhost:5432/workspace \
   python manage.py loaddata dump.json
 ```
 
-### 4. Verify
+### 4. Rebuild the vector indexes
+
+The dump carries the stored vectors, not the pgvector index derived from them:
+
+```bash
+DATABASE_URL=postgres://user:password@localhost:5432/workspace \
+  python manage.py rebuild_vector_index
+```
+
+### 5. Verify
 
 Compare record counts between both databases to make sure nothing was lost.
 

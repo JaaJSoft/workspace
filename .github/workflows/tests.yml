@@ -74,6 +74,7 @@ jobs:
       templates: ${{ steps.filter.outputs.templates }}
       webdav: ${{ steps.filter.outputs.webdav }}
       nextcloud: ${{ steps.filter.outputs.nextcloud }}
+      vectors: ${{ steps.filter.outputs.vectors }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -112,6 +113,15 @@ jobs:
               - 'workspace/settings/**'
               - 'workspace/*.py'
               - 'manage.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+            # The vector index and what its pgvector backend runs on.
+            vectors:
+              - 'workspace/common/vectors/**'
+              - 'workspace/common/management/commands/*vector*'
+              - 'workspace/common/tests/test_vectors*.py'
+              - 'workspace/settings/**'
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
@@ -460,3 +470,52 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.imports.tests.test_nextcloud_live -v 2
+
+  # The Django matrix runs on SQLite, so the pgvector backend of the vector
+  # index (common.vectors) only runs here, against a server that ships the
+  # extension. The test database is created by a superuser, which pgvector
+  # (not a trusted extension) needs to be enabled.
+  pgvector:
+    runs-on: ubuntu-latest
+    name: Vectors (pgvector)
+    needs: changes
+    if: needs.changes.outputs.vectors == 'true'
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg17
+        env:
+          POSTGRES_USER: workspace
+          POSTGRES_PASSWORD: workspace
+          POSTGRES_DB: workspace
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U workspace"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run the vector tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          # A server without a usable pgvector is a failure here, not a skip.
+          WORKSPACE_PGVECTOR_TESTS: '1'
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.common.tests.test_vectors workspace.common.tests.test_vectors_schema -v 2

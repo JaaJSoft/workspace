@@ -331,7 +331,7 @@
                 <th class="w-10" data-col="select">
                   <input
                     type="checkbox"
-                    class="checkbox checkbox-sm align-middle"
+                    class="checkbox checkbox-sm checkbox-module align-middle"
                     @click="toggleSelectAll()"
                     :checked="selectAllState() === 'all'"
                     x-effect="$el.indeterminate = selectAllState() === 'partial'"
@@ -391,7 +391,7 @@
                   <td data-col="select" data-stop-row-click @click.stop>
                     <input
                       type="checkbox"
-                      class="checkbox checkbox-sm align-middle"
+                      class="checkbox checkbox-sm checkbox-module align-middle"
                       :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
                       @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
                     />
@@ -592,7 +592,7 @@
                   <div class="absolute top-2 left-2 z-10" @click.stop>
                     <input
                       type="checkbox"
-                      class="checkbox checkbox-sm bg-base-100/80 backdrop-blur-sm"
+                      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm"
                       :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
                       :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
                       @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"

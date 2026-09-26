@@ -173,3 +173,22 @@ test('the progress badge follows the total, which moves while the page is open',
   assert.equal(progress.analyzed, 12);
   assert.equal(progress.total, 15);
 });
+
+test('a merge offers each named person once, never the target itself', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+  });
+  const clusters = [
+    { uuid: 't', person: null },
+    { uuid: 'nina-big', person: 'p-nina' },
+    { uuid: 'u1', person: null },
+    { uuid: 'nina-small', person: 'p-nina' },
+    { uuid: 'lea', person: 'p-lea' },
+  ];
+
+  const offered = Array.from(ctx.mergeCandidates(clusters, { uuid: 't', person: null }), (c) => c.uuid);
+  assert.deepEqual(offered, ['nina-big', 'u1', 'lea']);
+
+  const fromLea = Array.from(ctx.mergeCandidates(clusters, { uuid: 'lea', person: 'p-lea' }), (c) => c.uuid);
+  assert.deepEqual(fromLea, ['t', 'nina-big', 'u1']);
+});

@@ -54,6 +54,21 @@ function personsUrl(query) {
   return q ? `${FACES_API}/persons?q=${encodeURIComponent(q)}` : `${FACES_API}/persons`;
 }
 
+// What a merge may take in: every unnamed cluster, and one entry per named
+// person - their largest cluster, the list being largest first - since the
+// others of theirs are that same person already. Never the target, nor
+// another cluster of the target's own person.
+function mergeCandidates(clusters, target) {
+  const seen = new Set(target.person ? [target.person] : []);
+  return clusters.filter((c) => {
+    if (c.uuid === target.uuid) return false;
+    if (!c.person) return true;
+    if (seen.has(c.person)) return false;
+    seen.add(c.person);
+    return true;
+  });
+}
+
 function photoCount(count) {
   return `${count} photo${count === 1 ? '' : 's'}`;
 }
@@ -307,7 +322,7 @@ window.photosFacesMixin = function photosFacesMixin() {
         const clusters = await facesRequest(`${FACES_API}/clusters`);
         const target = clusters.find((c) => c.uuid === card.uuid);
         if (target) this.mergeDialog.target = target;
-        this.mergeDialog.clusters = clusters.filter((c) => c.uuid !== card.uuid);
+        this.mergeDialog.clusters = mergeCandidates(clusters, target || card);
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not load people');
       } finally {

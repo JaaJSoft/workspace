@@ -587,17 +587,17 @@ window.chatMessagesMixin = function chatMessagesMixin() {
           await this._refreshCurrentMessages();
           // Then whatever other surface shows a copy of this message: the
           // refresh above only repaints the surface the click landed on.
-          this._notifyReactionPeers();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to toggle reaction', e);
       }
     },
 
-    // Reaction fan-out to the other surface. The main flow tells the thread
-    // panel; the panel overrides this to a no-op because its own
-    // _refreshCurrentMessages already asks the main flow to repaint.
-    _notifyReactionPeers() {
+    // Fan-out of a reaction or pin change to the other surface. The main flow
+    // tells the thread panel; the panel overrides this to a no-op because its
+    // own _refreshCurrentMessages already asks the main flow to repaint.
+    _notifyPeerSurface() {
       window.dispatchEvent(new CustomEvent('chat:refresh-thread'));
     },
 
@@ -642,6 +642,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok) {
           await this.loadPinnedMessages(this.activeConversation.uuid);
           await this._refreshCurrentMessages();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to pin message', e);
@@ -659,6 +660,7 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         if (resp.ok || resp.status === 204) {
           await this.loadPinnedMessages(this.activeConversation.uuid);
           await this._refreshCurrentMessages();
+          this._notifyPeerSurface();
         }
       } catch (e) {
         console.error('Failed to unpin message', e);
@@ -677,7 +679,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
       // cannot: links, media, a text selection, and Shift+right-click.
       if (event.shiftKey || event.target.closest('a, img, video, audio')) return;
       const selection = window.getSelection();
-      if (selection && !selection.isCollapsed && bubble.contains(selection.anchorNode)) return;
+      // containsNode(_, true), not the anchor: a drag started above the bubble
+      // anchors outside it yet still selects its text.
+      if (selection && !selection.isCollapsed && selection.containsNode(bubble, true)) return;
       event.preventDefault();
 
       // The main flow and the thread panel each own a menu; right-click does

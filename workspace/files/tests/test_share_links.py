@@ -257,7 +257,7 @@ class PublicShareLinkAPITests(APITestCase):
     def test_get_content_no_password(self):
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn(b"Hello World", resp.content)
+        self.assertIn(b"Hello World", b"".join(resp.streaming_content))
 
     def test_get_content_increments_view_count(self):
         self.client.get(f"/api/v1/files/shared/{self.link.token}/content")

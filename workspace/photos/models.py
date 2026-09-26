@@ -204,8 +204,10 @@ class FaceAnalysis(models.Model):
 class FaceCluster(models.Model):
     """Faces the grouping believes are one person, in one user's library.
 
-    Deliberately not called a person: naming a cluster after a contact is a
-    separate step, and a cluster may still be two look-alikes.
+    Deliberately not called a person: a cluster may still be two look-alikes,
+    and one person often spans several clusters (a child growing up, a beard,
+    glasses), each kept compact so its centroid stays useful. Naming links a
+    cluster to a ``people.Person``; several clusters may link to the same one.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -218,6 +220,16 @@ class FaceCluster(models.Model):
     # is created, or by the user; re-picked when it leaves the cluster.
     cover = models.ForeignKey(
         "Face", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    # Who the faces are. Two clusters of one person are one person for the
+    # one-face-per-photo rule too, which the services enforce: the database
+    # constraint on Face only spans one cluster.
+    person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
     )
     hidden = models.BooleanField(default=False)
     # Quality-weighted mean of the members' embeddings, unit length, float32.

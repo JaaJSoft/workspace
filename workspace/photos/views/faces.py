@@ -6,8 +6,10 @@ rows a pending purge has not reached yet are not theirs to see any more.
 """
 
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.db.models import F
 from django.http import FileResponse, HttpResponse
+from django.urls import reverse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -21,6 +23,8 @@ from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
+from workspace.people.queries import reachable_person, user_persons
+from workspace.people.services.persons import create_person
 
 from ..queries import (
     cluster_photos,
@@ -34,7 +38,7 @@ from ..serializers import (
     FaceClusterSerializer,
     FaceSerializer,
 )
-from ..services import face_corrections
+from ..services import face_corrections, face_people
 from ..services.face_preferences import faces_available, faces_enabled
 
 
@@ -56,6 +60,22 @@ def _correction(fn, *args):
         raise ValidationError(
             {"detail": "The cover must be one of the group's faces."}
         ) from None
+    except face_people.PersonAlreadyInPhoto:
+        raise ValidationError(
+            {"detail": "This person is already in one of these photos."}
+        ) from None
+    except face_people.NoCover:
+        raise ValidationError(
+            {"detail": "This person has no face picture to use yet."}
+        ) from None
+
+
+def _person(user, uuid, field):
+    """The contact *uuid* names, if the user can see it; a 400 otherwise."""
+    person = reachable_person(user, uuid)
+    if person is None:
+        raise ValidationError({field: "No such contact."})
+    return person
 
 
 @extend_schema(tags=["Photos - Faces"])
@@ -133,6 +153,20 @@ class FaceClusterViewSet(
             face_corrections.set_hidden(cluster, data["hidden"])
         if "cover" in data:
             _correction(face_corrections.set_cover, cluster, data["cover"])
+        if "new_person" in data:
+            _correction(
+                face_people.link_new_person,
+                cluster,
+                self.request.user,
+                data["new_person"],
+            )
+        elif "person_id" in data:
+            person = (
+                _person(self.request.user, data["person_id"], "person")
+                if data["person_id"] is not None
+                else None
+            )
+            _correction(face_people.link_cluster, cluster, person)
 
     def perform_destroy(self, instance):
         face_corrections.ungroup(instance)
@@ -154,8 +188,33 @@ class FaceClusterViewSet(
         )
         if len(sources) != len(set(serializer.validated_data["clusters"])):
             raise NotFound
-        face_corrections.merge_clusters(target, sources)
+        try:
+            face_corrections.merge_clusters(
+                target, sources, person_id=serializer.validated_data.get("person")
+            )
+        except face_corrections.PersonsDiffer as exc:
+            names = user_persons(request.user).filter(pk__in=exc.person_ids)
+            raise ValidationError(
+                {
+                    "detail": "These are named after different people: pick the name to keep.",
+                    "persons": [
+                        {"uuid": str(p.pk), "name": p.display_name} for p in names
+                    ],
+                }
+            ) from None
         return Response(self.get_serializer(self.get_object()).data)
+
+    @extend_schema(
+        summary="Use the cover as the contact photo",
+        description="Gives the cluster's contact its cover face as their People avatar.",
+        request=None,
+        responses={204: None},
+    )
+    @action(detail=True, methods=["post"])
+    def avatar(self, request, pk=None):
+        cluster = self.get_object()
+        _correction(face_people.use_cover_as_avatar, cluster)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="Photos of a cluster",
@@ -203,6 +262,13 @@ class FaceViewSet(
     def perform_update(self, serializer):
         face = serializer.instance
         data = serializer.validated_data
+        if "new_person" in data:
+            _correction(self._to_new_person, face, data["new_person"])
+            return
+        if "to_person" in data:
+            person = _person(self.request.user, data["to_person"], "to_person")
+            _correction(face_people.assign_face_to_person, face, person)
+            return
         if "cluster_id" in data:
             if data["cluster_id"] is None:
                 face_corrections.reject_face(face)
@@ -219,6 +285,11 @@ class FaceViewSet(
             if face.cluster is None:
                 raise ValidationError({"assignment": "The face is in no cluster."})
             _correction(face_corrections.confirm_face, face, face.cluster)
+
+    def _to_new_person(self, face, name):
+        with transaction.atomic():
+            person = create_person(owner=self.request.user, display_name=name)
+            face_people.assign_face_to_person(face, person)
 
 
 @extend_schema(tags=["Photos - Faces"])
@@ -278,3 +349,60 @@ class FaceStatusView(APIView):
         return Response(
             {"enabled": faces_enabled(request.user), **face_progress(request.user)}
         )
+
+
+_PERSON_SEARCH_LIMIT = 20
+
+
+def _person_json(person, card=None):
+    return {
+        "uuid": str(person.pk),
+        "name": person.display_name,
+        "photo_count": card.photo_count if card else 0,
+        "cover_url": (
+            _cover_url(card.cover_cluster) if card and card.cover_cluster else None
+        ),
+        "clusters": [str(c.pk) for c in card.clusters] if card else [],
+        "hidden": card.hidden if card else False,
+    }
+
+
+def _cover_url(cluster):
+    if not cluster.cover_id:
+        return None
+    return reverse("photos-face-crop", kwargs={"pk": cluster.cover_id})
+
+
+@extend_schema(tags=["Photos - Faces"])
+class FacePersonsView(APIView):
+    """The contacts the user's face clusters are named after.
+
+    With ``?q=``, every contact the user can see whose name matches, those
+    with no cluster yet included: what the "this is..." picker offers.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="People found in the user's photos",
+        parameters=[
+            OpenApiParameter("q", str, description="Search all contacts by name.")
+        ],
+    )
+    def get(self, request):
+        _require_faces()
+        cards = {
+            card.person.pk: card
+            for card in face_people.person_cards(
+                user_face_clusters(request.user).select_related("person")
+            )
+        }
+        query = (request.query_params.get("q") or "").strip().lower()
+        if not query:
+            return Response([_person_json(c.person, c) for c in cards.values()])
+        matches = user_persons(request.user).filter(search_text__contains=query)[
+            :_PERSON_SEARCH_LIMIT
+        ]
+        results = [_person_json(p, cards.get(p.pk)) for p in matches]
+        results.sort(key=lambda r: (-r["photo_count"], r["name"].lower()))
+        return Response(results)

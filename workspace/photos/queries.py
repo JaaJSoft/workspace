@@ -263,6 +263,21 @@ def cluster_photos(user, cluster):
     return library_files(user).filter(faces__cluster=cluster)
 
 
+def person_photos(user, person):
+    """The live photos of the user's library showing *person*, through any
+    of the user's clusters named after them. Another user's clusters of the
+    same contact are theirs alone."""
+    return (
+        library_files(user)
+        .filter(
+            faces__cluster__in=user_face_clusters(user)
+            .filter(person=person)
+            .values("pk")
+        )
+        .distinct()
+    )
+
+
 def face_progress(user):
     """How far the analysis of the user's photos has come, as a dict."""
     from workspace.photos.services.face_analysis import pending_faces_qs

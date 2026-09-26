@@ -41,6 +41,11 @@ urlpatterns = [
         name="photo-album-reorder",
     ),
     path(
+        "api/v1/photos/persons",
+        faces.FacePersonsView.as_view(),
+        name="photos-face-persons",
+    ),
+    path(
         "api/v1/photos/faces/status",
         faces.FaceStatusView.as_view(),
         name="photos-face-status",

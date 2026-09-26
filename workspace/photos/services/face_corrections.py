@@ -9,7 +9,7 @@ user's (see queries.py).
 from django.db import IntegrityError, transaction
 
 from ..models import Face, FaceCluster
-from .face_grouping import refresh_clusters
+from .face_grouping import photo_clusters, refresh_clusters
 
 
 class CorrectionError(ValueError):
@@ -25,17 +25,44 @@ class CoverNotInCluster(CorrectionError):
     """The face chosen as cover is not one of the cluster's."""
 
 
-def merge_clusters(target, sources):
+class PersonsDiffer(CorrectionError):
+    """The clusters to merge are named after different people, and the
+    caller did not say which name the merged cluster keeps."""
+
+    def __init__(self, person_ids):
+        super().__init__()
+        self.person_ids = sorted(person_ids, key=str)
+
+
+def merge_clusters(target, sources, *, person_id=None):
     """Move every face of *sources* into *target*, then delete *sources*.
 
-    A photo already in *target* keeps its face there; the source's face of
-    that photo goes back to ungrouped rather than breaking the one face per
-    photo per cluster rule.
+    A photo already in *target*, or in another cluster of the person the
+    merged cluster ends up named after, keeps its face there; the source's
+    face of that photo goes back to ungrouped rather than breaking the one
+    face per photo per person rule.
+
+    When the clusters are named after different people, *person_id* says
+    which one the merged cluster keeps; without it the merge is refused.
     """
     sources = [cluster for cluster in sources if cluster.pk != target.pk]
+    named = {c.person_id for c in (target, *sources) if c.person_id is not None}
+    if person_id is None and len(named) > 1:
+        raise PersonsDiffer(named)
+    if person_id is not None and person_id not in named:
+        raise PersonsDiffer(named)
+    person_id = person_id if person_id is not None else next(iter(named), None)
+    merged = {target.pk, *(cluster.pk for cluster in sources)}
     with transaction.atomic():
+        same_person = (
+            FaceCluster.objects.filter(person_id=person_id).exclude(pk__in=merged)
+            if person_id is not None
+            else FaceCluster.objects.none()
+        )
         taken = set(
-            Face.objects.filter(cluster=target).values_list("file_id", flat=True)
+            Face.objects.filter(cluster__in=[target.pk, *same_person]).values_list(
+                "file_id", flat=True
+            )
         )
         for face in (
             Face.objects.filter(cluster__in=sources)
@@ -50,6 +77,9 @@ def merge_clusters(target, sources):
                 taken.add(face.file_id)
             face.save(update_fields=["cluster", "assignment"])
         FaceCluster.objects.filter(pk__in=[cluster.pk for cluster in sources]).delete()
+        if target.person_id != person_id:
+            target.person_id = person_id
+            target.save(update_fields=["person", "updated_at"])
     refresh_clusters([target.pk])
 
 
@@ -86,11 +116,7 @@ def reject_face(face):
 def confirm_face(face, cluster):
     """This is X: pin *face* in *cluster*, wherever it was."""
     previous = face.cluster_id
-    if (
-        Face.objects.filter(file_id=face.file_id, cluster=cluster)
-        .exclude(pk=face.pk)
-        .exists()
-    ):
+    if cluster.pk in photo_clusters(face.file_id, exclude_face=face.pk):
         raise PhotoAlreadyInCluster
     face.cluster = cluster
     face.assignment = Face.Assignment.CONFIRMED
@@ -104,10 +130,11 @@ def confirm_face(face, cluster):
     refresh_clusters({cluster.pk, previous} - {None})
 
 
-def start_cluster(face):
-    """This is someone new: a cluster of its own for *face*, confirmed."""
+def start_cluster(face, person=None):
+    """This is someone new, or *person* in a new look: a cluster of its own
+    for *face*, confirmed."""
     with transaction.atomic():
-        cluster = FaceCluster.objects.create(owner_id=face.owner_id)
+        cluster = FaceCluster.objects.create(owner_id=face.owner_id, person=person)
         confirm_face(face, cluster)
     return cluster
 

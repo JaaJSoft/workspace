@@ -54,6 +54,25 @@ class FaceClusterSerializer(serializers.ModelSerializer):
         help_text="The face shown for the cluster: one of its own.",
     )
     cover_url = serializers.SerializerMethodField(help_text="URL of the cover crop.")
+    person = serializers.UUIDField(
+        source="person_id",
+        allow_null=True,
+        required=False,
+        help_text=(
+            "The contact (People) this cluster is; write one to name the "
+            "cluster, null to clear its name."
+        ),
+    )
+    person_name = serializers.SerializerMethodField(
+        help_text="The contact's name, or null for an unnamed cluster."
+    )
+    new_person = serializers.CharField(
+        write_only=True,
+        required=False,
+        max_length=255,
+        trim_whitespace=True,
+        help_text="Name the cluster after a new personal contact of this name.",
+    )
 
     class Meta:
         model = FaceCluster
@@ -64,6 +83,9 @@ class FaceClusterSerializer(serializers.ModelSerializer):
             "face_count",
             "cover",
             "cover_url",
+            "person",
+            "person_name",
+            "new_person",
             "created_at",
         ]
         read_only_fields = ["uuid", "face_count", "created_at"]
@@ -76,6 +98,9 @@ class FaceClusterSerializer(serializers.ModelSerializer):
 
     def get_cover_url(self, cluster):
         return _crop_url(cluster.cover_id)
+
+    def get_person_name(self, cluster) -> str | None:
+        return cluster.person.display_name if cluster.person_id else None
 
 
 class FaceClusterCreateSerializer(serializers.Serializer):
@@ -90,6 +115,13 @@ class FaceClusterMergeSerializer(serializers.Serializer):
         allow_empty=False,
         max_length=100,
         help_text="The clusters to fold into this one; they are deleted.",
+    )
+    person = serializers.UUIDField(
+        required=False,
+        help_text=(
+            "The contact the merged cluster is named after, when the clusters "
+            "are named after different people: one of theirs."
+        ),
     )
 
 
@@ -109,10 +141,35 @@ class FaceSerializer(serializers.ModelSerializer):
         ),
     )
     crop_url = serializers.SerializerMethodField()
+    to_person = serializers.UUIDField(
+        write_only=True,
+        required=False,
+        help_text=(
+            "Say this face is that contact: it joins the contact's closest "
+            "cluster, or a new one of theirs."
+        ),
+    )
+    new_person = serializers.CharField(
+        write_only=True,
+        required=False,
+        max_length=255,
+        trim_whitespace=True,
+        help_text="Say this face is someone new: a contact of this name is created.",
+    )
 
     class Meta:
         model = Face
-        fields = ["uuid", "file", "box", "quality", "cluster", "assignment", "crop_url"]
+        fields = [
+            "uuid",
+            "file",
+            "box",
+            "quality",
+            "cluster",
+            "assignment",
+            "crop_url",
+            "to_person",
+            "new_person",
+        ]
         read_only_fields = ["uuid", "quality"]
         extra_kwargs = {
             "assignment": {

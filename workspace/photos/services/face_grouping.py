@@ -129,11 +129,7 @@ def _vote(face, threshold):
         .exclude(file_id=face.file_id)
         .values_list("pk", "cluster_id", "quality")
     )
-    excluded = set(
-        Face.objects.filter(file_id=face.file_id, cluster__isnull=False).values_list(
-            "cluster_id", flat=True
-        )
-    )
+    excluded = photo_clusters(face.file_id, exclude_face=face.pk)
     if face.rejected_cluster_id:
         excluded.add(face.rejected_cluster_id)
     scores = defaultdict(float)
@@ -150,6 +146,26 @@ def _vote(face, threshold):
     if not scores:
         return None
     return max(scores, key=scores.get)
+
+
+def photo_clusters(file_id, *, exclude_face=None):
+    """The clusters a face of *file_id* may not join: those already holding
+    another face of the photo, and every cluster of the same people.
+
+    Two faces of one photo are two people, whether their clusters are one or
+    two clusters of a person: the database constraint only covers the first.
+    """
+    faces = Face.objects.filter(file_id=file_id, cluster__isnull=False)
+    if exclude_face is not None:
+        faces = faces.exclude(pk=exclude_face)
+    taken = set(faces.values_list("cluster_id", flat=True))
+    persons = FaceCluster.objects.filter(pk__in=taken, person__isnull=False).values(
+        "person_id"
+    )
+    taken.update(
+        FaceCluster.objects.filter(person__in=persons).values_list("pk", flat=True)
+    )
+    return taken
 
 
 def _place(face_id, cluster_id):

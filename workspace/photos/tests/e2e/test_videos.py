@@ -79,3 +79,55 @@ class PhotosVideoTests(PlaywrightTestCase):
             "download", "iphone.mp4"
         )
         expect(self.page.locator("#viewer-panel video")).to_be_hidden()
+
+    def test_the_header_narrows_the_timeline_to_one_media_type(self):
+        self._open()
+        tabs = self.page.locator("nav[aria-label='Media type'] a")
+        expect(tabs).to_have_text(["All", "Photos", "Videos"])
+
+        tabs.nth(2).click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?type=video")
+        expect(self.page.locator(TILES)).to_have_count(1)
+        expect(self._tile(self.video)).to_be_visible()
+        expect(self.page.locator("header")).to_contain_text("1 video")
+        expect(tabs.nth(2)).to_have_attribute("aria-current", "page")
+
+        self.page.locator("#photos-nav a", has_text="Favorites").click()
+
+        expect(self.page).to_have_url(
+            f"{self.live_server_url}/photos?favorites=1&type=video"
+        )
+
+        tabs.nth(0).click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")
+
+    def test_a_tile_scrolled_under_the_header_stays_under_it(self):
+        for day in range(1, 13):
+            for hour in range(9, 13):
+                make_photo(
+                    self.user,
+                    f"june{day}-{hour}.jpg",
+                    datetime(2024, 6, day, hour, tzinfo=UTC),
+                )
+        self._open()
+        badge = self._tile(self.video).locator("[data-duration-badge]")
+
+        on_top = badge.evaluate(
+            """(badge) => {
+                const scroller = document.getElementById('photos-content');
+                const header = scroller.querySelector('header');
+                const middle = r => r.top + r.height / 2;
+                scroller.scrollTop += middle(badge.getBoundingClientRect())
+                    - middle(header.getBoundingClientRect());
+                // elementFromPoint skips a pointer-events: none element,
+                // and hit testing otherwise follows the paint order.
+                badge.style.pointerEvents = 'auto';
+                const b = badge.getBoundingClientRect();
+                const hit = document.elementFromPoint(b.left + b.width / 2, middle(b));
+                return header.contains(hit) ? 'header' : hit.outerHTML.slice(0, 80);
+            }"""
+        )
+
+        self.assertEqual(on_top, "header")

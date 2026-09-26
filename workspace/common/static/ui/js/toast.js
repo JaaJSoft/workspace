@@ -12,7 +12,10 @@
  * duration in ms (0 keeps the toast until dismissed; default 5000, errors
  * 8000), dismissible (default true), position top-right|top-left|
  * bottom-right|bottom-left|top-center (default bottom-right; there is one
- * container, so the latest toast's position wins).
+ * container, so the latest toast's position wins), actions: buttons as
+ * [{ label, onClick }], each dismissing the toast once clicked.
+ *
+ *   AppAlert.success('3 faces hidden', { actions: [{ label: 'Undo', onClick: undo }] });
  *
  * The slide keyframes live in scripts/frontend/input.css; <inline-alert>
  * plays the exit one declared in data-animation-out when it is removed.
@@ -51,7 +54,8 @@
       title = null,
       duration = 5000,
       dismissible = true,
-      position = 'bottom-right'
+      position = 'bottom-right',
+      actions = []
     } = options;
 
     updateContainerPosition(position);
@@ -62,6 +66,17 @@
     el.setAttribute('message', message);
     if (title) el.setAttribute('title', title);
     if (dismissible) el.setAttribute('dismissible', '');
+    // Children before insertion: <inline-alert> reads its slots once, on connect.
+    actions.forEach(({ label, onClick }) => {
+      const button = document.createElement('button');
+      button.setAttribute('type', 'button');
+      button.setAttribute('slot', 'actions');
+      button.setAttribute('data-dismiss', '');
+      button.className = 'btn btn-xs btn-ghost';
+      button.textContent = label;
+      if (onClick) button.addEventListener('click', onClick);
+      el.appendChild(button);
+    });
 
     const animations = SLIDE_ANIMATIONS[position] || SLIDE_ANIMATIONS['bottom-right'];
     el.style.animation = `${animations.enter} 0.3s ease-out`;

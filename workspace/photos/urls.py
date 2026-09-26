@@ -46,6 +46,21 @@ urlpatterns = [
         name="photos-face-persons",
     ),
     path(
+        "api/v1/photos/faces/actions",
+        faces.FaceActionsView.as_view(),
+        name="photos-face-actions",
+    ),
+    path(
+        "api/v1/photos/faces/batch",
+        faces.FaceBatchView.as_view(),
+        name="photos-face-batch",
+    ),
+    path(
+        "api/v1/photos/faces/undo",
+        faces.FaceUndoView.as_view(),
+        name="photos-face-undo",
+    ),
+    path(
         "api/v1/photos/faces/status",
         faces.FaceStatusView.as_view(),
         name="photos-face-status",

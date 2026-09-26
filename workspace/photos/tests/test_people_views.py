@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.photos.models import FaceCluster
+from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services.face_corrections import hide_face
 from workspace.photos.services.face_grouping import cluster_owner
 
 from .faces import FacesTestMixin, faces_on, opt_in
@@ -53,6 +54,22 @@ class PeoplePageTests(FacesTestMixin, TestCase):
         self.assertEqual(visible.context["unnamed"], [])
         self.assertEqual(visible.context["hidden_count"], 1)
         self.assertEqual(len(hidden.context["unnamed"]), 1)
+
+    def test_hidden_faces_are_listed_with_the_hidden_people(self):
+        opt_in(self.user)
+        photo = library_photo(self.user, "bob.png", (BOB, (100, 100, 100)))
+        face = Face.objects.get(file=photo)
+        hide_face(face)
+
+        visible = self.client.get("/photos/people")
+        hidden = self.client.get("/photos/people", {"hidden": "1"})
+
+        self.assertEqual(visible.context["hidden_count"], 1)
+        self.assertIsNone(visible.context["hidden_faces"])
+        self.assertEqual(hidden.context["hidden_faces"]["total"], 1)
+        (item,) = hidden.context["hidden_faces"]["faces"]
+        self.assertEqual(item["uuid"], str(face.pk))
+        self.assertContains(hidden, "photos-hidden-faces-data")
 
     def test_shows_the_progress_while_photos_wait(self):
         opt_in(self.user)
@@ -116,3 +133,58 @@ class PersonTimelineTests(FacesTestMixin, TestCase):
         self.assertEqual(
             self.client.get("/photos", {"cluster": "nope"}).status_code, 404
         )
+
+
+@faces_on
+class PersonFacesTests(FacesTestMixin, TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        opt_in(self.user)
+        self.client.force_login(self.user)
+        for name, x in (("alice-1.png", 40), ("alice-2.png", 200), ("alice-3.png", 90)):
+            library_photo(self.user, name, (ALICE, (x, 50, 100)))
+        cluster_owner(self.user.pk)
+        self.alice = FaceCluster.objects.get(faces__file__name="alice-1.png")
+        self.confirmed = Face.objects.get(file__name="alice-3.png")
+        Face.objects.filter(pk=self.confirmed.pk).update(
+            assignment=Face.Assignment.CONFIRMED
+        )
+
+    def get(self, **params):
+        return self.client.get(
+            "/photos/people/faces", {"cluster": str(self.alice.pk), **params}
+        )
+
+    def test_lists_the_faces_unconfirmed_first(self):
+        response = self.get()
+
+        self.assertEqual(response.status_code, 200)
+        faces = response.context["board"]["faces"]
+        self.assertEqual(len(faces), 3)
+        self.assertEqual(faces[-1]["uuid"], str(self.confirmed.pk))
+        self.assertEqual(faces[-1]["assignment"], "confirmed")
+
+    def test_narrows_to_the_confirmed_faces_or_the_others(self):
+        confirmed = self.get(show="confirmed").context["board"]["faces"]
+        others = self.get(show="check").context["board"]["faces"]
+
+        self.assertEqual([f["uuid"] for f in confirmed], [str(self.confirmed.pk)])
+        self.assertEqual(len(others), 2)
+
+    def test_the_timeline_and_the_faces_link_to_each_other(self):
+        timeline = self.client.get("/photos", {"cluster": str(self.alice.pk)})
+        faces = self.get()
+
+        self.assertContains(timeline, f"/photos/people/faces?cluster={self.alice.pk}")
+        self.assertContains(faces, f"/photos?cluster={self.alice.pk}")
+
+    def test_someone_elses_cluster_is_missing(self):
+        other = User.objects.create_user(username="eve", password="p")
+        theirs = FaceCluster.objects.create(owner=other)
+
+        response = self.client.get("/photos/people/faces", {"cluster": str(theirs.pk)})
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_needs_a_person(self):
+        self.assertEqual(self.client.get("/photos/people/faces").status_code, 404)

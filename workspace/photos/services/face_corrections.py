@@ -4,6 +4,10 @@ Every correction is recorded on the faces it touches (``assignment``,
 ``rejected_cluster``), which is what keeps the next clustering run from
 undoing it. The caller has already checked the cluster or face is the
 user's (see queries.py).
+
+The corrections of one face take a ``touched`` set: given one, they add the
+clusters to refresh to it instead of refreshing them, so a batch refreshes
+each cluster once rather than once per face.
 """
 
 from django.db import IntegrityError, transaction
@@ -34,6 +38,14 @@ class PersonsDiffer(CorrectionError):
     def __init__(self, person_ids):
         super().__init__()
         self.person_ids = sorted(person_ids, key=str)
+
+
+def _refresh(cluster_ids, touched):
+    cluster_ids = set(cluster_ids) - {None}
+    if touched is None:
+        refresh_clusters(cluster_ids)
+    else:
+        touched.update(cluster_ids)
 
 
 def merge_clusters(target, sources, *, person_id=None):
@@ -114,7 +126,7 @@ def ungroup(cluster):
         cluster.delete()
 
 
-def reject_face(face):
+def reject_face(face, *, touched=None):
     """Not this person: take *face* out of its cluster, for good."""
     previous = face.cluster_id
     if previous is None:
@@ -123,7 +135,30 @@ def reject_face(face):
     face.assignment = Face.Assignment.REJECTED
     face.rejected_cluster_id = previous
     face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
-    refresh_clusters([previous])
+    _refresh([previous], touched)
+
+
+def hide_face(face, *, touched=None):
+    """Nobody to name: *face* leaves its cluster and grouping until unhidden.
+
+    The cluster it leaves is remembered as rejected, so unhiding it never
+    puts it straight back where the user took it from.
+    """
+    previous = face.cluster_id
+    face.cluster = None
+    face.assignment = Face.Assignment.HIDDEN
+    if previous is not None:
+        face.rejected_cluster_id = previous
+    face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
+    _refresh([previous], touched)
+
+
+def unhide_face(face):
+    """Back among the faces waiting for a person; grouping may place it again."""
+    if face.assignment != Face.Assignment.HIDDEN:
+        return
+    face.assignment = Face.Assignment.AUTO
+    face.save(update_fields=["assignment"])
 
 
 def review_cluster(cluster, *, confirmed=(), rejected=()):
@@ -146,7 +181,7 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
         refresh_clusters([cluster.pk])
 
 
-def confirm_face(face, cluster):
+def confirm_face(face, cluster, *, touched=None):
     """This is X: pin *face* in *cluster*, wherever it was."""
     previous = face.cluster_id
     if cluster.pk in photo_clusters(face.file_id, exclude_face=face.pk):
@@ -160,15 +195,15 @@ def confirm_face(face, cluster):
             face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     except IntegrityError as exc:
         raise PhotoAlreadyInCluster from exc
-    refresh_clusters({cluster.pk, previous} - {None})
+    _refresh({cluster.pk, previous}, touched)
 
 
-def start_cluster(face, person=None):
+def start_cluster(face, person=None, *, touched=None):
     """This is someone new, or *person* in a new look: a cluster of its own
     for *face*, confirmed."""
     with transaction.atomic():
         cluster = FaceCluster.objects.create(owner_id=face.owner_id, person=person)
-        confirm_face(face, cluster)
+        confirm_face(face, cluster, touched=touched)
     return cluster
 
 

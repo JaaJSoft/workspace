@@ -67,12 +67,14 @@ def person_clusters(user, person):
     return FaceCluster.objects.filter(owner=user, person=person)
 
 
-def assign_face_to_person(face, person):
+def assign_face_to_person(face, person, *, new_look=None, touched=None):
     """This is *person*: pin *face* in the person's closest cluster.
 
     The closest by centroid among those the photo does not rule out; a new
     cluster of the person when none is near enough, the new look of someone
-    (a beard, twenty years on) being the usual reason. Returns the cluster.
+    (a beard, twenty years on) being the usual reason. *new_look*, a cluster
+    of the person started earlier in the same batch, takes the face instead
+    of yet another new one. Returns the cluster.
     """
     taken = photo_clusters(face.file_id, exclude_face=face.pk)
     candidates = [
@@ -88,12 +90,17 @@ def assign_face_to_person(face, person):
     ):
         raise PersonAlreadyInPhoto
     closest = _closest(face, candidates)
+    if closest is None and new_look is not None and new_look.pk not in taken:
+        closest = new_look
     if closest is None:
         try:
-            return start_cluster(face, person)
+            return start_cluster(face, person, touched=touched)
         except PhotoAlreadyInCluster as exc:
             raise PersonAlreadyInPhoto from exc
-    confirm_face(face, closest)
+    try:
+        confirm_face(face, closest, touched=touched)
+    except PhotoAlreadyInCluster as exc:
+        raise PersonAlreadyInPhoto from exc
     return closest
 
 

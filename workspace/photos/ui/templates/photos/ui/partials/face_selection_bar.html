@@ -1,0 +1,94 @@
+{% comment %}
+  What the picked faces of a board can have done to them. Sticks to the
+  bottom of the board while something is picked; each button shows once the
+  registry offers its action for every picked face. State in
+  faceSelectionMixin() (faces.js).
+{% endcomment %}
+<div
+  x-show="selectedFaces.length > 0"
+  x-cloak
+  x-transition.opacity
+  class="sticky bottom-4 z-20 flex justify-center px-4 pointer-events-none"
+  @keydown.escape.window="if (!document.querySelector('dialog[open]')) clearFaceSelection()"
+>
+  <div
+    class="pointer-events-auto flex items-center gap-0.5 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
+    role="toolbar"
+    aria-label="Selected faces"
+  >
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Clear selection"
+      aria-label="Clear selection"
+      @click="clearFaceSelection()"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+    <span
+      class="text-sm font-medium whitespace-nowrap px-1"
+      x-text="selectedFaces.length === 1 ? '1 selected' : selectedFaces.length + ' selected'"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Select all"
+      aria-label="Select all"
+      @click="selectAllFaces()"
+    >
+      <i data-lucide="check-check" class="w-4 h-4"></i>
+    </button>
+    <span class="w-px h-5 bg-base-300" aria-hidden="true"></span>
+    <span
+      x-show="faceActions === null || faceBusy"
+      class="loading loading-spinner loading-sm mx-2"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-module btn-sm rounded-full gap-1.5"
+      title="Say who they are"
+      x-show="faceAllows('assign')"
+      @click="runFaceAction('assign')"
+    >
+      <i data-lucide="user-round-pen" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">This is...</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm rounded-full gap-1.5"
+      x-show="faceAllows('confirm')"
+      @click="runFaceAction('confirm')"
+    >
+      <i data-lucide="check" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">That's right</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm rounded-full gap-1.5 text-error"
+      x-show="faceAllows('reject')"
+      @click="runFaceAction('reject')"
+    >
+      <i data-lucide="user-x" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Not this person</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm rounded-full gap-1.5"
+      x-show="faceAllows('unhide')"
+      @click="runFaceAction('unhide')"
+    >
+      <i data-lucide="eye" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Unhide</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Hide: nobody to name"
+      aria-label="Hide"
+      x-show="faceAllows('hide')"
+      @click="runFaceAction('hide')"
+    >
+      <i data-lucide="eye-off" class="w-4 h-4"></i>
+    </button>
+  </div>
+</div>

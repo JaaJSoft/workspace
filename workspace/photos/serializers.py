@@ -220,3 +220,45 @@ class FaceSerializer(serializers.ModelSerializer):
                 "Only 'confirmed' can be written; write cluster: null to reject."
             )
         return value
+
+
+class FaceBatchSerializer(serializers.Serializer):
+    ACTIONS = ("confirm", "reject", "hide", "unhide", "assign")
+
+    faces = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=False, max_length=500
+    )
+    action = serializers.ChoiceField(choices=ACTIONS)
+    cluster = serializers.UUIDField(
+        required=False, help_text="assign: these faces are this cluster's person."
+    )
+    person = serializers.UUIDField(
+        required=False, help_text="assign: these faces are this contact."
+    )
+    new_person = serializers.CharField(
+        required=False,
+        max_length=255,
+        trim_whitespace=True,
+        help_text="assign: these faces are someone new, a contact of this name.",
+    )
+    new_cluster = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="assign: these faces are someone new, not named yet.",
+    )
+
+    def validate(self, data):
+        targets = [
+            key for key in ("cluster", "person", "new_person") if data.get(key)
+        ] + (["new_cluster"] if data["new_cluster"] else [])
+        if data["action"] == "assign" and len(targets) != 1:
+            raise serializers.ValidationError(
+                "assign takes exactly one of cluster, person, new_person, new_cluster."
+            )
+        if data["action"] != "assign" and targets:
+            raise serializers.ValidationError("Only assign takes a target.")
+        return data
+
+
+class FaceUndoSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=64)

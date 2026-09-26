@@ -22,11 +22,18 @@ from rest_framework.views import APIView
 from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
+from workspace.common.uuids import (
+    BatchTooLarge,
+    MalformedUuid,
+    UuidBatchError,
+    parse_uuid_batch,
+)
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
 from workspace.people.queries import reachable_person, user_persons
 from workspace.people.services.persons import create_person
 
+from ..actions import FaceActionRegistry
 from ..queries import (
     cluster_photos,
     face_progress,
@@ -34,13 +41,15 @@ from ..queries import (
     user_faces,
 )
 from ..serializers import (
+    FaceBatchSerializer,
     FaceClusterCreateSerializer,
     FaceClusterMergeSerializer,
     FaceClusterReviewSerializer,
     FaceClusterSerializer,
     FaceSerializer,
+    FaceUndoSerializer,
 )
-from ..services import face_corrections, face_people
+from ..services import face_batches, face_corrections, face_people
 from ..services.face_preferences import faces_available, faces_enabled
 
 
@@ -443,3 +452,152 @@ class FacePersonsView(APIView):
         results = [_person_json(p, cards.get(p.pk)) for p in matches]
         results.sort(key=lambda r: (-r["photo_count"], r["name"].lower()))
         return Response(results)
+
+
+_ACTIONS_BATCH = 500
+
+
+@extend_schema(
+    tags=["Photos - Faces"],
+    summary="Get available corrections for faces",
+    description=(
+        "Return the corrections the caller may make to each of a batch of face "
+        "UUIDs. Every submitted UUID gets a key, spelled as it was sent; one "
+        "the caller cannot reach gets an empty list."
+    ),
+    request={
+        "application/json": {
+            "type": "object",
+            "properties": {
+                "uuids": {
+                    "type": "array",
+                    "items": {"type": "string", "format": "uuid"},
+                }
+            },
+            "required": ["uuids"],
+        },
+    },
+    responses={200: OpenApiResponse(description="Map of UUID to actions.")},
+)
+class FaceActionsView(CacheControlMixin, APIView):
+    permission_classes = [IsAuthenticated]
+    cache_no_store = True
+
+    def post(self, request):
+        _require_faces()
+        try:
+            parsed = parse_uuid_batch(request.data, max_items=_ACTIONS_BATCH)
+        except BatchTooLarge:
+            raise ValidationError(
+                {"detail": f"Too many UUIDs (max {_ACTIONS_BATCH})."}
+            ) from None
+        except MalformedUuid:
+            raise ValidationError({"detail": "Malformed UUID in uuids."}) from None
+        except UuidBatchError:
+            raise ValidationError(
+                {"detail": "uuids must be a non-empty list."}
+            ) from None
+        spellings = {}
+        for item, value in zip(request.data["uuids"], parsed, strict=True):
+            spellings.setdefault(value, []).append(str(item))
+        result = {key: [] for keys in spellings.values() for key in keys}
+        for face in user_faces(request.user).filter(pk__in=parsed):
+            actions = FaceActionRegistry.get_available_actions(request.user, face)
+            for key in spellings[face.pk]:
+                result[key] = actions
+        return Response(result)
+
+
+@extend_schema(tags=["Photos - Faces"])
+class FaceBatchView(APIView):
+    """One correction applied to a selection of faces."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Correct several faces at once",
+        description=(
+            "Each face that cannot take the correction is skipped with a "
+            "reason ('unavailable', 'already_in_photo', 'missing'); the others "
+            "go through. The returned undo token puts every face back as it "
+            "was, for a few minutes."
+        ),
+        request=FaceBatchSerializer,
+        responses={200: OpenApiResponse(description="done, skipped, undo")},
+    )
+    def post(self, request):
+        _require_faces()
+        serializer = FaceBatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        target = None
+        if data["action"] == face_batches.ASSIGN:
+            target = face_batches.Target(
+                cluster=self._cluster(data.get("cluster")),
+                person=(
+                    _person(request.user, data["person"], "person")
+                    if data.get("person")
+                    else None
+                ),
+                new_person=data.get("new_person", ""),
+                new_cluster=data["new_cluster"],
+            )
+        wanted = list(dict.fromkeys(data["faces"]))
+        faces = {
+            face.pk: face
+            for face in user_faces(request.user)
+            .filter(pk__in=wanted)
+            .select_related("cluster")
+        }
+        result = face_batches.apply(
+            request.user,
+            data["action"],
+            [faces[pk] for pk in wanted if pk in faces],
+            target,
+        )
+        skipped = [
+            {"face": str(pk), "reason": reason} for pk, reason in result.skipped
+        ] + [{"face": str(pk), "reason": "missing"} for pk in wanted if pk not in faces]
+        return Response(
+            {
+                "done": [str(pk) for pk in result.done],
+                "skipped": skipped,
+                "undo": result.undo,
+                "cluster": str(result.cluster.pk) if result.cluster else None,
+            }
+        )
+
+    def _cluster(self, uuid):
+        if uuid is None:
+            return None
+        cluster = user_face_clusters(self.request.user).filter(pk=uuid).first()
+        if cluster is None:
+            raise ValidationError({"cluster": "No such cluster."})
+        return cluster
+
+
+@extend_schema(tags=["Photos - Faces"])
+class FaceUndoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Undo a correction of several faces",
+        request=FaceUndoSerializer,
+        responses={
+            200: OpenApiResponse(description="restored: how many faces went back"),
+            410: OpenApiResponse(description="Too late to undo."),
+        },
+    )
+    def post(self, request):
+        _require_faces()
+        serializer = FaceUndoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            restored = face_batches.undo(
+                request.user, serializer.validated_data["token"]
+            )
+        except face_batches.UndoExpired:
+            return Response(
+                {"detail": "Too late to undo."}, status=status.HTTP_410_GONE
+            )
+        return Response({"restored": restored})

@@ -1,12 +1,16 @@
 """What is left for the user to settle in their face grouping.
 
-Two queues, for the review page:
+Three queues, for the review page:
 
 - **To name**: the unnamed clusters, each with a few of its faces and, when
   one is close enough, the named person it most looks like. Clusters are
   never merged automatically, so the same person in a new look ends up here.
 - **To check**: faces the grouping put in a named person's cluster that the
   user never confirmed, and that sit far from the cluster's centroid.
+- **Unassigned**: faces in no cluster - taken out of one by the user, or
+  never grouped - waiting for someone to say who they are.
+
+And the faces the user hid, for the Hidden page.
 """
 
 from collections import defaultdict
@@ -19,7 +23,7 @@ from workspace.common.vectors.encoding import from_bytes
 from ..indexes import FACE_EMBEDDINGS
 from ..models import Face
 from ..queries import user_face_clusters, user_faces
-from .face_grouping import max_distance
+from .face_grouping import LOW_QUALITY, max_distance
 from .face_people import person_cards
 
 # A face further than this fraction of the grouping threshold from its
@@ -30,6 +34,12 @@ DOUBT_RATIO = 0.5
 SAMPLE_FACES = 5
 # Faces to check shown per person at once; the rest come after a reload.
 DOUBTS_PER_PERSON = 60
+# Unassigned or hidden faces shown at once; the rest come after a reload.
+FACES_PER_PAGE = 200
+
+# The two halves of the unassigned queue.
+REJECTED = "rejected"
+UNGROUPED = "ungrouped"
 
 
 @dataclass(frozen=True)
@@ -45,6 +55,12 @@ class DoubtfulFace:
     face_id: object
     cluster_id: object
     distance: float
+
+
+@dataclass(frozen=True)
+class FacePage:
+    face_ids: tuple
+    total: int
 
 
 @dataclass(frozen=True)
@@ -177,3 +193,103 @@ def doubtful_faces(user):
                 )
             )
     return result
+
+
+def unassigned_faces(user, kind=REJECTED):
+    """Faces in no cluster that still wait for a person.
+
+    *REJECTED*: those the user took out of a cluster. *UNGROUPED*: those the
+    grouping never placed, good enough to recognise someone by - the blurred
+    crowd behind a subject would bury the rest. The best faces first, then
+    chained by likeness so one person's faces sit side by side.
+    """
+    faces = _unassigned(user, kind)
+    rows = faces.order_by("-quality", "pk").values_list("pk", "embedding")
+    return FacePage(
+        face_ids=tuple(by_likeness(rows[:FACES_PER_PAGE])), total=faces.count()
+    )
+
+
+def unassigned_counts(user):
+    """How many faces each half of the unassigned queue holds."""
+    return {kind: _unassigned(user, kind).count() for kind in (REJECTED, UNGROUPED)}
+
+
+def _unassigned(user, kind):
+    faces = user_faces(user).filter(cluster__isnull=True)
+    if kind == REJECTED:
+        return faces.filter(assignment=Face.Assignment.REJECTED)
+    return faces.filter(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
+
+
+def hidden_faces(user):
+    """The faces the user hid, most recently found first."""
+    faces = user_faces(user).filter(assignment=Face.Assignment.HIDDEN)
+    ids = faces.order_by("-created_at", "pk").values_list("pk", flat=True)
+    return FacePage(face_ids=tuple(ids[:FACES_PER_PAGE]), total=faces.count())
+
+
+def by_likeness(rows):
+    """The ids of *rows*, ``(pk, embedding)`` pairs, chained by likeness.
+
+    Starts from the first row, then each face is followed by the nearest one
+    left: look-alikes come side by side. Faces without an embedding go last.
+    """
+    ids, vectors, rest = [], [], []
+    for pk, blob in rows:
+        vector = _unit(blob)
+        if vector is None:
+            rest.append(pk)
+        else:
+            ids.append(pk)
+            vectors.append(vector)
+    if not ids:
+        return rest
+    matrix = np.stack(vectors)
+    left = np.ones(len(ids), dtype=bool)
+    order = [0]
+    left[0] = False
+    for _ in range(len(ids) - 1):
+        distances = 1 - matrix @ matrix[order[-1]]
+        distances[~left] = np.inf
+        following = int(np.argmin(distances))
+        order.append(following)
+        left[following] = False
+    return [ids[i] for i in order] + rest
+
+
+# What a person's faces page shows.
+ALL_FACES = "all"
+TO_CHECK = "check"
+CONFIRMED = "confirmed"
+PERSON_FACES_PER_PAGE = 300
+
+
+def person_faces(user, clusters, show=ALL_FACES):
+    """The faces of *clusters*, one person's, those most likely someone else
+    first: the unconfirmed ones farthest from their cluster's centroid, then
+    the confirmed ones. *show* narrows them to either half."""
+    faces = user_faces(user).filter(cluster__in=[c.pk for c in clusters])
+    if show == TO_CHECK:
+        faces = faces.filter(assignment=Face.Assignment.AUTO)
+    elif show == CONFIRMED:
+        faces = faces.filter(assignment=Face.Assignment.CONFIRMED)
+    centroids = {c.pk: _unit(c.centroid) for c in clusters}
+
+    def doubt(row):
+        pk, cluster_id, assignment, blob = row
+        vector, centroid = _unit(blob), centroids.get(cluster_id)
+        distance = (
+            1 - float(np.dot(vector, centroid))
+            if vector is not None and centroid is not None
+            else 0.0
+        )
+        return (assignment == Face.Assignment.CONFIRMED, -distance, str(pk))
+
+    rows = sorted(
+        faces.values_list("pk", "cluster_id", "assignment", "embedding"), key=doubt
+    )
+    return FacePage(
+        face_ids=tuple(row[0] for row in rows[:PERSON_FACES_PER_PAGE]),
+        total=len(rows),
+    )

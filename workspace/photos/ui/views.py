@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from urllib.parse import urlencode
+from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
@@ -13,7 +14,7 @@ from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
 from workspace.people.queries import reachable_person
-from workspace.photos.models import Album, MediaItem
+from workspace.photos.models import Album, Face, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -33,7 +34,19 @@ from workspace.photos.queries import (
 from workspace.photos.services.album_cards import album_cards, user_album_cards
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
-from workspace.photos.services.face_review import doubtful_faces, unnamed_queue
+from workspace.photos.services.face_review import (
+    ALL_FACES,
+    CONFIRMED,
+    REJECTED,
+    TO_CHECK,
+    UNGROUPED,
+    doubtful_faces,
+    hidden_faces,
+    person_faces,
+    unassigned_counts,
+    unassigned_faces,
+    unnamed_queue,
+)
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -457,6 +470,7 @@ def index(request):
         active_view, title, icon = "timeline", "Timeline", "images"
 
     context = {
+        "person_views": _person_views(who, "photos") if who is not None else None,
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
@@ -603,8 +617,11 @@ def people(request):
         for cluster in clusters
         if cluster.person_id is None and cluster.hidden == show_hidden
     ]
-    hidden_count = sum(card.hidden for card in persons) + sum(
-        c.hidden for c in clusters if c.person_id is None
+    hidden = hidden_faces(request.user)
+    hidden_count = (
+        sum(card.hidden for card in persons)
+        + sum(c.hidden for c in clusters if c.person_id is None)
+        + hidden.total
     )
     progress = face_progress(request.user) if enabled else None
     context = {
@@ -614,6 +631,11 @@ def people(request):
         "people_count": len(named) + len(unnamed),
         "unnamed_count": sum(not c.hidden for c in clusters if c.person_id is None),
         "show_hidden": show_hidden,
+        "hidden_faces": (
+            {"faces": _face_items(hidden.face_ids), "total": hidden.total}
+            if show_hidden
+            else None
+        ),
         "hidden_count": hidden_count if enabled else 0,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
         "review_url": reverse("photos_ui:people_review"),
@@ -664,19 +686,35 @@ def _unnamed_item(item):
     }
 
 
-def _doubts_item(doubts):
+def _face_items(face_ids):
+    """What a board shows of each of *face_ids*, in that order: the crop, and
+    the photo it was found in, for the tile to open it."""
+    rows = {
+        row[0]: row
+        for row in Face.objects.filter(pk__in=face_ids).values_list(
+            "pk", "file_id", "file__name", "file__type", "assignment"
+        )
+    }
+    return [
+        {
+            "uuid": str(pk),
+            "crop_url": _crop_url(pk),
+            "file": str(rows[pk][1]),
+            "file_name": rows[pk][2],
+            "file_type": rows[pk][3],
+            "assignment": rows[pk][4],
+        }
+        for pk in face_ids
+        if pk in rows
+    ]
+
+
+def _doubts_item(doubts, faces):
     return {
         "person": _person_summary(doubts.card)
         | {"url": _url_with({"person": str(doubts.card.person.pk)})},
         "total": doubts.total,
-        "faces": [
-            {
-                "uuid": str(face.face_id),
-                "cluster": str(face.cluster_id),
-                "crop_url": _crop_url(face.face_id),
-            }
-            for face in doubts.faces
-        ],
+        "faces": [faces[face.face_id] for face in doubts.faces],
     }
 
 
@@ -685,8 +723,9 @@ def _doubts_item(doubts):
 def people_review(request):
     """Naming people and checking faces one after the other.
 
-    Two queues: the unnamed clusters, and the faces the grouping put under a
-    named person without being sure. ``?queue=check`` opens the second.
+    Three queues: the unnamed clusters, the faces the grouping put under a
+    named person without being sure (``?queue=check``), and the faces in no
+    cluster at all (``?queue=unassigned``, narrowed by ``?kind=``).
     """
     if not faces_available():
         raise Http404
@@ -694,14 +733,109 @@ def people_review(request):
         # The opt-in card lives on the People tab.
         return redirect("photos_ui:people")
     unnamed = [_unnamed_item(item) for item in unnamed_queue(request.user)]
-    doubts = [_doubts_item(item) for item in doubtful_faces(request.user)]
+    doubtful = doubtful_faces(request.user)
+    faces = {
+        UUID(item["uuid"]): item
+        for item in _face_items([f.face_id for d in doubtful for f in d.faces])
+    }
+    doubts = [_doubts_item(item, faces) for item in doubtful]
+    counts = unassigned_counts(request.user)
     queue = request.GET.get("queue")
-    if queue not in ("name", "check"):
-        queue = "check" if doubts and not unnamed else "name"
+    if queue not in ("name", "check", "unassigned"):
+        if unnamed or not (doubts or any(counts.values())):
+            queue = "name"
+        else:
+            queue = "check" if doubts else "unassigned"
+    kind = request.GET.get("kind")
+    if kind not in (REJECTED, UNGROUPED):
+        kind = REJECTED if counts[REJECTED] or not counts[UNGROUPED] else UNGROUPED
+    page = unassigned_faces(request.user, kind) if queue == "unassigned" else None
+    review_url = reverse("photos_ui:people_review")
     context = {
         **_people_shell_context(request.user),
-        "review": {"queue": queue, "unnamed": unnamed, "doubts": doubts},
+        "review": {
+            "queue": queue,
+            "unnamed": unnamed,
+            "doubts": doubts,
+            "unassigned": {
+                "kind": kind,
+                "counts": counts,
+                "total": page.total if page else 0,
+                "faces": _face_items(page.face_ids) if page else [],
+            },
+        },
         "doubt_count": sum(item["total"] for item in doubts),
-        "review_url": reverse("photos_ui:people_review"),
+        "unassigned_count": sum(counts.values()),
+        "unassigned_kinds": [
+            {
+                "kind": value,
+                "label": label,
+                "count": counts[value],
+                "url": f"{review_url}?queue=unassigned&kind={value}",
+                "active": value == kind,
+            }
+            for value, label in ((REJECTED, "Taken out"), (UNGROUPED, "Never grouped"))
+        ],
+        "review_url": review_url,
     }
     return render(request, "photos/ui/people_review.html", context)
+
+
+def _person_views(who, active):
+    """The Photos and Faces tabs of a person's page."""
+    faces_url = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
+    return [
+        {
+            "label": "Photos",
+            "icon": "images",
+            "url": _url_with(who.params),
+            "active": active == "photos",
+        },
+        {
+            "label": "Faces",
+            "icon": "scan-face",
+            "url": faces_url,
+            "active": active == "faces",
+        },
+    ]
+
+
+@login_required
+@ensure_csrf_cookie
+def person_faces_view(request):
+    """A person's faces rather than their photos, to pick the ones that are
+    someone else. Same ``?person=`` or ``?cluster=`` as their timeline;
+    ``?show=check`` or ``?show=confirmed`` narrows the faces."""
+    if not faces_available():
+        raise Http404
+    if not faces_enabled(request.user):
+        return redirect("photos_ui:people")
+    who = _who(request)
+    if who is None:
+        raise Http404
+    show = request.GET.get("show")
+    if show not in (ALL_FACES, TO_CHECK, CONFIRMED):
+        show = ALL_FACES
+    page = person_faces(request.user, who.clusters, show)
+    base = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
+    context = {
+        **_people_shell_context(request.user),
+        "title": who.person.display_name if who.person else "Unnamed person",
+        "cluster": _who_card(who),
+        "person_views": _person_views(who, "faces"),
+        "board": {"faces": _face_items(page.face_ids), "total": page.total},
+        "face_count": page.total,
+        "shows": [
+            {
+                "label": label,
+                "url": base if value == ALL_FACES else f"{base}&show={value}",
+                "active": value == show,
+            }
+            for value, label in (
+                (ALL_FACES, "All"),
+                (TO_CHECK, "Not confirmed"),
+                (CONFIRMED, "Confirmed"),
+            )
+        ],
+    }
+    return render(request, "photos/ui/person_faces.html", context)

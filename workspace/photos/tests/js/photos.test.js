@@ -802,3 +802,19 @@ test('no drag starts where the registry does not offer reorder', async () => {
   assert.equal(start.prevented, true);
   assert.equal(app._drag, null);
 });
+
+test('a long press the browser cancels does not swallow the next tap', () => {
+  const page = grid(['a', 'b']);
+  const press = longPress();
+  const app = load({ document: page.document, ...press.globals }).ctx.photosApp();
+
+  app.startLongPress(page.tiles.a);
+  press.timers[0]();
+  // The press ends without a touchend: no endLongPress to clear it.
+  app.cancelLongPress();
+  app.startLongPress(page.tiles.b);
+  const end = touchEnd();
+  app.endLongPress(end);
+
+  assert.equal(end.prevented, false);
+});

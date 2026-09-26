@@ -32,7 +32,7 @@
   @touchstart.passive="startLongPress($el)"
   @touchend="endLongPress($event)"
   @touchmove.passive="cancelLongPress()"
-  @touchcancel="cancelLongPress()"
+  @touchcancel="endLongPress($event)"
   draggable="{{ manual_order|yesno:'true,false' }}"
   @dragstart="startTileDrag($event, $el)"
   @dragover="overTileDrag($event, $el)"

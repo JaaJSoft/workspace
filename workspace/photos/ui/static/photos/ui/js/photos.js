@@ -463,6 +463,9 @@ window.photosApp = function photosApp() {
     startLongPress(tile) {
       this._touchAt = Date.now();
       this.cancelLongPress();
+      // A press the browser cancelled (touchcancel, a scroll taking over)
+      // never reached endLongPress: its flag must not cancel this touch.
+      this._longPressed = false;
       this._longPressTimer = setTimeout(() => {
         this._longPressTimer = null;
         this._longPressed = true;

@@ -1,0 +1,91 @@
+{% comment %}
+  "Add to album": the albums the viewer may add to (the add_items action of
+  the album registry), and a New album row that creates one around the
+  photos. State lives in photosApp() (picker.*); openAlbumPicker() fills it.
+{% endcomment %}
+<dialog id="album-picker" class="modal" @close="picker.open = false">
+  <div class="modal-box max-w-md p-0 flex flex-col max-h-[80vh]">
+    <div class="px-5 pt-5 pb-3 border-b border-base-300">
+      <h3 class="font-bold text-lg flex items-center gap-3">
+        <span
+          class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-module/15 text-module"
+        >
+          <i data-lucide="book-image" class="w-5 h-5"></i>
+        </span>
+        <span>
+          Add to album
+          <span
+            class="block text-sm font-normal text-base-content/60"
+            x-text="countLabel(picker.files.length)"
+          ></span>
+        </span>
+      </h3>
+    </div>
+    <ul class="menu w-full p-2 overflow-y-auto flex-1 flex-nowrap">
+      <li>
+        <button
+          type="button"
+          class="gap-3"
+          :disabled="picker.busy"
+          @click="createAlbumFromPicker()"
+          data-picker-new
+        >
+          <span
+            class="w-10 h-10 rounded-lg border border-dashed border-base-content/30 flex items-center justify-center flex-shrink-0"
+          >
+            <i data-lucide="plus" class="w-5 h-5"></i>
+          </span>
+          <span class="flex-1 text-left font-medium">New album</span>
+        </button>
+      </li>
+      <li x-show="picker.loading" class="disabled">
+        <span class="gap-3">
+          <span class="loading loading-spinner loading-sm"></span>
+          Loading albums…
+        </span>
+      </li>
+      <template x-for="album in picker.albums" :key="album.uuid">
+        <li>
+          <button
+            type="button"
+            class="gap-3"
+            :disabled="picker.busy"
+            @click="addToAlbum(album)"
+            :data-picker-album="album.uuid"
+          >
+            <template x-if="album.cover_url">
+              <img
+                :src="album.cover_url"
+                alt=""
+                class="w-10 h-10 rounded-lg object-cover flex-shrink-0"
+                draggable="false"
+              />
+            </template>
+            <template x-if="!album.cover_url">
+              <span
+                class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center flex-shrink-0"
+              >
+                <i data-lucide="book-image" class="w-5 h-5 opacity-60"></i>
+              </span>
+            </template>
+            <span class="flex-1 min-w-0 text-left">
+              <span class="block truncate font-medium" x-text="album.title"></span>
+              <span
+                class="block text-xs text-base-content/60"
+                x-text="album.count === 1 ? '1 item' : album.count + ' items'"
+              ></span>
+            </span>
+          </button>
+        </li>
+      </template>
+    </ul>
+    <div class="modal-action m-0 px-5 py-3 border-t border-base-300">
+      <form method="dialog">
+        <button type="submit" class="btn btn-sm">Cancel</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

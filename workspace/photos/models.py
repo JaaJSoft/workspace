@@ -1,4 +1,6 @@
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from workspace.common.uuids import uuid_v7_or_v4
 from workspace.files.models import File
@@ -77,3 +79,97 @@ class MediaItem(models.Model):
 
     def __str__(self):
         return f"MediaItem: {self.file_id}"
+
+
+class Album(models.Model):
+    """A titled collection of library photos and videos.
+
+    Items point at ``File`` rows and are never copies: a photo can sit in any
+    number of albums without moving in Files, and it stays its owner's. What a
+    viewer sees of an album is always narrowed to the files they can open
+    (see ``queries.album_files``).
+
+    ``owner`` and ``group`` mirror ``File.owner`` / ``File.group``: a personal
+    album has no group, a group album belongs to that group's members and
+    ``owner`` records who created it.
+    """
+
+    class SortMode(models.TextChoices):
+        CAPTURE_DATE = "capture_date", "Capture date"
+        MANUAL = "manual", "Manual"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="photo_albums",
+    )
+    group = models.ForeignKey(
+        "auth.Group",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="photo_albums",
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    # The file the owner picked. It is only shown while it is an item of the
+    # album the viewer can see; otherwise the cover falls back to the most
+    # recently added visible item (see ``queries.album_summaries``).
+    cover = models.ForeignKey(
+        File,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    sort_mode = models.CharField(
+        max_length=16, choices=SortMode.choices, default=SortMode.CAPTURE_DATE
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["owner", "group"], name="photo_album_owner_idx"),
+            models.Index(fields=["group"], name="photo_album_group_idx"),
+        ]
+
+    def __str__(self):
+        return f"Album: {self.title}"
+
+
+class AlbumItem(models.Model):
+    """One file in one album.
+
+    ``position`` is sparse (see ``services.albums.POSITION_GAP``): adding an
+    item or moving a few writes those rows alone, so several people adding
+    at once never rewrite each other's order. Two rows may share a position
+    after a race; the order breaks the tie on the file's uuid.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name="items")
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="album_items")
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    added_at = models.DateTimeField(default=timezone.now)
+    position = models.BigIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["album", "file"], name="photo_album_item_unique_file"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["album", "position"], name="photo_album_item_pos_idx"),
+        ]
+
+    def __str__(self):
+        return f"AlbumItem: {self.file_id} in {self.album_id}"

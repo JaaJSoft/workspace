@@ -444,3 +444,361 @@ test('a refused save is swallowed', async () => {
 
   await app.saveTileSize();
 });
+
+// ── Selection ────────────────────────────────────────────
+
+// A page of tiles in display order, and the album the page shows (or none).
+function grid(uuids, album = null) {
+  const tiles = uuids.map((uuid) => tile({ uuid, selected: '0' }));
+  const byUuid = Object.fromEntries(tiles.map((t) => [t.dataset.uuid, t]));
+  return {
+    tiles: byUuid,
+    document: {
+      getElementById: (id) => (id === 'album-data' && album ? { textContent: JSON.stringify(album) } : null),
+      querySelector: (selector) => {
+        const match = /data-uuid="([^"]+)"/.exec(selector);
+        return match ? byUuid[match[1]] || null : null;
+      },
+      querySelectorAll: () => tiles,
+    },
+  };
+}
+
+test('photosRange spans both ends whichever comes first', () => {
+  const { ctx } = load();
+  const order = ['a', 'b', 'c', 'd'];
+  assert.deepEqual(Array.from(ctx.photosRange(order, 'c', 'a')), ['a', 'b', 'c']);
+  assert.deepEqual(Array.from(ctx.photosRange(order, 'b', 'd')), ['b', 'c', 'd']);
+  assert.deepEqual(Array.from(ctx.photosRange(order, 'b', 'x')), []);
+});
+
+test('the check mark toggles a tile in and out of the selection', () => {
+  const page = grid(['a', 'b', 'c']);
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+  assert.deepEqual(Array.from(app.selection), ['b']);
+  assert.equal(page.tiles.b.dataset.selected, '1');
+
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+  assert.deepEqual(Array.from(app.selection), []);
+  assert.equal(page.tiles.b.dataset.selected, '0');
+});
+
+test('shift selects every tile between the last one picked and this one', () => {
+  const page = grid(['a', 'b', 'c', 'd', 'e']);
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app.toggleTileSelection(page.tiles.d, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.b, { shiftKey: true });
+
+  assert.deepEqual(Array.from(app.selection).sort(), ['b', 'c', 'd']);
+  assert.deepEqual(
+    Object.values(page.tiles).map((t) => t.dataset.selected),
+    ['0', '1', '1', '1', '0'],
+  );
+});
+
+test('a shift-click with nothing picked before selects that tile alone', () => {
+  const page = grid(['a', 'b', 'c']);
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app.toggleTileSelection(page.tiles.c, { shiftKey: true });
+
+  assert.deepEqual(Array.from(app.selection), ['c']);
+});
+
+test('a click opens the viewer until something is selected, then selects', () => {
+  const page = grid(['a', 'b']);
+  const { ctx, dispatched } = load({ document: page.document });
+  const app = ctx.photosApp();
+
+  app.tileClicked({ shiftKey: false }, page.tiles.a);
+  assert.equal(dispatched.length, 1);
+
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  app.tileClicked({ shiftKey: false }, page.tiles.b);
+  assert.equal(dispatched.length, 1);
+  assert.deepEqual(Array.from(app.selection), ['a', 'b']);
+});
+
+test('clearing the selection unmarks every tile', () => {
+  const page = grid(['a', 'b']);
+  const app = load({ document: page.document }).ctx.photosApp();
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+
+  app.clearSelection();
+
+  assert.deepEqual(Array.from(app.selection), []);
+  assert.deepEqual(Object.values(page.tiles).map((t) => t.dataset.selected), ['0', '0']);
+});
+
+function longPress() {
+  const timers = [];
+  return {
+    timers,
+    globals: {
+      setTimeout: (fn) => { timers.push(fn); return timers.length; },
+      clearTimeout: () => {},
+      navigator: {},
+    },
+  };
+}
+
+function touchEnd() {
+  return { cancelable: true, prevented: false, preventDefault() { this.prevented = true; } };
+}
+
+test('a long press selects the tile and cancels the click its release would send', () => {
+  const page = grid(['a']);
+  const press = longPress();
+  const app = load({ document: page.document, ...press.globals }).ctx.photosApp();
+
+  app.startLongPress(page.tiles.a);
+  press.timers[0]();
+  const end = touchEnd();
+  app.endLongPress(end);
+
+  assert.deepEqual(Array.from(app.selection), ['a']);
+  assert.equal(end.prevented, true);
+});
+
+test('a short touch lets its click through', () => {
+  const page = grid(['a']);
+  const press = longPress();
+  const app = load({ document: page.document, ...press.globals }).ctx.photosApp();
+
+  app.startLongPress(page.tiles.a);
+  const end = touchEnd();
+  app.endLongPress(end);
+
+  assert.deepEqual(Array.from(app.selection), []);
+  assert.equal(end.prevented, false);
+});
+
+test('the tap after a long press selects the next tile', () => {
+  const page = grid(['a', 'b']);
+  const press = longPress();
+  const { ctx, dispatched } = load({ document: page.document, ...press.globals });
+  const app = ctx.photosApp();
+
+  app.startLongPress(page.tiles.a);
+  press.timers[0]();
+  app.endLongPress(touchEnd());
+  app.tileClicked({ shiftKey: false }, page.tiles.b);
+
+  assert.deepEqual(Array.from(app.selection), ['a', 'b']);
+  assert.equal(dispatched.length, 0);
+});
+
+test('the contextmenu of a long press does not open the menu', () => {
+  const { fileActions, calls } = fetchActionsReturning({ u1: [] });
+  const app = load({ fileActions, setTimeout: () => 1, clearTimeout: () => {} }).ctx.photosApp();
+
+  app.startLongPress(tile());
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile());
+
+  assert.equal(app.ctxMenu.open, false);
+  assert.equal(calls.length, 0);
+});
+
+test('a navigation that replaces the listing drops the selection', () => {
+  const page = grid(['a']);
+  const app = load({ document: page.document }).ctx.photosApp();
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+
+  app.onMerged({ target: { id: 'timeline-grid' } });
+  assert.equal(app.selection.length, 1);
+  app.onMerged({ target: { id: 'photos-content' } });
+  assert.equal(app.selection.length, 0);
+});
+
+// ── Albums ───────────────────────────────────────────────
+
+function jsonFetch(routes, requests = []) {
+  return (url, opts) => {
+    requests.push([opts.method, url, opts.body ? JSON.parse(opts.body) : undefined]);
+    const body = typeof routes === 'function' ? routes(url, opts) : routes[`${opts.method} ${url}`];
+    return Promise.resolve({ ok: true, status: body === null ? 204 : 200, json: () => Promise.resolve(body) });
+  };
+}
+
+test('the album on screen and what its registry allows there', async () => {
+  const page = grid(['a'], { uuid: 'al1', title: 'Summer', sort_mode: 'manual' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'remove_items' }, { id: 'reorder' }] } }),
+  }).ctx.photosApp();
+
+  await app.syncAlbum();
+
+  assert.equal(app.albumUuid, 'al1');
+  assert.equal(app.albumAllows('remove_items'), true);
+  assert.equal(app.albumAllows('set_cover'), false);
+});
+
+test('outside an album nothing is allowed and nothing is asked', async () => {
+  const requests = [];
+  const app = load({ fetch: jsonFetch({}, requests) }).ctx.photosApp();
+
+  await app.syncAlbum();
+
+  assert.equal(app.albumUuid, null);
+  assert.equal(app.albumAllows('remove_items'), false);
+  assert.equal(requests.length, 0);
+});
+
+test('the picker lists only the albums the viewer may add to', async () => {
+  const dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
+  const app = load({
+    document: { getElementById: (id) => (id === 'album-picker' ? dialog : null), querySelector: () => null },
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({
+      'GET /api/v1/photos/albums': [{ uuid: 'x', title: 'Mine' }, { uuid: 'y', title: 'Read only' }],
+      'POST /api/v1/photos/albums/actions': { x: [{ id: 'add_items' }], y: [{ id: 'rename' }] },
+    }),
+  }).ctx.photosApp();
+
+  await app.openAlbumPicker(['a', 'b']);
+
+  assert.equal(dialog.open, true);
+  assert.deepEqual(Array.from(app.picker.files), ['a', 'b']);
+  assert.deepEqual(Array.from(app.picker.albums, (a) => a.uuid), ['x']);
+  assert.equal(app.picker.loading, false);
+});
+
+test('adding posts the photos, closes the picker and clears the selection', async () => {
+  const page = grid(['a', 'b']);
+  const dialog = { open: true, close() { this.open = false; } };
+  const requests = [];
+  const alerts = [];
+  const app = load({
+    document: { ...page.document, getElementById: (id) => (id === 'album-picker' ? dialog : null) },
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/x/items': { added: 2 } }, requests),
+    AppAlert: { success: (m) => alerts.push(m), error: (m) => alerts.push(m) },
+    location: { href: '/photos' },
+  }).ctx.photosApp();
+  app.$ajax = () => Promise.resolve();
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+  app.picker.files = app.selection.slice();
+
+  await app.addToAlbum({ uuid: 'x', title: 'Summer' });
+
+  assert.deepEqual(requests.map((r) => [r[0], r[1], r[2]]), [
+    ['POST', '/api/v1/photos/albums/x/items', { files: ['a', 'b'] }],
+  ]);
+  assert.equal(dialog.open, false);
+  assert.equal(app.selection.length, 0);
+  assert.deepEqual(alerts, ['Added 2 photos to "Summer"']);
+});
+
+test('removing from the album takes the tiles off the page', async () => {
+  const day = { querySelector: () => null, remove() { this.removed = true; } };
+  const page = grid(['a', 'b'], { uuid: 'al1' });
+  for (const t of Object.values(page.tiles)) {
+    t.closest = () => day;
+    t.remove = () => { t.removed = true; };
+  }
+  const requests = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch((url) => (url.endsWith('/actions') ? { al1: [{ id: 'remove_items' }] } : { removed: 1 }), requests),
+    AppAlert: { success() {}, error() {} },
+    location: { href: '/photos/albums/al1' },
+  }).ctx.photosApp();
+  app.$ajax = () => Promise.resolve();
+  await app.syncAlbum();
+
+  await app.removeFromAlbum(['a']);
+
+  assert.deepEqual(requests[1].slice(1), ['/api/v1/photos/albums/al1/items/remove', { files: ['a'] }]);
+  assert.equal(page.tiles.a.removed, true);
+  assert.equal(page.tiles.b.removed, undefined);
+});
+
+test('removing does nothing where the registry did not offer it', async () => {
+  const requests = [];
+  const page = grid(['a'], { uuid: 'al1' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [] } }, requests),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+
+  await app.removeFromAlbum(['a']);
+
+  assert.equal(requests.length, 1);
+});
+
+// ── Manual order ─────────────────────────────────────────
+
+function dataTransfer() {
+  return { effectAllowed: 'uninitialized', dropEffect: 'none', setData() {} };
+}
+
+test('a drag declares move, and the tile it passes over accepts it as move', async () => {
+  const page = grid(['a', 'b', 'c'], { uuid: 'al1' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [{ id: 'reorder' }] } }),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  const start = { dataTransfer: dataTransfer(), preventDefault() { this.prevented = true; } };
+  const over = { dataTransfer: dataTransfer(), clientX: 90, preventDefault() { this.prevented = true; } };
+  page.tiles.c.getBoundingClientRect = () => ({ left: 0, width: 100 });
+
+  app.startTileDrag(start, page.tiles.a);
+  app.overTileDrag(over, page.tiles.c);
+
+  assert.equal(start.dataTransfer.effectAllowed, 'move');
+  assert.equal(over.dataTransfer.dropEffect, 'move');
+  assert.equal(over.prevented, true);
+  assert.equal(page.tiles.c.dataset.dropSide, 'after');
+});
+
+test('a drag from a selected tile carries the selection, in page order', async () => {
+  const page = grid(['a', 'b', 'c', 'd'], { uuid: 'al1' });
+  const requests = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch((url) => (url.endsWith('/actions') ? { al1: [{ id: 'reorder' }] } : null), requests),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  app.toggleTileSelection(page.tiles.c, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  const target = page.tiles.d;
+  target.getBoundingClientRect = () => ({ left: 0, width: 100 });
+  target.after = (...moved) => { target.inserted = moved.map((t) => t.dataset.uuid); };
+
+  app.startTileDrag({ dataTransfer: dataTransfer() }, page.tiles.a);
+  await app.dropTileDrag({ clientX: 80, preventDefault() {} }, target);
+
+  assert.deepEqual(requests[1].slice(1), [
+    '/api/v1/photos/albums/al1/reorder', { files: ['a', 'c'], after: 'd' },
+  ]);
+  assert.deepEqual(target.inserted, ['a', 'c']);
+});
+
+test('no drag starts where the registry does not offer reorder', async () => {
+  const page = grid(['a'], { uuid: 'al1' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/actions': { al1: [] } }),
+  }).ctx.photosApp();
+  await app.syncAlbum();
+  const start = { dataTransfer: dataTransfer(), preventDefault() { this.prevented = true; } };
+
+  app.startTileDrag(start, page.tiles.a);
+
+  assert.equal(start.prevented, true);
+  assert.equal(app._drag, null);
+});

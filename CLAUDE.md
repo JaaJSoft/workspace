@@ -507,6 +507,19 @@ shared = has_shared_photos(user)     # whether the Shared with me tab has anythi
 
 The scopes start from the `FileService` helpers and `FileShare.objects.reaching`, so trashed files drop out and come back on restore without touching their `MediaItem` row, and quarantined files are excluded. A raster image or a video without a `MediaItem` row has not been analyzed yet; it is not in the library. `MediaItem.media_type` tells photos and videos apart, and a video container pinned to the audio viewer (a voice recording) is neither.
 
+Albums have their own helpers in the same module:
+
+```python
+from workspace.photos.queries import album_files, get_album_role, reachable_album, user_albums
+
+albums = user_albums(user)                # personal albums + the user's groups' albums
+album = reachable_album(user, album_uuid) # the album or None - 404 on None
+role = get_album_role(user, album)        # 'owner' | None
+files = album_files(user, album)          # its items the user can open, as live File rows
+```
+
+`album_files` is `library_files(user, ALL)` narrowed to the album's items, so an item whose file was trashed, quarantined or stopped being shared with the viewer drops out instead of leaking through the album. Album writes are gated by `AlbumActionRegistry` (`POST /api/v1/photos/albums/actions`).
+
 #### Vault - `workspace.vault.queries`
 
 ```python

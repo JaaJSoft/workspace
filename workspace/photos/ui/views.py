@@ -4,30 +4,38 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils import dateformat, timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
-from workspace.photos.models import MediaItem
+from workspace.photos.models import Album, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
     SHARED,
+    album_date_range,
+    album_files,
     has_shared_photos,
     library_files,
     library_groups,
     library_tags,
     media_type_counts,
+    reachable_album,
     unanalyzed_count,
 )
+from workspace.photos.services.album_cards import album_cards, user_album_cards
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
+    manual_page,
     mark_favorite_toggles,
     parse_cursor,
     parse_date_position,
+    parse_manual_cursor,
     timeline_page,
+    with_album_positions,
     with_timeline_fields,
     year_counts,
 )
@@ -143,14 +151,60 @@ def _scope_tabs(user, scope, filter_params):
     ]
 
 
-def _page_context(request, files, position, tz, view_params):
-    page = timeline_page(with_timeline_fields(files, request.user), position, tz)
+def _page_context(request, page, page_url, view_params=None):
     mark_favorite_toggles(page.photos, request.user)
     next_url = None
     if page.next_cursor:
-        params = view_params | {"cursor": page.next_cursor}
-        next_url = f"{reverse('photos_ui:timeline')}?{urlencode(params)}"
+        params = (view_params or {}) | {"cursor": page.next_cursor}
+        next_url = f"{page_url}?{urlencode(params)}"
     return {"entries": page.entries, "next_url": next_url}
+
+
+def _timeline_page_context(request, files, position, tz, view_params):
+    page = timeline_page(with_timeline_fields(files, request.user), position, tz)
+    return _page_context(request, page, reverse("photos_ui:timeline"), view_params)
+
+
+def _album_page_context(request, album, files, cursor, tz):
+    """The first page of *album* when *cursor* is None, else the one after it.
+
+    ValueError on a cursor that is not one of the album's sort mode.
+    """
+    files = with_timeline_fields(files, request.user)
+    if album.sort_mode == Album.SortMode.MANUAL:
+        after = parse_manual_cursor(cursor) if cursor is not None else None
+        page = manual_page(with_album_positions(files, album), after)
+    else:
+        position = parse_cursor(cursor) if cursor is not None else START
+        page = timeline_page(files, position, tz)
+    page_url = reverse("photos_ui:album_timeline", args=[album.uuid])
+    return _page_context(request, page, page_url) | {
+        "manual_order": album.sort_mode == Album.SortMode.MANUAL
+    }
+
+
+def _sidebar_albums(user, active_album=None):
+    return [
+        {
+            "card": card,
+            "url": reverse("photos_ui:album", args=[card.album.uuid]),
+            "active": active_album is not None and card.album.pk == active_album.pk,
+        }
+        for card in user_album_cards(user)
+    ]
+
+
+def _date_range_label(first, last, tz):
+    """The capture dates an album spans, as "14 Jul - 2 Aug 2024"."""
+    if first is None:
+        return ""
+    first = timezone.localtime(first, tz).date()
+    last = timezone.localtime(last, tz).date()
+    if first == last:
+        return dateformat.format(first, "j M Y")
+    if first.year == last.year:
+        return f"{dateformat.format(first, 'j M')} - {dateformat.format(last, 'j M Y')}"
+    return f"{dateformat.format(first, 'j M Y')} - {dateformat.format(last, 'j M Y')}"
 
 
 def _count_label(counts):
@@ -164,6 +218,19 @@ def _count_label(counts):
         if count
     ]
     return ", ".join(parts) or "0 photos"
+
+
+def _display_context(user):
+    """What every listing needs to lay out and open its tiles."""
+    viewer_prefs = get_module_settings(user, "files").get("viewer") or {}
+    if not isinstance(viewer_prefs, dict):
+        viewer_prefs = {}
+    tile_size = _tile_size(user)
+    return {
+        "viewer_prefs": viewer_prefs,
+        "tile": {"size": tile_size, "widths": TILE_WIDTHS},
+        "tile_width": TILE_WIDTHS[tile_size - 1],
+    }
 
 
 def _url_with(params):
@@ -211,11 +278,6 @@ def index(request):
     else:
         active_view, title, icon = "timeline", "Timeline", "images"
 
-    viewer_prefs = get_module_settings(request.user, "files").get("viewer") or {}
-    if not isinstance(viewer_prefs, dict):
-        viewer_prefs = {}
-
-    tile_size = _tile_size(request.user)
     context = {
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
@@ -242,10 +304,9 @@ def index(request):
         "timeline_url": _url_with(scope_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"}),
         "videos_url": _url_with(scope_params | {"videos": "1"}),
-        "viewer_prefs": viewer_prefs,
-        "tile": {"size": tile_size, "widths": TILE_WIDTHS},
-        "tile_width": TILE_WIDTHS[tile_size - 1],
-        **_page_context(request, files, position, tz, view_params),
+        "albums": _sidebar_albums(request.user),
+        **_display_context(request.user),
+        **_timeline_page_context(request, files, position, tz, view_params),
     }
     return render(request, "photos/ui/index.html", context)
 
@@ -260,11 +321,72 @@ def timeline(request):
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
     files = _filtered_library(request.user, scope, favorites, videos, tag)
-    context = _page_context(
+    context = _timeline_page_context(
         request,
         files,
         position,
         get_user_timezone(request.user),
         _scope_params(scope) | _filter_params(favorites, videos, tag),
     )
+    return render(request, "photos/ui/partials/timeline_page.html", context)
+
+
+@login_required
+@ensure_csrf_cookie
+def album(request, uuid):
+    """An album, as the timeline shows it: by capture date or in its own order."""
+    album = reachable_album(request.user, uuid)
+    if album is None:
+        raise Http404
+    tz = get_user_timezone(request.user)
+    files = album_files(request.user, album)
+    card = album_cards(request.user, [album])[0]
+    first, last = album_date_range(files)
+    library_url = _url_with({})
+    context = {
+        "active_view": f"album:{album.uuid}",
+        "title": album.title,
+        "title_icon": "book-image",
+        "count_label": _count_label(media_type_counts(files)),
+        "album": {
+            "card": card,
+            "manual": album.sort_mode == Album.SortMode.MANUAL,
+            "date_range": _date_range_label(first, last, tz),
+        },
+        "album_data": {
+            "uuid": str(album.uuid),
+            "title": album.title,
+            "description": album.description,
+            "sort_mode": album.sort_mode,
+        },
+        "tags": [
+            {"tag": t, "url": _url_with({"tag": str(t.uuid)}), "active": False}
+            for t in library_tags(request.user, MINE)
+        ],
+        "timeline_url": library_url,
+        "favorites_url": _url_with({"favorites": "1"}),
+        "videos_url": _url_with({"videos": "1"}),
+        "albums": _sidebar_albums(request.user, album),
+        **_display_context(request.user),
+        **_album_page_context(request, album, files, None, tz),
+    }
+    return render(request, "photos/ui/index.html", context)
+
+
+@login_required
+def album_timeline(request, uuid):
+    """The page of an album after ``?cursor=``, appended by alpine-ajax."""
+    album = reachable_album(request.user, uuid)
+    if album is None:
+        raise Http404
+    try:
+        context = _album_page_context(
+            request,
+            album,
+            album_files(request.user, album),
+            request.GET.get("cursor", ""),
+            get_user_timezone(request.user),
+        )
+    except ValueError:
+        return HttpResponseBadRequest("Invalid cursor.")
     return render(request, "photos/ui/partials/timeline_page.html", context)

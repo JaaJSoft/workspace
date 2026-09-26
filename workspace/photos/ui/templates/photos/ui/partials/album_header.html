@@ -1,0 +1,66 @@
+{% comment %}
+  The top of an album page: its cover, title, what it holds and the dates it
+  spans, and the menu of what the viewer may do to it (the album action
+  registry decides, see albumMenuActions in photos.js). The rest of the
+  header row (size slider) is index.html's.
+
+  Context: album (card, manual, date_range), count_label.
+{% endcomment %}
+<div class="flex items-center gap-3 min-w-0 flex-1" data-album-header>
+  {% if album.card.cover_url %}
+    <img
+      src="{{ album.card.cover_url }}"
+      alt=""
+      class="w-11 h-11 rounded-lg object-cover shrink-0"
+      data-album-cover="{{ album.card.cover.uuid }}"
+      draggable="false"
+    />
+  {% else %}
+    <span
+      class="w-11 h-11 rounded-lg bg-module/10 text-module flex items-center justify-center shrink-0"
+    >
+      <i data-lucide="book-image" class="w-5 h-5"></i>
+    </span>
+  {% endif %}
+  <div class="min-w-0 flex-1">
+    <div class="flex items-center gap-1 min-w-0">
+      <h1 class="text-lg font-semibold truncate">{{ album.card.album.title }}</h1>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square shrink-0"
+        title="Album actions"
+        aria-label="Album actions"
+        aria-haspopup="menu"
+        @click.stop="openAlbumMenu($el)"
+      >
+        <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+      </button>
+    </div>
+    <div
+      class="flex flex-wrap items-center gap-x-2 text-sm text-base-content/60"
+    >
+      <span>{{ count_label }}</span>
+      {% if album.date_range %}
+        <span aria-hidden="true">·</span>
+        <span>{{ album.date_range }}</span>
+      {% endif %}
+      <span aria-hidden="true">·</span>
+      <span class="inline-flex items-center gap-1">
+        {% if album.manual %}
+          <i data-lucide="grip" class="w-3.5 h-3.5"></i>
+          Manual order
+        {% else %}
+          <i data-lucide="calendar-days" class="w-3.5 h-3.5"></i>
+          By capture date
+        {% endif %}
+      </span>
+    </div>
+    {% if album.card.album.description %}
+      <p
+        class="text-sm text-base-content/70 mt-0.5 line-clamp-2 whitespace-pre-line"
+      >
+        {{ album.card.album.description }}
+      </p>
+    {% endif %}
+  </div>
+</div>

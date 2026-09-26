@@ -1,17 +1,50 @@
 from urllib.parse import urlencode
 
+from django.db.models.functions import Lower
+from django.urls import reverse
 from django.utils import dateformat, timezone
 
 from workspace.common.search import apply_fulltext
 from workspace.core.module_registry import SearchResult, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 from workspace.photos.models import MediaItem
-from workspace.photos.queries import ALL, library_files
+from workspace.photos.queries import ALL, library_files, user_albums
 from workspace.photos.services.timeline import UNDATED
 from workspace.users.services.settings import get_user_timezone
 
 
 def search_photos(query, user, limit):
+    """Albums whose title matches, then photos and videos whose name does.
+
+    Albums come first: a title is something the user wrote to find the
+    photos again, and there are few of them.
+    """
+    albums = search_albums(query, user, limit)
+    return albums + _search_media(query, user, limit - len(albums))
+
+
+def search_albums(query, user, limit):
+    """The albums the user can open whose title holds *query*, each opening
+    the album."""
+    if limit <= 0 or not (query or "").strip():
+        return []
+    albums = user_albums(user).filter(title__icontains=query.strip())
+    return [
+        SearchResult(
+            uuid=str(album.uuid),
+            name=album.title,
+            url=reverse("photos_ui:album", args=[album.uuid]),
+            matched_value=album.title,
+            match_type="name",
+            type_icon="book-image",
+            module_slug="photos",
+            tags=(SearchTag("Album", "success"),),
+        )
+        for album in albums.order_by(Lower("title"), "uuid")[:limit]
+    ]
+
+
+def _search_media(query, user, limit):
     """Photos and videos the user can open whose name matches, each opening
     the timeline on its day.
 
@@ -21,6 +54,8 @@ def search_photos(query, user, limit):
     outside the user's own files opens in the All library, the one that holds
     it whatever the reason the user can see it.
     """
+    if limit <= 0:
+        return []
     tz = get_user_timezone(user)
     group_ids = set(user.groups.values_list("pk", flat=True))
     qs = apply_fulltext(

@@ -1,12 +1,15 @@
-// Photos: the module shell (sidebar, viewer hand-off) and the sentinel that
-// appends the next page of the timeline as it scrolls into view.
+// Photos: the module shell (sidebar, viewer hand-off, selection, albums) and
+// the sentinel that appends the next page of the timeline as it scrolls into
+// view.
 
 const PHOTOS_MOBILE_QUERY = '(max-width: 1023px)';
 
 // The swap targets of this page. A response that lacks one (a login page once
 // the session expired) must leave the live element alone: alpine-ajax's
 // default is to remove it, which would empty the timeline.
-const PHOTOS_SWAP_TARGETS = ['photos-nav', 'photos-content', 'timeline-grid', 'timeline-more'];
+const PHOTOS_SWAP_TARGETS = [
+  'photos-nav', 'photos-content', 'photos-header', 'timeline-grid', 'timeline-more',
+];
 
 // The file actions a photo's context menu offers, out of everything the files
 // registry may return for it. The registry still decides which of these the
@@ -16,9 +19,57 @@ const PHOTO_ACTIONS = [
   'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename', 'delete',
 ];
 
+// The album actions its header menu offers: the ones on the album as a whole.
+// The rest (add, remove, cover, reorder) gate controls elsewhere on the page.
+const ALBUM_MENU_ACTIONS = ['rename', 'edit_description', 'change_sort', 'delete'];
+
 // Room the context menu needs, to keep it inside the viewport.
 const PHOTOS_MENU_WIDTH = 224;
 const PHOTOS_MENU_HEIGHT = 340;
+
+// How long a finger rests on a tile before it selects it, in ms.
+const PHOTOS_LONG_PRESS = 450;
+// A contextmenu event this soon after a touch is the long press itself.
+const PHOTOS_TOUCH_GRACE = 1500;
+
+const ALBUMS_API = '/api/v1/photos/albums';
+
+function photosJson(method, url, body) {
+  const init = { method, headers: { 'X-CSRFToken': getCSRFToken() } };
+  if (body !== undefined) {
+    init.headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  return fetch(url, init).then((response) => {
+    if (!response.ok) throw new Error(String(response.status));
+    return response.status === 204 ? null : response.json();
+  });
+}
+
+// The album the page shows, as the server rendered it, or null on the
+// timeline. Read from the DOM each time: a navigation swaps it.
+function photosCurrentAlbum() {
+  const el = document.getElementById('album-data');
+  if (!el) return null;
+  try {
+    return JSON.parse(el.textContent);
+  } catch (_) {
+    return null;
+  }
+}
+
+// The uuids of `ordered` from `from` to `to`, both included, whichever
+// comes first; empty when either is missing.
+function photosRange(ordered, from, to) {
+  const start = ordered.indexOf(from);
+  const end = ordered.indexOf(to);
+  if (start === -1 || end === -1) return [];
+  return ordered.slice(Math.min(start, end), Math.max(start, end) + 1);
+}
+
+function photosCountLabel(count) {
+  return count === 1 ? '1 photo' : `${count} photos`;
+}
 
 // The size slider's step and the tile width in px of each step, as the page
 // was rendered with them.
@@ -50,6 +101,23 @@ window.photosApp = function photosApp() {
     _ctxGeneration: 0,
     _tagsLoaded: false,
 
+    // Selected tile uuids, in the order they were picked. Each tile mirrors
+    // its own state in data-selected.
+    selection: [],
+    _selectionAnchor: null,
+    _longPressTimer: null,
+    _longPressed: false,
+    _touchAt: 0,
+
+    // The album on screen and what its registry lets the viewer do there.
+    albumUuid: null,
+    albumActions: [],
+    _albumGeneration: 0,
+    albumMenu: { open: false, x: 0, y: 0, actions: null },
+    picker: { open: false, loading: false, busy: false, albums: [], files: [] },
+    _pickerGeneration: 0,
+    _drag: null,
+
     init() {
       window.addEventListener('open-properties', (e) => {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
@@ -60,6 +128,20 @@ window.photosApp = function photosApp() {
       window.addEventListener('tags-changed', () => {
         this.$ajax(window.location.href, { target: 'photos-nav', focus: false });
       });
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.selection.length && !document.querySelector('dialog[open]')) {
+          this.clearSelection();
+        }
+      });
+      this.syncAlbum();
+    },
+
+    // A navigation replaced the listing: the tiles the selection named are
+    // gone, and the album on screen may have changed.
+    onMerged(event) {
+      const id = event.target && event.target.id;
+      if (id === 'photos-content') this.clearSelection();
+      if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
     },
 
     // The stored preference is a desktop one: below `lg` the drawer is
@@ -102,6 +184,14 @@ window.photosApp = function photosApp() {
       if (target && PHOTOS_SWAP_TARGETS.includes(target.id)) {
         event.preventDefault();
       }
+    },
+
+    tileClicked(event, tile) {
+      if (this.selection.length) {
+        this.toggleTileSelection(tile, event);
+        return;
+      }
+      this.openPhoto(tile);
     },
 
     openPhoto(tile) {
@@ -155,6 +245,9 @@ window.photosApp = function photosApp() {
     // Opened at the cursor on a right-click, or under the "..." button that
     // was pressed - a keyboard press has no cursor position to go by.
     openCtxMenu(event, tile, anchor) {
+      // On a touch screen the long press that fires contextmenu selects the
+      // tile instead (see startLongPress).
+      if (!anchor && Date.now() - this._touchAt < PHOTOS_TOUCH_GRACE) return;
       let x = event.clientX;
       let y = event.clientY;
       if (anchor) {
@@ -298,12 +391,388 @@ window.photosApp = function photosApp() {
         return;
       }
       if (this.propertiesUuid === uuid) this.closePropertiesPanel();
+      this._removeTiles([uuid]);
+    },
+
+    _removeTiles(uuids) {
+      const gone = new Set(uuids);
+      this.selection = this.selection.filter((uuid) => !gone.has(uuid));
+      for (const uuid of uuids) {
+        const tile = this._tile(uuid);
+        if (!tile) continue;
+        const day = tile.closest('[data-day]');
+        tile.remove();
+        // A day group left without photos would keep its date over nothing.
+        if (day && !day.querySelector('[data-uuid]')) day.remove();
+      }
+    },
+
+    _refresh(targets) {
+      return this.$ajax(window.location.href, { targets, focus: false }).catch(() => {});
+    },
+
+    // ── Selection ───────────────────────────────────────
+
+    _tileUuids() {
+      return Array.from(document.querySelectorAll('#timeline-grid [data-uuid]'))
+        .map((tile) => tile.dataset.uuid);
+    },
+
+    _markSelected(uuid, selected) {
       const tile = this._tile(uuid);
-      if (!tile) return;
-      const day = tile.closest('[data-day]');
-      tile.remove();
-      // A day group left without photos would keep its date over nothing.
-      if (day && !day.querySelector('[data-uuid]')) day.remove();
+      if (tile) tile.dataset.selected = selected ? '1' : '0';
+    },
+
+    isSelected(uuid) {
+      return this.selection.includes(uuid);
+    },
+
+    // A click on the check mark, or on the tile once something is selected.
+    // Shift extends from the last tile picked, as in Files: every tile
+    // between the two, in the order the page shows them, gets selected.
+    toggleTileSelection(tile, event) {
+      const uuid = tile.dataset.uuid;
+      const anchor = this._selectionAnchor;
+      if (event && event.shiftKey && anchor && anchor !== uuid && this.isSelected(anchor)) {
+        const range = photosRange(this._tileUuids(), anchor, uuid);
+        if (range.length) {
+          const added = range.filter((u) => !this.isSelected(u));
+          added.forEach((u) => this._markSelected(u, true));
+          this.selection = this.selection.concat(added);
+          this._selectionAnchor = uuid;
+          return;
+        }
+      }
+      if (this.isSelected(uuid)) {
+        this.selection = this.selection.filter((u) => u !== uuid);
+        this._markSelected(uuid, false);
+        if (anchor === uuid) this._selectionAnchor = null;
+      } else {
+        this.selection = this.selection.concat([uuid]);
+        this._markSelected(uuid, true);
+        this._selectionAnchor = uuid;
+      }
+    },
+
+    clearSelection() {
+      this.selection.forEach((uuid) => this._markSelected(uuid, false));
+      this.selection = [];
+      this._selectionAnchor = null;
+    },
+
+    startLongPress(tile) {
+      this._touchAt = Date.now();
+      this.cancelLongPress();
+      this._longPressTimer = setTimeout(() => {
+        this._longPressTimer = null;
+        this._longPressed = true;
+        this.toggleTileSelection(tile, null);
+        if (navigator.vibrate) navigator.vibrate(10);
+      }, PHOTOS_LONG_PRESS);
+    },
+
+    cancelLongPress() {
+      if (this._longPressTimer) clearTimeout(this._longPressTimer);
+      this._longPressTimer = null;
+    },
+
+    // The finger lifts. After a long press the browser would follow with a
+    // click, which would toggle the tile straight back: cancelling the
+    // touchend is what stops that click from being sent. Waiting for the
+    // click to swallow it instead would not do: not every browser sends it,
+    // and the next real tap would be the one swallowed.
+    endLongPress(event) {
+      this.cancelLongPress();
+      if (this._longPressed) {
+        this._longPressed = false;
+        if (event.cancelable) event.preventDefault();
+      }
+    },
+
+    // ── Albums ──────────────────────────────────────────
+
+    // Reads the album the page now shows and what the viewer may do to it.
+    // The generation drops an answer about an album the page has left.
+    syncAlbum() {
+      const album = photosCurrentAlbum();
+      const generation = ++this._albumGeneration;
+      this.albumUuid = album ? album.uuid : null;
+      this.albumActions = [];
+      if (!album) return Promise.resolve();
+      return this._fetchAlbumActions(album.uuid).then((actions) => {
+        if (generation === this._albumGeneration) {
+          this.albumActions = actions.map((a) => a.id);
+        }
+      }).catch(() => {});
+    },
+
+    _fetchAlbumActions(uuid) {
+      return photosJson('POST', `${ALBUMS_API}/actions`, { uuids: [uuid] })
+        .then((data) => (data && data[uuid]) || []);
+    },
+
+    countLabel(count) {
+      return photosCountLabel(count);
+    },
+
+    albumAllows(actionId) {
+      return this.albumUuid !== null && this.albumActions.includes(actionId);
+    },
+
+    async createAlbum() {
+      const title = await this._askAlbumTitle();
+      if (!title) return;
+      try {
+        const album = await photosJson('POST', ALBUMS_API, { title });
+        window.location.href = album.url;
+      } catch (_) {
+        window.AppAlert.error('Failed to create the album');
+      }
+    },
+
+    _askAlbumTitle(value = '') {
+      return AppDialog.prompt({
+        title: value ? 'Rename album' : 'New album',
+        message: value ? '' : 'Albums gather photos without moving them in Files.',
+        value,
+        placeholder: 'Summer 2024',
+        okLabel: value ? 'Rename' : 'Create',
+        okClass: 'btn-module',
+        icon: 'book-image',
+        iconClass: 'bg-module/15 text-module',
+      }).then((title) => (title || '').trim());
+    },
+
+    // The albums the photos can go to: every album whose registry offers
+    // add_items to the viewer.
+    async openAlbumPicker(uuids) {
+      if (!uuids || !uuids.length) return;
+      const generation = ++this._pickerGeneration;
+      this.picker = { open: true, loading: true, busy: false, albums: [], files: uuids.slice() };
+      const dialog = document.getElementById('album-picker');
+      if (dialog && !dialog.open) dialog.showModal();
+      try {
+        const albums = await photosJson('GET', ALBUMS_API);
+        let allowed = [];
+        if (albums.length) {
+          const actions = await photosJson('POST', `${ALBUMS_API}/actions`, {
+            uuids: albums.map((a) => a.uuid),
+          });
+          allowed = albums.filter((a) => (actions[a.uuid] || []).some((x) => x.id === 'add_items'));
+        }
+        if (generation !== this._pickerGeneration) return;
+        this.picker.albums = allowed;
+      } catch (_) {
+        if (generation === this._pickerGeneration) window.AppAlert.error('Failed to load your albums');
+      }
+      if (generation === this._pickerGeneration) this.picker.loading = false;
+    },
+
+    _closePicker() {
+      const dialog = document.getElementById('album-picker');
+      if (dialog && dialog.open) dialog.close();
+      this.picker.open = false;
+    },
+
+    async addToAlbum(album) {
+      const files = this.picker.files;
+      this.picker.busy = true;
+      try {
+        const result = await photosJson('POST', `${ALBUMS_API}/${album.uuid}/items`, { files });
+        this._closePicker();
+        this.clearSelection();
+        const added = result ? result.added : 0;
+        window.AppAlert.success(
+          added ? `Added ${photosCountLabel(added)} to "${album.title}"` : `Already in "${album.title}"`,
+          { duration: 3000 },
+        );
+        this._refresh(['photos-nav']);
+      } catch (_) {
+        window.AppAlert.error('Failed to add to the album');
+      }
+      this.picker.busy = false;
+    },
+
+    async createAlbumFromPicker() {
+      const files = this.picker.files;
+      this._closePicker();
+      const title = await this._askAlbumTitle();
+      if (!title) return;
+      try {
+        const album = await photosJson('POST', ALBUMS_API, { title, files });
+        this.clearSelection();
+        window.AppAlert.success(`Created "${album.title}" with ${photosCountLabel(album.count)}`, { duration: 3000 });
+        this._refresh(['photos-nav']);
+      } catch (_) {
+        window.AppAlert.error('Failed to create the album');
+      }
+    },
+
+    async removeFromAlbum(uuids) {
+      const uuid = this.albumUuid;
+      if (!uuid || !this.albumAllows('remove_items') || !uuids.length) return;
+      const files = uuids.slice();
+      try {
+        await photosJson('POST', `${ALBUMS_API}/${uuid}/items/remove`, { files });
+      } catch (_) {
+        window.AppAlert.error('Failed to remove from the album');
+        return;
+      }
+      this._removeTiles(files);
+      this.clearSelection();
+      window.AppAlert.success(`Removed ${photosCountLabel(files.length)} from the album`, { duration: 2000 });
+      // Emptied: the whole listing, for its empty state.
+      const emptied = !document.querySelector('#timeline-grid [data-uuid]');
+      this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
+    },
+
+    async setAlbumCover(fileUuid) {
+      const uuid = this.albumUuid;
+      if (!uuid || !this.albumAllows('set_cover')) return;
+      try {
+        await photosJson('PATCH', `${ALBUMS_API}/${uuid}`, { cover: fileUuid });
+      } catch (_) {
+        window.AppAlert.error('Failed to set the cover');
+        return;
+      }
+      this._refresh(['photos-nav', 'photos-header']);
+    },
+
+    // The album header's menu, under its button.
+    openAlbumMenu(anchor) {
+      const album = photosCurrentAlbum();
+      if (!album) return;
+      const rect = anchor.getBoundingClientRect();
+      const x = Math.max(4, Math.min(rect.left, window.innerWidth - PHOTOS_MENU_WIDTH - 4));
+      const generation = ++this._ctxGeneration;
+      this.albumMenu = { open: true, x, y: rect.bottom + 4, actions: null };
+      this._fetchAlbumActions(album.uuid).then((actions) => {
+        if (generation !== this._ctxGeneration) return;
+        this.albumMenu.actions = actions.filter((a) => ALBUM_MENU_ACTIONS.includes(a.id));
+      }).catch(() => {
+        if (generation === this._ctxGeneration) this.albumMenu.actions = [];
+      });
+    },
+
+    async runAlbumAction(action) {
+      this.albumMenu.open = false;
+      const album = photosCurrentAlbum();
+      if (!album) return;
+      const url = `${ALBUMS_API}/${album.uuid}`;
+      try {
+        switch (action.id) {
+          case 'rename': {
+            const title = await this._askAlbumTitle(album.title);
+            if (!title || title === album.title) return;
+            await photosJson('PATCH', url, { title });
+            this._refresh(['photos-nav', 'photos-header']);
+            break;
+          }
+          case 'edit_description': {
+            const description = await AppDialog.prompt({
+              title: 'Album description',
+              value: album.description || '',
+              placeholder: 'What these photos are about',
+              okLabel: 'Save',
+              okClass: 'btn-module',
+              icon: 'align-left',
+              iconClass: 'bg-module/15 text-module',
+              inputSize: 'textarea',
+            });
+            if (description === null) return;
+            await photosJson('PATCH', url, { description: description.trim() });
+            this._refresh(['photos-header']);
+            break;
+          }
+          case 'change_sort': {
+            const sortMode = album.sort_mode === 'manual' ? 'capture_date' : 'manual';
+            await photosJson('PATCH', url, { sort_mode: sortMode });
+            this._refresh(['photos-nav', 'photos-content']);
+            break;
+          }
+          case 'delete': {
+            const ok = await AppDialog.confirm({
+              title: 'Delete album',
+              message: `Delete "${album.title}"? Its photos stay where they are in Files.`,
+              okLabel: 'Delete album',
+              okClass: 'btn-error',
+              icon: 'trash-2',
+              iconClass: 'bg-error/10 text-error',
+            });
+            if (!ok) return;
+            await photosJson('DELETE', url);
+            window.location.href = '/photos';
+            break;
+          }
+        }
+      } catch (_) {
+        window.AppAlert.error('Failed to update the album');
+      }
+    },
+
+    // ── Manual order ────────────────────────────────────
+    // Tiles of an album sorted by hand drag onto one another. A drag that
+    // starts on a selected tile carries the whole selection, in page order.
+
+    startTileDrag(event, tile) {
+      if (!this.albumAllows('reorder')) {
+        event.preventDefault();
+        return;
+      }
+      const uuid = tile.dataset.uuid;
+      const uuids = this.isSelected(uuid)
+        ? this._tileUuids().filter((u) => this.isSelected(u))
+        : [uuid];
+      this._drag = { uuids };
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('application/x-photos-album-items', uuids.join(','));
+    },
+
+    _dropSide(event, tile) {
+      const rect = tile.getBoundingClientRect();
+      return event.clientX < rect.left + rect.width / 2 ? 'before' : 'after';
+    },
+
+    overTileDrag(event, tile) {
+      if (!this._drag || this._drag.uuids.includes(tile.dataset.uuid)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      tile.dataset.dropSide = this._dropSide(event, tile);
+    },
+
+    leaveTileDrag(tile) {
+      delete tile.dataset.dropSide;
+    },
+
+    endTileDrag() {
+      this._drag = null;
+      document.querySelectorAll('#timeline-grid [data-drop-side]').forEach((el) => {
+        delete el.dataset.dropSide;
+      });
+    },
+
+    async dropTileDrag(event, tile) {
+      const drag = this._drag;
+      const target = tile.dataset.uuid;
+      if (!drag || drag.uuids.includes(target) || !this.albumUuid) return;
+      event.preventDefault();
+      const side = this._dropSide(event, tile);
+      this.endTileDrag();
+      try {
+        await photosJson('POST', `${ALBUMS_API}/${this.albumUuid}/reorder`, {
+          files: drag.uuids,
+          [side]: target,
+        });
+      } catch (_) {
+        window.AppAlert.error('Failed to reorder the album');
+        return;
+      }
+      const moved = drag.uuids.map((u) => this._tile(u)).filter(Boolean);
+      if (side === 'before') {
+        moved.forEach((el) => tile.before(el));
+      } else {
+        tile.after(...moved);
+      }
     },
   };
 };

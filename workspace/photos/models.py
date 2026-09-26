@@ -264,6 +264,9 @@ class Face(models.Model):
         # The user took the face out of automatic grouping: it stays out
         # until they place it themselves.
         REJECTED = "rejected", "Rejected"
+        # Nobody the user cares about (a stranger, a poster): out of grouping
+        # and out of the faces waiting for a person, until unhidden.
+        HIDDEN = "hidden", "Hidden"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="faces")

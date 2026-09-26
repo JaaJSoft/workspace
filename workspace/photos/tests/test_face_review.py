@@ -8,9 +8,19 @@ from workspace.common.vectors.encoding import from_bytes, normalize, to_bytes
 from workspace.people.services.persons import create_person
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services.face_corrections import hide_face, reject_face
 from workspace.photos.services.face_grouping import cluster_owner, refresh_clusters
 from workspace.photos.services.face_preferences import FACES_ENABLED, MODULE
-from workspace.photos.services.face_review import doubtful_faces, unnamed_queue
+from workspace.photos.services.face_review import (
+    REJECTED,
+    UNGROUPED,
+    by_likeness,
+    doubtful_faces,
+    hidden_faces,
+    unassigned_counts,
+    unassigned_faces,
+    unnamed_queue,
+)
 from workspace.users.services.settings import set_setting
 
 from .images import CAROL
@@ -228,3 +238,62 @@ class ReviewPageTests(ReviewTestCase):
     @override_settings(PHOTOS_FACES_ENABLED=False)
     def test_not_found_without_face_grouping_on_the_instance(self):
         self.assertEqual(self.client.get(REVIEW).status_code, 404)
+
+
+class UnassignedQueueTests(ReviewTestCase):
+    def test_rejected_faces_wait_for_a_person(self):
+        face = self.face("alice-2.png")
+        reject_face(face)
+
+        page = unassigned_faces(self.user, REJECTED)
+
+        self.assertEqual(page.face_ids, (face.pk,))
+        self.assertEqual(page.total, 1)
+
+    def test_faces_grouping_never_placed_are_apart_from_the_rejected(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(cluster=None)
+
+        self.assertEqual(unassigned_faces(self.user, UNGROUPED).face_ids, (face.pk,))
+        self.assertEqual(unassigned_faces(self.user, REJECTED).face_ids, ())
+        self.assertEqual(unassigned_counts(self.user), {REJECTED: 0, UNGROUPED: 1})
+
+    def test_a_blurred_ungrouped_face_is_left_out(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(cluster=None, quality=0.1)
+
+        self.assertEqual(unassigned_faces(self.user, UNGROUPED).face_ids, ())
+
+    def test_hidden_faces_are_not_waiting(self):
+        face = self.face("alice-2.png")
+        hide_face(face)
+
+        self.assertEqual(unassigned_faces(self.user, REJECTED).face_ids, ())
+        self.assertEqual(hidden_faces(self.user).face_ids, (face.pk,))
+
+    def test_a_trashed_photo_takes_its_faces_away(self):
+        face = self.face("alice-2.png")
+        hide_face(face)
+        self.photos["alice-2.png"].deleted_at = face.created_at
+        self.photos["alice-2.png"].save(update_fields=["deleted_at"])
+
+        self.assertEqual(hidden_faces(self.user).face_ids, ())
+
+
+class ByLikenessTests(ReviewTestCase):
+    def test_look_alikes_come_side_by_side(self):
+        base = _stranger()
+        other = np.random.default_rng(11).standard_normal(FACE_EMBEDDINGS.dims)
+
+        def blob(vector):
+            return to_bytes(normalize(vector, FACE_EMBEDDINGS.dims))
+
+        rows = [
+            ("a1", blob(base)),
+            ("b1", blob(other)),
+            ("a2", blob(base + 0.01)),
+            ("none", None),
+            ("b2", blob(other + 0.01)),
+        ]
+
+        self.assertEqual(by_likeness(rows), ["a1", "a2", "b1", "b2", "none"])

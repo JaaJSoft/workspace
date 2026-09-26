@@ -8,3 +8,11 @@ class AlbumActionRegistry(BaseActionRegistry):
     an action reads, the caller's role in the album, is resolved by the
     endpoint for the whole batch and passed through as ``role``.
     """
+
+
+class FaceActionRegistry(BaseActionRegistry):
+    """The corrections a face can take, offered on a selection of faces.
+
+    ``PhotosConfig.ready()`` imports the action module. An action reads the
+    face row alone, which the endpoint loaded with the batch.
+    """

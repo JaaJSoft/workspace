@@ -23,10 +23,11 @@ class PhotosConfig(AppConfig):
         )
         from workspace.photos import signals  # noqa: F401
 
-        # The album actions register on import. Imported here rather than
+        # The album and face actions register on import. Imported here rather than
         # lazily so a broken import fails the boot instead of a worker
         # answering "no actions" forever.
         from workspace.photos.actions import album as album_actions  # noqa: F401
+        from workspace.photos.actions import face as face_actions  # noqa: F401
         from workspace.photos.indexes import FACE_EMBEDDINGS
         from workspace.photos.queries import has_photos_of_person
         from workspace.photos.search import search_photos

@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
-from openai import NOT_GIVEN, APIStatusError
 
 from workspace.common.logging import scrub
 
@@ -215,6 +214,8 @@ def audio_duration_seconds(data: bytes) -> float | None:
 
 
 def _post(client, text: str, extra_body: dict) -> bytes:
+    from openai import NOT_GIVEN
+
     # `voice` must be absent, not empty. The field is how the backend is
     # asked for a voice it has cached, and it takes that branch on the mere
     # presence of the key: sending "" answers 500 "requires speaker
@@ -230,6 +231,8 @@ def _post(client, text: str, extra_body: dict) -> bytes:
 
 
 def _status_of(exc: BaseException) -> int:
+    from openai import APIStatusError
+
     if isinstance(exc, APIStatusError):
         return getattr(exc, "status_code", 0) or 0
     return 0

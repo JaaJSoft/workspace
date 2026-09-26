@@ -120,6 +120,8 @@ kubectl apply -f ingress.yaml
 | `USE_X_FORWARDED_PORT` | *(empty)*                       | Set to `1` when the ingress rewrites the public port |
 | `GUNICORN_WORKERS`     | `3`                             | Number of Gunicorn workers                |
 | `GUNICORN_LOG_LEVEL`   | `info`                          | Gunicorn log level                        |
+| `CELERY_WORKER_CONCURRENCY` | *(one per CPU)*            | Celery worker processes. Each holds its own copy of the models its tasks load, so memory grows with this number |
+| `CELERY_WORKER_MAX_MEMORY_PER_CHILD` | `524288`          | KiB. A Celery process that went past this is replaced after its current task; `0` disables |
 | `DJANGO_LOG_LEVEL`     | `INFO`                          | Django log level                          |
 | `TRASH_RETENTION_DAYS` | `30`                            | Days before trashed files are purged      |
 | `MEDIA_ROOT`           | `/app/data`                     | Root directory for user files and uploads |

@@ -56,7 +56,13 @@ class DjangoBasicDomainController(BaseDomainController):
             return False
 
         with _auth_lock:
-            _auth_cache[cache_key] = (user, time.monotonic())
+            now = time.monotonic()
+            # Only a miss writes, so expired entries go here or never: the
+            # cache lives as long as the worker.
+            for key, (_, cached_at) in list(_auth_cache.items()):
+                if now - cached_at >= _AUTH_TTL:
+                    del _auth_cache[key]
+            _auth_cache[cache_key] = (user, now)
         environ["workspace.user"] = user
         return True
 

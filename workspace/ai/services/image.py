@@ -7,7 +7,6 @@ import logging
 import time
 
 from django.conf import settings
-from openai import APIStatusError
 
 from workspace.common.logging import scrub
 
@@ -177,6 +176,8 @@ def _is_retryable(exc: BaseException) -> bool:
     The cause/context chain is walked because the edit path reports a
     backend rejection wrapped in the error of its fallback backend.
     """
+    from openai import APIStatusError
+
     for _ in range(5):
         if exc is None:
             break

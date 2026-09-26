@@ -52,7 +52,7 @@ class SendPushNotificationTests(TestCase):
         )
 
     @patch("workspace.notifications.tasks.is_active", return_value=False)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_sends_push_to_all_subscriptions(self, mock_webpush, _):
         from workspace.notifications.tasks import send_push_notification
 
@@ -60,7 +60,7 @@ class SendPushNotificationTests(TestCase):
         self.assertEqual(mock_webpush.call_count, 2)
 
     @patch("workspace.notifications.tasks.is_active", return_value=False)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_payload_carries_the_tag_alongside_the_other_display_fields(
         self, mock_webpush, _
     ):
@@ -86,7 +86,7 @@ class SendPushNotificationTests(TestCase):
         )
 
     @patch("workspace.notifications.tasks.is_active", return_value=True)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_skips_push_when_user_is_active(self, mock_webpush, mock_is_active):
         from workspace.notifications.tasks import send_push_notification
 
@@ -98,7 +98,7 @@ class SendPushNotificationTests(TestCase):
         mock_webpush.assert_not_called()
 
     @patch("workspace.notifications.tasks.is_active", return_value=False)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_sends_push_when_user_inactive(self, mock_webpush, _):
         from workspace.notifications.tasks import send_push_notification
 
@@ -106,7 +106,7 @@ class SendPushNotificationTests(TestCase):
         self.assertEqual(mock_webpush.call_count, 2)
 
     @patch("workspace.notifications.tasks.is_active", return_value=False)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_deletes_subscription_on_410(self, mock_webpush, _):
         from pywebpush import WebPushException
 
@@ -119,7 +119,7 @@ class SendPushNotificationTests(TestCase):
 
         self.assertEqual(PushSubscription.objects.filter(user=self.user).count(), 0)
 
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_noop_when_notification_not_found(self, mock_webpush):
         from workspace.notifications.tasks import send_push_notification
 
@@ -127,7 +127,7 @@ class SendPushNotificationTests(TestCase):
         mock_webpush.assert_not_called()
 
     @override_settings(WEBPUSH_VAPID_PRIVATE_KEY="")
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_noop_when_vapid_not_configured(self, mock_webpush):
         from workspace.notifications.tasks import send_push_notification
 
@@ -137,7 +137,7 @@ class SendPushNotificationTests(TestCase):
 
 @override_settings(**FAKE_VAPID_SETTINGS)
 @patch("workspace.notifications.tasks.is_active", return_value=False)
-@patch("workspace.notifications.tasks.webpush")
+@patch("pywebpush.webpush")
 class PushSkipAndCooldownTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -269,7 +269,7 @@ class ActiveUserRetryTests(TestCase):
         cache.clear()
 
     @patch("workspace.notifications.tasks.is_active", return_value=True)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_active_skip_schedules_one_delayed_retry(self, mock_webpush, _):
         from workspace.notifications import tasks
 
@@ -283,7 +283,7 @@ class ActiveUserRetryTests(TestCase):
         )
 
     @patch("workspace.notifications.tasks.is_active", return_value=True)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_retry_pushes_despite_active_user(self, mock_webpush, _):
         from workspace.notifications import tasks
 
@@ -293,7 +293,7 @@ class ActiveUserRetryTests(TestCase):
         mock_apply.assert_not_called()
 
     @patch("workspace.notifications.tasks.is_active", return_value=True)
-    @patch("workspace.notifications.tasks.webpush")
+    @patch("pywebpush.webpush")
     def test_retry_skips_when_read_meanwhile(self, mock_webpush, _):
         from workspace.notifications import tasks
 

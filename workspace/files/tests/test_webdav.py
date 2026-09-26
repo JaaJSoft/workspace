@@ -131,6 +131,19 @@ class DomainControllerTests(TestCase):
         auth.assert_not_called()
         self.assertEqual(second["workspace.user"], self.user)
 
+    def test_expired_auth_cache_entries_are_evicted(self):
+        """The cache lives as long as the worker: an entry past its TTL must
+        not stay in memory once another login is cached."""
+        from unittest import mock
+
+        other = User.objects.create_user(username="davdc2", password="secret456")
+        with mock.patch("workspace.files.webdav.dc.time.monotonic", return_value=0):
+            self.dc.basic_auth_user("Workspace", "davdc", "secret123", {})
+        later = dc_module._AUTH_TTL + 1
+        with mock.patch("workspace.files.webdav.dc.time.monotonic", return_value=later):
+            self.dc.basic_auth_user("Workspace", "davdc2", "secret456", {})
+        self.assertEqual([user for user, _ in dc_module._auth_cache.values()], [other])
+
     def test_basic_auth_wrong_password_not_served_from_cache(self):
         """Caching a success must not let a wrong password through."""
         environ = {}

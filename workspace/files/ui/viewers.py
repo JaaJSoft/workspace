@@ -7,6 +7,8 @@ a specific type of file in the browser.
 
 from abc import ABC, abstractmethod
 
+from django.conf import settings
+
 # Stable id the viewer panel hosts (files viewer modal, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
 # element with this id mounted at all times; every viewer response replaces it.
@@ -116,6 +118,29 @@ class BaseViewer(ABC):
         }
 
 
+def _too_large_to_embed(file_obj) -> bool:
+    """Whether *file_obj* is past the size the text viewers embed.
+
+    Read off the stored blob rather than a ``size`` column: the chat and
+    project attachment adapters have none.
+    """
+    try:
+        size = file_obj.content.size
+    except AttributeError, ValueError, OSError:
+        return False
+    return size > settings.FILES_TEXT_VIEWER_MAX_BYTES
+
+
+def _render_too_large(viewer, request) -> str:
+    from django.template.loader import render_to_string
+
+    context = viewer.get_context(request)
+    context["max_bytes"] = settings.FILES_TEXT_VIEWER_MAX_BYTES
+    return render_to_string(
+        "files/ui/viewers/text_viewer_too_large.html", context, request=request
+    )
+
+
 class TextViewer(BaseViewer):
     """Viewer for text and code files with Monaco Editor."""
 
@@ -126,6 +151,9 @@ class TextViewer(BaseViewer):
     def render(self, request) -> str:
         """Render Monaco Editor for text files."""
         from django.template.loader import render_to_string
+
+        if _too_large_to_embed(self.file):
+            return _render_too_large(self, request)
 
         file_handle = None
         try:
@@ -239,6 +267,9 @@ class MarkdownViewer(BaseViewer):
     def render(self, request) -> str:
         """Render Milkdown Crepe WYSIWYG editor for Markdown files."""
         from django.template.loader import render_to_string
+
+        if _too_large_to_embed(self.file):
+            return _render_too_large(self, request)
 
         file_handle = None
         try:

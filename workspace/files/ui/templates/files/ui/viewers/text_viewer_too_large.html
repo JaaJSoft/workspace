@@ -1,0 +1,12 @@
+<div class="flex flex-col h-full items-center justify-center gap-4 p-8">
+  <inline-alert type="info" title="Too large to preview" message="{{ file.name }} is larger than {{ max_bytes|filesizeformat }}, the most the editor opens. You can still read it as plain text in a new tab."></inline-alert>
+  <a
+    href="{{ content_url }}"
+    target="_blank"
+    rel="noopener"
+    class="btn btn-sm btn-module"
+  >
+    <i data-lucide="external-link" class="w-4 h-4"></i>
+    Open as plain text
+  </a>
+</div>

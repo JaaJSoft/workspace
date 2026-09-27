@@ -9,11 +9,9 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.files.models import File
 from workspace.files.services import ffmpeg
+from workspace.files.services.raster_formats import RASTER_LABELS
 from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
-from workspace.files.services.thumbnails.generation import (
-    RASTER_LABELS,
-    VIDEO_LABELS,
-)
+from workspace.files.services.thumbnails.generation import VIDEO_LABELS
 from workspace.files.ui.viewers import AudioViewer
 from workspace.users.services.settings import get_user_timezone
 

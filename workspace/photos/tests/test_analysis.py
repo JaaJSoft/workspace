@@ -6,11 +6,12 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from PIL import ExifTags
+from PIL import ExifTags, Image
 from PIL.TiffImagePlugin import IFDRational
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
+from workspace.files.tests.rasters import heic_bytes
 from workspace.files.tests.videos import clip_bytes, requires_ffmpeg
 from workspace.photos.models import MediaItem
 from workspace.photos.services.analysis import (
@@ -83,6 +84,23 @@ class AnalyzePhotoTests(TestCase):
         self.assertEqual((photo.camera_make, photo.camera_model), ("Canon", "EOS R6"))
         self.assertEqual(photo.content_hash, f.content_hash)
         self.assertIsNotNone(photo.analyzed_at)
+
+    def test_reads_a_heic_off_a_phone(self):
+        exif = Image.Exif()
+        exif[ExifTags.Base.Make] = "Apple"
+        exif[ExifTags.Base.Orientation] = 6
+        exif.get_ifd(ExifTags.IFD.Exif)[ExifTags.Base.DateTimeOriginal] = (
+            "2024:07:14 18:32:05"
+        )
+        exif.get_ifd(ExifTags.IFD.Exif)[ExifTags.Base.OffsetTimeOriginal] = "+02:00"
+        f = upload(self.user, "IMG_0001.HEIC", heic_bytes(size=(64, 48), exif=exif))
+
+        photo = analyze_media(f)
+
+        self.assertEqual(photo.media_type, MediaItem.MediaType.PHOTO)
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 16, 32, 5, tzinfo=UTC))
+        self.assertEqual((photo.width, photo.height), (48, 64))
+        self.assertEqual(photo.camera_make, "Apple")
 
     def test_writes_lens_exposure_settings_and_position(self):
         f = upload(self.user, "shot.jpg", _shot_jpeg())

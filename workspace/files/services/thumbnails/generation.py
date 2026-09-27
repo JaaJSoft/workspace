@@ -8,6 +8,7 @@ from django.core.files.storage import default_storage
 
 from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 from .. import ffmpeg
+from ..raster_formats import RASTER_LABELS
 from ..scanning.policy import is_blocked
 
 # Imported as a module, not as bare names: the ledger writes then resolve at
@@ -19,11 +20,9 @@ from .poster import poster_frame
 
 logger = logging.getLogger(__name__)
 
-RASTER_LABELS = frozenset({"jpeg", "png", "webp", "bmp", "tiff", "gif"})
 _SVG_LABELS = frozenset({"svg"})
-# The containers phones and cameras record into. Magika also files avif,
-# flv, wmv and mpegts under "video": avif is a still image, and mpegts
-# claims the .tsv extension.
+# The containers phones and cameras record into. Magika also files flv, wmv
+# and mpegts under "video": mpegts claims the .tsv extension.
 VIDEO_LABELS = frozenset({"mp4", "qt", "webm", "mkv", "3gp", "avi"})
 THUMBNAIL_LABELS = RASTER_LABELS | _SVG_LABELS | VIDEO_LABELS
 

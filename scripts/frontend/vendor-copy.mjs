@@ -3,7 +3,7 @@
  *
  * A copy, not a bundle: identical bytes are what let a *_bundle.test.js check
  * an artifact against the digest the published build carries. Libraries that
- * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide)
+ * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide, heic-to)
  * and plain data files go through here; everything else is an esbuild entry.
  *
  * The one edit is a trailing sourceMappingURL comment. collectstatic's
@@ -46,6 +46,13 @@ const SETS = {
     [
       'node_modules/cropperjs/dist/cropper.min.css',
       `${WORKSPACE}/users/ui/static/users/ui/css/vendor/cropper/cropper.css`,
+    ],
+  ],
+  // HEIC decoder (libheif in WASM) for browsers that cannot show HEIC photos.
+  heic: [
+    [
+      'node_modules/heic-to/dist/iife/heic-to.js',
+      `${WORKSPACE}/files/ui/static/files/ui/js/vendor/heic-to/heic-to.js`,
     ],
   ],
   'emoji-data': [

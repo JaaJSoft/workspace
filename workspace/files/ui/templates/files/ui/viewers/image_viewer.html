@@ -1,3 +1,4 @@
+{% load static %}
 <!-- Image Viewer -->
 <div class="flex flex-col h-full" x-data="imageViewerData()">
   <!-- Toolbar -->
@@ -78,12 +79,19 @@
     <div
       class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0"
     >
+      <span
+        x-show="converting"
+        x-cloak
+        class="loading loading-spinner loading-lg"
+      ></span>
       <img
-        :src="editPreview || '{{ content_url }}'"
+        :src="editPreview || convertedSrc || '{{ content_url }}'"
         alt="{{ file.name }}"
         class="max-w-full max-h-full object-contain transition-transform duration-200"
-        :style="`transform: scale(${zoomLevel}) rotate(${rotation}deg)`"
+        :style="{ transform: `scale(${zoomLevel}) rotate(${rotation}deg)` }"
+        x-show="!converting"
         x-ref="image"
+        @error="convertUnsupported()"
       />
     </div>
 
@@ -259,6 +267,30 @@
     const fileParent = '{{ file_parent|escapejs }}';
     const fileName = '{{ file_name|escapejs }}';
 
+    const contentUrl = '{{ content_url|escapejs }}';
+    const fileType = '{{ file.type|escapejs }}';
+    const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
+
+    // The decoder is ~700 KB gzipped: fetched on the first HEIC the browser
+    // cannot show, then shared by every viewer the page opens.
+    function loadHeicDecoder() {
+      if (!window.heicDecoder) {
+        window.heicDecoder = new Promise(function(resolve, reject) {
+          const script = document.createElement('script');
+          script.src = heicDecoderUrl;
+          script.onload = function() {
+            resolve(window.HeicTo);
+          };
+          script.onerror = function() {
+            window.heicDecoder = null;
+            reject(new Error('HEIC decoder failed to load'));
+          };
+          document.head.appendChild(script);
+        });
+      }
+      return window.heicDecoder;
+    }
+
     function getCSRFToken() {
       const match = document.cookie.split('; ').find(function(row) {
         return row.startsWith('csrftoken=');
@@ -318,6 +350,9 @@
       saveAsLoading: false,
       folders: [],
 
+      convertedSrc: null,
+      converting: false,
+
       init() {
         const self = this;
         this.$nextTick(function() {
@@ -334,6 +369,36 @@
             }
           }
         });
+      },
+
+      destroy() {
+        if (this.convertedSrc) URL.revokeObjectURL(this.convertedSrc);
+      },
+
+      // Only formats the browser cannot decode get here: a HEIC anywhere but
+      // Safari. Once browsers read HEIC natively this never runs, and the
+      // vendored decoder can go.
+      async convertUnsupported() {
+        if (fileType !== 'heif' || this.convertedSrc || this.converting) return;
+        this.converting = true;
+        try {
+          const resp = await fetch(contentUrl, {
+            credentials: 'same-origin'
+          });
+          if (!resp.ok) return;
+          const blob = await resp.blob();
+          const heicTo = await loadHeicDecoder();
+          const jpeg = await heicTo({
+            blob: blob,
+            type: 'image/jpeg',
+            quality: 0.92
+          });
+          this.convertedSrc = URL.createObjectURL(jpeg);
+        } catch (err) {
+          console.warn('Could not convert the image for display', err);
+        } finally {
+          this.converting = false;
+        }
       },
 
       zoom(delta) {

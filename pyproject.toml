@@ -25,6 +25,8 @@ dependencies = [
     "hiredis>=3.4.1",
     # imaging
     "pillow>=12.3.0",
+    # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin
+    "pillow-heif>=1.8.0",
     "cairosvg>=2.9.1",
     # mail
     "cryptography>=50.0.1",

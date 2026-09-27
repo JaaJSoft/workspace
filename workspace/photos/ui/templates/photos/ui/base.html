@@ -1,4 +1,4 @@
-{% extends "base_with_navbar.html" %}
+{% extends photos_shell|default:"base_with_navbar.html" %}
 
 {% load static %}
 
@@ -7,7 +7,8 @@
 {% comment %}
   The module shell every Photos page shares: the sidebar, the properties
   panel, the dialogs. A page fills #photos-content, the swap target of
-  every sidebar link together with #photos-nav.
+  every sidebar link together with #photos-nav. A swap is rendered on
+  photos/ui/swap.html instead, which keeps only those two blocks.
 {% endcomment %}
 
 {% block navbar %}
@@ -49,7 +50,9 @@
           {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </div>
       </div>
-      {% include "photos/ui/partials/sidebar_nav.html" %}
+      {% block photos_nav %}
+        {% include "photos/ui/partials/sidebar_nav.html" %}
+      {% endblock %}
       <!-- Bottom action: collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
         <ul class="menu p-0">
@@ -69,11 +72,13 @@
     inheriting the previous one's scroll offset.
   {% endcomment %}
   <div class="relative flex-1 h-full min-w-0">
-    <div id="photos-content" class="h-full overflow-y-auto">
-      {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
-      {{ faces_enabled|json_script:"photos-faces-enabled" }}
-      {% block photos_content %}{% endblock %}
-    </div>
+    {% block photos_swap %}
+      <div id="photos-content" class="h-full overflow-y-auto">
+        {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
+        {{ faces_enabled|json_script:"photos-faces-enabled" }}
+        {% block photos_content %}{% endblock %}
+      </div>
+    {% endblock %}
     {% comment %}
       Outside #photos-content so it survives the swap. The fade-in waits
       200 ms as a CSS transition-delay, so a view that answers at once never

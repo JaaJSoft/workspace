@@ -852,3 +852,58 @@ class AlbumPaginationTests(PhotosViewTestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+
+class SwapFragmentTests(PhotosViewTestCase):
+    """An alpine-ajax request gets the two swap targets, not the page around them."""
+
+    AJAX = {"HTTP_X_ALPINE_REQUEST": "true"}
+    # Rendered once by the page load and left alone by every swap.
+    SHELL = (
+        'id="properties-sidebar"',
+        'id="photos-context-menu"',
+        'id="viewer-prefs-data"',
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.photo = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
+
+    def _assert_fragment(self, response):
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="photos-nav"', count=1)
+        self.assertContains(response, 'id="photos-content"', count=1)
+        for marker in (*self.SHELL, "<html", "<body"):
+            self.assertNotContains(response, marker)
+        self.assertIn("X-Alpine-Request", response["Vary"])
+        # Back and forward reuse a stored response without revalidating it.
+        self.assertIn("no-store", response["Cache-Control"])
+
+    def test_a_page_load_gets_the_whole_page(self):
+        response = self.client.get("/photos")
+
+        self.assertContains(response, 'id="photos-nav"', count=1)
+        self.assertContains(response, 'id="photos-content"', count=1)
+        for marker in self.SHELL:
+            self.assertContains(response, marker)
+        # The same url answers a swap with a fragment: a cache must tell them apart.
+        self.assertIn("X-Alpine-Request", response["Vary"])
+        self.assertNotIn("no-store", response["Cache-Control"])
+
+    def test_a_swap_of_the_timeline_gets_the_fragment(self):
+        response = self.client.get("/photos", {"scope": "all"}, **self.AJAX)
+
+        self._assert_fragment(response)
+        self.assertEqual(self._tiles(response), [str(self.photo.uuid)])
+        self.assertContains(response, 'aria-label="Library"')
+        self.assertContains(response, 'id="photos-faces-enabled"')
+
+    def test_a_swap_of_an_album_gets_the_fragment_with_its_header(self):
+        album = create_album(self.user, "Summer", files=[self.photo])
+
+        response = self.client.get(f"/photos/albums/{album.uuid}", **self.AJAX)
+
+        self._assert_fragment(response)
+        self.assertContains(response, 'id="photos-header"')
+        self.assertContains(response, 'id="album-data"')
+        self.assertEqual(self._tiles(response), [str(self.photo.uuid)])

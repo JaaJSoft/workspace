@@ -180,7 +180,9 @@ class HpkeSuiteIdentifierTests(SimpleTestCase):
         for hpke_format, found in self._declared():
             with self.subTest(format=hpke_format):
                 declared = found["suite"]
-                self.assertEqual(declared["kem_id"], KEMId.DHKEM_X25519_HKDF_SHA256.value)
+                self.assertEqual(
+                    declared["kem_id"], KEMId.DHKEM_X25519_HKDF_SHA256.value
+                )
                 self.assertEqual(declared["kdf_id"], KDFId.HKDF_SHA256.value)
                 self.assertEqual(declared["aead_id"], AEADId.AES256_GCM.value)
                 self.assertEqual(declared["mode"], 0x00)

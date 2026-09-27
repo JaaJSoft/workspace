@@ -47,7 +47,9 @@ def encode_ciphertext(
         raise ValueError(f"key_version {key_version} does not fit in two bytes")
     expected_iv = entry("aead", aead_id)["iv_length"]
     if len(iv) != expected_iv:
-        raise ValueError(f"iv is {len(iv)} bytes, aead {aead_id:#04x} wants {expected_iv}")
+        raise ValueError(
+            f"iv is {len(iv)} bytes, aead {aead_id:#04x} wants {expected_iv}"
+        )
     header = bytes(
         [format_version, aead_id, kdf_id, key_version >> 8, key_version & 0xFF, len(iv)]
     )

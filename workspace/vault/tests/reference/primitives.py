@@ -157,7 +157,11 @@ def assert_account_kdf(algo: str, params: dict) -> None:
         raise UnsupportedAlgorithm("kdf", algo)
     for name, (low, high) in found["bounds"].items():
         value = params.get(name)
-        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not low <= value <= high
+        ):
             raise UnsupportedAlgorithm("kdf", algo)
 
 
@@ -182,7 +186,9 @@ class _AesGcm:
         # AESGCM infers the variant from the key length, so a 16-byte key would
         # quietly produce AES-128-GCM under a header declaring AES-256-GCM.
         if len(key) != AEAD_KEY_LENGTH:
-            raise ValueError(f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}")
+            raise ValueError(
+                f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+            )
 
     def seal(self, key, iv, plaintext, associated_data):
         self._check(key)
@@ -206,11 +212,15 @@ class _TestCtrHmac:
 
     def working_keys(self, key):
         if len(key) != AEAD_KEY_LENGTH:
-            raise ValueError(f"test aead needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}")
+            raise ValueError(
+                f"test aead needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+            )
         return hkdf(key, b"test-aead|enc"), hkdf(key, b"test-aead|mac")
 
     def _tag(self, mac_key, iv, ciphertext, associated_data):
-        message = len(associated_data).to_bytes(8, "big") + associated_data + iv + ciphertext
+        message = (
+            len(associated_data).to_bytes(8, "big") + associated_data + iv + ciphertext
+        )
         return hmac.new(mac_key, message, "sha256").digest()
 
     def seal(self, key, iv, plaintext, associated_data):
@@ -224,7 +234,9 @@ class _TestCtrHmac:
         if len(sealed) < self._TAG_LENGTH:
             raise InvalidTag()
         ciphertext, tag = sealed[: -self._TAG_LENGTH], sealed[-self._TAG_LENGTH :]
-        if not hmac.compare_digest(tag, self._tag(mac_key, iv, ciphertext, associated_data)):
+        if not hmac.compare_digest(
+            tag, self._tag(mac_key, iv, ciphertext, associated_data)
+        ):
             raise InvalidTag()
         decryptor = Cipher(algorithms.AES(enc_key), modes.CTR(iv)).decryptor()
         return decryptor.update(ciphertext) + decryptor.finalize()
@@ -245,13 +257,21 @@ def aead_seal(
     format_version: int | None = None,
 ) -> bytes:
     aead_id = CURRENT_SUITE["aead_id"] if aead_id is None else aead_id
-    format_version = CURRENT_SUITE["format_version"] if format_version is None else format_version
+    format_version = (
+        CURRENT_SUITE["format_version"] if format_version is None else format_version
+    )
     # The header is built first because format 2 authenticates it.
     header = wire.encode_ciphertext(
-        format_version=format_version, aead_id=aead_id, kdf_id=kdf_id,
-        key_version=key_version, iv=iv, ciphertext=b"",
+        format_version=format_version,
+        aead_id=aead_id,
+        kdf_id=kdf_id,
+        key_version=key_version,
+        iv=iv,
+        ciphertext=b"",
     )[: wire.HEADER_LENGTH]
-    sealed = AEADS[aead_id].seal(key, iv, plaintext, ad.associated_data(associated_data, header))
+    sealed = AEADS[aead_id].seal(
+        key, iv, plaintext, ad.associated_data(associated_data, header)
+    )
     return header + iv + sealed
 
 
@@ -260,7 +280,10 @@ def aead_open(key: bytes, raw: bytes, associated_data) -> bytes:
     # An open failure is surfaced as-is. Never retried with another AD, never
     # returned as partial plaintext. Retrying turns the AD into an oracle.
     return AEADS[decoded.aead_id].open(
-        key, decoded.iv, decoded.ciphertext, ad.associated_data(associated_data, decoded.header)
+        key,
+        decoded.iv,
+        decoded.ciphertext,
+        ad.associated_data(associated_data, decoded.header),
     )
 
 
@@ -345,7 +368,9 @@ def hpke_suite_for(stored: dict) -> CipherSuite:
     """
     declared = entry("hpke", stored_hpke_format(stored))["suite"]
     return hpke_suite(
-        KEMId(declared["kem_id"]), KDFId(declared["kdf_id"]), AEADId(declared["aead_id"])
+        KEMId(declared["kem_id"]),
+        KDFId(declared["kdf_id"]),
+        AEADId(declared["aead_id"]),
     )
 
 

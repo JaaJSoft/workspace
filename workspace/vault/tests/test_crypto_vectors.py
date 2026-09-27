@@ -111,9 +111,13 @@ class AccountWrapHeaderTests(SimpleTestCase):
         value = published.group(1)
         if re.fullmatch(self.NUMBER, value):
             return self._as_int(value)
-        declared = re.findall(rf"(?:\bvar\s+|,){re.escape(value)}={self.NUMBER}\b", bundle)
+        declared = re.findall(
+            rf"(?:\bvar\s+|,){re.escape(value)}={self.NUMBER}\b", bundle
+        )
         self.assertEqual(
-            len(declared), 1, f"{name} is published as {value}, not as one numeric binding"
+            len(declared),
+            1,
+            f"{name} is published as {value}, not as one numeric binding",
         )
         return self._as_int(declared[0])
 
@@ -142,7 +146,9 @@ class AccountWrapHeaderTests(SimpleTestCase):
         vector = self._vector("account-kex-priv-wrap-format-2")
         # The browser pins no format either: seal writes the current one, from
         # the same manifest the reference reads.
-        self.assertEqual(suites.CURRENT_SUITE["format_version"], vector["format_version"])
+        self.assertEqual(
+            suites.CURRENT_SUITE["format_version"], vector["format_version"]
+        )
         self.assertEqual(key_version, vector["key_version"])
         # Against the bundle, not the source: the byte the browser writes comes
         # from the artifact it loads.
@@ -169,7 +175,9 @@ class AccountWrapHeaderTests(SimpleTestCase):
         """
         vector = self._vector("account-kex-priv-wrap-format-2")
         # The seeder pins no format: it seals at the reference's current one.
-        self.assertEqual(suites.CURRENT_SUITE["format_version"], vector["format_version"])
+        self.assertEqual(
+            suites.CURRENT_SUITE["format_version"], vector["format_version"]
+        )
         for kdf_name, key_version in self._seeder_wraps():
             with self.subTest(kdf_name):
                 self.assertEqual(self._as_int(key_version), vector["key_version"])
@@ -214,7 +222,9 @@ class VectorReplayTests(SimpleTestCase):
                 )
                 self.assertEqual(to_base64url(raw), vector["expected_wire_b64"])
                 self.assertEqual(
-                    primitives.aead_open(from_base64url(vector["key_b64"]), raw, associated),
+                    primitives.aead_open(
+                        from_base64url(vector["key_b64"]), raw, associated
+                    ),
                     vector["plaintext"].encode(),
                 )
                 if "context_body" in vector:

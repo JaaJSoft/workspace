@@ -20,7 +20,11 @@ class ManifestShapeTests(SimpleTestCase):
         entries = suites.manifest()["pubkey"].values()
         for usage in ("kex", "sig"):
             with self.subTest(usage=usage):
-                current = [e for e in entries if e["state"] == "current" and e["usage"] == usage]
+                current = [
+                    e
+                    for e in entries
+                    if e["state"] == "current" and e["usage"] == usage
+                ]
                 self.assertEqual(len(current), 1)
 
     def test_states_come_from_the_closed_list(self):
@@ -39,24 +43,36 @@ class ManifestShapeTests(SimpleTestCase):
 
 class WireHeaderDispatchTests(SimpleTestCase):
     def _raw(self, format_version=2, aead_id=0x01, iv_len=12):
-        return bytes([format_version, aead_id, 0x01, 0x00, 0x01, iv_len]) + bytes(iv_len) + b"ct"
+        return (
+            bytes([format_version, aead_id, 0x01, 0x00, 0x01, iv_len])
+            + bytes(iv_len)
+            + b"ct"
+        )
 
     def test_both_formats_decode(self):
         for format_version in (1, 2):
             with self.subTest(format_version=format_version):
-                decoded = wire.decode_ciphertext(self._raw(format_version=format_version))
+                decoded = wire.decode_ciphertext(
+                    self._raw(format_version=format_version)
+                )
                 self.assertEqual(decoded.format_version, format_version)
-                self.assertEqual(decoded.header, self._raw(format_version=format_version)[:6])
+                self.assertEqual(
+                    decoded.header, self._raw(format_version=format_version)[:6]
+                )
 
     def test_an_unknown_format_is_unsupported(self):
         with self.assertRaises(suites.UnsupportedAlgorithm) as caught:
             wire.decode_ciphertext(self._raw(format_version=3))
-        self.assertEqual((caught.exception.axis, caught.exception.identifier), ("format", 3))
+        self.assertEqual(
+            (caught.exception.axis, caught.exception.identifier), ("format", 3)
+        )
 
     def test_an_unknown_aead_is_unsupported(self):
         with self.assertRaises(suites.UnsupportedAlgorithm) as caught:
             wire.decode_ciphertext(self._raw(aead_id=0x07))
-        self.assertEqual((caught.exception.axis, caught.exception.identifier), ("aead", 7))
+        self.assertEqual(
+            (caught.exception.axis, caught.exception.identifier), ("aead", 7)
+        )
 
     def test_the_test_aead_declares_a_sixteen_byte_nonce(self):
         decoded = wire.decode_ciphertext(self._raw(aead_id=0xF0, iv_len=16))
@@ -99,8 +115,13 @@ class AeadDispatchTests(SimpleTestCase):
     def _seal(self, **kwargs):
         iv = bytes(primitives.AEADS[kwargs.get("aead_id", 1)].iv_length)
         return primitives.aead_seal(
-            KEY, b"secret", ad.entry_field_ad(ENTRY, "password"),
-            iv=iv, key_version=1, kdf_id=1, **kwargs,
+            KEY,
+            b"secret",
+            ad.entry_field_ad(ENTRY, "password"),
+            iv=iv,
+            key_version=1,
+            kdf_id=1,
+            **kwargs,
         )
 
     def test_three_kinds_of_ciphertext_open_side_by_side(self):
@@ -108,7 +129,9 @@ class AeadDispatchTests(SimpleTestCase):
             with self.subTest(**kwargs):
                 raw = self._seal(**kwargs)
                 self.assertEqual(
-                    primitives.aead_open(KEY, raw, ad.entry_field_ad(ENTRY, "password")),
+                    primitives.aead_open(
+                        KEY, raw, ad.entry_field_ad(ENTRY, "password")
+                    ),
                     b"secret",
                 )
 
@@ -125,7 +148,9 @@ class AeadDispatchTests(SimpleTestCase):
                 raw = bytearray(self._seal(format_version=2))
                 raw[index] ^= 0x01
                 with self.assertRaises(InvalidTag):
-                    primitives.aead_open(KEY, bytes(raw), ad.entry_field_ad(ENTRY, "password"))
+                    primitives.aead_open(
+                        KEY, bytes(raw), ad.entry_field_ad(ENTRY, "password")
+                    )
 
     def test_a_format_1_header_byte_is_not(self):
         # The limit format 2 exists to close: kdf_id and key_version are
@@ -163,7 +188,11 @@ class HpkeDispatchTests(SimpleTestCase):
     def _wrap(self, suite):
         info = ad.vault_key_info(VAULT, ACCOUNT, suite)
         return info, primitives.hpke_seal(
-            self.recipient.public_key(), info, KEY, sender_private=self.sender, hpke_suite=suite
+            self.recipient.public_key(),
+            info,
+            KEY,
+            sender_private=self.sender,
+            hpke_suite=suite,
         )
 
     def test_the_format_2_info_names_the_suite(self):
@@ -181,25 +210,39 @@ class HpkeDispatchTests(SimpleTestCase):
             with self.subTest(suite=suite):
                 info, sealed = self._wrap(suite)
                 self.assertEqual(
-                    primitives.hpke_open(self.recipient, info, sealed, hpke_suite=suite), KEY
+                    primitives.hpke_open(
+                        self.recipient, info, sealed, hpke_suite=suite
+                    ),
+                    KEY,
                 )
 
     def test_dropping_the_format_to_downgrade_a_wrap_fails(self):
         _, sealed = self._wrap(FORMAT_2_HPKE)
         downgraded_info = ad.vault_key_info(VAULT, ACCOUNT, FORMAT_1_HPKE)
         with self.assertRaises(Exception):
-            primitives.hpke_open(self.recipient, downgraded_info, sealed, hpke_suite=FORMAT_1_HPKE)
+            primitives.hpke_open(
+                self.recipient, downgraded_info, sealed, hpke_suite=FORMAT_1_HPKE
+            )
 
     def test_an_unknown_suite_is_unsupported(self):
         for stored in ({**FORMAT_2_HPKE, "format": 9}, {**FORMAT_2_HPKE, "aead_id": 3}):
-            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+            with (
+                self.subTest(stored=stored),
+                self.assertRaises(suites.UnsupportedAlgorithm),
+            ):
                 primitives.hpke_suite_for(stored)
 
     def test_an_explicit_format_1_or_a_string_format_is_unsupported(self):
         # Format 1 is the missing key: vault_key_info would give an explicit 1
         # an info naming the suite, which no format-1 wrap was sealed under.
-        for stored in ({**FORMAT_1_HPKE, "format": 1}, {**FORMAT_1_HPKE, "format": "2"}):
-            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+        for stored in (
+            {**FORMAT_1_HPKE, "format": 1},
+            {**FORMAT_1_HPKE, "format": "2"},
+        ):
+            with (
+                self.subTest(stored=stored),
+                self.assertRaises(suites.UnsupportedAlgorithm),
+            ):
                 primitives.hpke_suite_for(stored)
 
     def test_a_suite_id_spelled_as_a_bool_or_a_string_is_unsupported(self):
@@ -211,7 +254,10 @@ class HpkeDispatchTests(SimpleTestCase):
             {**FORMAT_2_HPKE, "aead_id": 2.0},
             {**FORMAT_2_HPKE, "format": True},
         ):
-            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+            with (
+                self.subTest(stored=stored),
+                self.assertRaises(suites.UnsupportedAlgorithm),
+            ):
                 primitives.hpke_suite_for(stored)
 
     def test_the_info_applies_the_same_rule_as_the_opener(self):
@@ -221,7 +267,10 @@ class HpkeDispatchTests(SimpleTestCase):
             {**FORMAT_2_HPKE, "kdf_id": True},
             {**FORMAT_2_HPKE, "aead_id": 3},
         ):
-            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+            with (
+                self.subTest(stored=stored),
+                self.assertRaises(suites.UnsupportedAlgorithm),
+            ):
                 ad.vault_key_info(VAULT, ACCOUNT, stored)
 
 
@@ -238,14 +287,18 @@ class SignatureAndKeyDispatchTests(SimpleTestCase):
         payload = {"v": 7, "type": "tag-metadata"}
         data = primitives.canonical_cbor(payload)
         with self.assertRaises(suites.UnsupportedAlgorithm):
-            primitives.verify(key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata")
+            primitives.verify(
+                key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata"
+            )
 
     def test_a_payload_version_spelled_as_a_string_is_unsupported(self):
         # The manifest is keyed by strings: "1" must not find the entry 1 names.
         key = primitives.generate_sig_keypair()
         data = primitives.canonical_cbor({"v": "1", "type": "tag-metadata"})
         with self.assertRaises(suites.UnsupportedAlgorithm):
-            primitives.verify(key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata")
+            primitives.verify(
+                key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata"
+            )
 
     def test_a_signature_of_the_wrong_length_is_refused_before_ed25519(self):
         key = primitives.generate_sig_keypair()

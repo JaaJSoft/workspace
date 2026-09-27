@@ -159,7 +159,9 @@ class ReferenceReplayTests(SimpleTestCase):
             # HPKE suite and the shape of the info.
             vault_key = primitives.hpke_open(
                 kex_priv,
-                ad.vault_key_info(vault_uuid, self.account_uuid, keywrap_row["hpke_suite"]),
+                ad.vault_key_info(
+                    vault_uuid, self.account_uuid, keywrap_row["hpke_suite"]
+                ),
                 _b64(keywrap_row["wrapped_key"]),
                 hpke_suite=keywrap_row["hpke_suite"],
             )

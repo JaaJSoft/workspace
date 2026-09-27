@@ -78,7 +78,9 @@ def _current(axis: str, **match) -> str:
         and all(value.get(field) == wanted for field, wanted in match.items())
     ]
     if len(keys) != 1:
-        raise RuntimeError(f"manifest axis {axis} {match} has {len(keys)} current entries")
+        raise RuntimeError(
+            f"manifest axis {axis} {match} has {len(keys)} current entries"
+        )
     return keys[0]
 
 
@@ -88,12 +90,18 @@ def _current_suite() -> dict:
     return {
         "format_version": int(_current("format")),
         "aead_id": int(_current("aead")),
-        "hpke": {**manifest()["hpke"][hpke_format]["suite"], "format": int(hpke_format)},
+        "hpke": {
+            **manifest()["hpke"][hpke_format]["suite"],
+            "format": int(hpke_format),
+        },
         "kex_public_key_alg": int(_current("pubkey", usage="kex")),
         "sig_public_key_alg": int(_current("pubkey", usage="sig")),
         "signature_alg": int(_current("signature")),
         "payload_version": int(_current("payload")),
-        "kdf": {"algo": kdf_algo, "params": dict(manifest()["kdf"][kdf_algo]["params"])},
+        "kdf": {
+            "algo": kdf_algo,
+            "params": dict(manifest()["kdf"][kdf_algo]["params"]),
+        },
     }
 
 

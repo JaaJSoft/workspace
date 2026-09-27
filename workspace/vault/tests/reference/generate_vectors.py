@@ -80,7 +80,16 @@ def _format_1_ad(context) -> str:
 
 
 def _aead_case(
-    case_id, key, iv, context, plaintext, *, key_version, kdf_id, format_version, aead_id
+    case_id,
+    key,
+    iv,
+    context,
+    plaintext,
+    *,
+    key_version,
+    kdf_id,
+    format_version,
+    aead_id,
 ):
     """An AEAD vector carrying the context body, not a prebuilt AD string.
 
@@ -128,7 +137,9 @@ def _hpke_case(case_id, hpke_suite, *, sender, recipient, vault_key):
         "hpke_suite": hpke_suite,
         "sender_sk_b64": to_base64url(SENDER_SK),
         "recipient_sk_b64": to_base64url(RECIPIENT_SK),
-        "recipient_pk_b64": to_base64url(primitives.public_bytes(recipient.public_key())),
+        "recipient_pk_b64": to_base64url(
+            primitives.public_bytes(recipient.public_key())
+        ),
         "info": info.decode("ascii"),
         "plaintext_b64": to_base64url(vault_key),
         "expected_sealed_b64": to_base64url(sealed),

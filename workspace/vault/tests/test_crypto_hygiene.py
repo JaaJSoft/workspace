@@ -193,7 +193,9 @@ class NoAlgorithmLiteralTests(SimpleTestCase):
         offenders = [
             f"{path.relative_to(REPO_ROOT)}:{number}"
             for path in files
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+            for number, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1
+            )
             if self.LITERALS.search(line)
         ]
         self.assertEqual(offenders, [])

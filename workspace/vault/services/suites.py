@@ -83,10 +83,15 @@ def check_hpke_suite(value) -> None:
         raise ValueError("unsupported HPKE suite")
 
 
-def check_account_kdf(algo, params) -> None:
+def check_kdf_algo(algo) -> dict:
     declared = _entry("kdf", algo)
     if declared is None:
         raise ValueError("unsupported kdf_algo")
+    return declared
+
+
+def check_account_kdf(algo, params) -> None:
+    declared = check_kdf_algo(algo)
     if not isinstance(params, dict) or params.get("v") != declared["params"]["v"]:
         raise ValueError("unsupported kdf_params")
     for name, (low, high) in declared["bounds"].items():

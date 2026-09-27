@@ -37,6 +37,10 @@ class _AccountKdfMixin:
 
     def validate(self, attrs):
         try:
+            suites.check_kdf_algo(attrs["kdf_algo"])
+        except ValueError as exc:
+            raise serializers.ValidationError({"kdf_algo": [str(exc)]}) from exc
+        try:
             suites.check_account_kdf(attrs["kdf_algo"], attrs["kdf_params"])
         except ValueError as exc:
             raise serializers.ValidationError({"kdf_params": [str(exc)]}) from exc

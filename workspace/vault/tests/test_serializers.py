@@ -112,11 +112,12 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
             data=finalize_payload(kdf_params={**VALID_PARAMS, "m": 4 * 1024 * 1024})
         )
         self.assertFalse(serializer.is_valid())
-        self.assertIn("kdf_params", serializer.errors)
+        self.assertEqual(set(serializer.errors), {"kdf_params"})
 
-    def test_refuses_an_unknown_kdf_algo(self):
+    def test_refuses_an_unknown_kdf_algo_under_its_own_key(self):
         serializer = AccountFinalizeSerializer(data=finalize_payload(kdf_algo="scrypt"))
         self.assertFalse(serializer.is_valid())
+        self.assertEqual(set(serializer.errors), {"kdf_algo"})
 
     def test_refuses_a_wrapped_key_whose_header_names_an_unknown_aead(self):
         serializer = AccountFinalizeSerializer(

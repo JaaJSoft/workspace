@@ -21,14 +21,9 @@ window.fileBrowser = function fileBrowser() {
     // the flag only clears once the new #folder-browser announces itself.
     folderLoading: false,
 
-    // Upload progress state
-    uploading: false,
-    uploadTotal: 0,
-    uploadCompleted: 0,
-    uploadCurrentFile: '',
-    uploadBytePercent: 0,
-    _uploadToastEl: null,
-    _uploadToastTimer: null,
+    // Chains batch intakes: two batches deciding name collisions at once
+    // would stack their dialogs.
+    _uploadIntake: Promise.resolve(),
 
     _startLoading(...uuids) {
       if (window._actionLoadingState) {
@@ -96,6 +91,10 @@ window.fileBrowser = function fileBrowser() {
       // A drop on a folder, from the listing, the breadcrumbs or the sidebar
       window.addEventListener('file-move-request', (e) => {
         this.moveItemsTo(e.detail.items, e.detail.targetFolderId);
+      });
+
+      window.addEventListener('uploads-changed', () => {
+        this.refreshFolderBrowser();
       });
 
       // Listen for folder icon changes (from properties panel)
@@ -331,105 +330,26 @@ window.fileBrowser = function fileBrowser() {
     },
 
     async handleUpload(event) {
-      const files = event.target.files;
+      const files = Array.from(event.target.files);
+      // Cleared at once so picking the same files again still fires change.
+      event.target.value = '';
       if (!files.length) return;
       await this.uploadFiles(files);
     },
 
-    async uploadFiles(files) {
-      this.uploading = true;
-      this.uploadTotal = files.length;
-      this.uploadCompleted = 0;
-      this.uploadBytePercent = 0;
-
-      // Delay showing the progress toast so fast uploads don't flash it
-      this._uploadToastTimer = setTimeout(() => {
-        this._uploadToastEl = window.AppAlert.show({
-          message: 'Preparing upload...',
-          type: 'info',
-          duration: 0,
-          dismissible: false,
-        });
-        this._updateUploadToast();
-      }, 1000);
-
-      const outcome = { created: 0, replaced: 0, renamed: 0, skipped: 0 };
-      const duplicated = [];
-      const decisions = await this._decideNameCollisions(files);
-
-      for (const file of files) {
-        this.uploadCurrentFile = file.name;
-        this.uploadBytePercent = 0;
-        this._updateUploadToast();
-
-        const onConflict = decisions.get(file);
-        if (onConflict === 'skip') {
-          outcome.skipped++;
-          this.uploadCompleted++;
-          continue;
-        }
-
-        try {
-          const { status, body } = await this._uploadFile(file, onConflict);
-          let bucket = 'created';
-          if (status === 200) bucket = 'replaced';
-          else if (body.name && body.name !== file.name) bucket = 'renamed';
-          outcome[bucket]++;
-          // Only a row this request created can be discarded again; a
-          // replaced file is the user's existing file with new content.
-          if (bucket !== 'replaced' && body.duplicates && body.duplicates.length) {
-            duplicated.push({ body, bucket });
-          }
-        } catch (err) {
-          if (err.nameCollision) {
-            // The pre-check missed it (or the folder changed under us): the
-            // server keeps the existing file, which is what "skip" means.
-            outcome.skipped++;
-          } else {
-            window.AppAlert.error(`Failed to upload ${file.name}${err.message ? ': ' + err.message : ''}`);
-          }
-        }
-
-        this.uploadCompleted++;
-      }
-
-      // Cancel pending toast timer if upload finished before it fired
-      clearTimeout(this._uploadToastTimer);
-      this._uploadToastTimer = null;
-
-      if (this._uploadToastEl) {
-        window.AppAlert.dismiss(this._uploadToastEl);
-        this._uploadToastEl = null;
-      }
-
-      // The server keeps every upload; the user decides about the ones that
-      // duplicate a file they already have.
-      for (const { body, bucket } of duplicated) {
-        if (await this._resolveDuplicateUpload(body)) outcome[bucket]--;
-      }
-
-      // Refresh first, then show the summary toast after a short delay
-      // so the Alpine AJAX refresh doesn't interfere with the toast
-      const touched = outcome.created + outcome.replaced + outcome.renamed;
-      if (touched > 0 || duplicated.length) {
-        this.refreshFolderBrowser();
-      }
-      const summary = this._uploadSummary(outcome);
-      if (summary) {
-        const show = touched > 0 ? window.AppAlert.success : window.AppAlert.info;
-        setTimeout(() => show(summary), 600);
-      }
-
-      // Reset state
-      this.uploading = false;
-      this.uploadTotal = 0;
-      this.uploadCompleted = 0;
-      this.uploadCurrentFile = '';
-      this.uploadBytePercent = 0;
-
-      // Reset file input so re-selecting same files triggers change
-      const input = document.getElementById('file-upload-input');
-      if (input) input.value = '';
+    // The target folder is read once, here: the queue keeps it per file, so
+    // navigating while it drains never redirects the rest of the batch.
+    uploadFiles(files) {
+      const batch = Array.from(files);
+      const folderId = this.currentFolder || null;
+      const intake = async () => {
+        const decisions = await this._decideNameCollisions(batch, { targetFolderId: folderId });
+        Alpine.store('uploads').add(
+          batch.map((file) => ({ file, folderId, onConflict: decisions.get(file) }))
+        );
+      };
+      this._uploadIntake = this._uploadIntake.catch(() => {}).then(intake);
+      return this._uploadIntake;
     },
 
     // Map each file to what the server should do if its name is taken
@@ -495,171 +415,6 @@ window.fileBrowser = function fileBrowser() {
       if (!parts.length) return '';
       const text = parts.join(', ');
       return text.charAt(0).toUpperCase() + text.slice(1);
-    },
-
-    _uploadSummary({ created, replaced, renamed, skipped }) {
-      const parts = [];
-      const plural = (n) => (n > 1 ? 's' : '');
-      if (created) parts.push(`Uploaded ${created} file${plural(created)}`);
-      if (replaced) parts.push(`replaced ${replaced}`);
-      if (renamed) parts.push(`kept ${renamed} under a new name`);
-      if (skipped) parts.push(`skipped ${skipped}`);
-      if (!parts.length) return '';
-      const text = parts.join(', ');
-      return text.charAt(0).toUpperCase() + text.slice(1);
-    },
-
-    _uploadFile(file, onConflict) {
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        const formData = new FormData();
-        formData.append('name', file.name);
-        formData.append('node_type', 'file');
-        formData.append('content', file);
-        if (this.currentFolder) {
-          formData.append('parent', this.currentFolder);
-        }
-        if (onConflict) {
-          formData.append('on_conflict', onConflict);
-        }
-
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            this.uploadBytePercent = Math.round((e.loaded / e.total) * 100);
-            this._updateUploadToast();
-          }
-        };
-
-        xhr.onload = () => {
-          let body = {};
-          try {
-            body = JSON.parse(xhr.responseText);
-          } catch (_) {}
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve({ status: xhr.status, body });
-          } else {
-            const error = new Error(this._firstErrorMessage(body));
-            error.nameCollision = xhr.status === 400 && Array.isArray(body.name);
-            reject(error);
-          }
-        };
-
-        xhr.onerror = () => reject(new Error('Network error'));
-
-        xhr.open('POST', '/api/v1/files');
-        xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
-        xhr.send(formData);
-      });
-    },
-
-    // DRF answers either {detail: "..."} or {field: ["..."]}; surface the
-    // first human-readable message from whichever shape came back.
-    _firstErrorMessage(body) {
-      if (!body || typeof body !== 'object') return 'Unknown error';
-      if (typeof body.detail === 'string') return body.detail;
-      for (const value of Object.values(body)) {
-        if (typeof value === 'string') return value;
-        if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
-      }
-      return 'Unknown error';
-    },
-
-    // Ask whether to keep an upload whose content already exists in the
-    // user's files. Resolves true when the upload was discarded. Closing the
-    // dialog keeps both: the destructive choice is never the default.
-    async _resolveDuplicateUpload(created) {
-      const [first, ...rest] = created.duplicates;
-      const others = rest.length ? ` and ${rest.length} other file${rest.length > 1 ? 's' : ''}` : '';
-      const discard = await AppDialog.confirm({
-        title: 'Duplicate file',
-        message: `"${created.name}" has the same content as "${first.path}"${others}. Keep both, or discard the new upload?`,
-        okLabel: 'Discard upload',
-        cancelLabel: 'Keep both',
-        okClass: 'btn-warning',
-        icon: 'copy',
-        iconClass: 'bg-module/15 text-module',
-      });
-      if (!discard) return false;
-      try {
-        const headers = { 'X-CSRFToken': getCSRFToken() };
-        const trashed = await fetch(`/api/v1/files/${created.uuid}`, { method: 'DELETE', headers });
-        if (!trashed.ok) throw new Error();
-        const purged = await fetch(`/api/v1/files/${created.uuid}/purge`, { method: 'DELETE', headers });
-        if (!purged.ok) {
-          window.AppAlert.warning(`${created.name} was moved to trash but could not be permanently discarded`);
-        }
-        return true;
-      } catch (_) {
-        window.AppAlert.error(`Failed to discard ${created.name}`);
-        return false;
-      }
-    },
-
-    _updateUploadToast() {
-      if (!this._uploadToastEl) return;
-
-      // Build a standalone toast element instead of fighting .alert layout
-      const el = this._uploadToastEl;
-      el.className = 'shadow-lg rounded-xl text-white';
-      el.style.cssText = 'width:22rem; max-width:calc(100vw - 2rem); padding:0; overflow:hidden; background:oklch(var(--in));';
-
-      el.replaceChildren();
-
-      // Inner padding container
-      const inner = document.createElement('div');
-      inner.style.cssText = 'display:flex; align-items:start; gap:0.75rem; padding:0.875rem 1rem;';
-
-      // Upload icon
-      const iconNS = 'http://www.w3.org/2000/svg';
-      const svg = document.createElementNS(iconNS, 'svg');
-      svg.setAttribute('class', 'shrink-0');
-      svg.setAttribute('width', '20');
-      svg.setAttribute('height', '20');
-      svg.setAttribute('fill', 'none');
-      svg.setAttribute('stroke', 'currentColor');
-      svg.setAttribute('stroke-width', '2');
-      svg.setAttribute('stroke-linecap', 'round');
-      svg.setAttribute('stroke-linejoin', 'round');
-      svg.setAttribute('viewBox', '0 0 24 24');
-      const path = document.createElementNS(iconNS, 'path');
-      path.setAttribute('d', 'M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12');
-      svg.appendChild(path);
-      svg.style.marginTop = '1px';
-      inner.appendChild(svg);
-
-      // Text block
-      const text = document.createElement('div');
-      text.style.cssText = 'flex:1; min-width:0; overflow:hidden;';
-
-      const header = document.createElement('div');
-      header.style.cssText = 'display:flex; justify-content:space-between; align-items:baseline;';
-      const title = document.createElement('span');
-      title.className = 'font-semibold text-sm';
-      title.textContent = `Uploading ${this.uploadCompleted + 1} / ${this.uploadTotal}`;
-      const pct = document.createElement('span');
-      pct.className = 'text-xs tabular-nums';
-      pct.style.opacity = '0.8';
-      pct.textContent = `${this.uploadBytePercent}%`;
-      header.appendChild(title);
-      header.appendChild(pct);
-      text.appendChild(header);
-
-      const nameEl = document.createElement('div');
-      nameEl.className = 'text-xs truncate';
-      nameEl.style.opacity = '0.7';
-      nameEl.textContent = this.uploadCurrentFile;
-      text.appendChild(nameEl);
-
-      inner.appendChild(text);
-      el.appendChild(inner);
-
-      // Full-width progress bar pinned to the bottom, no side padding
-      const track = document.createElement('div');
-      track.style.cssText = 'height:5px; background:rgba(255,255,255,0.15);';
-      const fill = document.createElement('div');
-      fill.style.cssText = `height:100%; width:${this.uploadBytePercent}%; background:rgba(255,255,255,0.85); transition:width 0.15s ease;`;
-      track.appendChild(fill);
-      el.appendChild(track);
     },
 
     // --- Drag & drop upload ---
@@ -1241,7 +996,7 @@ window.fileBrowser = function fileBrowser() {
           try { body = await response.json(); } catch (_) {}
           if (!response.ok) {
             outcome.failed++;
-            firstError = firstError || this._firstErrorMessage(body);
+            firstError = firstError || window.fileActions.firstErrorMessage(body);
           } else if (isCopy ? response.status === 200 : body.uuid && body.uuid !== item.uuid) {
             // A copy answers 201 unless the existing file took the content;
             // a move answers with the moved row unless another row took it.

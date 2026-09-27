@@ -6,7 +6,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 function jsonResponse(status, body) {
   return { ok: status >= 200 && status < 300, status, json: async () => body };
@@ -16,7 +16,10 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
   const alerts = [];
   const requests = [];
   const events = [];
-  const ctx = loadScript('workspace/files/ui/static/files/ui/js/browser.js', {
+  const ctx = loadScripts([
+    'workspace/files/ui/static/files/ui/js/file_actions.js',
+    'workspace/files/ui/static/files/ui/js/browser.js',
+  ], {
     tagsMixin: () => ({ toggleFileTag: async () => {} }),
     propertiesPanelMixin: () => ({}),
     document: {

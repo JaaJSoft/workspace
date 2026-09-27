@@ -458,13 +458,19 @@ class AccountRotateTests(TestCase):
 
     def test_refuses_a_memory_cost_above_the_manifest_bound(self):
         body = {**self.body, "kdf_params": {**self.body["kdf_params"], "m": 4 << 20}}
-        self.assertEqual(self._post(body).status_code, 400)
+        response = self._post(body)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"kdf_params": ["unsupported kdf_params"]})
         self.identity.refresh_from_db()
         self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
 
     def test_refuses_a_wrapped_key_whose_header_names_an_unknown_format(self):
         body = {**self.body, "wrapped_kex_priv": to_base64url(bytes([9]) + bytes(40))}
-        self.assertEqual(self._post(body).status_code, 400)
+        response = self._post(body)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(), {"wrapped_kex_priv": ["unsupported ciphertext header"]}
+        )
         self.identity.refresh_from_db()
         self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
 

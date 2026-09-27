@@ -39,11 +39,15 @@ class _AccountKdfMixin:
         try:
             suites.check_kdf_algo(attrs["kdf_algo"])
         except ValueError as exc:
-            raise serializers.ValidationError({"kdf_algo": [str(exc)]}) from exc
+            raise serializers.ValidationError(
+                {"kdf_algo": ["unsupported kdf_algo"]}
+            ) from exc
         try:
             suites.check_account_kdf(attrs["kdf_algo"], attrs["kdf_params"])
         except ValueError as exc:
-            raise serializers.ValidationError({"kdf_params": [str(exc)]}) from exc
+            raise serializers.ValidationError(
+                {"kdf_params": ["unsupported kdf_params"]}
+            ) from exc
         return attrs
 
 
@@ -73,7 +77,7 @@ def validate_ciphertext(value):
     try:
         suites.check_ciphertext(decode_base64url(value))
     except suites.UnsupportedCiphertext as exc:
-        raise serializers.ValidationError(str(exc)) from exc
+        raise serializers.ValidationError("unsupported ciphertext header") from exc
     return value
 
 

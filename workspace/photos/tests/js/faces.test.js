@@ -591,3 +591,61 @@ test('on a person\'s board, a confirmed face stays and shows as confirmed', () =
   assert.deepEqual(Array.from(component.faces, (f) => f.assignment), ['confirmed', 'auto']);
   assert.equal(component.total, 2);
 });
+
+test('a moment of a video reads the way its player shows it', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js');
+
+  assert.equal(ctx.faceTimeLabel(0), '0:00');
+  assert.equal(ctx.faceTimeLabel(42.7), '0:42');
+  assert.equal(ctx.faceTimeLabel(725), '12:05');
+  assert.equal(ctx.faceTimeLabel(3725), '1:02:05');
+});
+
+function viewerEvents() {
+  const events = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => ({ close() {} }) },
+    CustomEvent: class {
+      constructor(type, init) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    dispatchEvent: (event) => events.push({ event: event.type, ...event.detail }),
+  });
+  return { faces: ctx.photosFacesMixin(), board: ctx.faceSelectionMixin(), events };
+}
+
+test('a face of a video opens the video at the moment it was seen', () => {
+  const { board, events } = viewerEvents();
+
+  board.openFacePhoto({ file: 'v', file_name: 'beach.mp4', file_type: 'mp4', timestamp: 42.5 });
+  board.openFacePhoto({ file: 'p', file_name: 'beach.jpg', file_type: 'jpeg', timestamp: null });
+
+  assert.deepEqual(events, [
+    { event: 'open-file-viewer', uuid: 'v', name: 'beach.mp4', type: 'mp4', at: 42.5 },
+    { event: 'open-file-viewer', uuid: 'p', name: 'beach.jpg', type: 'jpeg', at: null },
+  ]);
+});
+
+test('"People in this video" plays the video from where a face was seen', () => {
+  const { faces, events } = viewerEvents();
+  faces.facesDialog.photo = { uuid: 'v', name: 'beach.mp4', type: 'mp4', mediaType: 'video' };
+  const face = { uuid: 'f', timestamp: 65 };
+
+  assert.equal(faces.facesDialogIsVideo(), true);
+  assert.equal(faces.faceTime(face), '1:05');
+  faces.watchFace(face);
+
+  assert.deepEqual(events, [
+    { event: 'open-file-viewer', uuid: 'v', name: 'beach.mp4', type: 'mp4', at: 65 },
+  ]);
+});
+
+test('a photo\'s faces have no moment', () => {
+  const faces = mixin();
+  faces.facesDialog.photo = { uuid: 'p', name: 'beach.jpg', type: 'jpeg', mediaType: 'photo' };
+
+  assert.equal(faces.facesDialogIsVideo(), false);
+  assert.equal(faces.faceTime({ uuid: 'f', timestamp: null }), '');
+});

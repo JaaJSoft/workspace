@@ -43,8 +43,15 @@ rows, offered while the user has face grouping on.
     {% include "ui/partials/context_menu_item.html" with icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
   </template>
   {# Face rows: only the owner's photos have faces, so a photo of someone else's opens an empty dialog at worst. #}
-  <template x-if="ctxMenu.actions !== null && facesEnabled()">
+  <template
+    x-if="ctxMenu.actions !== null && facesEnabled() && ctxMenu.photo.mediaType !== 'video'"
+  >
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this photo" click="openFacesDialog(ctxMenu.photo)" only %}
+  </template>
+  <template
+    x-if="ctxMenu.actions !== null && facesEnabled() && ctxMenu.photo.mediaType === 'video'"
+  >
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this video" click="openFacesDialog(ctxMenu.photo)" only %}
   </template>
   <template x-if="ctxMenu.actions !== null && currentCluster()">
     {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}

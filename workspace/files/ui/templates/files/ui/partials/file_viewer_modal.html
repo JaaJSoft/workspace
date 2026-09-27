@@ -213,7 +213,8 @@
           }, 500);
         },
 
-        async openFile(uuid, name, fileType, updateUrl = true) {
+        // `at`, in seconds, starts a video there rather than at its beginning.
+        async openFile(uuid, name, fileType, updateUrl = true, at = null) {
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.fileType = fileType || '';
@@ -235,6 +236,9 @@
           await this.loadViewerPanel(`/files/view/${uuid}`);
           const panel = document.getElementById(this._viewerPanelId());
           this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
+          const video = at != null && panel ? panel.querySelector('video') : null;
+          // Before the metadata has loaded, this sets where playback starts.
+          if (video) video.currentTime = at;
         },
 
         // Every close path funnels here through the dialog's close event -
@@ -326,9 +330,10 @@
             const {
               uuid,
               name,
-              type
+              type,
+              at
             } = e.detail;
-            this.openFile(uuid, name, type);
+            this.openFile(uuid, name, type, true, at);
           };
 
           this._fileUpdatedHandler = (e) => {

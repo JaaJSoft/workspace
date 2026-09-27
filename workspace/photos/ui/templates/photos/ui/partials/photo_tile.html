@@ -24,6 +24,7 @@
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
   data-display-name="{{ file.name }}"
   data-file-type="{{ file.type }}"
+  data-media-type="{{ file.media_item.media_type }}"
   data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
   data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"
   data-files-url="{{ file|files_url }}"

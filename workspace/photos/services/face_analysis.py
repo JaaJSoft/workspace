@@ -1,18 +1,19 @@
-"""Find the faces of a photo: detect, align, score, embed, crop, store.
+"""Find the faces of a photo or a video, and store them.
 
-Runs in the Celery worker, after the photo's MediaItem analysis (see
-services/handlers.py) or from the hourly catch-up. The original is decoded
-once, at PHOTOS_FACES_DECODE_SIZE, and every face comes out of that copy.
-The rows and their vectors are written in one transaction; grouping them
+Runs in the Celery worker, after the file's MediaItem analysis (see
+services/handlers.py) or from the hourly catch-up. A photo is decoded once, at
+PHOTOS_FACES_DECODE_SIZE, and every face comes out of that copy
+(face_images.py). A video yields one face per person seen in it
+(face_video.py), and only where ffmpeg is installed. The rows and their
+vectors are written in one transaction; grouping them
 (services/face_grouping.py) follows once it has committed.
 
-Only the owner's personal photos are read: a group folder belongs to several
+Only the owner's personal files are read: a group folder belongs to several
 people, and whose library a face there would join has no good answer.
 """
 
 from __future__ import annotations
 
-import io
 import logging
 import time
 from dataclasses import dataclass
@@ -28,52 +29,48 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from workspace.common.logging import scrub
 from workspace.common.metrics import safe_counter, safe_histogram
+from workspace.common.vectors.encoding import from_bytes
 from workspace.common.vectors.indexing import index_vector
 from workspace.files.models import File
 from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
 from workspace.files.services.thumbnails.generation import RASTER_LABELS
 
 from ..indexes import FACE_EMBEDDINGS
-from ..models import Face, FaceAnalysis, FaceCluster
-from .detection.base import FaceBackend
-from .detection.geometry import ALIGNED_SIZE, align
+from ..models import Face, FaceAnalysis, FaceCluster, MediaItem
+from .analysis import library_candidates, media_type_for
 from .detection.registry import get_face_backend, is_misconfigured
+from .face_images import detect_faces
 from .face_preferences import (
     faces_available,
     faces_enabled,
     lock_opt_in,
     opted_in_owner_ids,
 )
+from .face_video import find_video_faces, video_faces_available
 
 logger = logging.getLogger(__name__)
 
-# Raise when the pipeline starts writing something new: every photo analyzed
+# Raise when the pipeline starts writing something new: every file analyzed
 # by an older version counts as pending again.
 FACE_ANALYSIS_VERSION = 1
 
-# Side of the square WebP shown for a face, in px.
-CROP_SIZE = 160
-_CROP_QUALITY = 80
-# The crop takes in this much of the face's surroundings: hair, chin, ears.
-_CROP_MARGIN = 1.6
-
-# A face at least this tall (px, at the decode size) scores full marks for
-# size: the embedding models see 112 px.
-_FULL_SIZE = ALIGNED_SIZE
 # A face kept from an old analysis passes its grouping on to the new face at
 # the same place: a reanalysis must not undo what the user corrected.
 _SAME_FACE_IOU = 0.5
+# In a video, the same person is the face whose embedding is this close, as a
+# share of the grouping threshold: the frame it comes from may have changed.
+_SAME_PERSON_DISTANCE = 0.5
 
 _DURATION = safe_histogram(
     "workspace_photos_face_analysis_seconds",
-    "Time spent analyzing one photo for faces.",
-    labels=("backend",),
-    buckets=(0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60),
+    "Time spent analyzing one photo or video for faces.",
+    labels=("backend", "media_type"),
+    buckets=(0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 600),
 )
 _RESULTS = safe_counter(
     "workspace_photos_face_analysis_total",
-    "Photos analyzed for faces, by outcome.",
-    labels=("result",),
+    "Photos and videos analyzed for faces, by outcome.",
+    labels=("result", "media_type"),
 )
 _DETECTED = safe_counter(
     "workspace_photos_faces_detected_total",
@@ -81,13 +78,20 @@ _DETECTED = safe_counter(
 )
 
 
+def face_media_type(file_obj):
+    """The kind of library item *file_obj* is when it can be read for faces:
+    a photo, or a video where ffmpeg is installed. None otherwise."""
+    media_type = media_type_for(file_obj)
+    if media_type == MediaItem.MediaType.VIDEO and not video_faces_available():
+        return None
+    return media_type
+
+
 def is_face_candidate(file_obj):
-    """Whether *file_obj* is a photo whose faces its owner wants found."""
+    """Whether *file_obj* is a photo or a video whose faces its owner wants found."""
     return (
         faces_available()
-        and file_obj.node_type == File.NodeType.FILE
-        and file_obj.type in RASTER_LABELS
-        and bool(file_obj.content)
+        and face_media_type(file_obj) is not None
         and file_obj.group_id is None
         and file_obj.deleted_at is None
         and not is_blocked(file_obj)
@@ -101,18 +105,26 @@ def faces_catch_up_enabled():
     return faces_available() and not is_misconfigured()
 
 
+def face_candidates(files):
+    """The photos among *files*, and the videos where ffmpeg is installed.
+
+    Without it a video is never pending: nothing could ever read it.
+    """
+    files = library_candidates(files)
+    if not video_faces_available():
+        files = files.filter(type__in=RASTER_LABELS)
+    return files
+
+
 def pending_faces_qs(*, reanalyze=False):
-    """The personal photos of opted-in users whose faces are missing or stale.
+    """The personal photos and videos of opted-in users whose faces are
+    missing or stale.
 
     Stale: other bytes, another backend, another owner, or an older version
     of this pipeline wrote them.
     """
     qs = exclude_blocked(
-        File.objects.alive()
-        .with_blob()
-        .filter(
-            node_type=File.NodeType.FILE,
-            type__in=RASTER_LABELS,
+        face_candidates(File.objects.alive().with_blob()).filter(
             group__isnull=True,
             owner_id__in=opted_in_owner_ids(),
         )
@@ -143,26 +155,31 @@ class _Found:
 def analyze_faces(file_obj):
     """Detect and store the faces of *file_obj*; return the new Face rows.
 
-    None means nothing was stored: the photo is not a candidate, its blob
+    None means nothing was stored: the file is not a candidate, its blob
     could not be opened, the backend failed, or the file changed while it was
-    read. A photo that cannot be decoded is stored as analyzed with no face,
-    so it does not come back every hour.
+    read. A file that cannot be decoded is stored as analyzed with no face,
+    so it does not come back every hour; so is one past the size limits.
     """
     if not is_face_candidate(file_obj):
         return None
+    media_type = face_media_type(file_obj)
     backend = get_face_backend()
     started = time.monotonic()
     try:
-        faces = _analyze(file_obj, backend)
+        faces = _analyze(file_obj, media_type, backend)
     except Exception:
-        _RESULTS.labels(result="error").inc()
+        _RESULTS.labels(result="error", media_type=media_type).inc()
         logger.exception("Face analysis failed for %s", scrub(file_obj.content.name))
         return None
-    _DURATION.labels(backend=backend.key).observe(time.monotonic() - started)
+    _DURATION.labels(backend=backend.key, media_type=media_type).observe(
+        time.monotonic() - started
+    )
     if faces is None:
-        _RESULTS.labels(result="skipped").inc()
+        _RESULTS.labels(result="skipped", media_type=media_type).inc()
         return None
-    _RESULTS.labels(result="faces" if faces else "no_faces").inc()
+    _RESULTS.labels(
+        result="faces" if faces else "no_faces", media_type=media_type
+    ).inc()
     _DETECTED.inc(len(faces))
 
     from .face_grouping import assign_faces, maybe_queue_clustering
@@ -172,16 +189,15 @@ def analyze_faces(file_obj):
     return faces
 
 
-def _analyze(file_obj, backend):
+def _analyze(file_obj, media_type, backend):
     read_hash = file_obj.content_hash
     owner_id = file_obj.owner_id
-    if file_obj.size and file_obj.size > settings.PHOTOS_FACES_MAX_FILE_BYTES:
-        found = []
+    if media_type == MediaItem.MediaType.VIDEO:
+        found = _find_in_video(file_obj, backend)
     else:
-        image = _decode(file_obj)
-        if image is False:
-            return None
-        found = [] if image is None else _find(file_obj, image, backend)
+        found = _find_in_photo(file_obj, backend)
+    if found is None:
+        return None
 
     crops = []
     try:
@@ -215,7 +231,7 @@ def _analyze(file_obj, backend):
                 # nothing of this analysis to delete: none is written.
                 _delete_crops(crops)
                 return None
-            faces = _replace_faces(file_obj, owner_id, found)
+            faces = _replace_faces(file_obj, owner_id, found, media_type)
             FaceAnalysis.objects.update_or_create(
                 file_id=file_obj.pk,
                 defaults={
@@ -272,83 +288,83 @@ def _decode(file_obj):
         handle.close()
 
 
-def _find(file_obj, image, backend: FaceBackend):
-    backend.prepare()
-    height, width = image.shape[:2]
-    detected = [
-        face
-        for face in backend.detect(image)
-        if min(face.box[2], face.box[3]) >= settings.PHOTOS_FACES_MIN_SIZE
+def _find_in_photo(file_obj, backend):
+    if file_obj.size and file_obj.size > settings.PHOTOS_FACES_MAX_FILE_BYTES:
+        return []
+    image = _decode(file_obj)
+    if image is False:
+        return None
+    if image is None:
+        return []
+    return [
+        _Found(
+            face=_face_row(file_obj, detection),
+            embedding=detection.embedding,
+            crop=detection.crop,
+        )
+        for detection in detect_faces(image, backend)
     ]
-    detected.sort(key=lambda face: face.score, reverse=True)
-    found = []
-    for detection in detected[: settings.PHOTOS_FACES_MAX_PER_PHOTO]:
-        aligned = align(image, detection.landmarks)
-        x, y, w, h = detection.box
-        size_score = min(1.0, min(w, h) / _FULL_SIZE)
-        quality = detection.score * (
-            0.5 * size_score + 0.5 * backend.sharpness(aligned)
+
+
+def _find_in_video(file_obj, backend):
+    people = find_video_faces(file_obj, backend)
+    if people is None:
+        return None
+    return [
+        _Found(
+            face=_face_row(file_obj, person.detection, timestamp=person.timestamp),
+            embedding=person.embedding,
+            crop=person.detection.crop,
         )
-        face = Face(
-            file_id=file_obj.pk,
-            owner_id=file_obj.owner_id,
-            box_x=_fraction(x, width),
-            box_y=_fraction(y, height),
-            box_width=_fraction(w, width),
-            box_height=_fraction(h, height),
-            landmarks=[
-                [round(_fraction(px, width), 4), round(_fraction(py, height), 4)]
-                for px, py in detection.landmarks
-            ],
-            detector_score=round(detection.score, 4),
-            quality=round(quality, 4),
-        )
-        found.append(
-            _Found(
-                face=face,
-                embedding=backend.embed(aligned),
-                crop=_crop(image, detection.box),
-            )
-        )
-    return found
+        for person in people
+    ]
+
+
+def _face_row(file_obj, detection, *, timestamp=None):
+    width, height = detection.width, detection.height
+    x, y, w, h = detection.box
+    return Face(
+        file_id=file_obj.pk,
+        owner_id=file_obj.owner_id,
+        box_x=_fraction(x, width),
+        box_y=_fraction(y, height),
+        box_width=_fraction(w, width),
+        box_height=_fraction(h, height),
+        landmarks=[
+            [round(_fraction(px, width), 4), round(_fraction(py, height), 4)]
+            for px, py in detection.landmarks
+        ],
+        detector_score=round(detection.score, 4),
+        quality=round(detection.quality, 4),
+        timestamp=timestamp,
+    )
 
 
 def _fraction(value, total):
     return min(1.0, max(0.0, float(value) / total))
 
 
-def _crop(image, box):
-    """The square WebP of a face and some of its surroundings."""
-    height, width = image.shape[:2]
-    x, y, w, h = box
-    side = min(max(w, h) * _CROP_MARGIN, width, height)
-    left = min(max(0.0, x + w / 2 - side / 2), width - side)
-    top = min(max(0.0, y + h / 2 - side / 2), height - side)
-    square = Image.fromarray(image).crop(
-        (round(left), round(top), round(left + side), round(top + side))
-    )
-    square = square.resize((CROP_SIZE, CROP_SIZE), Image.LANCZOS)
-    buffer = io.BytesIO()
-    square.save(buffer, format="WEBP", quality=_CROP_QUALITY)
-    return buffer.getvalue()
-
-
 def crop_path(owner_id, face_uuid):
     return f"faces/{owner_id}/{face_uuid}.webp"
 
 
-def _replace_faces(file_obj, owner_id, found):
-    """Swap the photo's faces for *found*, keeping what the user decided.
+def _replace_faces(file_obj, owner_id, found, media_type):
+    """Swap the file's faces for *found*, keeping what the user decided.
 
-    A new face at the place of an old one (same box, give or take) inherits
-    its cluster, its assignment and its rejection, and becomes the cover in
-    its place. Called inside the analysis transaction.
+    A new face of the same person as an old one inherits its cluster, its
+    assignment and its rejection, and becomes the cover in its place: in a
+    photo, the face at the same place (same box, give or take); in a video,
+    the person whose embedding is that close, whichever frame shows them.
+    Called inside the analysis transaction.
     """
     old_faces = list(Face.objects.filter(file_id=file_obj.pk))
     cover_of = dict(
         FaceCluster.objects.filter(cover__in=old_faces).values_list("cover_id", "pk")
     )
-    inherited = _match_old_faces(old_faces, [item.face for item in found])
+    if media_type == MediaItem.MediaType.VIDEO:
+        inherited = _match_old_people(old_faces, found)
+    else:
+        inherited = _match_old_faces(old_faces, [item.face for item in found])
     new_covers = {}
     for new_face, old_face in inherited.items():
         if old_face.owner_id != owner_id:
@@ -376,17 +392,53 @@ def _replace_faces(file_obj, owner_id, found):
 
 def _match_old_faces(old_faces, new_faces):
     """{new face: old face} for the pairs whose boxes overlap enough."""
+    return _pair(
+        old_faces,
+        new_faces,
+        [[_iou(old, new) for new in new_faces] for old in old_faces],
+        _SAME_FACE_IOU,
+    )
+
+
+def _match_old_people(old_faces, found):
+    """{new face: old face} for the pairs whose embeddings are close enough."""
+    from .face_grouping import max_distance
+
+    new_vectors = [_unit(item.embedding) for item in found]
+    similarity = []
+    for old in old_faces:
+        vector = (
+            _unit(from_bytes(old.embedding, FACE_EMBEDDINGS.dims))
+            if old.embedding
+            else None
+        )
+        similarity.append(
+            [-1.0 if vector is None else float(vector @ new) for new in new_vectors]
+        )
+    return _pair(
+        old_faces,
+        [item.face for item in found],
+        similarity,
+        1 - max_distance() * _SAME_PERSON_DISTANCE,
+    )
+
+
+def _pair(old_faces, new_faces, similarity, minimum):
+    """{new face: old face}, the most similar pairs first, each face once.
+
+    *similarity* is indexed [old][new]; a pair under *minimum* is no match.
+    """
     pairs = sorted(
         (
-            (_iou(old, new), i, j)
-            for i, old in enumerate(old_faces)
-            for j, new in enumerate(new_faces)
+            (similarity[i][j], i, j)
+            for i in range(len(old_faces))
+            for j in range(len(new_faces))
         ),
         reverse=True,
     )
     matched, used_old, used_new = {}, set(), set()
-    for iou, i, j in pairs:
-        if iou < _SAME_FACE_IOU:
+    for score, i, j in pairs:
+        if score < minimum:
             break
         if i in used_old or j in used_new:
             continue
@@ -394,6 +446,14 @@ def _match_old_faces(old_faces, new_faces):
         used_new.add(j)
         matched[new_faces[j]] = old_faces[i]
     return matched
+
+
+def _unit(vector):
+    if vector is None:
+        return None
+    vector = np.asarray(vector, dtype=np.float64)
+    norm = np.linalg.norm(vector)
+    return vector / norm if norm > 0 else None
 
 
 def _iou(a, b):
@@ -415,7 +475,7 @@ def _delete_crops(names):
 
 
 def forget_faces(file_obj):
-    """Drop the faces and the analysis of a photo that left its owner's library."""
+    """Drop the faces and the analysis of a file that left its owner's library."""
     from .face_grouping import refresh_clusters
 
     with transaction.atomic():

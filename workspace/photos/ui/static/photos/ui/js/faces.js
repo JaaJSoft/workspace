@@ -49,6 +49,21 @@ async function facesRequest(url, { method = 'GET', body } = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+// "0:42", "12:05", "1:02:05": a moment of a video, as its player shows it.
+function faceTimeLabel(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  const s = String(total % 60).padStart(2, '0');
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600);
+  return h ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}
+
+function openInViewer(uuid, name, type, at) {
+  window.dispatchEvent(new CustomEvent('open-file-viewer', {
+    detail: { uuid, name, type, at: at == null ? null : at },
+  }));
+}
+
 // Without a query, the named people then every other contact: a picker
 // opened empty lists who can be picked.
 function personsUrl(query) {
@@ -406,6 +421,21 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     clusterOf(face) {
       return this.facesDialog.clusters.find((c) => c.uuid === face.cluster) || null;
+    },
+
+    facesDialogIsVideo() {
+      return !!this.facesDialog.photo && this.facesDialog.photo.mediaType === 'video';
+    },
+
+    // When in the video a face was seen; empty for a photo's.
+    faceTime(face) {
+      return face.timestamp == null ? '' : faceTimeLabel(face.timestamp);
+    },
+
+    watchFace(face) {
+      const video = this.facesDialog.photo;
+      this.closeFacesDialog();
+      openInViewer(video.uuid, video.name, video.type, face.timestamp);
     },
 
     faceLabel(face) {
@@ -786,10 +816,9 @@ window.faceSelectionMixin = function faceSelectionMixin() {
       this._faceAnchor = null;
     },
 
+    // A face of a video opens it at the moment the face was seen.
     openFacePhoto(face) {
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid: face.file, name: face.file_name, type: face.file_type },
-      }));
+      openInViewer(face.file, face.file_name, face.file_type, face.timestamp);
     },
 
     // Asks the registry about the faces it has not answered for yet; the

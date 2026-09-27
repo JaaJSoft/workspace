@@ -329,6 +329,16 @@ class FaceCorrectionTests(FaceApiTestCase):
             [str(self.alice.pk), str(self.bob.pk)],
         )
         self.assertEqual(set(response.json()[0]["box"]), {"x", "y", "width", "height"})
+        self.assertIsNone(response.json()[0]["timestamp"])
+
+    def test_a_face_of_a_video_says_when_it_is_seen(self):
+        Face.objects.filter(pk=self.face("bob.png").pk).update(timestamp=42.5)
+
+        response = self.client.get(
+            f"/api/v1/photos/files/{self.photos['bob.png'].pk}/faces"
+        )
+
+        self.assertEqual(response.json()[0]["timestamp"], 42.5)
 
     def test_crop_is_a_privately_cached_webp(self):
         response = self.client.get(f"{self.url(self.face('bob.png'))}/crop")

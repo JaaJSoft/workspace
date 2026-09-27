@@ -11,9 +11,11 @@ metadata.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from contextlib import contextmanager
 
 # Resolved once, from the deploy's PATH, so a later PATH change cannot
@@ -103,6 +105,19 @@ def duration(report):
     return value if value > 0 else None
 
 
+def start_time(report):
+    """Seconds before the first frame of a :func:`probe` report, 0 when unknown.
+
+    A player counts from there: the frame at *t* in ffmpeg's clock is shown at
+    ``t - start_time``.
+    """
+    try:
+        value = float(report.get("format", {}).get("start_time"))
+    except TypeError, ValueError:
+        return 0.0
+    return value if value > 0 else 0.0
+
+
 def video_stream(report):
     """The first real video stream of a :func:`probe` report, or ``{}``.
 
@@ -169,3 +184,128 @@ def extract_frame(path, *, at, max_size, timeout=FRAME_TIMEOUT):
     except (subprocess.SubprocessError, OSError) as exc:
         raise MediaToolError(str(exc)) from exc
     return result.stdout
+
+
+_PTS_TIME = re.compile(rb"\bpts_time:\s*(-?[0-9.]+)")
+
+
+def sample_frames(
+    path,
+    on_frame,
+    *,
+    size,
+    interval,
+    max_frames,
+    scene=0.3,
+    scene_gap=0.5,
+    timeout=FRAME_TIMEOUT,
+):
+    """Hand frames of the video at *path* to *on_frame*; return their times.
+
+    A frame is taken at the start, then whenever *interval* seconds have
+    passed since the last one taken, and at every scene change (ffmpeg's
+    scene score above *scene*) at least *scene_gap* seconds after it. At most
+    *max_frames* are taken, from the start: the budget runs out before the end
+    of a video with more scene changes than it allows.
+
+    *on_frame* receives ``(index, pixels)``: RGB24 bytes of exactly *size*
+    (width, height), displayed the way a player shows them. The returned list
+    holds the time of each frame in ffmpeg's clock, in index order; it is only
+    known once the video has been read, the frames stream while it decodes so
+    that one of them at a time is held in memory.
+    """
+    if not FFMPEG:
+        raise MediaToolError("ffmpeg is not installed")
+    width, height = size
+    selection = (
+        f"isnan(prev_selected_t)+gte(t-prev_selected_t,{interval:.3f})"
+        f"+gt(scene,{scene})*gte(t-prev_selected_t,{scene_gap:.3f})"
+    )
+    command = [
+        FFMPEG,
+        "-nostdin",
+        "-hide_banner",
+        "-nostats",
+        # showinfo reports each frame's time at the info level.
+        "-v",
+        "info",
+        *_input_args(path),
+        "-an",
+        "-sn",
+        "-dn",
+        "-vf",
+        f"select='{selection}',scale={width}:{height},showinfo",
+        "-fps_mode",
+        "vfr",
+        "-frames:v",
+        str(max_frames),
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "pipe:1",
+    ]
+    frame_bytes = width * height * 3
+    try:
+        process = subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as exc:
+        raise MediaToolError(str(exc)) from exc
+    times, tail = [], []
+    # stderr is read on the side: a pipe left full would stall ffmpeg before
+    # its next frame reached stdout.
+    reader = threading.Thread(
+        target=_read_log, args=(process.stderr, times, tail), daemon=True
+    )
+    reader.start()
+    expired = threading.Event()
+
+    def expire():
+        expired.set()
+        process.kill()
+
+    timer = threading.Timer(timeout, expire)
+    timer.start()
+    index = 0
+    finished = False
+    try:
+        while not expired.is_set():
+            pixels = process.stdout.read(frame_bytes)
+            if len(pixels) < frame_bytes:
+                break
+            on_frame(index, pixels)
+            index += 1
+        finished = True
+    finally:
+        timer.cancel()
+        if not finished and process.poll() is None:
+            process.kill()
+        # Closed before waiting: whatever still writes to the pipe (the real
+        # ffmpeg behind a wrapper script that was killed) gets a broken pipe
+        # instead of blocking on it forever.
+        process.stdout.close()
+        returncode = process.wait()
+        reader.join()
+    if expired.is_set():
+        raise MediaToolError(f"reading the video took more than {timeout} s")
+    if returncode != 0:
+        raise MediaToolError(
+            b"\n".join(tail).decode(errors="replace") or "ffmpeg failed"
+        )
+    return times[:index]
+
+
+def _read_log(stream, times, tail):
+    for line in stream:
+        if b"Parsed_showinfo" in line:
+            match = _PTS_TIME.search(line)
+            if match is not None:
+                times.append(float(match[1]))
+            continue
+        tail.append(line.rstrip())
+        del tail[:-5]
+    stream.close()

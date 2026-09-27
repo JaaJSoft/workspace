@@ -75,6 +75,27 @@ class MissingToolsTests(SimpleTestCase):
         with self.assertRaises(ffmpeg.MediaToolError):
             ffmpeg.extract_frame("/tmp/clip.mp4", at=1, max_size=(64, 64))
 
+    @patch("workspace.files.services.ffmpeg.FFMPEG", None)
+    def test_sampling_without_ffmpeg(self):
+        with self.assertRaises(ffmpeg.MediaToolError):
+            ffmpeg.sample_frames(
+                "/tmp/clip.mp4", print, size=(64, 64), interval=2, max_frames=1
+            )
+
+
+class StartTimeTests(SimpleTestCase):
+    def test_reads_the_container_start(self):
+        self.assertEqual(ffmpeg.start_time({"format": {"start_time": "1.4"}}), 1.4)
+
+    def test_missing_negative_or_garbage_is_zero(self):
+        for report in (
+            {},
+            {"format": {"start_time": "-0.02"}},
+            {"format": {"start_time": "N/A"}},
+        ):
+            with self.subTest(report=report):
+                self.assertEqual(ffmpeg.start_time(report), 0.0)
+
 
 class DurationTests(SimpleTestCase):
     def test_reads_the_container_duration(self):
@@ -140,3 +161,61 @@ class RealToolsTests(TestCase):
         )
 
         self.assertEqual(png, b"")
+
+
+@requires_ffmpeg
+class SampleFramesTests(TestCase):
+    def setUp(self):
+        user = User.objects.create_user(username="alice", password="p")
+        self.clip = FileService.create_file(
+            owner=user, name="clip.webm", content=ContentFile(clip_bytes("clip.webm"))
+        ).content.path
+
+    def _sample(self, path=None, **kwargs):
+        frames = []
+        times = ffmpeg.sample_frames(
+            path or self.clip,
+            lambda index, pixels: frames.append((index, len(pixels))),
+            **{"size": (48, 27), "interval": 1, "max_frames": 60, **kwargs},
+        )
+        return times, frames
+
+    def test_hands_over_frames_of_the_requested_size_at_the_interval(self):
+        times, frames = self._sample()
+
+        self.assertEqual(times, [0.0, 1.0, 2.0])
+        self.assertEqual(frames, [(0, 48 * 27 * 3), (1, 48 * 27 * 3), (2, 48 * 27 * 3)])
+
+    def test_stops_at_the_frame_budget(self):
+        times, frames = self._sample(max_frames=2)
+
+        self.assertEqual(times, [0.0, 1.0])
+        self.assertEqual(len(frames), 2)
+
+    def test_something_that_is_not_a_video(self):
+        not_a_video = os.path.join(os.path.dirname(self.clip), "notes.txt")
+        with open(not_a_video, "wb") as f:
+            f.write(b"not a video")
+
+        with self.assertRaises(ffmpeg.MediaToolError):
+            self._sample(not_a_video)
+
+    def test_a_failing_callback_stops_ffmpeg_and_propagates(self):
+        def fail(index, pixels):
+            raise RuntimeError("model crashed")
+
+        with self.assertRaisesMessage(RuntimeError, "model crashed"):
+            ffmpeg.sample_frames(
+                self.clip, fail, size=(48, 27), interval=1, max_frames=60
+            )
+
+    def test_a_reading_past_the_timeout_is_an_error(self):
+        with self.assertRaisesMessage(ffmpeg.MediaToolError, "took more than"):
+            ffmpeg.sample_frames(
+                self.clip,
+                lambda index, pixels: __import__("time").sleep(0.2),
+                size=(48, 27),
+                interval=0.1,
+                max_frames=60,
+                timeout=0.1,
+            )

@@ -191,10 +191,19 @@ class FaceSerializer(serializers.ModelSerializer):
             "cluster",
             "assignment",
             "crop_url",
+            "timestamp",
             "to_person",
             "new_person",
         ]
-        read_only_fields = ["uuid", "quality"]
+        read_only_fields = ["uuid", "quality", "timestamp"]
+        extra_kwargs = {
+            "timestamp": {
+                "help_text": (
+                    "Seconds into the video of the frame the face was taken "
+                    "from; null for a photo."
+                )
+            }
+        }
         extra_kwargs = {
             "assignment": {
                 "help_text": (

@@ -1,6 +1,10 @@
 """Fixtures for the photos tests: tiny pictures with chosen EXIF, and videos."""
 
 import io
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 
 from django.core.files.base import ContentFile
 from django.utils import timezone
@@ -133,15 +137,71 @@ BOB = (30, 30, 220)
 CAROL = (30, 200, 30)
 
 
+def faces_image(*faces, size=(400, 300)):
+    """A grey picture with one square per ``(colour, (x, y, side))``."""
+    image = Image.new("RGB", size, (128, 128, 128))
+    for colour, (x, y, side) in faces:
+        image.paste(colour, (x, y, x + side, y + side))
+    return image
+
+
 def faces_png(*faces, size=(400, 300)):
-    """A PNG on a grey background with one square per ``(colour, (x, y, side))``.
+    """:func:`faces_image` as a PNG.
 
     PNG, not JPEG: compression noise would blur the colours the fake backend
     reads identities from.
     """
-    image = Image.new("RGB", size, (128, 128, 128))
-    for colour, (x, y, side) in faces:
-        image.paste(colour, (x, y, x + side, y + side))
     buf = io.BytesIO()
-    image.save(buf, format="PNG")
+    faces_image(*faces, size=size).save(buf, format="PNG")
     return buf.getvalue()
+
+
+def video_bytes(scenes, *, fps=4):
+    """A Matroska video showing each ``(seconds, image)`` of *scenes* in turn.
+
+    Encoded with FFV1 in RGB, which is lossless: the colours the fake backend
+    reads identities from come back out of the decoder exactly as drawn.
+    Needs ffmpeg (``requires_ffmpeg``).
+    """
+    width, height = scenes[0][1].size
+    frames = b"".join(
+        image.convert("RGB").tobytes() * round(seconds * fps)
+        for seconds, image in scenes
+    )
+    with tempfile.TemporaryDirectory() as directory:
+        target = Path(directory) / "clip.mkv"
+        subprocess.run(
+            [
+                shutil.which("ffmpeg"),
+                "-nostdin",
+                "-v",
+                "error",
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgb24",
+                "-s",
+                f"{width}x{height}",
+                "-r",
+                str(fps),
+                "-i",
+                "pipe:0",
+                "-c:v",
+                "ffv1",
+                "-pix_fmt",
+                "bgr0",
+                str(target),
+            ],
+            input=frames,
+            check=True,
+            capture_output=True,
+        )
+        return target.read_bytes()
+
+
+def faces_video(*scenes, fps=4):
+    """:func:`video_bytes` of scenes given as ``(seconds, [faces])``, each face
+    as :func:`faces_image` takes it."""
+    return video_bytes(
+        [(seconds, faces_image(*faces)) for seconds, faces in scenes], fps=fps
+    )

@@ -362,6 +362,7 @@
   {% include "ui/partials/context_menu_panel.html" with items="files/ui/partials/context_menu.html" x_data="contextMenu()" open="isOpen" close="close()" x="position.x" y="position.y" width="w-64" %}
   {% include "files/ui/partials/share_modal.html" %}
   {% include "files/ui/partials/storage_dialog.html" %}
+  {% include "files/ui/partials/upload_panel.html" %}
 
   <!-- Mobile preferences dialog -->
   <dialog id="files-prefs-dialog" class="modal" x-data="filePreferences()">
@@ -395,6 +396,7 @@
 
   <!-- File actions (shared) & browser -->
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
+  <script src="{% static 'files/ui/js/upload_queue.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
   <script src="{% static 'files/ui/js/folder_nav.js' %}"></script>

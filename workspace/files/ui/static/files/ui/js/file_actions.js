@@ -45,6 +45,18 @@ window.fileActions = {
         });
     },
 
+    // DRF answers either {detail: "..."} or {field: ["..."]}; surface the
+    // first human-readable message from whichever shape came back.
+    firstErrorMessage: function(body) {
+        if (!body || typeof body !== 'object') return 'Unknown error';
+        if (typeof body.detail === 'string') return body.detail;
+        for (const value of Object.values(body)) {
+            if (typeof value === 'string') return value;
+            if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+        }
+        return 'Unknown error';
+    },
+
     // ── Dialog helpers ───────────────────────────────────
 
     showCreateFolderDialog: function() {

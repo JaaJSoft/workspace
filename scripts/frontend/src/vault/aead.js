@@ -17,18 +17,6 @@ function assertRawKeyLength(key) {
   }
 }
 
-// WebCrypto picks the AES variant from the key, so a 16-byte one would
-// quietly produce AES-128-GCM under a header still declaring AES-256-GCM -
-// the agility byte would be a lie. Checked on every seal and open, not only
-// at import, so a handle reaching this impl by any other route than its own
-// importKey is refused rather than trusted.
-function assertGcmHandle(handle) {
-  const { name, length } = (handle && handle.algorithm) || {};
-  if (name !== 'AES-GCM' || length !== KEY_LENGTH * 8) {
-    throw new Error(`aes-256-gcm needs an AES-GCM ${KEY_LENGTH * 8}-bit key`);
-  }
-}
-
 const aes256Gcm = {
   ivLength: 12,
   async importKey(raw, usages) {
@@ -36,12 +24,10 @@ const aes256Gcm = {
     return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, usages);
   },
   async seal(handle, iv, plaintext, ad) {
-    assertGcmHandle(handle);
     return new Uint8Array(await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: ad, tagLength: 128 }, handle, plaintext));
   },
   async open(handle, iv, ciphertext, ad) {
-    assertGcmHandle(handle);
     return new Uint8Array(await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv, additionalData: ad, tagLength: 128 }, handle, ciphertext));
   },

@@ -54,13 +54,13 @@ export function declaredEntry(axis, id) {
 }
 
 export function hpkeEntry(format) {
-  const entry = MANIFEST.hpke[String(format)];
+  const entry = ownEntry('hpke', format);
   if (!entry || entry.state === 'test') throw new UnsupportedAlgorithmError('hpke', format);
   return entry;
 }
 
 export function kdfEntry(algo) {
-  const entry = Object.prototype.hasOwnProperty.call(MANIFEST.kdf, algo) ? MANIFEST.kdf[algo] : null;
+  const entry = ownEntry('kdf', algo);
   if (!entry || entry.state === 'test') throw new UnsupportedAlgorithmError('kdf', algo);
   return entry;
 }

@@ -132,7 +132,7 @@ test('registerAead refuses an impl whose ivLength disagrees with the manifest', 
 test('a keyring hides its handles and cannot be constructed from outside', async () => {
   const ring = await V.importAeadKey(KEY);
   assert.equal(ring.handles, undefined);
-  assert.throws(() => new ring.constructor(new Map()));
+  assert.throws(() => new ring.constructor(new Map()), /constructed only by importAeadKey/);
 });
 
 test('a format 2 header byte is authenticated', async () => {

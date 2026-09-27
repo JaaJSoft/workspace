@@ -2,7 +2,14 @@ from cryptography.exceptions import InvalidSignature, InvalidTag
 from django.test import SimpleTestCase
 from pyhpke.exceptions import OpenError
 
-from workspace.vault.tests.reference import ad, encoding, metadata, primitives, wire
+from workspace.vault.tests.reference import (
+    ad,
+    encoding,
+    metadata,
+    primitives,
+    suites,
+    wire,
+)
 
 
 class Base64UrlTests(SimpleTestCase):
@@ -34,7 +41,7 @@ class WireFormatTests(SimpleTestCase):
 
     def test_header_is_six_bytes_then_iv_then_ciphertext(self):
         raw = self._sample()
-        self.assertEqual(raw[0], 0x01)  # format_version
+        self.assertEqual(raw[0], 2)  # format_version
         self.assertEqual(raw[1], wire.AEAD_AES_256_GCM)
         self.assertEqual(raw[2], wire.KDF_HKDF_SHA256)
         self.assertEqual(raw[3:5], b"\x00\x01")  # key_version, big endian
@@ -53,8 +60,8 @@ class WireFormatTests(SimpleTestCase):
         future layout can never be half-read by an old client.
         """
         raw = bytearray(self._sample())
-        raw[0] = 0x02
-        with self.assertRaises(wire.UnsupportedVersion):
+        raw[0] = 0x03
+        with self.assertRaises(suites.UnsupportedAlgorithm):
             wire.decode_ciphertext(bytes(raw))
 
     def test_rejects_an_iv_length_inconsistent_with_the_aead(self):

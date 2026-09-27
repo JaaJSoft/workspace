@@ -1,5 +1,6 @@
 import email
 import json
+import tempfile
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -23,6 +24,13 @@ from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.smtp import SentMessage
 
 User = get_user_model()
+
+
+def sent_message():
+    """A SentMessage as send_email leaves it: the Sent copy in a temp file."""
+    file = tempfile.TemporaryFile()
+    file.write(b"Subject: Hi\r\n\r\nHello\r\n")
+    return SentMessage(file, "<hi@example.com>", outgoing_start=0)
 
 
 def plain_body(raw_message):
@@ -362,7 +370,7 @@ class SendEmailTests(MailComposeToolsTestCase):
             )
         )["confirmation_token"]
 
-        sent = SentMessage(outgoing=b"out", archived=b"archived")
+        sent = sent_message()
         with (
             patch("workspace.mail.services.smtp.send_email", return_value=sent) as smtp,
             patch("workspace.mail.services.imap_messages.append_to_sent") as append,
@@ -390,7 +398,7 @@ class SendEmailTests(MailComposeToolsTestCase):
         # Bcc belongs in the SMTP envelope only - the header would leak the
         # hidden recipients to everyone else.
         self.assertNotIn("include_bcc", kwargs)
-        self.assertEqual(append.call_args.args[1], b"archived")
+        self.assertEqual(append.call_args.args[2], "<hi@example.com>")
 
     def test_a_token_can_only_be_redeemed_once(self):
         bot = self._bot(can_send_email=True)
@@ -402,7 +410,7 @@ class SendEmailTests(MailComposeToolsTestCase):
             )
         )["confirmation_token"]
 
-        sent = SentMessage(outgoing=b"out", archived=b"archived")
+        sent = sent_message()
         with (
             patch("workspace.mail.services.smtp.send_email", return_value=sent),
             patch("workspace.mail.services.imap_messages.append_to_sent"),

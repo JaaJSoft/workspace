@@ -1,10 +1,16 @@
-"""Mail module: OAuth2 providers.
+"""Mail module: sending limits and OAuth2 providers.
 
 Each provider is enabled by setting its CLIENT_ID + CLIENT_SECRET.
 Only providers with a configured CLIENT_ID will appear in the UI.
 """
 
 import os
+
+# Bytes of attachments one outgoing message may carry. Common SMTP servers
+# refuse messages past 25-50 MB, and base64 grows them by a third on the wire.
+MAIL_MAX_ATTACHMENTS_SIZE = int(
+    os.getenv("MAIL_MAX_ATTACHMENTS_SIZE", str(25 * 1024 * 1024))
+)
 
 # Google (Gmail / Google Workspace)
 OAUTH_GOOGLE_CLIENT_ID = os.getenv("OAUTH_GOOGLE_CLIENT_ID", "")

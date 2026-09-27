@@ -20,6 +20,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
+from workspace.mail.tests.smtp_recorder import RecordingSMTP
 
 User = get_user_model()
 
@@ -59,12 +60,12 @@ class ReplyThreadingTests(TestCase):
             "body_text": "sure",
             **extra,
         }
-        with patch("workspace.mail.services.smtp.connect_smtp") as mock_connect:
+        server = RecordingSMTP()
+        with patch("workspace.mail.services.smtp.connect_smtp", return_value=server):
             with patch("workspace.mail.services.imap_messages.append_to_sent"):
                 self.client.post("/api/v1/mail/messages/send", payload, format="json")
-        mock_server = mock_connect.return_value
-        mock_server.sendmail.assert_called_once()
-        return message_from_string(mock_server.sendmail.call_args[0][2])
+        self.assertEqual(server.transactions, 1)
+        return server.message
 
     def test_sent_reply_carries_in_reply_to_and_references(self):
         msg = self._send(reply_message_id=str(self.parent.uuid))

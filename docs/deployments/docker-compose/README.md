@@ -75,6 +75,7 @@ All settings are configurable via environment variables or a `.env` file next to
 | `OAUTH_GENERIC_SCOPES` | *(empty)* | Space-separated OAuth2 scopes |
 | `OAUTH_GENERIC_IMAP_HOST` | *(empty)* | IMAP server hostname |
 | `OAUTH_GENERIC_SMTP_HOST` | *(empty)* | SMTP server hostname |
+| `MAIL_MAX_ATTACHMENTS_SIZE` | `26214400` | Bytes. Total size of the attachments of one outgoing email; a larger send is refused before it reaches the SMTP server |
 | `OIDC_RP_CLIENT_ID` | *(empty)* | OIDC client ID. Set this plus the secret and the four endpoints to enable SSO login |
 | `OIDC_RP_CLIENT_SECRET` | *(empty)* | OIDC client secret |
 | `OIDC_OP_AUTHORIZATION_ENDPOINT` | *(empty)* | Provider authorization endpoint |

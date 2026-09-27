@@ -17,9 +17,6 @@ logger = logging.getLogger(__name__)
 class Delivery(NamedTuple):
     """What became of a send."""
 
-    sent: object
-    """The `SentMessage` returned by the SMTP layer."""
-
     archived: bool
     """Whether the copy reached the Sent folder. The mail went out either way."""
 
@@ -51,7 +48,7 @@ def deliver_email(
 
     in_reply_to, references = reply_headers(account, reply_message_id)
 
-    sent = send_email(
+    with send_email(
         account=account,
         to=to,
         subject=subject,
@@ -63,12 +60,11 @@ def deliver_email(
         attachments=attachments,
         in_reply_to=in_reply_to,
         references=references,
-    )
+    ) as sent:
+        return Delivery(archived=_archive(account, sent))
 
-    return Delivery(sent=sent, archived=_archive(account, sent.archived))
 
-
-def _archive(account, raw_message):
+def _archive(account, sent):
     """Append the sent copy to Sent and queue its resync. True when it landed."""
     from ..models import MailFolder
     from ..queries import special_folder
@@ -90,7 +86,7 @@ def _archive(account, raw_message):
     try:
         # The archived variant, not the outgoing one: it is the copy that
         # carries the Bcc header, so Sent records who actually got a copy.
-        append_to_sent(account, raw_message)
+        append_to_sent(account, sent.archived(), sent.message_id)
     except Exception as exc:
         logger.warning(
             "Failed to append sent message to IMAP for %s: %s",

@@ -4,6 +4,7 @@ These are what the compose dialog's endpoints and the assistant's tools both
 call, so the invariants that used to live inside a view are pinned here once.
 """
 
+import tempfile
 import uuid as uuid_mod
 from email import message_from_bytes
 from unittest.mock import patch
@@ -18,6 +19,16 @@ from workspace.mail.services.sending import deliver_email
 from workspace.mail.services.smtp import SentMessage
 
 User = get_user_model()
+
+BCC_HEADER = b"Bcc: hidden@example.com\r\n"
+OUTGOING = b"Message-ID: <hi@example.com>\r\nSubject: Hi\r\n\r\nhello\r\n"
+
+
+def sent_message():
+    """A SentMessage as send_email leaves it: the Sent copy in a temp file."""
+    file = tempfile.TemporaryFile()
+    file.write(BCC_HEADER + OUTGOING)
+    return SentMessage(file, "<hi@example.com>", outgoing_start=len(BCC_HEADER))
 
 
 class ComposedDraftTests(TestCase):
@@ -140,21 +151,28 @@ class DeliverEmailTests(TestCase):
             display_name="Sent",
             folder_type="sent",
         )
-        self.delivery = SentMessage(outgoing=b"out", archived=b"archived")
+        self.delivery = sent_message()
 
     def test_the_archived_variant_is_what_reaches_the_sent_folder(self):
+        appended = []
         with (
             patch(
                 "workspace.mail.services.smtp.send_email", return_value=self.delivery
             ),
-            patch("workspace.mail.services.imap_messages.append_to_sent") as append,
+            patch(
+                "workspace.mail.services.imap_messages.append_to_sent",
+                side_effect=lambda account, file, msg_id: appended.append(
+                    (file.read(), msg_id)
+                ),
+            ),
             patch.object(mail_tasks.sync_folder, "delay") as queue_sync,
         ):
             result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
 
         self.assertTrue(result.archived)
-        self.assertEqual(append.call_args.args[1], b"archived")
+        self.assertEqual(appended, [(BCC_HEADER + OUTGOING, "<hi@example.com>")])
         queue_sync.assert_called_once_with(str(self.sent.uuid))
+        self.assertTrue(self.delivery.file.closed)
 
     def test_the_sent_folder_is_resynced_outside_the_request(self):
         with (
@@ -199,8 +217,8 @@ class DeliverEmailTests(TestCase):
             result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
 
         self.assertFalse(result.archived)
-        self.assertEqual(result.sent, self.delivery)
         queue_sync.assert_not_called()
+        self.assertTrue(self.delivery.file.closed)
 
     def test_an_account_with_no_sent_folder_reports_an_unarchived_copy(self):
         # append_to_sent returns quietly when there is no Sent folder, so

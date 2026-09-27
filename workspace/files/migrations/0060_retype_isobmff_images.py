@@ -73,6 +73,11 @@ def retype_images(apps, schema_editor):
         MediaInfo.objects.using(db).filter(file_id=row.pk).delete()
         ThumbnailFailure.objects.using(db).filter(file_id=row.pk).delete()
 
+    # Detected as avif, but filed under the video group Magika gives it.
+    File.objects.using(db).filter(type="avif").exclude(category="image").update(
+        category="image"
+    )
+
 
 class Migration(migrations.Migration):
     dependencies = [

@@ -57,6 +57,14 @@ class RetypeIsoMediaImagesTests(TestCase):
             ("avif", "image", "image/avif"),
         )
 
+    def test_an_avif_in_the_video_group_moves_to_images(self):
+        avif = self._stored_as_mp4("photo.avif", avif_bytes())
+        File.objects.filter(pk=avif.pk).update(type="avif")
+
+        self._migrate()
+
+        self.assertEqual(File.objects.get(pk=avif.pk).category, "image")
+
     def test_a_video_named_heic_stays_a_video(self):
         video = self._stored_as_mp4("renamed.heic", clip_bytes("clip_hevc.mp4"))
 

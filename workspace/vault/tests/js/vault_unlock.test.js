@@ -125,6 +125,7 @@ test('an envelope this build cannot read gets its own message, not a password on
   component.secretText = 'TYPED';
   await component.unlock();
   assert.match(component.error, /newer version of the app/);
+  assert.match(component.error, /persists after reloading, contact your administrator/);
   assert.doesNotMatch(component.error, /master password/);
 });
 

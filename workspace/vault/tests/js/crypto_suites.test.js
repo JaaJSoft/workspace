@@ -176,9 +176,21 @@ test('a format 2 header byte is authenticated', async () => {
 test('the registered test aead opens beside AES-GCM under one keyring', async () => {
   const T = bundleWithTestAead();
   assert.deepEqual(Array.from(T.implementedIds('aead')), [0x01, 0xf0]);
+  // The reference sealed this one under 0xF0 with the same 32 bytes as KEY; a
+  // reader that opened it as AES-GCM regardless of the id would fail its tag.
+  const vectors = JSON.parse(fs.readFileSync(
+    path.join(REPO_ROOT, 'workspace', 'vault', 'tests', 'crypto_vectors.json'), 'utf8'));
+  const testAead = vectors.aead.find((vector) => vector.id === 'format-2-test-ctr-hmac');
+  assert.equal(T.toBase64Url(KEY), testAead.key_b64);
+  const [, uuid, field] = testAead.context_body.split('|');
   const ring = await T.importAeadKey(KEY);
+  const fromReference = T.fromBase64Url(testAead.expected_wire_b64);
+  assert.equal(fromReference[1], 0xf0);
+  assert.equal(new TextDecoder().decode(await T.open(ring, fromReference, T.AD.entryFieldAd(uuid, field))),
+    testAead.plaintext);
   const aesGcm = await T.seal(ring, new TextEncoder().encode('a'), T.AD.entryFieldAd(ENTRY, 'password'),
     { keyVersion: 1, kdfId: T.KDF_HKDF_SHA256 });
+  assert.equal(aesGcm[1], 0x01);
   assert.equal(new TextDecoder().decode(await T.open(ring, aesGcm, T.AD.entryFieldAd(ENTRY, 'password'))), 'a');
 });
 

@@ -231,14 +231,11 @@
       </div>
 
       <!-- Attachments preview -->
-      {% include "ui/partials/attachment_chips.html" with chips_class="px-4 flex flex-wrap gap-2" %}
+      {% include "ui/partials/attachment_chips.html" with chips_class="px-4 pb-3 flex flex-wrap gap-2" %}
 
       <!-- Error -->
-      <div x-show="compose.error" x-cloak class="px-4">
-        <div class="alert alert-error text-sm py-2">
-          <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
-          <span x-text="compose.error"></span>
-        </div>
+      <div x-show="compose.error" x-cloak class="px-4 pb-3">
+        <inline-alert type="error"><span x-text="compose.error"></span></inline-alert>
       </div>
 
       <!-- Footer -->

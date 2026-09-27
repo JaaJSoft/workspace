@@ -9,6 +9,7 @@ from django.test import TestCase, override_settings
 
 from workspace.common.redaction import REDACTED, SecretRedactingFilter
 from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
+from workspace.vault.tests.factories import sealed
 from workspace.vault.tests.reference import ad, primitives
 from workspace.vault.tests.reference.encoding import to_base64url
 
@@ -18,6 +19,10 @@ INIT_URL = "/api/v1/vault/account/init"
 ENVELOPE_URL = "/api/v1/vault/account/envelope"
 FINALIZE_URL = "/api/v1/vault/account/finalize"
 ROTATE_URL = "/api/v1/vault/account/rotate"
+
+
+NEW_WKEX = sealed("new-wkex")
+NEW_WSIG = sealed("new-wsig")
 
 
 def build_identity_payload(account_uuid):
@@ -32,11 +37,11 @@ def build_identity_payload(account_uuid):
     )
     return {
         "kdf_algo": "argon2id",
-        "kdf_params": {"m": 65536, "t": 3, "p": 2},
+        "kdf_params": {"v": "1.3", "m": 65536, "t": 3, "p": 2},
         "kex_public": kex_public,
         "sig_public": sig_public,
-        "wrapped_kex_priv": "WKEXAAAABBBBCCCC",
-        "wrapped_sig_priv": "WSIGAAAABBBBCCCC",
+        "wrapped_kex_priv": sealed("wkex"),
+        "wrapped_sig_priv": sealed("wsig"),
         "sig_over_kex_pub": to_base64url(
             primitives.sign_bytes(sig, ad.kex_pub_payload(account_uuid, kex_public))
         ),
@@ -417,9 +422,10 @@ class AccountRotateTests(TestCase):
             hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
         )
         self.body = {
-            "kdf_params": {"m": 262144, "t": 4, "p": 2},
-            "wrapped_kex_priv": "NEW-WKEX",
-            "wrapped_sig_priv": "NEW-WSIG",
+            "kdf_algo": "argon2id",
+            "kdf_params": {"v": "1.3", "m": 262144, "t": 4, "p": 2},
+            "wrapped_kex_priv": NEW_WKEX,
+            "wrapped_sig_priv": NEW_WSIG,
         }
 
     def tearDown(self):
@@ -435,9 +441,32 @@ class AccountRotateTests(TestCase):
     def test_rewrites_the_envelope(self):
         self.assertEqual(self._post().status_code, 200)
         self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, "NEW-WKEX")
-        self.assertEqual(self.identity.wrapped_sig_priv, "NEW-WSIG")
-        self.assertEqual(self.identity.kdf_params, {"m": 262144, "t": 4, "p": 2})
+        self.assertEqual(self.identity.wrapped_kex_priv, NEW_WKEX)
+        self.assertEqual(self.identity.wrapped_sig_priv, NEW_WSIG)
+        self.assertEqual(
+            self.identity.kdf_params, {"v": "1.3", "m": 262144, "t": 4, "p": 2}
+        )
+
+    def test_writes_the_kdf_algo_alongside_its_params(self):
+        """The two describe one derivation: rewriting the parameters under the
+        algorithm the row happened to hold would pair them with the wrong
+        function the day a second one is declared."""
+        AccountIdentity.objects.filter(pk=self.identity.pk).update(kdf_algo="legacy")
+        self.assertEqual(self._post().status_code, 200)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.kdf_algo, "argon2id")
+
+    def test_refuses_a_memory_cost_above_the_manifest_bound(self):
+        body = {**self.body, "kdf_params": {**self.body["kdf_params"], "m": 4 << 20}}
+        self.assertEqual(self._post(body).status_code, 400)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
+
+    def test_refuses_a_wrapped_key_whose_header_names_an_unknown_format(self):
+        body = {**self.body, "wrapped_kex_priv": to_base64url(bytes([9]) + bytes(40))}
+        self.assertEqual(self._post(body).status_code, 400)
+        self.identity.refresh_from_db()
+        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
 
     def test_updates_the_row_in_place_rather_than_recreating_it(self):
         """The identity UUID is what every associated data string of this

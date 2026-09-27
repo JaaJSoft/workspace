@@ -22,6 +22,16 @@ SIG_ALG_ED25519 = 0x01
 HPKE_SUITE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 
 
+def sealed(label: str) -> str:
+    """A format-2, AES-256-GCM value in the wire format whose body is *label*.
+
+    The server checks a ciphertext's header on write and can never read its
+    body, so this is all a write needs - and two labels give two values.
+    """
+    header = bytes([2, 1, 1, 0, 1, 12])
+    return to_base64url(header + bytes(12) + label.encode().ljust(16, b"\0"))
+
+
 def make_account(username="owner", password="pw"):
     """A user with an active vault identity, and the private key behind it."""
     user = User.objects.create_user(username=username, password=password)
@@ -47,7 +57,7 @@ def make_vault(owner, **overrides):
     """A stored vault. Its own signature is not re-verified on read, so the
     bytes only have to be non-empty."""
     fields = {
-        "encrypted_name": "AQEBAAABc2VhbGVk",
+        "encrypted_name": sealed("sealed"),
         "metadata_sig": "AXNpZ25hdHVyZQ",
     }
     fields.update(overrides)

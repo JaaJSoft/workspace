@@ -12,9 +12,10 @@ from django.test import TestCase
 
 from workspace.vault.models import EntryType, VaultEntry, VaultTag
 from workspace.vault.services.metadata import tag_metadata_payload
-from workspace.vault.tests.factories import make_account, make_vault, sign
+from workspace.vault.tests.factories import make_account, make_vault, sealed, sign
 
 LIST_URL = "/api/v1/vault/tags"
+NAME = sealed("AQID")
 
 
 class TagApiTests(TestCase):
@@ -34,13 +35,13 @@ class TagApiTests(TestCase):
         )
 
         self.tag = VaultTag.objects.create(
-            vault=self.vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         self.original_sig = "AXNpZ25hdHVyZQ"
         self.entry = VaultEntry.objects.create(
             vault=self.vault,
             type=EntryType.LOGIN,
-            encrypted_name="AQID",
+            encrypted_name=sealed("AQID"),
             metadata_sig=self.original_sig,
         )
 
@@ -57,7 +58,7 @@ class TagApiTests(TestCase):
     def signed_tag(
         self,
         *,
-        encrypted_name="AQID",
+        encrypted_name=NAME,
         color="primary",
         vault=None,
         signer=None,

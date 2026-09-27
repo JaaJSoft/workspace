@@ -10,7 +10,8 @@ from ``workspace.vault.tests.reference``. That package is the parity oracle for
 the browser bundle; a server importing it would stop being an independent
 implementation, and the frozen vectors would prove nothing about it. The
 duplication is guarded by ``FrozenVectorTests``, which replays the committed
-vector through this module.
+vector through this module. The lengths come from the suite manifest
+(``suites.py``), which is data - which ids exist - not an implementation.
 """
 
 import base64
@@ -18,14 +19,13 @@ import base64
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
+from . import suites
+
 _URLSAFE_TO_STANDARD = str.maketrans("-_", "+/")
 
 PUBKEY_ALG_X25519 = 0x01
 PUBKEY_ALG_ED25519 = 0x02
 SIG_ALG_ED25519 = 0x01
-
-_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32, PUBKEY_ALG_ED25519: 32}
-_ED25519_SIGNATURE_LENGTH = 64
 
 
 class AttestationError(ValueError):
@@ -76,10 +76,34 @@ def decode_public_key(stored: bytes, expected_alg: int) -> bytes:
         raise AttestationError("public key is empty")
     if stored[0] != expected_alg:
         raise AttestationError(f"public key algorithm {stored[0]:#04x} is not expected")
-    length = _PUBKEY_LENGTHS[expected_alg]
-    if len(stored) != 1 + length:
+    length = suites.pubkey_length(expected_alg)
+    if length is None or len(stored) != 1 + length:
         raise AttestationError("public key has the wrong length")
     return stored[1:]
+
+
+def _verify_ed25519(public_raw: bytes, signature: bytes, message: bytes) -> None:
+    Ed25519PublicKey.from_public_bytes(public_raw).verify(signature, message)
+
+
+# Keyed by the signature's one-byte prefix. A second algorithm lands as an entry
+# here plus a manifest entry; the prefix, never a server default, picks it.
+_SIGNATURE_VERIFIERS = {SIG_ALG_ED25519: _verify_ed25519}
+
+
+def verify_signature(public_raw: bytes, signature: bytes, message: bytes) -> None:
+    """Raise :class:`AttestationError` unless *signature* - prefix byte, then
+    the raw signature - verifies *message* under *public_raw*."""
+    length = suites.signature_length(signature[0]) if signature else None
+    verifier = _SIGNATURE_VERIFIERS.get(signature[0]) if signature else None
+    if length is None or verifier is None:
+        raise AttestationError("unsupported signature algorithm")
+    if len(signature) != 1 + length:
+        raise AttestationError("signature has the wrong length")
+    try:
+        verifier(public_raw, signature[1:], message)
+    except InvalidSignature as exc:
+        raise AttestationError("signature does not verify") from exc
 
 
 def kex_pub_payload(account_uuid, kex_public_b64: str) -> bytes:
@@ -108,15 +132,8 @@ def verify_kex_pub_attestation(
         decode_base64url(sig_public_b64), PUBKEY_ALG_ED25519
     )
 
-    signature = decode_base64url(sig_over_kex_pub_b64)
-    if signature[0] != SIG_ALG_ED25519:
-        raise AttestationError("unsupported signature algorithm")
-    if len(signature) != 1 + _ED25519_SIGNATURE_LENGTH:
-        raise AttestationError("signature has the wrong length")
-
-    try:
-        Ed25519PublicKey.from_public_bytes(sig_public_raw).verify(
-            signature[1:], kex_pub_payload(account_uuid, kex_public_b64)
-        )
-    except InvalidSignature as exc:
-        raise AttestationError("attestation does not verify") from exc
+    verify_signature(
+        sig_public_raw,
+        decode_base64url(sig_over_kex_pub_b64),
+        kex_pub_payload(account_uuid, kex_public_b64),
+    )

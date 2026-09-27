@@ -6,13 +6,27 @@ from rest_framework import serializers
 from workspace.vault.serializers import (
     AccountFinalizeSerializer,
     AccountRotateSerializer,
+    VaultCreateSerializer,
+    VaultEntryWriteSerializer,
+    VaultFolderWriteSerializer,
     VaultTagWriteSerializer,
     VaultUpdateSerializer,
     validate_base64url,
 )
+from workspace.vault.tests.reference.encoding import to_base64url
 
-VALID_PARAMS = {"m": 65536, "t": 3, "p": 2}
+VALID_PARAMS = {"v": "1.3", "m": 65536, "t": 3, "p": 2}
 OPAQUE = "AAAABBBBCCCCDDDD"
+
+
+def ciphertext(format_version=2, aead_id=1, iv_len=12):
+    """A value in the wire format: a six-byte header, the nonce, then 17 bytes
+    standing in for the sealed body and its tag."""
+    header = bytes([format_version, aead_id, 1, 0, 1, iv_len])
+    return to_base64url(header + bytes(iv_len) + bytes(17))
+
+
+CIPHERTEXT = ciphertext()
 
 
 def finalize_payload(**overrides):
@@ -21,8 +35,8 @@ def finalize_payload(**overrides):
         "kdf_params": dict(VALID_PARAMS),
         "kex_public": OPAQUE,
         "sig_public": OPAQUE,
-        "wrapped_kex_priv": OPAQUE,
-        "wrapped_sig_priv": OPAQUE,
+        "wrapped_kex_priv": CIPHERTEXT,
+        "wrapped_sig_priv": CIPHERTEXT,
         "sig_over_kex_pub": OPAQUE,
     }
     payload.update(overrides)
@@ -67,12 +81,13 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
 
     def test_refuses_kdf_params_that_are_not_positive_integers(self):
         for params in (
-            {"m": 0, "t": 3, "p": 2},
-            {"m": 65536, "t": -1, "p": 2},
-            {"m": 65536, "t": 3},
-            {"m": "65536", "t": 3, "p": 2},
-            {"m": 65536.5, "t": 3, "p": 2},
-            {"m": True, "t": 3, "p": 2},
+            {"v": "1.3", "m": 0, "t": 3, "p": 2},
+            {"v": "1.3", "m": 65536, "t": -1, "p": 2},
+            {"v": "1.3", "m": 65536, "t": 3},
+            {"v": "1.3", "m": "65536", "t": 3, "p": 2},
+            {"v": "1.3", "m": 65536.5, "t": 3, "p": 2},
+            {"v": "1.3", "m": True, "t": 3, "p": 2},
+            {"m": 65536, "t": 3, "p": 2},
             [],
             "argon2id",
         ):
@@ -84,15 +99,38 @@ class AccountFinalizeSerializerTests(SimpleTestCase):
 
     def test_accepts_kdf_params_above_todays_values(self):
         """Cost parameters must be able to rise without a data migration, so
-        the server pins their shape and never their magnitude."""
+        the server bounds them by the manifest rather than pinning today's."""
         serializer = AccountFinalizeSerializer(
-            data=finalize_payload(kdf_params={"m": 262144, "t": 5, "p": 4})
+            data=finalize_payload(kdf_params={"v": "1.3", "m": 262144, "t": 5, "p": 4})
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_refuses_kdf_params_outside_the_manifest_bounds(self):
+        """A memory cost no browser can allocate is an account that never
+        unlocks again."""
+        serializer = AccountFinalizeSerializer(
+            data=finalize_payload(kdf_params={**VALID_PARAMS, "m": 4 * 1024 * 1024})
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("kdf_params", serializer.errors)
 
     def test_refuses_an_unknown_kdf_algo(self):
         serializer = AccountFinalizeSerializer(data=finalize_payload(kdf_algo="scrypt"))
         self.assertFalse(serializer.is_valid())
+
+    def test_refuses_a_wrapped_key_whose_header_names_an_unknown_aead(self):
+        serializer = AccountFinalizeSerializer(
+            data=finalize_payload(wrapped_kex_priv=ciphertext(aead_id=7))
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("wrapped_kex_priv", serializer.errors)
+
+    def test_accepts_a_format_1_wrapped_key(self):
+        """A tab opened before the deploy still writes format 1."""
+        serializer = AccountFinalizeSerializer(
+            data=finalize_payload(wrapped_kex_priv=ciphertext(format_version=1))
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
 
 class ValidateBase64urlTests(SimpleTestCase):
@@ -111,9 +149,10 @@ class AccountRotateSerializerTests(SimpleTestCase):
     def test_accepts_the_three_rotatable_fields(self):
         serializer = AccountRotateSerializer(
             data={
+                "kdf_algo": "argon2id",
                 "kdf_params": dict(VALID_PARAMS),
-                "wrapped_kex_priv": OPAQUE,
-                "wrapped_sig_priv": OPAQUE,
+                "wrapped_kex_priv": CIPHERTEXT,
+                "wrapped_sig_priv": CIPHERTEXT,
             }
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -124,14 +163,15 @@ class AccountRotateSerializerTests(SimpleTestCase):
         happens to carry."""
         declared = set(AccountRotateSerializer().fields)
         self.assertEqual(
-            declared, {"kdf_params", "wrapped_kex_priv", "wrapped_sig_priv"}
+            declared,
+            {"kdf_algo", "kdf_params", "wrapped_kex_priv", "wrapped_sig_priv"},
         )
 
 
 class VaultUpdateSerializerTests(SimpleTestCase):
     def _payload(self, **overrides):
         payload = {
-            "encrypted_name": OPAQUE,
+            "encrypted_name": CIPHERTEXT,
             "encrypted_description": "",
             "icon": "lock",
             "color": "primary",
@@ -178,7 +218,7 @@ class TagColourTests(SimpleTestCase):
         return {
             "uuid": str(uuid.uuid4()),
             "vault": str(uuid.uuid4()),
-            "encrypted_name": OPAQUE,
+            "encrypted_name": CIPHERTEXT,
             "color": colour,
             "metadata_sig": OPAQUE,
         }
@@ -204,8 +244,8 @@ class TagColourTests(SimpleTestCase):
         works in CSS classes, so a hex there would render as nothing."""
         serializer = VaultUpdateSerializer(
             data={
-                "encrypted_name": OPAQUE,
-                "encrypted_description": OPAQUE,
+                "encrypted_name": CIPHERTEXT,
+                "encrypted_description": CIPHERTEXT,
                 "icon": "lock",
                 "color": "#22c55e",
                 "metadata_sig": OPAQUE,
@@ -213,3 +253,127 @@ class TagColourTests(SimpleTestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("color", serializer.errors)
+
+
+class CiphertextHeaderTests(SimpleTestCase):
+    """Every field carrying a wire-format ciphertext refuses a header no
+    client will ever read; the headerless values stay opaque."""
+
+    UNKNOWN_FORMAT = ciphertext(format_version=9)
+    HPKE_SUITE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0, "format": 2}
+
+    def _vault_create(self, **overrides):
+        return {
+            "uuid": str(uuid.uuid4()),
+            "encrypted_name": CIPHERTEXT,
+            "encrypted_description": "",
+            "icon": "lock",
+            "color": "primary",
+            "metadata_sig": OPAQUE,
+            "wrapped_key": OPAQUE,
+            "hpke_suite": dict(self.HPKE_SUITE),
+            **overrides,
+        }
+
+    def _vault_update(self, **overrides):
+        return {
+            "encrypted_name": CIPHERTEXT,
+            "encrypted_description": CIPHERTEXT,
+            "icon": "lock",
+            "color": "primary",
+            "is_favorite": False,
+            "metadata_sig": OPAQUE,
+            **overrides,
+        }
+
+    def _entry(self, **overrides):
+        return {
+            "uuid": str(uuid.uuid4()),
+            "vault": str(uuid.uuid4()),
+            "type": "login",
+            "is_favorite": False,
+            "encrypted_name": CIPHERTEXT,
+            "encrypted_notes": "",
+            "fields": {"password": CIPHERTEXT},
+            "metadata_sig": OPAQUE,
+            **overrides,
+        }
+
+    def _folder(self, **overrides):
+        return {
+            "uuid": str(uuid.uuid4()),
+            "vault": str(uuid.uuid4()),
+            "encrypted_name": CIPHERTEXT,
+            "position": 0,
+            "metadata_sig": OPAQUE,
+            **overrides,
+        }
+
+    def _tag(self, **overrides):
+        return {
+            "uuid": str(uuid.uuid4()),
+            "vault": str(uuid.uuid4()),
+            "encrypted_name": CIPHERTEXT,
+            "color": "neutral",
+            "metadata_sig": OPAQUE,
+            **overrides,
+        }
+
+    def cases(self):
+        return (
+            (VaultCreateSerializer, self._vault_create, "encrypted_name"),
+            (VaultCreateSerializer, self._vault_create, "encrypted_description"),
+            (VaultUpdateSerializer, self._vault_update, "encrypted_name"),
+            (VaultUpdateSerializer, self._vault_update, "encrypted_description"),
+            (VaultEntryWriteSerializer, self._entry, "encrypted_name"),
+            (VaultEntryWriteSerializer, self._entry, "encrypted_notes"),
+            (VaultFolderWriteSerializer, self._folder, "encrypted_name"),
+            (VaultTagWriteSerializer, self._tag, "encrypted_name"),
+        )
+
+    def test_the_well_formed_payloads_pass(self):
+        for serializer_class, build, _ in self.cases():
+            with self.subTest(serializer=serializer_class.__name__):
+                serializer = serializer_class(data=build())
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_an_unknown_format_is_refused_on_every_ciphertext_field(self):
+        for serializer_class, build, field in self.cases():
+            with self.subTest(serializer=serializer_class.__name__, field=field):
+                serializer = serializer_class(
+                    data=build(**{field: self.UNKNOWN_FORMAT})
+                )
+                self.assertFalse(serializer.is_valid())
+                self.assertIn(field, serializer.errors)
+
+    def test_an_entry_field_value_with_an_unknown_format_is_refused(self):
+        serializer = VaultEntryWriteSerializer(
+            data=self._entry(fields={"password": self.UNKNOWN_FORMAT})
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("fields", serializer.errors)
+
+    def test_the_hpke_wrapped_key_is_not_header_checked(self):
+        """An HPKE wrap carries no wire header: its first bytes are the
+        encapsulated key's, and reading them as a format would refuse most
+        wraps."""
+        serializer = VaultCreateSerializer(
+            data=self._vault_create(wrapped_key=self.UNKNOWN_FORMAT)
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_both_hpke_suite_formats_are_accepted(self):
+        format_1 = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        for suite in (format_1, {**format_1, "format": 2}):
+            with self.subTest(suite=suite):
+                serializer = VaultCreateSerializer(
+                    data=self._vault_create(hpke_suite=suite)
+                )
+                self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_an_explicit_format_1_hpke_suite_is_refused(self):
+        serializer = VaultCreateSerializer(
+            data=self._vault_create(hpke_suite={**self.HPKE_SUITE, "format": 1})
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("hpke_suite", serializer.errors)

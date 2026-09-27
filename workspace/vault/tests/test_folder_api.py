@@ -11,9 +11,10 @@ from django.test import TestCase
 
 from workspace.vault.models import VaultFolder
 from workspace.vault.services.metadata import folder_metadata_payload
-from workspace.vault.tests.factories import make_account, make_vault, sign
+from workspace.vault.tests.factories import make_account, make_vault, sealed, sign
 
 LIST_URL = "/api/v1/vault/folders"
+NAME = sealed("AQID")
 
 
 class FolderApiTests(TestCase):
@@ -47,7 +48,7 @@ class FolderApiTests(TestCase):
     def signed_folder(
         self,
         *,
-        encrypted_name="AQID",
+        encrypted_name=NAME,
         position=0,
         parent=None,
         vault=None,
@@ -74,7 +75,7 @@ class FolderApiTests(TestCase):
 
     def test_listing_returns_the_folders_of_a_vault_the_caller_can_open(self):
         folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         response = self.client.get(f"{LIST_URL}?vault={self.vault.uuid}")
         self.assertEqual(response.status_code, 200)
@@ -119,7 +120,7 @@ class FolderApiTests(TestCase):
 
     def test_a_folder_signed_over_another_name_is_refused(self):
         body = self.signed_folder()
-        body["encrypted_name"] = "AQIE"
+        body["encrypted_name"] = sealed("AQIE")
         self.assertEqual(self._create(body).status_code, 400)
 
     def test_an_unsigned_folder_is_refused(self):
@@ -163,27 +164,29 @@ class FolderApiTests(TestCase):
     def test_renaming_a_folder_rewrites_its_signature(self):
         created = self._create(self.signed_folder()).json()
         body = self.signed_folder(
-            folder_uuid=created["uuid"], encrypted_name="AQIE", position=3
+            folder_uuid=created["uuid"], encrypted_name=sealed("AQIE"), position=3
         )
         response = self.client.patch(
             f"{LIST_URL}/{created['uuid']}", body, "application/json"
         )
         self.assertEqual(response.status_code, 200)
         folder = VaultFolder.objects.get(uuid=created["uuid"])
-        self.assertEqual(folder.encrypted_name, "AQIE")
+        self.assertEqual(folder.encrypted_name, sealed("AQIE"))
         self.assertEqual(folder.position, 3)
         self.assertEqual(folder.metadata_sig, body["metadata_sig"])
 
     def test_renaming_with_a_stale_signature_is_refused(self):
         created = self._create(self.signed_folder()).json()
-        body = self.signed_folder(folder_uuid=created["uuid"], encrypted_name="AQIE")
-        body["encrypted_name"] = "AQIF"
+        body = self.signed_folder(
+            folder_uuid=created["uuid"], encrypted_name=sealed("AQIE")
+        )
+        body["encrypted_name"] = sealed("AQIF")
         response = self.client.patch(
             f"{LIST_URL}/{created['uuid']}", body, "application/json"
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
-            VaultFolder.objects.get(uuid=created["uuid"]).encrypted_name, "AQID"
+            VaultFolder.objects.get(uuid=created["uuid"]).encrypted_name, sealed("AQID")
         )
 
     def test_renaming_a_folder_in_a_vault_the_caller_cannot_open_answers_404(self):

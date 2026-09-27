@@ -24,10 +24,12 @@ from workspace.vault.tests.factories import (
     make_account,
     make_key_wrap,
     make_vault,
+    sealed,
     sign,
 )
 
 LIST_URL = "/api/v1/vault/entries"
+NAME = sealed("AQID")
 
 
 class EntryApiTests(TestCase):
@@ -36,15 +38,15 @@ class EntryApiTests(TestCase):
         self.client.force_login(self.user)
         self.vault = make_vault(self.user)
         self.folder = VaultFolder.objects.create(
-            vault=self.vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         self.tag = VaultTag.objects.create(
-            vault=self.vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         self.entry = VaultEntry.objects.create(
             vault=self.vault,
             type=EntryType.LOGIN,
-            encrypted_name="AQID",
+            encrypted_name=sealed("AQID"),
             metadata_sig="AQ",
         )
 
@@ -53,10 +55,10 @@ class EntryApiTests(TestCase):
         )
         self.other_vault = make_vault(self.other_user)
         self.other_vault_folder = VaultFolder.objects.create(
-            vault=self.other_vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.other_vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         self.other_vault_tag = VaultTag.objects.create(
-            vault=self.other_vault, encrypted_name="AQID", metadata_sig="AQ"
+            vault=self.other_vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
         )
         self.other_entry_name = "AQEBAAEFb3RoZXI"
         self.other_entry = VaultEntry.objects.create(
@@ -76,7 +78,7 @@ class EntryApiTests(TestCase):
         folder=None,
         tags=(),
         fields=None,
-        encrypted_name="AQID",
+        encrypted_name=NAME,
         encrypted_notes="",
         is_favorite=False,
         entry_type=EntryType.LOGIN,
@@ -86,7 +88,7 @@ class EntryApiTests(TestCase):
         entry_version=1,
     ):
         vault = vault or self.vault
-        fields = {"password": "Ag"} if fields is None else fields
+        fields = {"password": sealed("Ag")} if fields is None else fields
         body = {
             "uuid": str(entry_uuid or uuid.uuid4()),
             "vault": str(vault.uuid),
@@ -167,11 +169,11 @@ class EntryApiTests(TestCase):
     # --- the field catalogue ----------------------------------------------
 
     def test_a_field_outside_the_catalogue_is_refused(self):
-        body = self.signed_entry(fields={"pin": "Ag"})
+        body = self.signed_entry(fields={"pin": sealed("Ag")})
         self.assertEqual(self._create(body).status_code, 400)
 
     def test_a_prefixed_field_is_accepted(self):
-        body = self.signed_entry(fields={"custom:pin": "Ag"})
+        body = self.signed_entry(fields={"custom:pin": sealed("Ag")})
         response = self._create(body)
         self.assertEqual(response.status_code, 201)
         self.assertEqual(
@@ -181,14 +183,16 @@ class EntryApiTests(TestCase):
 
     def test_a_field_named_like_an_entry_column_is_refused(self):
         for field_id in ("name", "notes"):
-            body = self.signed_entry(fields={field_id: "Ag"})
+            body = self.signed_entry(fields={field_id: sealed("Ag")})
             self.assertEqual(self._create(body).status_code, 400, field_id)
 
     # --- the signature over the tag and field sets ------------------------
 
     def test_a_signed_entry_is_created_with_its_fields_and_tags(self):
         body = self.signed_entry(
-            folder=self.folder, tags=[self.tag], fields={"password": "Ag", "totp": "Aw"}
+            folder=self.folder,
+            tags=[self.tag],
+            fields={"password": sealed("Ag"), "totp": sealed("Aw")},
         )
         response = self._create(body)
         self.assertEqual(response.status_code, 201)
@@ -197,20 +201,22 @@ class EntryApiTests(TestCase):
         self.assertEqual(list(entry.tags.all()), [self.tag])
         self.assertEqual(
             {field.field_id: field.encrypted_value for field in entry.fields.all()},
-            {"password": "Ag", "totp": "Aw"},
+            {"password": sealed("Ag"), "totp": sealed("Aw")},
         )
         self.assertEqual(entry.metadata_sig, body["metadata_sig"])
 
     def test_an_entry_signed_over_a_shorter_field_set_is_refused(self):
-        body = self.signed_entry(fields={"password": "Ag", "totp": "Aw"})
+        body = self.signed_entry(
+            fields={"password": sealed("Ag"), "totp": sealed("Aw")}
+        )
         del body["fields"]["totp"]
         response = self._create(body)
         self.assertEqual(response.status_code, 400)
         self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
 
     def test_a_replayed_field_ciphertext_is_refused(self):
-        body = self.signed_entry(fields={"password": "Ag"})
-        body["fields"]["password"] = "Bg"
+        body = self.signed_entry(fields={"password": sealed("Ag")})
+        body["fields"]["password"] = sealed("Bg")
         self.assertEqual(self._create(body).status_code, 400)
 
     def test_an_entry_signed_over_a_different_tag_set_is_refused(self):
@@ -236,9 +242,11 @@ class EntryApiTests(TestCase):
 
     def test_a_put_replaces_the_field_set(self):
         created = self._create(
-            self.signed_entry(fields={"password": "Ag", "totp": "Aw"})
+            self.signed_entry(fields={"password": sealed("Ag"), "totp": sealed("Aw")})
         ).json()
-        body = self.signed_entry(entry_uuid=created["uuid"], fields={"password": "Bg"})
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], fields={"password": sealed("Bg")}
+        )
         response = self.client.put(
             f"{LIST_URL}/{created['uuid']}", body, "application/json"
         )
@@ -246,7 +254,7 @@ class EntryApiTests(TestCase):
         entry = VaultEntry.objects.get(uuid=created["uuid"])
         self.assertEqual(
             {field.field_id: field.encrypted_value for field in entry.fields.all()},
-            {"password": "Bg"},
+            {"password": sealed("Bg")},
         )
 
     def test_a_put_whose_body_names_another_entry_is_refused(self):
@@ -344,7 +352,7 @@ class EntryApiTests(TestCase):
     def test_an_over_long_custom_field_id_is_refused_not_stored(self):
         """It would outgrow EntryField.field_id: silently truncated by SQLite,
         a DataError on PostgreSQL, which is where this runs in production."""
-        body = self.signed_entry(fields={f"custom:{'x' * 200}": "Ag"})
+        body = self.signed_entry(fields={f"custom:{'x' * 200}": sealed("Ag")})
         self.assertEqual(self._create(body).status_code, 400)
         self.assertFalse(VaultEntry.objects.filter(uuid=body["uuid"]).exists())
 

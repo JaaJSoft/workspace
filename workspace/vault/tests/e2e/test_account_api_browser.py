@@ -82,7 +82,12 @@ async () => {
   const finalized = await post('/api/v1/vault/account/finalize', body);
   const envelope = await fetch('/api/v1/vault/account/envelope');
 
-  const tampered = { ...body, sig_over_kex_pub: V.toBase64Url(V.randomBytes(65)) };
+  // The current signature id, then 64 bytes nobody signed: a forgery under
+  // an algorithm the server knows, never an id it has not heard of.
+  const forged = new Uint8Array(65);
+  forged[0] = V.CURRENT_SUITE.signatureAlg;
+  forged.set(V.randomBytes(64), 1);
+  const tampered = { ...body, sig_over_kex_pub: V.toBase64Url(forged) };
 
   return {
     initStatus: started.status,

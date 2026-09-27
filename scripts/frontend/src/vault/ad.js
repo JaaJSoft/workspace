@@ -29,11 +29,19 @@ class AdContext {
 
 // A context is spelled for the header's format; raw bytes are taken as the
 // body verbatim, with the header still in front under a format that wants it.
+// Anything else is refused: a string would be rejected by WebCrypto under
+// format 1 but coerced to garbage bytes by Uint8Array.set under format 2.
+// ArrayBuffer.isView rather than instanceof, which fails across realms.
 export function associatedData(context, header) {
   const format = declaredEntry('format', header[0]);
-  const body = context instanceof AdContext
-    ? ascii(format.ad_prefix + context.body)
-    : context;
+  let body;
+  if (context instanceof AdContext) {
+    body = ascii(format.ad_prefix + context.body);
+  } else if (ArrayBuffer.isView(context) && context.BYTES_PER_ELEMENT === 1) {
+    body = context;
+  } else {
+    throw new TypeError('associated data must be a context or bytes');
+  }
   if (!format.header_in_ad) return body;
   const out = new Uint8Array(header.length + body.length);
   out.set(header, 0);

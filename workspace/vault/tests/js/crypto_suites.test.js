@@ -198,6 +198,14 @@ const ACCOUNT = '01890a5d-ac96-774b-bcce-b302099a8058';
 const VAULT = '01890a5d-ac96-774b-bcce-b302099a8059';
 const FORMAT_1_HPKE = { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 };
 
+test('associated data is a context or bytes, under either format', () => {
+  for (const format of [1, 2]) {
+    const header = Uint8Array.from([format, 1, 1, 0, 1, 12]);
+    assert.throws(() => V.associatedData('entry-field|x|password', header), { name: 'TypeError' }, `format ${format}`);
+    assert.equal(V.associatedData(Uint8Array.from([7]), header).at(-1), 7);
+  }
+});
+
 test('vaultKeyInfo names the suite in format 2 only', () => {
   const dec = (b) => new TextDecoder().decode(b);
   assert.equal(dec(V.AD.vaultKeyInfo(VAULT, ACCOUNT, FORMAT_1_HPKE)), `v1|vault-key|${VAULT}|${ACCOUNT}`);

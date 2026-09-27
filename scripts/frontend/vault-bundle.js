@@ -13,17 +13,16 @@ import {
 } from './src/vault/suites.js';
 import {
   KDF_DIRECT, KDF_HKDF_SHA256,
-  PUBKEY_ALG_X25519, PUBKEY_ALG_ED25519,
   encodeCiphertext, decodeCiphertext,
   encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
 import {
-  ARGON2_PARAMS, deriveAmk, hkdf, ARCHIVE_ARGON2_BOUNDS, assertArchiveParams, deriveArchiveKey,
+  assertAccountKdf, deriveAmk, hkdf, assertArchiveParams, deriveArchiveKey,
 } from './src/vault/kdf.js';
 import { seal, open, importAeadKey, registerAead } from './src/vault/aead.js';
-import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
+import { hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
 import { canonicalCbor, cborSizeBound, decodeCbor, encodeCbor } from './src/vault/cbor.js';
-import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
+import { sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
 import { crockfordEncode, crockfordDecode } from './src/vault/crockford.js';
 import {
   base32Decode, base32Encode, parseOtpauth, normalizeTotpInput, importTotpKey, totpCode,
@@ -54,23 +53,19 @@ window.vaultCrypto = {
   implementedIds,
   KDF_DIRECT,
   KDF_HKDF_SHA256,
-  PUBKEY_ALG_X25519,
-  PUBKEY_ALG_ED25519,
   encodeCiphertext,
   decodeCiphertext,
   encodePublicKey,
   decodePublicKey,
-  ARGON2_PARAMS,
+  assertAccountKdf,
   deriveAmk,
   hkdf,
-  ARCHIVE_ARGON2_BOUNDS,
   assertArchiveParams,
   deriveArchiveKey,
   seal,
   open,
   importAeadKey,
   registerAead,
-  HPKE_SUITE_V1,
   hpkeSeal,
   hpkeOpen,
   hpkeRecipient,
@@ -78,7 +73,6 @@ window.vaultCrypto = {
   cborSizeBound,
   decodeCbor,
   encodeCbor,
-  SIG_ALG_ED25519,
   sign,
   verify,
   signBytes,

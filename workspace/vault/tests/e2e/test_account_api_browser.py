@@ -48,10 +48,10 @@ async () => {
   const seed = pkcs8.slice(-32);
 
   const kexPublic = V.toBase64Url(
-    V.encodePublicKey(await rawPublic(kexPair.publicKey), V.PUBKEY_ALG_X25519)
+    V.encodePublicKey(await rawPublic(kexPair.publicKey), V.CURRENT_SUITE.kexPublicKeyAlg)
   );
   const sigPublic = V.toBase64Url(
-    V.encodePublicKey(await rawPublic(sigPair.publicKey), V.PUBKEY_ALG_ED25519)
+    V.encodePublicKey(await rawPublic(sigPair.publicKey), V.CURRENT_SUITE.sigPublicKeyAlg)
   );
   const attestation = V.toBase64Url(
     await V.signBytes(seed, V.AD.kexPubPayload(accountUuid, kexPublic))

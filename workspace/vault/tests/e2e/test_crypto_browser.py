@@ -81,7 +81,8 @@ async (vectors) => {
     const opened = await V.hpkeOpen(
       V.fromBase64Url(v.recipient_sk_b64),
       utf8(v.info),
-      V.fromBase64Url(v.expected_sealed_b64)
+      V.fromBase64Url(v.expected_sealed_b64),
+      v.hpke_suite
     );
     if (b64(opened) !== v.plaintext_b64) failures.push('hpke/' + v.id);
   }
@@ -311,6 +312,7 @@ class CryptoBundleBrowserTests(EngineChecks, PlaywrightTestCase):
                 password: 'Tr0ub4dor&3',
                 secretKey: V.randomBytes(32),
                 salt: V.randomBytes(32),
+                params: V.CURRENT_SUITE.kdf.params,
               });
               return performance.now() - started;
             }

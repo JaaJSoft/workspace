@@ -202,6 +202,28 @@ class HpkeDispatchTests(SimpleTestCase):
             with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
                 primitives.hpke_suite_for(stored)
 
+    def test_a_suite_id_spelled_as_a_bool_or_a_string_is_unsupported(self):
+        # True == 1 and 2.0 == 2 in Python: a dict comparison alone lets them pass.
+        for stored in (
+            {**FORMAT_2_HPKE, "kdf_id": True},
+            {**FORMAT_1_HPKE, "kdf_id": True},
+            {**FORMAT_2_HPKE, "kem_id": "32"},
+            {**FORMAT_2_HPKE, "aead_id": 2.0},
+            {**FORMAT_2_HPKE, "format": True},
+        ):
+            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+                primitives.hpke_suite_for(stored)
+
+    def test_the_info_applies_the_same_rule_as_the_opener(self):
+        for stored in (
+            {**FORMAT_1_HPKE, "format": 1},
+            {**FORMAT_1_HPKE, "format": "2"},
+            {**FORMAT_2_HPKE, "kdf_id": True},
+            {**FORMAT_2_HPKE, "aead_id": 3},
+        ):
+            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+                ad.vault_key_info(VAULT, ACCOUNT, stored)
+
 
 class SignatureAndKeyDispatchTests(SimpleTestCase):
     def test_an_unknown_signature_prefix_is_unsupported(self):
@@ -264,3 +286,15 @@ class AccountKdfTests(SimpleTestCase):
             with self.subTest(algo=algo, params=params):
                 with self.assertRaises(suites.UnsupportedAlgorithm):
                     primitives.assert_account_kdf(algo, params)
+
+    def test_a_bool_or_a_non_mapping_is_unsupported(self):
+        for params in (
+            {**self.PARAMS, "t": True},
+            None,
+            [],
+            ["v", "m", "t", "p"],
+            "1.3",
+        ):
+            with self.subTest(params=params):
+                with self.assertRaises(suites.UnsupportedAlgorithm):
+                    primitives.assert_account_kdf("argon2id", params)

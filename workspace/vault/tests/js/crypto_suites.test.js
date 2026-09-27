@@ -154,3 +154,121 @@ test('the registered test aead opens beside AES-GCM under one keyring', async ()
     { keyVersion: 1, kdfId: T.KDF_HKDF_SHA256 });
   assert.equal(new TextDecoder().decode(await T.open(ring, aesGcm, T.AD.entryFieldAd(ENTRY, 'password'))), 'a');
 });
+
+const ACCOUNT = '01890a5d-ac96-774b-bcce-b302099a8058';
+const VAULT = '01890a5d-ac96-774b-bcce-b302099a8059';
+const FORMAT_1_HPKE = { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 };
+const isUnsupported = (axis) => (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === axis;
+
+test('vaultKeyInfo names the suite in format 2 only', () => {
+  const dec = (b) => new TextDecoder().decode(b);
+  assert.equal(dec(V.AD.vaultKeyInfo(VAULT, ACCOUNT, FORMAT_1_HPKE)), `v1|vault-key|${VAULT}|${ACCOUNT}`);
+  assert.equal(dec(V.AD.vaultKeyInfo(VAULT, ACCOUNT, V.CURRENT_SUITE.hpke)),
+    `v2|vault-key|${VAULT}|${ACCOUNT}|0020-0001-0002`);
+});
+
+test('an unknown hpke suite is unsupported', async () => {
+  const recipient = await V.hpkeRecipient(new Uint8Array(32).fill(7));
+  for (const stored of [{ ...V.CURRENT_SUITE.hpke, format: 9 }, { ...V.CURRENT_SUITE.hpke, aead_id: 3 }]) {
+    await assert.rejects(recipient.open(new Uint8Array(1), new Uint8Array(48), stored),
+      (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === 'hpke');
+  }
+});
+
+test('a stored hpke suite spells each format one way only, for the opener and the info alike', async () => {
+  const recipient = await V.hpkeRecipient(new Uint8Array(32).fill(7));
+  const current = V.CURRENT_SUITE.hpke;
+  for (const stored of [
+    { ...FORMAT_1_HPKE, format: 1 },
+    { ...current, format: '2' },
+    { ...current, format: true },
+    { ...current, format: 'constructor' },
+    { ...current, kdf_id: true },
+    { ...current, kem_id: '32' },
+    { ...FORMAT_1_HPKE, kdf_id: true },
+    { ...FORMAT_1_HPKE, extra: 1 },
+    { kem_id: 32, kdf_id: 1, aead_id: 2 },
+    null,
+    undefined,
+  ]) {
+    const label = JSON.stringify(stored);
+    await assert.rejects(recipient.open(new Uint8Array(1), new Uint8Array(48), stored),
+      isUnsupported('hpke'), label);
+    await assert.rejects(V.hpkeSeal(new Uint8Array(32).fill(9), new Uint8Array(1), new Uint8Array(1), stored),
+      isUnsupported('hpke'), label);
+    assert.throws(() => V.AD.vaultKeyInfo(VAULT, ACCOUNT, stored), isUnsupported('hpke'), label);
+  }
+});
+
+test('the account kdf is checked before Argon2 runs', () => {
+  const params = { v: '1.3', m: 65536, t: 3, p: 2 };
+  V.assertAccountKdf('argon2id', params);
+  V.assertAccountKdf('argon2id', { ...params, algo: 'argon2id' });
+  for (const [algo, bad] of [['scrypt', params], ['argon2id', { ...params, m: 4194304 }],
+    ['argon2id', { ...params, v: '1.0' }], ['argon2id', { ...params, p: 0 }]]) {
+    assert.throws(() => V.assertAccountKdf(algo, bad), (err) => err.name === 'UnsupportedAlgorithmError');
+  }
+});
+
+test('an account kdf named after a prototype key, or with malformed parameters, is unsupported', () => {
+  const params = { v: '1.3', m: 65536, t: 3, p: 2 };
+  const shapedLikeParams = Object.assign([], params);
+  for (const [algo, bad] of [
+    ['constructor', params], ['toString', params],
+    ['argon2id', { ...params, t: true }], ['argon2id', { ...params, m: '65536' }],
+    ['argon2id', null], ['argon2id', undefined], ['argon2id', shapedLikeParams],
+  ]) {
+    assert.throws(() => V.assertAccountKdf(algo, bad), isUnsupported('kdf'), `${algo} ${JSON.stringify(bad)}`);
+  }
+});
+
+test('deriveAmk needs its parameters spelled out', async () => {
+  await assert.rejects(
+    V.deriveAmk({ password: 'x', secretKey: new Uint8Array(32), salt: new Uint8Array(32) }),
+    /needs params/,
+  );
+});
+
+test('an unknown signature prefix or payload version is unsupported', async () => {
+  const seed = new Uint8Array(32).fill(3);
+  const signature = await V.signBytes(seed, new Uint8Array([1]));
+  signature[0] = 0x09;
+  await assert.rejects(V.verifyBytes(new Uint8Array(32), new Uint8Array([1]), signature),
+    (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === 'signature');
+  const payload = V.canonicalCbor({ v: 7, type: 'tag-metadata' });
+  await assert.rejects(V.verify(new Uint8Array(32), payload, new Uint8Array(65), 'tag-metadata'),
+    (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === 'payload');
+});
+
+test('a payload version spelled as a string or a bool is unsupported', async () => {
+  for (const v of ['1', true]) {
+    const payload = V.canonicalCbor({ v, type: 'tag-metadata' });
+    await assert.rejects(V.verify(new Uint8Array(32), payload, new Uint8Array(65), 'tag-metadata'),
+      isUnsupported('payload'), String(v));
+  }
+});
+
+test('signatures carry the current algorithm, and a wrong length is refused before Ed25519', async () => {
+  const seed = new Uint8Array(32).fill(3);
+  const signature = await V.signBytes(seed, new Uint8Array([1]));
+  assert.equal(signature[0], V.CURRENT_SUITE.signatureAlg);
+  const signer = await V.importSigner(seed);
+  assert.equal((await signer.sign(new Uint8Array([1])))[0], V.CURRENT_SUITE.signatureAlg);
+  await assert.rejects(V.verifyBytes(new Uint8Array(32), new Uint8Array([1]), signature.slice(0, -1)),
+    /wrong length/);
+});
+
+test('a public key is refused for the other usage, and unknown prefixes are unsupported', () => {
+  const sig = V.encodePublicKey(new Uint8Array(32), V.CURRENT_SUITE.sigPublicKeyAlg);
+  assert.equal(V.decodePublicKey(sig, 'sig').length, 32);
+  assert.throws(() => V.decodePublicKey(sig, 'kex'), (err) => err.name !== 'UnsupportedAlgorithmError');
+  assert.throws(() => V.decodePublicKey(Uint8Array.from([7, ...new Uint8Array(32)]), 'kex'),
+    (err) => err.name === 'UnsupportedAlgorithmError');
+});
+
+test('the removed constants are gone from the bundle', () => {
+  for (const name of ['HPKE_SUITE_V1', 'ARGON2_PARAMS', 'ARCHIVE_ARGON2_BOUNDS', 'SIG_ALG_ED25519',
+    'PUBKEY_ALG_X25519', 'PUBKEY_ALG_ED25519']) {
+    assert.equal(Object.hasOwn(V, name), false, name);
+  }
+});

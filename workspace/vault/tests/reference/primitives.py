@@ -30,7 +30,7 @@ from pyhpke import AEADId, CipherSuite, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
 from . import ad, wire
-from .suites import CURRENT_SUITE, UnsupportedAlgorithm, entry
+from .suites import CURRENT_SUITE, UnsupportedAlgorithm, entry, stored_hpke_format
 
 # One byte in front of every persisted signature and public key, so a future
 # algorithm lands without a data migration. What each id is - its length, the
@@ -153,7 +153,7 @@ def assert_account_kdf(algo: str, params: dict) -> None:
     any error surfaces. Extra keys are ignored - seeded accounts carry one.
     """
     found = entry("kdf", algo)
-    if params.get("v") != found["params"]["v"]:
+    if not isinstance(params, dict) or params.get("v") != found["params"]["v"]:
         raise UnsupportedAlgorithm("kdf", algo)
     for name, (low, high) in found["bounds"].items():
         value = params.get(name)
@@ -343,14 +343,7 @@ def hpke_suite_for(stored: dict) -> CipherSuite:
     the suite the manifest declares for its format is refused, before any key
     schedule runs.
     """
-    if "format" in stored and stored["format"] == 1:
-        # Format 1 is spelled by the key's absence, and vault_key_info builds
-        # the info from that spelling: an explicit 1 would pair a format-1
-        # suite with an info naming its suite, which no writer ever sealed.
-        raise UnsupportedAlgorithm("hpke", stored)
-    declared = _entry_for_integer("hpke", stored.get("format", 1))["suite"]
-    if {k: v for k, v in stored.items() if k != "format"} != declared:
-        raise UnsupportedAlgorithm("hpke", stored)
+    declared = entry("hpke", stored_hpke_format(stored))["suite"]
     return hpke_suite(
         KEMId(declared["kem_id"]), KDFId(declared["kdf_id"]), AEADId(declared["aead_id"])
     )

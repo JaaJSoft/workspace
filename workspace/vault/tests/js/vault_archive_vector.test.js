@@ -84,6 +84,7 @@ async function buildVector(params) {
   // Built inside the vm: an object created out here carries this realm's
   // prototypes, and the encoder branches on them - the cbor-x incident.
   const tree = vm.runInContext('JSON.parse(__treeJson)', ctx);
+  const declared = params || ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   // Salt and nonce are pinned so the archive is reproducible; every other
   // export draws both.
   const bytes = await ctx.vaultArchive.buildArchive({
@@ -91,10 +92,9 @@ async function buildVector(params) {
     passphrase: PASSPHRASE,
     salt: new Uint8Array(32).fill(0x2a),
     iv: new Uint8Array(12).fill(0x0c),
-    params: params ? vm.runInContext(`(${JSON.stringify(params)})`, ctx) : undefined,
+    params: vm.runInContext(`(${JSON.stringify(declared)})`, ctx),
   });
   assert.ok(bytes.length > 50);
-  const declared = params || ctx.vaultCrypto.ARGON2_PARAMS;
   return `${JSON.stringify({
     passphrase: PASSPHRASE,
     params: { m: declared.m, t: declared.t, p: declared.p },
@@ -135,7 +135,7 @@ test('the low-cost vector is not the default cost in disguise', async () => {
     ['workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js'],
     { crypto: globalThis.crypto, TextEncoder: globalThis.TextEncoder, TextDecoder: globalThis.TextDecoder }
   );
-  const defaults = ctx.vaultCrypto.ARGON2_PARAMS;
+  const defaults = ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   for (const name of ['m', 't', 'p']) {
     assert.notEqual(LOW_COST[name], defaults[name], `low-cost ${name} equals the default`);
   }

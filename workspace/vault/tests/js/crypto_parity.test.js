@@ -250,24 +250,58 @@ test('the bundle opens what the reference implementation sealed', async () => {
     const opened = await V.hpkeOpen(
       V.fromBase64Url(vector.recipient_sk_b64),
       new TextEncoder().encode(vector.info),
-      V.fromBase64Url(vector.expected_sealed_b64)
+      V.fromBase64Url(vector.expected_sealed_b64),
+      vector.hpke_suite
     );
     assert.equal(b64(opened), vector.plaintext_b64, vector.id);
   }
+});
+
+test('each hpke vector rebuilds its info from its stored suite, and the session recipient opens it', async () => {
+  const formats = new Set();
+  for (const vector of VECTORS.hpke) {
+    const [, , vaultUuid, recipientUuid] = vector.info.split('|');
+    const info = V.AD.vaultKeyInfo(vaultUuid, recipientUuid, vector.hpke_suite);
+    assert.equal(new TextDecoder().decode(info), vector.info, vector.id);
+    const recipient = await V.hpkeRecipient(V.fromBase64Url(vector.recipient_sk_b64));
+    const opened = await recipient.open(info, V.fromBase64Url(vector.expected_sealed_b64), vector.hpke_suite);
+    assert.equal(b64(opened), vector.plaintext_b64, vector.id);
+    formats.add(vector.hpke_suite.format ?? 1);
+  }
+  assert.deepStrictEqual([...formats].sort(), [1, 2]);
+});
+
+test('a format 2 wrap does not open under its format 1 info', async () => {
+  // Dropping the format key from the stored suite rebuilds the format 1 info,
+  // which is not what the wrap was sealed under.
+  const vector = VECTORS.hpke.find((item) => item.hpke_suite.format === 2);
+  const [, , vaultUuid, recipientUuid] = vector.info.split('|');
+  const { format, ...downgraded } = vector.hpke_suite;
+  assert.equal(format, 2);
+  await assert.rejects(V.hpkeOpen(
+    V.fromBase64Url(vector.recipient_sk_b64),
+    V.AD.vaultKeyInfo(vaultUuid, recipientUuid, downgraded),
+    V.fromBase64Url(vector.expected_sealed_b64),
+    downgraded
+  ), (err) => err.name !== 'UnsupportedAlgorithmError');
 });
 
 test('a bundle seal reopens, and a different info does not', async () => {
   for (const vector of VECTORS.hpke) {
     const info = new TextEncoder().encode(vector.info);
     const sealed = await V.hpkeSeal(
-      V.fromBase64Url(vector.recipient_pk_b64), info, V.fromBase64Url(vector.plaintext_b64)
+      V.fromBase64Url(vector.recipient_pk_b64), info, V.fromBase64Url(vector.plaintext_b64),
+      vector.hpke_suite
     );
-    const opened = await V.hpkeOpen(V.fromBase64Url(vector.recipient_sk_b64), info, sealed);
+    const opened = await V.hpkeOpen(
+      V.fromBase64Url(vector.recipient_sk_b64), info, sealed, vector.hpke_suite
+    );
     assert.equal(b64(opened), vector.plaintext_b64, vector.id);
     // All context binding lives in info, so info alone stands between a wrap
     // for one vault and a wrap for another.
     await assert.rejects(() => V.hpkeOpen(
-      V.fromBase64Url(vector.recipient_sk_b64), new TextEncoder().encode(`${vector.info}x`), sealed
+      V.fromBase64Url(vector.recipient_sk_b64), new TextEncoder().encode(`${vector.info}x`), sealed,
+      vector.hpke_suite
     ), vector.id);
   }
 });
@@ -290,7 +324,7 @@ test('ed25519 vectors replay exactly', async () => {
       ? await V.signBytes(V.fromBase64Url(vector.sk_b64), V.fromBase64Url(vector.message_b64))
       : await V.sign(V.fromBase64Url(vector.sk_b64), vector.payload);
     assert.equal(b64(signature), vector.expected_sig_b64, vector.id);
-    assert.equal(signature[0], V.SIG_ALG_ED25519, vector.id);
+    assert.equal(signature[0], V.CURRENT_SUITE.signatureAlg, vector.id);
   }
 });
 
@@ -348,8 +382,10 @@ test('a key given as a view into a larger buffer still seals and opens', async (
   backing.set(V.fromBase64Url(vector.recipient_pk_b64), 16);
   const view = backing.subarray(16, 48);
   const info = new TextEncoder().encode(vector.info);
-  const sealed = await V.hpkeSeal(view, info, V.fromBase64Url(vector.plaintext_b64));
-  const opened = await V.hpkeOpen(V.fromBase64Url(vector.recipient_sk_b64), info, sealed);
+  const sealed = await V.hpkeSeal(view, info, V.fromBase64Url(vector.plaintext_b64), vector.hpke_suite);
+  const opened = await V.hpkeOpen(
+    V.fromBase64Url(vector.recipient_sk_b64), info, sealed, vector.hpke_suite
+  );
   assert.equal(b64(opened), vector.plaintext_b64);
 });
 
@@ -412,10 +448,10 @@ test('a ciphertext truncated inside its iv is refused', () => {
 test('a stored public key round-trips through its algorithm prefix', () => {
   for (const vector of VECTORS.hpke) {
     const raw = V.fromBase64Url(vector.recipient_pk_b64);
-    const stored = V.encodePublicKey(raw);
-    assert.equal(stored[0], V.PUBKEY_ALG_X25519, vector.id);
+    const stored = V.encodePublicKey(raw, V.CURRENT_SUITE.kexPublicKeyAlg);
+    assert.equal(stored[0], V.CURRENT_SUITE.kexPublicKeyAlg, vector.id);
     assert.equal(stored.length, 1 + raw.length, vector.id);
-    assert.equal(b64(V.decodePublicKey(stored)), vector.recipient_pk_b64, vector.id);
+    assert.equal(b64(V.decodePublicKey(stored, 'kex')), vector.recipient_pk_b64, vector.id);
   }
 });
 
@@ -423,7 +459,8 @@ test('public key vectors replay exactly', () => {
   for (const vector of VECTORS.public_keys) {
     const stored = V.encodePublicKey(V.fromBase64Url(vector.raw_b64), vector.alg);
     assert.equal(b64(stored), vector.expected_stored_b64, vector.id);
-    assert.equal(b64(V.decodePublicKey(stored)), vector.raw_b64, vector.id);
+    const usage = vector.alg === V.CURRENT_SUITE.kexPublicKeyAlg ? 'kex' : 'sig';
+    assert.equal(b64(V.decodePublicKey(stored, usage)), vector.raw_b64, vector.id);
   }
 });
 
@@ -432,20 +469,21 @@ test('the attestation vector publishes the prefixed key, not the bare one', () =
   // signature would still verify over a relabelled key.
   const vector = VECTORS.ed25519.find((v) => v.kex_public_b64);
   const stored = V.fromBase64Url(vector.kex_public_b64);
-  assert.equal(stored[0], V.PUBKEY_ALG_X25519);
+  assert.equal(stored[0], V.CURRENT_SUITE.kexPublicKeyAlg);
   assert.equal(stored.length, 33);
 });
 
 test('a relabelled or truncated public key is refused', () => {
-  const stored = V.encodePublicKey(new Uint8Array(32));
+  const kex = V.CURRENT_SUITE.kexPublicKeyAlg;
+  const stored = V.encodePublicKey(new Uint8Array(32), kex);
   const relabelled = stored.slice();
   relabelled[0] = 0x7f;
   // A verifier reaching a label it does not implement must stop, not fall back
   // to the one algorithm it happens to know.
-  assert.throws(() => V.decodePublicKey(relabelled), /unsupported public key algorithm/);
-  assert.throws(() => V.decodePublicKey(stored.slice(0, -1)), /wants 32/);
-  assert.throws(() => V.decodePublicKey(new Uint8Array(0)), /empty/);
-  assert.throws(() => V.encodePublicKey(new Uint8Array(31)), /wants 32/);
+  assert.throws(() => V.decodePublicKey(relabelled, 'kex'), /unsupported pubkey 127/);
+  assert.throws(() => V.decodePublicKey(stored.slice(0, -1), 'kex'), /wants 32/);
+  assert.throws(() => V.decodePublicKey(new Uint8Array(0), 'kex'), /empty/);
+  assert.throws(() => V.encodePublicKey(new Uint8Array(31), kex), /wants 32/);
 });
 
 test('a reserved field id is its own associated data', () => {
@@ -503,7 +541,9 @@ test('a secret_key or salt of the wrong length is refused', async () => {
     [secretKey, salt.slice(0, 16)],
   ]) {
     await assert.rejects(
-      () => V.deriveAmk({ password: 'password', secretKey: badSecret, salt: badSalt }),
+      () => V.deriveAmk({
+        password: 'password', secretKey: badSecret, salt: badSalt, params: V.CURRENT_SUITE.kdf.params,
+      }),
       /expected 32/
     );
   }
@@ -513,6 +553,7 @@ test('the refusal reports a length, never the secret_key itself', async () => {
   await assert.rejects(
     () => V.deriveAmk({
       password: 'password', secretKey: new TextEncoder().encode('short'), salt: new Uint8Array(32),
+      params: V.CURRENT_SUITE.kdf.params,
     }),
     (error) => !error.message.includes('short') && /expected 32/.test(error.message)
   );

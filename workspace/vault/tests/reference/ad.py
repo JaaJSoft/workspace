@@ -17,7 +17,7 @@ the ciphertext it opens.
 
 from dataclasses import dataclass
 
-from .suites import entry
+from .suites import entry, stored_hpke_format
 
 # System identifiers an entry type may declare. Anything else a user adds is
 # mechanically prefixed, which is what keeps a custom field from colliding with
@@ -96,9 +96,10 @@ def vault_key_info(vault_uuid: str, recipient_uuid: str, hpke_suite: dict) -> by
     edited then fails to open instead of selecting another suite silently.
     """
     base = f"vault-key|{_uuid(vault_uuid)}|{_uuid(recipient_uuid)}"
-    if "format" not in hpke_suite:
+    fmt_id = stored_hpke_format(hpke_suite)
+    if fmt_id == 1:
         return f"v1|{base}".encode("ascii")
-    fmt = entry("format", hpke_suite["format"])
+    fmt = entry("format", fmt_id)
     descriptor = "-".join(
         f"{hpke_suite[field]:04x}" for field in ("kem_id", "kdf_id", "aead_id")
     )

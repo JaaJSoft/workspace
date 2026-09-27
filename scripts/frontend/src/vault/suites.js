@@ -41,7 +41,10 @@ function ownEntry(axis, id) {
   return Object.hasOwn(MANIFEST[axis], key) ? MANIFEST[axis][key] : null;
 }
 
+// A stored id arriving as the string "1" or as true is not the id 1: the
+// manifest is keyed by strings, so only an integer check keeps them apart.
 export function suiteEntry(axis, id) {
+  if (!Number.isInteger(id)) throw new UnsupportedAlgorithmError(axis, id);
   const entry = ownEntry(axis, id);
   if (!entry || !IMPLEMENTED[axis] || !IMPLEMENTED[axis].has(Number(id))) {
     throw new UnsupportedAlgorithmError(axis, id);
@@ -57,6 +60,28 @@ export function hpkeEntry(format) {
   const entry = ownEntry('hpke', format);
   if (!entry || entry.state === 'test') throw new UnsupportedAlgorithmError('hpke', format);
   return entry;
+}
+
+// One rule for every reader of a stored hpke_suite, the info builder included.
+// Format 1 is spelled by the key's absence: an explicit 1 would pair a format-1
+// suite with an info naming its suite, which no writer ever sealed under. The
+// ids are compared by identity, so true or "32" never stand in for 1 or 32.
+export function storedHpkeFormat(stored) {
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+    throw new UnsupportedAlgorithmError('hpke', stored);
+  }
+  const explicit = Object.hasOwn(stored, 'format');
+  const format = explicit ? stored.format : 1;
+  if (explicit && (!Number.isInteger(format) || format === 1)) {
+    throw new UnsupportedAlgorithmError('hpke', format);
+  }
+  const declared = hpkeEntry(format).suite;
+  const ids = Object.keys(stored).filter((key) => key !== 'format');
+  if (ids.length !== Object.keys(declared).length
+    || ids.some((key) => !Object.hasOwn(declared, key) || stored[key] !== declared[key])) {
+    throw new UnsupportedAlgorithmError('hpke', format);
+  }
+  return format;
 }
 
 export function kdfEntry(algo) {

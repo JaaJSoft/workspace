@@ -43,6 +43,33 @@ def entry(axis: str, identifier) -> dict:
     return found
 
 
+def _is_integer(value) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def stored_hpke_format(stored) -> int:
+    """The format a stored hpke_suite names, under the one rule every reader
+    of it applies - the opener and the info builder alike.
+
+    Format 1 is spelled by the key's absence: an explicit 1 would pair a
+    format-1 suite with an info naming its suite, which no writer ever sealed
+    under. The ids must be integers equal to the declared ones - True == 1 and
+    2.0 == 2 in Python, so equality alone would let either stand in.
+    """
+    if not isinstance(stored, dict):
+        raise UnsupportedAlgorithm("hpke", stored)
+    fmt = stored.get("format", 1)
+    if "format" in stored and (not _is_integer(fmt) or fmt == 1):
+        raise UnsupportedAlgorithm("hpke", stored)
+    declared = entry("hpke", fmt)["suite"]
+    ids = {key: value for key, value in stored.items() if key != "format"}
+    if ids.keys() != declared.keys() or any(
+        not _is_integer(value) or value != declared[key] for key, value in ids.items()
+    ):
+        raise UnsupportedAlgorithm("hpke", stored)
+    return fmt
+
+
 def _current(axis: str, **match) -> str:
     keys = [
         key

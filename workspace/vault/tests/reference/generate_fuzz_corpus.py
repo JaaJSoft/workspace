@@ -161,9 +161,6 @@ def build_corpus(seed: int = DEFAULT_SEED, count: int = DEFAULT_COUNT) -> dict:
                         iv=iv,
                         key_version=key_version,
                         kdf_id=kdf_id,
-                        # The corpus hunts wire and AD encoding divergences in
-                        # the raw bytes it publishes, which is format 1's AD.
-                        format_version=1,
                     )
                 ),
             }

@@ -1,9 +1,15 @@
 import { canonicalCbor, decodeCbor } from './cbor.js';
 import { equalBytes } from './encoding.js';
+import { CURRENT_SUITE, suiteEntry } from './suites.js';
 
 // One byte in front of every persisted signature, so a future algorithm lands
-// without a data migration. 0x02 is reserved for Ed25519 + ML-DSA-44.
-export const SIG_ALG_ED25519 = 0x01;
+// without a data migration.
+function prefixed(signature) {
+  const out = new Uint8Array(1 + signature.length);
+  out[0] = CURRENT_SUITE.signatureAlg;
+  out.set(signature, 1);
+  return out;
+}
 
 // WebCrypto imports an Ed25519 PUBLIC key as 'raw' but refuses a private one -
 // it only accepts 'pkcs8' or 'jwk'. The vectors carry the bare 32-byte seed,
@@ -28,17 +34,13 @@ export async function signBytes(privateRaw, message) {
   const key = await crypto.subtle.importKey(
     'pkcs8', toPkcs8(privateRaw), 'Ed25519', false, ['sign']
   );
-  const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', key, message));
-  const out = new Uint8Array(1 + signature.length);
-  out[0] = SIG_ALG_ED25519;
-  out.set(signature, 1);
-  return out;
+  return prefixed(new Uint8Array(await crypto.subtle.sign('Ed25519', key, message)));
 }
 
 export async function verifyBytes(publicRaw, message, signature) {
-  if (signature[0] !== SIG_ALG_ED25519) {
-    throw new Error(`unsupported signature algorithm ${signature[0]}`);
-  }
+  if (signature.length < 1) throw new Error('signature is empty');
+  const entry = suiteEntry('signature', signature[0]);
+  if (signature.length !== 1 + entry.length) throw new Error('signature has the wrong length');
   const key = await crypto.subtle.importKey('raw', publicRaw, 'Ed25519', false, ['verify']);
   const ok = await crypto.subtle.verify('Ed25519', key, signature.slice(1), message);
   if (!ok) throw new Error('signature does not verify');
@@ -56,18 +58,14 @@ export async function importSigner(seed) {
   );
   return {
     async sign(message) {
-      const signature = new Uint8Array(await crypto.subtle.sign('Ed25519', key, message));
-      const out = new Uint8Array(1 + signature.length);
-      out[0] = SIG_ALG_ED25519;
-      out.set(signature, 1);
-      return out;
+      return prefixed(new Uint8Array(await crypto.subtle.sign('Ed25519', key, message)));
     },
   };
 }
 
 export async function verify(publicRaw, payloadBytes, signature, expectedType) {
   const payload = decodeCbor(payloadBytes);              // 1. decode
-  if (payload.v !== 1) throw new Error(`unsupported payload version ${payload.v}`);  // 2.
+  suiteEntry('payload', payload.v);                      // 2. version
   if (payload.type !== expectedType) {                   // 3. type, before any crypto
     throw new Error(`payload type ${payload.type} does not match ${expectedType}`);
   }

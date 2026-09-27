@@ -24,29 +24,41 @@ const V = ctx.vaultCrypto;
 const bytes = (length, fill) =>
   vm.runInContext(`new Uint8Array(${length}).fill(${fill})`, ctx);
 
+const KEX = V.CURRENT_SUITE.kexPublicKeyAlg;
+const SIG = V.CURRENT_SUITE.sigPublicKeyAlg;
+
 test('ed25519 and x25519 do not share an algorithm byte', () => {
-  assert.equal(V.PUBKEY_ALG_ED25519, 0x02);
-  assert.notEqual(V.PUBKEY_ALG_ED25519, V.PUBKEY_ALG_X25519);
+  assert.equal(SIG, 0x02);
+  assert.notEqual(SIG, KEX);
 });
 
 test('an ed25519 public key encodes under its own algorithm byte', () => {
-  const stored = V.encodePublicKey(bytes(32, 7), V.PUBKEY_ALG_ED25519);
+  const stored = V.encodePublicKey(bytes(32, 7), SIG);
   assert.equal(stored[0], 0x02);
   assert.equal(stored.length, 33);
 });
 
 test('a stored ed25519 key decodes back to its raw bytes', () => {
   const raw = bytes(32, 7);
-  const stored = V.encodePublicKey(raw, V.PUBKEY_ALG_ED25519);
-  assert.equal(V.toBase64Url(V.decodePublicKey(stored)), V.toBase64Url(raw));
+  const stored = V.encodePublicKey(raw, SIG);
+  assert.equal(V.toBase64Url(V.decodePublicKey(stored, 'sig')), V.toBase64Url(raw));
+});
+
+test('a stored key is refused when read for the other usage', () => {
+  assert.throws(() => V.decodePublicKey(V.encodePublicKey(bytes(32, 7), SIG), 'kex'), /not a kex key/);
+  assert.throws(() => V.decodePublicKey(V.encodePublicKey(bytes(32, 7), KEX), 'sig'), /not a sig key/);
 });
 
 test('an ed25519 key of the wrong length is refused, not truncated', () => {
-  assert.throws(() => V.encodePublicKey(bytes(31, 7), V.PUBKEY_ALG_ED25519));
+  assert.throws(() => V.encodePublicKey(bytes(31, 7), SIG), /wants 32/);
+});
+
+test('encoding needs an algorithm: there is no default to fall back on', () => {
+  assert.throws(() => V.encodePublicKey(bytes(32, 7)), (err) => err.name === 'UnsupportedAlgorithmError');
 });
 
 test('an unknown algorithm byte is refused', () => {
-  const stored = V.encodePublicKey(bytes(32, 7), V.PUBKEY_ALG_ED25519);
+  const stored = V.encodePublicKey(bytes(32, 7), SIG);
   stored[0] = 0x7f;
-  assert.throws(() => V.decodePublicKey(stored));
+  assert.throws(() => V.decodePublicKey(stored, 'sig'), (err) => err.name === 'UnsupportedAlgorithmError');
 });

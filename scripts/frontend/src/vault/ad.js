@@ -1,4 +1,4 @@
-import { declaredEntry } from './suites.js';
+import { declaredEntry, storedHpkeFormat } from './suites.js';
 
 // The info and associated-data catalogue. These strings ARE the format:
 // changing one breaks the decryption of everything already written with it,
@@ -73,8 +73,16 @@ export const AD = {
     new AdContext(`entry-field|${uuid(entryUuid)}|${fieldName}`),
   kexPubPayload: (accountUuid, kexPubB64) =>
     ascii(`v1|account-kex-pub|${uuid(accountUuid)}|${kexPubB64}`),
-  vaultKeyInfo: (vaultUuid, recipientUuid) =>
-    ascii(`v1|vault-key|${uuid(vaultUuid)}|${uuid(recipientUuid)}`),
+  // Format 2 names the suite inside the info: a stored hpke_suite someone
+  // edited then fails to open instead of selecting another suite silently.
+  vaultKeyInfo: (vaultUuid, recipientUuid, hpkeSuite) => {
+    const base = `vault-key|${uuid(vaultUuid)}|${uuid(recipientUuid)}`;
+    const format = storedHpkeFormat(hpkeSuite);
+    if (format === 1) return ascii(`v1|${base}`);
+    const hex = (n) => n.toString(16).padStart(4, '0');
+    const descriptor = `${hex(hpkeSuite.kem_id)}-${hex(hpkeSuite.kdf_id)}-${hex(hpkeSuite.aead_id)}`;
+    return ascii(`${declaredEntry('format', format).ad_prefix}${base}|${descriptor}`);
+  },
   vaultMetaInfo: (vaultUuid) => ascii(`v1|vault-meta|${uuid(vaultUuid)}`),
   vaultFieldAd: (vaultUuid, field) => {
     if (!VAULT_FIELD_IDS.includes(field)) {

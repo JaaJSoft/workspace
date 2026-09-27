@@ -10,25 +10,12 @@ export const HEADER_LENGTH = 6;
 
 // One byte in front of every persisted public key, so a second key exchange
 // algorithm lands without a data migration. The attestation signs the prefixed
-// form: an unsigned label would be the server's to change at will.
-export const PUBKEY_ALG_X25519 = 0x01;
-// Ed25519 carries its own label even though both keys are 32 raw bytes: under
-// one shared label the two would be indistinguishable once stored. Reading the
-// label back is not this decoder's job - the attestation signs the labelled
-// form, so a swap breaks the signature the client re-checks against the signing
-// key it unwrapped. The server, which only ever sees a pair the client signed
-// itself, pins the expected algorithm instead.
-export const PUBKEY_ALG_ED25519 = 0x02;
-
-// Raw key length per algorithm: a stored key of the wrong size is refused
-// rather than truncated.
-const PUBKEY_LENGTHS = { [PUBKEY_ALG_X25519]: 32, [PUBKEY_ALG_ED25519]: 32 };
-
-export function encodePublicKey(raw, algId = PUBKEY_ALG_X25519) {
-  const expected = PUBKEY_LENGTHS[algId];
-  if (expected === undefined) throw new Error(`unknown public key algorithm ${algId}`);
-  if (raw.length !== expected) {
-    throw new Error(`public key is ${raw.length} bytes, algorithm ${algId} wants ${expected}`);
+// form: an unsigned label would be the server's to change at will. A key of
+// the wrong size is refused rather than truncated.
+export function encodePublicKey(raw, algId) {
+  const entry = suiteEntry('pubkey', algId);
+  if (raw.length !== entry.length) {
+    throw new Error(`public key is ${raw.length} bytes, algorithm ${algId} wants ${entry.length}`);
   }
   const out = new Uint8Array(1 + raw.length);
   out[0] = algId;
@@ -36,18 +23,16 @@ export function encodePublicKey(raw, algId = PUBKEY_ALG_X25519) {
   return out;
 }
 
-// The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte key,
-// so handing it the stored form would read the label as key material.
-export function decodePublicKey(stored) {
+// The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte key.
+// The usage check is what keeps a signing key from reaching the KEM, or the
+// reverse - both are 32 bytes, the label is all that tells them apart. A known
+// label of the other usage is a malformed key, not an unsupported one.
+export function decodePublicKey(stored, usage) {
   if (stored.length < 1) throw new Error('public key is empty');
-  const expected = PUBKEY_LENGTHS[stored[0]];
-  if (expected === undefined) {
-    throw new Error(`unsupported public key algorithm ${stored[0]}`);
-  }
-  if (stored.length !== 1 + expected) {
-    throw new Error(
-      `public key is ${stored.length - 1} bytes, algorithm ${stored[0]} wants ${expected}`
-    );
+  const entry = suiteEntry('pubkey', stored[0]);
+  if (entry.usage !== usage) throw new Error(`public key algorithm ${stored[0]} is not a ${usage} key`);
+  if (stored.length !== 1 + entry.length) {
+    throw new Error(`public key is ${stored.length - 1} bytes, algorithm ${stored[0]} wants ${entry.length}`);
   }
   return stored.slice(1);
 }

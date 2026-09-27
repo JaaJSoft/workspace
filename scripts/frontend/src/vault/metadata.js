@@ -1,3 +1,5 @@
+import { CURRENT_SUITE } from './suites.js';
+
 // The signed metadata payload of a vault. The key set is frozen: it is what
 // the signature covers, and adding or removing one invalidates every signature
 // already written. No timestamp is in it - the server writes created_at and
@@ -10,7 +12,7 @@ export function vaultMetadataPayload({
   icon, color, key_version, is_favorite,
 }) {
   return {
-    v: 1,
+    v: CURRENT_SUITE.payloadVersion,
     type: VAULT_METADATA_TYPE,
     vault_uuid: String(vault_uuid).toLowerCase(),
     owner_account_uuid: String(owner_account_uuid).toLowerCase(),
@@ -43,7 +45,7 @@ export function entryMetadataPayload({
   tag_uuids, fields,
 }) {
   return {
-    v: 1,
+    v: CURRENT_SUITE.payloadVersion,
     type: ENTRY_METADATA_TYPE,
     entry_uuid: lower(entry_uuid),
     vault_uuid: lower(vault_uuid),
@@ -66,7 +68,7 @@ export function folderMetadataPayload({
   folder_uuid, vault_uuid, signer_account_uuid, parent_uuid, position, encrypted_name,
 }) {
   return {
-    v: 1,
+    v: CURRENT_SUITE.payloadVersion,
     type: FOLDER_METADATA_TYPE,
     folder_uuid: lower(folder_uuid),
     vault_uuid: lower(vault_uuid),
@@ -81,7 +83,7 @@ export function tagMetadataPayload({
   tag_uuid, vault_uuid, signer_account_uuid, encrypted_name, color,
 }) {
   return {
-    v: 1,
+    v: CURRENT_SUITE.payloadVersion,
     type: TAG_METADATA_TYPE,
     tag_uuid: lower(tag_uuid),
     vault_uuid: lower(vault_uuid),

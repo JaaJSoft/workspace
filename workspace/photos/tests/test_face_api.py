@@ -355,3 +355,26 @@ class FaceStatusTests(FaceApiTestCase):
         response = self.client.get("/api/v1/photos/faces/status")
 
         self.assertEqual(response.json(), {"enabled": True, "total": 5, "analyzed": 4})
+
+
+class FaceApiAnonymousTests(TestCase):
+    def test_every_face_endpoint_refuses_an_anonymous_caller(self):
+        some = "00000000-0000-4000-8000-000000000000"
+        routes = [
+            ("get", CLUSTERS),
+            ("get", f"{CLUSTERS}/{some}"),
+            ("get", f"{CLUSTERS}/{some}/photos"),
+            ("post", f"{CLUSTERS}/{some}/merge"),
+            ("get", f"/api/v1/photos/faces/{some}"),
+            ("get", f"/api/v1/photos/faces/{some}/crop"),
+            ("get", f"/api/v1/photos/files/{some}/faces"),
+            ("get", "/api/v1/photos/faces/status"),
+            ("get", "/api/v1/photos/persons"),
+            ("post", "/api/v1/photos/faces/actions"),
+            ("post", "/api/v1/photos/faces/batch"),
+            ("post", "/api/v1/photos/faces/undo"),
+        ]
+        for method, url in routes:
+            with self.subTest(url=url):
+                response = getattr(self.client, method)(url)
+                self.assertIn(response.status_code, (401, 403))

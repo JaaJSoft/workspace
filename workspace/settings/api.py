@@ -188,6 +188,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Face grouping: the people found in your photos, and their corrections.",
         },
         {
+            "name": "Photos - Import",
+            "description": "The folder photos imported from the Photos page are saved to.",
+        },
+        {
             "name": "Projects",
             "description": "Collaborative projects: settings, members, archiving, and actions.",
         },

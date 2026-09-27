@@ -39,7 +39,7 @@ class PhotosVideoTests(PlaywrightTestCase):
 
     def test_a_video_tile_plays_in_the_viewer_among_the_photos(self):
         self._open()
-        expect(self.page.locator("header")).to_contain_text("1 photo, 1 video")
+        expect(self.page.locator("#photos-header")).to_contain_text("1 photo, 1 video")
         expect(self._tile(self.video).locator("[data-duration-badge]")).to_have_text(
             "0:03"
         )
@@ -90,7 +90,7 @@ class PhotosVideoTests(PlaywrightTestCase):
         expect(self.page).to_have_url(f"{self.live_server_url}/photos?type=video")
         expect(self.page.locator(TILES)).to_have_count(1)
         expect(self._tile(self.video)).to_be_visible()
-        expect(self.page.locator("header")).to_contain_text("1 video")
+        expect(self.page.locator("#photos-header")).to_contain_text("1 video")
         expect(tabs.nth(2)).to_have_attribute("aria-current", "page")
 
         self.page.locator("#photos-nav a", has_text="Favorites").click()

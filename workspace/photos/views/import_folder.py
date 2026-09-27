@@ -15,6 +15,7 @@ from ..services.import_folder import (
 )
 
 
+@extend_schema(tags=["Photos - Import"])
 class ImportFolderView(APIView):
     @extend_schema(
         summary="Get the import folder",

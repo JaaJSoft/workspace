@@ -173,6 +173,15 @@ test('a vault whose signature failed cannot be switched to', async () => {
   assert.equal(component.vaultUuid, 'v-1');
 });
 
+test('a vault this build cannot read cannot be switched to either', async () => {
+  // Written by a newer build - no name to show and no key this build can
+  // unwrap, exactly like the tampered and the unopenable cases above.
+  const { component } = switcher();
+  await component.switchVault({ uuid: 'v-newer', unsupported: true });
+  assert.equal(component.loaded, 0);
+  assert.equal(component.vaultUuid, 'v-1');
+});
+
 test('the search field appears only past a handful of vaults', () => {
   const { component } = switcher();
   assert.equal(component.switcherNeedsSearch(), false);

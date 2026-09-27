@@ -356,7 +356,7 @@ window.vaultBrowser = (function () {
       // could have made it earlier.
       resolveLandingVault: function (vaults) {
         const openable = vaults.filter(function (vault) {
-          return !(vault.tampered || vault.unopenable || vault.unreadable);
+          return !(vault.tampered || vault.unopenable || vault.unreadable || vault.unsupported);
         });
         if (!openable.length) return null;
         const remembered = String(readPreference(LAST_VAULT_KEY) || '');
@@ -437,6 +437,7 @@ window.vaultBrowser = (function () {
           // is a broken listing, not a row hidden from the user, and the
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
+          unsupportedCount: entries.unsupportedCount,
         });
         // Every row is rebuilt from the fresh listing, so whatever the panel
         // had decrypted belongs to a row this pass no longer vouches for - a

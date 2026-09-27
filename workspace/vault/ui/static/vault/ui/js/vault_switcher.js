@@ -60,7 +60,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     },
 
     vaultIsDegraded: function (vault) {
-      return !!(vault && (vault.tampered || vault.unopenable || vault.unreadable));
+      return !!(
+        vault
+        && (vault.tampered || vault.unopenable || vault.unreadable || vault.unsupported)
+      );
     },
 
     switchVault: async function (vault) {

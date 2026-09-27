@@ -27,6 +27,12 @@ window.vaultExportTree = (function () {
       } catch (err) {
         // A lock is not tampering, and the dialog says so in its own words.
         if (err && err.reason === 'locked') throw err;
+        // Written by a newer build: refusing to read it is not a verdict on
+        // the account, so it must not fall into the same message as a
+        // corrupted field.
+        if (err && err.name === 'UnsupportedAlgorithmError') {
+          throw VaultExportError('a field needs a newer version of the app', 'unsupported');
+        }
         throw VaultExportError('a field could not be opened', 'unreadable');
       }
     };
@@ -53,6 +59,12 @@ window.vaultExportTree = (function () {
   // archive is not written at all. vaultReader counts those rather than
   // throwing, so the count is what we read.
   function refuseIfUnreadable(...results) {
+    // Checked first: a row a newer build wrote is not the account's tamper
+    // alert, and the two reasons must never collapse into one message.
+    const unsupported = results.reduce((sum, result) => sum + (result.unsupportedCount || 0), 0);
+    if (unsupported > 0) {
+      throw VaultExportError('a field needs a newer version of the app', 'unsupported');
+    }
     const total = results.reduce((sum, result) => sum + result.tamperedCount, 0);
     if (total > 0) {
       throw VaultExportError(
@@ -74,6 +86,9 @@ window.vaultExportTree = (function () {
     const api = window.vaultApi;
     const reader = window.vaultReader;
     const vault = await reader.readVault(session, vaultRow);
+    if (vault.unsupported) {
+      throw VaultExportError('a vault needs a newer version of the app', 'unsupported');
+    }
     if (vault.tampered || vault.unopenable || vault.unreadable) {
       throw VaultExportError('a vault could not be verified or opened', 'unreadable');
     }

@@ -76,7 +76,7 @@
             <span
               class="truncate flex-1"
               :class="vaultIsDegraded(candidate) ? 'line-through' : ''"
-              x-text="vaultIsDegraded(candidate) ? 'Unreadable vault' : (candidate.name || 'Unnamed')"
+              x-text="candidate.unsupported ? 'Needs a newer version - reload' : (vaultIsDegraded(candidate) ? 'Unreadable vault' : (candidate.name || 'Unnamed'))"
             ></span>
 
             <span

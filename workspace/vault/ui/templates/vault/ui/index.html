@@ -127,8 +127,7 @@
                 <span x-text="unsupportedCount === 1 ? 'entry needs' : 'entries need'"></span>
                 a newer version of the app.
               </b>
-              They were saved by a more recent version than the one this page is running.
-              Reload the page to read them.
+              <span x-text="unsupportedCount === 1 ? 'It was saved by a more recent version than the one this page is running. Reload the page to read it.' : 'They were saved by a more recent version than the one this page is running. Reload the page to read them.'"></span>
             </span>
             </inline-alert>
           </template>

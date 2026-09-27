@@ -19,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from PIL import Image, ImageOps
 
+from workspace.files.tests.videos import requires_ffmpeg
 from workspace.photos.models import FaceCluster
 from workspace.photos.services.detection import weights
 from workspace.photos.services.detection.weights import ModelFile, WeightsError
@@ -26,7 +27,7 @@ from workspace.photos.services.face_analysis import analyze_faces
 from workspace.photos.services.face_grouping import cluster_owner
 
 from .faces import FacesTestMixin, opt_in
-from .images import upload
+from .images import upload, video_bytes
 
 User = get_user_model()
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -114,7 +115,10 @@ class WeightsTests(TestCase):
         self.assertEqual(weights.model_path(models[1]).read_bytes(), rec)
 
 
-def _photo(path, *, mirror=False, crop=0):
+def _canvas(path=None, *, mirror=False, crop=0):
+    canvas = Image.new("RGB", (600, 400), (200, 190, 170))
+    if path is None:
+        return canvas
     image = Image.open(path).convert("RGB")
     if crop:
         image = image.crop(
@@ -122,8 +126,12 @@ def _photo(path, *, mirror=False, crop=0):
         )
     if mirror:
         image = ImageOps.mirror(image)
-    canvas = Image.new("RGB", (600, 400), (200, 190, 170))
     canvas.paste(image, (40, 60))
+    return canvas
+
+
+def _photo(path, *, mirror=False, crop=0):
+    canvas = _canvas(path, mirror=mirror, crop=crop)
     buffer = io.BytesIO()
     canvas.save(buffer, format="JPEG", quality=90)
     return buffer.getvalue()
@@ -154,6 +162,37 @@ class RealBackendTests(FacesTestMixin, TestCase):
     @override_settings(PHOTOS_FACES_ENABLED=True, PHOTOS_FACE_BACKEND="yunet_sface")
     def test_yunet_sface(self):
         self.assertEqual(self._run(), [["a-1.jpg", "a-2.jpg"], ["b.jpg"]])
+
+    @requires_ffmpeg
+    @override_settings(PHOTOS_FACES_ENABLED=True, PHOTOS_FACE_BACKEND="yunet_sface")
+    def test_yunet_sface_video(self):
+        """One person seen twice in a video, with a gap between: one face,
+        grouped with their photo."""
+        user = User.objects.create_user(username="alice", password="p")
+        opt_in(user)
+        for name, data in (
+            ("a.jpg", _photo(FIXTURES / "synthetic-face-a.jpg")),
+            ("b.jpg", _photo(FIXTURES / "synthetic-face-b.jpg")),
+        ):
+            analyze_faces(upload(user, name, data))
+        clip = video_bytes(
+            [
+                (2, _canvas(FIXTURES / "synthetic-face-a.jpg", mirror=True, crop=24)),
+                (2, _canvas()),
+                (2, _canvas(FIXTURES / "synthetic-face-a.jpg", crop=12)),
+            ]
+        )
+
+        self.assertEqual(len(analyze_faces(upload(user, "a.mkv", clip))), 1)
+        cluster_owner(user.pk)
+
+        self.assertEqual(
+            sorted(
+                sorted(cluster.faces.values_list("file__name", flat=True))
+                for cluster in FaceCluster.objects.filter(owner=user)
+            ),
+            [["a.jpg", "a.mkv"], ["b.jpg"]],
+        )
 
     @override_settings(PHOTOS_FACES_ENABLED=True, PHOTOS_FACE_BACKEND="scrfd_arcface")
     def test_scrfd_arcface(self):

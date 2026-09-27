@@ -176,11 +176,12 @@ class AlbumItem(models.Model):
 
 
 class FaceAnalysis(models.Model):
-    """That a photo was read for faces: which bytes, by which backend, for whom.
+    """That a photo or a video was read for faces: which bytes, by which
+    backend, for whom.
 
-    A photo with no face gets a row too, so the catch-up does not read it
+    A file with no face gets a row too, so the catch-up does not read it
     again every hour. Any mismatch with the file (new bytes, another backend,
-    another owner, an older pipeline) makes the photo pending again.
+    another owner, an older pipeline) makes it pending again.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
@@ -254,7 +255,8 @@ class FaceCluster(models.Model):
 
 
 class Face(models.Model):
-    """One face found in one photo of its owner's library."""
+    """One face found in one photo of its owner's library, or one person
+    seen in one of its videos."""
 
     class Assignment(models.TextChoices):
         # The grouping's call: it may move the face.
@@ -308,6 +310,9 @@ class Face(models.Model):
     )
     # Storage path of the square WebP crop shown for the face.
     crop = models.CharField(max_length=255, blank=True, default="")
+    # Seconds into a video, as a player counts them, of the frame the box,
+    # the landmarks and the crop come from. Null for a photo.
+    timestamp = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

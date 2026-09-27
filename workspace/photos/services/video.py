@@ -72,9 +72,7 @@ def parse_report(report, *, default_tz=UTC):
     stream = ffmpeg.video_stream(report)
     stream_tags = _lowercase_keys(stream.get("tags"))
 
-    width, height = _positive(stream.get("width")), _positive(stream.get("height"))
-    if width and height and _rotation(stream) % 180 == 90:
-        width, height = height, width
+    width, height = ffmpeg.display_size(report) or (None, None)
 
     latitude, longitude = _location(_first(tags, _LOCATION_KEYS))
     return VideoMetadata(
@@ -100,26 +98,6 @@ def _first(tags, keys):
         if isinstance(value, str) and value.strip():
             return value.replace("\x00", "").strip()
     return ""
-
-
-def _positive(value):
-    return value if isinstance(value, int) and value > 0 else None
-
-
-def _rotation(stream):
-    """The rotation a player applies, in degrees, from the display matrix
-    (current ffmpeg) or the ``rotate`` tag (older muxers)."""
-    for side_data in stream.get("side_data_list") or []:
-        if isinstance(side_data, dict) and "rotation" in side_data:
-            return _degrees(side_data["rotation"])
-    return _degrees(_lowercase_keys(stream.get("tags")).get("rotate"))
-
-
-def _degrees(value):
-    try:
-        return round(float(value)) % 360
-    except TypeError, ValueError:
-        return 0
 
 
 def _recording_time(tags, stream_tags, default_tz):

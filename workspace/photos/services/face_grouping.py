@@ -83,7 +83,7 @@ def _vector(face):
     return from_bytes(face.embedding, FACE_EMBEDDINGS.dims) if face.embedding else None
 
 
-def _weight(quality):
+def face_weight(quality):
     return max(float(quality), _MIN_WEIGHT)
 
 
@@ -138,7 +138,7 @@ def _vote(face, threshold):
         if cluster_id in excluded:
             continue
         distance = distances[pk]
-        scores[cluster_id] += (1 - distance / threshold + 1e-6) * _weight(quality)
+        scores[cluster_id] += (1 - distance / threshold + 1e-6) * face_weight(quality)
         if quality >= LOW_QUALITY and distance <= threshold * _CONFIDENT:
             confident.add(cluster_id)
     if face.quality < LOW_QUALITY:
@@ -349,7 +349,7 @@ def split_by_photo(members, files, vectors, qualities, threshold):
             groups.append(best)
         best["members"].append(i)
         best["files"].add(files[i])
-        best["sum"] = best["sum"] + vectors[i] * _weight(qualities[i])
+        best["sum"] = best["sum"] + vectors[i] * face_weight(qualities[i])
     return [group["members"] for group in groups]
 
 
@@ -387,7 +387,7 @@ def refresh_cluster(cluster):
     for _pk, quality, blob, _deleted in members:
         vector = from_bytes(blob, FACE_EMBEDDINGS.dims) if blob else None
         if vector is not None:
-            weighted = vector.astype(np.float64) * _weight(quality)
+            weighted = vector.astype(np.float64) * face_weight(quality)
             total = weighted if total is None else total + weighted
     try:
         cluster.centroid = (

@@ -324,6 +324,7 @@ window.photosApp = function photosApp() {
         uuid: tile.dataset.uuid,
         name: tile.dataset.displayName,
         type: tile.dataset.fileType,
+        mediaType: tile.dataset.mediaType,
         filesUrl: tile.dataset.filesUrl,
       };
       const generation = ++this._ctxGeneration;

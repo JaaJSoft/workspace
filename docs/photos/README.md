@@ -5,8 +5,9 @@ the day they were taken. It is a preview module.
 
 ## Face detection and grouping
 
-The **People** tab finds the faces in a user's photos and groups the ones that
-look like the same person, so every photo of someone is one click away. Faces
+The **People** tab finds the faces in a user's photos and videos and groups the
+ones that look like the same person, so every photo and video of someone is one
+click away. Faces
 are detected and compared on the server itself; no photo and no face is sent
 anywhere.
 
@@ -28,8 +29,8 @@ data, and the feature is built around that:
 PHOTOS_FACES_ENABLED=1
 ```
 
-The analysis runs in the Celery worker, after the photo's capture date has been
-read. The model weights download on the first analysis into
+The analysis runs in the Celery worker, after the photo's or the video's capture
+date has been read. The model weights download on the first analysis into
 `PHOTOS_MODEL_DIR` (default: `models/` under `MEDIA_ROOT`) and are checked
 against pinned SHA-256 hashes; a file that does not match is never loaded. To
 ship them in the image instead, for a worker without internet access:
@@ -83,6 +84,35 @@ one inherits its group and its confirmation.
 | `PHOTOS_FACES_MAX_PER_PHOTO` | `40` | The most confident faces kept per photo. |
 | `PHOTOS_FACES_MAX_DISTANCE` | backend's own | Cosine distance under which two faces count as one person (0.58 for SFace, 0.6 for ArcFace). |
 | `PHOTOS_FACES_CLUSTER_PENDING` | `50` | Ungrouped faces that trigger a grouping run before the nightly one. |
+| `PHOTOS_FACES_VIDEO_DECODE_SIZE` | `1280` | Longest side, in px, of the video frames detection runs on. |
+| `PHOTOS_FACES_VIDEO_INTERVAL` | `2` | Seconds between two sampled frames at least (more in a long video, so the frames cover all of it). |
+| `PHOTOS_FACES_VIDEO_MAX_FRAMES` | `60` | The most frames sampled from one video. |
+| `PHOTOS_FACES_VIDEO_MAX_DURATION` | `1200` | Longer videos (seconds) are not read for faces. |
+| `PHOTOS_FACES_VIDEO_MAX_FILE_BYTES` | 2 GB | Larger videos are not read for faces. |
+
+### Faces in videos
+
+Videos are read where ffmpeg and ffprobe are installed (the Docker image ships
+them); without them, videos are simply left out and never count as pending.
+Each video runs in its own low-priority task, so a long one never holds up the
+photos behind it.
+
+- **Frames**: ffmpeg samples a frame at every scene change and at least every
+  `PHOTOS_FACES_VIDEO_INTERVAL` seconds, up to `PHOTOS_FACES_VIDEO_MAX_FRAMES`.
+  The faces of each frame are found like a photo's.
+- **Tracking**: a face in one frame and a face in the next one are the same
+  person when their boxes overlap and they look much alike. Someone who leaves
+  and comes back is recognised by their face alone; two faces of one frame are
+  always two people.
+- **One face per person and video**: the grouping sees each person once per
+  video, as it sees them once per photo. Their face picture is the best one of
+  the video, and "People in this video" says when it was seen, with a link
+  playing the video from there.
+
+The cost is a few seconds of CPU per video on a small server for detection,
+plus the decoding: ffmpeg reads the whole video to find its scene changes, so
+a long 4K recording costs far more than a short phone clip. Lower
+`PHOTOS_FACES_VIDEO_MAX_DURATION` on a server that should not spend that.
 
 ### How grouping works
 

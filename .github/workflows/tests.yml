@@ -249,10 +249,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
-      # Poster frames and video metadata run ffmpeg and ffprobe; their tests
-      # skip without the binaries, which would leave that code uncovered.
+      # Poster frames, video metadata, faces in videos and the frames a
+      # vision model is shown run ffmpeg and ffprobe; their tests skip without
+      # the binaries, which would leave that code uncovered.
       - name: Install ffmpeg
-        if: contains(fromJSON('["files", "photos"]'), matrix.module)
+        if: contains(fromJSON('["ai", "files", "photos"]'), matrix.module)
         run: |
           sudo apt-get update
           DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends ffmpeg

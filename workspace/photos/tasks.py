@@ -27,6 +27,27 @@ def analyze_photo_faces(self, file_uuid):
     max_retries=0: a photo that failed is still pending, and the hourly
     catch-up (or ``manage.py catch_up faces``) comes back for it.
     """
+    _analyze_pending(file_uuid)
+
+
+@shared_task(
+    name="photos.analyze_video_faces",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def analyze_video_faces(self, file_uuid):
+    """Find the people of one video, unless they are already up to date.
+
+    Its own task, below the photos: a video takes seconds to minutes of
+    decoding and detection, which must not hold up the photos queued behind
+    it. max_retries=0 for the reason analyze_photo_faces gives.
+    """
+    _analyze_pending(file_uuid)
+
+
+def _analyze_pending(file_uuid):
     from workspace.common.uuids import parse_uuid_or_none
 
     from .services.face_analysis import analyze_faces, pending_faces_qs
@@ -41,9 +62,16 @@ def analyze_photo_faces(self, file_uuid):
         analyze_faces(file_obj)
 
 
+def face_analysis_task(file_type):
+    """The task that reads a pending file of content label *file_type*."""
+    from workspace.files.services.thumbnails.generation import VIDEO_LABELS
+
+    return analyze_video_faces if file_type in VIDEO_LABELS else analyze_photo_faces
+
+
 @shared_task(name="photos.queue_owner_faces", priority=LOW_PRIORITY, ignore_result=True)
 def queue_owner_faces(user_id):
-    """Queue every photo of a user who just turned face grouping on."""
+    """Queue every photo and video of a user who just turned face grouping on."""
     from .services.face_analysis import faces_catch_up_enabled, pending_faces_qs
 
     if not faces_catch_up_enabled():
@@ -51,12 +79,12 @@ def queue_owner_faces(user_id):
     # Read in full before sending: with tasks run inline (development), a
     # cursor held open across their writes makes SQLite report a locked
     # database.
-    uuids = list(
-        pending_faces_qs().filter(owner_id=user_id).values_list("uuid", flat=True)
+    pending = list(
+        pending_faces_qs().filter(owner_id=user_id).values_list("uuid", "type")
     )
-    for uuid in uuids:
-        analyze_photo_faces.apply_async((str(uuid),), priority=LOW_PRIORITY)
-    return len(uuids)
+    for uuid, file_type in pending:
+        face_analysis_task(file_type).apply_async((str(uuid),), priority=LOW_PRIORITY)
+    return len(pending)
 
 
 @shared_task(name="photos.cluster_faces", priority=LOW_PRIORITY, ignore_result=True)

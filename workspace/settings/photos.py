@@ -52,3 +52,20 @@ PHOTOS_FACES_MAX_DISTANCE = (
 # Once a user has this many ungrouped faces, a clustering run is queued
 # without waiting for the nightly one.
 PHOTOS_FACES_CLUSTER_PENDING = int(os.getenv("PHOTOS_FACES_CLUSTER_PENDING", "50"))
+
+# Videos are read for faces from frames sampled at scene changes, and at least
+# every PHOTOS_FACES_VIDEO_INTERVAL seconds (more sparsely in a long video, so
+# the frames cover all of it), at most PHOTOS_FACES_VIDEO_MAX_FRAMES of them,
+# decoded at PHOTOS_FACES_VIDEO_DECODE_SIZE px on the longest side. Videos
+# longer (seconds) or larger than the limits are not read for faces at all.
+PHOTOS_FACES_VIDEO_DECODE_SIZE = int(
+    os.getenv("PHOTOS_FACES_VIDEO_DECODE_SIZE", "1280")
+)
+PHOTOS_FACES_VIDEO_INTERVAL = float(os.getenv("PHOTOS_FACES_VIDEO_INTERVAL", "2"))
+PHOTOS_FACES_VIDEO_MAX_FRAMES = int(os.getenv("PHOTOS_FACES_VIDEO_MAX_FRAMES", "60"))
+PHOTOS_FACES_VIDEO_MAX_DURATION = int(
+    os.getenv("PHOTOS_FACES_VIDEO_MAX_DURATION", str(20 * 60))
+)
+PHOTOS_FACES_VIDEO_MAX_FILE_BYTES = int(
+    os.getenv("PHOTOS_FACES_VIDEO_MAX_FILE_BYTES", str(2 * 1024**3))
+)

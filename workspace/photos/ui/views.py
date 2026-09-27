@@ -688,11 +688,12 @@ def _unnamed_item(item):
 
 def _face_items(face_ids):
     """What a board shows of each of *face_ids*, in that order: the crop, and
-    the photo it was found in, for the tile to open it."""
+    the photo or the moment of the video it was found in, for the tile to
+    open it."""
     rows = {
         row[0]: row
         for row in Face.objects.filter(pk__in=face_ids).values_list(
-            "pk", "file_id", "file__name", "file__type", "assignment"
+            "pk", "file_id", "file__name", "file__type", "assignment", "timestamp"
         )
     }
     return [
@@ -703,6 +704,7 @@ def _face_items(face_ids):
             "file_name": rows[pk][2],
             "file_type": rows[pk][3],
             "assignment": rows[pk][4],
+            "timestamp": rows[pk][5],
         }
         for pk in face_ids
         if pk in rows

@@ -2,13 +2,17 @@
   "People in this photo": each face found in a photo, the person it was
   grouped with, and the corrections - confirm, not this person, or say who
   it is: a named person, a contact from People, a new name, or an unnamed
-  cluster. State lives in photosFacesMixin() (faces.js).
+  cluster. For a video, "People in this video": one face per person, with the
+  moment it was seen and a link playing the video from there. State lives in
+  photosFacesMixin() (faces.js).
 {% endcomment %}
 <dialog id="photo-faces-dialog" class="modal" @close="facesDialogClosed()">
   <div class="modal-box max-w-lg">
     <h3 class="font-bold text-lg flex items-center gap-2">
       <i data-lucide="scan-face" class="w-5 h-5 text-module"></i>
-      People in this photo
+      <span
+        x-text="facesDialogIsVideo() ? 'People in this video' : 'People in this photo'"
+      >People in this photo</span>
     </h3>
     <p
       class="text-sm text-base-content/60 mb-4 truncate"
@@ -23,7 +27,9 @@
       x-cloak
       class="text-sm text-base-content/60 py-6 text-center"
     >
-      No face was found in this photo, or it has not been read yet.
+      <span
+        x-text="facesDialogIsVideo() ? 'No face was found in this video, or it has not been read yet.' : 'No face was found in this photo, or it has not been read yet.'"
+      ></span>
     </p>
 
     <ul class="space-y-2" x-show="!facesDialog.loading">
@@ -57,6 +63,17 @@
                 class="badge badge-sm badge-success badge-outline shrink-0"
               >Confirmed</span>
             </div>
+            <template x-if="face.timestamp != null">
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs shrink-0 tabular-nums"
+                :title="'Play the video from ' + faceTime(face)"
+                @click="watchFace(face)"
+              >
+                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                <span x-text="'at ' + faceTime(face)"></span>
+              </button>
+            </template>
           </div>
           <div class="flex flex-wrap justify-end gap-1 mt-2">
             <button

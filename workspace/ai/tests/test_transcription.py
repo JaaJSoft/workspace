@@ -144,7 +144,7 @@ class TranscodingTests(SimpleTestCase):
         self.assertEqual(http.calls, [])
 
     def test_transcoding_is_skipped_without_ffmpeg(self):
-        with patch.object(transcription, "_FFMPEG", None):
+        with patch("workspace.files.services.ffmpeg.FFMPEG", None):
             self.assertIsNone(transcription._to_wav(WEBM))
 
     @override_settings(CHAT_VOICE_MAX_SECONDS=300)
@@ -152,7 +152,7 @@ class TranscodingTests(SimpleTestCase):
         # The upload cap is 50 MB, and Opus at its lowest bitrate packs about
         # nineteen hours into that - two gigabytes of PCM read into a worker.
         with (
-            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch("workspace.files.services.ffmpeg.FFMPEG", "/usr/bin/ffmpeg"),
             patch.object(transcription.subprocess, "run") as run,
         ):
             transcription._to_wav(WEBM)
@@ -176,7 +176,7 @@ class TranscodingTests(SimpleTestCase):
             return MagicMock(returncode=0)
 
         with (
-            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch("workspace.files.services.ffmpeg.FFMPEG", "/usr/bin/ffmpeg"),
             patch.object(transcription.subprocess, "run", side_effect=fake_run),
         ):
             self.assertIsNone(transcription._to_wav(WEBM))
@@ -189,7 +189,7 @@ class TranscodingTests(SimpleTestCase):
             return MagicMock(returncode=0)
 
         with (
-            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch("workspace.files.services.ffmpeg.FFMPEG", "/usr/bin/ffmpeg"),
             patch.object(transcription.subprocess, "run", side_effect=fake_run),
         ):
             self.assertEqual(transcription._to_wav(WEBM), RECORDING)
@@ -197,7 +197,7 @@ class TranscodingTests(SimpleTestCase):
     def test_a_failing_ffmpeg_yields_no_audio(self):
         error = subprocess.CalledProcessError(1, "ffmpeg")
         with (
-            patch.object(transcription, "_FFMPEG", "/usr/bin/ffmpeg"),
+            patch("workspace.files.services.ffmpeg.FFMPEG", "/usr/bin/ffmpeg"),
             patch.object(transcription.subprocess, "run", side_effect=error),
         ):
             self.assertIsNone(transcription._to_wav(WEBM))

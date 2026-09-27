@@ -15,8 +15,8 @@ trash, was quarantined or stopped being shared with the viewer drops out of
 the album instead of leaking through it.
 
 Faces and their clusters are the user's own and only ever in their personal
-photos (see services/face_analysis.py); the helpers at the end narrow them
-to the photos the library still shows.
+photos and videos (see services/face_analysis.py); the helpers at the end
+narrow them to the files the library still shows.
 """
 
 from django.contrib.auth.models import Group
@@ -26,7 +26,6 @@ from django.db.models.functions import Lower, RowNumber
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
-from workspace.files.services.thumbnails.generation import RASTER_LABELS
 from workspace.photos.models import Album, AlbumItem, Face, FaceCluster, MediaItem
 from workspace.photos.services.analysis import library_candidates
 from workspace.photos.services.face_preferences import faces_enabled
@@ -284,15 +283,17 @@ def has_photos_of_person(user, person):
 
 
 def face_progress(user):
-    """How far the analysis of the user's photos has come, as a dict."""
-    from workspace.photos.services.face_analysis import pending_faces_qs
-
-    photos = (
-        _media(FileService.user_files_qs(user))
-        .filter(type__in=RASTER_LABELS)
-        .with_blob()
+    """How far the analysis of the user's photos and videos has come, as a dict."""
+    from workspace.photos.services.face_analysis import (
+        face_candidates,
+        pending_faces_qs,
     )
-    total = photos.count()
+
+    total = (
+        exclude_blocked(face_candidates(FileService.user_files_qs(user)))
+        .with_blob()
+        .count()
+    )
     pending = (
         pending_faces_qs().filter(owner=user).count() if faces_enabled(user) else total
     )

@@ -225,6 +225,8 @@ class ReviewPageTests(ReviewTestCase):
     def test_lists_the_faces_taken_out_of_a_group(self):
         face = self.face("alice-2.png")
         reject_face(face)
+        # Seen in a video: the tile opens it at that moment.
+        Face.objects.filter(pk=face.pk).update(timestamp=12.0)
 
         response = self.client.get(REVIEW, {"queue": "unassigned"})
 
@@ -234,6 +236,7 @@ class ReviewPageTests(ReviewTestCase):
         self.assertEqual(item["uuid"], str(face.pk))
         self.assertEqual(item["file"], str(self.photos["alice-2.png"].pk))
         self.assertEqual(item["file_name"], "alice-2.png")
+        self.assertEqual(item["timestamp"], 12.0)
         self.assertEqual(response.context["unassigned_count"], 1)
 
     def test_the_faces_never_grouped_are_one_filter_away(self):

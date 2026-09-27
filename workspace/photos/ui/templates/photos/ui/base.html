@@ -48,6 +48,14 @@
           :class="{ 'justify-center': sidebarCollapsed(), 'justify-between': !sidebarCollapsed() }"
         >
           {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+          <div
+            class="flex items-center gap-0.5{% if workspace_sidebar_collapsed %} hidden{% endif %}"
+            :class="{ hidden: sidebarCollapsed() }"
+            x-show="!sidebarCollapsed()"
+            x-transition
+          >
+            {% include "ui/partials/preferences_popover.html" with content="photos/ui/partials/preferences_content.html" accent="text-module" button_class="hover:text-module" %}
+          </div>
         </div>
       </div>
       {% block photos_nav %}
@@ -66,12 +74,27 @@
 {% block content %}
   {{ viewer_prefs|json_script:"viewer-prefs-data" }}
   {{ tile|json_script:"photo-tile-data" }}
+  {{ import_folder|json_script:"photos-import-folder-data" }}
+  <input
+    id="photos-import-input"
+    type="file"
+    class="hidden"
+    multiple
+    accept="image/*,video/*,.heic,.heif"
+    @change="onImportInput($event)"
+  />
   {% comment %}
     The scroll container is the swap target itself: a sidebar navigation
     replaces it whole, so the new listing starts at the top instead of
     inheriting the previous one's scroll offset.
   {% endcomment %}
-  <div class="relative flex-1 h-full min-w-0">
+  <div
+    class="relative flex-1 h-full min-w-0"
+    @dragenter="onImportDragEnter($event)"
+    @dragover="onImportDragOver($event)"
+    @dragleave="onImportDragLeave($event)"
+    @drop="onImportDrop($event)"
+  >
     {% block photos_swap %}
       <div id="photos-content" class="h-full overflow-y-auto">
         {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
@@ -101,6 +124,21 @@
       </span>
       <span class="sr-only">Loading…</span>
     </div>
+    <div
+      x-show="importDropActive"
+      x-cloak
+      x-transition.opacity
+      class="absolute inset-2 z-30 flex items-center justify-center rounded-box border-2 border-dashed border-module bg-base-100/90 backdrop-blur-sm pointer-events-none"
+      data-testid="photos-drop-zone"
+    >
+      <div class="text-center">
+        <i data-lucide="image-up" class="w-12 h-12 mx-auto mb-3 text-module"></i>
+        <p class="text-lg font-semibold text-module">Drop photos and videos to import them</p>
+        <p class="text-sm text-base-content/60">
+          They are saved to <span class="font-medium" x-text="importFolderLabel()"></span> in Files
+        </p>
+      </div>
+    </div>
   </div>
 
   {% comment %}
@@ -124,6 +162,7 @@
   </div>
 
   {% include "photos/ui/partials/selection_bar.html" %}
+  {% include "files/ui/partials/upload_panel.html" %}
 
   {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
   {% include "files/ui/partials/tag_dialog.html" %}
@@ -152,6 +191,8 @@
   <script src="{% static 'ui/js/password_generator.js' %}"></script>
   <script src="{% static 'files/ui/js/share_modal.js' %}"></script>
   <script src="{% static 'ui/js/comments.js' %}"></script>
+  <script src="{% static 'files/ui/js/upload_queue.js' %}"></script>
+  <script src="{% static 'photos/ui/js/import.js' %}"></script>
   <script src="{% static 'photos/ui/js/faces.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>
 {% endblock %}

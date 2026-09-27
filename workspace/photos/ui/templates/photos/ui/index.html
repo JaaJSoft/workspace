@@ -48,6 +48,7 @@
         <span
           class="badge badge-ghost gap-1.5 max-sm:hidden"
           title="New photos and videos show up here once their capture date has been read."
+          data-photos-pending
         >
           <span class="loading loading-spinner loading-xs"></span>
           {{ pending }} being analyzed
@@ -56,6 +57,18 @@
       <div class="max-sm:hidden self-center">
         {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
       </div>
+      {% if not album and not cluster %}
+        <button
+          type="button"
+          class="btn btn-module btn-sm gap-1 self-center"
+          title="Import photos and videos"
+          @click="pickImportFiles()"
+          data-testid="photos-import"
+        >
+          <i data-lucide="image-up" class="w-4 h-4"></i>
+          <span class="max-sm:hidden">Import</span>
+        </button>
+      {% endif %}
       {% if date_param %}
         <a
           href="{{ latest_url }}"
@@ -174,9 +187,19 @@
       {% elif is_timeline_view and not date_param and not media_type %}
         <h2 class="text-lg font-semibold">No photos yet</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
-          Photos and videos you upload to Files show up here, by the day they were taken.
+          Import photos and videos, or drop them here. Everything you keep in Files shows up too, by the day it was taken.
         </p>
-        <a href="{% url 'files_ui:index' %}" class="btn btn-module btn-sm">Go to Files</a>
+        <div class="flex flex-wrap justify-center gap-2">
+          <button
+            type="button"
+            class="btn btn-module btn-sm gap-1"
+            @click="pickImportFiles()"
+          >
+            <i data-lucide="image-up" class="w-4 h-4"></i>
+            Import photos
+          </button>
+          <a href="{% url 'files_ui:index' %}" class="btn btn-ghost btn-sm">Go to Files</a>
+        </div>
       {% else %}
         <h2 class="text-lg font-semibold">Nothing here</h2>
         <p class="text-sm text-base-content/60 max-w-sm">

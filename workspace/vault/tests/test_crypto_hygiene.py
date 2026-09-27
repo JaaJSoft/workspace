@@ -189,7 +189,10 @@ class NoAlgorithmLiteralTests(SimpleTestCase):
     SEEDER = REPO_ROOT / "scripts" / "seed_vault.py"
 
     def test_no_writer_names_an_algorithm(self):
-        files = [*self.APP_JS.glob("*.js"), self.SEEDER]
+        app_js = list(self.APP_JS.glob("*.js"))
+        # A moved directory would otherwise make this pass on nothing.
+        self.assertIn(self.APP_JS / "onboarding.js", app_js)
+        files = [*app_js, self.SEEDER]
         offenders = [
             f"{path.relative_to(REPO_ROOT)}:{number}"
             for path in files

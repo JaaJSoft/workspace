@@ -60,6 +60,27 @@ function pkcs8FromSeed(seed) {
   return out;
 }
 
+// Every algorithm the envelope names, checked against this build before
+// Argon2 runs: a tab older than the deploy that wrote the envelope should say
+// so at once, not after seconds of derivation. Only the unsupported answer is
+// taken here. A value that is merely malformed is left to the step that reads
+// it, which reports it by where it fails - a malformed signing key is a
+// substitution, not an old tab.
+function refuseUnreadable(V, envelope) {
+  try {
+    V.decodeCiphertext(V.fromBase64Url(envelope.wrapped_kex_priv));
+    V.decodeCiphertext(V.fromBase64Url(envelope.wrapped_sig_priv));
+    V.decodePublicKey(V.fromBase64Url(envelope.sig_public), 'sig');
+    V.decodePublicKey(V.fromBase64Url(envelope.kex_public), 'kex');
+    const attestation = V.fromBase64Url(envelope.sig_over_kex_pub);
+    if (attestation.length) V.suiteEntry('signature', attestation[0]);
+  } catch (err) {
+    if (err && err.name === 'UnsupportedAlgorithmError') {
+      throw VaultUnlockError('unsupported', err);
+    }
+  }
+}
+
 window.vaultSession = (function () {
   let accountUuid = null;
   let signer = null;
@@ -198,6 +219,7 @@ window.vaultSession = (function () {
           throw VaultUnlockError('recovery-key', err);
         }
         V.assertAccountKdf(envelope.kdf_algo, envelope.kdf_params);
+        refuseUnreadable(V, envelope);
         amk = await V.deriveAmk({
           password: options.password.normalize('NFC'),
           secretKey: secretBytes,
@@ -250,6 +272,9 @@ window.vaultSession = (function () {
             V.fromBase64Url(envelope.sig_over_kex_pub)
           );
         } catch (err) {
+          if (err && err.name === 'UnsupportedAlgorithmError') {
+            throw VaultUnlockError('unsupported', err);
+          }
           throw VaultUnlockError('substituted-key', err);
         }
 
@@ -434,7 +459,9 @@ window.vaultSession = (function () {
       // Every input to the derivation, not just the entry: a memo keyed on
       // less would answer for a wrapped key it never saw. The entry uuid
       // stands in for the info derived from it.
-      const memo = [vault.uuid, vault.wrapped_key, entryUuid].join(' ');
+      const memo = [
+        vault.uuid, vault.wrapped_key, JSON.stringify(vault.hpke_suite ?? null), entryUuid,
+      ].join(' ');
       if (entryKeyCache.has(memo)) return entryKeyCache.get(memo);
       const derived = await this._openDerivedKey(vault, info);
       // Re-read: the cache can have been dropped by a lock across that await,

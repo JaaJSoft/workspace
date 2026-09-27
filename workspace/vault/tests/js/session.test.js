@@ -62,6 +62,8 @@ function harness(overrides = {}) {
     equalBytes: (a, b) => String(a) === String(b),
     decodePublicKey: (bytes) => bytes.slice(1),
     assertAccountKdf: () => {},
+    decodeCiphertext: () => ({}),
+    suiteEntry: () => ({}),
     deriveAmk: async () => { calls.push('deriveAmk'); return amk; },
     hkdf: async () => { calls.push('hkdf'); return Uint8Array.from([13, 14]); },
     open: async (key, raw, ad) => {
@@ -294,6 +296,17 @@ test('a substituted signing public key is caught before it is trusted', async ()
   );
   assert.equal(h.calls.includes('verifyBytes'), false);
   assert.equal(h.session.isUnlocked(), false);
+});
+
+test('an attestation under a signature algorithm this build cannot read is unsupported, not a substitution', async () => {
+  const unsupported = Object.assign(new Error('unsupported signature 9'), {
+    name: 'UnsupportedAlgorithmError',
+  });
+  const h = harness({ vaultCrypto: { verifyBytes: async () => { throw unsupported; } } });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET, remember: false }),
+    (err) => err.reason === 'unsupported' && err.cause === unsupported
+  );
 });
 
 test('the attestation is verified after the key comparison, never before', async () => {
@@ -831,6 +844,21 @@ test('separate entries still get separate keys', async () => {
   assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
 });
 
+test('the memo tells two hpke suites apart', async () => {
+  // The suite is an input to the vault key open, so a hit keyed without it
+  // would answer for a wrapped key under a suite it never opened.
+  const h = readerHarness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
+  const before = h.calls.filter((c) => c === 'hkdf').length;
+
+  await h.session.withEntryKeyCache(async () => {
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
+    await h.session.openEntryKey({ ...vaultRow('vault-1'), hpke_suite: { format: 3 } }, 'entry-1');
+  });
+
+  assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
+});
+
 test('a key derived for one read is not reused by the next', async () => {
   // Scoped to the walk that needed it. Left standing, a key would outlive the
   // export and be handed to whatever asked next.
@@ -1068,4 +1096,44 @@ test('a lock during the keyring import hands back no key', async () => {
     return keyring;
   };
   await assert.rejects(session.openVaultKey(vault), (err) => err.reason === 'locked');
+});
+
+function withPrefix(envelope, field, id) {
+  return withWrap(envelope, field, (bytes) => { bytes[0] = id; });
+}
+
+test('an attestation under an unknown signature id is unsupported, not a substitution', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession(withPrefix(envelope, 'sig_over_kex_pub', 0x7f));
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('a signing key under an unknown algorithm id is unsupported, not a substitution', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession(withPrefix(envelope, 'sig_public', 0x7f));
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('a key-exchange key under an unknown algorithm id is unsupported, not a substitution', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession(withPrefix(envelope, 'kex_public', 0x7f));
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('an unreadable envelope is refused before Argon2 runs', async () => {
+  // Deciding after the derivation would still give the right answer, seconds
+  // late - which is why the answer alone cannot pin this.
+  const { envelope, credentials } = await fixture();
+  for (const [field, edit] of [
+    ['wrapped_kex_priv', (w) => { w[1] = 0x07; }],
+    ['wrapped_sig_priv', (w) => { w[0] = 0x09; }],
+    ['sig_over_kex_pub', (w) => { w[0] = 0x7f; }],
+  ]) {
+    const { ctx, session } = realSession(withWrap(envelope, field, edit));
+    let derivations = 0;
+    const deriveAmk = ctx.vaultCrypto.deriveAmk;
+    ctx.vaultCrypto.deriveAmk = async (...args) => { derivations += 1; return deriveAmk(...args); };
+    await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported', field);
+    assert.equal(derivations, 0, `${field}: Argon2 ran before the refusal`);
+  }
 });

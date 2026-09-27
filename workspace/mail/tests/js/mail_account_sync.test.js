@@ -15,17 +15,19 @@ function jsonResponse(status, body) {
   return { status, ok: status >= 200 && status < 300, json: async () => body };
 }
 
-function makeApp(accountSnapshots) {
-  const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail_accounts.js');
+function makeApp(accountSnapshots, syncResponse = jsonResponse(202, { status: 'queued', updated_at: QUEUED_AT })) {
+  const calls = { polls: 0, folders: 0, messages: 0, spinnerDuringReload: null, dialogs: [] };
+  const ctx = loadScript('workspace/mail/ui/static/mail/ui/js/mail_accounts.js', {
+    AppDialog: { async message(opts) { calls.dialogs.push(opts); } },
+  });
   const app = ctx.mailAccountsMixin();
-  const calls = { polls: 0, folders: 0, messages: 0, spinnerDuringReload: null };
   Object.assign(app, {
     accounts: [{ uuid: 'acc-1', updated_at: QUEUED_AT, expanded: true }],
     syncingAccounts: {},
     selectedFolder: { account_id: 'acc-1' },
     async _syncPollDelay() {},
     async _fetch(url, opts = {}) {
-      if (opts.method === 'POST') return jsonResponse(202, { status: 'queued', updated_at: QUEUED_AT });
+      if (opts.method === 'POST') return syncResponse;
       const snapshot = accountSnapshots[Math.min(calls.polls, accountSnapshots.length - 1)];
       calls.polls++;
       return snapshot instanceof Error ? Promise.reject(snapshot) : jsonResponse(200, snapshot);
@@ -84,4 +86,25 @@ test('a sync that never lands gives up instead of spinning forever', async () =>
   assert.ok(calls.polls > 1);
   assert.equal(calls.folders, 1);
   assert.equal(app.syncingAccounts['acc-1'], false);
+});
+
+test('a refused sync shows the server detail and reloads nothing', async () => {
+  const { app, calls } = makeApp([], jsonResponse(409, { detail: 'Account is inactive' }));
+
+  await app.syncAccount('acc-1');
+
+  assert.equal(calls.dialogs.length, 1);
+  assert.equal(calls.dialogs[0].message, 'Account is inactive');
+  assert.equal(calls.polls, 0);
+  assert.equal(calls.folders, 0);
+  assert.equal(app.syncingAccounts['acc-1'], false);
+});
+
+test('a sync that could not be queued shows the error field', async () => {
+  const { app, calls } = makeApp([], jsonResponse(503, { status: 'error', error: 'Sync could not be queued' }));
+
+  await app.syncAccount('acc-1');
+
+  assert.equal(calls.dialogs[0].message, 'Sync could not be queued');
+  assert.equal(calls.folders, 0);
 });

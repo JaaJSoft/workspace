@@ -97,6 +97,16 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       this.syncingAccounts[uuid] = true;
       try {
         const res = await this._fetch(`/api/v1/mail/accounts/${uuid}/sync`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          await AppDialog.message({
+            title: 'Sync',
+            message: data.detail || data.error || 'Failed to sync account',
+            icon: 'alert-triangle',
+            iconClass: 'bg-error/10 text-error',
+          });
+          return;
+        }
         if (res.status === 202) {
           const { updated_at: queuedAt } = await res.json();
           await this._waitForAccountSync(uuid, queuedAt);

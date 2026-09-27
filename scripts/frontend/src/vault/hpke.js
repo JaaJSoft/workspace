@@ -1,6 +1,6 @@
 import { Aes256Gcm, CipherSuite, HkdfSha256 } from '@hpke/core';
 import { DhkemX25519HkdfSha256 } from '@hpke/dhkem-x25519';
-import { storedHpkeFormat } from './suites.js';
+import { UnsupportedAlgorithmError, storedHpkeFormat } from './suites.js';
 
 // mode_base throughout. The aad parameter stays empty - all context binding
 // goes through info, which is what keeps a JS and a Python implementation from
@@ -14,17 +14,26 @@ function exactBuffer(bytes) {
   return bytes.slice().buffer;
 }
 
+// The RFC 9180 ids of the one construction below, spelled out independently
+// of the manifest: a manifest that names anything else for a format describes
+// a wrap this build would not have sealed.
+const CONSTRUCTION_IDS = Object.freeze({ kem_id: 0x0020, kdf_id: 0x0001, aead_id: 0x0002, mode: 0 });
+
 function construction() {
   return new CipherSuite({
     kem: new DhkemX25519HkdfSha256(), kdf: new HkdfSha256(), aead: new Aes256Gcm(),
   });
 }
 
-// Every suite the manifest declares for a format is this construction today;
-// a second one lands as a branch here plus a manifest entry. The stored suite
-// is checked before any HPKE maths runs.
+// A second construction lands as a branch here plus a manifest entry. The
+// stored suite is checked before any HPKE maths runs.
 function suiteFor(stored) {
-  storedHpkeFormat(stored);
+  const format = storedHpkeFormat(stored);
+  const ids = Object.keys(stored).filter((key) => key !== 'format');
+  if (ids.length !== Object.keys(CONSTRUCTION_IDS).length
+    || ids.some((key) => !Object.hasOwn(CONSTRUCTION_IDS, key) || stored[key] !== CONSTRUCTION_IDS[key])) {
+    throw new UnsupportedAlgorithmError('hpke', format);
+  }
   return construction();
 }
 

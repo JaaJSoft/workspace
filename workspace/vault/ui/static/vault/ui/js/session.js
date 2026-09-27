@@ -221,6 +221,7 @@ window.vaultSession = (function () {
         V.assertAccountKdf(envelope.kdf_algo, envelope.kdf_params);
         refuseUnreadable(V, envelope);
         amk = await V.deriveAmk({
+          algo: envelope.kdf_algo,
           password: options.password.normalize('NFC'),
           secretKey: secretBytes,
           salt: V.fromBase64Url(envelope.kdf_salt),

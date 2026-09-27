@@ -320,6 +320,7 @@ window.vaultOnboarding = function vaultOnboarding() {
         }
 
         const amk = await V.deriveAmk({
+          algo: V.CURRENT_SUITE.kdf.algo,
           password: this.password.normalize('NFC'),
           secretKey: this.secretBytes,
           salt: V.fromBase64Url(account.kdf_salt),

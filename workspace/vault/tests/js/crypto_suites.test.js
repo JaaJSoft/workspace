@@ -40,6 +40,7 @@ function bundleWithTestAead() {
 const V = freshBundle();
 const KEY = Uint8Array.from({ length: 32 }, (_, i) => i);
 const ENTRY = '01890a5d-ac96-774b-bcce-b302099a8057';
+const isUnsupported = (axis) => (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === axis;
 
 test('the current suite is format 2 with AES-256-GCM', () => {
   assert.equal(V.CURRENT_SUITE.formatVersion, 2);
@@ -48,13 +49,39 @@ test('the current suite is format 2 with AES-256-GCM', () => {
   assert.equal(V.CURRENT_SUITE.kdf.algo, 'argon2id');
 });
 
+function declaredReadable(axis) {
+  return Object.entries(MANIFEST[axis])
+    .filter(([, entry]) => entry.state !== 'test')
+    .map(([id]) => id);
+}
+
 test('the bundle implements every readable id the manifest declares, and no other', () => {
-  for (const axis of ['format', 'aead', 'pubkey', 'signature', 'payload']) {
-    const declared = Object.entries(MANIFEST[axis])
-      .filter(([, entry]) => entry.state !== 'test')
-      .map(([id]) => Number(id))
-      .sort((a, b) => a - b);
+  for (const axis of ['format', 'aead', 'hpke', 'pubkey', 'signature', 'payload']) {
+    const declared = declaredReadable(axis).map(Number).sort((a, b) => a - b);
     assert.deepEqual(Array.from(V.implementedIds(axis)), declared, axis);
+  }
+  // Keyed by name: a KDF the manifest declares is one deriveAmk must run.
+  assert.deepEqual(Array.from(V.implementedIds('kdf')), declaredReadable('kdf').sort(), 'kdf');
+});
+
+test('every hpke suite the manifest declares is one the bundle seals under', async () => {
+  // implementedIds says a format is known; this says its declared ids are the
+  // construction the bundle builds, not a suite it would only claim to use.
+  for (const format of declaredReadable('hpke')) {
+    const stored = Number(format) === 1
+      ? { ...MANIFEST.hpke[format].suite }
+      : { ...MANIFEST.hpke[format].suite, format: Number(format) };
+    const sealed = await V.hpkeSeal(new Uint8Array(32).fill(9), new Uint8Array(1), new Uint8Array(1), stored);
+    assert.ok(sealed.length > 32, format);
+  }
+});
+
+test('a declared kdf is derived with, and anything else is refused before Argon2', async () => {
+  const inputs = { password: 'x', secretKey: new Uint8Array(32), salt: new Uint8Array(32),
+    params: { v: '1.3', m: 8192, t: 1, p: 1 } };
+  assert.equal((await V.deriveAmk({ ...inputs, algo: 'argon2id' })).length, 32);
+  for (const algo of ['scrypt', 'constructor', undefined]) {
+    await assert.rejects(V.deriveAmk({ ...inputs, algo }), isUnsupported('kdf'), String(algo));
   }
 });
 
@@ -158,7 +185,6 @@ test('the registered test aead opens beside AES-GCM under one keyring', async ()
 const ACCOUNT = '01890a5d-ac96-774b-bcce-b302099a8058';
 const VAULT = '01890a5d-ac96-774b-bcce-b302099a8059';
 const FORMAT_1_HPKE = { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 };
-const isUnsupported = (axis) => (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === axis;
 
 test('vaultKeyInfo names the suite in format 2 only', () => {
   const dec = (b) => new TextDecoder().decode(b);
@@ -224,7 +250,7 @@ test('an account kdf named after a prototype key, or with malformed parameters, 
 
 test('deriveAmk needs its parameters spelled out', async () => {
   await assert.rejects(
-    V.deriveAmk({ password: 'x', secretKey: new Uint8Array(32), salt: new Uint8Array(32) }),
+    V.deriveAmk({ algo: 'argon2id', password: 'x', secretKey: new Uint8Array(32), salt: new Uint8Array(32) }),
     /needs params/,
   );
 });

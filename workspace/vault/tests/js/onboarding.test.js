@@ -179,7 +179,10 @@ const CRYPTO_STUB = {
   crockfordEncode: (bytes) => 'SECRET' + bytes[0],
   fromBase64Url: () => new Uint8Array(16),
   toBase64Url: () => 'b64',
-  deriveAmk: async (options) => { CRYPTO_CALLS.push(['deriveAmk', options.params]); return new Uint8Array(32); },
+  deriveAmk: async (options) => {
+    CRYPTO_CALLS.push(['deriveAmk', options.params], ['deriveAmk:algo', options.algo]);
+    return new Uint8Array(32);
+  },
   hkdf: async () => new Uint8Array(32),
   seal: async (key, plaintext, ad, options) => {
     SEAL_CALLS.push({ ad, options });
@@ -277,6 +280,7 @@ test('every algorithm the envelope names comes from the current suite', async ()
     CRYPTO_CALLS.map(([name, arg]) => [name, typeof arg === 'object' ? { ...arg } : arg]),
     [
       ['deriveAmk', suite.kdf.params],
+      ['deriveAmk:algo', suite.kdf.algo],
       ['encodePublicKey', suite.kexPublicKeyAlg],
       ['encodePublicKey', suite.sigPublicKeyAlg],
       ['decodePublicKey', 'kex'],

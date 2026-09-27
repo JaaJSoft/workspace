@@ -970,7 +970,7 @@ function fixture() {
     const accountUuid = V.uuidV7();
     const secretKey = V.randomBytes(32);
     const salt = V.randomBytes(32);
-    const amk = await V.deriveAmk({ password: PASSWORD, secretKey, salt, params: FAST_KDF });
+    const amk = await V.deriveAmk({ algo: 'argon2id', password: PASSWORD, secretKey, salt, params: FAST_KDF });
     const unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
     const kexPair = await crypto.subtle.generateKey('X25519', true, ['deriveBits']);
     const sigPair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']);

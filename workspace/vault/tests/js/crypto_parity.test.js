@@ -114,6 +114,7 @@ test('the aead vectors decode to the header the reference wrote', () => {
 test('argon2id vectors replay exactly', async () => {
   for (const vector of VECTORS.argon2id) {
     const amk = await V.deriveAmk({
+      algo: 'argon2id',
       password: vector.password,
       secretKey: V.fromBase64Url(vector.secret_key_b64),
       salt: V.fromBase64Url(vector.salt_b64),
@@ -542,7 +543,7 @@ test('a secret_key or salt of the wrong length is refused', async () => {
   ]) {
     await assert.rejects(
       () => V.deriveAmk({
-        password: 'password', secretKey: badSecret, salt: badSalt, params: V.CURRENT_SUITE.kdf.params,
+        algo: 'argon2id', password: 'password', secretKey: badSecret, salt: badSalt, params: V.CURRENT_SUITE.kdf.params,
       }),
       /expected 32/
     );
@@ -552,7 +553,7 @@ test('a secret_key or salt of the wrong length is refused', async () => {
 test('the refusal reports a length, never the secret_key itself', async () => {
   await assert.rejects(
     () => V.deriveAmk({
-      password: 'password', secretKey: new TextEncoder().encode('short'), salt: new Uint8Array(32),
+      algo: 'argon2id', password: 'password', secretKey: new TextEncoder().encode('short'), salt: new Uint8Array(32),
       params: V.CURRENT_SUITE.kdf.params,
     }),
     (error) => !error.message.includes('short') && /expected 32/.test(error.message)

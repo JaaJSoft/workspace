@@ -260,6 +260,12 @@ class HpkeDispatchTests(SimpleTestCase):
             ):
                 primitives.hpke_suite_for(stored)
 
+    def test_the_reference_builds_every_hpke_suite_the_manifest_declares(self):
+        declared = {
+            int(fmt): value["suite"] for fmt, value in suites.manifest()["hpke"].items()
+        }
+        self.assertEqual(primitives.HPKE_FORMATS, declared)
+
     def test_the_info_applies_the_same_rule_as_the_opener(self):
         for stored in (
             {**FORMAT_1_HPKE, "format": 1},
@@ -339,6 +345,23 @@ class AccountKdfTests(SimpleTestCase):
             with self.subTest(algo=algo, params=params):
                 with self.assertRaises(suites.UnsupportedAlgorithm):
                     primitives.assert_account_kdf(algo, params)
+
+    def test_the_reference_derives_with_every_kdf_the_manifest_declares(self):
+        self.assertEqual(
+            sorted(primitives.ACCOUNT_KDFS), sorted(suites.manifest()["kdf"])
+        )
+
+    def test_an_unknown_kdf_is_refused_before_any_derivation(self):
+        for algo in ("scrypt", "constructor", 1, None):
+            with (
+                self.subTest(algo=algo),
+                self.assertRaises(suites.UnsupportedAlgorithm),
+            ):
+                primitives.assert_account_kdf(algo, self.PARAMS)
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.derive_amk(
+                "password", bytes(32), bytes(32), self.PARAMS, algo="scrypt"
+            )
 
     def test_a_bool_or_a_non_mapping_is_unsupported(self):
         for params in (

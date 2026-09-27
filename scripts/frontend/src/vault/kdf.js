@@ -4,7 +4,7 @@
 // interchangeable to the KDF - an attacker who learns one then gets the
 // other's search space free.
 import { argon2id } from 'hash-wasm';
-import { CURRENT_SUITE, UnsupportedAlgorithmError, kdfEntry } from './suites.js';
+import { CURRENT_SUITE, UnsupportedAlgorithmError, kdfEntry, markImplemented } from './suites.js';
 
 // Refused before Argon2 runs. The bounds are not a secret - parameters a
 // server lowers derive another key and fail anyway - they stop an absurd m from
@@ -30,7 +30,28 @@ export function assertAccountKdf(algo, params) {
 const SECRET_KEY_LENGTH = 32;
 const SALT_LENGTH = 32;
 
-export async function deriveAmk({ password, secretKey, salt, params }) {
+async function argon2idAmk(passwordInput, secretKey, salt, params) {
+  const hex = await argon2id({
+    password: passwordInput,
+    salt,
+    secret: secretKey,
+    parallelism: params.p,
+    iterations: params.t,
+    memorySize: params.m,
+    hashLength: 32,
+    outputType: 'hex',
+  });
+  return Uint8Array.from(hex.match(/../g).map((byte) => parseInt(byte, 16)));
+}
+
+// The account KDFs this build derives with, by the name an envelope stores in
+// kdf_algo. This table is what makes a name readable: the manifest declaring
+// one is not enough.
+const ACCOUNT_KDFS = new Map([['argon2id', argon2idAmk]]);
+for (const algo of ACCOUNT_KDFS.keys()) markImplemented('kdf', algo);
+
+export async function deriveAmk({ algo, password, secretKey, salt, params }) {
+  kdfEntry(algo);
   if (!params) throw new Error('deriveAmk needs params');
   for (const [name, value, expected] of [
     ['secret_key', secretKey, SECRET_KEY_LENGTH],
@@ -43,17 +64,7 @@ export async function deriveAmk({ password, secretKey, salt, params }) {
   // NFC applies to the KDF input, not just to the length check: the same
   // password typed on two keyboards must open the same vault.
   const passwordInput = new TextEncoder().encode(password.normalize('NFC'));
-  const hex = await argon2id({
-    password: passwordInput,
-    salt,
-    secret: secretKey,
-    parallelism: params.p,
-    iterations: params.t,
-    memorySize: params.m,
-    hashLength: 32,
-    outputType: 'hex',
-  });
-  return Uint8Array.from(hex.match(/../g).map((byte) => parseInt(byte, 16)));
+  return ACCOUNT_KDFS.get(algo)(passwordInput, secretKey, salt, params);
 }
 
 // Salt is 32 zero bytes rather than drawn: the input keying material is

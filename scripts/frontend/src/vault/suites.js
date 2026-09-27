@@ -13,21 +13,29 @@ export class UnsupportedAlgorithmError extends Error {
 }
 
 // What this build can read, per axis. The AEAD axis is filled by aead.js and by
-// registerAead; the others are fixed by the code that implements them.
+// registerAead, the KDF axis by kdf.js; the others are fixed by the code that
+// implements them. The HPKE axis is keyed by format, as the manifest is, and
+// hpke.js refuses any format whose declared suite is not the one construction
+// it builds.
 const IMPLEMENTED = {
   format: new Set([1, 2]),
   aead: new Set(),
+  hpke: new Set([1, 2]),
   pubkey: new Set([1, 2]),
   signature: new Set([1]),
   payload: new Set([1]),
+  kdf: new Set(),
 };
 
 export function markImplemented(axis, id) {
   IMPLEMENTED[axis].add(id);
 }
 
+// Numeric axes sort as numbers; the KDF axis is keyed by name.
 export function implementedIds(axis) {
-  return Array.from(IMPLEMENTED[axis]).sort((a, b) => a - b);
+  return Array.from(IMPLEMENTED[axis]).sort((a, b) => (
+    typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
+  ));
 }
 
 // A 'test' entry is readable once something registered it - which only the
@@ -57,8 +65,10 @@ export function declaredEntry(axis, id) {
 }
 
 export function hpkeEntry(format) {
-  const entry = ownEntry('hpke', format);
-  if (!entry || entry.state === 'test') throw new UnsupportedAlgorithmError('hpke', format);
+  const entry = Number.isInteger(format) ? ownEntry('hpke', format) : null;
+  if (!entry || entry.state === 'test' || !IMPLEMENTED.hpke.has(format)) {
+    throw new UnsupportedAlgorithmError('hpke', format);
+  }
   return entry;
 }
 
@@ -85,8 +95,10 @@ export function storedHpkeFormat(stored) {
 }
 
 export function kdfEntry(algo) {
-  const entry = ownEntry('kdf', algo);
-  if (!entry || entry.state === 'test') throw new UnsupportedAlgorithmError('kdf', algo);
+  const entry = typeof algo === 'string' ? ownEntry('kdf', algo) : null;
+  if (!entry || entry.state === 'test' || !IMPLEMENTED.kdf.has(algo)) {
+    throw new UnsupportedAlgorithmError('kdf', algo);
+  }
   return entry;
 }
 

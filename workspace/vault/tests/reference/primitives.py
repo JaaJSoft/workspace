@@ -106,25 +106,8 @@ def argon2id_raw(
     return bytes(ffi.buffer(out, tag_length))
 
 
-def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> bytes:
-    """Argon2id with secret_key passed as K, never concatenated.
-
-    Argon2 accepts a K and a salt of any length, so a secret_key one character
-    short derives a different AMK instead of failing, and only surfaces later
-    as a GCM tag error the UI can report as nothing but a wrong password. The
-    guard belongs here and not in argon2id_raw, which the published RFC 9106
-    vectors reach with their own lengths.
-    """
-    for name, value, expected in (
-        ("secret_key", secret_key, SECRET_KEY_LENGTH),
-        ("salt", salt, SALT_LENGTH),
-    ):
-        if len(value) != expected:
-            raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
-    params = params or CURRENT_SUITE["kdf"]["params"]
-    # NFC applies to the KDF input, not just to the length check: "café"
-    # precomposed and decomposed are different byte strings otherwise.
-    password_input = unicodedata.normalize("NFC", password).encode("utf-8")
+def _argon2id_amk(password_input: bytes, secret_key: bytes, salt: bytes, params):
+    """Argon2id with secret_key passed as K, never concatenated."""
     return argon2id_raw(
         password=password_input,
         salt=salt,
@@ -135,6 +118,44 @@ def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> by
         p=params["p"],
         tag_length=32,
     )
+
+
+# The account KDFs the reference derives with, by the name an envelope stores
+# in kdf_algo. A name the manifest declares but this table lacks is refused:
+# declared is not the same as implemented.
+ACCOUNT_KDFS = {"argon2id": _argon2id_amk}
+
+
+def _account_kdf(algo):
+    derive = ACCOUNT_KDFS.get(algo) if isinstance(algo, str) else None
+    if derive is None:
+        raise UnsupportedAlgorithm("kdf", algo)
+    return entry("kdf", algo), derive
+
+
+def derive_amk(
+    password: str, secret_key: bytes, salt: bytes, params=None, algo=None
+) -> bytes:
+    """The account master key, derived under the envelope's kdf_algo.
+
+    Argon2 accepts a K and a salt of any length, so a secret_key one character
+    short derives a different AMK instead of failing, and only surfaces later
+    as a GCM tag error the UI can report as nothing but a wrong password. The
+    guard belongs here and not in argon2id_raw, which the published RFC 9106
+    vectors reach with their own lengths.
+    """
+    _, derive = _account_kdf(CURRENT_SUITE["kdf"]["algo"] if algo is None else algo)
+    for name, value, expected in (
+        ("secret_key", secret_key, SECRET_KEY_LENGTH),
+        ("salt", salt, SALT_LENGTH),
+    ):
+        if len(value) != expected:
+            raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
+    params = params or CURRENT_SUITE["kdf"]["params"]
+    # NFC applies to the KDF input, not just to the length check: "café"
+    # precomposed and decomposed are different byte strings otherwise.
+    password_input = unicodedata.normalize("NFC", password).encode("utf-8")
+    return derive(password_input, secret_key, salt, params)
 
 
 def _entry_for_integer(axis: str, identifier) -> dict:
@@ -152,7 +173,7 @@ def assert_account_kdf(algo: str, params: dict) -> None:
     key and fail anyway. They stop an absurd m from killing the tab before
     any error surfaces. Extra keys are ignored - seeded accounts carry one.
     """
-    found = entry("kdf", algo)
+    found, _ = _account_kdf(algo)
     if not isinstance(params, dict) or params.get("v") != found["params"]["v"]:
         raise UnsupportedAlgorithm("kdf", algo)
     for name, (low, high) in found["bounds"].items():
@@ -359,14 +380,29 @@ def hpke_suite(
     return CipherSuite.new(kem, kdf, aead)
 
 
+# The HPKE constructions the reference seals under, keyed by format as the
+# manifest is. The ids are spelled here rather than read from the manifest: a
+# format the manifest declares under other ids is one the reference refuses.
+_X25519_HKDF_SHA256_AES256_GCM = {
+    "kem_id": KEMId.DHKEM_X25519_HKDF_SHA256.value,
+    "kdf_id": KDFId.HKDF_SHA256.value,
+    "aead_id": AEADId.AES256_GCM.value,
+    "mode": 0,
+}
+HPKE_FORMATS = {1: _X25519_HKDF_SHA256_AES256_GCM, 2: _X25519_HKDF_SHA256_AES256_GCM}
+
+
 def hpke_suite_for(stored: dict) -> CipherSuite:
     """The suite a stored hpke_suite names, checked against the manifest.
 
     A row carrying no "format" key is format 1. Anything other than exactly
     the suite the manifest declares for its format is refused, before any key
-    schedule runs.
+    schedule runs - and so is a declared suite the reference does not build.
     """
-    declared = entry("hpke", stored_hpke_format(stored))["suite"]
+    fmt = stored_hpke_format(stored)
+    declared = entry("hpke", fmt)["suite"]
+    if HPKE_FORMATS.get(fmt) != declared:
+        raise UnsupportedAlgorithm("hpke", stored)
     return hpke_suite(
         KEMId(declared["kem_id"]),
         KDFId(declared["kdf_id"]),

@@ -52,6 +52,7 @@ async (vectors) => {
 
   for (const v of vectors.argon2id) {
     const amk = await V.deriveAmk({
+      algo: 'argon2id',
       password: v.password,
       secretKey: V.fromBase64Url(v.secret_key_b64),
       salt: V.fromBase64Url(v.salt_b64),
@@ -358,6 +359,7 @@ class CryptoBundleBrowserTests(EngineChecks, PlaywrightTestCase):
               const V = window.vaultCrypto;
               const started = performance.now();
               await V.deriveAmk({
+                algo: V.CURRENT_SUITE.kdf.algo,
                 password: 'Tr0ub4dor&3',
                 secretKey: V.randomBytes(32),
                 salt: V.randomBytes(32),

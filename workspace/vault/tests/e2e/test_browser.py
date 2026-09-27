@@ -25,6 +25,7 @@ from django.core.cache import cache
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.vault.models import VaultEntry, VaultTag
 from workspace.vault.tests.reference import totp
+from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 
 GOOD_PASSWORD = "correct-horse-battery-staple-42"
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
@@ -307,8 +308,12 @@ class VaultBrowserTests(VaultBrowserCase):
         self._create_entry("GitHub", "octocat", "hunter2")
 
         entry = VaultEntry.objects.get(vault__uuid=self.vault_uuid)
+        # The algorithm byte is kept: a prefix nobody declared reads as a row
+        # a newer build wrote, never as a forgery.
+        signature = from_base64url(entry.metadata_sig)
+        forged = signature[:1] + bytes(len(signature) - 1)
         VaultEntry.objects.filter(uuid=entry.uuid).update(
-            metadata_sig="A" * len(entry.metadata_sig)
+            metadata_sig=to_base64url(forged)
         )
 
         self.page.reload()

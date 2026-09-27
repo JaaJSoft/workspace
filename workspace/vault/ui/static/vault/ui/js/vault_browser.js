@@ -401,6 +401,18 @@ window.vaultBrowser = (function () {
         return !this.loading && !this.openVault && !this.missing && this.vaults.length > 0;
       },
 
+      // Why none opened, for the sentence that says so. A vault written by a
+      // newer build is not a failed verification: telling the two apart is
+      // what points the user at a reload rather than at a forgery.
+      // 'newer' when every vault needs a newer build, 'mixed' when some do,
+      // 'refused' when none do, null when something opened.
+      noOpenableVaultReason: function () {
+        if (!this.hasNoOpenableVault()) return null;
+        const newer = this.vaults.filter(function (vault) { return vault.unsupported; }).length;
+        if (newer === 0) return 'refused';
+        return newer === this.vaults.length ? 'newer' : 'mixed';
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },

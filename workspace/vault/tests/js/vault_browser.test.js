@@ -2583,6 +2583,32 @@ test('an account whose every vault is refused says so rather than showing nothin
   assert.equal(component.hasNoOpenableVault(), true);
 });
 
+test('vaults written by a newer build are reported as needing a reload, never as refused', async () => {
+  // readVault flags a vault whose metadata names an unknown algorithm as
+  // unsupported; that is the one state a reload can fix.
+  const newerBuild = { name: 'UnsupportedAlgorithmError', axis: 'signature' };
+  const refused = forgedVaultRow('v-bad');
+  const newer = Object.assign(vaultRow('v-new', 'Newer'), { metadata_sig: 'newer' });
+  const newest = Object.assign(vaultRow('v-newest', 'Newest'), { metadata_sig: 'newer' });
+  const session = {
+    verifyVaultMetadata: async (payload, sig) => {
+      if (sig === 'forged') throw new Error('bad signature');
+      if (sig === 'newer') throw newerBuild;
+    },
+  };
+  for (const [vaults, reason] of [
+    [[newer, newest], 'newer'],
+    [[newer, refused], 'mixed'],
+    [[refused, forgedVaultRow('v-worse')], 'refused'],
+    [[newer, vaultRow('v-ok', 'Readable')], null],
+  ]) {
+    const { component } = browser({ data: { 'vault-uuid': null }, vaults, session });
+    component.init();
+    await component.load();
+    assert.equal(component.noOpenableVaultReason(), reason, vaults.map((v) => v.uuid).join());
+  }
+});
+
 test('one readable vault among refused ones is opened, not reported unopenable', async () => {
   const { component } = browser({
     data: { 'vault-uuid': null },

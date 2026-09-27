@@ -116,8 +116,13 @@ window.photosFacesMixin = function photosFacesMixin() {
       return facesJson('photos-cluster-data');
     },
 
+    // Rejected when no answer came: the content-loading veil must drop even
+    // when the caller swallows the error.
     _reloadView(url = window.location.href) {
-      return this.$ajax(url, { targets: ['photos-nav', 'photos-content'], focus: false });
+      return this.$ajax(url, { targets: ['photos-nav', 'photos-content'], focus: false }).catch((err) => {
+        this.contentLoading = false;
+        throw err;
+      });
     },
 
     _peopleUrl() {

@@ -162,6 +162,8 @@ window.photosApp = function photosApp() {
     _pickerGeneration: 0,
     _drag: null,
     _refreshing: null,
+    // A request that swaps #photos-content is in flight.
+    contentLoading: false,
 
     init() {
       window.addEventListener('open-properties', (e) => {
@@ -187,13 +189,34 @@ window.photosApp = function photosApp() {
       });
       this.$watch('selection', () => this._loadSelectionActions());
       this.syncAlbum();
+      this._trackContentLoading();
+    },
+
+    // Raised by a request whose own targets name #photos-content. An answer,
+    // error included, always ends in ajax:merged or ajax:missing on it. A
+    // request that never got one (the network is down) rejects without any
+    // ajax event: in the caller for $ajax, unhandled for a link.
+    _trackContentLoading() {
+      document.addEventListener('ajax:send', (e) => {
+        const targets = String(e.detail?.headers?.['X-Alpine-Target'] || '').split(/\s+/);
+        if (targets.includes('photos-content')) this.contentLoading = true;
+      });
+      document.addEventListener('ajax:missing', (e) => {
+        if (e.detail?.target?.id === 'photos-content') this.contentLoading = false;
+      });
+      window.addEventListener('unhandledrejection', () => {
+        this.contentLoading = false;
+      });
     },
 
     // A navigation replaced the listing: the tiles the selection named are
     // gone, and the album on screen may have changed.
     onMerged(event) {
       const id = event.target && event.target.id;
-      if (id === 'photos-content') this.clearSelection();
+      if (id === 'photos-content') {
+        this.contentLoading = false;
+        this.clearSelection();
+      }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
     },
 
@@ -477,7 +500,9 @@ window.photosApp = function photosApp() {
     // a page rendered before its own write (a count off by the photos just
     // removed).
     _refresh(targets) {
-      const run = () => this.$ajax(window.location.href, { targets, focus: false }).catch(() => {});
+      const run = () => this.$ajax(window.location.href, { targets, focus: false }).catch(() => {
+        if (targets.includes('photos-content')) this.contentLoading = false;
+      });
       this._refreshing = (this._refreshing || Promise.resolve()).then(run);
       return this._refreshing;
     },

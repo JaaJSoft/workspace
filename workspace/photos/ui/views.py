@@ -8,6 +8,7 @@ from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import dateformat, timezone
+from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.booleans import is_truthy
@@ -418,6 +419,27 @@ def _who_card(who):
     return _person_card(card)
 
 
+def _render_page(request, template, context):
+    """A photos page, or on an alpine-ajax request its two swap targets alone.
+
+    Every swap on these pages aims at #photos-nav, #photos-content or an
+    element inside them, and the fragment always carries both: alpine-ajax
+    hands a GET still in flight to every identical one, whatever targets each
+    caller asked for.
+
+    The fragment is never stored: back and forward reuse a stored response
+    without revalidating it, and this one must never come back as a page.
+    """
+    swap = bool(request.headers.get("X-Alpine-Request"))
+    if swap:
+        context["photos_shell"] = "photos/ui/swap.html"
+    response = render(request, template, context)
+    patch_vary_headers(response, ["X-Alpine-Request"])
+    if swap:
+        patch_cache_control(response, private=True, no_store=True)
+    return response
+
+
 @login_required
 @ensure_csrf_cookie
 def index(request):
@@ -507,7 +529,7 @@ def index(request):
         **_display_context(request.user),
         **_timeline_page_context(request, files, position, tz, view_params),
     }
-    return render(request, "photos/ui/index.html", context)
+    return _render_page(request, "photos/ui/index.html", context)
 
 
 @login_required
@@ -574,7 +596,7 @@ def album(request, uuid):
         **_display_context(request.user),
         **_album_page_context(request, album, files, None, tz),
     }
-    return render(request, "photos/ui/index.html", context)
+    return _render_page(request, "photos/ui/index.html", context)
 
 
 @login_required
@@ -642,7 +664,7 @@ def people(request):
         "progress": progress,
         "analyzing": progress is not None and progress["analyzed"] < progress["total"],
     }
-    return render(request, "photos/ui/people.html", context)
+    return _render_page(request, "photos/ui/people.html", context)
 
 
 def _people_shell_context(user):
@@ -780,7 +802,7 @@ def people_review(request):
         ],
         "review_url": review_url,
     }
-    return render(request, "photos/ui/people_review.html", context)
+    return _render_page(request, "photos/ui/people_review.html", context)
 
 
 def _person_views(who, active):
@@ -840,4 +862,4 @@ def person_faces_view(request):
             )
         ],
     }
-    return render(request, "photos/ui/person_faces.html", context)
+    return _render_page(request, "photos/ui/person_faces.html", context)

@@ -188,3 +188,24 @@ class PersonFacesTests(FacesTestMixin, TestCase):
 
     def test_needs_a_person(self):
         self.assertEqual(self.client.get("/photos/people/faces").status_code, 404)
+
+
+@faces_on
+class PeopleSwapFragmentTests(FacesTestMixin, TestCase):
+    """The People pages answer a swap with the two targets, like the timeline."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        self.client.force_login(self.user)
+        opt_in(self.user)
+
+    def test_each_people_page_answers_a_swap_with_the_fragment(self):
+        for url in ("/photos/people", "/photos/people/review"):
+            with self.subTest(url=url):
+                response = self.client.get(url, HTTP_X_ALPINE_REQUEST="true")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, 'id="photos-nav"', count=1)
+                self.assertContains(response, 'id="photos-content"', count=1)
+                self.assertNotContains(response, 'id="properties-sidebar"')
+                self.assertNotContains(response, "<body")

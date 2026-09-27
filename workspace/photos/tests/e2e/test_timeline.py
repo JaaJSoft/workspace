@@ -192,6 +192,23 @@ class PhotosTimelineTests(PlaywrightTestCase):
 
         expect(self.page.locator(TILES)).to_have_count(7)
 
+    def test_coming_back_to_a_swapped_view_loads_the_whole_page(self):
+        # A swap is answered with the two targets alone, on the url it pushes:
+        # returning there from another page must not show that fragment bare.
+        FileFavorite.objects.create(owner=self.user, file=self.photos[1])
+        self._open()
+        self.page.locator("#photos-nav a[href='/photos?favorites=1']").click()
+        expect(self.page.locator(TILES)).to_have_count(1)
+
+        self.page.goto(f"{self.live_server_url}/files")
+        self.page.go_back()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")
+        expect(self.page.locator(".drawer-side aside")).to_be_visible()
+        expect(self.page.locator("#photos-content h1")).to_have_text("Favorites")
+        expect(self.page.locator(TILES)).to_have_count(1)
+        expect(self.page.locator("#properties-sidebar")).to_have_count(1)
+
     def _open_menu(self, index=0):
         tile = self.page.locator(TILES).nth(index)
         tile.hover()

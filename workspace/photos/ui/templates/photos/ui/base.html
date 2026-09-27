@@ -1,4 +1,4 @@
-{% extends "base_with_navbar.html" %}
+{% extends photos_shell|default:"base_with_navbar.html" %}
 
 {% load static %}
 
@@ -7,7 +7,8 @@
 {% comment %}
   The module shell every Photos page shares: the sidebar, the properties
   panel, the dialogs. A page fills #photos-content, the swap target of
-  every sidebar link together with #photos-nav.
+  every sidebar link together with #photos-nav. A swap is rendered on
+  photos/ui/swap.html instead, which keeps only those two blocks.
 {% endcomment %}
 
 {% block navbar %}
@@ -49,7 +50,9 @@
           {% include "core/partials/module_switcher.html" with module=workspace_current_module collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
         </div>
       </div>
-      {% include "photos/ui/partials/sidebar_nav.html" %}
+      {% block photos_nav %}
+        {% include "photos/ui/partials/sidebar_nav.html" %}
+      {% endblock %}
       <!-- Bottom action: collapse on desktop -->
       <div class="border-t border-base-300 py-4 px-3 hidden lg:block">
         <ul class="menu p-0">
@@ -68,10 +71,36 @@
     replaces it whole, so the new listing starts at the top instead of
     inheriting the previous one's scroll offset.
   {% endcomment %}
-  <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
-    {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
-    {{ faces_enabled|json_script:"photos-faces-enabled" }}
-    {% block photos_content %}{% endblock %}
+  <div class="relative flex-1 h-full min-w-0">
+    {% block photos_swap %}
+      <div id="photos-content" class="h-full overflow-y-auto">
+        {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
+        {{ faces_enabled|json_script:"photos-faces-enabled" }}
+        {% block photos_content %}{% endblock %}
+      </div>
+    {% endblock %}
+    {% comment %}
+      Outside #photos-content so it survives the swap. The fade-in waits
+      200 ms as a CSS transition-delay, so a view that answers at once never
+      flashes a veil, and the spinner turns on the compositor while the main
+      thread binds the new listing. It never takes pointer events.
+    {% endcomment %}
+    <div
+      x-show="contentLoading"
+      x-cloak
+      x-transition:enter="transition-opacity duration-150 delay-200"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      class="absolute inset-0 z-20 flex items-center justify-center bg-base-100/60 pointer-events-none"
+      role="status"
+      aria-live="polite"
+      data-testid="photos-loading"
+    >
+      <span class="inline-flex text-module animate-spin">
+        <i data-lucide="loader-circle" class="w-8 h-8"></i>
+      </span>
+      <span class="sr-only">Loading…</span>
+    </div>
   </div>
 
   {% comment %}

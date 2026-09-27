@@ -144,7 +144,7 @@ function browser(options = {}) {
         forgetDevice() {},
         accountUuid: () => 'account-1',
         openVaultKey: async () => new Uint8Array(32),
-        openEntryKey: async (vaultUuid, wrapped, entryUuid) => {
+        openEntryKey: async (vault, entryUuid) => {
           entryKeys.push(entryUuid);
           return new Uint8Array(32);
         },

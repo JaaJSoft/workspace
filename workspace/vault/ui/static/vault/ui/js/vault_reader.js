@@ -66,7 +66,7 @@ window.vaultReader = (function () {
     });
     await session.verifyRecord(payload, row.metadata_sig, 'entry-metadata');
 
-    const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
+    const key = await session.openEntryKey(vault, row.uuid);
     const entry = {
       uuid: row.uuid,
       type: row.type,
@@ -103,7 +103,7 @@ window.vaultReader = (function () {
       position: row.position,
     });
     await session.verifyRecord(payload, row.metadata_sig, 'folder-metadata');
-    const key = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+    const key = await session.openVaultKey(vault);
     return {
       uuid: row.uuid,
       parent: row.parent,
@@ -122,7 +122,7 @@ window.vaultReader = (function () {
       color: row.color,
     });
     await session.verifyRecord(payload, row.metadata_sig, 'tag-metadata');
-    const key = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+    const key = await session.openVaultKey(vault);
     return {
       uuid: row.uuid,
       color: row.color,
@@ -172,7 +172,7 @@ window.vaultReader = (function () {
       return Object.assign({}, row, { unopenable: true, name: '', description: '' });
     }
     try {
-      const metaKey = await session.openVaultKey(row.uuid, row.wrapped_key);
+      const metaKey = await session.openVaultKey(row);
       return Object.assign({}, row, {
         name: await openText(
           V, metaKey, row.encrypted_name, V.AD.vaultFieldAd(row.uuid, NAME_FIELD)
@@ -212,7 +212,7 @@ window.vaultReader = (function () {
       const V = window.vaultCrypto;
       const ciphertext = fieldCiphertext(row, fieldId);
       if (!ciphertext) return '';
-      const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
+      const key = await session.openEntryKey(vault, row.uuid);
       return openText(V, key, ciphertext, V.AD.entryFieldAd(row.uuid, fieldId));
     },
   };

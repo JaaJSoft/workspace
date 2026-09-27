@@ -174,3 +174,26 @@ class RandomnessSourceTests(SimpleTestCase):
     def test_a_full_read_is_returned_unchanged(self):
         self.assertEqual(len(encoding.random_bytes(32)), 32)
         self.assertNotEqual(encoding.random_bytes(32), encoding.random_bytes(32))
+
+
+class NoAlgorithmLiteralTests(SimpleTestCase):
+    # Every algorithm choice a writer makes comes from the current suite. A
+    # literal here is a writer that will keep writing the old algorithm the day
+    # the manifest moves.
+    LITERALS = re.compile(
+        r"HPKE_SUITE_V1|AEAD_AES_256_GCM|ARGON2_PARAMS|PUBKEY_ALG_|SIG_ALG_"
+        r"|['\"]argon2id['\"]|kem_id\s*:"
+    )
+    # Non-recursive on purpose: vendor/ and test_suites/ are not writers.
+    APP_JS = WORKSPACE / "vault" / "ui" / "static" / "vault" / "ui" / "js"
+    SEEDER = REPO_ROOT / "scripts" / "seed_vault.py"
+
+    def test_no_writer_names_an_algorithm(self):
+        files = [*self.APP_JS.glob("*.js"), self.SEEDER]
+        offenders = [
+            f"{path.relative_to(REPO_ROOT)}:{number}"
+            for path in files
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+            if self.LITERALS.search(line)
+        ]
+        self.assertEqual(offenders, [])

@@ -30,8 +30,10 @@ const VAULT_SECRET_STORAGE_KEY = 'vault.secret-key';
 // before the private keys are unwrapped), 'substituted-key' (a spoofed or
 // malformed signing key, or an unexpected failure at or after the private
 // keys are unwrapped), 'network' (the envelope request itself failed),
-// 'throttled' (the envelope request was rate-limited), or 'locked' (called
-// before a session is open). cause, when given, is the
+// 'throttled' (the envelope request was rate-limited), 'unsupported' (the
+// envelope names an algorithm or parameters this build does not read -
+// usually a tab older than the last deploy), or 'locked' (called before a
+// session is open). cause, when given, is the
 // exception this reason was mapped from - kept so a genuine programming
 // error stays diagnosable instead of surfacing only as a security-sounding
 // reason string.
@@ -195,6 +197,7 @@ window.vaultSession = (function () {
         } catch (err) {
           throw VaultUnlockError('recovery-key', err);
         }
+        V.assertAccountKdf(envelope.kdf_algo, envelope.kdf_params);
         amk = await V.deriveAmk({
           password: options.password.normalize('NFC'),
           secretKey: secretBytes,
@@ -218,6 +221,11 @@ window.vaultSession = (function () {
             V.AD.sigPrivAd(envelope.uuid)
           );
         } catch (err) {
+          // Named bytes this build cannot read are not a wrong password, and
+          // saying so would send the user hunting for a typo that is not there.
+          if (err && err.name === 'UnsupportedAlgorithmError') {
+            throw VaultUnlockError('unsupported', err);
+          }
           throw VaultUnlockError('password', err);
         }
         keysUnwrapped = true;
@@ -227,7 +235,7 @@ window.vaultSession = (function () {
         zero(secretBytes);
 
         recomputed = await publicKeyFromSeed(sigSeed);
-        const served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public));
+        const served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public), 'sig');
         if (!V.equalBytes(recomputed, served)) {
           throw VaultUnlockError('substituted-key');
         }
@@ -250,7 +258,7 @@ window.vaultSession = (function () {
         // key rather than the served one. Decoding it any earlier - or
         // re-fetching it later - would hand a second chance to the
         // substitution this whole sequence exists to catch.
-        newKexPublicRaw = V.decodePublicKey(V.fromBase64Url(envelope.kex_public));
+        newKexPublicRaw = V.decodePublicKey(V.fromBase64Url(envelope.kex_public), 'kex');
         newSigner = await V.importSigner(sigSeed);
         newRecipient = await V.hpkeRecipient(kexPriv);
         zero(sigSeed);
@@ -268,6 +276,7 @@ window.vaultSession = (function () {
         // newSigner/newRecipient, not to the closure's signer/recipient, so
         // a failed attempt - first or a later one against an already-live
         // session - never touched what's committed.
+        if (err && err.name === 'UnsupportedAlgorithmError') throw VaultUnlockError('unsupported', err);
         if (err && err.name === 'VaultUnlockError') throw err;
         throw VaultUnlockError(keysUnwrapped ? 'substituted-key' : 'identity', err);
       }
@@ -372,12 +381,13 @@ window.vaultSession = (function () {
     // The vault key itself never encrypts anything and never leaves this
     // function: every caller wants one of its HKDF children, and handing back
     // the parent would put a key that opens everything in a caller's hands.
-    _openDerivedKey: async function (vaultUuid, wrappedKeyB64, info) {
+    _openDerivedKey: async function (vault, info) {
       const stillOurs = sessionGuard();
       const V = window.vaultCrypto;
       const raw = await recipient.open(
-        V.AD.vaultKeyInfo(vaultUuid, accountUuid),
-        V.fromBase64Url(wrappedKeyB64)
+        V.AD.vaultKeyInfo(vault.uuid, accountUuid, vault.hpke_suite),
+        V.fromBase64Url(vault.wrapped_key),
+        vault.hpke_suite
       );
       let derived;
       try {
@@ -395,26 +405,26 @@ window.vaultSession = (function () {
         return key;
       } finally {
         // The caller never gets a copy it could forget to zero: what it gets
-        // back is a non-extractable key.
+        // back is a keyring of non-extractable keys.
         zero(derived);
       }
     },
 
-    openVaultKey: async function (vaultUuid, wrappedKeyB64) {
+    // vault is the row as the server lists it: uuid, wrapped_key and the
+    // hpke_suite the key was wrapped under.
+    openVaultKey: async function (vault) {
       const V = window.vaultCrypto;
-      return this._openDerivedKey(
-        vaultUuid, wrappedKeyB64, V.AD.vaultMetaInfo(vaultUuid)
-      );
+      return this._openDerivedKey(vault, V.AD.vaultMetaInfo(vault.uuid));
     },
 
     // An entry's fields hang off their own HKDF child, not off the metadata
     // key: one compromised entry key must not open the vault's name, nor any
     // other entry.
-    openEntryKey: async function (vaultUuid, wrappedKeyB64, entryUuid) {
+    openEntryKey: async function (vault, entryUuid) {
       const V = window.vaultCrypto;
       const info = V.AD.entryKeyInfo(entryUuid);
       if (!entryKeyCache) {
-        return this._openDerivedKey(vaultUuid, wrappedKeyB64, info);
+        return this._openDerivedKey(vault, info);
       }
       // The guard runs on the cached path too. _openDerivedKey opens with it,
       // so skipping it here would make a hit the one way to get a key out of a
@@ -424,9 +434,9 @@ window.vaultSession = (function () {
       // Every input to the derivation, not just the entry: a memo keyed on
       // less would answer for a wrapped key it never saw. The entry uuid
       // stands in for the info derived from it.
-      const memo = [vaultUuid, wrappedKeyB64, entryUuid].join(' ');
+      const memo = [vault.uuid, vault.wrapped_key, entryUuid].join(' ');
       if (entryKeyCache.has(memo)) return entryKeyCache.get(memo);
-      const derived = await this._openDerivedKey(vaultUuid, wrappedKeyB64, info);
+      const derived = await this._openDerivedKey(vault, info);
       // Re-read: the cache can have been dropped by a lock across that await,
       // and putting the key back would undo what the lock just did.
       if (entryKeyCache) entryKeyCache.set(memo, derived);

@@ -84,7 +84,6 @@ async function buildVector(params) {
   // Built inside the vm: an object created out here carries this realm's
   // prototypes, and the encoder branches on them - the cbor-x incident.
   const tree = vm.runInContext('JSON.parse(__treeJson)', ctx);
-  const declared = params || ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   // Salt and nonce are pinned so the archive is reproducible; every other
   // export draws both.
   const bytes = await ctx.vaultArchive.buildArchive({
@@ -92,9 +91,10 @@ async function buildVector(params) {
     passphrase: PASSPHRASE,
     salt: new Uint8Array(32).fill(0x2a),
     iv: new Uint8Array(12).fill(0x0c),
-    params: vm.runInContext(`(${JSON.stringify(declared)})`, ctx),
+    params: params ? vm.runInContext(`(${JSON.stringify(params)})`, ctx) : undefined,
   });
   assert.ok(bytes.length > 50);
+  const declared = params || ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   return `${JSON.stringify({
     passphrase: PASSPHRASE,
     params: { m: declared.m, t: declared.t, p: declared.p },

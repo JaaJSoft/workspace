@@ -9,7 +9,7 @@ const SCRIPT = 'workspace/vault/ui/static/vault/ui/js/vault_archive.js';
 
 function withCrypto(overrides = {}) {
   const V = Object.assign({
-    ARGON2_PARAMS: { v: '1.3', m: 65536, t: 3, p: 2 },
+    CURRENT_SUITE: { kdf: { params: { v: '1.3', m: 65536, t: 3, p: 2 } } },
     KDF_HKDF_SHA256: 0x01,
     randomBytes: (count) => new Uint8Array(count).fill(0xab),
     deriveArchiveKey: async () => new Uint8Array(32).fill(1),

@@ -47,11 +47,12 @@ class VectorFileTests(SimpleTestCase):
 class AccountWrapHeaderTests(SimpleTestCase):
     """Every writer of the two account wraps, held against the frozen vector.
 
-    ``account-kex-priv-wrap`` is the format's word on how the two ciphertexts
-    that gate every vault an account owns are labelled. Nothing at runtime
-    reads those bytes - ``open`` takes the iv and the ciphertext and ignores
-    the rest - so a writer that disagrees with the vector breaks nothing today
-    and everything the day an agility step, a second AEAD or an independent
+    ``account-kex-priv-wrap-format-2`` is the format's word on how the two
+    ciphertexts that gate every vault an account owns are labelled. Format 2
+    authenticates whatever label a writer chose, so a wrap labelled unlike the
+    vector still opens - nothing at runtime compares the kdf id and the key
+    version to what the format says they mean, and a writer that disagrees
+    breaks nothing today and everything the day an independent
     re-implementation starts trusting them.
 
     It has to be checked from here rather than from JavaScript: a test on the
@@ -101,10 +102,20 @@ class AccountWrapHeaderTests(SimpleTestCase):
 
     def _bundled_constant(self, name):
         # The published object is a literal, so the key survives minification.
+        # Its value does not always: a constant the bundle also reads
+        # internally is published through its minified binding, resolved here
+        # to the one top-level declaration that assigns it.
         bundle = self.WIRE_BUNDLE.read_text(encoding="utf-8")
-        declared = re.search(rf"{name}:\s*{self.NUMBER}\b", bundle)
-        self.assertIsNotNone(declared, f"{name} is not published by the built bundle")
-        return self._as_int(declared.group(1))
+        published = re.search(rf"\b{name}:\s*({self.NUMBER}|[\w$]+)\b", bundle)
+        self.assertIsNotNone(published, f"{name} is not published by the built bundle")
+        value = published.group(1)
+        if re.fullmatch(self.NUMBER, value):
+            return self._as_int(value)
+        declared = re.findall(rf"(?:\bvar\s+|,){re.escape(value)}={self.NUMBER}\b", bundle)
+        self.assertEqual(
+            len(declared), 1, f"{name} is published as {value}, not as one numeric binding"
+        )
+        return self._as_int(declared[0])
 
     def _seeder_wraps(self):
         source = self.SEEDER.read_text(encoding="utf-8")
@@ -128,9 +139,10 @@ class AccountWrapHeaderTests(SimpleTestCase):
 
     def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
         key_version, kdf_name = self._sealed_literal()
-        # The browser writes format 1 until its writers move to the manifest's
-        # current suite.
-        vector = self._vector("account-kex-priv-wrap")
+        vector = self._vector("account-kex-priv-wrap-format-2")
+        # The browser pins no format either: seal writes the current one, from
+        # the same manifest the reference reads.
+        self.assertEqual(suites.CURRENT_SUITE["format_version"], vector["format_version"])
         self.assertEqual(key_version, vector["key_version"])
         # Against the bundle, not the source: the byte the browser writes comes
         # from the artifact it loads.

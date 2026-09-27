@@ -46,7 +46,7 @@ async () => {
   try {
     const vault = (await A.listVaults())[0];
     const entryUuid = V.uuidV7();
-    const entryKey = await S.openEntryKey(vault.uuid, vault.wrapped_key, entryUuid);
+    const entryKey = await S.openEntryKey(vault, entryUuid);
     const seal = async (field, text) => V.toBase64Url(
       await V.seal(entryKey, enc.encode(text), V.AD.entryFieldAd(entryUuid, field), {
         keyVersion: 1,
@@ -117,7 +117,7 @@ async () => {
 
   const vaults = [];
   for (const vault of (await A.listVaults()).slice().sort(byUuid)) {
-    const metaKey = await S.openVaultKey(vault.uuid, vault.wrapped_key);
+    const metaKey = await S.openVaultKey(vault);
 
     const folders = [];
     for (const folder of (await A.listFolders(vault.uuid)).slice().sort(byUuid)) {
@@ -151,7 +151,7 @@ async () => {
 
     const entries = [];
     for (const row of rows) {
-      const entryKey = await S.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
+      const entryKey = await S.openEntryKey(vault, row.uuid);
       const fields = {};
       const fieldRows = row.entry_fields
         .slice()
@@ -228,7 +228,7 @@ async (description) => {
   const V = window.vaultCrypto, A = window.vaultApi, S = window.vaultSession;
   try {
     const row = (await A.listVaults())[0];
-    const metaKey = await S.openVaultKey(row.uuid, row.wrapped_key);
+    const metaKey = await S.openVaultKey(row);
     const name = new TextDecoder().decode(
       await V.open(
         metaKey,

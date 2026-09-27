@@ -26,6 +26,7 @@ window.vaultUnlockMixin = (function () {
     network: 'The vault could not be reached. Check your connection and try again.',
     throttled: 'Too many unlock attempts from here. Nothing is wrong with your password - wait a minute and try again.',
     'recovery-key': 'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.',
+    unsupported: 'This vault was saved by a newer version of the app. Reload the page to update it.',
     'password-or-recovery-key': 'That did not open this account. Either the master password is wrong, or the recovery key remembered on this device belongs to another account - both fail the same way. Nothing was sent to the server.',
   };
 

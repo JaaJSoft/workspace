@@ -200,10 +200,10 @@ class _Signer:
     def write_identity(self):
         account = str(self.account_uuid)
         kex_public = primitives.encode_public_key(
-            self.kex_private.public_key(), primitives.PUBKEY_ALG_X25519
+            self.kex_private.public_key(), suites.CURRENT_SUITE["kex_public_key_alg"]
         )
         sig_public = primitives.encode_public_key(
-            self.sig_private.public_key(), primitives.PUBKEY_ALG_ED25519
+            self.sig_private.public_key(), suites.CURRENT_SUITE["sig_public_key_alg"]
         )
         identity = AccountIdentity.objects.create(
             uuid=self.account_uuid,

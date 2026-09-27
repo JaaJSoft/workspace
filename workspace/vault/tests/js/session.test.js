@@ -61,6 +61,7 @@ function harness(overrides = {}) {
     toBase64Url: (bytes) => String.fromCharCode(...bytes),
     equalBytes: (a, b) => String(a) === String(b),
     decodePublicKey: (bytes) => bytes.slice(1),
+    assertAccountKdf: () => {},
     deriveAmk: async () => { calls.push('deriveAmk'); return amk; },
     hkdf: async () => { calls.push('hkdf'); return Uint8Array.from([13, 14]); },
     open: async (key, raw, ad) => {
@@ -112,6 +113,11 @@ function harness(overrides = {}) {
 }
 
 const SECRET = 'A'.repeat(53);
+
+// A vault row as the server lists it. The suite is opaque to these stubs.
+function vaultRow(uuid) {
+  return { uuid, wrapped_key: 'd3JhcHBlZA', hpke_suite: { format: 2 } };
+}
 
 test('a session starts locked', () => {
   assert.equal(harness().session.isUnlocked(), false);
@@ -412,7 +418,7 @@ test('a broken metadata-key derivation still zeroes the opened vault key', async
   const h = harness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
   h.ctx.vaultCrypto.hkdf = async () => { throw new Error('boom'); };
-  await assert.rejects(h.session.openVaultKey('0192f3a4-2222-7d8e-9f01-23456789abcd', 'd3JhcHBlZA'));
+  await assert.rejects(h.session.openVaultKey(vaultRow('0192f3a4-2222-7d8e-9f01-23456789abcd')));
   assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
 });
 
@@ -615,7 +621,7 @@ const A_VAULT = '0192f3a4-2222-7d8e-9f01-23456789abcd';
 test('openVaultKey hands back an imported key, never the raw metadata bytes', async () => {
   const h = metaKeyHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  const key = await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  const key = await h.session.openVaultKey(vaultRow(A_VAULT));
   assert.equal(key, h.imported);
   assert.equal(h.seen.length, 1, 'the derived bytes must be imported exactly once');
   assert.ok(!(key instanceof Uint8Array), 'openVaultKey must not return raw bytes');
@@ -624,7 +630,7 @@ test('openVaultKey hands back an imported key, never the raw metadata bytes', as
 test('openVaultKey zeroes the metadata bytes it derived', async () => {
   const h = metaKeyHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  await h.session.openVaultKey(vaultRow(A_VAULT));
   assert.ok(h.metaRaw.every((byte) => byte === 0));
   assert.ok(h.vaultKeyRaw.every((byte) => byte === 0));
 });
@@ -632,7 +638,7 @@ test('openVaultKey zeroes the metadata bytes it derived', async () => {
 test('a failed import still zeroes the metadata bytes', async () => {
   const h = metaKeyHarness({ failImport: true });
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  await assert.rejects(h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA'));
+  await assert.rejects(h.session.openVaultKey(vaultRow(A_VAULT)));
   assert.ok(h.metaRaw.every((byte) => byte === 0));
 });
 
@@ -655,9 +661,9 @@ test('openEntryKey derives from the entry info, not the vault metadata info', as
   });
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
   seen.length = 0;
-  await h.session.openEntryKey(A_VAULT, 'd3JhcHBlZA', 'an-entry');
+  await h.session.openEntryKey(vaultRow(A_VAULT), 'an-entry');
   assert.deepStrictEqual(Array.from(seen), ['entrykey:an-entry']);
-  await h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  await h.session.openVaultKey(vaultRow(A_VAULT));
   assert.equal(seen[1], `vaultmeta:${A_VAULT}`);
 });
 
@@ -699,7 +705,7 @@ function racingHarness(overrides = {}) {
 test('a key operation that outlived its session is refused', async () => {
   const h = racingHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  const opening = h.session.openVaultKey(vaultRow(A_VAULT));
   h.session.lock();
   h.release();
   await assert.rejects(opening, (err) => err.reason === 'locked');
@@ -712,7 +718,7 @@ test('a key operation that spanned a lock and a fresh unlock is refused too', as
   // session nobody is in any more.
   const h = racingHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  const opening = h.session.openVaultKey(vaultRow(A_VAULT));
   h.session.lock();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
   assert.equal(h.session.isUnlocked(), true);
@@ -740,7 +746,7 @@ test('a signature that outlived its session is refused', async () => {
 test('an operation still resolves when no lock interrupts it', async () => {
   const h = racingHarness();
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
-  const opening = h.session.openVaultKey(A_VAULT, 'd3JhcHBlZA');
+  const opening = h.session.openVaultKey(vaultRow(A_VAULT));
   h.release();
   assert.equal(await opening, h.imported);
 });
@@ -804,8 +810,8 @@ test('one read of the account derives each entry key once', async () => {
   const before = derivations();
 
   await h.session.withEntryKeyCache(async () => {
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
   });
 
   assert.equal(derivations() - before, 1, 'the same key was derived twice in one read');
@@ -818,8 +824,8 @@ test('separate entries still get separate keys', async () => {
   const before = h.calls.filter((c) => c === 'hkdf').length;
 
   await h.session.withEntryKeyCache(async () => {
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-2');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-2');
   });
 
   assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
@@ -833,10 +839,10 @@ test('a key derived for one read is not reused by the next', async () => {
   const before = h.calls.filter((c) => c === 'hkdf').length;
 
   await h.session.withEntryKeyCache(async () => {
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
   });
   await h.session.withEntryKeyCache(async () => {
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
   });
 
   assert.equal(h.calls.filter((c) => c === 'hkdf').length - before, 2);
@@ -850,10 +856,10 @@ test('a lock is still a lock in the middle of a cached read', async () => {
   await h.session.unlock({ password: 'pw', secretText: SECRET, remember: false });
 
   await h.session.withEntryKeyCache(async () => {
-    await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+    await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
     h.session.lock();
     await assert.rejects(
-      h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1'),
+      h.session.openEntryKey(vaultRow('vault-1'), 'entry-1'),
       (err) => err.reason === 'locked'
     );
   });
@@ -867,8 +873,8 @@ test('the cache does not outlive a read that threw', async () => {
     /boom/
   );
   const before = h.calls.filter((c) => c === 'hkdf').length;
-  await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
-  await h.session.openEntryKey('vault-1', 'd3JhcHBlZA', 'entry-1');
+  await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
+  await h.session.openEntryKey(vaultRow('vault-1'), 'entry-1');
   assert.equal(
     h.calls.filter((c) => c === 'hkdf').length - before, 2,
     'a cache survived the read that threw'
@@ -886,7 +892,7 @@ test('an export scope that ends under a newer one leaves the newer memo alone', 
   h.ctx.vaultCrypto.importAeadKey = async () => ({ handle: 'entry-key' });
   const derivations = () => h.calls.filter((call) => call === 'hkdf').length;
   const open = () => h.session.openEntryKey(
-    '0192f3a4-2222-7d8e-9f01-23456789abcd', 'd3JhcHBlZA', '0192f3a4-3333-7d8e-9f01-23456789abcd'
+    vaultRow('0192f3a4-2222-7d8e-9f01-23456789abcd'), '0192f3a4-3333-7d8e-9f01-23456789abcd'
   );
 
   let releaseOlder;
@@ -907,4 +913,159 @@ test('an export scope that ends under a newer one leaves the newer memo alone', 
   await open();
   await open();
   assert.equal(derivations() - after, 2, 'a memo outlived every walk that held it');
+});
+
+// The same unlock against the real bundle. The stubs above cannot say whether
+// a byte the envelope carries is read as an algorithm or as a wrong password -
+// that is decided by the bundle, so it is the bundle that has to run.
+const BUNDLE_GLOBALS = {
+  crypto: globalThis.crypto,
+  TextEncoder: globalThis.TextEncoder,
+  TextDecoder: globalThis.TextDecoder,
+  btoa: globalThis.btoa,
+  atob: globalThis.atob,
+};
+const BUNDLE = 'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js';
+const V = loadScripts([BUNDLE], BUNDLE_GLOBALS).vaultCrypto;
+const PASSWORD = 'correct horse battery staple';
+// The manifest's floor, not its default: every unlock here runs Argon2 for
+// real, and the cost is not what these tests are about.
+const FAST_KDF = { v: '1.3', m: 8192, t: 1, p: 1 };
+
+async function exportRaw(format, key) {
+  return new Uint8Array(await crypto.subtle.exportKey(format, key));
+}
+
+let fixtureBuilt = null;
+function fixture() {
+  fixtureBuilt ||= (async () => {
+    const accountUuid = V.uuidV7();
+    const secretKey = V.randomBytes(32);
+    const salt = V.randomBytes(32);
+    const amk = await V.deriveAmk({ password: PASSWORD, secretKey, salt, params: FAST_KDF });
+    const unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
+    const kexPair = await crypto.subtle.generateKey('X25519', true, ['deriveBits']);
+    const sigPair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']);
+    const kexPriv = (await exportRaw('pkcs8', kexPair.privateKey)).slice(-32);
+    const sigSeed = (await exportRaw('pkcs8', sigPair.privateKey)).slice(-32);
+    const kexPublicRaw = await exportRaw('raw', kexPair.publicKey);
+    const kexPublic = V.toBase64Url(
+      V.encodePublicKey(kexPublicRaw, V.CURRENT_SUITE.kexPublicKeyAlg)
+    );
+    const sealed = { keyVersion: 0, kdfId: V.KDF_DIRECT };
+    const envelope = {
+      uuid: accountUuid,
+      state: 'active',
+      kdf_algo: V.CURRENT_SUITE.kdf.algo,
+      kdf_params: FAST_KDF,
+      kdf_salt: V.toBase64Url(salt),
+      kex_public: kexPublic,
+      sig_public: V.toBase64Url(V.encodePublicKey(
+        await exportRaw('raw', sigPair.publicKey), V.CURRENT_SUITE.sigPublicKeyAlg
+      )),
+      wrapped_kex_priv: V.toBase64Url(
+        await V.seal(unwrapKey, kexPriv, V.AD.kexPrivAd(accountUuid), sealed)
+      ),
+      wrapped_sig_priv: V.toBase64Url(
+        await V.seal(unwrapKey, sigSeed, V.AD.sigPrivAd(accountUuid), sealed)
+      ),
+      sig_over_kex_pub: V.toBase64Url(
+        await V.signBytes(sigSeed, V.AD.kexPubPayload(accountUuid, kexPublic))
+      ),
+    };
+    const vaultUuid = V.uuidV7();
+    const vault = {
+      uuid: vaultUuid,
+      hpke_suite: V.CURRENT_SUITE.hpke,
+      wrapped_key: V.toBase64Url(await V.hpkeSeal(
+        kexPublicRaw,
+        V.AD.vaultKeyInfo(vaultUuid, accountUuid, V.CURRENT_SUITE.hpke),
+        V.randomBytes(32),
+        V.CURRENT_SUITE.hpke
+      )),
+    };
+    return {
+      envelope,
+      vault,
+      credentials: { password: PASSWORD, secretText: V.crockfordEncode(secretKey), remember: false },
+    };
+  })();
+  return fixtureBuilt;
+}
+
+function realSession(envelope) {
+  const ctx = loadScripts(
+    ['workspace/vault/ui/static/vault/ui/js/api.js', BUNDLE, 'workspace/vault/ui/static/vault/ui/js/session.js'],
+    {
+      ...BUNDLE_GLOBALS,
+      getCSRFToken: () => 'csrf',
+      localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+      document: { addEventListener() {} },
+      addEventListener() {},
+      setInterval: () => 1,
+      clearInterval: () => {},
+      Date: globalThis.Date,
+      fetch: async () => ({ ok: true, status: 200, json: async () => envelope }),
+    }
+  );
+  return { ctx, session: ctx.vaultSession };
+}
+
+function withWrap(envelope, field, edit) {
+  const wrapped = V.fromBase64Url(envelope[field]);
+  edit(wrapped);
+  return { ...envelope, [field]: V.toBase64Url(wrapped) };
+}
+
+test('the real envelope unlocks and opens a vault key sealed under the current suite', async () => {
+  const { envelope, vault, credentials } = await fixture();
+  const { ctx, session } = realSession(envelope);
+  await session.unlock(credentials);
+  const key = await session.openVaultKey(vault);
+  // The keyring belongs to the session's own copy of the bundle.
+  const V = ctx.vaultCrypto;
+  const sealed = await V.seal(key, new TextEncoder().encode('x'), V.AD.vaultFieldAd(vault.uuid, 'name'), {
+    keyVersion: 1, kdfId: V.KDF_HKDF_SHA256,
+  });
+  assert.equal(new TextDecoder().decode(await V.open(key, sealed, V.AD.vaultFieldAd(vault.uuid, 'name'))), 'x');
+});
+
+test('an envelope under an unknown kdf is unsupported, not a wrong password', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession({ ...envelope, kdf_algo: 'scrypt' });
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('an envelope whose kdf cost is out of bounds is unsupported, not a wrong password', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession({ ...envelope, kdf_params: { ...FAST_KDF, m: 4 * 1024 * 1024 } });
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('a wrapped private key under an unknown aead is unsupported, not a wrong password', async () => {
+  const { envelope, credentials } = await fixture();
+  const { session } = realSession(withWrap(envelope, 'wrapped_kex_priv', (w) => { w[1] = 0x07; }));
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported');
+});
+
+test('a format 2 wrap with a flipped key-version byte is a wrong password', async () => {
+  const { envelope, credentials } = await fixture();
+  assert.equal(V.fromBase64Url(envelope.wrapped_kex_priv)[0], 2);
+  const { session } = realSession(withWrap(envelope, 'wrapped_kex_priv', (w) => { w[4] ^= 0x01; }));
+  await assert.rejects(session.unlock(credentials), (err) => err.reason === 'password');
+});
+
+test('a lock during the keyring import hands back no key', async () => {
+  // importAeadKey imports once per registered AEAD, so it is several awaits
+  // long on its own - the lock lands between the last of them and the return.
+  const { envelope, vault, credentials } = await fixture();
+  const { ctx, session } = realSession(envelope);
+  await session.unlock(credentials);
+  const importAeadKey = ctx.vaultCrypto.importAeadKey;
+  ctx.vaultCrypto.importAeadKey = async (...args) => {
+    const keyring = await importAeadKey(...args);
+    session.lock();
+    return keyring;
+  };
+  await assert.rejects(session.openVaultKey(vault), (err) => err.reason === 'locked');
 });

@@ -192,22 +192,20 @@ window.photosApp = function photosApp() {
       this._trackContentLoading();
     },
 
-    // alpine-ajax marks every swap target aria-busy for the life of its
-    // request, which tells a navigation apart from a header or page refresh.
-    // On ajax:error the event names no target, but the attribute is released
-    // right after dispatching, so it answers once this handler yields.
+    // Raised by a request whose own targets name #photos-content. An answer,
+    // error included, always ends in ajax:merged or ajax:missing on it. A
+    // request that never got one (the network is down) rejects without any
+    // ajax event: in the caller for $ajax, unhandled for a link.
     _trackContentLoading() {
-      const busy = () => document.getElementById('photos-content')?.getAttribute('aria-busy') === 'true';
-      document.addEventListener('ajax:send', () => {
-        if (busy()) this.contentLoading = true;
+      document.addEventListener('ajax:send', (e) => {
+        const targets = String(e.detail?.headers?.['X-Alpine-Target'] || '').split(/\s+/);
+        if (targets.includes('photos-content')) this.contentLoading = true;
       });
       document.addEventListener('ajax:missing', (e) => {
         if (e.detail?.target?.id === 'photos-content') this.contentLoading = false;
       });
-      document.addEventListener('ajax:error', () => {
-        queueMicrotask(() => {
-          if (!busy()) this.contentLoading = false;
-        });
+      window.addEventListener('unhandledrejection', () => {
+        this.contentLoading = false;
       });
     },
 
@@ -501,7 +499,9 @@ window.photosApp = function photosApp() {
     // a page rendered before its own write (a count off by the photos just
     // removed).
     _refresh(targets) {
-      const run = () => this.$ajax(window.location.href, { targets, focus: false }).catch(() => {});
+      const run = () => this.$ajax(window.location.href, { targets, focus: false }).catch(() => {
+        if (targets.includes('photos-content')) this.contentLoading = false;
+      });
       this._refreshing = (this._refreshing || Promise.resolve()).then(run);
       return this._refreshing;
     },

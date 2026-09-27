@@ -109,6 +109,38 @@ class PhotosLoadingOverlayTests(PlaywrightTestCase):
         held[0].fulfill(status=500, body="boom")
         expect(overlay).to_be_hidden()
 
+    def test_a_swap_that_gets_no_answer_clears_the_veil(self):
+        # A network failure rejects the request without any ajax event.
+        overlay = self._open()
+        held = self._hold("**/photos?scope=*")
+
+        self.page.locator("nav[aria-label='Library'] a", has_text="Family").click()
+        self._wait_for(held)
+        expect(overlay).to_be_visible()
+
+        held[0].abort()
+        expect(overlay).to_be_hidden()
+
+    def test_a_refresh_after_a_lost_swap_does_not_show_the_veil(self):
+        # The lost request leaves #photos-content marked aria-busy: only the
+        # targets of the request being sent may raise the veil.
+        overlay = self._open()
+        lost = self._hold("**/photos?scope=*")
+        self.page.locator("nav[aria-label='Library'] a", has_text="Family").click()
+        self._wait_for(lost)
+        lost[0].abort()
+        expect(overlay).to_be_hidden()
+        expect(self.page.locator("#photos-content")).to_have_attribute(
+            "aria-busy", "true"
+        )
+
+        held = self._hold(f"{self.live_server_url}/photos")
+        self.page.evaluate("window.dispatchEvent(new CustomEvent('tags-changed'))")
+        self._wait_for(held)
+        self.page.wait_for_timeout(300)
+        expect(overlay).to_be_hidden()
+        held[0].continue_()
+
     def test_a_sidebar_refresh_does_not_show_the_veil(self):
         overlay = self._open()
         held = self._hold(f"{self.live_server_url}/photos")

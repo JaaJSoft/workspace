@@ -15,7 +15,6 @@ from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_sche
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -104,7 +103,6 @@ class FaceClusterViewSet(
     """
 
     serializer_class = FaceClusterSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = OptInLimitOffsetPagination
     lookup_value_regex = "[0-9a-fA-F-]{36}"
     http_method_names = ["get", "patch", "post", "delete"]
@@ -277,7 +275,6 @@ class FaceViewSet(
     """One face found in one of the user's photos, and its corrections."""
 
     serializer_class = FaceSerializer
-    permission_classes = [IsAuthenticated]
     lookup_value_regex = "[0-9a-fA-F-]{36}"
     http_method_names = ["get", "patch"]
 
@@ -330,7 +327,6 @@ class FaceCropView(CacheControlMixin, APIView):
     browser may keep it; private, as it is somebody's face.
     """
 
-    permission_classes = [IsAuthenticated]
     cache_max_age = 7 * 24 * 3600
 
     @extend_schema(
@@ -356,8 +352,6 @@ class FaceCropView(CacheControlMixin, APIView):
 
 @extend_schema(tags=["Photos - Faces"])
 class PhotoFacesView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(
         summary="Faces of a photo", responses={200: FaceSerializer(many=True)}
     )
@@ -370,8 +364,6 @@ class PhotoFacesView(APIView):
 @extend_schema(tags=["Photos - Faces"])
 class FaceStatusView(APIView):
     """Whether face grouping is on for the user, and how far it has come."""
-
-    permission_classes = [IsAuthenticated]
 
     @extend_schema(summary="Face grouping status")
     def get(self, request):
@@ -413,8 +405,6 @@ class FacePersonsView(APIView):
     ``?contacts=1`` and no query, the other contacts follow the named people,
     by name: a picker opened empty is a list to click in, not a blank field.
     """
-
-    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="People found in the user's photos",
@@ -480,7 +470,6 @@ _ACTIONS_BATCH = 500
     responses={200: OpenApiResponse(description="Map of UUID to actions.")},
 )
 class FaceActionsView(CacheControlMixin, APIView):
-    permission_classes = [IsAuthenticated]
     cache_no_store = True
 
     def post(self, request):
@@ -511,8 +500,6 @@ class FaceActionsView(CacheControlMixin, APIView):
 @extend_schema(tags=["Photos - Faces"])
 class FaceBatchView(APIView):
     """One correction applied to a selection of faces."""
-
-    permission_classes = [IsAuthenticated]
 
     @extend_schema(
         summary="Correct several faces at once",
@@ -578,8 +565,6 @@ class FaceBatchView(APIView):
 
 @extend_schema(tags=["Photos - Faces"])
 class FaceUndoView(APIView):
-    permission_classes = [IsAuthenticated]
-
     @extend_schema(
         summary="Undo a correction of several faces",
         request=FaceUndoSerializer,

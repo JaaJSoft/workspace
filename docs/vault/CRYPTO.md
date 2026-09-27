@@ -80,24 +80,61 @@ knowing before writing another implementation:
 
 ## The compatibility corpus
 
-`workspace/vault/tests/fixtures/compat/v1/` is one account, written once by the
-real client in a browser and never rewritten. The parity vectors prove that the
+`workspace/vault/tests/fixtures/compat/` holds one directory per format, each
+one account written once by the real client in a browser and never rewritten:
+
+- `v2/` is the format-2 corpus, written by the client that ships with the first
+  release. Every header starts with `0x02` and every HPKE wrap stores
+  `"format": 2` in its `hpke_suite`.
+- `v1/` is the pre-release format-1 corpus. Format 1 is `superseded`, not
+  withdrawn: accounts written under it must keep opening, so it is kept and
+  replayed exactly like `v2/`.
+
+The parity vectors prove that the
 bundle and the reference agree *today*; they are regenerated from the current
 code, so changing a primitive rewrites them and CI stays green while every
 existing vault stops opening. The corpus is the other half of that sentence:
 fixed bytes, replayed by the Python reference, by the server's verifiers and by
 a browser on every commit.
 
-It is append-only. A deliberate format change ships `v2` beside `v1` and leaves
-`v1` byte-for-byte alone - the point is to keep reading what was written before
-the change, so editing it would erase the only evidence. A test compares every
-file to `SHA256SUMS` and fails on any edit; another fails on a version no replay
-reads.
+It is append-only. A deliberate format change ships the next directory beside
+the published ones and leaves those byte-for-byte alone - the point is to keep
+reading what was written before the change, so editing one would erase the only
+evidence. A test compares every file to its `SHA256SUMS` and fails on any edit;
+another fails on a version no replay reads. Each replay lists the versions it
+opens in its `CORPORA` tuple and runs every test once per version.
+
+A new version is written by the browser walk in
+`tests/e2e/test_compat_corpus_write.py`, pointed at the new directory by its
+`VERSION` constant, and never by the reference:
+
+```bash
+E2E=1 VAULT_COMPAT_CORPUS_WRITE=1 uv run python manage.py test workspace.vault.tests.e2e.test_compat_corpus_write
+```
+
+The walk stages its output beside the published versions, hashes it into
+`SHA256SUMS` and publishes it with a single rename, and it refuses to start
+when the target directory already exists.
 
 The corpus carries an entry's notes and a `custom:` field, which the UI does not
 expose yet. It freezes the format, not the screen: both derive associated-data
 strings of their own, and a corpus that stopped at what the form can write would
 leave those two unguarded.
+
+## The suite manifest
+
+`workspace/vault/crypto_suites.json` names every algorithm and format
+identifier the vault knows - wire format, AEAD, HPKE suite, public key,
+signature, payload and KDF - and gives each one a state: `current` is what new
+data is written under, `superseded` is still read but never written, and `test`
+exists only for the test suites. The server reads it to refuse what it does not
+know, the Python reference reads it directly, and the browser reads only the
+copy built into `vault-crypto.js`: the server never serves it, so a server
+cannot talk a client into an algorithm.
+
+Making a suite current is a manifest edit plus an implementation of it in each
+of the three programs - the bundle, the reference and the server's checks -
+and a new corpus directory written under it.
 
 ## The export archive
 

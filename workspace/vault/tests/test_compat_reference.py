@@ -17,15 +17,20 @@ from pyhpke import AEADId, KDFId, KEMId
 from pyhpke.exceptions import OpenError
 
 from . import compat
-from .reference import ad, archive, encoding, metadata, primitives, suites
+from .reference import ad, archive, encoding, metadata, primitives, suites, wire
 
 # The corpora this file's replays actually open, and the versions derived
 # from them. test_compat_frozen checks COVERED against compat.versions() so a
 # new corpus directory can never go unread - deriving the list from the loads
 # themselves is what stops a version being *declared* covered by a replay that
 # never reads it.
-CORPORA = (compat.load("v1"),)
+CORPORA = (compat.load("v1"), compat.load("v2"))
 COVERED = [corpus.root.name for corpus in CORPORA]
+
+# The first byte of every six-byte ciphertext header, per corpus directory.
+# The HPKE vault-key wraps carry no such header: their format is the
+# "format" key of the stored hpke_suite, absent on format 1.
+FORMAT_OF = {"v1": 1, "v2": 2}
 
 
 def _only(rows, model):
@@ -61,11 +66,39 @@ def _open_optional(key, raw_b64, associated_data):
     return primitives.aead_open(key, _b64(raw_b64), associated_data).decode("utf-8")
 
 
-class ReferenceReplayTests(SimpleTestCase):
+def _corpus_named(name):
+    (corpus,) = [corpus for corpus in CORPORA if corpus.root.name == name]
+    return corpus
+
+
+def _identity(corpus):
+    rows = json.loads(corpus.rows.read_text(encoding="utf-8"))
+    return _only(rows, "vault.accountidentity")
+
+
+def _account_unwrap_key(corpus, identity):
+    """The key the account private keys are wrapped under, derived from the
+    credentials and the parameters the identity row stores.
+    """
+    fields = identity["fields"]
+    primitives.assert_account_kdf(fields["kdf_algo"], fields["kdf_params"])
+    amk = primitives.derive_amk(
+        corpus.credentials["vault_master_password"],
+        primitives.crockford_decode(corpus.credentials["secret_key"]),
+        _b64(fields["kdf_salt"]),
+        fields["kdf_params"],
+    )
+    return primitives.hkdf(amk, ad.unwrap_info())
+
+
+class _ReferenceReplay:
+    """Every replay, run once per corpus by the classes generated below."""
+
+    corpus = None
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        (cls.corpus,) = CORPORA
         cls.rows = json.loads(cls.corpus.rows.read_text(encoding="utf-8"))
         cls.identity = _only(cls.rows, "vault.accountidentity")
         # An account is named by its AccountIdentity uuid, never the numeric
@@ -73,18 +106,9 @@ class ReferenceReplayTests(SimpleTestCase):
         cls.account_uuid = cls.identity["pk"]
 
     def _kex_private_key(self):
-        identity = self.identity["fields"]
-        primitives.assert_account_kdf(identity["kdf_algo"], identity["kdf_params"])
-        amk = primitives.derive_amk(
-            self.corpus.credentials["vault_master_password"],
-            primitives.crockford_decode(self.corpus.credentials["secret_key"]),
-            _b64(identity["kdf_salt"]),
-            identity["kdf_params"],
-        )
-        unwrap = primitives.hkdf(amk, ad.unwrap_info())
         kex_priv = primitives.aead_open(
-            unwrap,
-            _b64(identity["wrapped_kex_priv"]),
+            _account_unwrap_key(self.corpus, self.identity),
+            _b64(self.identity["fields"]["wrapped_kex_priv"]),
             ad.kex_priv_ad(self.account_uuid),
         )
         return X25519PrivateKey.from_private_bytes(kex_priv)
@@ -406,32 +430,45 @@ class ReferenceReplayTests(SimpleTestCase):
             )
 
     def test_the_frozen_rows_name_the_algorithms_they_were_sealed_under(self):
-        """`kdf_algo` sits on the account and `hpke_suite` on every wrap, and
-        no reader consults either: one suite is implemented, so each assumes
-        it. They are the only columns the replays carry without checking, and
-        a corpus whose descriptor disagreed with its own bytes would replay
-        green for ever - the first reader to dispatch on the descriptor would
-        be the one to find out, against data nobody can regenerate.
+        """`kdf_algo` sits on the account, `hpke_suite` on every wrap and a
+        format byte in front of every other ciphertext. Readers dispatch on
+        all three, so a corpus whose descriptors disagreed with its own bytes
+        would be read under the wrong rules - and nobody can regenerate it to
+        find out.
 
         `kdf_params` is deliberately not pinned to a value: it is per-account
         by design, and the two tests above already prove a reader obeys what
         the row carries.
         """
+        expected_format = FORMAT_OF[self.corpus.root.name]
         self.assertEqual(self.identity["fields"]["kdf_algo"], "argon2id")
+
         wraps = _all(self.rows, "vault.vaultkeywrap")
         self.assertEqual(len(wraps), len(self.corpus.manifest["vaults"]))
+        suite = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        if expected_format != 1:
+            # Format 1 is the suite alone, with no "format" key.
+            suite["format"] = expected_format
         for wrap in wraps:
-            # Format 1: the suite alone, no "format" key.
-            self.assertEqual(
-                wrap["fields"]["hpke_suite"],
-                {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
-            )
+            self.assertEqual(wrap["fields"]["hpke_suite"], suite)
+
+        headers = 0
+        for row in self.rows:
+            for name, value in row["fields"].items():
+                if name == "wrapped_key" or not value:
+                    continue
+                if name.startswith(("wrapped_", "encrypted_")):
+                    with self.subTest(model=row["model"], pk=row["pk"], field=name):
+                        header = wire.decode_ciphertext(_b64(value))
+                        self.assertEqual(header.format_version, expected_format)
+                    headers += 1
+        self.assertGreater(headers, 0)
 
     def test_a_wrapped_vault_key_refuses_a_suite_it_was_not_sealed_under(self):
         """The other half: a descriptor is worth freezing only if it names
         something load-bearing. AES-128-GCM is one number away from the
         stored aead_id and the identifier feeds the HPKE key schedule, so a
-        wrap sealed under format 1 cannot open under it.
+        wrap sealed under the stored suite cannot open under it.
 
         A reader never gets that far: a stored suite the manifest does not
         declare is refused before any key schedule runs. The library call
@@ -612,3 +649,47 @@ class ReferenceReplayTests(SimpleTestCase):
         self.assertEqual(compared_tags, expected_tags)
         self.assertEqual(compared_entries, expected_entries)
         self.assertEqual(compared_fields, expected_fields)
+
+
+# One test class per corpus, generated from CORPORA itself: a version added to
+# the tuple is replayed without a class to remember, and one left out of it is
+# refused by test_compat_frozen.
+for _corpus in CORPORA:
+    _name = f"ReferenceReplay{_corpus.root.name.upper()}Tests"
+    globals()[_name] = type(
+        _name, (_ReferenceReplay, SimpleTestCase), {"corpus": _corpus}
+    )
+
+
+class AccountWrapHeaderTests(SimpleTestCase):
+    """What format 2 changed, shown on the account wrap each corpus froze.
+
+    Byte 2 of the header is the kdf_id. Format 1 left the header outside the
+    associated data, so a flipped byte went unnoticed; format 2 binds it.
+    """
+
+    def _open_account_wrap(self, corpus, *, flip_kdf_id):
+        identity = _identity(corpus)
+        raw = bytearray(_b64(identity["fields"]["wrapped_kex_priv"]))
+        if flip_kdf_id:
+            raw[2] ^= 0x01
+        return primitives.aead_open(
+            _account_unwrap_key(corpus, identity),
+            bytes(raw),
+            ad.kex_priv_ad(identity["pk"]),
+        )
+
+    def test_a_format_1_header_byte_is_not_authenticated(self):
+        corpus = _corpus_named("v1")
+        self.assertEqual(
+            self._open_account_wrap(corpus, flip_kdf_id=True),
+            self._open_account_wrap(corpus, flip_kdf_id=False),
+        )
+
+    def test_a_format_2_header_byte_is_authenticated(self):
+        corpus = _corpus_named("v2")
+        # The untouched wrap opens first: a refusal that also hit it would
+        # say nothing about the flipped byte.
+        self.assertEqual(len(self._open_account_wrap(corpus, flip_kdf_id=False)), 32)
+        with self.assertRaises(InvalidTag):
+            self._open_account_wrap(corpus, flip_kdf_id=True)

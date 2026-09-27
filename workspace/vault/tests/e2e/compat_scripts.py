@@ -215,7 +215,7 @@ async () => {
 # dialog nor the appearance one renders the field afterwards. So the one vault
 # every real account has is the one vault no sequence of clicks can describe.
 #
-# Left empty it would take `v1|vault-field|<uuid>|description` out of the
+# Left empty it would take the `vault-field|<uuid>|description` string out of the
 # corpus on that row, which is the hole this closes. buildVaultUpdateRequest
 # is the product's own helper - the same one the rename dialog calls - handed
 # the field that dialog does not draw: the form is bypassed, never the crypto.

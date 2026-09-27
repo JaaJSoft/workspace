@@ -1,0 +1,382 @@
+[
+{
+  "model": "auth.user",
+  "pk": 1,
+  "fields": {
+    "password": "md5$mbditRiSJIqQYbzGO4q2sj$5e5f89636df8db178e1aae55ca79ab99",
+    "last_login": "2026-09-27T13:20:42.176Z",
+    "is_superuser": false,
+    "username": "owner",
+    "first_name": "",
+    "last_name": "",
+    "email": "owner@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-27T13:20:42.125Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "vault.accountidentity",
+  "pk": "01a0e306-6b22-70dd-8dd2-bda5b4456ded",
+  "fields": {
+    "user": 1,
+    "kdf_algo": "argon2id",
+    "kdf_params": {
+      "v": "1.3",
+      "m": 65536,
+      "t": 3,
+      "p": 2
+    },
+    "kdf_salt": "i_txCaYafFY5ycNNEMdTGnm3edVBJUSrGpqfzgl45AA",
+    "kex_public": "AWkST2FATAEAQ06AXWp1vASkTwM2konpKZERjqbz8jtq",
+    "sig_public": "AhkfCXT6KvJ-l1oO4ZwiLIV_hKtfM1kaifTI2mkOYQ0R",
+    "wrapped_kex_priv": "AgEAAAAMyj39chwaCLuiYkw7Fvc5fL0aQIFT6H4c51U-Hlcwri4fGrEY6AYl_e1eR_LVfe27mvUf0EDoAbMLQM7B",
+    "wrapped_sig_priv": "AgEAAAAMXCLxqJdO5-T1VT5tt_7ITCRa6G3MybfIFZLmJ85yYze0K6oqM-A108hbYzDbYkJzX78DQg-EFHVxYWo_",
+    "sig_over_kex_pub": "Ad4OYmd3yFZW42UilGUF-DpSPCoPu9jVyLzGc3ts1ZjYeSU8uMslbB2-MyMmQ-7sjqbf7N0EnBzRXdT78tN6eQc",
+    "state": "active",
+    "created_at": "2026-09-27T13:20:43.810Z",
+    "updated_at": "2026-09-27T13:20:44.048Z"
+  }
+},
+{
+  "model": "vault.vault",
+  "pk": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+  "fields": {
+    "owner": 1,
+    "encrypted_name": "AgEBAAEM6bRmzCLtqUEcrhckrvC112QwdA_tg1B2tt9mmFSKc1H1E0FH",
+    "encrypted_description": "AgEBAAEMAYUL8nJj55Bwyf0fKbNhezqZ4bJfj87Z0-h2znc8US4mmChx7OIazzG_1RIdi9CyGVRq4Z2lU6jXasmMtBbEVbk",
+    "icon": "lock",
+    "color": "primary",
+    "key_version": 1,
+    "metadata_sig": "ASh9pPFV0uUIdSDaDIgv23NBuVRCSBFeA3S7iWQZ2DgjkCfptrCbL-_ZWI3-IWjHOtL4-zcwLGQQUXrHdDRARg4",
+    "is_favorite": false,
+    "created_at": "2026-09-27T13:20:44.453Z",
+    "updated_at": "2026-09-27T13:20:45.427Z"
+  }
+},
+{
+  "model": "vault.vault",
+  "pk": "01a0e306-8bca-737d-985f-33a549f1ecb0",
+  "fields": {
+    "owner": 1,
+    "encrypted_name": "AgEBAAEMLo8QktS352SHLhzz6pXF9YO0TKEsS27YpOFEHiMchss",
+    "encrypted_description": "AgEBAAEMkSptLYq21aMH9qAN8_X0G1NYL3puG_3m06pSYNSToC0uHHBcAAfoTXltFq_wSC-mIs5cPQ55zap0JD20AMi2mqEYJow",
+    "icon": "lock",
+    "color": "primary",
+    "key_version": 1,
+    "metadata_sig": "AXKvOZTVI9nUJuwaDJSugkCZPGXmRZerbWjGZp2yOWECeFqsVBraLLmAjHVx6kT2ZsnqDbLi13m-gNxPK63nOAs",
+    "is_favorite": false,
+    "created_at": "2026-09-27T13:20:52.181Z",
+    "updated_at": "2026-09-27T13:20:52.181Z"
+  }
+},
+{
+  "model": "vault.vaultkeywrap",
+  "pk": "01a0e306-6da6-74a2-b2f1-3b01edb5c3b5",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "recipient": 1,
+    "wrapped_key": "MCNFWTEaU5TmESgXuubYLYo-4z3FE3box6yTitQoaXe9Sa8a38L0tBP4WyW7MEMfB60aRiGaYvtJvJdRPDXYH_QqPMq0GZ4eMmv5OjPkJMg",
+    "key_version": 1,
+    "hpke_suite": {
+      "kem_id": 32,
+      "kdf_id": 1,
+      "aead_id": 2,
+      "mode": 0,
+      "format": 2
+    },
+    "created_at": "2026-09-27T13:20:44.454Z"
+  }
+},
+{
+  "model": "vault.vaultkeywrap",
+  "pk": "01a0e306-8bd5-7115-84d0-08044ffdc178",
+  "fields": {
+    "vault": "01a0e306-8bca-737d-985f-33a549f1ecb0",
+    "recipient": 1,
+    "wrapped_key": "le3SGwWDu10OLR3rHIhckDHSnRrE4IHfhiWJxhh_ymu4myoTJ4wIoO43iU7FHspcNaksnRrW80OqXgnqiGadTUq6ks_QrV5jCiUp7GYYFkU",
+    "key_version": 1,
+    "hpke_suite": {
+      "kem_id": 32,
+      "kdf_id": 1,
+      "aead_id": 2,
+      "mode": 0,
+      "format": 2
+    },
+    "created_at": "2026-09-27T13:20:52.182Z"
+  }
+},
+{
+  "model": "vault.vaultfolder",
+  "pk": "01a0e306-7dc9-7e40-9896-3248510fd2ae",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "parent": null,
+    "encrypted_name": "AgEBAAEMzgPosPfUytV3B1QQAQGVUWQW6gFuAOvqJkxzA0hMr56fPFI",
+    "metadata_sig": "AZ612wHRtwgoFZU5BmtY0ahLIIHHzxDqOuZJ7P9uHhaiVlCaOBurumO3oX5WY5Xi62AV20egcq3ABYqAxVY0hQU",
+    "position": 0,
+    "created_at": "2026-09-27T13:20:48.883Z",
+    "updated_at": "2026-09-27T13:20:48.883Z"
+  }
+},
+{
+  "model": "vault.vaultfolder",
+  "pk": "01a0e306-8096-7478-9f53-0a4bd82a2ccd",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "parent": "01a0e306-7dc9-7e40-9896-3248510fd2ae",
+    "encrypted_name": "AgEBAAEMumwa9OkhhzteS_awsHcAdEBI58oByDWX7XQASx7UQq9V",
+    "metadata_sig": "AV3hTdzo6zXKJUq268WS4D7k7onYxYHMO0Ayxo6AGAfPfNzEPfQ59dS5W29ZQ3aOx15a08SGSOI93TvHdr48FwE",
+    "position": 0,
+    "created_at": "2026-09-27T13:20:49.600Z",
+    "updated_at": "2026-09-27T13:20:49.600Z"
+  }
+},
+{
+  "model": "vault.vaulttag",
+  "pk": "01a0e306-78b6-717b-b424-43a8beee17ee",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "encrypted_name": "AgEBAAEMFAYtJ-RwBI6TUoTbmu0P-y_g3kGLYdQlkOPfCpFecoCIkv8",
+    "metadata_sig": "AWnmOX8ZwIdhAcAxb6gTk3eJ5f84Gwj9aX_k1ytqY6qn5f9LLfChFFaH9MlkBpB6udm0X-pZ9m81X6zQxx2kHAQ",
+    "color": "#ef4444",
+    "created_at": "2026-09-27T13:20:47.580Z"
+  }
+},
+{
+  "model": "vault.vaultentry",
+  "pk": "01a0e306-736e-79c0-bc16-70211739e807",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "type": "login",
+    "folder": null,
+    "is_favorite": true,
+    "deleted_at": null,
+    "last_used_at": null,
+    "encrypted_name": "AgEBAAEMK5AfZ2WHyKRZHaSR1LDdbqKPNBdxtlRVZRx3zQ2des35axS42Hu0",
+    "encrypted_notes": "",
+    "key_version": 1,
+    "entry_version": 1,
+    "metadata_sig": "AWHWafOvZoaOQnNuEj261I9TvTh4PyRLEYiEVCKFRg9uNu13d41qDZxTlZGBYQzBE3WD-ep6ObFe_w-9v8aqXwc",
+    "created_at": "2026-09-27T13:20:46.246Z",
+    "updated_at": "2026-09-27T13:20:48.185Z",
+    "tags": [
+      "01a0e306-78b6-717b-b424-43a8beee17ee"
+    ]
+  }
+},
+{
+  "model": "vault.vaultentry",
+  "pk": "01a0e306-8373-7813-ac0a-2579f363a4ec",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "type": "login",
+    "folder": "01a0e306-8096-7478-9f53-0a4bd82a2ccd",
+    "is_favorite": false,
+    "deleted_at": null,
+    "last_used_at": null,
+    "encrypted_name": "AgEBAAEMUHBM1eAKDZaSuNUDmqJUOCy13-QxHoZd5Fg5qqz7M4-ElloPJL1G",
+    "encrypted_notes": "",
+    "key_version": 1,
+    "entry_version": 1,
+    "metadata_sig": "Af8lq1zAgsrNU7mciVn9O-0F9vYyPO9aGKR5yuQELit8mTEtHyMT49UUtBzwAl74yDXO-DMkmHw-DT2AUUhaIw8",
+    "created_at": "2026-09-27T13:20:50.345Z",
+    "updated_at": "2026-09-27T13:20:50.346Z",
+    "tags": []
+  }
+},
+{
+  "model": "vault.vaultentry",
+  "pk": "01a0e306-8661-7250-89ec-8646d731929b",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "type": "login",
+    "folder": null,
+    "is_favorite": false,
+    "deleted_at": "2026-09-27T13:20:51.594Z",
+    "last_used_at": null,
+    "encrypted_name": "AgEBAAEMQkIiAXUBaWmYQMpuWsIE9fFGhVMKA18iZzP604BZaU1-Pv8A4A",
+    "encrypted_notes": "",
+    "key_version": 1,
+    "entry_version": 1,
+    "metadata_sig": "AaLly6OmoxTlRrngkOyKeYJzNwQAFg_Ow92cdiBpXkp6e8YZCoUs_AYmoNlRMEqzx0Dxq6ZmEscmz6BANuPcgQY",
+    "created_at": "2026-09-27T13:20:51.097Z",
+    "updated_at": "2026-09-27T13:20:51.594Z",
+    "tags": []
+  }
+},
+{
+  "model": "vault.vaultentry",
+  "pk": "01a0e306-8a00-76ca-ac9f-f33c84655f5d",
+  "fields": {
+    "vault": "01a0e306-6d94-715b-98dd-aa3b350b7915",
+    "type": "login",
+    "folder": null,
+    "is_favorite": false,
+    "deleted_at": null,
+    "last_used_at": null,
+    "encrypted_name": "AgEBAAEMUhMTCbIQf_zD2xJfgcvQutOoT_h8EwApejxbiB64TExlgg",
+    "encrypted_notes": "AgEBAAEMa7fKYPIWxUMo4g76jGWq_bnvhuNphEuZdItBoiqRGPo0w2TthAi7pRoFuUXFEKA5_XdquNTWTyaohsS-ndwBBgmOzGeHKmjV1w",
+    "key_version": 1,
+    "entry_version": 1,
+    "metadata_sig": "AWmklez7pag_ihb9CjYt8MDee38jo4WISEmxvzuZ3sJPxBwsxpZac0Rigx3A6ajZ23L6g3gjzcncl5XHA7nWEQQ",
+    "created_at": "2026-09-27T13:20:51.719Z",
+    "updated_at": "2026-09-27T13:20:51.721Z",
+    "tags": []
+  }
+},
+{
+  "model": "vault.vaultentry",
+  "pk": "01a0e306-8d38-7bdd-995e-8a89fc917645",
+  "fields": {
+    "vault": "01a0e306-8bca-737d-985f-33a549f1ecb0",
+    "type": "login",
+    "folder": null,
+    "is_favorite": false,
+    "deleted_at": null,
+    "last_used_at": null,
+    "encrypted_name": "AgEBAAEMRfhSnq91X2MJwWhlzeMm7dl7uPTpFPLl4aUyN8Srz6ZtGsHaaw",
+    "encrypted_notes": "",
+    "key_version": 1,
+    "entry_version": 1,
+    "metadata_sig": "ATEATcNE2SlO_6RLm3_n-FFAGrqayMC85cy8YbcJvK4dBVdgmpBmdlqC8LZGwdz5xxEllLHCT9zPDnjgLzZzDgk",
+    "created_at": "2026-09-27T13:20:52.847Z",
+    "updated_at": "2026-09-27T13:20:52.849Z",
+    "tags": []
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-7c3a-75f7-bfe1-5fb475049f26",
+  "fields": {
+    "entry": "01a0e306-736e-79c0-bc16-70211739e807",
+    "field_id": "totp",
+    "encrypted_value": "AgEBAAEM0TIKyJ-GDwNRLKZ2q3RY1YIYmDxG-aN1RrVJ8YMaA7sZ10lVys67rfhjQZKI2AlOy175vXnPnlNwPTqioCIH0rlfpSTVjrCD4zZc-ZoSnCzsi6iKpButRPNC2qvX7UpTgd7z0jxykahrvZCFED_6m4SEzblFgks7M1yQxYg17IA_w7QYj5Qx-gkbavHZ",
+    "created_at": "2026-09-27T13:20:48.187Z",
+    "updated_at": "2026-09-27T13:20:48.187Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-7c3a-75f7-bfe1-5fb5dccb9f19",
+  "fields": {
+    "entry": "01a0e306-736e-79c0-bc16-70211739e807",
+    "field_id": "password",
+    "encrypted_value": "AgEBAAEMZ-nQuONQF1EwQSO5Q4zDgwTYWkcgA5oU5AHhuKNmJ0h0wGg",
+    "created_at": "2026-09-27T13:20:48.187Z",
+    "updated_at": "2026-09-27T13:20:48.187Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-7c3a-75f7-bfe1-5fb6a066c6fc",
+  "fields": {
+    "entry": "01a0e306-736e-79c0-bc16-70211739e807",
+    "field_id": "username",
+    "encrypted_value": "AgEBAAEMWORVgAZn_9uCB-EymFBxn4Xyc8gVhaeBIlF67cbc2g",
+    "created_at": "2026-09-27T13:20:48.187Z",
+    "updated_at": "2026-09-27T13:20:48.187Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-84ab-70cf-9814-ea048f16d2ab",
+  "fields": {
+    "entry": "01a0e306-8373-7813-ac0a-2579f363a4ec",
+    "field_id": "password",
+    "encrypted_value": "AgEBAAEM-0rapvtuFQdRjEQbB_AwexcJVfNTXQYJoU5bfOMZO8s",
+    "created_at": "2026-09-27T13:20:50.347Z",
+    "updated_at": "2026-09-27T13:20:50.347Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-84ab-70cf-9814-ea05a0b983b6",
+  "fields": {
+    "entry": "01a0e306-8373-7813-ac0a-2579f363a4ec",
+    "field_id": "username",
+    "encrypted_value": "AgEBAAEMVMKpOCJnf_y3QLMmrzZ3Ww1ii7M-PUD_nuBD658C3dY",
+    "created_at": "2026-09-27T13:20:50.347Z",
+    "updated_at": "2026-09-27T13:20:50.347Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-879b-72ed-bae5-5069c6eb0e61",
+  "fields": {
+    "entry": "01a0e306-8661-7250-89ec-8646d731929b",
+    "field_id": "password",
+    "encrypted_value": "AgEBAAEMLCsYxvJ7M_3lxrlgvMuxSW6MVpAB-OnO7c9qrr0xvPXqy5c",
+    "created_at": "2026-09-27T13:20:51.099Z",
+    "updated_at": "2026-09-27T13:20:51.099Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-879b-72ed-bae5-506a6e6eecdd",
+  "fields": {
+    "entry": "01a0e306-8661-7250-89ec-8646d731929b",
+    "field_id": "username",
+    "encrypted_value": "AgEBAAEMdED7GOps38gWIAibR_O-t3Jfq9QU0fN2RBKytMmw6A",
+    "created_at": "2026-09-27T13:20:51.099Z",
+    "updated_at": "2026-09-27T13:20:51.099Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-8a0a-7760-a521-e8a435209d73",
+  "fields": {
+    "entry": "01a0e306-8a00-76ca-ac9f-f33c84655f5d",
+    "field_id": "username",
+    "encrypted_value": "AgEBAAEMGYEyAD0goq0wBc1_38FwJ7CFlBV0DD7GHuYXcsrFxnec7WU",
+    "created_at": "2026-09-27T13:20:51.722Z",
+    "updated_at": "2026-09-27T13:20:51.722Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-8a0a-7760-a521-e8a58645c13f",
+  "fields": {
+    "entry": "01a0e306-8a00-76ca-ac9f-f33c84655f5d",
+    "field_id": "password",
+    "encrypted_value": "AgEBAAEME8lkwUSR5aHVQ_wt-hp6mBZikxxoocXQuZoTnEe3g1mfBgI",
+    "created_at": "2026-09-27T13:20:51.722Z",
+    "updated_at": "2026-09-27T13:20:51.722Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-8a0a-7760-a521-e8a6bd525b19",
+  "fields": {
+    "entry": "01a0e306-8a00-76ca-ac9f-f33c84655f5d",
+    "field_id": "custom:pin",
+    "encrypted_value": "AgEBAAEMHpCjvHSv51lHS99a9G7yqt5UeiU-IBiCFRG4aMU_O3E",
+    "created_at": "2026-09-27T13:20:51.722Z",
+    "updated_at": "2026-09-27T13:20:51.722Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-8e72-778d-ad03-e9f2d9afadb2",
+  "fields": {
+    "entry": "01a0e306-8d38-7bdd-995e-8a89fc917645",
+    "field_id": "password",
+    "encrypted_value": "AgEBAAEMNgoT-hA9LMbsLEG4LBETY6oKCG0UGv53puS9ey_v_C6wW5HaKnso",
+    "created_at": "2026-09-27T13:20:52.850Z",
+    "updated_at": "2026-09-27T13:20:52.850Z"
+  }
+},
+{
+  "model": "vault.entryfield",
+  "pk": "01a0e306-8e72-778d-ad03-e9f3d5301559",
+  "fields": {
+    "entry": "01a0e306-8d38-7bdd-995e-8a89fc917645",
+    "field_id": "username",
+    "encrypted_value": "AgEBAAEMX7zihzwkukQ1TiurvBB7mxLf-DKV7Tt6Isudsv-5kw",
+    "created_at": "2026-09-27T13:20:52.850Z",
+    "updated_at": "2026-09-27T13:20:52.850Z"
+  }
+}
+]

@@ -10,9 +10,9 @@ vault onboarding creates - go through window.vaultCrypto / vaultApi /
 vaultSession in the same page, on the session the UI just opened. That is
 still the real client write path; it is the form that is bypassed, never the
 crypto. Each derives associated-data strings of its own
-(v1|entry-field|<uuid>|notes, v1|entry-field|<uuid>|custom:...,
-v1|vault-field|<uuid>|description), which is exactly what a corpus that
-stopped at the form would leave unguarded.
+(entry-field|<uuid>|notes, entry-field|<uuid>|custom:...,
+vault-field|<uuid>|description, behind the format's prefix), which is exactly
+what a corpus that stopped at the form would leave unguarded.
 """
 
 import contextlib
@@ -40,7 +40,10 @@ from .compat_scripts import (
 from .test_browser import GOOD_PASSWORD, PANEL, SIDEBAR, VaultBrowserCase
 
 WRITE = os.environ.get("VAULT_COMPAT_CORPUS_WRITE") == "1"
-VERSION = "v1"
+VERSION = "v2"
+# The version a published-corpus test targets: one that exists, whatever
+# VERSION the next walk is pointed at.
+PUBLISHED = "v1"
 ARCHIVE_PASSPHRASE = "corpus fige sept huit neuf dix onze douze"
 
 # create_user's default, which the shared harness takes. Written into the
@@ -224,12 +227,12 @@ class CorpusWriteGuardTests(SimpleTestCase):
         )
 
     def test_the_generator_reproduces_the_published_sums(self):
-        """v1's SHA256SUMS was written by hand, after publication. This is
-        what says the generator now produces that same file byte for byte -
-        so the format the append-only guard parses and the format the walk
-        emits cannot drift apart at v2.
+        """The first corpus's SHA256SUMS was written by hand, after
+        publication. This is what says the generator produces that same file
+        byte for byte - so the format the append-only guard parses and the
+        format the walk emits cannot drift apart.
         """
-        published = compat.CORPUS_ROOT / VERSION
+        published = compat.CORPUS_ROOT / PUBLISHED
         staging = self._scratch_root() / "staged"
         staging.mkdir()
         for path in published.iterdir():
@@ -300,7 +303,7 @@ class CorpusWriteGuardTests(SimpleTestCase):
         # The real root and the real version: the refusal is only worth
         # anything against the directory a rerun would actually destroy.
         with self.assertRaises(FileExistsError):
-            with _corpus_output(VERSION):
+            with _corpus_output(PUBLISHED):
                 pass
 
 

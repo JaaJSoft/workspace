@@ -166,9 +166,14 @@ An archive is a 50-byte public header followed by a single sealed payload.
   salt and parameters and no `secret` - an export has no `secret_key` - then
   HKDF-SHA256 with info `v1|archive-key`. The payload declares that last step:
   KDF id `0x01` (HKDF-SHA256) and key version `0`.
-- **The associated data** is the whole 50-byte header, so an edited header
-  byte fails as tampering rather than as a wrong passphrase. The payload's own
-  header is not covered by it, so a reader treats that KDF id as untrusted.
+- **The associated data** depends on the payload's format byte, at offset 50,
+  and carries no `ad_prefix`: the archive header is used verbatim. Under
+  format 2, which the current client writes, it is the payload's 6-byte wire
+  header followed by the 50-byte archive header, so every header byte is
+  authenticated. Under format 1 it is the 50-byte archive header alone; the
+  payload's own header is not covered, so a reader treats that KDF id as
+  untrusted. Either way an edited header byte fails as tampering rather than
+  as a wrong passphrase.
 - **The parameter bounds** are checked before anything is derived: `m` in
   [8192, 1048576], `t` in [1, 10], `p` in [1, 4]. A file declaring 4 GiB is
   refused rather than tried. The bounds may widen and must never narrow:

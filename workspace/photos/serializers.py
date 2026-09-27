@@ -197,17 +197,15 @@ class FaceSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["uuid", "quality", "timestamp"]
         extra_kwargs = {
+            "assignment": {
+                "help_text": (
+                    "Write 'confirmed' to pin the face in its current cluster."
+                ),
+            },
             "timestamp": {
                 "help_text": (
                     "Seconds into the video of the frame the face was taken "
                     "from; null for a photo."
-                )
-            }
-        }
-        extra_kwargs = {
-            "assignment": {
-                "help_text": (
-                    "Write 'confirmed' to pin the face in its current cluster."
                 ),
             },
         }

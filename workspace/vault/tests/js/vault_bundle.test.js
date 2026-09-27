@@ -136,3 +136,8 @@ test('randomBytes returns the length asked for, and draws each time', () => {
   assert.equal(V.randomBytes(32).length, 32);
   assert.notEqual(V.toBase64Url(V.randomBytes(32)), V.toBase64Url(V.randomBytes(32)));
 });
+
+test('the test aead never ships in the production bundle', () => {
+  const text = fs.readFileSync(BUNDLE, 'utf8');
+  assert.equal(text.includes('test-aead|enc'), false);
+});

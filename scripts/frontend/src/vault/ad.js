@@ -1,3 +1,5 @@
+import { declaredEntry } from './suites.js';
+
 // The info and associated-data catalogue. These strings ARE the format:
 // changing one breaks the decryption of everything already written with it,
 // and nothing fails until a user opens the entry. ASCII only, `|` separator,
@@ -13,6 +15,31 @@ const ascii = (text) => {
   return new TextEncoder().encode(text);
 };
 const uuid = (value) => String(value).toLowerCase();
+
+// A slot's name, not its bytes: which prefix it gets, and whether the wire
+// header goes in front, depends on the format of the ciphertext it opens -
+// and only the AEAD layer, holding that header, can decide it.
+class AdContext {
+  constructor(body) {
+    ascii(body);
+    this.body = body;
+    Object.freeze(this);
+  }
+}
+
+// A context is spelled for the header's format; raw bytes are taken as the
+// body verbatim, with the header still in front under a format that wants it.
+export function associatedData(context, header) {
+  const format = declaredEntry('format', header[0]);
+  const body = context instanceof AdContext
+    ? ascii(format.ad_prefix + context.body)
+    : context;
+  if (!format.header_in_ad) return body;
+  const out = new Uint8Array(header.length + body.length);
+  out.set(header, 0);
+  out.set(body, header.length);
+  return out;
+}
 
 export const RESERVED_FIELD_IDS = Object.freeze(['username', 'password', 'totp', 'uri']);
 
@@ -40,9 +67,10 @@ const CUSTOM_PREFIX = 'custom:';
 export const AD = {
   unwrapInfo: () => ascii('v1|unwrap'),
   entryKeyInfo: (entryUuid) => ascii(`v1|entry-key|${uuid(entryUuid)}`),
-  kexPrivAd: (accountUuid) => ascii(`v1|account-kex-priv|${uuid(accountUuid)}`),
-  sigPrivAd: (accountUuid) => ascii(`v1|account-sig-priv|${uuid(accountUuid)}`),
-  entryFieldAd: (entryUuid, fieldName) => ascii(`v1|entry-field|${uuid(entryUuid)}|${fieldName}`),
+  kexPrivAd: (accountUuid) => new AdContext(`account-kex-priv|${uuid(accountUuid)}`),
+  sigPrivAd: (accountUuid) => new AdContext(`account-sig-priv|${uuid(accountUuid)}`),
+  entryFieldAd: (entryUuid, fieldName) =>
+    new AdContext(`entry-field|${uuid(entryUuid)}|${fieldName}`),
   kexPubPayload: (accountUuid, kexPubB64) =>
     ascii(`v1|account-kex-pub|${uuid(accountUuid)}|${kexPubB64}`),
   vaultKeyInfo: (vaultUuid, recipientUuid) =>
@@ -52,19 +80,19 @@ export const AD = {
     if (!VAULT_FIELD_IDS.includes(field)) {
       throw new Error(`${field} is not a vault metadata field`);
     }
-    return ascii(`v1|vault-field|${uuid(vaultUuid)}|${field}`);
+    return new AdContext(`vault-field|${uuid(vaultUuid)}|${field}`);
   },
   folderFieldAd: (folderUuid, field) => {
     if (!FOLDER_FIELD_IDS.includes(field)) {
       throw new Error(`${field} is not a folder metadata field`);
     }
-    return ascii(`v1|folder-field|${uuid(folderUuid)}|${field}`);
+    return new AdContext(`folder-field|${uuid(folderUuid)}|${field}`);
   },
   tagFieldAd: (tagUuid, field) => {
     if (!TAG_FIELD_IDS.includes(field)) {
       throw new Error(`${field} is not a tag metadata field`);
     }
-    return ascii(`v1|tag-field|${uuid(tagUuid)}|${field}`);
+    return new AdContext(`tag-field|${uuid(tagUuid)}|${field}`);
   },
 };
 

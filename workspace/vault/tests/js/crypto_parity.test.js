@@ -46,14 +46,14 @@ test('base64url round-trips without padding', () => {
 
 test('the wire header matches the reference layout', () => {
   const raw = V.encodeCiphertext({
-    aeadId: V.AEAD_AES_256_GCM,
+    aeadId: 0x01,
     kdfId: V.KDF_HKDF_SHA256,
     keyVersion: 1,
     iv: Uint8Array.from({ length: 12 }, (_, i) => i),
     ciphertext: new TextEncoder().encode('ciphertext-and-tag'),
   });
-  assert.equal(raw[0], 0x01);
-  assert.equal(raw[1], V.AEAD_AES_256_GCM);
+  assert.equal(raw[0], V.CURRENT_SUITE.formatVersion);
+  assert.equal(raw[1], 0x01);
   assert.equal(raw[2], V.KDF_HKDF_SHA256);
   assert.equal(raw[3], 0x00);
   assert.equal(raw[4], 0x01);
@@ -62,19 +62,22 @@ test('the wire header matches the reference layout', () => {
 
 test('an unknown format_version is rejected without parsing', () => {
   const raw = V.encodeCiphertext({
-    aeadId: V.AEAD_AES_256_GCM,
+    aeadId: 0x01,
     kdfId: V.KDF_HKDF_SHA256,
     keyVersion: 1,
     iv: new Uint8Array(12),
     ciphertext: new Uint8Array(4),
   });
-  raw[0] = 0x02;
-  assert.throws(() => V.decodeCiphertext(raw), /format_version/);
+  raw[0] = 0x03;
+  assert.throws(
+    () => V.decodeCiphertext(raw),
+    (err) => err.name === 'UnsupportedAlgorithmError' && err.axis === 'format'
+  );
 });
 
 test('an iv_len inconsistent with the aead is rejected', () => {
   const raw = V.encodeCiphertext({
-    aeadId: V.AEAD_AES_256_GCM,
+    aeadId: 0x01,
     kdfId: V.KDF_HKDF_SHA256,
     keyVersion: 1,
     iv: new Uint8Array(12),
@@ -84,12 +87,19 @@ test('an iv_len inconsistent with the aead is rejected', () => {
   assert.throws(() => V.decodeCiphertext(raw), /iv_len/);
 });
 
+// Its AEAD is registered only by the test-suite script, which this file does
+// not load: the production bundle must refuse it, and crypto_suites says so.
+const TEST_SUITE_VECTORS = new Set(['format-2-test-ctr-hmac']);
+const productionAeadVectors = () => VECTORS.aead.filter((v) => !TEST_SUITE_VECTORS.has(v.id));
+
 test('the aead vectors decode to the header the reference wrote', () => {
-  for (const vector of VECTORS.aead) {
+  for (const vector of productionAeadVectors()) {
     const decoded = V.decodeCiphertext(V.fromBase64Url(vector.expected_wire_b64));
+    assert.equal(decoded.formatVersion, vector.format_version, vector.id);
+    assert.equal(decoded.aeadId, vector.aead_id, vector.id);
     assert.equal(decoded.keyVersion, vector.key_version, vector.id);
     assert.equal(decoded.kdfId, vector.kdf_id, vector.id);
-    assert.equal(decoded.iv.length, 12, vector.id);
+    assert.equal(b64(decoded.iv), vector.iv_b64, vector.id);
   }
 });
 
@@ -114,8 +124,66 @@ test('hkdf vectors replay exactly', async () => {
   }
 });
 
-test('aead vectors replay exactly and reopen', async () => {
-  for (const vector of VECTORS.aead) {
+const hex = (bytes) => Buffer.from(bytes).toString('hex');
+
+// A context_body names its slot; the context is rebuilt through the public AD
+// builder for that slot, so the test goes through the same closed-list checks
+// the application does.
+const CONTEXT_BUILDERS = {
+  'entry-field': (id, field) => V.AD.entryFieldAd(id, field),
+  'account-kex-priv': (id) => V.AD.kexPrivAd(id),
+  'account-sig-priv': (id) => V.AD.sigPrivAd(id),
+  'vault-field': (id, field) => V.AD.vaultFieldAd(id, field),
+  'folder-field': (id, field) => V.AD.folderFieldAd(id, field),
+  'tag-field': (id, field) => V.AD.tagFieldAd(id, field),
+};
+
+function contextFor(body) {
+  const [slot, ...args] = body.split('|');
+  const context = CONTEXT_BUILDERS[slot](...args);
+  assert.equal(context.body, body);
+  return context;
+}
+
+test('aead context vectors rebuild their associated data and open', async () => {
+  const contextVectors = productionAeadVectors().filter((v) => v.context_body !== undefined);
+  assert.ok(contextVectors.length >= 3, 'the context vectors are missing');
+  for (const vector of contextVectors) {
+    const context = contextFor(vector.context_body);
+    const wire = V.fromBase64Url(vector.expected_wire_b64);
+    const { header } = V.decodeCiphertext(wire);
+    assert.equal(hex(V.associatedData(context, header)), vector.associated_data, vector.id);
+    const key = V.fromBase64Url(vector.key_b64);
+    const plain = await V.open(key, wire, context);
+    assert.equal(new TextDecoder().decode(plain), vector.plaintext, vector.id);
+    // Only the current format is ever written, so only its vectors replay.
+    if (vector.format_version === V.CURRENT_SUITE.formatVersion) {
+      const sealed = await V.seal(key, new TextEncoder().encode(vector.plaintext), context, {
+        iv: V.fromBase64Url(vector.iv_b64),
+        keyVersion: vector.key_version,
+        kdfId: vector.kdf_id,
+      });
+      assert.equal(b64(sealed), vector.expected_wire_b64, vector.id);
+    }
+  }
+});
+
+test('legacy aead vectors, sealed under format 1 with raw associated data, reopen', async () => {
+  const legacy = VECTORS.aead.filter((v) => v.ad !== undefined);
+  assert.ok(legacy.length >= 1, 'the legacy vectors are missing');
+  for (const vector of legacy) {
+    assert.equal(vector.format_version, 1, vector.id);
+    const plain = await V.open(
+      V.fromBase64Url(vector.key_b64),
+      V.fromBase64Url(vector.expected_wire_b64),
+      new TextEncoder().encode(vector.ad)
+    );
+    assert.equal(new TextDecoder().decode(plain), vector.plaintext, vector.id);
+  }
+});
+
+test('raw associated data seals under the current format and reopens', async () => {
+  for (const vector of VECTORS.aead.filter((v) => v.ad !== undefined)) {
     const ad = new TextEncoder().encode(vector.ad);
     const raw = await V.seal(
       V.fromBase64Url(vector.key_b64),
@@ -127,7 +195,7 @@ test('aead vectors replay exactly and reopen', async () => {
         kdfId: vector.kdf_id,
       }
     );
-    assert.equal(b64(raw), vector.expected_wire_b64, vector.id);
+    assert.equal(raw[0], V.CURRENT_SUITE.formatVersion, vector.id);
     const plain = await V.open(V.fromBase64Url(vector.key_b64), raw, ad);
     assert.equal(new TextDecoder().decode(plain), vector.plaintext, vector.id);
   }
@@ -251,7 +319,7 @@ test('a non-integer key version is refused rather than truncated', () => {
   // without a word. The reference implementation raises, so this one must too.
   assert.throws(
     () => V.encodeCiphertext({
-      aeadId: V.AEAD_AES_256_GCM,
+      aeadId: 0x01,
       kdfId: V.KDF_HKDF_SHA256,
       keyVersion: 1.5,
       iv: new Uint8Array(12),
@@ -317,7 +385,7 @@ test('an aead key of the wrong length is refused', async () => {
 test('a fractional or oversized header id is refused', () => {
   for (const overrides of [{ kdfId: 1.5 }, { kdfId: 256 }, { aeadId: 1.5 }]) {
     assert.throws(() => V.encodeCiphertext({
-      aeadId: V.AEAD_AES_256_GCM, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
+      aeadId: 0x01, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
       iv: new Uint8Array(12), ciphertext: new Uint8Array(4), ...overrides,
     }), /does not fit in one byte/, JSON.stringify(overrides));
   }
@@ -325,7 +393,7 @@ test('a fractional or oversized header id is refused', () => {
 
 test('a ciphertext truncated inside its iv is refused', () => {
   const raw = V.encodeCiphertext({
-    aeadId: V.AEAD_AES_256_GCM, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
+    aeadId: 0x01, kdfId: V.KDF_HKDF_SHA256, keyVersion: 1,
     iv: new Uint8Array(12), ciphertext: new Uint8Array(4),
   });
   assert.throws(() => V.decodeCiphertext(raw.slice(0, 8)), /shorter than its declared iv/);
@@ -448,14 +516,16 @@ test('entry, folder and tag payloads encode as the reference does', () => {
   }
 });
 
-test('open accepts raw bytes and a CryptoKey interchangeably', async () => {
+test('open accepts raw bytes and a keyring interchangeably', async () => {
   const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
   const raw = V.fromBase64Url(frozen.key_b64);
   const wire = V.fromBase64Url(frozen.expected_wire_b64);
   const associated = new TextEncoder().encode(frozen.ad);
   const viaBytes = await V.open(raw, wire, associated);
   const imported = await V.importAeadKey(raw);
-  assert.equal(imported.extractable, false, 'an imported aead key must not be extractable');
+  for (const handle of imported.handles.values()) {
+    assert.equal(handle.extractable, false, 'an imported aead key must not be extractable');
+  }
   const viaKey = await V.open(imported, wire, associated);
   assert.deepStrictEqual(Array.from(viaBytes), Array.from(viaKey));
   // The same key, used twice: the reason this call shape exists at all.
@@ -465,7 +535,7 @@ test('open accepts raw bytes and a CryptoKey interchangeably', async () => {
   );
 });
 
-test('seal accepts a CryptoKey and produces bytes the raw form opens', async () => {
+test('seal accepts a keyring and produces bytes the raw form opens', async () => {
   const frozen = VECTORS.aead.find((item) => item.id === 'entry-field-password');
   const raw = V.fromBase64Url(frozen.key_b64);
   const associated = new TextEncoder().encode(frozen.ad);
@@ -562,9 +632,9 @@ test('deriveArchiveKey itself refuses out-of-bounds parameters', async () => {
   );
 });
 
-test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', async () => {
-  // Imported outside importAeadKey, which is the only path that could produce
-  // one: sealing under it would write an AES-256-GCM header over AES-128-GCM.
+test('a bare CryptoKey is refused rather than mislabelled', async () => {
+  // Imported outside importAeadKey: sealing under it would write an
+  // AES-256-GCM header over AES-128-GCM. Only a keyring carries handles.
   const weak = await crypto.subtle.importKey(
     'raw', new Uint8Array(16), 'AES-GCM', false, ['encrypt', 'decrypt']
   );
@@ -573,6 +643,6 @@ test('a CryptoKey that is not aes-256-gcm is refused rather than mislabelled', a
       keyVersion: 1,
       kdfId: 1,
     }),
-    /AES-GCM 256-bit key/
+    /raw bytes or a keyring/
   );
 });

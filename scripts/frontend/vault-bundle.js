@@ -6,18 +6,21 @@
 import { toBase64Url, fromBase64Url, randomBytes, equalBytes } from './src/vault/encoding.js';
 import {
   AD, RESERVED_FIELD_IDS, ENTRY_COLUMN_FIELD_IDS, VAULT_FIELD_IDS, FOLDER_FIELD_IDS,
-  TAG_FIELD_IDS, qualifyFieldId,
+  TAG_FIELD_IDS, qualifyFieldId, associatedData,
 } from './src/vault/ad.js';
 import {
-  FORMAT_VERSION, AEAD_AES_256_GCM, KDF_DIRECT, KDF_HKDF_SHA256,
+  CURRENT_SUITE, UnsupportedAlgorithmError, suiteEntry, implementedIds,
+} from './src/vault/suites.js';
+import {
+  KDF_DIRECT, KDF_HKDF_SHA256,
   PUBKEY_ALG_X25519, PUBKEY_ALG_ED25519,
-  UnsupportedVersionError, encodeCiphertext, decodeCiphertext,
+  encodeCiphertext, decodeCiphertext,
   encodePublicKey, decodePublicKey,
 } from './src/vault/wire.js';
 import {
   ARGON2_PARAMS, deriveAmk, hkdf, ARCHIVE_ARGON2_BOUNDS, assertArchiveParams, deriveArchiveKey,
 } from './src/vault/kdf.js';
-import { seal, open, importAeadKey } from './src/vault/aead.js';
+import { seal, open, importAeadKey, registerAead } from './src/vault/aead.js';
 import { HPKE_SUITE_V1, hpkeSeal, hpkeOpen, hpkeRecipient } from './src/vault/hpke.js';
 import { canonicalCbor, cborSizeBound, decodeCbor, encodeCbor } from './src/vault/cbor.js';
 import { SIG_ALG_ED25519, sign, verify, signBytes, verifyBytes, importSigner } from './src/vault/sign.js';
@@ -44,13 +47,15 @@ window.vaultCrypto = {
   FOLDER_FIELD_IDS,
   TAG_FIELD_IDS,
   qualifyFieldId,
-  FORMAT_VERSION,
-  AEAD_AES_256_GCM,
+  associatedData,
+  CURRENT_SUITE,
+  UnsupportedAlgorithmError,
+  suiteEntry,
+  implementedIds,
   KDF_DIRECT,
   KDF_HKDF_SHA256,
   PUBKEY_ALG_X25519,
   PUBKEY_ALG_ED25519,
-  UnsupportedVersionError,
   encodeCiphertext,
   decodeCiphertext,
   encodePublicKey,
@@ -64,6 +69,7 @@ window.vaultCrypto = {
   seal,
   open,
   importAeadKey,
+  registerAead,
   HPKE_SUITE_V1,
   hpkeSeal,
   hpkeOpen,

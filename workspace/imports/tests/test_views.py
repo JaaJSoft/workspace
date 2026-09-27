@@ -83,7 +83,8 @@ class UserMenuEntryTests(TestCase):
     def test_visible_user_gets_the_menu_entry(self):
         staff = User.objects.create_user(username="staff", password="pw", is_staff=True)
         self.client.force_login(staff)
-        response = self.client.get(reverse("users_ui:settings"))
+        with self.settings(PREVIEW_VISIBILITY="staff"):
+            response = self.client.get(reverse("users_ui:settings"))
         self.assertContains(response, 'href="/imports"')
 
     def test_menu_entry_follows_module_visibility(self):

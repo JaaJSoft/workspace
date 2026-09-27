@@ -9,7 +9,7 @@ Prometheus gauge decrement).
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from prometheus_client import REGISTRY
 
 from workspace.core.views import sse
@@ -223,3 +223,17 @@ class StreamCursorTests(TestCase):
         raw = sse.encode_stream_cursor({"files": "12"})
         request = RequestFactory().get("/api/v1/stream", {"last_event_id": raw})
         self.assertEqual(sse._incoming_cursors(request), {"files": "12"})
+
+
+@override_settings(PREVIEW_VISIBILITY="staff")
+class StreamModuleVisibilityTests(TestCase):
+    """The stream is served by core, so the module guard never sees it: a
+    provider of a module the user may not reach is not started at all."""
+
+    def test_a_hidden_module_provides_no_events(self):
+        regular = User.objects.create_user(username="regular", password="p")
+        self.assertNotIn("imports", sse._init_providers(regular, {}))
+
+    def test_the_audience_gets_them(self):
+        staff = User.objects.create_user(username="staff", password="p", is_staff=True)
+        self.assertIn("imports", sse._init_providers(staff, {}))

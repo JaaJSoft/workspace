@@ -61,14 +61,17 @@ class ModuleSwitcherShortcutTests(PlaywrightTestCase):
         )
 
         # A tile past the 4rem rail must be hit-testable, i.e. not clipped by
-        # the drawer.
-        last = self.page.locator(TILES).last
-        expect(last).to_be_in_viewport()
-        box = last.bounding_box()
+        # the drawer. The rightmost one, not the last: how many modules the
+        # user sees decides whether the last tile opens a row of its own.
+        tiles = self.page.locator(TILES)
+        boxes = [tiles.nth(i).bounding_box() for i in range(tiles.count())]
+        rightmost = max(range(len(boxes)), key=lambda i: boxes[i]["x"])
+        tile, box = tiles.nth(rightmost), boxes[rightmost]
+        expect(tile).to_be_in_viewport()
         rail = self.page.locator("aside").first.bounding_box()
         self.assertGreater(box["x"], rail["x"] + rail["width"])
         hit = self.page.evaluate(
             "([x, y]) => document.elementFromPoint(x, y)?.closest('a')?.textContent.trim()",
             [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2],
         )
-        self.assertEqual(hit, last.text_content().strip())
+        self.assertEqual(hit, tile.text_content().strip())

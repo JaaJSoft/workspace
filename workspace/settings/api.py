@@ -22,9 +22,14 @@ REST_FRAMEWORK = {
         "knox.auth.TokenAuthentication",
         "rest_framework.authentication.BasicAuthentication",
     ],
+    # A view that overrides permission_classes must keep ModuleVisible, or a
+    # preview module's endpoint answers users outside its audience;
+    # core.tests.test_module_guard fails on a preview module that drops it.
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
+        "workspace.core.module_guard.ModuleVisible",
     ],
+    "EXCEPTION_HANDLER": "workspace.core.module_guard.exception_handler",
     # Disable BrowsableAPI renderer in production for better performance
     "DEFAULT_RENDERER_CLASSES": [
         "drf_orjson_renderer.renderers.ORJSONRenderer",

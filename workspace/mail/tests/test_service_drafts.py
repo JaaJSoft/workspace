@@ -11,6 +11,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder, MailMessage
 from workspace.mail.services.drafts import save_composed_draft
 from workspace.mail.services.sending import deliver_email
@@ -147,13 +148,42 @@ class DeliverEmailTests(TestCase):
                 "workspace.mail.services.smtp.send_email", return_value=self.delivery
             ),
             patch("workspace.mail.services.imap_messages.append_to_sent") as append,
-            patch("workspace.mail.services.imap_sync.sync_folder_messages") as sync,
+            patch.object(mail_tasks.sync_folder, "delay") as queue_sync,
         ):
             result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
 
         self.assertTrue(result.archived)
         self.assertEqual(append.call_args.args[1], b"archived")
-        sync.assert_called_once()
+        queue_sync.assert_called_once_with(str(self.sent.uuid))
+
+    def test_the_sent_folder_is_resynced_outside_the_request(self):
+        with (
+            patch(
+                "workspace.mail.services.smtp.send_email", return_value=self.delivery
+            ),
+            patch("workspace.mail.services.imap_messages.append_to_sent"),
+            patch.object(mail_tasks.sync_folder, "delay"),
+            patch("workspace.mail.services.imap_sync.sync_folder_messages") as sync,
+        ):
+            deliver_email(self.account, to=["bob@example.com"], subject="Hi")
+
+        sync.assert_not_called()
+
+    def test_a_broker_failure_does_not_undo_the_archived_copy(self):
+        with (
+            patch(
+                "workspace.mail.services.smtp.send_email", return_value=self.delivery
+            ),
+            patch("workspace.mail.services.imap_messages.append_to_sent"),
+            patch.object(
+                mail_tasks.sync_folder,
+                "delay",
+                side_effect=ConnectionError("broker down"),
+            ),
+        ):
+            result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
+
+        self.assertTrue(result.archived)
 
     def test_a_failed_archive_is_reported_but_the_send_still_stands(self):
         with (
@@ -164,13 +194,13 @@ class DeliverEmailTests(TestCase):
                 "workspace.mail.services.imap_messages.append_to_sent",
                 side_effect=OSError("connection reset"),
             ),
-            patch("workspace.mail.services.imap_sync.sync_folder_messages") as sync,
+            patch.object(mail_tasks.sync_folder, "delay") as queue_sync,
         ):
             result = deliver_email(self.account, to=["bob@example.com"], subject="Hi")
 
         self.assertFalse(result.archived)
         self.assertEqual(result.sent, self.delivery)
-        sync.assert_not_called()
+        queue_sync.assert_not_called()
 
     def test_an_account_with_no_sent_folder_reports_an_unarchived_copy(self):
         # append_to_sent returns quietly when there is no Sent folder, so

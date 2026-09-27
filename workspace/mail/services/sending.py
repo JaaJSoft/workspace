@@ -69,11 +69,11 @@ def deliver_email(
 
 
 def _archive(account, raw_message):
-    """Append the sent copy to Sent and resync it. True when it landed."""
+    """Append the sent copy to Sent and queue its resync. True when it landed."""
     from ..models import MailFolder
     from ..queries import special_folder
+    from ..tasks import sync_folder
     from .imap_messages import append_to_sent
-    from .imap_sync import sync_folder_messages
 
     # Resolved before the append, not after: append_to_sent returns quietly
     # when the folder is missing, so a check afterwards cannot tell "nowhere
@@ -100,10 +100,10 @@ def _archive(account, raw_message):
         return False
 
     try:
-        sync_folder_messages(account, sent_folder)
+        sync_folder.delay(str(sent_folder.uuid))
     except Exception as exc:
         logger.warning(
-            "Failed to sync sent folder after send for %s: %s",
+            "Failed to queue the Sent folder sync after send for %s: %s",
             scrub(account.email),
             scrub(str(exc)),
         )

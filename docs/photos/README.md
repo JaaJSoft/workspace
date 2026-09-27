@@ -170,25 +170,32 @@ only leaves its groups unnamed.
 
 ### Reviewing people
 
-*Review* on the People tab settles the grouping in a row, in three queues:
+*Review* on the People tab settles the grouping one card at a time. Every
+card is a group of faces and one question, *who is this?*, answered the same
+way whatever the card holds:
 
-- **To name**: the unnamed groups, largest first, one at a time with the name
-  field focused. Enter picks the highlighted contact, or adds the typed name
-  to People. A group whose centroid is within the grouping threshold of a
-  named person's suggests that person first, unless they are already in one
-  of its photos.
-- **To check**: faces the grouping put under a named person on its own and
-  that sit further than half the threshold from their group's centroid, most
-  doubtful first. A person's button confirms the faces left unpicked. A
-  confirmed face never comes back to this list.
-- **Unassigned**: faces in no group, either taken out of one by the user or
-  never grouped (clear ones only: the blurred crowd behind a subject would
-  bury the rest). Look-alikes come side by side.
+- **An unnamed group**, its faces least like the rest first. A group whose
+  centroid is within the grouping threshold of a named person's suggests that
+  person, unless they are already in one of its photos.
+- **A named person's doubtful faces** (*Is this Léa?*): faces the grouping put
+  with them on its own that sit further than half the threshold from their
+  group's centroid, most doubtful first. A confirmed face never comes back.
+- **Look-alike faces in no group**, taken out of one by the user or never
+  grouped (clear ones only: the blurred crowd behind a subject would bury the
+  rest), with the named person they look like when there is one - never the
+  one they were taken out of.
+
+Clicking a face leaves it out of the answer; everything else on the card goes
+with it. The answer is the guess (Enter, while nothing is typed), a contact, a
+new name added to People, or *Hide* for nobody to name. Faces left out are
+taken out of the group the answer settles, or left where they were, and come
+back on a card of their own. Cards that settle the most photos come first;
+*Skip* and the back arrow go round the queue.
 
 ### Correcting several faces at once
 
-The review queues, the *Faces* tab of a person's page and the hidden faces on
-the *Hidden* page are boards of face tiles: click to pick (Shift picks a
+The *Faces* tab of a person's page and the hidden faces on the *Hidden* page
+are boards of face tiles: click to pick (Shift picks a
 range), then act from the bar under them:
 
 - **This is...** puts the faces with a contact (their closest group, or one

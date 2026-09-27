@@ -1,14 +1,15 @@
 """What is left for the user to settle in their face grouping.
 
-Three queues, for the review page:
+Three kinds of face groups, which the review page asks about one after the
+other with the same question, "who is this?":
 
-- **To name**: the unnamed clusters, each with a few of its faces and, when
-  one is close enough, the named person it most looks like. Clusters are
+- **Unnamed clusters**, each with its faces least like the rest first and,
+  when one is close enough, the named person it most looks like. Clusters are
   never merged automatically, so the same person in a new look ends up here.
-- **To check**: faces the grouping put in a named person's cluster that the
-  user never confirmed, and that sit far from the cluster's centroid.
-- **Unassigned**: faces in no cluster - taken out of one by the user, or
-  never grouped - waiting for someone to say who they are.
+- **Doubtful faces**: faces the grouping put in a named person's cluster that
+  the user never confirmed, and that sit far from the cluster's centroid.
+- **Unassigned faces**: faces in no cluster - taken out of one by the user,
+  or never grouped - gathered into look-alike groups.
 
 And the faces the user hid, for the Hidden page.
 """
@@ -17,6 +18,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
+from django.db.models import Q
 
 from workspace.common.vectors.encoding import from_bytes
 
@@ -30,23 +32,29 @@ from .face_people import person_cards
 # cluster's centroid is worth a look. The centroid being a mean, a face of
 # the right person usually sits well inside the threshold.
 DOUBT_RATIO = 0.5
-# Faces shown next to the cover of an unnamed cluster.
-SAMPLE_FACES = 5
+# Faces of an unnamed cluster shown at once.
+CLUSTER_FACES = 60
 # Faces to check shown per person at once; the rest come after a reload.
 DOUBTS_PER_PERSON = 60
-# Unassigned or hidden faces shown at once; the rest come after a reload.
+# Unassigned or hidden faces read at once; the rest come after a reload.
 FACES_PER_PAGE = 200
-
-# The two halves of the unassigned queue.
-REJECTED = "rejected"
-UNGROUPED = "ungrouped"
 
 
 @dataclass(frozen=True)
 class UnnamedCluster:
     cluster: object
-    sample_face_ids: tuple
+    # Least like the rest first, at most CLUSTER_FACES.
+    face_ids: tuple
     # The PersonCard of the named person the cluster looks like, or None.
+    suggestion: object
+
+
+@dataclass(frozen=True)
+class FaceGroup:
+    """Unassigned faces that look alike."""
+
+    face_ids: tuple
+    # The PersonCard of the named person the faces look like, or None.
     suggestion: object
 
 
@@ -75,44 +83,61 @@ def _unit(blob):
     return from_bytes(blob, FACE_EMBEDDINGS.dims) if blob else None
 
 
-def unnamed_queue(user):
-    """The user's visible unnamed clusters, largest first."""
+def _unnamed_clusters(user):
+    return user_face_clusters(user).filter(
+        person__isnull=True, hidden=False, photo_count__gt=0
+    )
+
+
+def unnamed_count(user):
+    return _unnamed_clusters(user).count()
+
+
+def unnamed_queue(user, limit=None):
+    """The user's visible unnamed clusters, largest first, at most *limit*."""
     clusters = list(
-        user_face_clusters(user)
-        .filter(person__isnull=True, hidden=False, photo_count__gt=0)
-        .order_by("-photo_count", "-face_count", "created_at")
+        _unnamed_clusters(user).order_by("-photo_count", "-face_count", "created_at")[
+            :limit
+        ]
     )
     if not clusters:
         return []
+    centroids = {c.pk: _unit(c.centroid) for c in clusters}
     faces = defaultdict(list)
     files = defaultdict(set)
-    for pk, cluster_id, file_id in (
+    for pk, cluster_id, file_id, blob in (
         user_faces(user)
-        .filter(cluster__in=[c.pk for c in clusters])
-        .order_by("-quality")
-        .values_list("pk", "cluster_id", "file_id")
+        .filter(cluster__in=list(centroids))
+        .values_list("pk", "cluster_id", "file_id", "embedding")
     ):
-        faces[cluster_id].append(pk)
+        faces[cluster_id].append((_distance(_unit(blob), centroids[cluster_id]), pk))
         files[cluster_id].add(file_id)
     suggest = _suggester(user)
     return [
         UnnamedCluster(
             cluster=cluster,
-            sample_face_ids=tuple(
-                pk for pk in faces[cluster.pk] if pk != cluster.cover_id
-            )[:SAMPLE_FACES],
-            suggestion=suggest(cluster, files[cluster.pk]),
+            face_ids=tuple(
+                pk for _, pk in sorted(faces[cluster.pk], key=lambda d: (-d[0], d[1]))
+            )[:CLUSTER_FACES],
+            suggestion=suggest(centroids[cluster.pk], files[cluster.pk]),
         )
         for cluster in clusters
     ]
 
 
+def _distance(vector, centroid):
+    if vector is None or centroid is None:
+        return 0.0
+    return 1 - float(np.dot(vector, centroid))
+
+
 def _suggester(user):
-    """A function giving the named person an unnamed cluster looks like.
+    """A function giving the named person a face vector looks like.
 
     The nearest named cluster by centroid, within the grouping threshold,
-    whose person is in none of the cluster's photos: naming it after them
-    would be refused.
+    whose person is in none of *files*, the photos of the faces asked about:
+    naming the faces after them would be refused. *excluded* persons are
+    never suggested - those the faces were taken out of.
     """
     clusters = list(
         user_face_clusters(user)
@@ -127,7 +152,7 @@ def _suggester(user):
         if (vector := _unit(cluster.centroid)) is not None
     ]
     if not decoded:
-        return lambda cluster, files: None
+        return lambda vector, files, excluded=(): None
     named = [cluster for cluster, _ in decoded]
     centroids = np.stack([vector for _, vector in decoded])
     cards = {card.person.pk: card for card in person_cards(clusters)}
@@ -138,8 +163,7 @@ def _suggester(user):
         person_files[person_id].add(file_id)
     threshold = max_distance()
 
-    def suggest(cluster, files):
-        vector = _unit(cluster.centroid)
+    def suggest(vector, files, excluded=()):
         if vector is None:
             return None
         distances = 1 - centroids @ vector
@@ -147,7 +171,7 @@ def _suggester(user):
             if distances[index] > threshold:
                 return None
             person_id = named[index].person_id
-            if not person_files[person_id] & files:
+            if person_id not in excluded and not person_files[person_id] & files:
                 return cards[person_id]
         return None
 
@@ -176,7 +200,7 @@ def doubtful_faces(user):
         vector, centroid = _unit(blob), centroids[cluster_id]
         if vector is None or centroid is None:
             continue
-        distance = 1 - float(np.dot(vector, centroid))
+        distance = _distance(vector, centroid)
         if distance > limit:
             by_person[clusters[cluster_id].person_id].append(
                 DoubtfulFace(face_id=pk, cluster_id=cluster_id, distance=distance)
@@ -195,31 +219,48 @@ def doubtful_faces(user):
     return result
 
 
-def unassigned_faces(user, kind=REJECTED):
-    """Faces in no cluster that still wait for a person.
+def unassigned_groups(user):
+    """Faces in no cluster that still wait for a person, by look-alikes.
 
-    *REJECTED*: those the user took out of a cluster. *UNGROUPED*: those the
-    grouping never placed, good enough to recognise someone by - the blurred
-    crowd behind a subject would bury the rest. The best faces first, then
-    chained by likeness so one person's faces sit side by side.
+    Those the user took out of a cluster, and those the grouping never
+    placed that are good enough to recognise someone by - the blurred crowd
+    behind a subject would bury the rest. The best faces are read first;
+    the largest groups come first.
     """
-    faces = _unassigned(user, kind)
-    rows = faces.order_by("-quality", "pk").values_list("pk", "embedding")
-    return FacePage(
-        face_ids=tuple(by_likeness(rows[:FACES_PER_PAGE])), total=faces.count()
+    faces = (
+        user_faces(user)
+        .filter(cluster__isnull=True)
+        .filter(
+            Q(assignment=Face.Assignment.REJECTED)
+            | Q(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
+        )
     )
-
-
-def unassigned_counts(user):
-    """How many faces each half of the unassigned queue holds."""
-    return {kind: _unassigned(user, kind).count() for kind in (REJECTED, UNGROUPED)}
-
-
-def _unassigned(user, kind):
-    faces = user_faces(user).filter(cluster__isnull=True)
-    if kind == REJECTED:
-        return faces.filter(assignment=Face.Assignment.REJECTED)
-    return faces.filter(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
+    rows = list(
+        faces.order_by("-quality", "pk").values_list(
+            "pk", "embedding", "file_id", "rejected_cluster__person_id"
+        )[:FACES_PER_PAGE]
+    )
+    if not rows:
+        return []
+    by_pk = {row[0]: row for row in rows}
+    suggest = _suggester(user)
+    groups = []
+    for ids in likeness_groups([(pk, blob) for pk, blob, *_ in rows], max_distance()):
+        vectors = [v for pk in ids if (v := _unit(by_pk[pk][1])) is not None]
+        mean = np.mean(vectors, axis=0) if vectors else None
+        norm = np.linalg.norm(mean) if mean is not None else 0
+        groups.append(
+            FaceGroup(
+                face_ids=tuple(ids),
+                suggestion=suggest(
+                    mean / norm if norm else None,
+                    {by_pk[pk][2] for pk in ids},
+                    {by_pk[pk][3] for pk in ids} - {None},
+                ),
+            )
+        )
+    groups.sort(key=lambda group: -len(group.face_ids))
+    return groups
 
 
 def hidden_faces(user):
@@ -229,17 +270,18 @@ def hidden_faces(user):
     return FacePage(face_ids=tuple(ids[:FACES_PER_PAGE]), total=faces.count())
 
 
-def by_likeness(rows):
-    """The ids of *rows*, ``(pk, embedding)`` pairs, chained by likeness.
+def likeness_groups(rows, threshold):
+    """The ids of *rows*, ``(pk, embedding)`` pairs, gathered by likeness.
 
     Starts from the first row, then each face is followed by the nearest one
-    left: look-alikes come side by side. Faces without an embedding go last.
+    left; a new group starts when that one is further than *threshold*. A
+    face without an embedding is a group of its own, last.
     """
     ids, vectors, rest = [], [], []
     for pk, blob in rows:
         vector = _unit(blob)
         if vector is None:
-            rest.append(pk)
+            rest.append([pk])
         else:
             ids.append(pk)
             vectors.append(vector)
@@ -247,15 +289,18 @@ def by_likeness(rows):
         return rest
     matrix = np.stack(vectors)
     left = np.ones(len(ids), dtype=bool)
-    order = [0]
     left[0] = False
+    groups = [[ids[0]]]
+    last = 0
     for _ in range(len(ids) - 1):
-        distances = 1 - matrix @ matrix[order[-1]]
+        distances = 1 - matrix @ matrix[last]
         distances[~left] = np.inf
-        following = int(np.argmin(distances))
-        order.append(following)
-        left[following] = False
-    return [ids[i] for i in order] + rest
+        last = int(np.argmin(distances))
+        left[last] = False
+        if distances[last] > threshold:
+            groups.append([])
+        groups[-1].append(ids[last])
+    return groups + rest
 
 
 # What a person's faces page shows.

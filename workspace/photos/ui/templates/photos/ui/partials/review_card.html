@@ -1,0 +1,278 @@
+{% comment %}
+  The card on screen of the review page: a group of faces and the question
+  of who they are. A click on a face leaves it out of the answer; the
+  answer is the guess, a contact, a new name, or nobody to name. State and
+  actions in facesReview() (faces.js).
+{% endcomment %}
+<template x-if="current()">
+  <div
+    class="w-full max-w-5xl mx-auto p-4 lg:py-6 flex flex-col lg:flex-row lg:items-start gap-5 lg:gap-8"
+  >
+    <section
+      class="lg:order-2 lg:w-80 shrink-0 lg:sticky lg:top-20 flex flex-col gap-3"
+      aria-label="Answer"
+    >
+      <div class="flex items-center gap-3">
+        <template x-if="current().url">
+          <a
+            :href="current().url"
+            target="_blank"
+            rel="noopener"
+            class="block w-16 h-16 shrink-0 overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module"
+            title="See the photos in a new tab"
+          >
+            <img :src="current().cover_url" alt="" class="w-full h-full object-cover" />
+          </a>
+        </template>
+        <template x-if="!current().url">
+          <span
+            class="block w-16 h-16 shrink-0 overflow-hidden rounded-full bg-base-200"
+          >
+            <img :src="current().cover_url" alt="" class="w-full h-full object-cover" />
+          </span>
+        </template>
+        <div class="min-w-0">
+          <h2 class="text-lg font-semibold leading-tight" x-text="question()"></h2>
+          <p class="text-sm text-base-content/60" x-text="subtitle()"></p>
+        </div>
+      </div>
+
+      <template x-if="guessOption()">
+        <button
+          type="button"
+          class="btn h-auto min-h-0 py-2 justify-start gap-3 w-full text-left font-normal"
+          :class="guessRejectsAll() ? 'btn-error btn-outline' : 'btn-module'"
+          :disabled="!canPick(guessOption())"
+          @click="pick(guessOption())"
+        >
+          <img
+            :src="guessOption().person.cover_url"
+            alt=""
+            class="w-9 h-9 rounded-full object-cover bg-base-200 shrink-0"
+          />
+          <span class="flex-1 min-w-0">
+            <span class="block font-semibold truncate" x-text="guessLabel()"></span>
+            <span class="block text-xs opacity-80 truncate" x-text="guessHint()"></span>
+          </span>
+          <kbd
+            class="kbd kbd-sm bg-transparent border-current opacity-70 max-sm:hidden"
+            x-show="active === 0"
+          >↵</kbd>
+        </button>
+      </template>
+
+      <div>
+        <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+          <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+          <input
+            type="text"
+            class="grow"
+            :placeholder="guessOption() ? 'Someone else? Type a name' : 'Type a name'"
+            autocomplete="off"
+            aria-label="Name"
+            x-ref="reviewInput"
+            x-init="$nextTick(() => $el.focus())"
+            x-model="query"
+            @input.debounce.250ms="searchReviewNames()"
+            @keydown.arrow-down.prevent="moveActive(1)"
+            @keydown.arrow-up.prevent="moveActive(-1)"
+            @keydown.enter.prevent="pickActive()"
+            :disabled="saving"
+          />
+          <span x-show="saving" x-cloak class="loading loading-spinner loading-xs"></span>
+        </label>
+
+        <ul
+          class="menu menu-sm p-0 mt-2 max-h-44 lg:max-h-72 flex-nowrap overflow-y-auto"
+          role="listbox"
+          aria-label="Contacts"
+        >
+          <template
+            x-for="(option, i) in otherOptions()"
+            :key="option.kind === 'create' ? 'create' : option.person.uuid"
+          >
+            <li role="option" :aria-selected="i + (guessOption() ? 1 : 0) === active">
+              <button
+                type="button"
+                class="gap-3 rounded"
+                :class="{ 'bg-base-content/10': i + (guessOption() ? 1 : 0) === active, 'text-module': option.kind === 'create' }"
+                :disabled="!canPick(option)"
+                @click="pick(option)"
+              >
+                <template x-if="option.kind === 'person' && option.person.cover_url">
+                  <img
+                    :src="option.person.cover_url"
+                    alt=""
+                    class="w-8 h-8 rounded-full object-cover"
+                  />
+                </template>
+                <template x-if="option.kind === 'person' && !option.person.cover_url">
+                  <span
+                    class="flex w-8 h-8 items-center justify-center rounded-full bg-base-200 text-base-content/50"
+                  >
+                    <i data-lucide="contact" class="w-4 h-4"></i>
+                  </span>
+                </template>
+                <template x-if="option.kind === 'create'">
+                  <span
+                    class="flex w-8 h-8 items-center justify-center rounded-full border-2 border-dashed border-current"
+                  >
+                    <i data-lucide="user-plus" class="w-4 h-4"></i>
+                  </span>
+                </template>
+                <span class="flex-1 truncate text-left">
+                  <template x-if="option.kind === 'create'">
+                    <span>Add “<span x-text="option.name"></span>” to People</span>
+                  </template>
+                  <template x-if="option.kind === 'person'">
+                    <span x-text="option.person.name"></span>
+                  </template>
+                </span>
+                <span
+                  x-show="option.kind === 'person' && option.person.photo_count"
+                  class="text-xs text-base-content/60 tabular-nums"
+                  x-text="option.kind === 'person' ? photoLabel(option.person.photo_count) : ''"
+                ></span>
+              </button>
+            </li>
+          </template>
+          <li
+            x-show="!searching && !options().length"
+            x-cloak
+            class="px-3 py-4 text-sm text-base-content/60"
+          >
+            No contact yet: type a name to add one to People.
+          </li>
+        </ul>
+      </div>
+
+      <div class="flex items-center gap-2 pt-3 border-t border-base-300">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-1"
+          :disabled="saving || cards.length < 2"
+          title="Previous"
+          @click="previous()"
+        >
+          <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          <span class="sr-only">Previous</span>
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm gap-1 ml-auto"
+          :disabled="saving || !keptCount()"
+          :title="current().kind === 'cluster' ? 'Nobody to name: leave this person out of People' : 'Nobody to name: hide these faces'"
+          @click="hideCurrent()"
+        >
+          <i data-lucide="eye-off" class="w-4 h-4"></i>
+          Hide
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm gap-1"
+          :disabled="saving || cards.length < 2"
+          @click="skip()"
+        >
+          Skip
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </section>
+
+    <section class="lg:order-1 flex-1 min-w-0" aria-label="Faces">
+      <div
+        class="flex items-center gap-2 mb-3 min-h-8 text-sm text-base-content/60"
+      >
+        <i data-lucide="mouse-pointer-click" class="w-4 h-4 shrink-0"></i>
+        <span x-show="!excluded.length"><span class="sm:hidden">Tap</span><span class="max-sm:hidden">Click</span> a face that isn't them to leave it out.</span>
+        <span x-show="excluded.length" x-cloak>
+          <span
+            class="font-medium text-base-content"
+            x-text="excluded.length + ' left out'"
+          ></span>: they come back on a card of their own.
+        </span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs ml-auto"
+          x-show="excluded.length"
+          x-cloak
+          @click="excluded = []"
+        >
+          Put them back
+        </button>
+      </div>
+      <div
+        class="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-2"
+      >
+        <template x-for="face in current().faces" :key="face.uuid">
+          <div class="group relative aspect-square">
+            <button
+              type="button"
+              class="absolute inset-0 overflow-hidden rounded-lg bg-base-200 ring-2 ring-offset-1 ring-offset-base-100 transition focus-visible:outline-none"
+              :class="isExcluded(face.uuid) ? 'ring-error/60' : 'ring-transparent hover:ring-error/40 focus-visible:ring-module'"
+              :aria-pressed="isExcluded(face.uuid)"
+              :title="isExcluded(face.uuid) ? 'Put back' : 'Not them: leave out'"
+              :aria-label="isExcluded(face.uuid) ? 'Left out face, put back' : 'Face, leave out'"
+              :disabled="saving"
+              @click="toggleExcluded(face.uuid)"
+            >
+              <img
+                :src="face.crop_url"
+                alt=""
+                class="w-full h-full object-cover transition"
+                :class="{ 'opacity-30 grayscale': isExcluded(face.uuid) }"
+                loading="lazy"
+                draggable="false"
+              />
+            </button>
+            <span
+              x-show="isExcluded(face.uuid)"
+              x-cloak
+              class="pointer-events-none absolute inset-0 flex items-center justify-center"
+            >
+              <span class="rounded-full bg-error text-error-content p-1 shadow">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </span>
+            </span>
+            <button
+              type="button"
+              class="absolute bottom-1 right-1 btn btn-xs btn-circle bg-base-100/90 border-0 shadow opacity-0 group-hover:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
+              :title="face.timestamp == null ? 'Open the photo' : 'Open the video'"
+              :aria-label="face.timestamp == null ? 'Open the photo' : 'Open the video'"
+              @click="openFacePhoto(face)"
+            >
+              <i data-lucide="maximize-2" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </template>
+      </div>
+      <p
+        x-show="current().total > current().faces.length"
+        x-cloak
+        class="mt-3 text-xs text-base-content/60"
+        x-text="current().kind === 'cluster'
+          ? (current().total - current().faces.length) + ' more faces of this group, closer to the rest, go with the answer.'
+          : 'The next ' + (current().total - current().faces.length) + ' come once these are settled.'"
+      ></p>
+    </section>
+  </div>
+</template>
+
+<template x-if="!current()">
+  <div
+    class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+  >
+    <div class="rounded-full bg-module/10 p-5">
+      <i data-lucide="user-check" class="w-10 h-10 text-module"></i>
+    </div>
+    <h2 class="text-lg font-semibold">Everyone is sorted out</h2>
+    <p class="text-sm text-base-content/60 max-w-sm">
+      New people and faces to check show up here as more photos are read for faces.
+    </p>
+    <a
+      href="{{ people_url }}"
+      x-target.push="photos-nav photos-content"
+      class="btn btn-module btn-sm"
+    >Back to People</a>
+  </div>
+</template>

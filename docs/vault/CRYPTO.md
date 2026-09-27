@@ -84,7 +84,7 @@ knowing before writing another implementation:
 one account written once by the real client in a browser and never rewritten:
 
 - `v2/` is the format-2 corpus, written by the client that ships with the first
-  release. Every header starts with `0x02` and every HPKE wrap stores
+  release. Every ciphertext header starts with `0x02` and every HPKE wrap stores
   `"format": 2` in its `hpke_suite`.
 - `v1/` is the pre-release format-1 corpus. Format 1 is `superseded`, not
   withdrawn: accounts written under it must keep opening, so it is kept and
@@ -126,8 +126,10 @@ leave those two unguarded.
 `workspace/vault/crypto_suites.json` names every algorithm and format
 identifier the vault knows - wire format, AEAD, HPKE suite, public key,
 signature, payload and KDF - and gives each one a state: `current` is what new
-data is written under, `superseded` is still read but never written, and `test`
-exists only for the test suites. The server reads it to refuse what it does not
+data is written under, `superseded` is still read but never written by an
+up-to-date client (the server still accepts it on write, so a tab opened before
+a deploy can finish what it started), and `test` exists only for the test
+suites. The server reads it to refuse what it does not
 know, the Python reference reads it directly, and the browser reads only the
 copy built into `vault-crypto.js`: the server never serves it, so a server
 cannot talk a client into an algorithm.
@@ -135,6 +137,11 @@ cannot talk a client into an algorithm.
 Making a suite current is a manifest edit plus an implementation of it in each
 of the three programs - the bundle, the reference and the server's checks -
 and a new corpus directory written under it.
+
+The HPKE axis is keyed by format, with one suite per format today. A second KEM
+therefore needs that keying reworked in the bundle and the reference, not just
+a new manifest entry. Stored wraps already carry their format and every suite
+id, so the rework needs no data migration.
 
 ## The export archive
 

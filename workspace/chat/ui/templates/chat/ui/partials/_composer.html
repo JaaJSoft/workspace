@@ -390,7 +390,7 @@
       @keydown="handleInputKeydown($event)"
       @input="autoResize($el); handleMentionInput(); sendTypingSignal()"
       @paste="handlePaste($event)"
-      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none !bg-transparent"
+      class="textarea textarea-ghost w-full min-h-[2.5rem] max-h-[8rem] resize-none leading-snug px-3 py-1.5 focus:outline-none focus:border-transparent !bg-transparent"
       placeholder="Type a message..."
       rows="1"
     ></textarea>

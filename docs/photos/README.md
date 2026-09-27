@@ -13,11 +13,11 @@ folder it sits in. There are three ways to add more:
   Other kinds of files are skipped. A name already taken in the folder keeps
   both files, so two cameras' `IMG_0001.JPG` never replace each other.
 - **The import folder** is where both land. It defaults to a root folder named
-  `Images`, created on the first import (an existing one is reused). The
+  `Pictures`, created on the first import (an existing one is reused). The
   Preferences panel of the Photos sidebar changes it to any personal or group
   folder.
 - **Phone backup over WebDAV.** The same panel shows the WebDAV address of the
-  import folder (`https://<your-domain>/dav/Images/` by default). Point a sync
+  import folder (`https://<your-domain>/dav/Pictures/` by default). Point a sync
   app at it - PhotoSync or FolderSync on Android, PhotoSync on iOS - with the
   account's username and password (or an API token, from **Settings > API
   Tokens**, when the account signs in through single sign-on). New photos then

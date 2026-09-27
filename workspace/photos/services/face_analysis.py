@@ -32,8 +32,8 @@ from workspace.common.metrics import safe_counter, safe_histogram
 from workspace.common.vectors.encoding import from_bytes
 from workspace.common.vectors.indexing import index_vector
 from workspace.files.models import File
+from workspace.files.services.raster_formats import RASTER_LABELS
 from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
-from workspace.files.services.thumbnails.generation import RASTER_LABELS
 
 from ..indexes import FACE_EMBEDDINGS
 from ..models import Face, FaceAnalysis, FaceCluster, MediaItem

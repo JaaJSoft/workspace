@@ -20,6 +20,7 @@ from workspace.files.services.thumbnails.generation import (
     generate_thumbnail,
     get_thumbnail_path,
 )
+from workspace.files.tests.rasters import avif_bytes, heic_bytes
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -119,6 +120,28 @@ class GenerateThumbnailOutputTests(TestCase):
         img = self._open_thumb(f.uuid)
         # Alpha is composited onto a white background, so the WebP is RGB.
         self.assertEqual(img.mode, "RGB")
+
+    def test_heic_upload_gets_a_thumbnail(self):
+        # Not forced through _make_file: the upload's own detection has to
+        # read the photo as an image for the thumbnail to be generated.
+        name = "IMG_0001.HEIC"
+        f = FileService.create_file(
+            owner=self.user,
+            name=name,
+            content=ContentFile(heic_bytes(size=(1000, 500)), name=name),
+        )
+        self.addCleanup(self._cleanup_thumb, f.uuid)
+
+        self.assertTrue(generate_thumbnail(f))
+
+        self.assertEqual(self._open_thumb(f.uuid).size, (512, 256))
+
+    def test_avif_gets_a_thumbnail(self):
+        f = self._make_file("photo.avif", avif_bytes(size=(1000, 500)), "avif", "")
+
+        self.assertTrue(generate_thumbnail(f))
+
+        self.assertEqual(self._open_thumb(f.uuid).size, (512, 256))
 
     def test_svg_rasterized_to_square_webp(self):
         # cairosvg letterboxes a non-square SVG into the requested square box;

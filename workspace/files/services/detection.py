@@ -44,7 +44,28 @@ def _build_extension_map(kb):
 
 
 _KB = _load_kb()
+# Magika files AVIF, a still image, under "video" next to the MP4 container
+# it shares.
+_KB["avif"]["group"] = "image"
 _EXT_TO_LABEL = _build_extension_map(_KB)
+
+# MP4, QuickTime, HEIF and AVIF share the ISO base media container, and Magika
+# reads a HEIC photo straight off an iPhone as mp4. The major brand of the
+# leading ftyp box says which one the file is.
+_ISOBMFF_LABELS = frozenset({"mp4", "qt", "3gp", "heif", "avif"})
+_IMAGE_BRANDS = {
+    b"heic": "heif",
+    b"heix": "heif",
+    b"heim": "heif",
+    b"heis": "heif",
+    b"hevc": "heif",
+    b"hevx": "heif",
+    b"avif": "avif",
+    b"avis": "avif",
+}
+# Generic HEIF brands: the codec is in the compatible brands that follow.
+_GENERIC_IMAGE_BRANDS = frozenset({b"mif1", b"msf1"})
+_HEAD_SIZE = 64
 
 
 @dataclass(frozen=True)
@@ -55,14 +76,38 @@ class DetectionResult:
     score: float
 
 
-def detect_from_bytes(content: bytes) -> DetectionResult:
-    result = _get_magika().identify_bytes(content)
+def _image_label_from_ftyp(head):
+    """'heif' or 'avif' when *head* opens on an image ftyp box, else None."""
+    if head[4:8] != b"ftyp":
+        return None
+    major = head[8:12]
+    if major in _IMAGE_BRANDS:
+        return _IMAGE_BRANDS[major]
+    if major not in _GENERIC_IMAGE_BRANDS:
+        return None
+    box_end = min(int.from_bytes(head[:4], "big"), len(head))
+    compatible = {head[i : i + 4] for i in range(16, box_end - 3, 4)}
+    return "avif" if {b"avif", b"avis"} & compatible else "heif"
+
+
+def _result(magika_result, head):
+    label = magika_result.output.label
+    mime_type = magika_result.output.mime_type
+    if label in _ISOBMFF_LABELS:
+        image_label = _image_label_from_ftyp(head)
+        if image_label and image_label != label:
+            label = image_label
+            mime_type = _KB[label]["mime_type"]
     return DetectionResult(
-        label=result.output.label,
-        mime_type=result.output.mime_type,
-        group=result.output.group or "",
-        score=result.score,
+        label=label,
+        mime_type=mime_type,
+        group=_KB.get(label, {}).get("group") or magika_result.output.group or "",
+        score=magika_result.score,
     )
+
+
+def detect_from_bytes(content: bytes) -> DetectionResult:
+    return _result(_get_magika().identify_bytes(content), content[:_HEAD_SIZE])
 
 
 def _buffered_stream(stream):
@@ -85,20 +130,21 @@ def detect_from_stream(stream) -> DetectionResult:
     raw = _buffered_stream(stream)
     seekable = hasattr(stream, "seek")
     pos = stream.tell() if hasattr(stream, "tell") else 0
+    head = b""
     if raw is not None and raw.readable():
         result = _get_magika().identify_stream(raw)
     else:
         if seekable:
             stream.seek(pos)
-        result = _get_magika().identify_bytes(stream.read())
+        content = stream.read()
+        result = _get_magika().identify_bytes(content)
+        head = content[:_HEAD_SIZE]
     if seekable:
         stream.seek(pos)
-    return DetectionResult(
-        label=result.output.label,
-        mime_type=result.output.mime_type,
-        group=result.output.group or "",
-        score=result.score,
-    )
+        if not head:
+            head = stream.read(_HEAD_SIZE)
+            stream.seek(pos)
+    return _result(result, head)
 
 
 def label_from_name(filename: str) -> str:

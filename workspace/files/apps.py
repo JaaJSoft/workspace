@@ -20,6 +20,10 @@ class FilesConfig(AppConfig):
             os.getenv("FILE_UPLOAD_CHUNK_SIZE", 2 * 1024 * 1024)
         )
 
+        from workspace.files.services.raster_formats import register_decoders
+
+        register_decoders()
+
         from workspace.core.module_registry import (
             CommandInfo,
             ModuleInfo,

@@ -167,3 +167,65 @@ class DetectFromNameTest(TestCase):
                 expected_label,
                 msg=f"{filename} -> expected {expected_label}, got {result.label}",
             )
+
+
+class IsoMediaImageTest(TestCase):
+    """HEIF and AVIF share the MP4 container; the ftyp brand tells them apart."""
+
+    def test_heic_is_a_heif_image_not_an_mp4(self):
+        from workspace.files.services.detection import detect_from_bytes
+        from workspace.files.tests.rasters import heic_bytes
+
+        result = detect_from_bytes(heic_bytes())
+
+        self.assertEqual(
+            (result.label, result.group, result.mime_type),
+            ("heif", "image", "image/heic"),
+        )
+
+    def test_avif_is_an_image(self):
+        from workspace.files.services.detection import detect_from_bytes
+        from workspace.files.tests.rasters import avif_bytes
+
+        result = detect_from_bytes(avif_bytes())
+
+        self.assertEqual(
+            (result.label, result.group, result.mime_type),
+            ("avif", "image", "image/avif"),
+        )
+
+    def test_stream_detection_reads_the_brand_and_rewinds(self):
+        from io import BytesIO
+
+        from workspace.files.services.detection import detect_from_stream
+        from workspace.files.tests.rasters import heic_bytes
+
+        stream = BytesIO(heic_bytes())
+
+        self.assertEqual(detect_from_stream(stream).label, "heif")
+        self.assertEqual(stream.tell(), 0)
+
+    def test_a_generic_heif_brand_defers_to_the_compatible_ones(self):
+        from workspace.files.services.detection import _image_label_from_ftyp
+        from workspace.files.tests.rasters import ftyp_box
+
+        self.assertEqual(
+            _image_label_from_ftyp(ftyp_box(b"mif1", b"mif1", b"heic")), "heif"
+        )
+        self.assertEqual(
+            _image_label_from_ftyp(ftyp_box(b"mif1", b"mif1", b"miaf", b"avif")),
+            "avif",
+        )
+
+    def test_hevc_and_quicktime_videos_stay_videos(self):
+        from workspace.files.services.detection import detect_from_bytes
+        from workspace.files.tests.videos import clip_bytes
+
+        self.assertEqual(detect_from_bytes(clip_bytes("clip_hevc.mp4")).label, "mp4")
+        self.assertEqual(detect_from_bytes(clip_bytes("clip_iphone.mov")).label, "qt")
+
+    def test_avif_extension_is_an_image(self):
+        from workspace.files.services.detection import detect_from_name
+
+        self.assertEqual(detect_from_name("photo.avif").group, "image")
+        self.assertEqual(detect_from_name("IMG_0001.HEIC").label, "heif")

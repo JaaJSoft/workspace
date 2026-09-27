@@ -1,7 +1,7 @@
 """The folder photos imported from the Photos page land in.
 
 Stored as a folder uuid in the `photos` / `import_folder` user setting. Until
-the user picks one, imports go to a root folder named "Photos", created on
+the user picks one, imports go to a root folder named "Images", created on
 the first import (never on a page view: a user who never imports should not
 find a folder they did not ask for).
 """
@@ -15,7 +15,7 @@ from workspace.users.services.settings import get_setting, set_setting
 
 MODULE = "photos"
 IMPORT_FOLDER = "import_folder"
-DEFAULT_NAME = "Photos"
+DEFAULT_NAME = "Images"
 
 
 def _writable_folders(user):
@@ -57,7 +57,7 @@ def ensure_import_folder(user):
     folder = import_folder(user)
     if folder is None:
         folder = FileService.create_folder(
-            user, DEFAULT_NAME, icon="images", color="primary", acting_user=user
+            user, DEFAULT_NAME, icon="image", color="primary", acting_user=user
         )
     if get_setting(user, MODULE, IMPORT_FOLDER) != str(folder.uuid):
         set_setting(user, MODULE, IMPORT_FOLDER, str(folder.uuid))

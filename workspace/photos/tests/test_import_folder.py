@@ -26,11 +26,11 @@ class ImportFolderTestCase(TestCase):
     def tearDown(self):
         cache.clear()
 
-    def _root_photos_folders(self):
+    def _root_images_folders(self):
         return File.objects.filter(
             owner=self.user,
             parent__isnull=True,
-            name="Photos",
+            name="Images",
             node_type=File.NodeType.FOLDER,
             deleted_at__isnull=True,
         )
@@ -40,23 +40,23 @@ class ImportFolderServiceTests(ImportFolderTestCase):
     def test_reading_it_never_creates_the_default_folder(self):
         self.assertIsNone(import_folder(self.user))
 
-        self.assertFalse(self._root_photos_folders().exists())
+        self.assertFalse(self._root_images_folders().exists())
 
     def test_ensuring_it_creates_the_default_folder_once(self):
         first = ensure_import_folder(self.user)
         second = ensure_import_folder(self.user)
 
         self.assertEqual(first.pk, second.pk)
-        self.assertEqual(self._root_photos_folders().count(), 1)
+        self.assertEqual(self._root_images_folders().count(), 1)
         self.assertEqual(
             get_setting(self.user, "photos", "import_folder"), str(first.pk)
         )
 
-    def test_an_existing_photos_folder_is_reused(self):
-        existing = FileService.create_folder(self.user, "Photos")
+    def test_an_existing_images_folder_is_reused(self):
+        existing = FileService.create_folder(self.user, "Images")
 
         self.assertEqual(ensure_import_folder(self.user).pk, existing.pk)
-        self.assertEqual(self._root_photos_folders().count(), 1)
+        self.assertEqual(self._root_images_folders().count(), 1)
 
     def test_a_trashed_chosen_folder_falls_back_to_the_default_one(self):
         chosen = FileService.create_folder(self.user, "Camera")
@@ -64,7 +64,7 @@ class ImportFolderServiceTests(ImportFolderTestCase):
         FileService.soft_delete(chosen, acting_user=self.user)
 
         self.assertIsNone(import_folder(self.user))
-        self.assertEqual(ensure_import_folder(self.user).name, "Photos")
+        self.assertEqual(ensure_import_folder(self.user).name, "Images")
 
     def test_a_malformed_stored_value_falls_back_to_the_default_one(self):
         set_setting(self.user, "photos", "import_folder", "not-a-uuid")
@@ -84,15 +84,15 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"uuid": None, "name": "Photos", "path": "Photos", "group": None},
+            {"uuid": None, "name": "Images", "path": "Images", "group": None},
         )
-        self.assertFalse(self._root_photos_folders().exists())
+        self.assertFalse(self._root_images_folders().exists())
 
     def test_post_creates_the_default_folder(self):
         response = self.client.post(API)
 
         self.assertEqual(response.status_code, 200)
-        folder = self._root_photos_folders().get()
+        folder = self._root_images_folders().get()
         self.assertEqual(response.json()["uuid"], str(folder.pk))
 
     def test_put_chooses_a_personal_folder(self):
@@ -106,7 +106,7 @@ class ImportFolderApiTests(ImportFolderTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["path"], "Camera/Roll")
         self.assertEqual(self.client.post(API).json()["uuid"], str(roll.pk))
-        self.assertFalse(self._root_photos_folders().exists())
+        self.assertFalse(self._root_images_folders().exists())
 
     def test_put_chooses_a_folder_of_one_of_the_users_groups(self):
         family = Group.objects.create(name="Family")
@@ -141,6 +141,6 @@ class ImportFolderPageTests(ImportFolderTestCase):
         response = self.client.get("/photos")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["import_folder"]["path"], "Photos")
+        self.assertEqual(response.context["import_folder"]["path"], "Images")
         self.assertContains(response, 'id="photos-import-folder-data"')
-        self.assertFalse(self._root_photos_folders().exists())
+        self.assertFalse(self._root_images_folders().exists())

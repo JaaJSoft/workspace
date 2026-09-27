@@ -22,7 +22,9 @@ from workspace.vault.tests.reference.encoding import from_base64url, to_base64ur
 
 from .test_browser import GOOD_PASSWORD, VaultBrowserCase
 
-UNSUPPORTED_BANNER = "inline-alert:has-text('a newer version of the app')"
+# :visible because the page also holds the no-openable-vault alerts, hidden
+# with x-show, and one of them says the same words.
+UNSUPPORTED_BANNER = "inline-alert:visible:has-text('a newer version of the app')"
 TAMPERED_BANNER = "inline-alert:has-text('removed from the list')"
 # An id no manifest declares, so no build of this app can open it.
 UNKNOWN_AEAD_ID = 0x07

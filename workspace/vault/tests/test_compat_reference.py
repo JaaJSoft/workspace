@@ -17,7 +17,7 @@ from pyhpke import AEADId, KDFId, KEMId
 from pyhpke.exceptions import OpenError
 
 from . import compat
-from .reference import ad, archive, encoding, metadata, primitives
+from .reference import ad, archive, encoding, metadata, primitives, suites
 
 # The corpora this file's replays actually open, and the versions derived
 # from them. test_compat_frozen checks COVERED against compat.versions() so a
@@ -74,6 +74,7 @@ class ReferenceReplayTests(SimpleTestCase):
 
     def _kex_private_key(self):
         identity = self.identity["fields"]
+        primitives.assert_account_kdf(identity["kdf_algo"], identity["kdf_params"])
         amk = primitives.derive_amk(
             self.corpus.credentials["vault_master_password"],
             primitives.crockford_decode(self.corpus.credentials["secret_key"]),
@@ -154,10 +155,13 @@ class ReferenceReplayTests(SimpleTestCase):
             vault_row = vault_rows[vault_uuid]
             keywrap_row = keywrap_by_vault[vault_uuid]
 
+            # The suite the row stores, never a constant: it decides both the
+            # HPKE suite and the shape of the info.
             vault_key = primitives.hpke_open(
                 kex_priv,
-                ad.vault_key_info(vault_uuid, self.account_uuid),
+                ad.vault_key_info(vault_uuid, self.account_uuid, keywrap_row["hpke_suite"]),
                 _b64(keywrap_row["wrapped_key"]),
+                hpke_suite=keywrap_row["hpke_suite"],
             )
             self.assertEqual(len(vault_key), 32)
             # Folder and tag names travel under this same key - it is what
@@ -256,7 +260,7 @@ class ReferenceReplayTests(SimpleTestCase):
         account's signing key - never against a signature manufactured here.
         """
         sig_public_raw = primitives.decode_public_key(
-            _b64(self.identity["fields"]["sig_public"])
+            _b64(self.identity["fields"]["sig_public"]), "sig"
         )
         sig_public = Ed25519PublicKey.from_public_bytes(sig_public_raw)
 
@@ -415,17 +419,31 @@ class ReferenceReplayTests(SimpleTestCase):
         wraps = _all(self.rows, "vault.vaultkeywrap")
         self.assertEqual(len(wraps), len(self.corpus.manifest["vaults"]))
         for wrap in wraps:
-            self.assertEqual(wrap["fields"]["hpke_suite"], primitives.HPKE_SUITE_V1)
+            # Format 1: the suite alone, no "format" key.
+            self.assertEqual(
+                wrap["fields"]["hpke_suite"],
+                {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
+            )
 
     def test_a_wrapped_vault_key_refuses_a_suite_it_was_not_sealed_under(self):
         """The other half: a descriptor is worth freezing only if it names
         something load-bearing. AES-128-GCM is one number away from the
         stored aead_id and the identifier feeds the HPKE key schedule, so a
-        wrap sealed under v1 cannot open under it.
+        wrap sealed under format 1 cannot open under it.
+
+        A reader never gets that far: a stored suite the manifest does not
+        declare is refused before any key schedule runs. The library call
+        below is what proves the refusal is not the only thing standing in
+        the way.
         """
         kex_priv = self._kex_private_key()
         wrap = _all(self.rows, "vault.vaultkeywrap")[0]["fields"]
         sealed = _b64(wrap["wrapped_key"])
+        info = ad.vault_key_info(wrap["vault"], self.account_uuid, wrap["hpke_suite"])
+        edited = {**wrap["hpke_suite"], "aead_id": AEADId.AES128_GCM.value}
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.hpke_open(kex_priv, info, sealed, hpke_suite=edited)
+
         suite = primitives.hpke_suite(
             KEMId.DHKEM_X25519_HKDF_SHA256, KDFId.HKDF_SHA256, AEADId.AES128_GCM
         )
@@ -434,7 +452,7 @@ class ReferenceReplayTests(SimpleTestCase):
         recipient = suite.create_recipient_context(
             enc=sealed[:32],
             skr=suite.kem.deserialize_private_key(primitives.private_bytes(kex_priv)),
-            info=ad.vault_key_info(wrap["vault"], self.account_uuid),
+            info=info,
         )
         with self.assertRaises(OpenError):
             recipient.open(sealed[32:], aad=b"")

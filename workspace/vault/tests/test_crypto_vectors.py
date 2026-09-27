@@ -5,7 +5,13 @@ import re
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from workspace.vault.tests.reference import ad, primitives, wire
+from workspace.vault.tests.reference import (
+    ad,
+    generate_vectors,
+    primitives,
+    suites,
+    wire,
+)
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 from workspace.vault.tests.reference.generate_fuzz_corpus import (
     CORPUS_PATH,
@@ -112,17 +118,19 @@ class AccountWrapHeaderTests(SimpleTestCase):
         )
         return wraps
 
-    def _vector(self):
+    def _vector(self, case_id):
         # Counted rather than searched: two vectors under one id would have the
         # loop silently take the first, and which one that is depends on the
         # generator's ordering.
-        found = [e for e in VECTORS["aead"] if e["id"] == "account-kex-priv-wrap"]
-        self.assertEqual(len(found), 1, "the account wrap vector is gone or doubled")
+        found = [e for e in VECTORS["aead"] if e["id"] == case_id]
+        self.assertEqual(len(found), 1, f"the {case_id} vector is gone or doubled")
         return found[0]
 
     def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
         key_version, kdf_name = self._sealed_literal()
-        vector = self._vector()
+        # The browser writes format 1 until its writers move to the manifest's
+        # current suite.
+        vector = self._vector("account-kex-priv-wrap")
         self.assertEqual(key_version, vector["key_version"])
         # Against the bundle, not the source: the byte the browser writes comes
         # from the artifact it loads.
@@ -147,7 +155,9 @@ class AccountWrapHeaderTests(SimpleTestCase):
         constant is resolved there. A seeded envelope is the copy a developer
         is most likely to open when asking what a real one carries.
         """
-        vector = self._vector()
+        vector = self._vector("account-kex-priv-wrap-format-2")
+        # The seeder pins no format: it seals at the reference's current one.
+        self.assertEqual(suites.CURRENT_SUITE["format_version"], vector["format_version"])
         for kdf_name, key_version in self._seeder_wraps():
             with self.subTest(kdf_name):
                 self.assertEqual(self._as_int(key_version), vector["key_version"])
@@ -173,21 +183,48 @@ class VectorReplayTests(SimpleTestCase):
     def test_aead_vectors_replay_and_open(self):
         for vector in VECTORS["aead"]:
             with self.subTest(vector["id"]):
+                # The older format-1 cases publish their whole AD string; the
+                # others publish the context body their format builds on.
+                associated = (
+                    ad.Context(vector["context_body"])
+                    if "context_body" in vector
+                    else vector["ad"].encode()
+                )
                 raw = primitives.aead_seal(
                     from_base64url(vector["key_b64"]),
                     vector["plaintext"].encode(),
-                    vector["ad"].encode(),
+                    associated,
                     iv=from_base64url(vector["iv_b64"]),
                     key_version=vector["key_version"],
                     kdf_id=vector["kdf_id"],
+                    aead_id=vector["aead_id"],
+                    format_version=vector["format_version"],
                 )
                 self.assertEqual(to_base64url(raw), vector["expected_wire_b64"])
                 self.assertEqual(
-                    primitives.aead_open(
-                        from_base64url(vector["key_b64"]), raw, vector["ad"].encode()
-                    ),
+                    primitives.aead_open(from_base64url(vector["key_b64"]), raw, associated),
                     vector["plaintext"].encode(),
                 )
+                if "context_body" in vector:
+                    self.assertEqual(
+                        ad.associated_data(associated, raw[: wire.HEADER_LENGTH]).hex(),
+                        vector["associated_data"],
+                    )
+
+    def test_the_agility_cases_are_present(self):
+        """The cases the browser replays by name, one per format and one for
+        the test AEAD, so each is proven to open beside the others."""
+        aead_ids = [v["id"] for v in VECTORS["aead"]]
+        for case_id in (
+            "format-1-aes-256-gcm",
+            "format-2-aes-256-gcm",
+            "format-2-test-ctr-hmac",
+            "account-kex-priv-wrap",
+            "account-kex-priv-wrap-format-2",
+        ):
+            with self.subTest(case_id):
+                self.assertEqual(aead_ids.count(case_id), 1)
+        self.assertEqual([v["id"] for v in VECTORS["hpke"]], ["format-1", "format-2"])
 
     def test_hpke_vectors_replay(self):
         from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -200,13 +237,28 @@ class VectorReplayTests(SimpleTestCase):
                 recipient = X25519PrivateKey.from_private_bytes(
                     from_base64url(vector["recipient_sk_b64"])
                 )
+                # Rebuilt from the stored suite, not replayed: format 2 names
+                # the suite inside the info.
+                info = ad.vault_key_info(
+                    generate_vectors.VAULT_UUID,
+                    generate_vectors.ACCOUNT_UUID,
+                    vector["hpke_suite"],
+                )
+                self.assertEqual(info.decode("ascii"), vector["info"])
                 sealed = primitives.hpke_seal(
                     recipient.public_key(),
-                    vector["info"].encode(),
+                    info,
                     from_base64url(vector["plaintext_b64"]),
                     sender_private=sender,
+                    hpke_suite=vector["hpke_suite"],
                 )
                 self.assertEqual(to_base64url(sealed), vector["expected_sealed_b64"])
+                self.assertEqual(
+                    primitives.hpke_open(
+                        recipient, info, sealed, hpke_suite=vector["hpke_suite"]
+                    ),
+                    from_base64url(vector["plaintext_b64"]),
+                )
 
     def test_cbor_and_signature_vectors_replay(self):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -256,7 +308,11 @@ class VectorReplayTests(SimpleTestCase):
                 stored = primitives.encode_public_key(key, vector["alg"])
                 self.assertEqual(to_base64url(stored), vector["expected_stored_b64"])
                 self.assertEqual(
-                    to_base64url(primitives.decode_public_key(stored)),
+                    to_base64url(
+                        primitives.decode_public_key(
+                            stored, suites.entry("pubkey", vector["alg"])["usage"]
+                        )
+                    ),
                     vector["raw_b64"],
                 )
 

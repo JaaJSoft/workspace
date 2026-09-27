@@ -147,3 +147,120 @@ class AeadDispatchTests(SimpleTestCase):
         self.assertEqual(
             sorted(primitives.AEADS), sorted(int(k) for k in suites.manifest()["aead"])
         )
+
+
+ACCOUNT = "01890a5d-ac96-774b-bcce-b302099a8058"
+VAULT = "01890a5d-ac96-774b-bcce-b302099a8059"
+FORMAT_1_HPKE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+FORMAT_2_HPKE = {**FORMAT_1_HPKE, "format": 2}
+
+
+class HpkeDispatchTests(SimpleTestCase):
+    def setUp(self):
+        self.recipient = primitives.generate_kex_keypair()
+        self.sender = primitives.generate_kex_keypair()
+
+    def _wrap(self, suite):
+        info = ad.vault_key_info(VAULT, ACCOUNT, suite)
+        return info, primitives.hpke_seal(
+            self.recipient.public_key(), info, KEY, sender_private=self.sender, hpke_suite=suite
+        )
+
+    def test_the_format_2_info_names_the_suite(self):
+        self.assertEqual(
+            ad.vault_key_info(VAULT, ACCOUNT, FORMAT_2_HPKE),
+            f"v2|vault-key|{VAULT}|{ACCOUNT}|0020-0001-0002".encode(),
+        )
+        self.assertEqual(
+            ad.vault_key_info(VAULT, ACCOUNT, FORMAT_1_HPKE),
+            f"v1|vault-key|{VAULT}|{ACCOUNT}".encode(),
+        )
+
+    def test_both_formats_open(self):
+        for suite in (FORMAT_1_HPKE, FORMAT_2_HPKE):
+            with self.subTest(suite=suite):
+                info, sealed = self._wrap(suite)
+                self.assertEqual(
+                    primitives.hpke_open(self.recipient, info, sealed, hpke_suite=suite), KEY
+                )
+
+    def test_dropping_the_format_to_downgrade_a_wrap_fails(self):
+        _, sealed = self._wrap(FORMAT_2_HPKE)
+        downgraded_info = ad.vault_key_info(VAULT, ACCOUNT, FORMAT_1_HPKE)
+        with self.assertRaises(Exception):
+            primitives.hpke_open(self.recipient, downgraded_info, sealed, hpke_suite=FORMAT_1_HPKE)
+
+    def test_an_unknown_suite_is_unsupported(self):
+        for stored in ({**FORMAT_2_HPKE, "format": 9}, {**FORMAT_2_HPKE, "aead_id": 3}):
+            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+                primitives.hpke_suite_for(stored)
+
+    def test_an_explicit_format_1_or_a_string_format_is_unsupported(self):
+        # Format 1 is the missing key: vault_key_info would give an explicit 1
+        # an info naming the suite, which no format-1 wrap was sealed under.
+        for stored in ({**FORMAT_1_HPKE, "format": 1}, {**FORMAT_1_HPKE, "format": "2"}):
+            with self.subTest(stored=stored), self.assertRaises(suites.UnsupportedAlgorithm):
+                primitives.hpke_suite_for(stored)
+
+
+class SignatureAndKeyDispatchTests(SimpleTestCase):
+    def test_an_unknown_signature_prefix_is_unsupported(self):
+        key = primitives.generate_sig_keypair()
+        signature = bytearray(primitives.sign_bytes(key, b"message"))
+        signature[0] = 0x09
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.verify_bytes(key.public_key(), b"message", bytes(signature))
+
+    def test_an_unknown_payload_version_is_unsupported(self):
+        key = primitives.generate_sig_keypair()
+        payload = {"v": 7, "type": "tag-metadata"}
+        data = primitives.canonical_cbor(payload)
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.verify(key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata")
+
+    def test_a_payload_version_spelled_as_a_string_is_unsupported(self):
+        # The manifest is keyed by strings: "1" must not find the entry 1 names.
+        key = primitives.generate_sig_keypair()
+        data = primitives.canonical_cbor({"v": "1", "type": "tag-metadata"})
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.verify(key.public_key(), data, primitives.sign_bytes(key, data), "tag-metadata")
+
+    def test_a_signature_of_the_wrong_length_is_refused_before_ed25519(self):
+        key = primitives.generate_sig_keypair()
+        signature = primitives.sign_bytes(key, b"message")
+        with self.assertRaises(ValueError):
+            primitives.verify_bytes(key.public_key(), b"message", signature + b"\x00")
+
+    def test_a_public_key_is_checked_against_its_usage(self):
+        sig_key = primitives.generate_sig_keypair()
+        stored = primitives.encode_public_key(
+            sig_key.public_key(), suites.CURRENT_SUITE["sig_public_key_alg"]
+        )
+        self.assertEqual(len(primitives.decode_public_key(stored, "sig")), 32)
+        with self.assertRaises(ValueError) as caught:
+            primitives.decode_public_key(stored, "kex")
+        self.assertNotIsInstance(caught.exception, suites.UnsupportedAlgorithm)
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.decode_public_key(bytes([0x07]) + bytes(32), "kex")
+
+
+class AccountKdfTests(SimpleTestCase):
+    PARAMS = {"v": "1.3", "m": 65536, "t": 3, "p": 2}
+
+    def test_the_current_parameters_pass(self):
+        primitives.assert_account_kdf("argon2id", self.PARAMS)
+
+    def test_a_seeded_account_with_an_algo_key_still_passes(self):
+        primitives.assert_account_kdf("argon2id", {**self.PARAMS, "algo": "argon2id"})
+
+    def test_unknown_or_out_of_bounds_is_unsupported(self):
+        for algo, params in (
+            ("scrypt", self.PARAMS),
+            ("argon2id", {**self.PARAMS, "v": "1.0"}),
+            ("argon2id", {**self.PARAMS, "m": 4 * 1024 * 1024}),
+            ("argon2id", {**self.PARAMS, "t": 0}),
+            ("argon2id", {**self.PARAMS, "p": 5}),
+        ):
+            with self.subTest(algo=algo, params=params):
+                with self.assertRaises(suites.UnsupportedAlgorithm):
+                    primitives.assert_account_kdf(algo, params)

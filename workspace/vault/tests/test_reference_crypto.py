@@ -80,6 +80,7 @@ class AssociatedDataTests(SimpleTestCase):
     USER = "0192f3a4-1111-7d8e-9f01-23456789abcd"
     VAULT = "0192f3a4-2222-7d8e-9f01-23456789abcd"
     FORMAT_1_HEADER = bytes([1, 0, 0, 0, 0, 12])
+    FORMAT_1_HPKE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 
     def test_the_catalogue_is_pinned_byte_for_byte(self):
         """These strings ARE the contract - there is no document above them.
@@ -110,7 +111,7 @@ class AssociatedDataTests(SimpleTestCase):
             f"v1|account-kex-pub|{self.USER}|AWtleA".encode(),
         )
         self.assertEqual(
-            ad.vault_key_info(self.VAULT, self.USER),
+            ad.vault_key_info(self.VAULT, self.USER, self.FORMAT_1_HPKE),
             f"v1|vault-key|{self.VAULT}|{self.USER}".encode(),
         )
 
@@ -129,7 +130,7 @@ class AssociatedDataTests(SimpleTestCase):
             ad.associated_data(
                 ad.entry_field_ad(self.ENTRY, "password"), self.FORMAT_1_HEADER
             ),
-            ad.vault_key_info(self.VAULT, self.USER),
+            ad.vault_key_info(self.VAULT, self.USER, self.FORMAT_1_HPKE),
         ):
             value.decode("ascii")
             self.assertFalse(value.endswith(b"\n"))
@@ -336,11 +337,11 @@ class SignatureTests(SimpleTestCase):
 class PublicKeyEncodingTests(SimpleTestCase):
     def test_the_stored_form_carries_its_algorithm_prefix(self):
         public = primitives.generate_kex_keypair().public_key()
-        stored = primitives.encode_public_key(public)
+        stored = primitives.encode_public_key(public, primitives.PUBKEY_ALG_X25519)
         self.assertEqual(stored[0], primitives.PUBKEY_ALG_X25519)
         self.assertEqual(len(stored), 1 + 32)
         self.assertEqual(
-            primitives.decode_public_key(stored), primitives.public_bytes(public)
+            primitives.decode_public_key(stored, "kex"), primitives.public_bytes(public)
         )
 
     def test_a_relabelled_key_is_refused_rather_than_read_as_x25519(self):
@@ -349,23 +350,26 @@ class PublicKeyEncodingTests(SimpleTestCase):
         algorithm it happens to know.
         """
         stored = primitives.encode_public_key(
-            primitives.generate_kex_keypair().public_key()
+            primitives.generate_kex_keypair().public_key(), primitives.PUBKEY_ALG_X25519
         )
-        with self.assertRaises(ValueError):
-            primitives.decode_public_key(bytes([0x7F]) + stored[1:])
+        with self.assertRaises(suites.UnsupportedAlgorithm):
+            primitives.decode_public_key(bytes([0x7F]) + stored[1:], "kex")
 
-    def test_swapping_two_known_labels_of_equal_length_is_not_the_decoders_job(self):
-        """X25519 and Ed25519 are both 32 raw bytes, so relabelling one as the
-        other decodes cleanly. That is not a hole in the decoder: the label is
-        signed as part of the stored form the attestation covers, and it is the
-        signature that refuses the swap. Pinned so nobody later "fixes" the
-        decoder by guessing at key material it cannot inspect.
+    def test_a_relabelled_key_decodes_only_for_the_usage_its_label_names(self):
+        """X25519 and Ed25519 are both 32 raw bytes, so the decoder cannot tell
+        a relabelled key from key material. What it checks is the usage the
+        label names: an exchange key relabelled as a signing key is refused
+        where an exchange key is expected. The label itself is signed as part
+        of the stored form the attestation covers, and it is the signature
+        that refuses a swap the usage check lets through.
         """
         stored = primitives.encode_public_key(
-            primitives.generate_kex_keypair().public_key()
+            primitives.generate_kex_keypair().public_key(), primitives.PUBKEY_ALG_X25519
         )
         relabelled = bytes([primitives.PUBKEY_ALG_ED25519]) + stored[1:]
-        self.assertEqual(primitives.decode_public_key(relabelled), stored[1:])
+        self.assertEqual(primitives.decode_public_key(relabelled, "sig"), stored[1:])
+        with self.assertRaises(ValueError):
+            primitives.decode_public_key(relabelled, "kex")
 
     def test_encodes_an_ed25519_public_key_under_its_own_algorithm_byte(self):
         key = primitives.generate_sig_keypair().public_key()
@@ -373,23 +377,23 @@ class PublicKeyEncodingTests(SimpleTestCase):
         self.assertEqual(stored[0], 0x02)
         self.assertEqual(len(stored), 33)
         self.assertEqual(
-            primitives.decode_public_key(stored), primitives.public_bytes(key)
+            primitives.decode_public_key(stored, "sig"), primitives.public_bytes(key)
         )
 
     def test_refuses_an_ed25519_key_of_the_wrong_length(self):
         with self.assertRaises(ValueError):
             primitives.decode_public_key(
-                bytes([primitives.PUBKEY_ALG_ED25519]) + bytes(31)
+                bytes([primitives.PUBKEY_ALG_ED25519]) + bytes(31), "sig"
             )
 
     def test_a_truncated_key_is_refused(self):
         stored = primitives.encode_public_key(
-            primitives.generate_kex_keypair().public_key()
+            primitives.generate_kex_keypair().public_key(), primitives.PUBKEY_ALG_X25519
         )
         with self.assertRaises(ValueError):
-            primitives.decode_public_key(stored[:-1])
+            primitives.decode_public_key(stored[:-1], "kex")
         with self.assertRaises(ValueError):
-            primitives.decode_public_key(b"")
+            primitives.decode_public_key(b"", "kex")
 
 
 class HpkeTests(SimpleTestCase):
@@ -403,9 +407,13 @@ class HpkeTests(SimpleTestCase):
             info,
             vault_key,
             sender_private=sender_private,
+            hpke_suite=suites.CURRENT_SUITE["hpke"],
         )
         self.assertEqual(
-            primitives.hpke_open(recipient_private, info, sealed), vault_key
+            primitives.hpke_open(
+                recipient_private, info, sealed, hpke_suite=suites.CURRENT_SUITE["hpke"]
+            ),
+            vault_key,
         )
 
     def test_a_different_info_fails_to_open(self):
@@ -419,9 +427,15 @@ class HpkeTests(SimpleTestCase):
             b"v1|vault-key|a|r",
             bytes(range(32)),
             sender_private=sender_private,
+            hpke_suite=suites.CURRENT_SUITE["hpke"],
         )
         with self.assertRaises(OpenError):
-            primitives.hpke_open(recipient_private, b"v1|vault-key|b|r", sealed)
+            primitives.hpke_open(
+                recipient_private,
+                b"v1|vault-key|b|r",
+                sealed,
+                hpke_suite=suites.CURRENT_SUITE["hpke"],
+            )
 
 
 class CanonicalTypeTests(SimpleTestCase):

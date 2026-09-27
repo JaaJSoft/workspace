@@ -72,7 +72,7 @@ class VaultMetadataTests(SimpleTestCase):
 
     def test_another_accounts_signing_key_is_refused(self):
         other = _prefixed_public_key(
-            _vector("hpke", "vault-key-self-wrap")["recipient_pk_b64"]
+            _vector("hpke", "format-2")["recipient_pk_b64"]
         )
         with self.assertRaises(AttestationError):
             verify_vault_metadata(

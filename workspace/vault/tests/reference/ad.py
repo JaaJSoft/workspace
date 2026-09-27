@@ -89,8 +89,20 @@ def kex_pub_payload(account_uuid: str, kex_pub_b64: str) -> bytes:
     return f"v1|account-kex-pub|{_uuid(account_uuid)}|{kex_pub_b64}".encode("ascii")
 
 
-def vault_key_info(vault_uuid: str, recipient_uuid: str) -> bytes:
-    return f"v1|vault-key|{_uuid(vault_uuid)}|{_uuid(recipient_uuid)}".encode("ascii")
+def vault_key_info(vault_uuid: str, recipient_uuid: str, hpke_suite: dict) -> bytes:
+    """HPKE info for a wrapped vault key.
+
+    Format 2 names the suite inside the info: a stored hpke_suite someone
+    edited then fails to open instead of selecting another suite silently.
+    """
+    base = f"vault-key|{_uuid(vault_uuid)}|{_uuid(recipient_uuid)}"
+    if "format" not in hpke_suite:
+        return f"v1|{base}".encode("ascii")
+    fmt = entry("format", hpke_suite["format"])
+    descriptor = "-".join(
+        f"{hpke_suite[field]:04x}" for field in ("kem_id", "kdf_id", "aead_id")
+    )
+    return f"{fmt['ad_prefix']}{base}|{descriptor}".encode("ascii")
 
 
 # Closed, like the entry field catalogue and for the same reason: an open list

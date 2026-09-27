@@ -30,30 +30,20 @@ from pyhpke import AEADId, CipherSuite, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
 from . import ad, wire
-from .suites import CURRENT_SUITE
-
-ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
+from .suites import CURRENT_SUITE, UnsupportedAlgorithm, entry
 
 # One byte in front of every persisted signature and public key, so a future
-# algorithm lands without a data migration.
+# algorithm lands without a data migration. What each id is - its length, the
+# usage of a key - is the manifest's word; these only name the ids.
 SIG_ALG_ED25519 = 0x01
 PUBKEY_ALG_X25519 = 0x01
 # Ed25519 carries its own label even though both keys are 32 raw bytes: under
-# one shared label the two would be indistinguishable once stored. Reading the
-# label back is not this decoder's job - the attestation signs the labelled
-# form, so a swap breaks the signature the client re-checks against the signing
-# key it unwrapped. The server, which only ever sees a pair the client signed
-# itself, pins the expected algorithm instead.
+# one shared label the two would be indistinguishable once stored, and the
+# decoder could not refuse a signing key handed over as an exchange key.
 PUBKEY_ALG_ED25519 = 0x02
-
-# Raw key length per algorithm: a stored key of the wrong size is refused
-# rather than truncated.
-_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32, PUBKEY_ALG_ED25519: 32}
 
 SECRET_KEY_LENGTH = 32
 SALT_LENGTH = 32
-
-HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 0x00}
 
 # HKDF salt is 32 zero bytes rather than drawn: the input keying material is
 # already a uniformly random key, so a salt buys nothing and a drawn one would
@@ -131,7 +121,7 @@ def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> by
     ):
         if len(value) != expected:
             raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
-    params = params or ARGON2_PARAMS
+    params = params or CURRENT_SUITE["kdf"]["params"]
     # NFC applies to the KDF input, not just to the length check: "café"
     # precomposed and decomposed are different byte strings otherwise.
     password_input = unicodedata.normalize("NFC", password).encode("utf-8")
@@ -145,6 +135,30 @@ def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> by
         p=params["p"],
         tag_length=32,
     )
+
+
+def _entry_for_integer(axis: str, identifier) -> dict:
+    # The manifest is keyed by strings, so "2" would find the entry 2 names;
+    # a stored integer id arriving as a string or a bool is not that id.
+    if isinstance(identifier, bool) or not isinstance(identifier, int):
+        raise UnsupportedAlgorithm(axis, identifier)
+    return entry(axis, identifier)
+
+
+def assert_account_kdf(algo: str, params: dict) -> None:
+    """Refuse, before Argon2 runs, what this build cannot or will not derive.
+
+    The bounds are not a secret: parameters a server lowers derive another
+    key and fail anyway. They stop an absurd m from killing the tab before
+    any error surfaces. Extra keys are ignored - seeded accounts carry one.
+    """
+    found = entry("kdf", algo)
+    if params.get("v") != found["params"]["v"]:
+        raise UnsupportedAlgorithm("kdf", algo)
+    for name, (low, high) in found["bounds"].items():
+        value = params.get(name)
+        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+            raise UnsupportedAlgorithm("kdf", algo)
 
 
 def hkdf_with_salt(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:
@@ -264,15 +278,13 @@ def public_bytes(key) -> bytes:
     )
 
 
-def encode_public_key(key, alg: int = PUBKEY_ALG_X25519) -> bytes:
+def encode_public_key(key, alg: int) -> bytes:
     """The stored form of a public key: algorithm byte, then the raw key.
 
     The attestation signs this form, not the bare key: an unsigned algorithm
     byte would be the server's to change while the signature still verifies.
     """
-    expected = _PUBKEY_LENGTHS.get(alg)
-    if expected is None:
-        raise ValueError(f"unknown public key algorithm {alg:#04x}")
+    expected = entry("pubkey", alg)["length"]
     raw = public_bytes(key)
     if len(raw) != expected:
         raise ValueError(
@@ -281,21 +293,25 @@ def encode_public_key(key, alg: int = PUBKEY_ALG_X25519) -> bytes:
     return bytes([alg]) + raw
 
 
-def decode_public_key(stored: bytes) -> bytes:
-    """Raw key bytes from the stored form.
+def decode_public_key(stored: bytes, usage: str) -> bytes:
+    """Raw key bytes from the stored form, for a key of the given usage.
 
     The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte
     key, so handing it the stored form would read the label as key material.
+    A known label of the other usage is a malformed key, not an unsupported
+    one: this build implements it, just not for this purpose.
     """
     if not stored:
         raise ValueError("public key is empty")
-    expected = _PUBKEY_LENGTHS.get(stored[0])
-    if expected is None:
-        raise ValueError(f"unsupported public key algorithm {stored[0]:#04x}")
-    if len(stored) != 1 + expected:
+    found = entry("pubkey", stored[0])
+    if found["usage"] != usage:
+        raise ValueError(
+            f"public key algorithm {stored[0]:#04x} is a {found['usage']} key, not {usage}"
+        )
+    if len(stored) != 1 + found["length"]:
         raise ValueError(
             f"public key is {len(stored) - 1} bytes, "
-            f"algorithm {stored[0]:#04x} wants {expected}"
+            f"algorithm {stored[0]:#04x} wants {found['length']}"
         )
     return stored[1:]
 
@@ -313,10 +329,31 @@ def hpke_suite(
     kdf: KDFId = KDFId.HKDF_SHA256,
     aead: AEADId = AEADId.AES256_GCM,
 ) -> CipherSuite:
-    """Suite v1 by default; the arguments exist for the published vectors,
-    which cover this KEM and KDF only in their AES-128-GCM variant.
+    """The arguments exist for the published vectors, which cover this KEM
+    and KDF only in their AES-128-GCM variant. A stored wrap goes through
+    hpke_suite_for instead.
     """
     return CipherSuite.new(kem, kdf, aead)
+
+
+def hpke_suite_for(stored: dict) -> CipherSuite:
+    """The suite a stored hpke_suite names, checked against the manifest.
+
+    A row carrying no "format" key is format 1. Anything other than exactly
+    the suite the manifest declares for its format is refused, before any key
+    schedule runs.
+    """
+    if "format" in stored and stored["format"] == 1:
+        # Format 1 is spelled by the key's absence, and vault_key_info builds
+        # the info from that spelling: an explicit 1 would pair a format-1
+        # suite with an info naming its suite, which no writer ever sealed.
+        raise UnsupportedAlgorithm("hpke", stored)
+    declared = _entry_for_integer("hpke", stored.get("format", 1))["suite"]
+    if {k: v for k, v in stored.items() if k != "format"} != declared:
+        raise UnsupportedAlgorithm("hpke", stored)
+    return hpke_suite(
+        KEMId(declared["kem_id"]), KDFId(declared["kdf_id"]), AEADId(declared["aead_id"])
+    )
 
 
 def hpke_seal(
@@ -325,6 +362,7 @@ def hpke_seal(
     plaintext: bytes,
     *,
     sender_private: X25519PrivateKey,
+    hpke_suite: dict,
 ) -> bytes:
     """mode_base seal, aad empty - all context binding lives in info.
 
@@ -334,7 +372,7 @@ def hpke_seal(
     the suite to mode_auth, which binds the wrap to a sender identity nothing
     here verifies.
     """
-    suite = hpke_suite()
+    suite = hpke_suite_for(hpke_suite)
     pk = suite.kem.deserialize_public_key(public_bytes(recipient_public))
     ephemeral = KEMKeyPair(
         suite.kem.deserialize_private_key(private_bytes(sender_private)),
@@ -344,8 +382,10 @@ def hpke_seal(
     return enc + sender.seal(plaintext, aad=b"")
 
 
-def hpke_open(recipient_private: X25519PrivateKey, info: bytes, sealed: bytes) -> bytes:
-    suite = hpke_suite()
+def hpke_open(
+    recipient_private: X25519PrivateKey, info: bytes, sealed: bytes, *, hpke_suite: dict
+) -> bytes:
+    suite = hpke_suite_for(hpke_suite)
     enc_length = 32  # DHKEM(X25519) encapsulated key size
     enc, ciphertext = sealed[:enc_length], sealed[enc_length:]
     sk = suite.kem.deserialize_private_key(private_bytes(recipient_private))
@@ -422,14 +462,20 @@ def sign_bytes(private_key: Ed25519PrivateKey, message: bytes) -> bytes:
     through sign() would wrap it in a CBOR byte string and produce a signature
     no conforming verifier accepts.
     """
-    return bytes([SIG_ALG_ED25519]) + private_key.sign(message)
+    return bytes([CURRENT_SUITE["signature_alg"]]) + private_key.sign(message)
 
 
 def verify_bytes(
     public_key: Ed25519PublicKey, message: bytes, signature: bytes
 ) -> None:
-    if signature[0] != SIG_ALG_ED25519:
-        raise ValueError(f"unsupported signature algorithm {signature[0]:#04x}")
+    if not signature:
+        raise ValueError("signature is empty")
+    found = entry("signature", signature[0])
+    if len(signature) != 1 + found["length"]:
+        raise ValueError(
+            f"signature is {len(signature) - 1} bytes, "
+            f"algorithm {signature[0]:#04x} wants {found['length']}"
+        )
     public_key.verify(signature[1:], message)
 
 
@@ -455,8 +501,7 @@ def verify(
     Ed25519 at all.
     """
     payload = cbor2.loads(payload_bytes)  # 1. decode
-    if payload.get("v") != 1:  # 2. version
-        raise ValueError(f"unsupported payload version {payload.get('v')!r}")
+    _entry_for_integer("payload", payload.get("v"))  # 2. version
     if payload.get("type") != expected_type:  # 3. type, before any crypto
         raise ValueError(
             f"payload type {payload.get('type')!r} does not match {expected_type!r}"

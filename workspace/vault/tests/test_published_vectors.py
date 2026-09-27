@@ -25,7 +25,7 @@ from django.test import SimpleTestCase
 from pyhpke import AEADId, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
-from workspace.vault.tests.reference import primitives, totp
+from workspace.vault.tests.reference import primitives, suites, totp
 
 
 class Argon2idPublishedVectorTests(SimpleTestCase):
@@ -165,28 +165,41 @@ class HpkeSuiteIdentifierTests(SimpleTestCase):
     """The declared suite identifiers against the library's own enum.
 
     RFC 9180 section 7.3 assigns these numbers, and the design warns explicitly
-    that a one-off desynchronizes every wrap. HPKE_SUITE_V1 is documentation
-    until something compares it to what the library actually selects, and
-    nothing else in the code would notice a mismatch.
+    that a one-off desynchronizes every wrap. The manifest's hpke suites are
+    documentation until something compares them to what the library actually
+    selects, and nothing else in the code would notice a mismatch.
 
     The browser side is covered transitively: its bundle opens what this
     reference sealed, which could not happen under a different suite.
     """
 
-    def test_the_declared_identifiers_match_the_library(self):
-        self.assertEqual(
-            primitives.HPKE_SUITE_V1["kem_id"], KEMId.DHKEM_X25519_HKDF_SHA256.value
-        )
-        self.assertEqual(primitives.HPKE_SUITE_V1["kdf_id"], KDFId.HKDF_SHA256.value)
-        self.assertEqual(primitives.HPKE_SUITE_V1["aead_id"], AEADId.AES256_GCM.value)
-        self.assertEqual(primitives.HPKE_SUITE_V1["mode"], 0x00)
+    def _declared(self):
+        return suites.manifest()["hpke"].items()
 
-    def test_the_default_suite_is_the_declared_one(self):
-        suite = primitives.hpke_suite()
-        # .id is the enum member, not an int - these are plain Enums.
-        self.assertEqual(suite.kem.id.value, primitives.HPKE_SUITE_V1["kem_id"])
-        self.assertEqual(suite.kdf.id.value, primitives.HPKE_SUITE_V1["kdf_id"])
-        self.assertEqual(suite.aead.id.value, primitives.HPKE_SUITE_V1["aead_id"])
+    def test_the_declared_identifiers_match_the_library(self):
+        for hpke_format, found in self._declared():
+            with self.subTest(format=hpke_format):
+                declared = found["suite"]
+                self.assertEqual(declared["kem_id"], KEMId.DHKEM_X25519_HKDF_SHA256.value)
+                self.assertEqual(declared["kdf_id"], KDFId.HKDF_SHA256.value)
+                self.assertEqual(declared["aead_id"], AEADId.AES256_GCM.value)
+                self.assertEqual(declared["mode"], 0x00)
+
+    def test_a_stored_suite_selects_the_declared_one(self):
+        for hpke_format, found in self._declared():
+            with self.subTest(format=hpke_format):
+                declared = found["suite"]
+                # A format-1 row carries no "format" key at all.
+                stored = (
+                    dict(declared)
+                    if hpke_format == "1"
+                    else {**declared, "format": int(hpke_format)}
+                )
+                suite = primitives.hpke_suite_for(stored)
+                # .id is the enum member, not an int - these are plain Enums.
+                self.assertEqual(suite.kem.id.value, declared["kem_id"])
+                self.assertEqual(suite.kdf.id.value, declared["kdf_id"])
+                self.assertEqual(suite.aead.id.value, declared["aead_id"])
 
 
 class HpkePublishedVectorTests(SimpleTestCase):

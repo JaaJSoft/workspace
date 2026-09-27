@@ -19,6 +19,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder
 from workspace.mail.services.sending import deliver_email
 
@@ -119,7 +120,7 @@ class SendOverTheWireTests(TestCase):
                 "workspace.mail.services.imap_messages.connect_imap",
                 lambda account: imaplib.IMAP4(*imap_server.server_address, timeout=10),
             ),
-            patch("workspace.mail.services.imap_sync.sync_folder_messages"),
+            patch.object(mail_tasks.sync_folder, "delay"),
         ):
             delivery = deliver_email(
                 self.account,

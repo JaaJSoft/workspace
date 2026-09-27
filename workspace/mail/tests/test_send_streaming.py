@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.mail import tasks as mail_tasks
 from workspace.mail.models import MailAccount, MailFolder
 from workspace.mail.services.sending import deliver_email
 from workspace.mail.tests.smtp_recorder import RecordingSMTP
@@ -58,7 +59,7 @@ class StreamedSendTests(TestCase):
             patch(
                 "workspace.mail.services.imap_messages.connect_imap", return_value=imap
             ),
-            patch("workspace.mail.services.imap_sync.sync_folder_messages"),
+            patch.object(mail_tasks.sync_folder, "delay"),
         ):
             delivery = deliver_email(
                 self.account,

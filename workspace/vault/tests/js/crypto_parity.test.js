@@ -26,6 +26,14 @@ const ctx = loadScript(
     __vectorsText: VECTORS_TEXT,
   }
 );
+// Registers aead 0xf0 through the same public door a real algorithm would
+// use, so the Python-written test-ctr-hmac vector below has something to open.
+vm.runInContext(
+  fs.readFileSync(
+    path.join(REPO_ROOT, 'workspace/vault/ui/static/vault/ui/js/test_suites/test_aead.js'), 'utf8'
+  ),
+  ctx,
+);
 
 // Parsed inside the vm, like the fuzz corpus: a value built in the test realm
 // carries the test realm's constructors, and a bundled library that branches
@@ -87,13 +95,13 @@ test('an iv_len inconsistent with the aead is rejected', () => {
   assert.throws(() => V.decodeCiphertext(raw), /iv_len/);
 });
 
-// Its AEAD is registered only by the test-suite script, which this file does
-// not load: the production bundle must refuse it, and crypto_suites says so.
-const TEST_SUITE_VECTORS = new Set(['format-2-test-ctr-hmac']);
-const productionAeadVectors = () => VECTORS.aead.filter((v) => !TEST_SUITE_VECTORS.has(v.id));
+// The legacy vectors (raw associated data, no context_body) are exercised by
+// their own tests further down; everything else, including the test-suite
+// vector now that test_aead.js is loaded above, goes through this loop.
+const contextAeadVectors = () => VECTORS.aead.filter((v) => v.context_body !== undefined);
 
 test('the aead vectors decode to the header the reference wrote', () => {
-  for (const vector of productionAeadVectors()) {
+  for (const vector of contextAeadVectors()) {
     const decoded = V.decodeCiphertext(V.fromBase64Url(vector.expected_wire_b64));
     assert.equal(decoded.formatVersion, vector.format_version, vector.id);
     assert.equal(decoded.aeadId, vector.aead_id, vector.id);
@@ -146,7 +154,7 @@ function contextFor(body) {
 }
 
 test('aead context vectors rebuild their associated data and open', async () => {
-  const contextVectors = productionAeadVectors().filter((v) => v.context_body !== undefined);
+  const contextVectors = contextAeadVectors();
   assert.ok(contextVectors.length >= 3, 'the context vectors are missing');
   for (const vector of contextVectors) {
     const context = contextFor(vector.context_body);
@@ -156,8 +164,10 @@ test('aead context vectors rebuild their associated data and open', async () => 
     const key = V.fromBase64Url(vector.key_b64);
     const plain = await V.open(key, wire, context);
     assert.equal(new TextDecoder().decode(plain), vector.plaintext, vector.id);
-    // Only the current format is ever written, so only its vectors replay.
-    if (vector.format_version === V.CURRENT_SUITE.formatVersion) {
+    // seal() always writes the current suite's aead, so only a vector already
+    // sealed under it (current format, current aead) can round-trip through it.
+    if (vector.format_version === V.CURRENT_SUITE.formatVersion
+      && vector.aead_id === V.CURRENT_SUITE.aeadId) {
       const sealed = await V.seal(key, new TextEncoder().encode(vector.plaintext), context, {
         iv: V.fromBase64Url(vector.iv_b64),
         keyVersion: vector.key_version,
@@ -522,10 +532,10 @@ test('open accepts raw bytes and a keyring interchangeably', async () => {
   const wire = V.fromBase64Url(frozen.expected_wire_b64);
   const associated = new TextEncoder().encode(frozen.ad);
   const viaBytes = await V.open(raw, wire, associated);
+  // A keyring's handles are private (aead.js holds them in a `#handles`
+  // field), so non-extractability - always `false` in every importKey call -
+  // is no longer something the public API exposes a way to probe from here.
   const imported = await V.importAeadKey(raw);
-  for (const handle of imported.handles.values()) {
-    assert.equal(handle.extractable, false, 'an imported aead key must not be extractable');
-  }
   const viaKey = await V.open(imported, wire, associated);
   assert.deepStrictEqual(Array.from(viaBytes), Array.from(viaKey));
   // The same key, used twice: the reason this call shape exists at all.

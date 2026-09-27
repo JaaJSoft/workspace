@@ -17,6 +17,18 @@ function assertRawKeyLength(key) {
   }
 }
 
+// WebCrypto picks the AES variant from the key, so a 16-byte one would
+// quietly produce AES-128-GCM under a header still declaring AES-256-GCM -
+// the agility byte would be a lie. Checked on every seal and open, not only
+// at import, so a handle reaching this impl by any other route than its own
+// importKey is refused rather than trusted.
+function assertGcmHandle(handle) {
+  const { name, length } = (handle && handle.algorithm) || {};
+  if (name !== 'AES-GCM' || length !== KEY_LENGTH * 8) {
+    throw new Error(`aes-256-gcm needs an AES-GCM ${KEY_LENGTH * 8}-bit key`);
+  }
+}
+
 const aes256Gcm = {
   ivLength: 12,
   async importKey(raw, usages) {
@@ -24,17 +36,28 @@ const aes256Gcm = {
     return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, usages);
   },
   async seal(handle, iv, plaintext, ad) {
+    assertGcmHandle(handle);
     return new Uint8Array(await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: ad, tagLength: 128 }, handle, plaintext));
   },
   async open(handle, iv, ciphertext, ad) {
+    assertGcmHandle(handle);
     return new Uint8Array(await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv, additionalData: ad, tagLength: 128 }, handle, ciphertext));
   },
 };
 
 export function registerAead(id, impl) {
-  if (!declaredEntry('aead', id)) throw new Error(`aead ${id} is not declared in the manifest`);
+  if (!Number.isInteger(id) || id < 0 || id > 0xff) {
+    throw new Error(`aead id must be an integer in [0, 255], got ${JSON.stringify(id)}`);
+  }
+  const declared = declaredEntry('aead', id);
+  if (!declared) throw new Error(`aead ${id} is not declared in the manifest`);
+  if (impl.ivLength !== declared.iv_length) {
+    throw new Error(
+      `aead ${id} declares iv_length ${declared.iv_length} in the manifest, impl offers ${impl.ivLength}`
+    );
+  }
   if (AEADS.has(id)) throw new Error(`aead ${id} is already registered`);
   AEADS.set(id, impl);
   markImplemented('aead', id);
@@ -42,14 +65,24 @@ export function registerAead(id, impl) {
 
 registerAead(0x01, aes256Gcm);
 
+// A token only this module holds, so a Keyring can be produced by
+// importAeadKey and by nothing else - `new Keyring(anything)` from outside
+// falls through to the else branch below and throws.
+const KEYRING_TOKEN = Symbol('vault keyring');
+
 // One non-extractable handle per registered AEAD, imported once from the raw
 // bytes the caller then zeroes. The keyring is how a session keeps a key that
 // opens format 1 and format 2, AES-GCM and whatever comes next, without ever
-// holding raw key bytes.
+// holding raw key bytes. The handles live in a private field, not a public
+// property: nothing outside this module can read or replace them.
 class Keyring {
-  constructor(handles) {
-    this.handles = handles;
-    Object.freeze(this);
+  #handles;
+  constructor(token, handles) {
+    if (token !== KEYRING_TOKEN) throw new Error('Keyring is constructed only by importAeadKey');
+    this.#handles = handles;
+  }
+  handleFor(aeadId) {
+    return this.#handles.get(aeadId);
   }
 }
 
@@ -59,8 +92,10 @@ class Keyring {
 export async function importAeadKey(raw, usages = ['encrypt', 'decrypt']) {
   assertRawKeyLength(raw);
   const handles = new Map();
+  // Snapshots the AEADs registered at this moment: a script registering a
+  // further id must run before this call, or that id is simply absent here.
   for (const [id, impl] of AEADS) handles.set(id, await impl.importKey(raw, usages));
-  return new Keyring(handles);
+  return new Keyring(KEYRING_TOKEN, handles);
 }
 
 // A bare CryptoKey is refused: nothing here can tell which AEAD, or which key
@@ -68,7 +103,7 @@ export async function importAeadKey(raw, usages = ['encrypt', 'decrypt']) {
 // lies about the algorithm.
 async function handleFor(key, aeadId, usage) {
   if (key instanceof Keyring) {
-    const handle = key.handles.get(aeadId);
+    const handle = key.handleFor(aeadId);
     if (!handle) throw new UnsupportedAlgorithmError('aead', aeadId);
     return handle;
   }

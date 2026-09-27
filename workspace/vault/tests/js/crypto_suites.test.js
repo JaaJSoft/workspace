@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const { loadScript } = require('../../../common/tests/js/loader');
 
 const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..');
@@ -20,6 +21,20 @@ function freshBundle() {
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   }).vaultCrypto;
+}
+
+function bundleWithTestAead() {
+  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js', {
+    crypto: globalThis.crypto, TextEncoder: globalThis.TextEncoder,
+    TextDecoder: globalThis.TextDecoder, btoa: globalThis.btoa, atob: globalThis.atob,
+  });
+  vm.runInContext(
+    fs.readFileSync(
+      path.join(REPO_ROOT, 'workspace/vault/ui/static/vault/ui/js/test_suites/test_aead.js'), 'utf8'
+    ),
+    ctx,
+  );
+  return ctx.vaultCrypto;
 }
 
 const V = freshBundle();
@@ -83,8 +98,41 @@ test('registerAead refuses an id the manifest does not declare, and a second reg
   const B = freshBundle();
   const impl = { ivLength: 16, importKey: async () => ({}), seal: async () => new Uint8Array(),
     open: async () => new Uint8Array() };
-  assert.throws(() => B.registerAead(0x33, impl));
-  assert.throws(() => B.registerAead(0x01, impl));
+  assert.throws(() => B.registerAead(0x33, impl), /not declared/);
+  assert.throws(() => B.registerAead(0x01, { ...impl, ivLength: 12 }), /already registered/);
+});
+
+test('registerAead accepts the declared test id with a correct impl', () => {
+  const B = freshBundle();
+  const impl = { ivLength: 16, importKey: async () => ({}), seal: async () => new Uint8Array(),
+    open: async () => new Uint8Array() };
+  B.registerAead(0xf0, impl);
+  assert.deepEqual(Array.from(B.implementedIds('aead')), [0x01, 0xf0]);
+});
+
+test('registerAead refuses an id that is not a genuine integer', () => {
+  const B = freshBundle();
+  const impl = { ivLength: 16, importKey: async () => ({}), seal: async () => new Uint8Array(),
+    open: async () => new Uint8Array() };
+  // '1' as a string, and 'constructor' aliasing the manifest's prototype chain.
+  assert.throws(() => B.registerAead('1', impl), /integer/);
+  assert.throws(() => B.registerAead('constructor', impl), /integer/);
+  assert.throws(() => B.registerAead(1.5, impl), /integer/);
+  assert.throws(() => B.registerAead(-1, impl), /integer/);
+  assert.throws(() => B.registerAead(256, impl), /integer/);
+});
+
+test('registerAead refuses an impl whose ivLength disagrees with the manifest', () => {
+  const B = freshBundle();
+  const impl = { ivLength: 12, importKey: async () => ({}), seal: async () => new Uint8Array(),
+    open: async () => new Uint8Array() };
+  assert.throws(() => B.registerAead(0xf0, impl), /iv_length/);
+});
+
+test('a keyring hides its handles and cannot be constructed from outside', async () => {
+  const ring = await V.importAeadKey(KEY);
+  assert.equal(ring.handles, undefined);
+  assert.throws(() => new ring.constructor(new Map()));
 });
 
 test('a format 2 header byte is authenticated', async () => {
@@ -96,4 +144,13 @@ test('a format 2 header byte is authenticated', async () => {
     await assert.rejects(V.open(ring, raw, V.AD.entryFieldAd(ENTRY, 'password')),
       (err) => err.name !== 'UnsupportedAlgorithmError');
   }
+});
+
+test('the registered test aead opens beside AES-GCM under one keyring', async () => {
+  const T = bundleWithTestAead();
+  assert.deepEqual(Array.from(T.implementedIds('aead')), [0x01, 0xf0]);
+  const ring = await T.importAeadKey(KEY);
+  const aesGcm = await T.seal(ring, new TextEncoder().encode('a'), T.AD.entryFieldAd(ENTRY, 'password'),
+    { keyVersion: 1, kdfId: T.KDF_HKDF_SHA256 });
+  assert.equal(new TextDecoder().decode(await T.open(ring, aesGcm, T.AD.entryFieldAd(ENTRY, 'password'))), 'a');
 });

@@ -33,8 +33,16 @@ export function implementedIds(axis) {
 // A 'test' entry is readable once something registered it - which only the
 // test-suite script does. Anything not implemented is unsupported, whatever
 // the manifest says: declared is not the same as readable.
+// Object.hasOwn, not a bracket lookup: MANIFEST[axis] is a plain object, and
+// 'constructor' or another Object.prototype name would otherwise resolve
+// through the prototype chain to a value that is truthy but names no suite.
+function ownEntry(axis, id) {
+  const key = String(id);
+  return Object.hasOwn(MANIFEST[axis], key) ? MANIFEST[axis][key] : null;
+}
+
 export function suiteEntry(axis, id) {
-  const entry = MANIFEST[axis][String(id)];
+  const entry = ownEntry(axis, id);
   if (!entry || !IMPLEMENTED[axis] || !IMPLEMENTED[axis].has(Number(id))) {
     throw new UnsupportedAlgorithmError(axis, id);
   }
@@ -42,7 +50,7 @@ export function suiteEntry(axis, id) {
 }
 
 export function declaredEntry(axis, id) {
-  return MANIFEST[axis][String(id)];
+  return ownEntry(axis, id);
 }
 
 export function hpkeEntry(format) {

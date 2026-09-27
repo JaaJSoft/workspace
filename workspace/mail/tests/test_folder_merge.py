@@ -1,3 +1,4 @@
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -316,14 +317,18 @@ class SentCopyTargetTests(FolderMergeTestMixin, TestCase):
 
         merge_folder(self.envoyes, self.sent)
 
-        with patch("workspace.mail.services.imap_messages.connect_imap") as connect:
+        with (
+            patch("workspace.mail.services.imap_messages.connect_imap") as connect,
+            tempfile.TemporaryFile() as message,
+        ):
             conn = connect.return_value
             conn.select.return_value = ("OK", [b""])
             conn.uid.return_value = ("OK", [b""])
-            conn.append.return_value = ("OK", [b""])
+            conn._simple_command.return_value = ("OK", [b""])
             from workspace.mail.services.imap_messages import append_to_sent
 
-            append_to_sent(self.account, b"Message-ID: <x@example.com>\r\n\r\nbody")
+            message.write(b"Message-ID: <x@example.com>\r\n\r\nbody")
+            append_to_sent(self.account, message, "<x@example.com>")
 
         selected = conn.select.call_args[0][0]
         self.assertIn("Sent", selected)

@@ -33,6 +33,8 @@ services:
       - OAUTH_GENERIC_SCOPES=${OAUTH_GENERIC_SCOPES:-}
       - OAUTH_GENERIC_IMAP_HOST=${OAUTH_GENERIC_IMAP_HOST:-}
       - OAUTH_GENERIC_SMTP_HOST=${OAUTH_GENERIC_SMTP_HOST:-}
+      # Bytes of attachments per outgoing email
+      - MAIL_MAX_ATTACHMENTS_SIZE=${MAIL_MAX_ATTACHMENTS_SIZE:-26214400}
       # OIDC login / SSO (optional). Run `manage.py oidc_discover <issuer>`
       # to get the four OIDC_OP_* endpoints. Redirect URI: <origin>/oidc/callback
       - OIDC_RP_CLIENT_ID=${OIDC_RP_CLIENT_ID:-}

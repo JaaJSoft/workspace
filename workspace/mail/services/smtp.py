@@ -1,13 +1,16 @@
 """SMTP service for sending emails."""
 
 import base64
+import io
 import logging
 import smtplib
+import tempfile
+import uuid
+from email.generator import BytesGenerator
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr, formatdate, make_msgid
-from typing import NamedTuple
 
 from workspace.common.logging import scrub
 
@@ -58,6 +61,16 @@ def test_smtp_connection(account):
         return False, str(e)
 
 
+# Bytes of an attachment encoded per step. A multiple of 57, the payload of
+# one 76-character base64 line, so only the last line of a part is short.
+_BASE64_CHUNK = 57 * 1024
+
+# Bytes handed to the socket per send while streaming DATA.
+_SEND_CHUNK = 64 * 1024
+
+_CRLF = b"\r\n"
+
+
 def _build_mime(
     account,
     to=None,
@@ -72,12 +85,11 @@ def _build_mime(
     in_reply_to="",
     references="",
 ):
-    """Assemble the MIME message object. See build_draft_message for the
-    parameters.
+    """Assemble the MIME message. See build_draft_message for the parameters.
 
-    Each attachment is read exactly once here, so a caller that needs two
-    serializations of the same message must build it once and re-serialize
-    the returned object rather than calling this twice.
+    Attachments are not read here: each part carries a unique placeholder
+    line instead of its payload, and the returned dict maps that line to the
+    attachment for `_write_mime` to stream in its place.
     """
     to = to or []
     cc = cc or []
@@ -111,12 +123,46 @@ def _build_mime(
         body_part.attach(MIMEText(f"<pre>{body_text}</pre>", "html", "utf-8"))
     msg.attach(body_part)
 
+    placeholders = {}
     for attachment in attachments:
-        part = MIMEApplication(attachment.read(), Name=attachment.name)
+        part = MIMEApplication(b"", Name=attachment.name)
         part["Content-Disposition"] = f'attachment; filename="{attachment.name}"'
+        placeholder = f"attachment-{uuid.uuid4().hex}"
+        part.set_payload(placeholder)
+        placeholders[placeholder.encode("ascii")] = attachment
         msg.attach(part)
 
-    return msg
+    return msg, placeholders
+
+
+def _write_mime(fp, msg, placeholders):
+    """Serialize `msg` into `fp` with CRLF line endings, streaming each
+    attachment's base64 in place of its placeholder line.
+
+    Every attachment is read exactly once, so a message needed in two
+    variants is written once and the variants carved out of the output.
+    """
+    skeleton = io.BytesIO()
+    BytesGenerator(
+        skeleton, mangle_from_=False, policy=msg.policy.clone(linesep="\r\n")
+    ).flatten(msg)
+    for line in skeleton.getvalue().splitlines(keepends=True):
+        attachment = placeholders.get(line.rstrip(_CRLF))
+        if attachment is None:
+            fp.write(line)
+        else:
+            _write_base64(fp, attachment)
+
+
+def _write_base64(fp, stream):
+    pending = b""
+    while chunk := stream.read(_BASE64_CHUNK):
+        pending += chunk
+        whole_lines = len(pending) - len(pending) % 57
+        fp.write(base64.encodebytes(pending[:whole_lines]).replace(b"\n", _CRLF))
+        pending = pending[whole_lines:]
+    if pending:
+        fp.write(base64.encodebytes(pending).replace(b"\n", _CRLF))
 
 
 def build_draft_message(
@@ -162,7 +208,7 @@ def build_draft_message(
         Both must be derived server-side from a stored message - a client
         supplied value would let a caller graft a reply onto any thread.
     """
-    msg = _build_mime(
+    msg, placeholders = _build_mime(
         account,
         to=to,
         subject=subject,
@@ -176,22 +222,46 @@ def build_draft_message(
         in_reply_to=in_reply_to,
         references=references,
     )
-    return msg.as_string().encode("utf-8")
+    raw = io.BytesIO()
+    _write_mime(raw, msg, placeholders)
+    return raw.getvalue()
 
 
-class SentMessage(NamedTuple):
-    """The two byte variants of a message that was just sent.
+class SentMessage:
+    """A message that was just sent, serialized once into a temporary file.
 
-    They differ by the Bcc header alone and share everything else,
-    Message-ID included, so the archived copy threads with the replies the
-    outgoing one attracts.
+    The file holds the copy to archive in Sent: the Bcc header first, then
+    the bytes that went out. The two variants differ by that header alone
+    and share everything else, Message-ID included, so the archived copy
+    threads with the replies the outgoing one attracts. Close it once the
+    Sent copy is filed.
     """
 
-    outgoing: bytes
-    """Handed to sendmail - no Bcc header, the list is in the envelope."""
+    def __init__(self, file, message_id, outgoing_start):
+        self.file = file
+        self.message_id = message_id
+        self._outgoing_start = outgoing_start
 
-    archived: bytes
-    """Handed to IMAP APPEND - carries Bcc so Sent records who got a copy."""
+    def outgoing(self):
+        """The file, positioned on the bytes handed to SMTP: no Bcc header,
+        the list is in the envelope."""
+        self.file.seek(self._outgoing_start)
+        return self.file
+
+    def archived(self):
+        """The file, positioned on the Sent copy: it carries the Bcc header,
+        so Sent records who got a copy."""
+        self.file.seek(0)
+        return self.file
+
+    def close(self):
+        self.file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
 
 
 def send_email(
@@ -209,15 +279,14 @@ def send_email(
 ):
     """Send an email through the account's SMTP server.
 
-    Returns a `SentMessage` carrying both serializations: the bytes that
-    went out (no Bcc header) and the ones to archive in Sent (Bcc header
-    included). The message is assembled once because the attachment
-    streams can only be read once.
+    Returns the open `SentMessage` for the caller to archive, then close.
+    The message goes through a temporary file rather than memory: its
+    attachments can weigh hundreds of MB, and the web worker is shared.
     """
     cc = cc or []
     bcc = bcc or []
 
-    msg = _build_mime(
+    msg, placeholders = _build_mime(
         account,
         to=to,
         subject=subject,
@@ -230,19 +299,25 @@ def send_email(
         in_reply_to=in_reply_to,
         references=references,
     )
-    outgoing = msg.as_string().encode("utf-8")
-
-    if bcc:
-        msg["Bcc"] = ", ".join(bcc)
-    archived = msg.as_string().encode("utf-8")
-
-    all_recipients = to + cc + bcc
-
-    server = connect_smtp(account)
+    # A real file, never an in-memory spool: the Sent copy is APPENDed from
+    # a memory map of it.
+    file = tempfile.TemporaryFile()
     try:
-        server.sendmail(account.email, all_recipients, outgoing.decode("utf-8"))
-    finally:
-        server.quit()
+        if bcc:
+            file.write(
+                msg.policy.clone(linesep="\r\n").fold_binary("Bcc", ", ".join(bcc))
+            )
+        message = SentMessage(file, msg["Message-ID"], outgoing_start=file.tell())
+        _write_mime(file, msg, placeholders)
+
+        server = connect_smtp(account)
+        try:
+            _transmit(server, account.email, to + cc + bcc, message.outgoing())
+        finally:
+            server.quit()
+    except BaseException:
+        file.close()
+        raise
 
     logger.info(
         "Email sent from %s to %s: %s",
@@ -250,4 +325,52 @@ def send_email(
         scrub(to),
         scrub(subject),
     )
-    return SentMessage(outgoing=outgoing, archived=archived)
+    return message
+
+
+def _transmit(server, sender, recipients, stream):
+    """`smtplib.SMTP.sendmail`, reading the message from `stream`.
+
+    sendmail wants the message as one bytes object and copies it twice more
+    while dot-stuffing and terminating it. The stream is already CRLF, so
+    all that is left is dot-stuffing it line by line on the way out.
+    """
+    server.ehlo_or_helo_if_needed()
+    start = stream.tell()
+    size = stream.seek(0, io.SEEK_END) - start
+    stream.seek(start)
+    options = []
+    if server.does_esmtp and server.has_extn("size"):
+        options.append(f"size={size}")
+
+    code, resp = server.mail(sender, options)
+    if code != 250:
+        raise smtplib.SMTPSenderRefused(code, resp, sender)
+    refused = {}
+    for recipient in recipients:
+        code, resp = server.rcpt(recipient)
+        if code not in (250, 251):
+            refused[recipient] = (code, resp)
+    if len(refused) == len(recipients):
+        raise smtplib.SMTPRecipientsRefused(refused)
+
+    code, resp = server.docmd("DATA")
+    if code != 354:
+        raise smtplib.SMTPDataError(code, resp)
+    buffer = bytearray()
+    line = _CRLF
+    for line in stream:
+        if line.startswith(b"."):
+            buffer += b"."
+        buffer += line
+        if len(buffer) >= _SEND_CHUNK:
+            server.send(bytes(buffer))
+            buffer.clear()
+    if not line.endswith(_CRLF):
+        buffer += _CRLF
+    buffer += b"." + _CRLF
+    server.send(bytes(buffer))
+    code, resp = server.getreply()
+    if code != 250:
+        raise smtplib.SMTPDataError(code, resp)
+    return refused

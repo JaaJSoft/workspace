@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
@@ -43,7 +44,7 @@ class MailSendView(APIView):
         attachments = list(request.FILES.getlist("attachments", []))
 
         file_uuids = d.get("file_uuids", [])
-        ws_file_handles = []
+        ws_files = []
         if file_uuids:
             from workspace.files.services.files import FileService
 
@@ -55,18 +56,30 @@ class MailSendView(APIView):
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            for ws_file in ws_files:
-                try:
-                    handle = ws_file.content.open("rb")
-                    handle.name = ws_file.name
-                    ws_file_handles.append(handle)
-                    attachments.append(handle)
-                except FileNotFoundError, OSError:
-                    close_all(ws_file_handles)
-                    return Response(
-                        {"detail": f'File "{ws_file.name}" content is unavailable.'},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
+
+        total_size = sum(upload.size for upload in attachments) + sum(
+            ws_file.size or 0 for ws_file in ws_files
+        )
+        if total_size > settings.MAIL_MAX_ATTACHMENTS_SIZE:
+            limit_mb = settings.MAIL_MAX_ATTACHMENTS_SIZE / (1024 * 1024)
+            return Response(
+                {"detail": f"Attachments are limited to {limit_mb:g} MB per email."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ws_file_handles = []
+        for ws_file in ws_files:
+            try:
+                handle = ws_file.content.open("rb")
+                handle.name = ws_file.name
+                ws_file_handles.append(handle)
+                attachments.append(handle)
+            except FileNotFoundError, OSError:
+                close_all(ws_file_handles)
+                return Response(
+                    {"detail": f'File "{ws_file.name}" content is unavailable.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             # A Sent copy that did not land is not a failed send: deliver_email

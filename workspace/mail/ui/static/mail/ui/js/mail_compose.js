@@ -294,7 +294,7 @@ window.mailComposeMixin = function mailComposeMixin() {
           if (draftId) this._deleteDraft(draftId);
         } else {
           const data = await res.json().catch(() => ({}));
-          this.compose.error = data.error || 'Failed to send email';
+          this.compose.error = data.detail || data.error || 'Failed to send email';
         }
       } catch (e) {
         // Network failure (offline, DNS, CORS, abort) - fetch rejects without

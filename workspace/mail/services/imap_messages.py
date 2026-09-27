@@ -2,6 +2,7 @@
 
 import imaplib
 import logging
+import mmap
 import time
 
 from django.utils import timezone as dj_timezone
@@ -90,10 +91,11 @@ def _set_flag(account, message, flag, add):
             pass
 
 
-def append_to_sent(account, raw_message_bytes):
+def append_to_sent(account, message_file, msg_id):
     """Append a sent message to the account's Sent folder via IMAP APPEND.
 
-    Checks first whether the server already auto-copied the message
+    `message_file` is a real file holding the whole message with CRLF line
+    endings. Checks first whether the server already auto-copied the message
     (Gmail, Outlook, etc.) by searching for its Message-ID to avoid duplicates.
     """
     from ..models import MailFolder
@@ -105,13 +107,6 @@ def append_to_sent(account, raw_message_bytes):
             "No Sent folder found for %s, skipping APPEND", scrub(account.email)
         )
         return
-
-    # Extract Message-ID from raw bytes to check for duplicates
-    msg_id = None
-    for line in raw_message_bytes.split(b"\n"):
-        if line.lower().startswith(b"message-id:"):
-            msg_id = line.split(b":", 1)[1].strip().decode(errors="replace")
-            break
 
     conn = connect_imap(account)
     try:
@@ -129,11 +124,8 @@ def append_to_sent(account, raw_message_bytes):
 
         # Not found - append it ourselves
         conn.select(_quote_mailbox(sent_folder.name), readonly=False)
-        status, _ = conn.append(
-            _quote_mailbox(sent_folder.name),
-            "(\\Seen)",
-            imaplib.Time2Internaldate(time.time()),
-            raw_message_bytes,
+        status, _ = _append_file(
+            conn, _quote_mailbox(sent_folder.name), "(\\Seen)", message_file
         )
         if status == "OK":
             logger.info(
@@ -154,6 +146,21 @@ def append_to_sent(account, raw_message_bytes):
             # Best-effort cleanup: a logout failure on an already-broken
             # connection isn't actionable.
             pass
+
+
+def _append_file(conn, mailbox, flags, message_file):
+    """`imaplib.IMAP4.append` for a message held in a file.
+
+    append wants the message as bytes and copies it once more to normalize
+    its line endings. A memory map of the file, already CRLF, goes out as
+    the literal instead: sent from the page cache, never copied to the heap.
+    """
+    message_file.flush()
+    with mmap.mmap(message_file.fileno(), 0, access=mmap.ACCESS_READ) as literal:
+        conn.literal = literal
+        return conn._simple_command(
+            "APPEND", mailbox, flags, imaplib.Time2Internaldate(time.time())
+        )
 
 
 def save_draft(account, raw_message_bytes, old_uid=None):

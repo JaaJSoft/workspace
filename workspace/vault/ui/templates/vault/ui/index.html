@@ -117,15 +117,15 @@
           {% endcomment %}
           <template x-if="unsupportedCount > 0">
             <inline-alert type="warning" icon="refresh-cw" class="mx-5 mt-4">
-              <span class="text-sm">
-                <b>
-                  <span x-text="unsupportedCount"></span>
-                  <span x-text="unsupportedCount === 1 ? 'entry needs' : 'entries need'"></span>
-                  a newer version of the app.
-                </b>
-                They were saved by a more recent version than the one this page is running.
-                Reload the page to read them.
-              </span>
+            <span class="text-sm">
+              <b>
+                <span x-text="unsupportedCount"></span>
+                <span x-text="unsupportedCount === 1 ? 'entry needs' : 'entries need'"></span>
+                a newer version of the app.
+              </b>
+              They were saved by a more recent version than the one this page is running.
+              Reload the page to read them.
+            </span>
             </inline-alert>
           </template>
 

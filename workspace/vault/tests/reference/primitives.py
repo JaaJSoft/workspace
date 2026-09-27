@@ -8,10 +8,12 @@ convenient high-level call that drops a parameter this hierarchy depends on,
 the low-level API is used instead and the comment says why.
 """
 
+import hmac
 import unicodedata
 
 import cbor2
 from argon2.low_level import Type, core, ffi, lib
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
@@ -21,12 +23,14 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
 )
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pyhpke import AEADId, CipherSuite, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
-from . import wire
+from . import ad, wire
+from .suites import CURRENT_SUITE
 
 ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
 
@@ -157,40 +161,93 @@ def hkdf(ikm: bytes, info: bytes, length: int = 32) -> bytes:
 AEAD_KEY_LENGTH = 32
 
 
+class _AesGcm:
+    iv_length = 12
+
+    def _check(self, key):
+        # AESGCM infers the variant from the key length, so a 16-byte key would
+        # quietly produce AES-128-GCM under a header declaring AES-256-GCM.
+        if len(key) != AEAD_KEY_LENGTH:
+            raise ValueError(f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}")
+
+    def seal(self, key, iv, plaintext, associated_data):
+        self._check(key)
+        return AESGCM(key).encrypt(iv, plaintext, associated_data)
+
+    def open(self, key, iv, ciphertext, associated_data):
+        self._check(key)
+        return AESGCM(key).decrypt(iv, ciphertext, associated_data)
+
+
+class _TestCtrHmac:
+    """AES-256-CTR then HMAC-SHA256 - exists only to prove the dispatch.
+
+    Structurally unlike AES-GCM on purpose (another id, a 16-byte nonce,
+    encrypt-then-MAC), so a reader that ignored the id and decrypted as GCM
+    regardless would fail on it.
+    """
+
+    iv_length = 16
+    _TAG_LENGTH = 32
+
+    def working_keys(self, key):
+        if len(key) != AEAD_KEY_LENGTH:
+            raise ValueError(f"test aead needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}")
+        return hkdf(key, b"test-aead|enc"), hkdf(key, b"test-aead|mac")
+
+    def _tag(self, mac_key, iv, ciphertext, associated_data):
+        message = len(associated_data).to_bytes(8, "big") + associated_data + iv + ciphertext
+        return hmac.new(mac_key, message, "sha256").digest()
+
+    def seal(self, key, iv, plaintext, associated_data):
+        enc_key, mac_key = self.working_keys(key)
+        encryptor = Cipher(algorithms.AES(enc_key), modes.CTR(iv)).encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        return ciphertext + self._tag(mac_key, iv, ciphertext, associated_data)
+
+    def open(self, key, iv, sealed, associated_data):
+        enc_key, mac_key = self.working_keys(key)
+        if len(sealed) < self._TAG_LENGTH:
+            raise InvalidTag()
+        ciphertext, tag = sealed[: -self._TAG_LENGTH], sealed[-self._TAG_LENGTH :]
+        if not hmac.compare_digest(tag, self._tag(mac_key, iv, ciphertext, associated_data)):
+            raise InvalidTag()
+        decryptor = Cipher(algorithms.AES(enc_key), modes.CTR(iv)).decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
+
+
+AEADS = {wire.AEAD_AES_256_GCM: _AesGcm(), wire.AEAD_TEST_CTR_HMAC: _TestCtrHmac()}
+
+
 def aead_seal(
     key: bytes,
     plaintext: bytes,
-    associated_data: bytes,
+    associated_data,
     *,
     iv: bytes,
     key_version: int,
     kdf_id: int,
+    aead_id: int | None = None,
+    format_version: int | None = None,
 ) -> bytes:
-    # AESGCM infers the variant from the key length, so a 16-byte key would
-    # quietly produce AES-128-GCM under a header still declaring AES-256-GCM.
-    if len(key) != AEAD_KEY_LENGTH:
-        raise ValueError(
-            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
-        )
-    ciphertext = AESGCM(key).encrypt(iv, plaintext, associated_data)
-    return wire.encode_ciphertext(
-        aead_id=wire.AEAD_AES_256_GCM,
-        kdf_id=kdf_id,
-        key_version=key_version,
-        iv=iv,
-        ciphertext=ciphertext,
-    )
+    aead_id = CURRENT_SUITE["aead_id"] if aead_id is None else aead_id
+    format_version = CURRENT_SUITE["format_version"] if format_version is None else format_version
+    # The header is built first because format 2 authenticates it.
+    header = wire.encode_ciphertext(
+        format_version=format_version, aead_id=aead_id, kdf_id=kdf_id,
+        key_version=key_version, iv=iv, ciphertext=b"",
+    )[: wire.HEADER_LENGTH]
+    sealed = AEADS[aead_id].seal(key, iv, plaintext, ad.associated_data(associated_data, header))
+    return header + iv + sealed
 
 
-def aead_open(key: bytes, raw: bytes, associated_data: bytes) -> bytes:
-    if len(key) != AEAD_KEY_LENGTH:
-        raise ValueError(
-            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
-        )
+def aead_open(key: bytes, raw: bytes, associated_data) -> bytes:
     decoded = wire.decode_ciphertext(raw)
     # An open failure is surfaced as-is. Never retried with another AD, never
     # returned as partial plaintext. Retrying turns the AD into an oracle.
-    return AESGCM(key).decrypt(decoded.iv, decoded.ciphertext, associated_data)
+    return AEADS[decoded.aead_id].open(
+        key, decoded.iv, decoded.ciphertext, ad.associated_data(associated_data, decoded.header)
+    )
 
 
 def generate_kex_keypair() -> X25519PrivateKey:

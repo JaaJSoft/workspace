@@ -79,6 +79,7 @@ class AssociatedDataTests(SimpleTestCase):
     ENTRY = "0192f3a4-5b6c-7d8e-9f01-23456789abcd"
     USER = "0192f3a4-1111-7d8e-9f01-23456789abcd"
     VAULT = "0192f3a4-2222-7d8e-9f01-23456789abcd"
+    FORMAT_1_HEADER = bytes([1, 0, 0, 0, 0, 12])
 
     def test_the_catalogue_is_pinned_byte_for_byte(self):
         """These strings ARE the contract - there is no document above them.
@@ -91,13 +92,17 @@ class AssociatedDataTests(SimpleTestCase):
             ad.entry_key_info(self.ENTRY), f"v1|entry-key|{self.ENTRY}".encode()
         )
         self.assertEqual(
-            ad.kex_priv_ad(self.USER), f"v1|account-kex-priv|{self.USER}".encode()
+            ad.associated_data(ad.kex_priv_ad(self.USER), self.FORMAT_1_HEADER),
+            f"v1|account-kex-priv|{self.USER}".encode(),
         )
         self.assertEqual(
-            ad.sig_priv_ad(self.USER), f"v1|account-sig-priv|{self.USER}".encode()
+            ad.associated_data(ad.sig_priv_ad(self.USER), self.FORMAT_1_HEADER),
+            f"v1|account-sig-priv|{self.USER}".encode(),
         )
         self.assertEqual(
-            ad.entry_field_ad(self.ENTRY, "password"),
+            ad.associated_data(
+                ad.entry_field_ad(self.ENTRY, "password"), self.FORMAT_1_HEADER
+            ),
             f"v1|entry-field|{self.ENTRY}|password".encode(),
         )
         self.assertEqual(
@@ -121,7 +126,9 @@ class AssociatedDataTests(SimpleTestCase):
         for value in (
             ad.unwrap_info(),
             ad.entry_key_info(self.ENTRY),
-            ad.entry_field_ad(self.ENTRY, "password"),
+            ad.associated_data(
+                ad.entry_field_ad(self.ENTRY, "password"), self.FORMAT_1_HEADER
+            ),
             ad.vault_key_info(self.VAULT, self.USER),
         ):
             value.decode("ascii")
@@ -539,7 +546,9 @@ class VaultMetadataCatalogueTests(SimpleTestCase):
 
     def test_the_field_ad_names_the_field(self):
         self.assertEqual(
-            ad.vault_field_ad(self.VAULT, "name"),
+            ad.associated_data(
+                ad.vault_field_ad(self.VAULT, "name"), bytes([1, 0, 0, 0, 0, 12])
+            ),
             b"v1|vault-field|" + self.VAULT.encode() + b"|name",
         )
 
@@ -616,12 +625,13 @@ class VaultMetadataCatalogueTests(SimpleTestCase):
 
     def test_folder_and_tag_ad_are_closed_catalogues(self):
         target = "018f3f6e-0000-7000-8000-000000000001"
+        header = bytes([1, 0, 0, 0, 0, 12])
         self.assertEqual(
-            ad.folder_field_ad(target, "name"),
+            ad.associated_data(ad.folder_field_ad(target, "name"), header),
             b"v1|folder-field|018f3f6e-0000-7000-8000-000000000001|name",
         )
         self.assertEqual(
-            ad.tag_field_ad(target, "name"),
+            ad.associated_data(ad.tag_field_ad(target, "name"), header),
             b"v1|tag-field|018f3f6e-0000-7000-8000-000000000001|name",
         )
         with self.assertRaises(ValueError):

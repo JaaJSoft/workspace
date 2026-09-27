@@ -1,6 +1,10 @@
+from cryptography.exceptions import InvalidTag
 from django.test import SimpleTestCase
 
-from .reference import suites, wire
+from .reference import ad, primitives, suites, wire
+
+KEY = bytes(range(32))
+ENTRY = "01890a5d-ac96-774b-bcce-b302099a8057"
 
 
 class ManifestShapeTests(SimpleTestCase):
@@ -68,3 +72,78 @@ class WireHeaderDispatchTests(SimpleTestCase):
             aead_id=0x01, kdf_id=0x01, key_version=1, iv=bytes(12), ciphertext=b"x"
         )
         self.assertEqual(raw[0], 2)
+
+
+class AssociatedDataTests(SimpleTestCase):
+    def test_format_1_is_the_v1_string_alone(self):
+        header = bytes([1, 1, 1, 0, 1, 12])
+        self.assertEqual(
+            ad.associated_data(ad.entry_field_ad(ENTRY, "password"), header),
+            f"v1|entry-field|{ENTRY}|password".encode(),
+        )
+
+    def test_format_2_prepends_the_header_to_the_v2_string(self):
+        header = bytes([2, 1, 1, 0, 1, 12])
+        self.assertEqual(
+            ad.associated_data(ad.entry_field_ad(ENTRY, "password"), header),
+            header + f"v2|entry-field|{ENTRY}|password".encode(),
+        )
+
+    def test_caller_owned_bytes_get_the_header_in_format_2_only(self):
+        self.assertEqual(ad.associated_data(b"raw", bytes([1, 1, 1, 0, 0, 12])), b"raw")
+        header = bytes([2, 1, 1, 0, 0, 12])
+        self.assertEqual(ad.associated_data(b"raw", header), header + b"raw")
+
+
+class AeadDispatchTests(SimpleTestCase):
+    def _seal(self, **kwargs):
+        iv = bytes(primitives.AEADS[kwargs.get("aead_id", 1)].iv_length)
+        return primitives.aead_seal(
+            KEY, b"secret", ad.entry_field_ad(ENTRY, "password"),
+            iv=iv, key_version=1, kdf_id=1, **kwargs,
+        )
+
+    def test_three_kinds_of_ciphertext_open_side_by_side(self):
+        for kwargs in ({"format_version": 1}, {"format_version": 2}, {"aead_id": 0xF0}):
+            with self.subTest(**kwargs):
+                raw = self._seal(**kwargs)
+                self.assertEqual(
+                    primitives.aead_open(KEY, raw, ad.entry_field_ad(ENTRY, "password")),
+                    b"secret",
+                )
+
+    def test_the_test_aead_is_not_aes_gcm_under_another_number(self):
+        raw = bytearray(self._seal(aead_id=0xF0))
+        raw[1] = 0x01  # claim AES-GCM
+        raw[5] = 12
+        with self.assertRaises((InvalidTag, ValueError)):
+            primitives.aead_open(KEY, bytes(raw), ad.entry_field_ad(ENTRY, "password"))
+
+    def test_a_format_2_header_byte_is_authenticated(self):
+        for index in (2, 3, 4):  # kdf_id, key_version high, key_version low
+            with self.subTest(index=index):
+                raw = bytearray(self._seal(format_version=2))
+                raw[index] ^= 0x01
+                with self.assertRaises(InvalidTag):
+                    primitives.aead_open(KEY, bytes(raw), ad.entry_field_ad(ENTRY, "password"))
+
+    def test_a_format_1_header_byte_is_not(self):
+        # The limit format 2 exists to close: kdf_id and key_version are
+        # outside format 1's associated data, so flipping one goes unnoticed.
+        raw = bytearray(self._seal(format_version=1))
+        raw[2] ^= 0x01
+        self.assertEqual(
+            primitives.aead_open(KEY, bytes(raw), ad.entry_field_ad(ENTRY, "password")),
+            b"secret",
+        )
+
+    def test_the_test_aead_never_uses_the_key_as_it_is(self):
+        # Same 32 bytes, two algorithms: its working keys are HKDF children.
+        aead = primitives.AEADS[0xF0]
+        self.assertNotIn(KEY, aead.working_keys(KEY))
+
+    def test_the_reference_implements_every_aead_the_manifest_declares(self):
+        # The reference reads every state, "test" included.
+        self.assertEqual(
+            sorted(primitives.AEADS), sorted(int(k) for k in suites.manifest()["aead"])
+        )

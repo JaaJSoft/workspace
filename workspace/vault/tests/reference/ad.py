@@ -9,7 +9,15 @@ An account is named by the UUID of its AccountIdentity row, never by a user
 id: Django's auth.User has an integer primary key, which is enumerable and
 reassignable once an account is deleted - an associated data string another
 human could one day inherit.
+
+An associated-data builder returns a `Context`, not bytes: which prefix it
+gets, and whether the wire header goes in front, is decided by the format of
+the ciphertext it opens.
 """
+
+from dataclasses import dataclass
+
+from .suites import entry
 
 # System identifiers an entry type may declare. Anything else a user adds is
 # mechanically prefixed, which is what keeps a custom field from colliding with
@@ -30,6 +38,33 @@ def _uuid(value: str) -> str:
     return str(value).lower()
 
 
+@dataclass(frozen=True)
+class Context:
+    """The part of an associated-data string that names a slot."""
+
+    body: str
+
+    def __post_init__(self):
+        # Field ids come from users; refusing non-ASCII here keeps the browser
+        # and this implementation from building different bytes.
+        self.body.encode("ascii")
+
+
+def associated_data(context, header: bytes) -> bytes:
+    """The associated data a ciphertext with this header was sealed under.
+
+    A ``bytes`` value is caller-owned (the archive passes its container
+    header): format 2 still puts the wire header in front of it.
+    """
+    fmt = entry("format", header[0])
+    body = (
+        (fmt["ad_prefix"] + context.body).encode("ascii")
+        if isinstance(context, Context)
+        else bytes(context)
+    )
+    return (header + body) if fmt["header_in_ad"] else body
+
+
 def unwrap_info() -> bytes:
     return b"v1|unwrap"
 
@@ -38,16 +73,16 @@ def entry_key_info(entry_uuid: str) -> bytes:
     return f"v1|entry-key|{_uuid(entry_uuid)}".encode("ascii")
 
 
-def kex_priv_ad(account_uuid: str) -> bytes:
-    return f"v1|account-kex-priv|{_uuid(account_uuid)}".encode("ascii")
+def kex_priv_ad(account_uuid: str) -> Context:
+    return Context(f"account-kex-priv|{_uuid(account_uuid)}")
 
 
-def sig_priv_ad(account_uuid: str) -> bytes:
-    return f"v1|account-sig-priv|{_uuid(account_uuid)}".encode("ascii")
+def sig_priv_ad(account_uuid: str) -> Context:
+    return Context(f"account-sig-priv|{_uuid(account_uuid)}")
 
 
-def entry_field_ad(entry_uuid: str, field_name: str) -> bytes:
-    return f"v1|entry-field|{_uuid(entry_uuid)}|{field_name}".encode("ascii")
+def entry_field_ad(entry_uuid: str, field_name: str) -> Context:
+    return Context(f"entry-field|{_uuid(entry_uuid)}|{field_name}")
 
 
 def kex_pub_payload(account_uuid: str, kex_pub_b64: str) -> bytes:
@@ -69,10 +104,10 @@ def vault_meta_info(vault_uuid: str) -> bytes:
     return f"v1|vault-meta|{_uuid(vault_uuid)}".encode("ascii")
 
 
-def vault_field_ad(vault_uuid: str, field: str) -> bytes:
+def vault_field_ad(vault_uuid: str, field: str) -> Context:
     if field not in VAULT_FIELD_IDS:
         raise ValueError(f"{field} is not a vault metadata field")
-    return f"v1|vault-field|{_uuid(vault_uuid)}|{field}".encode("ascii")
+    return Context(f"vault-field|{_uuid(vault_uuid)}|{field}")
 
 
 # Closed at one identifier each, for the reason the vault and entry catalogues
@@ -82,16 +117,16 @@ FOLDER_FIELD_IDS = ("name",)
 TAG_FIELD_IDS = ("name",)
 
 
-def folder_field_ad(folder_uuid: str, field: str) -> bytes:
+def folder_field_ad(folder_uuid: str, field: str) -> Context:
     if field not in FOLDER_FIELD_IDS:
         raise ValueError(f"{field} is not a folder metadata field")
-    return f"v1|folder-field|{_uuid(folder_uuid)}|{field}".encode("ascii")
+    return Context(f"folder-field|{_uuid(folder_uuid)}|{field}")
 
 
-def tag_field_ad(tag_uuid: str, field: str) -> bytes:
+def tag_field_ad(tag_uuid: str, field: str) -> Context:
     if field not in TAG_FIELD_IDS:
         raise ValueError(f"{field} is not a tag metadata field")
-    return f"v1|tag-field|{_uuid(tag_uuid)}|{field}".encode("ascii")
+    return Context(f"tag-field|{_uuid(tag_uuid)}|{field}")
 
 
 def qualify_field_id(field_id: str) -> str:

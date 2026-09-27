@@ -68,10 +68,34 @@
     replaces it whole, so the new listing starts at the top instead of
     inheriting the previous one's scroll offset.
   {% endcomment %}
-  <div id="photos-content" class="flex-1 h-full min-w-0 overflow-y-auto">
-    {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
-    {{ faces_enabled|json_script:"photos-faces-enabled" }}
-    {% block photos_content %}{% endblock %}
+  <div class="relative flex-1 h-full min-w-0">
+    <div id="photos-content" class="h-full overflow-y-auto">
+      {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
+      {{ faces_enabled|json_script:"photos-faces-enabled" }}
+      {% block photos_content %}{% endblock %}
+    </div>
+    {% comment %}
+      Outside #photos-content so it survives the swap. The fade-in waits
+      200 ms as a CSS transition-delay, so a view that answers at once never
+      flashes a veil, and the spinner turns on the compositor while the main
+      thread binds the new listing. It never takes pointer events.
+    {% endcomment %}
+    <div
+      x-show="contentLoading"
+      x-cloak
+      x-transition:enter="transition-opacity duration-150 delay-200"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      class="absolute inset-0 z-20 flex items-center justify-center bg-base-100/60 pointer-events-none"
+      role="status"
+      aria-live="polite"
+      data-testid="photos-loading"
+    >
+      <span class="inline-flex text-module animate-spin">
+        <i data-lucide="loader-circle" class="w-8 h-8"></i>
+      </span>
+      <span class="sr-only">Loading…</span>
+    </div>
   </div>
 
   {% comment %}

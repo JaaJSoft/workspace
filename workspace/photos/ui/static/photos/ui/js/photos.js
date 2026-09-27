@@ -162,6 +162,8 @@ window.photosApp = function photosApp() {
     _pickerGeneration: 0,
     _drag: null,
     _refreshing: null,
+    // A request that swaps #photos-content is in flight.
+    contentLoading: false,
 
     init() {
       window.addEventListener('open-properties', (e) => {
@@ -187,13 +189,36 @@ window.photosApp = function photosApp() {
       });
       this.$watch('selection', () => this._loadSelectionActions());
       this.syncAlbum();
+      this._trackContentLoading();
+    },
+
+    // alpine-ajax marks every swap target aria-busy for the life of its
+    // request, which tells a navigation apart from a header or page refresh.
+    // On ajax:error the event names no target, but the attribute is released
+    // right after dispatching, so it answers once this handler yields.
+    _trackContentLoading() {
+      const busy = () => document.getElementById('photos-content')?.getAttribute('aria-busy') === 'true';
+      document.addEventListener('ajax:send', () => {
+        if (busy()) this.contentLoading = true;
+      });
+      document.addEventListener('ajax:missing', (e) => {
+        if (e.detail?.target?.id === 'photos-content') this.contentLoading = false;
+      });
+      document.addEventListener('ajax:error', () => {
+        queueMicrotask(() => {
+          if (!busy()) this.contentLoading = false;
+        });
+      });
     },
 
     // A navigation replaced the listing: the tiles the selection named are
     // gone, and the album on screen may have changed.
     onMerged(event) {
       const id = event.target && event.target.id;
-      if (id === 'photos-content') this.clearSelection();
+      if (id === 'photos-content') {
+        this.contentLoading = false;
+        this.clearSelection();
+      }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
     },
 

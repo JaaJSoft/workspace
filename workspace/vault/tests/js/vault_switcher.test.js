@@ -182,6 +182,28 @@ test('a vault this build cannot read cannot be switched to either', async () => 
   assert.equal(component.vaultUuid, 'v-1');
 });
 
+test('a vault written by a newer build reads as a reload away, not as broken', () => {
+  const { component } = switcher();
+  const newer = { uuid: 'v-newer', unsupported: true, name: '' };
+  assert.equal(component.vaultIsDegraded(newer), true);
+  assert.equal(component.vaultIsStruckThrough(newer), false);
+  assert.equal(component.vaultRowLabel(newer), 'Newer version');
+  assert.match(component.vaultRowTitle(newer), /newer version of the app.*Reload the page/);
+});
+
+test('a vault nothing here can repair is struck through and carries no reload hint', () => {
+  const { component } = switcher();
+  for (const flag of ['tampered', 'unopenable', 'unreadable']) {
+    const vault = { uuid: 'v-' + flag, [flag]: true, name: '' };
+    assert.equal(component.vaultIsStruckThrough(vault), true, flag);
+    assert.equal(component.vaultRowLabel(vault), 'Unreadable vault', flag);
+    assert.equal(component.vaultRowTitle(vault), null, flag);
+  }
+  assert.equal(component.vaultIsStruckThrough(VAULT), false);
+  assert.equal(component.vaultRowLabel(VAULT), 'Personal');
+  assert.equal(component.vaultRowLabel({ uuid: 'v-x', name: '' }), 'Unnamed');
+});
+
 test('the search field appears only past a handful of vaults', () => {
   const { component } = switcher();
   assert.equal(component.switcherNeedsSearch(), false);

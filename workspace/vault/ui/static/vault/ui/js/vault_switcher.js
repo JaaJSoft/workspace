@@ -66,6 +66,26 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       );
     },
 
+    // Struck through: a vault nothing on this account can repair. One written
+    // by a newer build is fine and opens after a reload, so it is not.
+    vaultIsStruckThrough: function (vault) {
+      return this.vaultIsDegraded(vault) && !vault.unsupported;
+    },
+
+    // Short enough for the switcher's width; the full instruction is the
+    // row's tooltip.
+    vaultRowLabel: function (vault) {
+      if (vault.unsupported) return 'Newer version';
+      if (this.vaultIsDegraded(vault)) return 'Unreadable vault';
+      return vault.name || 'Unnamed';
+    },
+
+    vaultRowTitle: function (vault) {
+      return vault.unsupported
+        ? 'Saved by a newer version of the app. Reload the page to read it.'
+        : null;
+    },
+
     switchVault: async function (vault) {
       if (!vault || String(vault.uuid) === String(this.vaultUuid)) return;
       // No name to show and no contents to read: opening one would swap a

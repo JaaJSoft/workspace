@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from workspace.common.celery_claim import cas_finalize, dispatch_due
 from workspace.common.logging import scrub
-from workspace.common.task_priority import NORMAL_PRIORITY
+from workspace.common.task_priority import INTERACTIVE_PRIORITY, NORMAL_PRIORITY
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -122,13 +122,10 @@ def sync_single_account(self, account_uuid, claim_token=None):
     ``claim_token`` is the value the dispatcher CAS-wrote into
     ``last_sync_at``. Calls without a token skip the CAS: there is no
     dispatcher window to pin against, and the caller is asserting it does not
-    need the protection. They still take the lock.
-
-    Note that the UI's per-account refresh does not come through here - it
-    calls ``sync_account`` inline in the request (``MailAccountSyncView``), so
-    it takes neither guard. A manual refresh can therefore overlap a
-    background pass; that is pre-existing and absorbed by
-    ``UniqueConstraint(folder, imap_uid)``.
+    need the protection. They still take the lock: the UI's "sync now"
+    (``MailAccountSyncView``) comes through here without a token, so it never
+    overlaps a background pass - it is skipped, and the running pass is the
+    one the UI waits for.
     """
     from workspace.common.task_locks import task_lock
     from workspace.mail.models import MailAccount
@@ -176,3 +173,35 @@ def sync_single_account(self, account_uuid, claim_token=None):
             account.last_sync_error = str(e)
             account.save(update_fields=["last_sync_error", "updated_at"])
             return {"status": "error", "error": str(e)}
+
+
+@shared_task(name="mail.sync_folder", priority=INTERACTIVE_PRIORITY, max_retries=0)
+def sync_folder(folder_uuid):
+    """Sync the messages of one folder, e.g. Sent right after a message went out.
+
+    Takes no account lock: an overlapping account pass is absorbed by
+    ``UniqueConstraint(folder, imap_uid)``, and a folder pass is short enough
+    that waiting behind a whole account sync would cost more than it saves.
+    """
+    from workspace.mail.models import MailFolder
+    from workspace.mail.services.imap_sync import sync_folder_messages
+
+    try:
+        folder = MailFolder.objects.select_related("account", "account__owner").get(
+            uuid=folder_uuid, account__is_active=True
+        )
+    except MailFolder.DoesNotExist:
+        logger.warning("Folder %s not found or inactive", scrub(str(folder_uuid)))
+        return {"status": "not_found"}
+
+    try:
+        sync_folder_messages(folder.account, folder)
+    except Exception as e:
+        logger.warning(
+            "Failed to sync folder %s for %s: %s",
+            scrub(folder.name),
+            scrub(folder.account.email),
+            scrub(str(e)),
+        )
+        return {"status": "error", "error": str(e)}
+    return {"status": "ok"}

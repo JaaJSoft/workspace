@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.logging import scrub
+from workspace.common.task_priority import INTERACTIVE_PRIORITY
 
 from ..models import MailAccount
 from ..serializers import (
@@ -190,23 +191,41 @@ class MailAccountTestView(APIView):
 class MailAccountSyncView(APIView):
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(summary="Trigger sync for a mail account")
+    @extend_schema(
+        summary="Queue a sync for a mail account",
+        description=(
+            "Answers 202 once the sync is queued. The sync is over when the "
+            "account's `updated_at` moves past the returned one; "
+            "`last_sync_at` and `last_sync_error` then carry its outcome."
+        ),
+    )
     def post(self, request, uuid):
         try:
             account = MailAccount.objects.get(uuid=uuid, owner=request.user)
         except MailAccount.DoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        from ..services.imap_sync import sync_account
-
-        try:
-            sync_account(account)
-            return Response({"status": "ok", "last_sync_at": account.last_sync_at})
-        except Exception as e:
-            account.last_sync_error = str(e)
-            account.save(update_fields=["last_sync_error", "updated_at"])
-            logger.exception("Failed to sync account %s", scrub(account.email))
+        if not account.is_active:
             return Response(
-                {"status": "error", "error": "Sync failed"},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {"detail": "Account is inactive"}, status=status.HTTP_409_CONFLICT
             )
+
+        from ..tasks import sync_single_account
+
+        # Read before queueing: under eager Celery the sync has already run
+        # (and moved updated_at) by the time apply_async returns.
+        updated_at = MailAccountSerializer(account).data["updated_at"]
+        try:
+            sync_single_account.apply_async(
+                args=[str(account.uuid)], priority=INTERACTIVE_PRIORITY
+            )
+        except Exception:
+            logger.exception("Failed to queue sync for %s", scrub(account.email))
+            return Response(
+                {"status": "error", "error": "Sync could not be queued"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(
+            {"status": "queued", "updated_at": updated_at},
+            status=status.HTTP_202_ACCEPTED,
+        )

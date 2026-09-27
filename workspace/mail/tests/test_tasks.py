@@ -19,7 +19,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from workspace.mail import tasks as mail_tasks
-from workspace.mail.models import MailAccount
+from workspace.mail.models import MailAccount, MailFolder
 
 User = get_user_model()
 
@@ -404,3 +404,49 @@ class SyncSingleAccountTaskTests(TestCase):
         self.assertNotIn("\n", messages[0])
         # The address content survives, flattened onto one line.
         self.assertIn("forged admin login", messages[0])
+
+
+class SyncFolderTaskTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice", password="pass")
+
+    def _make_folder(self, account):
+        return MailFolder.objects.create(
+            account=account, name="Sent", display_name="Sent", folder_type="sent"
+        )
+
+    def test_syncs_the_folder(self):
+        folder = self._make_folder(_make_account(self.alice))
+        with mock.patch(
+            "workspace.mail.services.imap_sync.sync_folder_messages"
+        ) as sync_mock:
+            result = mail_tasks.sync_folder.run(str(folder.uuid))
+
+        self.assertEqual(result, {"status": "ok"})
+        self.assertEqual(sync_mock.call_args.args[1], folder)
+
+    def test_an_inactive_account_is_not_synced(self):
+        folder = self._make_folder(_make_account(self.alice, is_active=False))
+        with mock.patch(
+            "workspace.mail.services.imap_sync.sync_folder_messages"
+        ) as sync_mock:
+            result = mail_tasks.sync_folder.run(str(folder.uuid))
+
+        self.assertEqual(result, {"status": "not_found"})
+        sync_mock.assert_not_called()
+
+    def test_a_missing_folder_is_not_found(self):
+        result = mail_tasks.sync_folder.run(str(uuid4()))
+
+        self.assertEqual(result, {"status": "not_found"})
+
+    def test_a_sync_failure_is_reported_not_raised(self):
+        folder = self._make_folder(_make_account(self.alice))
+        with mock.patch(
+            "workspace.mail.services.imap_sync.sync_folder_messages",
+            side_effect=OSError("connection reset"),
+        ):
+            result = mail_tasks.sync_folder.run(str(folder.uuid))
+
+        self.assertEqual(result, {"status": "error", "error": "connection reset"})

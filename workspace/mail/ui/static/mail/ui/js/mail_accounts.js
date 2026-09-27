@@ -1,5 +1,8 @@
 // Mail accounts: add / edit / remove, OAuth, sync, test, autodiscover,
 // account context menu actions.
+const SYNC_POLL_INTERVAL_MS = 2000;
+const SYNC_POLL_ATTEMPTS = 150;
+
 window.mailAccountsMixin = function mailAccountsMixin() {
   return {
     // ----- Accounts -----
@@ -93,7 +96,11 @@ window.mailAccountsMixin = function mailAccountsMixin() {
     async syncAccount(uuid) {
       this.syncingAccounts[uuid] = true;
       try {
-        await this._fetch(`/api/v1/mail/accounts/${uuid}/sync`, { method: 'POST' });
+        const res = await this._fetch(`/api/v1/mail/accounts/${uuid}/sync`, { method: 'POST' });
+        if (res.status === 202) {
+          const { updated_at: queuedAt } = await res.json();
+          await this._waitForAccountSync(uuid, queuedAt);
+        }
         await this.loadFolders(uuid);
         if (this.selectedFolder?.account_id === uuid) {
           await this.loadMessages();
@@ -101,7 +108,34 @@ window.mailAccountsMixin = function mailAccountsMixin() {
       } finally {
         this.syncingAccounts[uuid] = false;
       }
+    },
 
+    // The sync runs in a worker; it is over once the account row moves past
+    // the updated_at the queueing request saw. Gives up after a few minutes
+    // so a lost task cannot spin forever - the next periodic pass still lands.
+    async _waitForAccountSync(uuid, queuedAt) {
+      const since = new Date(queuedAt).getTime();
+      for (let attempt = 0; attempt < SYNC_POLL_ATTEMPTS; attempt++) {
+        if (attempt > 0) await this._syncPollDelay();
+        let res;
+        try {
+          res = await this._fetch(`/api/v1/mail/accounts/${uuid}`);
+        } catch (e) {
+          continue;
+        }
+        if (res.status === 404) return;
+        if (!res.ok) continue;
+        const account = await res.json();
+        if (new Date(account.updated_at).getTime() > since) {
+          const idx = this.accounts.findIndex(a => a.uuid === uuid);
+          if (idx !== -1) this.accounts[idx] = { ...this.accounts[idx], ...account };
+          return;
+        }
+      }
+    },
+
+    _syncPollDelay() {
+      return new Promise(resolve => setTimeout(resolve, SYNC_POLL_INTERVAL_MS));
     },
 
     async testAccount(uuid) {

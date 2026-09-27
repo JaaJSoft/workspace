@@ -129,6 +129,7 @@ window.photosApp = function photosApp() {
     ...tags,
     ...window.propertiesPanelMixin(),
     ...window.photosFacesMixin(),
+    ...window.photosImportMixin(),
 
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
@@ -188,6 +189,7 @@ window.photosApp = function photosApp() {
         }
       });
       this.$watch('selection', () => this._loadSelectionActions());
+      this.initImport();
       this.syncAlbum();
       this._trackContentLoading();
     },

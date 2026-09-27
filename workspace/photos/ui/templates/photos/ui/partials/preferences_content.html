@@ -1,0 +1,35 @@
+{# Reads the import state of photosApp() (photos/ui/js/import.js). #}
+<div class="space-y-3">
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Import folder</label>
+    <div
+      class="input input-bordered input-sm w-full flex items-center gap-1 cursor-pointer pr-1"
+      @mousedown.prevent
+      @click="chooseImportFolder()"
+      data-testid="photos-import-folder"
+    >
+      <span class="text-sm flex-1 truncate" x-text="importFolderLabel()"></span>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square"
+        tabindex="-1"
+        aria-label="Change the import folder"
+      >
+        <i data-lucide="pen-line" class="w-3 h-3"></i>
+      </button>
+    </div>
+    <p class="text-xs text-base-content/60 mt-1">
+      Where Import and drag and drop save photos and videos. Anything in your Files shows up in Photos, wherever it is.
+    </p>
+  </div>
+  <div x-show="importFolder && !importFolder.group">
+    <label class="text-sm text-base-content/60 block mb-1">Back up your phone</label>
+    <p class="text-xs text-base-content/60">
+      Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to send new photos here automatically:
+    </p>
+    <code
+      class="block bg-base-200 px-2 py-1 mt-1 rounded text-xs break-all select-all"
+      x-text="importDavUrl()"
+    ></code>
+  </div>
+</div>

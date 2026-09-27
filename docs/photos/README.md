@@ -3,6 +3,26 @@
 The Photos module shows the photos and videos stored in Files as a timeline, by
 the day they were taken. It is a preview module.
 
+## Adding photos
+
+Every photo and video a user keeps in Files is in their library, whatever
+folder it sits in. There are three ways to add more:
+
+- **Import** in the Photos header (or on the empty timeline) opens the file
+  picker. **Dropping** photos and videos anywhere on the listing does the same.
+  Other kinds of files are skipped. A name already taken in the folder keeps
+  both files, so two cameras' `IMG_0001.JPG` never replace each other.
+- **The import folder** is where both land. It defaults to a root folder named
+  `Pictures`, created on the first import (an existing one is reused). The
+  Preferences panel of the Photos sidebar changes it to any personal or group
+  folder.
+- **Phone backup over WebDAV.** The same panel shows the WebDAV address of the
+  import folder (`https://<your-domain>/dav/Pictures/` by default). Point a sync
+  app at it - PhotoSync or FolderSync on Android, PhotoSync on iOS - with the
+  account's username and password (or an API token, from **Settings > API
+  Tokens**, when the account signs in through single sign-on). New photos then
+  reach the timeline on their own, once their capture date has been read.
+
 ## Face detection and grouping
 
 The **People** tab finds the faces in a user's photos and videos and groups the

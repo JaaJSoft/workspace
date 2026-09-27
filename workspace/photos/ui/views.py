@@ -48,6 +48,7 @@ from workspace.photos.services.face_review import (
     unassigned_faces,
     unnamed_queue,
 )
+from workspace.photos.services.import_folder import import_folder, import_folder_data
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -433,6 +434,8 @@ def _render_page(request, template, context):
     swap = bool(request.headers.get("X-Alpine-Request"))
     if swap:
         context["photos_shell"] = "photos/ui/swap.html"
+    else:
+        context["import_folder"] = import_folder_data(import_folder(request.user))
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
     if swap:

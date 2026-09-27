@@ -204,6 +204,16 @@ test('a vault nothing here can repair is struck through and carries no reload hi
   assert.equal(component.vaultRowLabel({ uuid: 'v-x', name: '' }), 'Unnamed');
 });
 
+test('the search matches the label a row shows, not only the decrypted name', () => {
+  const { component } = switcher();
+  const newer = { uuid: 'v-newer', unsupported: true, name: '' };
+  component.vaults = [VAULT, OTHER, newer];
+  component.switcherSearch = 'newer';
+  assert.deepEqual(Array.from(component.switcherVaults()), [newer]);
+  component.switcherSearch = 'work';
+  assert.deepEqual(Array.from(component.switcherVaults()), [OTHER]);
+});
+
 test('the search field appears only past a handful of vaults', () => {
   const { component } = switcher();
   assert.equal(component.switcherNeedsSearch(), false);

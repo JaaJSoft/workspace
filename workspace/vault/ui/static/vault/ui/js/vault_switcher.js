@@ -54,8 +54,11 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     switcherVaults: function () {
       const needle = this.switcherSearch.trim().toLowerCase();
       if (!needle) return this.vaults;
+      const self = this;
+      // The label, not the name: a vault this build cannot read has no name,
+      // and the search must find what the row shows.
       return this.vaults.filter(function (vault) {
-        return (vault.name || '').toLowerCase().includes(needle);
+        return self.vaultRowLabel(vault).toLowerCase().includes(needle);
       });
     },
 

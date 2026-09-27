@@ -17,27 +17,18 @@ anything that is not already RIFF/WAVE is transcoded here first.
 import io
 import logging
 import os
-import shutil
 import subprocess
 import tempfile
 
 from django.conf import settings
 
 from workspace.common.logging import scrub
+from workspace.files.services import ffmpeg
 
 from ..client import get_transcription_client
 
 logger = logging.getLogger(__name__)
 
-# Resolved at import so the absolute path is captured once from the deploy's
-# PATH and a later PATH change cannot redirect the call, as in
-# ai/services/video.py. ffmpeg ships in the image for video frames already.
-_FFMPEG = shutil.which("ffmpeg")
-if not _FFMPEG:
-    logger.info(
-        "ffmpeg not found on PATH; a voice message that is not already WAV "
-        "cannot be transcribed."
-    )
 
 # The recognition model reads 16 kHz mono 16-bit, and pinning the format here
 # also pins what a converted recording can weigh: seconds * rate * width.
@@ -82,7 +73,7 @@ def _to_wav(data: bytes) -> bytes | None:
     read whole into a worker. AI_ASR_TIMEOUT does not bound that, since ffmpeg
     decodes far faster than real time.
     """
-    if not _FFMPEG:
+    if not ffmpeg.FFMPEG:
         return None
     seconds = settings.CHAT_VOICE_MAX_SECONDS
     budget = seconds * _SAMPLE_RATE * _SAMPLE_WIDTH + _WAV_HEADER_SLACK
@@ -98,7 +89,7 @@ def _to_wav(data: bytes) -> bytes | None:
             # at the cap, rather than being decoded whole and then trimmed.
             subprocess.run(
                 [
-                    _FFMPEG,
+                    ffmpeg.FFMPEG,
                     "-t",
                     str(seconds),
                     "-i",

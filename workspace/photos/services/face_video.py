@@ -19,7 +19,6 @@ from workspace.common.logging import scrub
 from workspace.common.metrics import safe_histogram
 from workspace.files.services import ffmpeg
 
-from . import video
 from .face_grouping import max_distance
 from .face_images import Detection, detect_faces
 from .face_tracking import Tracker
@@ -29,6 +28,8 @@ logger = logging.getLogger(__name__)
 # Far above what the frame budget takes on an ordinary video, far below the
 # Celery time limit.
 _SAMPLING_TIMEOUT = 15 * 60
+# ffmpeg's scene score above which a frame starts a new shot.
+_SCENE_CHANGE = 0.3
 
 _FRAMES = safe_histogram(
     "workspace_photos_video_face_frames",
@@ -94,10 +95,10 @@ def _read(path, backend):
     duration = ffmpeg.duration(report)
     if duration is not None and duration > settings.PHOTOS_FACES_VIDEO_MAX_DURATION:
         return []
-    metadata = video.parse_report(report)
-    if not metadata.width or not metadata.height:
+    shown = ffmpeg.display_size(report)
+    if shown is None:
         return []
-    width, height = decode_size(metadata.width, metadata.height)
+    width, height = ffmpeg.fit(shown, settings.PHOTOS_FACES_VIDEO_DECODE_SIZE)
     max_frames = settings.PHOTOS_FACES_VIDEO_MAX_FRAMES
     # Half the budget covers the whole video at a regular pace, the other
     # half is left for the scene changes.
@@ -116,6 +117,7 @@ def _read(path, backend):
         size=(width, height),
         interval=interval,
         max_frames=max_frames,
+        scene=_SCENE_CHANGE,
         timeout=_SAMPLING_TIMEOUT,
     )
     start = ffmpeg.start_time(report)
@@ -137,10 +139,3 @@ def _read(path, backend):
             )
         )
     return faces
-
-
-def decode_size(width, height):
-    """*width* x *height* shrunk to PHOTOS_FACES_VIDEO_DECODE_SIZE on its
-    longest side, never enlarged."""
-    scale = min(1.0, settings.PHOTOS_FACES_VIDEO_DECODE_SIZE / max(width, height))
-    return max(1, round(width * scale)), max(1, round(height * scale))

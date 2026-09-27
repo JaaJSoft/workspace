@@ -133,6 +133,49 @@ def video_stream(report):
     return {}
 
 
+def display_size(report):
+    """(width, height) of the video of a :func:`probe` report as a player
+    shows it, the rotation the container carries applied; None when unknown.
+    """
+    stream = video_stream(report)
+    width, height = _positive(stream.get("width")), _positive(stream.get("height"))
+    if not width or not height:
+        return None
+    if _rotation(stream) % 180 == 90:
+        return height, width
+    return width, height
+
+
+def fit(size, max_side):
+    """*size* shrunk to *max_side* on its longest side, never enlarged."""
+    width, height = size
+    scale = min(1.0, max_side / max(width, height))
+    return max(1, round(width * scale)), max(1, round(height * scale))
+
+
+def _positive(value):
+    return value if isinstance(value, int) and value > 0 else None
+
+
+def _rotation(stream):
+    """The rotation a player applies, in degrees, from the display matrix
+    (current ffmpeg) or the ``rotate`` tag (older muxers)."""
+    for side_data in stream.get("side_data_list") or []:
+        if isinstance(side_data, dict) and "rotation" in side_data:
+            return _degrees(side_data["rotation"])
+    tags = stream.get("tags")
+    if not isinstance(tags, dict):
+        return 0
+    return _degrees({str(k).lower(): v for k, v in tags.items()}.get("rotate"))
+
+
+def _degrees(value):
+    try:
+        return round(float(value)) % 360
+    except TypeError, ValueError:
+        return 0
+
+
 def audio_stream(report):
     """The first audio stream of a :func:`probe` report, or ``{}``."""
     for stream in _streams(report):
@@ -196,20 +239,22 @@ def sample_frames(
     size,
     interval,
     max_frames,
-    scene=0.3,
+    scene=None,
     scene_gap=0.5,
     timeout=FRAME_TIMEOUT,
 ):
     """Hand frames of the video at *path* to *on_frame*; return their times.
 
     A frame is taken at the start, then whenever *interval* seconds have
-    passed since the last one taken, and at every scene change (ffmpeg's
-    scene score above *scene*) at least *scene_gap* seconds after it. At most
-    *max_frames* are taken, from the start: the budget runs out before the end
-    of a video with more scene changes than it allows.
+    passed since the last one taken. With *scene*, one is also taken at every
+    scene change (ffmpeg's scene score above *scene*) at least *scene_gap*
+    seconds after the last one. At most *max_frames* are taken, from the
+    start: the budget runs out before the end of a video with more scene
+    changes than it allows.
 
     *on_frame* receives ``(index, pixels)``: RGB24 bytes of exactly *size*
-    (width, height), displayed the way a player shows them. The returned list
+    (width, height, see :func:`display_size` and :func:`fit`), displayed the
+    way a player shows them. The returned list
     holds the time of each frame in ffmpeg's clock, in index order; it is only
     known once the video has been read, the frames stream while it decodes so
     that one of them at a time is held in memory.
@@ -217,10 +262,11 @@ def sample_frames(
     if not FFMPEG:
         raise MediaToolError("ffmpeg is not installed")
     width, height = size
-    selection = (
-        f"isnan(prev_selected_t)+gte(t-prev_selected_t,{interval:.3f})"
-        f"+gt(scene,{scene})*gte(t-prev_selected_t,{scene_gap:.3f})"
-    )
+    selection = f"isnan(prev_selected_t)+gte(t-prev_selected_t,{interval:.3f})"
+    if scene is not None:
+        # The scene score compares every decoded frame with the one before:
+        # only asked for when wanted.
+        selection += f"+gt(scene,{scene})*gte(t-prev_selected_t,{scene_gap:.3f})"
     command = [
         FFMPEG,
         "-nostdin",

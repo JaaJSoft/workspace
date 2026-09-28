@@ -121,6 +121,7 @@
             <i data-lucide="notebook-pen" class="w-4 h-4 text-module flex-shrink-0"></i>
             <input
               type="text"
+              x-ref="noteTitle"
               class="input input-ghost input-sm font-semibold flex-1 min-w-0"
               :value="selectedNote ? noteName(selectedNote) : ''"
               @change="renameNote($event.target.value)"

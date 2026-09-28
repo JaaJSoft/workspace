@@ -34,6 +34,12 @@
         <div class="min-w-0">
           <h2 class="text-lg font-semibold leading-tight" x-text="question()"></h2>
           <p class="text-sm text-base-content/60" x-text="subtitle()"></p>
+          <a
+            href="{{ unassigned_url }}"
+            x-target.push="photos-nav photos-content"
+            class="text-xs link link-hover text-module"
+            x-show="current().kind === 'loose'"
+          >See every face without anyone</a>
         </div>
       </div>
 

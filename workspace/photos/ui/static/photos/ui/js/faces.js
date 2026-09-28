@@ -1016,12 +1016,49 @@ window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
     ...window.faceSelectionMixin(),
     faces: [],
     total: 0,
+    groups: [],
 
     init() {
       const data = facesJson(dataId) || {};
       this.faces = data.faces || [];
       this.total = data.total || 0;
+      this.groups = data.groups || [];
       this.initFaceSelection();
+    },
+
+    // On a board of look-alike groups (each face carrying the index of its
+    // group in `groups`): the groups that still have faces, in page order.
+    // The faces like no other and like nobody named share one last section.
+    faceGroups() {
+      const byGroup = new Map();
+      for (const face of this.faces) {
+        if (!byGroup.has(face.group)) byGroup.set(face.group, []);
+        byGroup.get(face.group).push(face);
+      }
+      const groups = [];
+      const alone = [];
+      for (const [index, faces] of byGroup) {
+        const suggestion = (this.groups[index] || {}).suggestion || null;
+        if (faces.length === 1 && !suggestion) alone.push(faces[0]);
+        else groups.push({ index, faces, suggestion, alone: false });
+      }
+      if (alone.length) groups.push({ index: 'alone', faces: alone, suggestion: null, alone: true });
+      return groups;
+    },
+
+    selectGroup(group) {
+      this.selectFaces(group.faces.map((face) => face.uuid));
+    },
+
+    // The group is the person it looks like.
+    assignGroup(group) {
+      const person = group.suggestion;
+      if (!person) return null;
+      return this.applyFaceBatch(
+        { action: 'assign', person: person.uuid },
+        group.faces.map((face) => face.uuid),
+        person.name,
+      );
     },
 
     facesSettled(done, action) {

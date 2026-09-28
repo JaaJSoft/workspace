@@ -307,6 +307,62 @@ class ReviewPageTests(ReviewTestCase):
         self.assertEqual(self.client.get(REVIEW).status_code, 404)
 
 
+UNASSIGNED = "/photos/people/unassigned"
+
+
+class UnassignedPageTests(ReviewTestCase):
+    def test_lists_every_face_waiting_for_someone_by_look_alikes(self):
+        faces = [self.face("alice-1.png"), self.face("alice-2.png")]
+        for face in faces:
+            reject_face(face)
+        bob = self.face("bob.png")
+        Face.objects.filter(pk=bob.pk).update(cluster=None)
+
+        response = self.client.get(UNASSIGNED)
+
+        self.assertEqual(response.status_code, 200)
+        board = response.context["board"]
+        self.assertEqual(board["total"], 3)
+        # The two of Alice come first, as one group; Bob alone after them.
+        groups = [item["group"] for item in board["faces"]]
+        self.assertEqual(groups, [0, 0, 1])
+        self.assertCountEqual(
+            [item["uuid"] for item in board["faces"][:2]], [str(f.pk) for f in faces]
+        )
+        self.assertEqual(len(board["groups"]), 2)
+
+    def test_a_group_suggests_who_it_looks_like(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(cluster=None)
+        refresh_clusters([self.alice.pk])
+
+        response = self.client.get(UNASSIGNED)
+
+        (group,) = response.context["board"]["groups"]
+        self.assertEqual(group["suggestion"]["uuid"], str(self.contact.pk))
+
+    def test_the_people_tab_links_to_it_with_the_count(self):
+        reject_face(self.face("alice-2.png"))
+
+        response = self.client.get("/photos/people")
+
+        self.assertEqual(response.context["unassigned_count"], 1)
+        self.assertContains(response, f'href="{UNASSIGNED}"')
+
+    def test_nothing_waits(self):
+        response = self.client.get(UNASSIGNED)
+
+        self.assertEqual(response.context["board"]["faces"], [])
+        self.assertContains(response, "Every face has someone")
+
+    def test_goes_back_to_the_opt_in_when_face_grouping_is_off(self):
+        set_setting(self.user, MODULE, FACES_ENABLED, False)
+
+        response = self.client.get(UNASSIGNED)
+
+        self.assertRedirects(response, "/photos/people", fetch_redirect_response=False)
+
+
 class UnassignedGroupsTests(ReviewTestCase):
     def test_rejected_faces_wait_for_a_person(self):
         face = self.face("alice-2.png")

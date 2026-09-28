@@ -192,10 +192,15 @@ taken out of the group the answer settles, or left where they were, and come
 back on a card of their own. Cards that settle the most photos come first;
 *Skip* and the back arrow go round the queue.
 
+*Without anyone* on the People tab shows all the faces waiting for a person at
+once, look-alike groups side by side: a group can be given to the person it
+looks like in one click, or faces picked across groups corrected from the
+selection bar.
+
 ### Correcting several faces at once
 
-The *Faces* tab of a person's page and the hidden faces on the *Hidden* page
-are boards of face tiles: click to pick (Shift picks a
+The *Faces* tab of a person's page, the *Without anyone* page and the hidden
+faces on the *Hidden* page are boards of face tiles: click to pick (Shift picks a
 range), then act from the bar under them:
 
 - **This is...** puts the faces with a contact (their closest group, or one

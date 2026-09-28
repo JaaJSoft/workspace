@@ -683,15 +683,54 @@ test('assigning to a new name sends it with the picked faces', async () => {
   assert.deepEqual(requests[0].body, { action: 'assign', new_person: 'Léa', faces: ['a'] });
 });
 
-function plainBoard(data, options) {
+function plainBoard(data, options, globals = {}) {
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
     document: { getElementById: (id) => (id === 'board-data' ? { textContent: JSON.stringify(data) } : null) },
+    ...globals,
   });
   const component = ctx.faceBoard('board-data', options);
   component.$watch = () => {};
   component.init();
   return component;
 }
+
+test('a board of look-alike groups keeps each group together, and drops an emptied one', () => {
+  const component = plainBoard({
+    total: 5,
+    faces: [
+      { uuid: 'a', group: 0 }, { uuid: 'b', group: 0 },
+      { uuid: 'c', group: 1 }, { uuid: 'd', group: 2 }, { uuid: 'e', group: 3 },
+    ],
+    groups: [{ suggestion: NINA }, { suggestion: NOAH }, { suggestion: null }, { suggestion: null }],
+  });
+  const shape = () => Array.from(component.faceGroups(), (g) => [g.index, Array.from(g.faces, (f) => f.uuid)]);
+
+  // A lone face like someone named keeps its group; the others share one.
+  assert.deepEqual(shape(), [[0, ['a', 'b']], [1, ['c']], ['alone', ['d', 'e']]]);
+  component.facesSettled(['c', 'd', 'e'], 'hide');
+  assert.deepEqual(shape(), [[0, ['a', 'b']]]);
+});
+
+test('a group is said to be the person it looks like in one batch', async () => {
+  const requests = [];
+  const component = plainBoard(
+    { total: 2, faces: [{ uuid: 'a', group: 0 }, { uuid: 'b', group: 0 }], groups: [{ suggestion: NINA }] },
+    {},
+    {
+      getCSRFToken: () => 'token',
+      fetch: async (url, options) => {
+        requests.push(JSON.parse(options.body));
+        return { ok: true, status: 200, json: async () => ({ done: ['a', 'b'], skipped: [], undo: 't' }) };
+      },
+      AppAlert: { success() {}, warning() {}, error() {} },
+    },
+  );
+
+  await component.assignGroup(component.faceGroups()[0]);
+
+  assert.deepEqual(requests, [{ action: 'assign', person: 'n', faces: ['a', 'b'] }]);
+  assert.equal(component.faces.length, 0);
+});
 
 test('a board lets corrected faces go', () => {
   const component = plainBoard({ total: 3, faces: [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }] });

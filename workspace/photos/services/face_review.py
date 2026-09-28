@@ -219,6 +219,22 @@ def doubtful_faces(user):
     return result
 
 
+def _unassigned_faces(user):
+    return (
+        user_faces(user)
+        .filter(cluster__isnull=True)
+        .filter(
+            Q(assignment=Face.Assignment.REJECTED)
+            | Q(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
+        )
+    )
+
+
+def unassigned_count(user):
+    """How many faces wait for a person, past the ones a page reads."""
+    return _unassigned_faces(user).count()
+
+
 def unassigned_groups(user):
     """Faces in no cluster that still wait for a person, by look-alikes.
 
@@ -227,18 +243,12 @@ def unassigned_groups(user):
     behind a subject would bury the rest. The best faces are read first;
     the largest groups come first.
     """
-    faces = (
-        user_faces(user)
-        .filter(cluster__isnull=True)
-        .filter(
-            Q(assignment=Face.Assignment.REJECTED)
-            | Q(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
-        )
-    )
     rows = list(
-        faces.order_by("-quality", "pk").values_list(
-            "pk", "embedding", "file_id", "rejected_cluster__person_id"
-        )[:FACES_PER_PAGE]
+        _unassigned_faces(user)
+        .order_by("-quality", "pk")
+        .values_list("pk", "embedding", "file_id", "rejected_cluster__person_id")[
+            :FACES_PER_PAGE
+        ]
     )
     if not rows:
         return []

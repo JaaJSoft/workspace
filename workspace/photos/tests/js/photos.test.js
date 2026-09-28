@@ -1177,6 +1177,27 @@ test('a refused save puts the previous value back and says so', async () => {
   assert.equal(errors.length, 1);
 });
 
+test('a refused save does not undo a later change that went through', async () => {
+  const pending = [];
+  const errors = [];
+  const app = load({
+    document: withPrefsData('{"tile_shape": "square"}'),
+    fetch: () => new Promise((resolve) => pending.push(resolve)),
+    getCSRFToken: () => 't',
+    AppAlert: { error: (message) => errors.push(message) },
+  }).ctx.photosApp();
+
+  const first = app.savePhotoPref('tile_shape', 'original');
+  const second = app.savePhotoPref('tile_shape', 'square');
+  pending[1]({ ok: true });
+  await second;
+  pending[0]({ ok: false, status: 500 });
+  await first;
+
+  assert.equal(app.photoPrefs.tile_shape, 'square');
+  assert.equal(errors.length, 0);
+});
+
 // ── Video preview on hover ───────────────────────────────
 
 function fakeTimers() {

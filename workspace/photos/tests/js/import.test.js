@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function load({ folder = null, fetchResponse = null } = {}) {
+function load({ folder = null, fetchResponse = null, sortOk = () => true } = {}) {
   const added = [];
   const warnings = [];
   const requests = [];
@@ -25,7 +25,8 @@ function load({ folder = null, fetchResponse = null } = {}) {
     getCSRFToken: () => 'token',
     fetch: async (url, options) => {
       requests.push({ url, method: options.method, body: options.body });
-      return { ok: true, json: async () => fetchResponse };
+      const ok = url.endsWith('/by-date') ? sortOk() : true;
+      return { ok, json: async () => fetchResponse };
     },
     Alpine: { store: () => uploads },
     AppAlert: { warning: (message) => warnings.push(message), error: () => {} },
@@ -86,9 +87,9 @@ test('the WebDAV address points at a personal import folder, encoded', () => {
 
 const SORT_API = '/api/v1/photos/import-folder/by-date';
 
-async function importedTwo({ sortByDate }) {
+async function importedTwo({ sortByDate, sortOk }) {
   const folder = { uuid: 'f1', name: 'Pictures', path: 'Pictures', group: null };
-  const loaded = load({ fetchResponse: folder });
+  const loaded = load({ fetchResponse: folder, sortOk });
   loaded.mixin.photoPrefs = { import_by_date: sortByDate };
   // Something another page queued, into another folder.
   loaded.uploads.items.push({ id: 99, folderId: 'other', status: 'done', uuid: 'elsewhere' });
@@ -104,8 +105,8 @@ test('a finished import is reported for sorting, once, and only its own rows', a
   a.uuid = 'u-a';
   b.status = 'cancelled';
 
-  mixin._sortImportsByDate();
-  mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
 
   assert.deepEqual(requests, [
     { url: SORT_API, method: 'POST', body: JSON.stringify({ files: ['u-a'] }) },
@@ -118,11 +119,11 @@ test('a failed row waits for its retry before it is reported', async () => {
   a.status = 'done';
   a.uuid = 'u-a';
   b.status = 'failed';
-  mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
 
   b.status = 'done';
   b.uuid = 'u-b';
-  mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
 
   assert.deepEqual(
     requests.map((request) => JSON.parse(request.body).files),
@@ -141,4 +142,35 @@ test('with the preference off nothing is reported, not even later', async () => 
   mixin._sortImportsByDate();
 
   assert.equal(requests.length, 0);
+});
+
+test('a report the server refused goes again with the next one', async () => {
+  const answers = [false, true];
+  const { mixin, uploads, requests } = await importedTwo({ sortByDate: true, sortOk: () => answers.shift() });
+  for (const row of uploads.items.slice(1)) {
+    row.status = 'done';
+    row.uuid = `u-${row.id}`;
+  }
+
+  await mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
+  await mixin._sortImportsByDate();
+
+  assert.deepEqual(
+    requests.map((request) => JSON.parse(request.body).files),
+    [['u-2', 'u-3'], ['u-2', 'u-3']],
+  );
+});
+
+test('a report on its way is not sent twice', async () => {
+  const { mixin, uploads, requests } = await importedTwo({ sortByDate: true });
+  const [, a] = uploads.items;
+  a.status = 'done';
+  a.uuid = 'u-a';
+
+  const first = mixin._sortImportsByDate();
+  const second = mixin._sortImportsByDate();
+  await Promise.all([first, second]);
+
+  assert.equal(requests.length, 1);
 });

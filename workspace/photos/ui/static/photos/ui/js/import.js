@@ -36,6 +36,8 @@ window.photosImportMixin = function photosImportMixin() {
     // Upload queue rows this page imported and has not reported for sorting
     // by date yet (see _sortImportsByDate).
     _importedRows: new Set(),
+    // Those whose report is on its way, not to be sent twice.
+    _sortingRows: new Set(),
 
     initImport() {
       window.addEventListener('uploads-changed', () => {
@@ -103,24 +105,48 @@ window.photosImportMixin = function photosImportMixin() {
 
     // Reports what this page imported and the queue has finished, for the
     // server to file into year and month folders. Only these rows: the same
-    // queue also carries what other pages dropped into other folders.
-    _sortImportsByDate() {
+    // queue also carries what other pages dropped into other folders. A row
+    // leaves _importedRows once the server took its report; a refused one is
+    // sent again with the next report.
+    async _sortImportsByDate() {
       const rows = Alpine.store('uploads').items.filter(
         // A failed row can still be retried: it waits for its next outcome.
-        (row) => this._importedRows.has(row.id) && !['queued', 'uploading', 'failed'].includes(row.status)
+        (row) => this._importedRows.has(row.id)
+          && !this._sortingRows.has(row.id)
+          && !['queued', 'uploading', 'failed'].includes(row.status)
       );
-      for (const row of rows) this._importedRows.delete(row.id);
-      if (!this.photoPrefs.import_by_date) return;
-      const uuids = rows.filter((row) => row.status === 'done' && row.uuid).map((row) => row.uuid);
-      for (let i = 0; i < uuids.length; i += PHOTOS_IMPORT_BY_DATE_BATCH) {
-        fetch(PHOTOS_IMPORT_BY_DATE_API, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-          body: JSON.stringify({ files: uuids.slice(i, i + PHOTOS_IMPORT_BY_DATE_BATCH) }),
-        }).catch(() => {
-          // They stay in the import folder, where they already show up.
-        });
+      if (!this.photoPrefs.import_by_date) {
+        for (const row of rows) this._importedRows.delete(row.id);
+        return;
       }
+      const done = [];
+      for (const row of rows) {
+        if (row.status === 'done' && row.uuid) done.push(row);
+        else this._importedRows.delete(row.id);
+      }
+      const batches = [];
+      for (let i = 0; i < done.length; i += PHOTOS_IMPORT_BY_DATE_BATCH) {
+        batches.push(done.slice(i, i + PHOTOS_IMPORT_BY_DATE_BATCH));
+      }
+      await Promise.all(batches.map(async (batch) => {
+        for (const row of batch) this._sortingRows.add(row.id);
+        let ok = false;
+        try {
+          const response = await fetch(PHOTOS_IMPORT_BY_DATE_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify({ files: batch.map((row) => row.uuid) }),
+          });
+          ok = response.ok;
+        } catch (_) {
+          // Until a later report goes through, they stay in the import
+          // folder, where they already show up.
+        }
+        for (const row of batch) {
+          this._sortingRows.delete(row.id);
+          if (ok) this._importedRows.delete(row.id);
+        }
+      }));
     },
 
     async chooseImportFolder() {

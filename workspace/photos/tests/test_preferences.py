@@ -102,6 +102,10 @@ class DisplayPreferencesTests(PreferencesTestCase):
         for token in ("", "group:", "group:-1", "groups:1", "Mine", None, 3):
             self.assertFalse(is_scope_token(token), token)
 
+    def test_a_group_id_int_cannot_read_is_no_scope_token(self):
+        """A superscript two is a digit to str.isdigit, not to int()."""
+        self.assertFalse(is_scope_token("group:²"))
+
 
 class DefaultScopeTests(PreferencesTestCase):
     def setUp(self):
@@ -161,6 +165,11 @@ class DefaultScopeTests(PreferencesTestCase):
         set_setting(self.user, "photos", "default_scope", "all")
 
         response = self.client.get("/photos?scope=group:999")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_group_id_int_cannot_read_is_404(self):
+        response = self.client.get("/photos", {"scope": "group:²"})
 
         self.assertEqual(response.status_code, 404)
 

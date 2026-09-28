@@ -40,7 +40,7 @@ def is_scope_token(value):
     if value in SCOPE_CHOICES:
         return True
     prefix, _, group_id = value.partition(":")
-    return f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdigit()
+    return f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal()
 
 
 def _prefs(user):

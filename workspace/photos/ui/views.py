@@ -106,7 +106,7 @@ def _resolve_scope(user, token):
     if token in (MINE, SHARED, ALL):
         return token
     prefix, _, group_id = token.partition(":")
-    if f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdigit():
+    if f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal():
         return user.groups.filter(pk=int(group_id)).first()
     return None
 

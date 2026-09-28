@@ -45,17 +45,23 @@ def importable_files(user, file_uuids):
 
 def file_by_date(user, file_uuids):
     """Move each of *file_uuids* still at the top of the import folder into
-    its year and month folder. Returns how many moved."""
+    its year and month folder. Returns how many moved.
+
+    A file that fails for an unexpected reason stays where it is and the
+    batch goes on; the failures are raised together at the end, as an
+    ExceptionGroup, so the task still reports them.
+    """
     if not import_by_date(user):
         return 0
     tz = get_user_timezone(user)
     moved = 0
+    failures = []
     for file_obj in importable_files(user, file_uuids).select_related("parent"):
-        taken_at = _taken_at(file_obj)
-        if taken_at is None:
-            continue
-        day = timezone.localtime(taken_at, tz)
         try:
+            taken_at = _taken_at(file_obj)
+            if taken_at is None:
+                continue
+            day = timezone.localtime(taken_at, tz)
             _move_to_month(user, file_obj, day.year, day.month)
         except ValueError as exc:
             # A file named like the year or month folder, or a move the
@@ -64,7 +70,13 @@ def file_by_date(user, file_uuids):
                 "Could not file %s by date: %s", scrub(file_obj.name), scrub(str(exc))
             )
             continue
+        except Exception as exc:
+            logger.exception("Filing %s by date failed", scrub(file_obj.name))
+            failures.append(exc)
+            continue
         moved += 1
+    if failures:
+        raise ExceptionGroup(f"{len(failures)} import(s) not filed by date", failures)
     return moved
 
 

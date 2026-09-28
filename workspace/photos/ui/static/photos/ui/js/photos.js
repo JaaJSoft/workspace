@@ -151,6 +151,7 @@ window.photosApp = function photosApp() {
     tileSize: tile.size,
     _tileWidths: tile.widths,
     photoPrefs: photosPrefs(),
+    _prefVersions: {},
     _hoverPreview: null,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
     _ctxGeneration: 0,
@@ -277,10 +278,13 @@ window.photosApp = function photosApp() {
     },
 
     // ── Preferences ─────────────────────────────────────
-    // Applied at once; a refused write puts the previous value back.
+    // Applied at once; a refused write puts the previous value back, unless
+    // a later change of the same preference has been made since.
 
     savePhotoPref(key, value) {
       const previous = this.photoPrefs[key];
+      const version = (this._prefVersions[key] || 0) + 1;
+      this._prefVersions[key] = version;
       this.photoPrefs[key] = value;
       if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
       return fetch(`/api/v1/settings/photos/${key}`, {
@@ -292,6 +296,7 @@ window.photosApp = function photosApp() {
           if (!response.ok) throw new Error(String(response.status));
         })
         .catch(() => {
+          if (this._prefVersions[key] !== version) return;
           this.photoPrefs[key] = previous;
           window.AppAlert.error('Could not save the preference');
         });

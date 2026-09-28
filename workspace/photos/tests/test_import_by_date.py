@@ -162,6 +162,27 @@ class FileByDateTests(ImportByDateTestCase):
         self.assertEqual(photo.parent.group, family)
         self.assertEqual(photo.parent.parent.group, family)
 
+    def test_a_failing_file_does_not_stop_the_rest_of_the_batch(self):
+        first = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
+        second = make_photo(self.user, "b.jpg", _at(2024, 7, 15), parent=self.folder)
+        real_move = FileService.move
+
+        def move(file_obj, *args, **kwargs):
+            if file_obj.pk == first.pk:
+                raise OSError("storage unavailable")
+            return real_move(file_obj, *args, **kwargs)
+
+        with (
+            patch.object(FileService, "move", side_effect=move),
+            self.assertLogs("workspace.photos.services.import_by_date", "ERROR"),
+            self.assertRaises(ExceptionGroup) as raised,
+        ):
+            file_by_date(self.user, [first.uuid, second.uuid])
+
+        self.assertEqual([type(exc) for exc in raised.exception.exceptions], [OSError])
+        self.assertEqual(self._path(first), "Pictures/a.jpg")
+        self.assertEqual(self._path(second), "Pictures/2024/07/b.jpg")
+
     def test_the_task_files_for_its_user(self):
         photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), parent=self.folder)
 

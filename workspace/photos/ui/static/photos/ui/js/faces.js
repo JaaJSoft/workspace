@@ -1094,6 +1094,9 @@ window.facesReview = function facesReview() {
     searching: false,
     // The key of the card being settled.
     saving: null,
+    // The key of the card whose name field takes the keyboard next; that
+    // field focuses itself and clears it.
+    focusKey: null,
     _searchGeneration: 0,
     _searchTimer: null,
 
@@ -1252,7 +1255,7 @@ window.facesReview = function facesReview() {
       const option = this.options(card)[this.active];
       if (!option) return;
       const next = this.cards[this.cards.indexOf(card) + 1];
-      if (await this.pick(card, option) && next) this._focusInput(next);
+      if (await this.pick(card, option) && next) this.focusKey = next.key;
     },
 
     pick(card, option) {
@@ -1270,15 +1273,6 @@ window.facesReview = function facesReview() {
     hideCard(card) {
       if (!this.keptCount(card)) return null;
       return this._settle(card, { hide: true });
-    },
-
-    // Called once the answered card left the page: `$root` resolves from the
-    // element the call came from, which is gone by then.
-    _focusInput(card) {
-      this.$nextTick(() => {
-        const input = document.querySelector(`[data-review-input="${card.key}"]`);
-        if (input) input.focus();
-      });
     },
 
     // Sends the answer; true once the card is settled and left the list.

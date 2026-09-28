@@ -131,7 +131,7 @@
           :placeholder="card.guess ? 'Someone else? Type a name' : 'Who is this? Type a name'"
           autocomplete="off"
           aria-label="Name"
-          :data-review-input="card.key"
+          x-effect="if (focusKey === card.key) { focusKey = null; $nextTick(() => $el.focus()) }"
           :value="isActive(card) ? query : ''"
           :disabled="saving !== null"
           @focus="focusCard(card)"

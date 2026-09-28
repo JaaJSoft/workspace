@@ -500,6 +500,19 @@ test('a card asks the question its kind asks', () => {
   assert.equal(component.guessLabel(cluster), "It's Nina Petit");
 });
 
+test('enter in a card answers it and hands the keyboard to the next card', async () => {
+  const { component, requests } = reviewPage({
+    cards: [{ ...clusterCard('c1', 'f1'), guess: NINA }, clusterCard('c2', 'f2')],
+  });
+  const card = component.cards[0];
+  component.focusCard(card);
+
+  await component.pickActive(card);
+
+  assert.deepEqual(requests.map((r) => r.body), [{ person: 'n' }]);
+  assert.equal(component.focusKey, 'c2');
+});
+
 test('the typed name belongs to the card whose field is in use', () => {
   const { component } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
   const [first, second] = component.cards;

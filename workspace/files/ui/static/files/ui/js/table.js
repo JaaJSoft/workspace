@@ -744,14 +744,7 @@ window.fileTableControls = function fileTableControls() {
       if (key === 'Enter' || key === ' ') {
         e.preventDefault();
         if (this._nodeHasAction(data, 'open')) {
-          // A row carries a folder link; a card navigates through the
-          // hidden nav link, as a click on it does.
-          const link = this.$el.querySelector(`[data-uuid="${data.uuid}"] a[data-folder-link]`)
-            || document.querySelector('#folder-nav-push');
-          if (link) {
-            if (!link.hasAttribute('data-folder-link')) link.href = `/files/${data.uuid}`;
-            link.click();
-          }
+          window.folderNav.navigateTo(`/files/${data.uuid}`);
         } else if (this._nodeHasAction(data, 'view')) {
           window.dispatchEvent(new CustomEvent('open-file-viewer', {
             detail: { uuid: data.uuid, name: data.name, type: data.fileType }
@@ -1286,12 +1279,7 @@ window.viewToggle = function viewToggle() {
         }
         return;
       }
-      // Normal behavior: navigate to folder
-      const link = document.querySelector('#folder-nav-push');
-      if (link) {
-        link.href = url;
-        link.click();
-      }
+      window.folderNav.navigateTo(url);
     },
 
     openFileFromCard(event, uuid, name, fileType) {

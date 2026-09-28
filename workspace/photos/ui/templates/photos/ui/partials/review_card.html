@@ -5,8 +5,8 @@
   State and actions in facesReview() (faces.js).
 {% endcomment %}
 <section
-  class="rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 transition"
-  :class="{ 'opacity-60 pointer-events-none': saving === card.key, 'ring-2 ring-module/40': isActive(card) && pickerOpen }"
+  class="rounded-box border border-base-300 bg-base-100 p-3 sm:p-4 transition scroll-mt-20"
+  :class="{ 'opacity-60 pointer-events-none': saving === card.key, 'ring-2 ring-module/40': isActive(card) }"
   :aria-label="question(card)"
 >
   <div class="flex items-start gap-3 mb-3">
@@ -60,7 +60,7 @@
           :aria-pressed="isExcluded(card, face.uuid)"
           :title="isExcluded(card, face.uuid) ? 'Put back' : 'Not them: leave out'"
           :aria-label="isExcluded(card, face.uuid) ? 'Left out face, put back' : 'Face, leave out'"
-          @click="toggleExcluded(card, face.uuid)"
+          @click="toggleExcluded(card, face.uuid); keepKeyboard(card)"
         >
           <img
             :src="face.crop_url"
@@ -131,16 +131,14 @@
           :placeholder="card.guess ? 'Someone else? Type a name' : 'Who is this? Type a name'"
           autocomplete="off"
           aria-label="Name"
-          x-effect="if (focusKey === card.key) { focusKey = null; $nextTick(() => $el.focus()) }"
+          x-effect="if (focusRequest && focusRequest.key === card.key) { const scroll = focusRequest.scroll; focusRequest = null; $nextTick(() => focusField($el, scroll)) }"
           :value="isActive(card) ? query : ''"
           :disabled="saving !== null"
           @focus="focusCard(card)"
+          @click="openPicker(card)"
           @blur="closePicker()"
           @input="typeName(card, $event.target.value)"
-          @keydown.arrow-down.prevent="moveActive(card, 1)"
-          @keydown.arrow-up.prevent="moveActive(card, -1)"
-          @keydown.enter.prevent="pickActive(card)"
-          @keydown.escape="$event.target.blur()"
+          @keydown="onKeydown(card, $event)"
         />
         <span
           x-show="saving === card.key"
@@ -225,4 +223,17 @@
       Hide
     </button>
   </div>
+  <p
+    x-show="isActive(card)"
+    x-cloak
+    class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/50 max-sm:hidden"
+  >
+    <span><kbd class="kbd kbd-xs">↵</kbd> <span
+   x-text="pickerOpen ? 'pick the contact' : (card.guess ? guessLabel(card) : 'show contacts')"
+ ></span></span>
+    <span><kbd class="kbd kbd-xs">↑</kbd> <kbd class="kbd kbd-xs">↓</kbd> contacts</span>
+    <span><kbd class="kbd kbd-xs">Tab</kbd> next group</span>
+    <span><kbd class="kbd kbd-xs">Alt</kbd> <kbd class="kbd kbd-xs">H</kbd> hide</span>
+    <span><kbd class="kbd kbd-xs">Esc</kbd> close</span>
+  </p>
 </section>

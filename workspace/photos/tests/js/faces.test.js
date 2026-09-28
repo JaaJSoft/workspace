@@ -500,17 +500,87 @@ test('a card asks the question its kind asks', () => {
   assert.equal(component.guessLabel(cluster), "It's Nina Petit");
 });
 
-test('enter in a card answers it and hands the keyboard to the next card', async () => {
+const key = (k, extra = {}) => ({ key: k, code: '', altKey: false, shiftKey: false, preventDefault() { this.prevented = true; }, ...extra });
+
+test('the first card has the keyboard when the page opens', () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
+
+  assert.deepEqual({ ...component.focusRequest }, { key: 'c1', scroll: false });
+});
+
+test('enter answers with the guess and hands the keyboard to the next card', async () => {
   const { component, requests } = reviewPage({
     cards: [{ ...clusterCard('c1', 'f1'), guess: NINA }, clusterCard('c2', 'f2')],
   });
   const card = component.cards[0];
   component.focusCard(card);
 
-  await component.pickActive(card);
+  await component.onKeydown(card, key('Enter'));
+  await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(requests.map((r) => r.body), [{ person: 'n' }]);
-  assert.equal(component.focusKey, 'c2');
+  assert.deepEqual({ ...component.focusRequest }, { key: 'c2', scroll: true });
+});
+
+test('enter without a guess opens the contacts instead of taking the first one', () => {
+  const { component, requests } = reviewPage({ cards: [clusterCard('c1', 'f1')] });
+  const card = component.cards[0];
+  component.results = [NOAH];
+  component.focusCard(card);
+
+  component.onKeydown(card, key('Enter'));
+
+  assert.equal(component.pickerOpen, true);
+  assert.deepEqual(requests, []);
+  component.onKeydown(card, key('Enter'));
+  assert.deepEqual(requests.map((r) => r.body), [{ person: 'o' }]);
+});
+
+test('tab and shift+tab go from card to card, past the last one tab leaves the list', () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
+  const [first, second] = component.cards;
+
+  const forward = key('Tab');
+  component.onKeydown(first, forward);
+  assert.equal(forward.prevented, true);
+  assert.equal(component.focusRequest.key, 'c2');
+  component.onKeydown(second, key('Tab', { shiftKey: true }));
+  assert.equal(component.focusRequest.key, 'c1');
+  const out = key('Tab');
+  component.onKeydown(second, out);
+  assert.equal(out.prevented, undefined);
+});
+
+test('alt+h hides the card', async () => {
+  const { component, requests } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
+
+  await component.onKeydown(component.cards[0], key('˙', { altKey: true, code: 'KeyH' }));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(requests.map((r) => r.body), [{ hidden: true }]);
+});
+
+test('escape closes the contacts first, then clears the name', () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1')] });
+  const card = component.cards[0];
+  component.typeName(card, 'Lé');
+  clearTimeout(component._searchTimer);
+
+  component.onKeydown(card, key('Escape'));
+  assert.equal(component.pickerOpen, false);
+  assert.equal(component.query, 'Lé');
+  component.onKeydown(card, key('Escape'));
+  assert.equal(component.query, '');
+});
+
+test('a face clicked hands the keyboard back to its card, and a mouse answer moves on', async () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1', 'f2'), clusterCard('c2', 'f3')] });
+  const card = component.cards[0];
+
+  component.keepKeyboard(card);
+  assert.deepEqual({ ...component.focusRequest }, { key: 'c1', scroll: false });
+  await component.hideCard(card);
+  assert.equal(component.focusRequest.key, 'c2');
 });
 
 test('the typed name belongs to the card whose field is in use', () => {

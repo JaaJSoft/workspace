@@ -188,10 +188,16 @@ answered the same way whatever it holds:
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
-the card's field (Enter picks, then moves to the next card), or *Hide* for
-nobody to name. Faces left out are taken out of the group the answer settles,
+the card's field, or *Hide* for nobody to name. Faces left out are taken out of the group the answer settles,
 or left where they were, and come back in a card of their own. A settled card
 leaves the list; the cards settling the most photos come first, 30 at a time.
+
+The review runs from the keyboard: the card at hand has the focus in its name
+field, from the first card on and after each answer (on a touch screen, only
+after a keyboard answer). Enter takes the guess, or the highlighted contact
+once the list is open; the arrows open and walk the contacts, Tab and
+Shift+Tab move between cards, Alt+H hides, Escape closes the contacts then
+clears the name. Clicking a face hands the keyboard back to its card.
 
 ### Correcting several faces at once
 

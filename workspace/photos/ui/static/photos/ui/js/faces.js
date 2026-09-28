@@ -1094,17 +1094,23 @@ window.facesReview = function facesReview() {
     searching: false,
     // The key of the card being settled.
     saving: null,
-    // The key of the card whose name field takes the keyboard next; that
-    // field focuses itself and clears it.
-    focusKey: null,
+    // The card whose name field takes the keyboard next ({ key, scroll });
+    // that field focuses itself and clears it.
+    focusRequest: null,
     _searchGeneration: 0,
     _searchTimer: null,
+    // With a mouse and a keyboard, the name field of the card at hand always
+    // has the focus. On a touch screen, focusing it would open the keyboard
+    // after every tap, so it only follows a keyboard answer.
+    _keyboardFirst: true,
 
     init() {
       const data = facesJson('photos-review-data') || {};
       this.cards = (data.cards || []).map((card) => ({ ...card, excluded: [] }));
       this.left = data.left || 0;
+      this._keyboardFirst = !window.matchMedia || window.matchMedia('(pointer: fine)').matches;
       if (this.cards.length) this.searchReviewNames();
+      if (this.cards.length && this._keyboardFirst) this._requestFocus(this.cards[0], false);
     },
 
     destroy() {
@@ -1201,15 +1207,22 @@ window.facesReview = function facesReview() {
       return this.canAnswer(card) && (option.suggested || !this.guessRejectsAll(card));
     },
 
+    // The card's field got the focus: it is the card at hand. The contact
+    // list opens on a click, a typed letter or an arrow key, not on focus,
+    // so tabbing through the cards leaves them uncovered.
     focusCard(card) {
-      if (!this.isActive(card)) {
-        const typed = this.query !== '';
-        this.position = card.key;
-        this.query = '';
-        this.active = 0;
-        // The contacts found were for the other card's typed name.
-        if (typed) this._searchSoon(0);
-      }
+      if (this.isActive(card)) return;
+      const typed = this.query !== '';
+      this.position = card.key;
+      this.query = '';
+      this.active = 0;
+      this.pickerOpen = false;
+      // The contacts found were for the other card's typed name.
+      if (typed) this._searchSoon(0);
+    },
+
+    openPicker(card) {
+      this.focusCard(card);
       this.pickerOpen = true;
     },
 
@@ -1218,9 +1231,67 @@ window.facesReview = function facesReview() {
     },
 
     typeName(card, value) {
-      this.focusCard(card);
+      this.openPicker(card);
       this.query = value;
       this._searchSoon(250);
+    },
+
+    _requestFocus(card, scroll) {
+      this.focusRequest = { key: card.key, scroll };
+    },
+
+    // Run by the field the request names, from its x-effect.
+    focusField(el, scroll) {
+      el.focus({ preventScroll: true });
+      if (scroll) el.closest('section').scrollIntoView({ block: 'start', behavior: 'smooth' });
+    },
+
+    // A face clicked took the focus off the name field: give it back, so
+    // Enter still answers the card.
+    keepKeyboard(card) {
+      if (this._keyboardFirst) this._requestFocus(card, false);
+    },
+
+    _sibling(card, step) {
+      return this.cards[this.cards.indexOf(card) + step] || null;
+    },
+
+    // The keys of a card's name field: Enter answers, the arrows walk the
+    // contacts, Tab and Shift+Tab go to the next and previous card, Alt+H
+    // hides the card, Escape closes the contacts then clears the name.
+    onKeydown(card, event) {
+      if (event.altKey && event.code === 'KeyH') {
+        event.preventDefault();
+        this.hideCard(card, true);
+        return;
+      }
+      switch (event.key) {
+        case 'Enter':
+          event.preventDefault();
+          this.pickActive(card);
+          break;
+        case 'ArrowDown':
+          event.preventDefault();
+          this.moveActive(card, 1);
+          break;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.moveActive(card, -1);
+          break;
+        case 'Escape':
+          if (this.pickerOpen) this.closePicker();
+          else if (this.query) this.query = '';
+          break;
+        case 'Tab': {
+          const sibling = this._sibling(card, event.shiftKey ? -1 : 1);
+          if (sibling) {
+            event.preventDefault();
+            this._requestFocus(sibling, true);
+          }
+          break;
+        }
+        default:
+      }
     },
 
     _searchSoon(delay) {
@@ -1245,38 +1316,49 @@ window.facesReview = function facesReview() {
     },
 
     moveActive(card, step) {
+      if (!this.pickerOpen) {
+        this.openPicker(card);
+        return;
+      }
       const count = this.options(card).length;
       if (count) this.active = (this.active + step + count) % count;
     },
 
-    // Enter in a card's name field: the highlighted option, the guess while
-    // nothing is typed. The next card's field takes over the keyboard.
-    async pickActive(card) {
-      const option = this.options(card)[this.active];
-      if (!option) return;
-      const next = this.cards[this.cards.indexOf(card) + 1];
-      if (await this.pick(card, option) && next) this.focusKey = next.key;
+    // Enter in a card's name field: the highlighted contact while the list
+    // is open, otherwise the guess. Without a guess, a closed list opens
+    // rather than answering with a contact nobody looked at.
+    pickActive(card) {
+      const options = this.options(card);
+      const option = this.pickerOpen
+        ? options[this.active]
+        : options.find((o) => o.suggested);
+      if (!option) {
+        this.openPicker(card);
+        return null;
+      }
+      return this.pick(card, option, true);
     },
 
-    pick(card, option) {
+    pick(card, option, fromKeyboard = false) {
       if (!this.canPick(card, option)) return null;
       const answer = option.kind === 'create'
         ? { new_person: option.name, name: option.name }
         : { person: option.person.uuid, name: option.person.name };
-      return this._settle(card, answer);
+      return this._settle(card, answer, fromKeyboard);
     },
 
     pickGuess(card) {
       return card.guess ? this.pick(card, { kind: 'person', person: card.guess, suggested: true }) : null;
     },
 
-    hideCard(card) {
+    hideCard(card, fromKeyboard = false) {
       if (!this.keptCount(card)) return null;
-      return this._settle(card, { hide: true });
+      return this._settle(card, { hide: true }, fromKeyboard);
     },
 
-    // Sends the answer; true once the card is settled and left the list.
-    async _settle(card, answer) {
+    // Sends the answer; true once the card is settled and left the list. The
+    // card that takes its place gets the keyboard.
+    async _settle(card, answer, fromKeyboard = false) {
       if (this.saving !== null) return false;
       const faces = card.faces.map((face) => face.uuid);
       const left = faces.filter((uuid) => this.isExcluded(card, uuid));
@@ -1305,6 +1387,7 @@ window.facesReview = function facesReview() {
         this.saving = null;
       }
       this._announce(card, answer, main, undo);
+      const index = this.cards.indexOf(card);
       this.cards = this.cards.filter((c) => c !== card);
       this.left = Math.max(0, this.left - 1);
       if (this.isActive(card)) {
@@ -1313,7 +1396,12 @@ window.facesReview = function facesReview() {
         this.pickerOpen = false;
       }
       // What was left out, and the cards past this page, come now.
-      if (!this.cards.length) this._reloadQueue();
+      if (!this.cards.length) {
+        this._reloadQueue();
+        return true;
+      }
+      const next = this.cards[index] || this.cards[index - 1];
+      if (fromKeyboard || this._keyboardFirst) this._requestFocus(next, true);
       return true;
     },
 

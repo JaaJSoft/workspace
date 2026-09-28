@@ -277,12 +277,15 @@ test('adding a name is not offered when a contact has exactly that name', () => 
 
 function reviewPage({ cards = [], left = cards.length, responses = {}, alerts = [] } = {}) {
   const requests = [];
+  const events = [];
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
     document: {
       getElementById: (id) => (id === 'photos-review-data' ? { textContent: JSON.stringify({ cards, left }) } : null),
     },
     getCSRFToken: () => 'token',
     location: { pathname: '/photos/people/review', search: '' },
+    CustomEvent: class { constructor(type) { this.type = type; } },
+    dispatchEvent: (event) => { events.push(event.type); },
     fetch: async (url, options) => {
       // The contact search is not what these tests look at.
       if (url.includes('/persons')) return { ok: true, status: 200, json: async () => [] };
@@ -305,7 +308,7 @@ function reviewPage({ cards = [], left = cards.length, responses = {}, alerts = 
   component.$nextTick = () => {};
   component.$refs = {};
   component.init();
-  return { ctx, component, requests, alerts };
+  return { ctx, component, requests, alerts, events };
 }
 
 const faces = (...uuids) => uuids.map((uuid) => ({ uuid }));
@@ -325,6 +328,39 @@ test('naming an unnamed cluster takes the faces left out of it first', async () 
   ]);
   assert.equal(component.current().cluster, 'c2');
   assert.deepEqual(Array.from(component.excluded), []);
+});
+
+test('the undo of a named cluster clears the name, then puts back the faces left out', async () => {
+  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1', 'f2') };
+  const { component, requests, alerts, events } = reviewPage({
+    cards: [card, { ...card, cluster: 'c2' }],
+    responses: { [BATCH]: batchDone, '/api/v1/photos/faces/undo': { restored: 1 } },
+  });
+  component.toggleExcluded('f2');
+  await component.pick({ kind: 'person', person: NOAH });
+  requests.length = 0;
+
+  assert.equal(alerts[0].message, 'Named Noah');
+  await alerts[0].options.actions[0].onClick();
+
+  assert.deepEqual(requests.map((r) => [r.url, r.method, r.body]), [
+    ['/api/v1/photos/clusters/c1', 'PATCH', { person: null }],
+    ['/api/v1/photos/faces/undo', 'POST', { token: 't-reject' }],
+  ]);
+  assert.equal(alerts.at(-1).message, '1 face put back');
+  assert.deepEqual(events, ['photos-faces-changed']);
+});
+
+test('the undo of a hidden cluster shows it again', async () => {
+  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1') };
+  const { component, requests, alerts } = reviewPage({ cards: [card, { ...card, cluster: 'c2' }] });
+  await component.hideCurrent();
+  requests.length = 0;
+
+  await alerts[0].options.actions[0].onClick();
+
+  assert.deepEqual(requests.map((r) => r.body), [{ hidden: false }]);
+  assert.equal(alerts.at(-1).message, 'Put back');
 });
 
 test('saying yes to a person confirms the faces kept and takes the others out', async () => {

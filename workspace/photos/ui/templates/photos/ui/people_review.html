@@ -21,6 +21,7 @@
         {% if review.left %}
           <span
             class="ml-auto text-sm text-base-content/60 tabular-nums whitespace-nowrap"
+            x-show="left > 0"
             x-text="left === 1 ? '1 left' : left + ' left'"
           >{{ review.left }} left</span>
         {% endif %}

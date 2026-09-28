@@ -765,6 +765,28 @@ async function undoFaceBatch(tokens) {
   window.dispatchEvent(new CustomEvent('photos-faces-changed'));
 }
 
+// Undoes a review card's answer about an unnamed cluster: the cluster goes
+// back to unnamed (or visible), then the faces left out of it return. A
+// contact the answer created stays in People.
+async function undoClusterAnswer(cluster, answer, tokens) {
+  try {
+    await facesRequest(`${FACES_API}/clusters/${cluster}`, {
+      method: 'PATCH',
+      body: answer.hide ? { hidden: false } : { person: null },
+    });
+  } catch (err) {
+    window.AppAlert.error(err.message || 'Could not undo');
+    window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+    return;
+  }
+  if (tokens.length) {
+    await undoFaceBatch(tokens);
+    return;
+  }
+  window.AppAlert.success('Put back', { duration: 2500 });
+  window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+}
+
 // Spread into a board component, whose init() calls initFaceSelection().
 // The board defines facesSettled(done, action), which takes the corrected
 // faces off its own lists.
@@ -1260,7 +1282,10 @@ window.facesReview = function facesReview() {
 
     _announce(card, answer, main, undo) {
       if (card.kind === 'cluster') {
-        window.AppAlert.success(answer.hide ? 'Hidden' : `Named ${answer.name}`, { duration: 1500 });
+        window.AppAlert.success(answer.hide ? 'Hidden' : `Named ${answer.name}`, {
+          duration: 8000,
+          actions: [{ label: 'Undo', onClick: () => undoClusterAnswer(card.cluster, answer, undo) }],
+        });
         return;
       }
       if (!main) return;

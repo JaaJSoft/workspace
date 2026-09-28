@@ -43,18 +43,6 @@
             {% endif %}
           </a>
         {% endif %}
-        {% if not show_hidden and unassigned_count %}
-          <a
-            href="{{ unassigned_url }}"
-            x-target.push="photos-nav photos-content"
-            class="btn btn-ghost btn-sm gap-1"
-            title="Every face waiting for someone to say who it is"
-          >
-            <i data-lucide="user-round-search" class="w-4 h-4"></i>
-            <span class="max-sm:hidden">Without anyone</span>
-            <span class="badge badge-sm badge-ghost tabular-nums">{{ unassigned_count }}</span>
-          </a>
-        {% endif %}
         {% if show_hidden %}
           <a
             href="{{ people_url }}"

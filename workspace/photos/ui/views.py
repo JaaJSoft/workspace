@@ -42,7 +42,6 @@ from workspace.photos.services.face_review import (
     doubtful_faces,
     hidden_faces,
     person_faces,
-    unassigned_count,
     unassigned_groups,
     unnamed_count,
     unnamed_queue,
@@ -662,7 +661,6 @@ def people(request):
         ),
         "hidden_count": hidden_count if enabled else 0,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
-        "unassigned_count": unassigned_count(request.user) if enabled else 0,
         "progress": progress,
         "analyzing": progress is not None and progress["analyzed"] < progress["total"],
     }
@@ -683,7 +681,6 @@ def _people_shell_context(user):
         "favorites_url": _url_with({"favorites": "1"}),
         "albums": _sidebar_albums(user),
         "review_url": reverse("photos_ui:people_review"),
-        "unassigned_url": reverse("photos_ui:people_unassigned"),
         **_faces_context(user),
         **_display_context(user),
     }
@@ -737,6 +734,7 @@ def _review_cards(user):
     cards = [
         {
             "kind": "cluster",
+            "key": f"cluster-{item.cluster.pk}",
             "cluster": str(item.cluster.pk),
             "guess": _person_summary(item.suggestion) if item.suggestion else None,
             "cover_url": _crop_url(item.cluster.cover_id),
@@ -753,6 +751,7 @@ def _review_cards(user):
         cards.append(
             {
                 "kind": "check",
+                "key": f"check-{person['uuid']}",
                 "cluster": None,
                 "guess": person,
                 "cover_url": person["cover_url"],
@@ -767,6 +766,7 @@ def _review_cards(user):
         cards.append(
             {
                 "kind": "loose",
+                "key": f"loose-{group.face_ids[0]}",
                 "cluster": None,
                 "guess": _person_summary(group.suggestion)
                 if group.suggestion
@@ -828,40 +828,6 @@ def _person_views(who, active):
             "active": active == "faces",
         },
     ]
-
-
-@login_required
-@ensure_csrf_cookie
-def people_unassigned(request):
-    """Every face waiting for a person, look-alikes gathered: the whole
-    picture the review page asks about one group at a time."""
-    if not faces_available():
-        raise Http404
-    if not faces_enabled(request.user):
-        return redirect("photos_ui:people")
-    groups = unassigned_groups(request.user)
-    group_of = {pk: index for index, g in enumerate(groups) for pk in g.face_ids}
-    faces = _face_items([pk for group in groups for pk in group.face_ids])
-    for item in faces:
-        item["group"] = group_of[UUID(item["uuid"])]
-    total = unassigned_count(request.user)
-    context = {
-        **_people_shell_context(request.user),
-        "board": {
-            "faces": faces,
-            "total": total,
-            "groups": [
-                {
-                    "suggestion": (
-                        _person_summary(group.suggestion) if group.suggestion else None
-                    )
-                }
-                for group in groups
-            ],
-        },
-        "face_count": total,
-    }
-    return _render_page(request, "photos/ui/people_unassigned.html", context)
 
 
 @login_required

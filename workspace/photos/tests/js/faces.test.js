@@ -284,6 +284,8 @@ function reviewPage({ cards = [], left = cards.length, responses = {}, alerts = 
     },
     getCSRFToken: () => 'token',
     location: { pathname: '/photos/people/review', search: '' },
+    setTimeout,
+    clearTimeout,
     CustomEvent: class { constructor(type) { this.type = type; } },
     dispatchEvent: (event) => { events.push(event.type); },
     fetch: async (url, options) => {
@@ -315,29 +317,44 @@ const faces = (...uuids) => uuids.map((uuid) => ({ uuid }));
 const BATCH = '/api/v1/photos/faces/batch';
 const batchDone = (body) => ({ done: body.faces, skipped: [], undo: `t-${body.action}` });
 
-test('naming an unnamed cluster takes the faces left out of it first', async () => {
-  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1', 'f2', 'f3') };
-  const { component, requests } = reviewPage({ cards: [card, { ...card, cluster: 'c2' }], responses: { [BATCH]: batchDone } });
-  component.toggleExcluded('f2');
+const clusterCard = (key, ...uuids) => ({ key, kind: 'cluster', cluster: key, guess: null, faces: faces(...uuids) });
 
-  await component.pick({ kind: 'create', name: 'Léa' });
+test('naming an unnamed cluster takes the faces left out of it first', async () => {
+  const { component, requests } = reviewPage({
+    cards: [clusterCard('c1', 'f1', 'f2', 'f3'), clusterCard('c2', 'f4')],
+    responses: { [BATCH]: batchDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f2');
+
+  await component.pick(card, { kind: 'create', name: 'Léa' });
 
   assert.deepEqual(requests.map((r) => [r.url, r.method, r.body]), [
     [BATCH, 'POST', { action: 'reject', faces: ['f2'] }],
     ['/api/v1/photos/clusters/c1', 'PATCH', { new_person: 'Léa' }],
   ]);
-  assert.equal(component.current().cluster, 'c2');
-  assert.deepEqual(Array.from(component.excluded), []);
+  assert.deepEqual(Array.from(component.cards, (c) => c.key), ['c2']);
+});
+
+test('each card keeps its own faces left out', () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1', 'f2'), clusterCard('c2', 'f3')] });
+  const [first, second] = component.cards;
+
+  component.toggleExcluded(first, 'f1');
+
+  assert.equal(component.keptCount(first), 1);
+  assert.equal(component.keptCount(second), 1);
+  assert.equal(component.isExcluded(second, 'f1'), false);
 });
 
 test('the undo of a named cluster clears the name, then puts back the faces left out', async () => {
-  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1', 'f2') };
   const { component, requests, alerts, events } = reviewPage({
-    cards: [card, { ...card, cluster: 'c2' }],
+    cards: [clusterCard('c1', 'f1', 'f2'), clusterCard('c2', 'f3')],
     responses: { [BATCH]: batchDone, '/api/v1/photos/faces/undo': { restored: 1 } },
   });
-  component.toggleExcluded('f2');
-  await component.pick({ kind: 'person', person: NOAH });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f2');
+  await component.pick(card, { kind: 'person', person: NOAH });
   requests.length = 0;
 
   assert.equal(alerts[0].message, 'Named Noah');
@@ -352,9 +369,8 @@ test('the undo of a named cluster clears the name, then puts back the faces left
 });
 
 test('the undo of a hidden cluster shows it again', async () => {
-  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1') };
-  const { component, requests, alerts } = reviewPage({ cards: [card, { ...card, cluster: 'c2' }] });
-  await component.hideCurrent();
+  const { component, requests, alerts } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
+  await component.hideCard(component.cards[0]);
   requests.length = 0;
 
   await alerts[0].options.actions[0].onClick();
@@ -364,11 +380,14 @@ test('the undo of a hidden cluster shows it again', async () => {
 });
 
 test('saying yes to a person confirms the faces kept and takes the others out', async () => {
-  const card = { kind: 'check', guess: NINA, faces: faces('f1', 'f2') };
-  const { component, requests, alerts } = reviewPage({ cards: [card], responses: { [BATCH]: batchDone } });
-  component.toggleExcluded('f2');
+  const { component, requests, alerts } = reviewPage({
+    cards: [{ key: 'k', kind: 'check', guess: NINA, faces: faces('f1', 'f2') }],
+    responses: { [BATCH]: batchDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f2');
 
-  await component.pick(component.guessOption());
+  await component.pickGuess(card);
 
   assert.deepEqual(requests.map((r) => r.body), [
     { action: 'confirm', faces: ['f1'] },
@@ -380,37 +399,44 @@ test('saying yes to a person confirms the faces kept and takes the others out', 
 });
 
 test('leaving every face out makes the guess a no', async () => {
-  const card = { kind: 'check', guess: NINA, faces: faces('f1', 'f2') };
-  const { component, requests } = reviewPage({ cards: [card], responses: { [BATCH]: batchDone } });
-  component.toggleExcluded('f1');
-  component.toggleExcluded('f2');
+  const { component, requests } = reviewPage({
+    cards: [{ key: 'k', kind: 'check', guess: NINA, faces: faces('f1', 'f2') }],
+    responses: { [BATCH]: batchDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f1');
+  component.toggleExcluded(card, 'f2');
 
-  assert.equal(component.guessLabel(), 'None of them is Nina Petit');
-  assert.equal(component.canPick({ kind: 'create', name: 'Léa' }), false);
-  await component.pick(component.guessOption());
+  assert.equal(component.guessLabel(card), 'None of them is Nina Petit');
+  assert.equal(component.canPick(card, { kind: 'create', name: 'Léa' }), false);
+  await component.pickGuess(card);
 
   assert.deepEqual(requests.map((r) => r.body), [{ action: 'reject', faces: ['f1', 'f2'] }]);
 });
 
 test('naming someone else moves the kept faces and leaves the others be', async () => {
-  const card = { kind: 'check', guess: NINA, faces: faces('f1', 'f2') };
-  const { component, requests, alerts } = reviewPage({ cards: [card], responses: { [BATCH]: batchDone } });
-  component.toggleExcluded('f2');
+  const { component, requests, alerts } = reviewPage({
+    cards: [{ key: 'k', kind: 'check', guess: NINA, faces: faces('f1', 'f2') }],
+    responses: { [BATCH]: batchDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f2');
 
-  await component.pick({ kind: 'person', person: NOAH });
+  await component.pick(card, { kind: 'person', person: NOAH });
 
   assert.deepEqual(requests.map((r) => r.body), [{ action: 'assign', faces: ['f1'], person: 'o' }]);
   assert.equal(alerts[0].message, '1 face moved to Noah');
 });
 
 test('faces in no group are named or hidden, the ones left out stay', async () => {
-  const card = { kind: 'loose', guess: null, faces: faces('f1', 'f2', 'f3') };
-  const { component, requests } = reviewPage({ cards: [card, { ...card }], responses: { [BATCH]: batchDone } });
-  component.toggleExcluded('f3');
+  const loose = (key) => ({ key, kind: 'loose', guess: null, faces: faces('f1', 'f2', 'f3') });
+  const { component, requests } = reviewPage({ cards: [loose('a'), loose('b')], responses: { [BATCH]: batchDone } });
+  const [first, second] = component.cards;
+  component.toggleExcluded(first, 'f3');
+  component.toggleExcluded(second, 'f1');
 
-  await component.pick({ kind: 'create', name: 'Léa' });
-  component.toggleExcluded('f1');
-  await component.hideCurrent();
+  await component.pick(first, { kind: 'create', name: 'Léa' });
+  await component.hideCard(second);
 
   assert.deepEqual(requests.map((r) => r.body), [
     { action: 'assign', faces: ['f1', 'f2'], new_person: 'Léa' },
@@ -419,37 +445,39 @@ test('faces in no group are named or hidden, the ones left out stay', async () =
 });
 
 test('hiding an unnamed cluster hides the whole group', async () => {
-  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1') };
-  const { component, requests } = reviewPage({ cards: [card] });
+  const { component, requests } = reviewPage({ cards: [clusterCard('c1', 'f1')] });
 
-  await component.hideCurrent();
+  await component.hideCard(component.cards[0]);
 
   assert.deepEqual(requests.map((r) => [r.url, r.body]), [['/api/v1/photos/clusters/c1', { hidden: true }]]);
 });
 
 test('the last card settled brings the next ones from the server', async () => {
-  const card = { kind: 'loose', guess: null, faces: faces('f1') };
-  const { component } = reviewPage({ cards: [card], left: 40, responses: { [BATCH]: batchDone } });
+  const { component } = reviewPage({
+    cards: [{ key: 'k', kind: 'loose', guess: null, faces: faces('f1') }],
+    left: 40,
+    responses: { [BATCH]: batchDone },
+  });
 
-  await component.hideCurrent();
+  await component.hideCard(component.cards[0]);
 
-  assert.equal(component.current(), null);
+  assert.equal(component.cards.length, 0);
   assert.equal(component.left, 39);
   assert.equal(component.reloads, 1);
 });
 
 test('a refused answer keeps the card, and reloads once something went through', async () => {
-  const card = { kind: 'cluster', cluster: 'c1', guess: null, faces: faces('f1', 'f2') };
   const { component, alerts } = reviewPage({
-    cards: [card],
+    cards: [clusterCard('c1', 'f1', 'f2')],
     responses: { [BATCH]: batchDone, '/api/v1/photos/clusters/c1': new Error('Already in one of the photos') },
   });
-  component.toggleExcluded('f2');
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'f2');
 
-  const settled = await component.pick({ kind: 'person', person: NOAH });
+  const settled = await component.pick(card, { kind: 'person', person: NOAH });
 
   assert.equal(settled, false);
-  assert.equal(component.current().cluster, 'c1');
+  assert.deepEqual(Array.from(component.cards, (c) => c.key), ['c1']);
   assert.equal(alerts[0].message, 'Already in one of the photos');
   assert.equal(component.reloads, 1);
 });
@@ -457,34 +485,34 @@ test('a refused answer keeps the card, and reloads once something went through',
 test('a card asks the question its kind asks', () => {
   const { component } = reviewPage({
     cards: [
-      { kind: 'check', guess: NINA, total: 3, faces: faces('f1', 'f2') },
-      { kind: 'cluster', cluster: 'c1', guess: NINA, photo_count: 4, total: 4, faces: faces('f3') },
+      { key: 'k', kind: 'check', guess: NINA, total: 3, faces: faces('f1', 'f2') },
+      { ...clusterCard('c1', 'f3'), guess: NINA, photo_count: 4, total: 4 },
     ],
   });
-  component.results = [NOAH];
+  const [check, cluster] = component.cards;
 
-  assert.equal(component.question(), 'Is this Nina Petit?');
-  assert.equal(component.guessLabel(), "Yes, it's Nina Petit");
-  assert.equal(component.guessHint(), 'Confirms 2 faces');
-  component.toggleExcluded('f2');
-  assert.equal(component.guessHint(), 'Confirms 1 face, takes 1 out');
-  assert.deepEqual(Array.from(component.otherOptions(), (o) => o.person.uuid), ['o']);
-
-  component.skip();
-  assert.equal(component.question(), 'Who is this?');
-  assert.equal(component.guessLabel(), "It's Nina Petit");
-  assert.deepEqual(Array.from(component.excluded), []);
+  assert.equal(component.question(check), 'Is this Nina Petit?');
+  assert.equal(component.guessLabel(check), "Yes, it's Nina Petit");
+  assert.equal(component.guessHint(check), 'Confirms 2 faces');
+  component.toggleExcluded(check, 'f2');
+  assert.equal(component.guessHint(check), 'Confirms 1 face, takes 1 out');
+  assert.equal(component.question(cluster), 'Who is this?');
+  assert.equal(component.guessLabel(cluster), "It's Nina Petit");
 });
 
-test('skipping goes round the queue', () => {
-  const { component } = reviewPage({ cards: [{ key: 'a', faces: [] }, { key: 'b', faces: [] }] });
+test('the typed name belongs to the card whose field is in use', () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1'), clusterCard('c2', 'f2')] });
+  const [first, second] = component.cards;
+  component.results = [NOAH];
 
-  component.skip();
-  assert.equal(component.current().key, 'b');
-  component.skip();
-  assert.equal(component.current().key, 'a');
-  component.previous();
-  assert.equal(component.current().key, 'b');
+  component.typeName(first, 'Léa');
+
+  assert.deepEqual(Array.from(component.options(first), (o) => o.kind), ['person', 'create']);
+  assert.deepEqual(Array.from(component.options(second), (o) => o.kind), ['person']);
+  component.focusCard(second);
+  assert.equal(component.query, '');
+  assert.equal(component.isActive(second), true);
+  clearTimeout(component._searchTimer);
 });
 
 test('not this person detaches the face of every selected photo, past a failure', async () => {
@@ -683,54 +711,15 @@ test('assigning to a new name sends it with the picked faces', async () => {
   assert.deepEqual(requests[0].body, { action: 'assign', new_person: 'Léa', faces: ['a'] });
 });
 
-function plainBoard(data, options, globals = {}) {
+function plainBoard(data, options) {
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
     document: { getElementById: (id) => (id === 'board-data' ? { textContent: JSON.stringify(data) } : null) },
-    ...globals,
   });
   const component = ctx.faceBoard('board-data', options);
   component.$watch = () => {};
   component.init();
   return component;
 }
-
-test('a board of look-alike groups keeps each group together, and drops an emptied one', () => {
-  const component = plainBoard({
-    total: 5,
-    faces: [
-      { uuid: 'a', group: 0 }, { uuid: 'b', group: 0 },
-      { uuid: 'c', group: 1 }, { uuid: 'd', group: 2 }, { uuid: 'e', group: 3 },
-    ],
-    groups: [{ suggestion: NINA }, { suggestion: NOAH }, { suggestion: null }, { suggestion: null }],
-  });
-  const shape = () => Array.from(component.faceGroups(), (g) => [g.index, Array.from(g.faces, (f) => f.uuid)]);
-
-  // A lone face like someone named keeps its group; the others share one.
-  assert.deepEqual(shape(), [[0, ['a', 'b']], [1, ['c']], ['alone', ['d', 'e']]]);
-  component.facesSettled(['c', 'd', 'e'], 'hide');
-  assert.deepEqual(shape(), [[0, ['a', 'b']]]);
-});
-
-test('a group is said to be the person it looks like in one batch', async () => {
-  const requests = [];
-  const component = plainBoard(
-    { total: 2, faces: [{ uuid: 'a', group: 0 }, { uuid: 'b', group: 0 }], groups: [{ suggestion: NINA }] },
-    {},
-    {
-      getCSRFToken: () => 'token',
-      fetch: async (url, options) => {
-        requests.push(JSON.parse(options.body));
-        return { ok: true, status: 200, json: async () => ({ done: ['a', 'b'], skipped: [], undo: 't' }) };
-      },
-      AppAlert: { success() {}, warning() {}, error() {} },
-    },
-  );
-
-  await component.assignGroup(component.faceGroups()[0]);
-
-  assert.deepEqual(requests, [{ action: 'assign', person: 'n', faces: ['a', 'b'] }]);
-  assert.equal(component.faces.length, 0);
-});
 
 test('a board lets corrected faces go', () => {
   const component = plainBoard({ total: 3, faces: [{ uuid: 'a' }, { uuid: 'b' }, { uuid: 'c' }] });

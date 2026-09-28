@@ -32,8 +32,9 @@ from .face_people import person_cards
 # cluster's centroid is worth a look. The centroid being a mean, a face of
 # the right person usually sits well inside the threshold.
 DOUBT_RATIO = 0.5
-# Faces of an unnamed cluster shown at once.
-CLUSTER_FACES = 60
+# Faces of an unnamed cluster shown: the least like the rest, where an
+# intruder would be; the others go with the answer unseen.
+CLUSTER_FACES = 24
 # Faces to check shown per person at once; the rest come after a reload.
 DOUBTS_PER_PERSON = 60
 # Unassigned or hidden faces read at once; the rest come after a reload.
@@ -228,11 +229,6 @@ def _unassigned_faces(user):
             | Q(assignment=Face.Assignment.AUTO, quality__gte=LOW_QUALITY)
         )
     )
-
-
-def unassigned_count(user):
-    """How many faces wait for a person, past the ones a page reads."""
-    return _unassigned_faces(user).count()
 
 
 def unassigned_groups(user):

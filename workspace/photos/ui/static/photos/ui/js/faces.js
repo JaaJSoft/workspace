@@ -1016,49 +1016,12 @@ window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
     ...window.faceSelectionMixin(),
     faces: [],
     total: 0,
-    groups: [],
 
     init() {
       const data = facesJson(dataId) || {};
       this.faces = data.faces || [];
       this.total = data.total || 0;
-      this.groups = data.groups || [];
       this.initFaceSelection();
-    },
-
-    // On a board of look-alike groups (each face carrying the index of its
-    // group in `groups`): the groups that still have faces, in page order.
-    // The faces like no other and like nobody named share one last section.
-    faceGroups() {
-      const byGroup = new Map();
-      for (const face of this.faces) {
-        if (!byGroup.has(face.group)) byGroup.set(face.group, []);
-        byGroup.get(face.group).push(face);
-      }
-      const groups = [];
-      const alone = [];
-      for (const [index, faces] of byGroup) {
-        const suggestion = (this.groups[index] || {}).suggestion || null;
-        if (faces.length === 1 && !suggestion) alone.push(faces[0]);
-        else groups.push({ index, faces, suggestion, alone: false });
-      }
-      if (alone.length) groups.push({ index: 'alone', faces: alone, suggestion: null, alone: true });
-      return groups;
-    },
-
-    selectGroup(group) {
-      this.selectFaces(group.faces.map((face) => face.uuid));
-    },
-
-    // The group is the person it looks like.
-    assignGroup(group) {
-      const person = group.suggestion;
-      if (!person) return null;
-      return this.applyFaceBatch(
-        { action: 'assign', person: person.uuid },
-        group.faces.map((face) => face.uuid),
-        person.name,
-      );
     },
 
     facesSettled(done, action) {
@@ -1112,58 +1075,57 @@ function reviewSteps(card, kept, left, answer) {
   return steps;
 }
 
-// The review page: one card at a time, a group of faces and the question of
-// who they are - an unnamed cluster, the faces the grouping put under a named
-// person without being sure, or look-alike faces in no group. A click on a
-// face leaves it out of the answer. Its own component, nested in
-// photosApp(): a navigation away tears it down.
+// The review page: every group of faces waiting for an answer, one card each
+// - an unnamed cluster, the faces the grouping put under a named person
+// without being sure, or look-alike faces in no group - and the question of
+// who they are. A click on a face leaves it out of the card's answer. The
+// contact search belongs to the card whose name field is in use. Its own
+// component, nested in photosApp(): a navigation away tears it down.
 window.facesReview = function facesReview() {
   return {
     cards: [],
     left: 0,
-    position: 0,
-    excluded: [],
+    // The key of the card whose name field is in use.
+    position: null,
+    pickerOpen: false,
     query: '',
     results: [],
     active: 0,
     searching: false,
-    saving: false,
+    // The key of the card being settled.
+    saving: null,
     _searchGeneration: 0,
+    _searchTimer: null,
 
     init() {
       const data = facesJson('photos-review-data') || {};
-      this.cards = data.cards || [];
+      this.cards = (data.cards || []).map((card) => ({ ...card, excluded: [] }));
       this.left = data.left || 0;
       if (this.cards.length) this.searchReviewNames();
     },
 
-    current() {
-      return this.cards[this.position] || null;
+    destroy() {
+      clearTimeout(this._searchTimer);
     },
 
     photoLabel(count) {
       return photoCount(count);
     },
 
-    faceLabel(count) {
-      return faceCount(count);
-    },
-
     // ── The faces ───────────────────────────────────────
 
-    isExcluded(uuid) {
-      return this.excluded.includes(uuid);
+    isExcluded(card, uuid) {
+      return card.excluded.includes(uuid);
     },
 
-    toggleExcluded(uuid) {
-      this.excluded = this.isExcluded(uuid)
-        ? this.excluded.filter((u) => u !== uuid)
-        : this.excluded.concat([uuid]);
+    toggleExcluded(card, uuid) {
+      card.excluded = this.isExcluded(card, uuid)
+        ? card.excluded.filter((u) => u !== uuid)
+        : card.excluded.concat([uuid]);
     },
 
-    keptCount() {
-      const card = this.current();
-      return card ? card.faces.length - this.excluded.length : 0;
+    keptCount(card) {
+      return card.faces.length - card.excluded.length;
     },
 
     // A face of a video opens it at the moment the face was seen.
@@ -1171,68 +1133,96 @@ window.facesReview = function facesReview() {
       openInViewer(face.file, face.file_name, face.file_type, face.timestamp);
     },
 
-    // ── What the card says ──────────────────────────────
+    // ── What a card says ────────────────────────────────
 
-    question() {
-      const card = this.current();
-      return card && card.kind === 'check' ? `Is this ${card.guess.name}?` : 'Who is this?';
+    question(card) {
+      return card.kind === 'check' ? `Is this ${card.guess.name}?` : 'Who is this?';
     },
 
-    subtitle() {
-      const card = this.current();
-      if (!card) return '';
+    subtitle(card) {
       if (card.kind === 'cluster') return `${photoCount(card.photo_count)}, grouped by likeness`;
       if (card.kind === 'check') return `${faceCount(card.total)} put with them without being sure`;
       return card.total === 1 ? '1 face in no group' : `${card.total} look-alike faces in no group`;
     },
 
-    guessLabel() {
-      const card = this.current();
-      const option = this.guessOption();
-      if (!card || !option) return '';
-      if (card.kind !== 'check') return `It's ${option.person.name}`;
-      return this.keptCount() ? `Yes, it's ${option.person.name}` : `None of them is ${option.person.name}`;
+    guessLabel(card) {
+      if (!card.guess) return '';
+      const name = card.guess.name;
+      if (card.kind !== 'check') return `It's ${name}`;
+      return this.keptCount(card) ? `Yes, it's ${name}` : `None of them is ${name}`;
     },
 
-    guessHint() {
-      const card = this.current();
-      if (!card) return '';
+    guessHint(card) {
       if (card.kind !== 'check') return 'Looks like them';
-      const kept = this.keptCount();
+      const kept = this.keptCount(card);
       if (!kept) return 'Takes them out of the group';
-      return this.excluded.length ? `Confirms ${faceCount(kept)}, takes ${this.excluded.length} out` : `Confirms ${faceCount(kept)}`;
+      const left = card.excluded.length;
+      return left ? `Confirms ${faceCount(kept)}, takes ${left} out` : `Confirms ${faceCount(kept)}`;
     },
 
     // ── The answer ──────────────────────────────────────
 
-    options() {
-      const card = this.current();
-      return reviewOptions(this.query, this.results, card ? card.guess : null);
+    isActive(card) {
+      return this.position === card.key;
     },
 
-    // The guess, offered as the answer at hand while nothing is typed.
-    guessOption() {
-      const first = this.options()[0];
-      return first && first.suggested ? first : null;
+    // The typed name and the contacts found are the active card's only.
+    options(card) {
+      const query = this.isActive(card) ? this.query : '';
+      return reviewOptions(query, this.results, card.guess);
     },
 
-    otherOptions() {
-      return this.guessOption() ? this.options().slice(1) : this.options();
+    // The contacts the picker lists: the guess has its own button.
+    otherOptions(card) {
+      const options = this.options(card);
+      return options.length && options[0].suggested ? options.slice(1) : options;
+    },
+
+    // Where an option of otherOptions() sits in options(), for the keyboard.
+    optionIndex(card, i) {
+      const options = this.options(card);
+      return i + (options.length && options[0].suggested ? 1 : 0);
     },
 
     // Every face left out of a person's doubtful ones is still an answer
     // about them: none of these is them.
-    guessRejectsAll() {
-      const card = this.current();
-      return !!card && card.kind === 'check' && this.keptCount() === 0;
+    guessRejectsAll(card) {
+      return card.kind === 'check' && this.keptCount(card) === 0;
     },
 
-    canAnswer() {
-      return !this.saving && (this.keptCount() > 0 || this.guessRejectsAll());
+    canAnswer(card) {
+      return this.saving === null && (this.keptCount(card) > 0 || this.guessRejectsAll(card));
     },
 
-    canPick(option) {
-      return this.canAnswer() && (option.suggested || !this.guessRejectsAll());
+    canPick(card, option) {
+      return this.canAnswer(card) && (option.suggested || !this.guessRejectsAll(card));
+    },
+
+    focusCard(card) {
+      if (!this.isActive(card)) {
+        const typed = this.query !== '';
+        this.position = card.key;
+        this.query = '';
+        this.active = 0;
+        // The contacts found were for the other card's typed name.
+        if (typed) this._searchSoon(0);
+      }
+      this.pickerOpen = true;
+    },
+
+    closePicker() {
+      this.pickerOpen = false;
+    },
+
+    typeName(card, value) {
+      this.focusCard(card);
+      this.query = value;
+      this._searchSoon(250);
+    },
+
+    _searchSoon(delay) {
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => this.searchReviewNames(), delay);
     },
 
     async searchReviewNames() {
@@ -1251,40 +1241,56 @@ window.facesReview = function facesReview() {
       }
     },
 
-    moveActive(step) {
-      const count = this.options().length;
+    moveActive(card, step) {
+      const count = this.options(card).length;
       if (count) this.active = (this.active + step + count) % count;
     },
 
-    pickActive() {
-      const option = this.options()[this.active];
-      if (option) this.pick(option);
+    // Enter in a card's name field: the highlighted option, the guess while
+    // nothing is typed. The next card's field takes over the keyboard.
+    async pickActive(card) {
+      const option = this.options(card)[this.active];
+      if (!option) return;
+      const next = this.cards[this.cards.indexOf(card) + 1];
+      if (await this.pick(card, option) && next) this._focusInput(next);
     },
 
-    pick(option) {
-      if (!this.canPick(option)) return null;
+    pick(card, option) {
+      if (!this.canPick(card, option)) return null;
       const answer = option.kind === 'create'
         ? { new_person: option.name, name: option.name }
         : { person: option.person.uuid, name: option.person.name };
-      return this._settle(answer);
+      return this._settle(card, answer);
     },
 
-    hideCurrent() {
-      if (!this.current() || !this.keptCount()) return null;
-      return this._settle({ hide: true });
+    pickGuess(card) {
+      return card.guess ? this.pick(card, { kind: 'person', person: card.guess, suggested: true }) : null;
     },
 
-    // Sends the answer; true once the card is settled and left the queue.
-    async _settle(answer) {
-      const card = this.current();
-      if (!card || this.saving) return false;
+    hideCard(card) {
+      if (!this.keptCount(card)) return null;
+      return this._settle(card, { hide: true });
+    },
+
+    // Called once the answered card left the page: `$root` resolves from the
+    // element the call came from, which is gone by then.
+    _focusInput(card) {
+      this.$nextTick(() => {
+        const input = document.querySelector(`[data-review-input="${card.key}"]`);
+        if (input) input.focus();
+      });
+    },
+
+    // Sends the answer; true once the card is settled and left the list.
+    async _settle(card, answer) {
+      if (this.saving !== null) return false;
       const faces = card.faces.map((face) => face.uuid);
-      const left = faces.filter((uuid) => this.isExcluded(uuid));
-      const kept = faces.filter((uuid) => !this.isExcluded(uuid));
+      const left = faces.filter((uuid) => this.isExcluded(card, uuid));
+      const kept = faces.filter((uuid) => !this.isExcluded(card, uuid));
       const undo = [];
       let main = null;
       let sent = 0;
-      this.saving = true;
+      this.saving = card.key;
       try {
         for (const step of reviewSteps(card, kept, left, answer)) {
           if (step.batch) {
@@ -1302,18 +1308,18 @@ window.facesReview = function facesReview() {
         if (sent) this._reloadQueue();
         return false;
       } finally {
-        this.saving = false;
+        this.saving = null;
       }
       this._announce(card, answer, main, undo);
-      this.cards.splice(this.position, 1);
+      this.cards = this.cards.filter((c) => c !== card);
       this.left = Math.max(0, this.left - 1);
-      if (!this.cards.length) {
-        // What was left out, and the cards past this page, come now.
-        this._reloadQueue();
-        return true;
+      if (this.isActive(card)) {
+        this.position = null;
+        this.query = '';
+        this.pickerOpen = false;
       }
-      if (this.position >= this.cards.length) this.position = 0;
-      this._nextCard();
+      // What was left out, and the cards past this page, come now.
+      if (!this.cards.length) this._reloadQueue();
       return true;
     },
 
@@ -1334,28 +1340,6 @@ window.facesReview = function facesReview() {
       window.AppAlert.success(message, {
         duration: 8000,
         actions: undo.length ? [{ label: 'Undo', onClick: () => undoFaceBatch(undo) }] : [],
-      });
-    },
-
-    skip() {
-      if (this.cards.length < 2) return;
-      this.position = (this.position + 1) % this.cards.length;
-      this._nextCard();
-    },
-
-    previous() {
-      if (this.cards.length < 2) return;
-      this.position = (this.position - 1 + this.cards.length) % this.cards.length;
-      this._nextCard();
-    },
-
-    _nextCard() {
-      this.excluded = [];
-      this.query = '';
-      this.active = 0;
-      if (this.cards.length) this.searchReviewNames();
-      this.$nextTick(() => {
-        if (this.$refs.reviewInput) this.$refs.reviewInput.focus();
       });
     },
 

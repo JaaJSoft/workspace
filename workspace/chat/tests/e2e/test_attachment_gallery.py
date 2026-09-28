@@ -53,6 +53,17 @@ class AttachmentGalleryTests(PlaywrightTestCase):
         Message.objects.filter(body="two pictures").update(
             thread_root=self.root, reply_to=self.root
         )
+        # In the main flow, on screen next to the thread panel.
+        resp = client.post(
+            f"/api/v1/chat/conversations/{self.conv.uuid}/messages",
+            {
+                "body": "unrelated",
+                "files": [
+                    SimpleUploadedFile("outside.png", PNG_1PX, content_type="image/png")
+                ],
+            },
+        )
+        assert resp.status_code == 201, resp.content
 
     def test_an_attachment_opened_in_a_thread_pages_through_the_thread(self):
         self.login_as(self.user)
@@ -63,7 +74,19 @@ class AttachmentGalleryTests(PlaywrightTestCase):
         thread = self.page.locator("#thread-messages-container")
         first = thread.locator('[data-attachment-name="one.png"]')
         expect(first).to_be_visible()
+        expect(
+            self.page.locator(
+                '#messages-container [data-attachment-name="outside.png"]'
+            )
+        ).to_be_visible()
 
         first.click()
+        dialog = self.page.locator("dialog[open]")
+        expect(dialog.get_by_role("heading", name="one.png")).to_be_visible()
+        expect(dialog).to_contain_text("1 / 2")
 
-        expect(self.page.get_by_title("Next attachment")).to_be_visible()
+        self.page.get_by_title("Next attachment").click()
+        expect(dialog.get_by_role("heading", name="two.png")).to_be_visible()
+        expect(dialog).to_contain_text("2 / 2")
+        # The last thread attachment ends the gallery: the main flow's is out.
+        expect(self.page.get_by_title("Next attachment")).to_be_hidden()

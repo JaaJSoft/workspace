@@ -18,7 +18,7 @@
       <option value="original">Original proportions</option>
     </select>
   </div>
-  {% include "ui/partials/pref_toggle.html" with label="Always show favorites and video length" state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Always show badges" state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
   {% include "ui/partials/pref_toggle.html" with label="Play videos on hover" state="photoPrefs.video_hover_preview" change="savePhotoPref('video_hover_preview', $event.target.checked)" accent="toggle-module" %}
   <hr class="border-base-300" />
   <div>
@@ -26,7 +26,7 @@
       class="text-sm text-base-content/60 block mb-1"
       for="photos-pref-scope"
     >
-      Open on
+      Open Photos on
     </label>
     <div class="space-y-2">
       <select
@@ -53,7 +53,6 @@
         <option value="video">Videos only</option>
       </select>
     </div>
-    <p class="text-xs text-base-content/60 mt-1">What the timeline shows when you open Photos.</p>
   </div>
   <hr class="border-base-300" />
   <div>
@@ -74,23 +73,17 @@
         <i data-lucide="pen-line" class="w-3 h-3"></i>
       </button>
     </div>
-    <p class="text-xs text-base-content/60 mt-1">
-      Where Import and drag and drop save photos and videos. Anything in your Files shows up in Photos, wherever it is.
-    </p>
   </div>
-  <div>
-    {% include "ui/partials/pref_toggle.html" with label="Sort imports by year and month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
-    <p class="text-xs text-base-content/60 mt-1">
-      Files each imported photo into a folder like 2024/07 of the import folder, after the day it was taken.
-    </p>
-  </div>
+  {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
   <div x-show="importFolder && !importFolder.group">
-    <label class="text-sm text-base-content/60 block mb-1">Back up your phone</label>
-    <p class="text-xs text-base-content/60">
-      Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to send new photos here automatically:
-    </p>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      title="Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back up your phone here"
+    >
+      Phone backup (WebDAV)
+    </label>
     <code
-      class="block bg-base-200 px-2 py-1 mt-1 rounded text-xs break-all select-all"
+      class="block bg-base-200 px-2 py-1 rounded text-xs break-all select-all"
       x-text="importDavUrl()"
     ></code>
   </div>

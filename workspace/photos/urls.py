@@ -46,6 +46,11 @@ urlpatterns = [
         name="photos-import-folder",
     ),
     path(
+        "api/v1/photos/import-folder/by-date",
+        import_folder.ImportByDateView.as_view(),
+        name="photos-import-by-date",
+    ),
+    path(
         "api/v1/photos/persons",
         faces.FacePersonsView.as_view(),
         name="photos-face-persons",

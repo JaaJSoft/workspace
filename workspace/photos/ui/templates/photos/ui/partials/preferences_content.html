@@ -1,5 +1,61 @@
-{# Reads the import state of photosApp() (photos/ui/js/import.js). #}
+{# Reads the preferences and import state of photosApp() (photos/ui/js/photos.js, import.js). #}
 <div class="space-y-3">
+  <div>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      for="photos-pref-tile-shape"
+    >
+      Tile shape
+    </label>
+    <select
+      id="photos-pref-tile-shape"
+      class="select select-bordered select-sm w-full"
+      :value="photoPrefs.tile_shape"
+      @change="savePhotoPref('tile_shape', $event.target.value)"
+      data-testid="photos-pref-tile-shape"
+    >
+      <option value="square">Square</option>
+      <option value="original">Original proportions</option>
+    </select>
+  </div>
+  {% include "ui/partials/pref_toggle.html" with label="Always show favorites and video length" state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Play videos on hover" state="photoPrefs.video_hover_preview" change="savePhotoPref('video_hover_preview', $event.target.checked)" accent="toggle-module" %}
+  <hr class="border-base-300" />
+  <div>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      for="photos-pref-scope"
+    >
+      Open on
+    </label>
+    <div class="space-y-2">
+      <select
+        id="photos-pref-scope"
+        class="select select-bordered select-sm w-full"
+        :value="photoPrefs.default_scope"
+        @change="savePhotoPref('default_scope', $event.target.value)"
+        aria-label="Library the timeline opens on"
+        data-testid="photos-pref-scope"
+      >
+        {% for choice in scope_choices %}
+          <option value="{{ choice.value }}">{{ choice.label }}</option>
+        {% endfor %}
+      </select>
+      <select
+        class="select select-bordered select-sm w-full"
+        :value="photoPrefs.default_media_type"
+        @change="savePhotoPref('default_media_type', $event.target.value)"
+        aria-label="Media type the timeline opens on"
+        data-testid="photos-pref-media-type"
+      >
+        <option value="all">Photos and videos</option>
+        <option value="photo">Photos only</option>
+        <option value="video">Videos only</option>
+      </select>
+    </div>
+    <p class="text-xs text-base-content/60 mt-1">What the timeline shows when you open Photos.</p>
+  </div>
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Import folder</label>
     <div
@@ -20,6 +76,12 @@
     </div>
     <p class="text-xs text-base-content/60 mt-1">
       Where Import and drag and drop save photos and videos. Anything in your Files shows up in Photos, wherever it is.
+    </p>
+  </div>
+  <div>
+    {% include "ui/partials/pref_toggle.html" with label="Sort imports by year and month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
+    <p class="text-xs text-base-content/60 mt-1">
+      Files each imported photo into a folder like 2024/07 of the import folder, after the day it was taken.
     </p>
   </div>
   <div x-show="importFolder && !importFolder.group">

@@ -6,6 +6,16 @@ function load({ folder = null, fetchResponse = null } = {}) {
   const added = [];
   const warnings = [];
   const requests = [];
+  // The upload queue store: rows as createUploadQueue keeps them.
+  const uploads = {
+    items: [],
+    add(entries) {
+      added.push(...entries);
+      for (const entry of entries) {
+        uploads.items.push({ id: uploads.items.length + 1, folderId: entry.folderId, status: 'queued', uuid: null });
+      }
+    },
+  };
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/import.js', {
     document: {
       getElementById: (id) =>
@@ -14,13 +24,13 @@ function load({ folder = null, fetchResponse = null } = {}) {
     location: { origin: 'https://cloud.example.org' },
     getCSRFToken: () => 'token',
     fetch: async (url, options) => {
-      requests.push({ url, method: options.method });
+      requests.push({ url, method: options.method, body: options.body });
       return { ok: true, json: async () => fetchResponse };
     },
-    Alpine: { store: () => ({ add: (entries) => added.push(...entries) }) },
+    Alpine: { store: () => uploads },
     AppAlert: { warning: (message) => warnings.push(message), error: () => {} },
   });
-  return { ctx, mixin: ctx.photosImportMixin(), added, warnings, requests };
+  return { ctx, mixin: ctx.photosImportMixin(), added, warnings, requests, uploads };
 }
 
 const file = (name, type) => ({ name, type });
@@ -42,7 +52,9 @@ test('an import queues the media into the resolved folder, keeping both on a nam
 
   await mixin.importFiles([file('a.jpg', 'image/jpeg'), file('b.txt', 'text/plain')]);
 
-  assert.deepEqual(requests, [{ url: '/api/v1/photos/import-folder', method: 'POST' }]);
+  assert.deepEqual(requests.map(({ url, method }) => ({ url, method })), [
+    { url: '/api/v1/photos/import-folder', method: 'POST' },
+  ]);
   assert.equal(added.length, 1);
   assert.equal(added[0].file.name, 'a.jpg');
   assert.equal(added[0].folderId, 'f1');
@@ -68,4 +80,65 @@ test('the WebDAV address points at a personal import folder, encoded', () => {
   assert.equal(personal.mixin.importFolderLabel(), 'Camera Roll/2024');
   assert.equal(shared.mixin.importDavUrl(), '');
   assert.equal(shared.mixin.importFolderLabel(), 'Holidays (Family)');
+});
+
+// ── Sorting by date ──────────────────────────────────────
+
+const SORT_API = '/api/v1/photos/import-folder/by-date';
+
+async function importedTwo({ sortByDate }) {
+  const folder = { uuid: 'f1', name: 'Pictures', path: 'Pictures', group: null };
+  const loaded = load({ fetchResponse: folder });
+  loaded.mixin.photoPrefs = { import_by_date: sortByDate };
+  // Something another page queued, into another folder.
+  loaded.uploads.items.push({ id: 99, folderId: 'other', status: 'done', uuid: 'elsewhere' });
+  await loaded.mixin.importFiles([file('a.jpg', 'image/jpeg'), file('b.jpg', 'image/jpeg')]);
+  loaded.requests.length = 0;
+  return loaded;
+}
+
+test('a finished import is reported for sorting, once, and only its own rows', async () => {
+  const { mixin, uploads, requests } = await importedTwo({ sortByDate: true });
+  const [, a, b] = uploads.items;
+  a.status = 'done';
+  a.uuid = 'u-a';
+  b.status = 'cancelled';
+
+  mixin._sortImportsByDate();
+  mixin._sortImportsByDate();
+
+  assert.deepEqual(requests, [
+    { url: SORT_API, method: 'POST', body: JSON.stringify({ files: ['u-a'] }) },
+  ]);
+});
+
+test('a failed row waits for its retry before it is reported', async () => {
+  const { mixin, uploads, requests } = await importedTwo({ sortByDate: true });
+  const [, a, b] = uploads.items;
+  a.status = 'done';
+  a.uuid = 'u-a';
+  b.status = 'failed';
+  mixin._sortImportsByDate();
+
+  b.status = 'done';
+  b.uuid = 'u-b';
+  mixin._sortImportsByDate();
+
+  assert.deepEqual(
+    requests.map((request) => JSON.parse(request.body).files),
+    [['u-a'], ['u-b']],
+  );
+});
+
+test('with the preference off nothing is reported, not even later', async () => {
+  const { mixin, uploads, requests } = await importedTwo({ sortByDate: false });
+  for (const row of uploads.items.slice(1)) {
+    row.status = 'done';
+    row.uuid = `u-${row.id}`;
+  }
+  mixin._sortImportsByDate();
+  mixin.photoPrefs.import_by_date = true;
+  mixin._sortImportsByDate();
+
+  assert.equal(requests.length, 0);
 });

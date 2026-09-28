@@ -4,6 +4,9 @@
 // folder GET/POST/PUT /api/v1/photos/import-folder answers for.
 
 const PHOTOS_IMPORT_API = '/api/v1/photos/import-folder';
+const PHOTOS_IMPORT_BY_DATE_API = '/api/v1/photos/import-folder/by-date';
+// The most uuids the by-date endpoint takes in one report.
+const PHOTOS_IMPORT_BY_DATE_BATCH = 500;
 // Browsers leave `type` empty for the formats they cannot decode themselves.
 const PHOTOS_UNTYPED_MEDIA = /\.(heic|heif|avif|jxl)$/i;
 const PHOTOS_ANALYSIS_POLL_MS = 4000;
@@ -30,9 +33,15 @@ window.photosImportMixin = function photosImportMixin() {
     importDropActive: false,
     _importDragDepth: 0,
     _analysisTimer: null,
+    // Upload queue rows this page imported and has not reported for sorting
+    // by date yet (see _sortImportsByDate).
+    _importedRows: new Set(),
 
     initImport() {
-      window.addEventListener('uploads-changed', () => this._showImported());
+      window.addEventListener('uploads-changed', () => {
+        this._sortImportsByDate();
+        this._showImported();
+      });
     },
 
     importFolderLabel() {
@@ -83,10 +92,35 @@ window.photosImportMixin = function photosImportMixin() {
         return;
       }
       this.importFolder = folder;
+      const uploads = Alpine.store('uploads');
+      const firstRow = uploads.items.length;
       // Cameras reuse names (IMG_0001.JPG): a clash keeps both, never replaces.
-      Alpine.store('uploads').add(
+      uploads.add(
         media.map((file) => ({ file, folderId: folder.uuid, onConflict: 'rename' }))
       );
+      for (const row of uploads.items.slice(firstRow)) this._importedRows.add(row.id);
+    },
+
+    // Reports what this page imported and the queue has finished, for the
+    // server to file into year and month folders. Only these rows: the same
+    // queue also carries what other pages dropped into other folders.
+    _sortImportsByDate() {
+      const rows = Alpine.store('uploads').items.filter(
+        // A failed row can still be retried: it waits for its next outcome.
+        (row) => this._importedRows.has(row.id) && !['queued', 'uploading', 'failed'].includes(row.status)
+      );
+      for (const row of rows) this._importedRows.delete(row.id);
+      if (!this.photoPrefs.import_by_date) return;
+      const uuids = rows.filter((row) => row.status === 'done' && row.uuid).map((row) => row.uuid);
+      for (let i = 0; i < uuids.length; i += PHOTOS_IMPORT_BY_DATE_BATCH) {
+        fetch(PHOTOS_IMPORT_BY_DATE_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ files: uuids.slice(i, i + PHOTOS_IMPORT_BY_DATE_BATCH) }),
+        }).catch(() => {
+          // They stay in the import folder, where they already show up.
+        });
+      }
     },
 
     async chooseImportFolder() {

@@ -175,6 +175,23 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
   // when the presence store changes. Instances register on connect and
   // deregister on disconnect, which matters under alpine-ajax swaps.
   const instances = new Set();
+  // The avatar endpoint is cached for minutes, so a changed picture needs a
+  // new URL to be fetched again.
+  const pictureVersions = new Map();
+
+  /**
+   * Re-render every avatar of a user whose picture was just replaced or
+   * removed, past the HTTP cache. Avatars created later pick the version up.
+   *
+   * @param {number|string} userId
+   */
+  window.refreshUserAvatar = function refreshUserAvatar(userId) {
+    const key = String(userId);
+    pictureVersions.set(key, Date.now());
+    for (const avatar of instances) {
+      if (avatar.userId === key) avatar.render();
+    }
+  };
 
   function presenceStore() {
     return typeof Alpine !== 'undefined' && Alpine.store ? Alpine.store('presence') : null;
@@ -286,7 +303,12 @@ window.userAvatarTag = function userAvatarTag(userId, username, options) {
 
       if (userId !== null || src !== '') {
         const img = document.createElement('img');
-        img.src = userId !== null ? `/api/v1/users/${encodeURIComponent(userId)}/avatar` : src;
+        if (userId !== null) {
+          const version = pictureVersions.get(userId);
+          img.src = `/api/v1/users/${encodeURIComponent(userId)}/avatar` + (version ? `?v=${version}` : '');
+        } else {
+          img.src = src;
+        }
         img.alt = username;
         img.loading = 'lazy';
         img.decoding = 'async';

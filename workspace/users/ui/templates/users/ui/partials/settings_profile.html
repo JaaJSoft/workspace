@@ -327,9 +327,7 @@
             this.hasAvatar = true;
             this.avatarPreviewUrl = '/api/v1/users/{{ request.user.id }}/avatar?t=' + Date.now();
             this.showFeedback('success', result.message || 'Avatar updated.');
-            document.querySelectorAll('[data-user-avatar]').forEach(el => {
-              el.innerHTML = '<img src="' + this.avatarPreviewUrl + '" alt="Avatar" class="rounded-full object-cover w-full h-full" />';
-            });
+            window.refreshUserAvatar({{ request.user.id }});
           } else {
             const msgs = result.errors || ['Upload failed.'];
             this.showFeedback('error', msgs.join(', '));
@@ -362,9 +360,7 @@
           if (res.ok) {
             this.hasAvatar = false;
             this.showFeedback('success', result.message || 'Avatar removed.');
-            document.querySelectorAll('[data-user-avatar]').forEach(el => {
-              el.innerHTML = '<span>{{ request.user.username|slice:":1"|upper }}</span>';
-            });
+            window.refreshUserAvatar({{ request.user.id }});
           } else {
             this.showFeedback('error', 'Failed to remove avatar.');
           }

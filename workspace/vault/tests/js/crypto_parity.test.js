@@ -429,6 +429,15 @@ test('an aead key of the wrong length is refused', async () => {
   );
 });
 
+test('a pinned iv of the wrong length is refused before sealing', async () => {
+  await assert.rejects(
+    () => V.seal(new Uint8Array(32), new Uint8Array(1), new Uint8Array(0), {
+      iv: new Uint8Array(11), keyVersion: 1, kdfId: 1,
+    }),
+    /iv is 11 bytes, aead 1 wants 12/
+  );
+});
+
 test('a fractional or oversized header id is refused', () => {
   for (const overrides of [{ kdfId: 1.5 }, { kdfId: 256 }, { aeadId: 1.5 }]) {
     assert.throws(() => V.encodeCiphertext({

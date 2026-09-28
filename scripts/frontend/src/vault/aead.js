@@ -1,6 +1,6 @@
 import { randomBytes } from './encoding.js';
 import { CURRENT_SUITE, UnsupportedAlgorithmError, declaredEntry, markImplemented } from './suites.js';
-import { HEADER_LENGTH, decodeCiphertext, encodeCiphertext } from './wire.js';
+import { decodeCiphertext, encodeHeader } from './wire.js';
 import { associatedData } from './ad.js';
 
 const KEY_LENGTH = 32;
@@ -105,10 +105,11 @@ export async function seal(key, plaintext, context, { iv, keyVersion, kdfId }) {
   const aeadId = CURRENT_SUITE.aeadId;
   const impl = AEADS.get(aeadId);
   const nonce = iv || randomBytes(impl.ivLength);
+  if (nonce.length !== impl.ivLength) {
+    throw new Error(`iv is ${nonce.length} bytes, aead ${aeadId} wants ${impl.ivLength}`);
+  }
   // The header comes first because format 2 authenticates it.
-  const header = encodeCiphertext({
-    aeadId, kdfId, keyVersion, iv: nonce, ciphertext: new Uint8Array(0),
-  }).slice(0, HEADER_LENGTH);
+  const header = encodeHeader({ aeadId, kdfId, keyVersion });
   const sealed = await impl.seal(
     await handleFor(key, aeadId, 'encrypt'), nonce, plaintext, associatedData(context, header)
   );

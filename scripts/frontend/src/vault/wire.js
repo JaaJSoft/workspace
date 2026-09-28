@@ -37,8 +37,10 @@ export function decodePublicKey(stored, usage) {
   return stored.slice(1);
 }
 
-export function encodeCiphertext({
-  formatVersion = CURRENT_SUITE.formatVersion, aeadId, kdfId, keyVersion, iv, ciphertext,
+// The header on its own, because seal needs it before the AEAD runs: format 2
+// authenticates it. iv_len is the one the manifest declares for the AEAD.
+export function encodeHeader({
+  formatVersion = CURRENT_SUITE.formatVersion, aeadId, kdfId, keyVersion,
 }) {
   suiteEntry('format', formatVersion);
   // Integer-ness is checked, not assumed: every header field is written into a
@@ -54,12 +56,18 @@ export function encodeCiphertext({
       throw new Error(`${name} ${id} does not fit in one byte`);
     }
   }
-  const expected = suiteEntry('aead', aeadId).iv_length;
+  const ivLength = suiteEntry('aead', aeadId).iv_length;
+  return Uint8Array.from([formatVersion, aeadId, kdfId, keyVersion >> 8, keyVersion & 0xff, ivLength]);
+}
+
+export function encodeCiphertext({ iv, ciphertext, ...fields }) {
+  const header = encodeHeader(fields);
+  const expected = suiteEntry('aead', fields.aeadId).iv_length;
   if (iv.length !== expected) {
-    throw new Error(`iv is ${iv.length} bytes, aead ${aeadId} wants ${expected}`);
+    throw new Error(`iv is ${iv.length} bytes, aead ${fields.aeadId} wants ${expected}`);
   }
   const out = new Uint8Array(HEADER_LENGTH + iv.length + ciphertext.length);
-  out.set([formatVersion, aeadId, kdfId, keyVersion >> 8, keyVersion & 0xff, iv.length], 0);
+  out.set(header, 0);
   out.set(iv, HEADER_LENGTH);
   out.set(ciphertext, HEADER_LENGTH + iv.length);
   return out;

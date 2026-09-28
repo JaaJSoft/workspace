@@ -36,6 +36,9 @@ const ALBUM_MENU_ACTIONS = ['rename', 'edit_description', 'change_sort', 'delete
 const PHOTOS_MENU_WIDTH = 224;
 const PHOTOS_MENU_HEIGHT = 340;
 
+// How long the pointer rests on a video tile before its preview plays, in ms.
+const PHOTOS_HOVER_PREVIEW_DELAY = 400;
+
 // How long a finger rests on a tile before it selects it, in ms.
 const PHOTOS_LONG_PRESS = 450;
 // A contextmenu event this soon after a touch is the long press itself.
@@ -119,6 +122,19 @@ function photosTilePrefs() {
   return { size: 1, widths: [] };
 }
 
+// The Preferences panel's settings (photos/services/preferences.py), as the
+// page was rendered with them.
+function photosPrefs() {
+  const el = document.getElementById('photos-prefs-data');
+  try {
+    const data = el ? JSON.parse(el.textContent) : null;
+    if (data && typeof data === 'object') return data;
+  } catch (_) {
+    // Unreadable: the page keeps what the server rendered.
+  }
+  return {};
+}
+
 window.photosApp = function photosApp() {
   const tags = window.tagsMixin();
   const tile = photosTilePrefs();
@@ -134,6 +150,9 @@ window.photosApp = function photosApp() {
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
     _tileWidths: tile.widths,
+    photoPrefs: photosPrefs(),
+    _prefVersions: {},
+    _hoverPreview: null,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
     _ctxGeneration: 0,
     _tagsLoaded: false,
@@ -218,6 +237,7 @@ window.photosApp = function photosApp() {
       if (id === 'photos-content') {
         this.contentLoading = false;
         this.clearSelection();
+        this.stopHoverPreview();
       }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
     },
@@ -255,6 +275,70 @@ window.photosApp = function photosApp() {
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value: this.tileSize }),
       }).catch(() => {});
+    },
+
+    // ── Preferences ─────────────────────────────────────
+    // Applied at once; a refused write puts the previous value back, unless
+    // a later change of the same preference has been made since.
+
+    savePhotoPref(key, value) {
+      const previous = this.photoPrefs[key];
+      const version = (this._prefVersions[key] || 0) + 1;
+      this._prefVersions[key] = version;
+      this.photoPrefs[key] = value;
+      if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
+      return fetch(`/api/v1/settings/photos/${key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value }),
+      })
+        .then((response) => {
+          if (!response.ok) throw new Error(String(response.status));
+        })
+        .catch(() => {
+          if (this._prefVersions[key] !== version) return;
+          this.photoPrefs[key] = previous;
+          window.AppAlert.error('Could not save the preference');
+        });
+    },
+
+    // ── Video preview on hover ──────────────────────────
+    // A muted loop over the thumbnail, after a short rest so that sweeping
+    // the pointer across the grid starts no download. One at a time.
+
+    startHoverPreview(tile) {
+      if (!this.photoPrefs.video_hover_preview || this.selection.length) return;
+      if (window.matchMedia('(hover: none)').matches) return;
+      this.stopHoverPreview();
+      const timer = setTimeout(() => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.loop = true;
+        video.playsInline = true;
+        video.preload = 'auto';
+        video.className = 'absolute inset-0 w-full h-full object-cover pointer-events-none';
+        video.setAttribute('aria-hidden', 'true');
+        video.dataset.hoverPreview = '';
+        video.src = `/api/v1/files/${tile.dataset.uuid}/content`;
+        tile.querySelector('button').appendChild(video);
+        video.play().catch(() => {});
+        this._hoverPreview = { tile, timer: null, video };
+      }, PHOTOS_HOVER_PREVIEW_DELAY);
+      this._hoverPreview = { tile, timer, video: null };
+    },
+
+    stopHoverPreview(tile) {
+      const preview = this._hoverPreview;
+      if (!preview || (tile && preview.tile !== tile)) return;
+      clearTimeout(preview.timer);
+      if (preview.video) {
+        preview.video.pause();
+        // Dropping the source is what ends the download.
+        preview.video.removeAttribute('src');
+        preview.video.load();
+        preview.video.remove();
+      }
+      this._hoverPreview = null;
     },
 
     keepMissingTarget(event) {

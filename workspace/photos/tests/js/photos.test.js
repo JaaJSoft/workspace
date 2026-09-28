@@ -1131,3 +1131,204 @@ test('trashing the selection asks first, and a cancel sends nothing', async () =
   assert.equal(called, false);
   assert.equal(app.selection.length, 1);
 });
+
+// ── Preferences ──────────────────────────────────────────
+
+function withPrefsData(textContent) {
+  return { getElementById: (id) => (id === 'photos-prefs-data' ? { textContent } : null), querySelector: () => null };
+}
+
+test('the preferences start as the page was rendered with them', () => {
+  const app = load({ document: withPrefsData('{"tile_shape": "original", "tile_badges": false}') }).ctx.photosApp();
+
+  assert.equal(app.photoPrefs.tile_shape, 'original');
+  assert.equal(app.photoPrefs.tile_badges, false);
+  assert.deepEqual({ ...load({ document: withPrefsData('nope') }).ctx.photosApp().photoPrefs }, {});
+});
+
+test('a preference applies at once and is saved under the photos module', async () => {
+  const requests = [];
+  const app = load({
+    document: withPrefsData('{"tile_shape": "square"}'),
+    fetch: (url, opts) => { requests.push([url, opts.method, opts.body]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+
+  const saving = app.savePhotoPref('tile_shape', 'original');
+  assert.equal(app.photoPrefs.tile_shape, 'original');
+  await saving;
+
+  assert.deepEqual(requests, [['/api/v1/settings/photos/tile_shape', 'PUT', '{"value":"original"}']]);
+  assert.equal(app.photoPrefs.tile_shape, 'original');
+});
+
+test('a refused save puts the previous value back and says so', async () => {
+  const errors = [];
+  const app = load({
+    document: withPrefsData('{"default_scope": "mine"}'),
+    fetch: () => Promise.resolve({ ok: false, status: 400 }),
+    getCSRFToken: () => 't',
+    AppAlert: { error: (message) => errors.push(message) },
+  }).ctx.photosApp();
+
+  await app.savePhotoPref('default_scope', 'all');
+
+  assert.equal(app.photoPrefs.default_scope, 'mine');
+  assert.equal(errors.length, 1);
+});
+
+test('a refused save does not undo a later change that went through', async () => {
+  const pending = [];
+  const errors = [];
+  const app = load({
+    document: withPrefsData('{"tile_shape": "square"}'),
+    fetch: () => new Promise((resolve) => pending.push(resolve)),
+    getCSRFToken: () => 't',
+    AppAlert: { error: (message) => errors.push(message) },
+  }).ctx.photosApp();
+
+  const first = app.savePhotoPref('tile_shape', 'original');
+  const second = app.savePhotoPref('tile_shape', 'square');
+  pending[1]({ ok: true });
+  await second;
+  pending[0]({ ok: false, status: 500 });
+  await first;
+
+  assert.equal(app.photoPrefs.tile_shape, 'square');
+  assert.equal(errors.length, 0);
+});
+
+// ── Video preview on hover ───────────────────────────────
+
+function fakeTimers() {
+  const pending = new Map();
+  let next = 1;
+  return {
+    setTimeout: (fn) => { const id = next++; pending.set(id, fn); return id; },
+    clearTimeout: (id) => pending.delete(id),
+    runAll() { for (const [id, fn] of [...pending]) { pending.delete(id); fn(); } },
+    get count() { return pending.size; },
+  };
+}
+
+function videoTile(uuid) {
+  const children = [];
+  const button = { appendChild: (el) => { children.push(el); el.parentButton = button; } };
+  return { dataset: { uuid }, children, querySelector: (selector) => (selector === 'button' ? button : null) };
+}
+
+function hoverApp({ enabled = true, touch = false } = {}) {
+  const timers = fakeTimers();
+  const created = [];
+  const document = {
+    getElementById: (id) => (id === 'photos-prefs-data' ? { textContent: JSON.stringify({ video_hover_preview: enabled }) } : null),
+    querySelector: () => null,
+    createElement: (tag) => {
+      const el = {
+        tag,
+        dataset: {},
+        attributes: {},
+        played: false,
+        paused: false,
+        removed: false,
+        loads: 0,
+        setAttribute(name, value) { this.attributes[name] = value; },
+        removeAttribute(name) { if (name === 'src') this.src = undefined; },
+        play() { this.played = true; return Promise.resolve(); },
+        pause() { this.paused = true; },
+        load() { this.loads += 1; },
+        remove() { this.removed = true; },
+      };
+      created.push(el);
+      return el;
+    },
+  };
+  const { ctx } = load({
+    document,
+    mobile: touch,
+    setTimeout: timers.setTimeout,
+    clearTimeout: timers.clearTimeout,
+    fetch: () => Promise.resolve({ ok: true }),
+    getCSRFToken: () => 't',
+  });
+  return { app: ctx.photosApp(), timers, created };
+}
+
+test('resting on a video tile plays a muted loop of it', () => {
+  const { app, timers, created } = hoverApp();
+  const tile = videoTile('v1');
+
+  app.startHoverPreview(tile);
+  assert.equal(created.length, 0, 'nothing loads before the pointer rests');
+  timers.runAll();
+
+  assert.equal(created.length, 1);
+  const [video] = created;
+  assert.equal(video.src, '/api/v1/files/v1/content');
+  assert.equal(video.muted, true);
+  assert.equal(video.loop, true);
+  assert.equal(video.played, true);
+  assert.deepEqual(tile.children, [video]);
+});
+
+test('leaving the tile stops the download and removes the video', () => {
+  const { app, timers, created } = hoverApp();
+  const tile = videoTile('v1');
+  app.startHoverPreview(tile);
+  timers.runAll();
+
+  app.stopHoverPreview(tile);
+
+  const [video] = created;
+  assert.equal(video.paused, true);
+  assert.equal(video.src, undefined);
+  assert.equal(video.loads, 1);
+  assert.equal(video.removed, true);
+});
+
+test('sweeping across a tile loads nothing', () => {
+  const { app, timers, created } = hoverApp();
+  const tile = videoTile('v1');
+
+  app.startHoverPreview(tile);
+  app.stopHoverPreview(tile);
+  timers.runAll();
+
+  assert.equal(created.length, 0);
+  assert.equal(timers.count, 0);
+});
+
+test('one preview at a time', () => {
+  const { app, timers, created } = hoverApp();
+  app.startHoverPreview(videoTile('v1'));
+  timers.runAll();
+
+  app.startHoverPreview(videoTile('v2'));
+  timers.runAll();
+
+  assert.equal(created.length, 2);
+  assert.equal(created[0].removed, true);
+  assert.equal(created[1].removed, false);
+});
+
+test('no preview with the preference off, on a touch screen, or while selecting', () => {
+  for (const [options, select] of [[{ enabled: false }, false], [{ touch: true }, false], [{}, true]]) {
+    const { app, timers, created } = hoverApp(options);
+    if (select) app.selection = ['p1'];
+
+    app.startHoverPreview(videoTile('v1'));
+    timers.runAll();
+
+    assert.equal(created.length, 0, JSON.stringify(options));
+  }
+});
+
+test('turning the preference off stops the preview on screen', async () => {
+  const { app, timers, created } = hoverApp();
+  app.startHoverPreview(videoTile('v1'));
+  timers.runAll();
+
+  await app.savePhotoPref('video_hover_preview', false);
+
+  assert.equal(created[0].removed, true);
+});

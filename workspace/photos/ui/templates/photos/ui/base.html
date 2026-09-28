@@ -22,11 +22,17 @@
 {% comment %}
   The tile width is a custom property on the root, so it outlives every swap
   of the timeline; the server renders the stored one for the first paint.
+  The tile shape and badges preferences are root attributes for the same
+  reason (see photo_tile.html).
 {% endcomment %}
 {% block drawer_attrs %}
   x-data="photosApp()"
   style="--photo-tile: {{ tile_width }}px"
   :style="tileStyle()"
+  data-tile-shape="{{ photos_prefs.tile_shape }}"
+  :data-tile-shape="photoPrefs.tile_shape"
+  data-tile-badges="{{ photos_prefs.tile_badges|yesno:'always,hover' }}"
+  :data-tile-badges="photoPrefs.tile_badges ? 'always' : 'hover'"
   :data-selecting="selection.length > 0"
   @ajax:missing="keepMissingTarget($event)"
   @ajax:merged="onMerged($event)"
@@ -75,6 +81,7 @@
   {{ viewer_prefs|json_script:"viewer-prefs-data" }}
   {{ tile|json_script:"photo-tile-data" }}
   {{ import_folder|json_script:"photos-import-folder-data" }}
+  {{ photos_prefs|json_script:"photos-prefs-data" }}
   <input
     id="photos-import-input"
     type="file"

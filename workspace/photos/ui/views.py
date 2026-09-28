@@ -47,6 +47,13 @@ from workspace.photos.services.face_review import (
     unnamed_queue,
 )
 from workspace.photos.services.import_folder import import_folder, import_folder_data
+from workspace.photos.services.preferences import (
+    ALL_TYPES,
+    GROUP_SCOPE_PREFIX,
+    default_media_type,
+    default_scope_token,
+    display_preferences,
+)
 from workspace.photos.services.timeline import (
     START,
     UNDATED,
@@ -81,44 +88,72 @@ def _tile_size(user):
     return size if 1 <= size <= len(TILE_WIDTHS) else DEFAULT_TILE_SIZE
 
 
-def _scope(request):
-    """The library ``?scope=`` asks for; 404 on a group the user is not in."""
+@dataclass(frozen=True)
+class _Defaults:
+    """What the listing shows when the URL names no library or no media type:
+    the user's preferences. A URL spells out only what differs from them."""
+
+    scope: str
+    media_type: object = None
+
+
+def _defaults(user):
+    return _Defaults(default_scope_token(user), default_media_type(user))
+
+
+def _resolve_scope(user, token):
+    """The library *token* names, or None when it names none the user has."""
+    if token in (MINE, SHARED, ALL):
+        return token
+    prefix, _, group_id = token.partition(":")
+    if f"{prefix}:" == GROUP_SCOPE_PREFIX and group_id.isdecimal():
+        return user.groups.filter(pk=int(group_id)).first()
+    return None
+
+
+def _scope(request, defaults):
+    """The library ``?scope=`` asks for, else the user's default one.
+
+    404 on a group the user is not in. A default group the user has left
+    falls back to their own photos instead: the preference is not the URL.
+    """
     raw = request.GET.get("scope", "")
-    if raw in ("", MINE):
-        return MINE
-    if raw in (SHARED, ALL):
-        return raw
-    prefix, _, group_id = raw.partition(":")
-    if prefix == "group":
-        try:
-            group = request.user.groups.filter(pk=int(group_id)).first()
-        except ValueError:
-            group = None
-        if group is not None:
-            return group
-    raise Http404
+    if not raw:
+        return _resolve_scope(request.user, defaults.scope) or MINE
+    scope = _resolve_scope(request.user, raw)
+    if scope is None:
+        raise Http404
+    return scope
 
 
-def _scope_params(scope):
-    if scope == MINE:
-        return {}
-    if scope in (SHARED, ALL):
-        return {"scope": scope}
-    return {"scope": f"group:{scope.pk}"}
+def _scope_token(scope):
+    if isinstance(scope, str):
+        return scope
+    return f"{GROUP_SCOPE_PREFIX}{scope.pk}"
 
 
-def _filters(request):
+def _scope_params(scope, defaults):
+    token = _scope_token(scope)
+    return {} if token == defaults.scope else {"scope": token}
+
+
+def _filters(request, defaults):
     """The active filters as ``(favorites, media_type, tag)``.
 
-    404 on a tag not the user's, 400 on a ``?type=`` that is neither
-    ``photo`` nor ``video``.
+    No ``?type=`` is the user's default media type, ``?type=all`` both kinds.
+    404 on a tag not the user's, 400 on a ``?type=`` that is none of
+    ``all``, ``photo`` and ``video``.
     """
     favorites = is_truthy(request.GET.get("favorites"))
-    media_type = None
-    if request.GET.get("type"):
-        if request.GET["type"] not in MediaItem.MediaType.values:
-            raise BadRequest("Invalid media type.")
-        media_type = MediaItem.MediaType(request.GET["type"])
+    raw_type = request.GET.get("type", "")
+    if not raw_type:
+        media_type = defaults.media_type
+    elif raw_type == ALL_TYPES:
+        media_type = None
+    elif raw_type in MediaItem.MediaType.values:
+        media_type = MediaItem.MediaType(raw_type)
+    else:
+        raise BadRequest("Invalid media type.")
     tag = None
     if request.GET.get("tag"):
         tag_uuid = parse_uuid_or_none(request.GET["tag"])
@@ -205,11 +240,13 @@ def _view_filter_params(favorites, tag, who=None):
     return params
 
 
-def _type_params(media_type):
-    return {"type": media_type.value} if media_type is not None else {}
+def _type_params(media_type, defaults):
+    if media_type == defaults.media_type:
+        return {}
+    return {"type": media_type.value if media_type is not None else ALL_TYPES}
 
 
-def _type_tabs(counts, media_type, params):
+def _type_tabs(counts, media_type, params, defaults):
     """The media type switcher: All, Photos, Videos.
 
     Hidden (empty) while the view holds a single kind, as there is nothing to
@@ -227,14 +264,14 @@ def _type_tabs(counts, media_type, params):
             "label": label,
             "title": title,
             "icon": icon,
-            "url": _url_with(params | _type_params(choice)),
+            "url": _url_with(params | _type_params(choice, defaults)),
             "active": choice == media_type,
         }
         for choice, label, title, icon in choices
     ]
 
 
-def _scope_tabs(user, scope, filter_params):
+def _scope_tabs(user, scope, filter_params, defaults):
     """The library switcher: Mine, All, Shared with me, then one tab per group.
 
     Shared with me and the groups only get a tab when they hold a photo. The
@@ -255,7 +292,7 @@ def _scope_tabs(user, scope, filter_params):
         {
             "label": label,
             "icon": icon,
-            "url": _url_with(_scope_params(choice) | filter_params),
+            "url": _url_with(_scope_params(choice, defaults) | filter_params),
             "active": choice == scope,
         }
         for choice, label, icon in choices
@@ -418,6 +455,20 @@ def _who_card(who):
     return _person_card(card)
 
 
+def _scope_choices(user):
+    """The libraries the timeline can open on, for the Preferences panel."""
+    choices = [
+        {"value": MINE, "label": "My photos"},
+        {"value": ALL, "label": "All"},
+        {"value": SHARED, "label": "Shared with me"},
+    ]
+    choices += [
+        {"value": _scope_token(group), "label": group.name}
+        for group in user.groups.order_by("name")
+    ]
+    return choices
+
+
 def _render_page(request, template, context):
     """A photos page, or on an alpine-ajax request its two swap targets alone.
 
@@ -434,6 +485,8 @@ def _render_page(request, template, context):
         context["photos_shell"] = "photos/ui/swap.html"
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
+        context["photos_prefs"] = display_preferences(request.user)
+        context["scope_choices"] = _scope_choices(request.user)
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
     if swap:
@@ -450,9 +503,10 @@ def index(request):
     those of one unnamed face cluster: a person's page is their timeline.
     """
     who = _who(request)
+    defaults = _defaults(request.user)
     # Faces are only ever found in the user's personal photos.
-    scope = MINE if who is not None else _scope(request)
-    favorites, media_type, tag = _filters(request)
+    scope = MINE if who is not None else _scope(request, defaults)
+    favorites, media_type, tag = _filters(request, defaults)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
     position = START
@@ -465,8 +519,8 @@ def index(request):
     view_files = _filtered_library(request.user, scope, favorites, tag, who)
     files = _of_type(view_files, media_type)
     counts = media_type_counts(view_files)
-    scope_params = _scope_params(scope)
-    type_params = _type_params(media_type)
+    scope_params = _scope_params(scope, defaults)
+    type_params = _type_params(media_type, defaults)
     view_filter_params = _view_filter_params(favorites, tag, who)
     filter_params = view_filter_params | type_params
     view_params = scope_params | filter_params
@@ -503,6 +557,7 @@ def index(request):
         "title_icon": icon,
         "cluster": _who_card(who) if who is not None else None,
         "count_label": _count_label(counts, media_type),
+        "view_empty": not (counts["photos"] or counts["videos"]),
         "pending": (
             unanalyzed_count(request.user, scope)
             if active_view == "timeline" and media_type is None
@@ -511,9 +566,13 @@ def index(request):
         "date_param": date_param,
         "latest_url": _url_with(view_params),
         "scope_tabs": (
-            _scope_tabs(request.user, scope, filter_params) if who is None else []
+            _scope_tabs(request.user, scope, filter_params, defaults)
+            if who is None
+            else []
         ),
-        "type_tabs": _type_tabs(counts, media_type, scope_params | view_filter_params),
+        "type_tabs": _type_tabs(
+            counts, media_type, scope_params | view_filter_params, defaults
+        ),
         "years": years,
         "tags": [
             {
@@ -537,8 +596,9 @@ def index(request):
 def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
     who = _who(request)
-    scope = MINE if who is not None else _scope(request)
-    favorites, media_type, tag = _filters(request)
+    defaults = _defaults(request.user)
+    scope = MINE if who is not None else _scope(request, defaults)
+    favorites, media_type, tag = _filters(request, defaults)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
@@ -551,9 +611,9 @@ def timeline(request):
         files,
         position,
         get_user_timezone(request.user),
-        _scope_params(scope)
+        _scope_params(scope, defaults)
         | _view_filter_params(favorites, tag, who)
-        | _type_params(media_type),
+        | _type_params(media_type, defaults),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)
 

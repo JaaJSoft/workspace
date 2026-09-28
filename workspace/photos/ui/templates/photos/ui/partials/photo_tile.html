@@ -16,9 +16,16 @@
   isolate makes the tile its own stacking context: the overlays' z-10 then
   ranks them within the tile only, never against the sticky header (z-10
   too), which they would otherwise paint over while scrolling under it.
+
+  The tile shape and badge preferences are attributes of the page root
+  (data-tile-shape, data-tile-badges), so changing one restyles every tile,
+  the pages still to be appended included, without a re-render. In the
+  "original" shape the size slider sets the height and --tile-aspect the
+  width.
 {% endcomment %}
 <div
-  class="group relative isolate shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square overflow-hidden rounded-lg bg-base-200"
+  class="group relative isolate shrink-0 w-[calc((100vw-1.5rem)/3)] sm:w-[var(--photo-tile)] aspect-square [[data-tile-shape=original]_&]:w-auto [[data-tile-shape=original]_&]:max-w-full [[data-tile-shape=original]_&]:aspect-[var(--tile-aspect)] [[data-tile-shape=original]_&]:h-[calc((100vw-1.5rem)/3)] sm:[[data-tile-shape=original]_&]:h-[var(--photo-tile)] overflow-hidden rounded-lg bg-base-200"
+  style="--tile-aspect: {{ file|tile_aspect }}"
   data-uuid="{{ file.uuid }}"
   data-node-type="file"
   data-viewable="{{ file.is_viewable|yesno:'1,0' }}"
@@ -40,6 +47,7 @@
   @dragleave="leaveTileDrag($el)"
   @drop="dropTileDrag($event, $el)"
   @dragend="endTileDrag()"
+  {% if file.media_item.media_type == "video" %} @mouseenter="startHoverPreview($el)" @mouseleave="stopHoverPreview($el)" {% endif %}
 >
   <button
     type="button"
@@ -69,7 +77,12 @@
     {% endif %}
   </button>
   {% if file.media_item.media_type == "video" %}
-    {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
+    {# Hidden until hover when the badges preference says so; a touch screen then never shows it. #}
+    <span
+      class="transition-opacity [[data-tile-badges=hover]_.group:not(:hover):not(:focus-within)_&]:opacity-0"
+    >
+      {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
+    </span>
   {% endif %}
   {% comment %}
     Selection, with the Files mosaic cards' checkbox and ring, in the module's color. The
@@ -117,7 +130,7 @@
     <div class="absolute top-2 right-2 z-10">
       <button
         type="button"
-        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hidden group-data-[favorite='1']:inline-flex"
+        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm hidden group-data-[favorite='1']:inline-flex [[data-tile-badges=hover]_.group:not(:hover):not(:focus-within)_&]:opacity-0"
         title="Remove from favorites"
         aria-label="Remove from favorites"
         @click.stop="toggleTileFavorite($el)"

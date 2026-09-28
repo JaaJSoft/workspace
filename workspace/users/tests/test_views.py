@@ -542,6 +542,30 @@ class SettingDetailTests(UserTestMixin, APITestCase):
             )
             self.assertIn(resp.status_code, (200, 201), value)
 
+    def test_put_checks_the_photos_preferences(self):
+        cases = {
+            "tile_shape": (["square", "original"], ["round", 1]),
+            "tile_badges": ([True, False], ["true", 1]),
+            "video_hover_preview": ([True, False], ["yes", 0]),
+            "import_by_date": ([True, False], ["on", 1]),
+            "default_media_type": (["all", "photo", "video"], ["audio", 1]),
+            "default_scope": (
+                ["mine", "all", "shared", "group:12"],
+                ["group:", "group:x", "family", 3, "mine "],
+            ),
+        }
+        for key, (accepted, rejected) in cases.items():
+            for value in accepted:
+                resp = self.client.put(
+                    self._url("photos", key), {"value": value}, format="json"
+                )
+                self.assertIn(resp.status_code, (200, 201), (key, value))
+            for value in rejected:
+                resp = self.client.put(
+                    self._url("photos", key), {"value": value}, format="json"
+                )
+                self.assertEqual(resp.status_code, 400, (key, value))
+
     def test_put_rejects_a_lock_delay_that_is_not_a_delay(self):
         """A vault that never locks is the failure this setting can cause, so
         the value is checked here rather than trusted from the page."""

@@ -8,6 +8,21 @@ from workspace.photos.queries import person_photos
 
 register = template.Library()
 
+# The widest and the tallest a tile gets in the "original" tile shape: past
+# them a panorama would take a whole row, a phone screenshot a sliver.
+_TILE_ASPECT_RANGE = (0.5, 2.5)
+
+
+@register.filter
+def tile_aspect(file_obj):
+    """The width-to-height ratio of *file_obj*'s tile, as CSS ``aspect-ratio``
+    reads it; square when the analysis found no size."""
+    item = getattr(file_obj, "media_item", None)
+    if item is None or not item.width or not item.height:
+        return "1"
+    low, high = _TILE_ASPECT_RANGE
+    return f"{min(max(item.width / item.height, low), high):.4f}"
+
 
 @register.filter
 def files_url(file_obj):

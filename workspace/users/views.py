@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -492,6 +493,27 @@ _setting_fields = {
 }
 
 
+_PHOTOS_FLAGS = ("tile_badges", "video_hover_preview", "import_by_date")
+_PHOTOS_CHOICES = {
+    "tile_shape": ("square", "original"),
+    "default_media_type": ("all", "photo", "video"),
+}
+_PHOTOS_SCOPE_RE = re.compile(r"^(mine|all|shared|group:\d+)$")
+
+
+def _validate_photos_setting(key, value):
+    """The Photos Preferences panel's settings (photos/services/preferences.py)."""
+    if key in _PHOTOS_FLAGS and not isinstance(value, bool):
+        return f"{key} must be a boolean."
+    if key in _PHOTOS_CHOICES and value not in _PHOTOS_CHOICES[key]:
+        return f"{key} must be one of: {', '.join(_PHOTOS_CHOICES[key])}."
+    if key == "default_scope" and not (
+        isinstance(value, str) and _PHOTOS_SCOPE_RE.match(value)
+    ):
+        return "default_scope must be mine, all, shared or group:<id>."
+    return None
+
+
 def _validate_setting_value(module, key, value):
     """Return an error message when the value is rejected, else None."""
     if module == "core" and key == "timezone" and value is not None:
@@ -511,6 +533,10 @@ def _validate_setting_value(module, key, value):
         # each of the five and none for anything else.
         if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 5:
             return "tile_size must be an integer between 1 and 5."
+    if module == "photos" and value is not None:
+        error = _validate_photos_setting(key, value)
+        if error:
+            return error
     if module == "vault" and key == "default_sort" and value is not None:
         # The four the preferences panel offers. Stored unchecked, an unknown
         # value reaches the listing as a sort nothing implements, and the sort

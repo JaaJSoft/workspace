@@ -184,7 +184,7 @@
           x-target.push="photos-nav photos-content"
           class="btn btn-module btn-sm"
         >Go to the timeline</a>
-      {% elif is_timeline_view and not date_param and not media_type %}
+      {% elif is_timeline_view and not date_param and view_empty %}
         <h2 class="text-lg font-semibold">No photos yet</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
           Import photos and videos, or drop them here. Everything you keep in Files shows up too, by the day it was taken.

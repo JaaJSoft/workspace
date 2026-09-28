@@ -1,4 +1,4 @@
-"""Celery tasks for face detection and grouping."""
+"""Celery tasks of the photos module: faces, and filing imports by date."""
 
 import logging
 
@@ -147,3 +147,18 @@ def purge_faces(user_id):
     ).exists():
         return 0
     return purge_owner_faces(user_id)
+
+
+@shared_task(
+    name="photos.file_imports_by_date", priority=NORMAL_PRIORITY, ignore_result=True
+)
+def file_imports_by_date(user_id, file_uuids):
+    """Sort a batch the Photos page just imported into year and month folders."""
+    from django.contrib.auth import get_user_model
+
+    from .services.import_by_date import file_by_date
+
+    user = get_user_model().objects.filter(pk=user_id).first()
+    if user is None:
+        return 0
+    return file_by_date(user, file_uuids)

@@ -1,5 +1,60 @@
-{# Reads the import state of photosApp() (photos/ui/js/import.js). #}
+{# Reads the preferences and import state of photosApp() (photos/ui/js/photos.js, import.js). #}
 <div class="space-y-3">
+  <div>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      for="photos-pref-tile-shape"
+    >
+      Tile shape
+    </label>
+    <select
+      id="photos-pref-tile-shape"
+      class="select select-bordered select-sm w-full"
+      :value="photoPrefs.tile_shape"
+      @change="savePhotoPref('tile_shape', $event.target.value)"
+      data-testid="photos-pref-tile-shape"
+    >
+      <option value="square">Square</option>
+      <option value="original">Original proportions</option>
+    </select>
+  </div>
+  {% include "ui/partials/pref_toggle.html" with label="Always show badges" state="photoPrefs.tile_badges" change="savePhotoPref('tile_badges', $event.target.checked)" accent="toggle-module" %}
+  {% include "ui/partials/pref_toggle.html" with label="Play videos on hover" state="photoPrefs.video_hover_preview" change="savePhotoPref('video_hover_preview', $event.target.checked)" accent="toggle-module" %}
+  <hr class="border-base-300" />
+  <div>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      for="photos-pref-scope"
+    >
+      Open Photos on
+    </label>
+    <div class="space-y-2">
+      <select
+        id="photos-pref-scope"
+        class="select select-bordered select-sm w-full"
+        :value="photoPrefs.default_scope"
+        @change="savePhotoPref('default_scope', $event.target.value)"
+        aria-label="Library the timeline opens on"
+        data-testid="photos-pref-scope"
+      >
+        {% for choice in scope_choices %}
+          <option value="{{ choice.value }}">{{ choice.label }}</option>
+        {% endfor %}
+      </select>
+      <select
+        class="select select-bordered select-sm w-full"
+        :value="photoPrefs.default_media_type"
+        @change="savePhotoPref('default_media_type', $event.target.value)"
+        aria-label="Media type the timeline opens on"
+        data-testid="photos-pref-media-type"
+      >
+        <option value="all">Photos and videos</option>
+        <option value="photo">Photos only</option>
+        <option value="video">Videos only</option>
+      </select>
+    </div>
+  </div>
+  <hr class="border-base-300" />
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Import folder</label>
     <div
@@ -18,17 +73,17 @@
         <i data-lucide="pen-line" class="w-3 h-3"></i>
       </button>
     </div>
-    <p class="text-xs text-base-content/60 mt-1">
-      Where Import and drag and drop save photos and videos. Anything in your Files shows up in Photos, wherever it is.
-    </p>
   </div>
+  {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
   <div x-show="importFolder && !importFolder.group">
-    <label class="text-sm text-base-content/60 block mb-1">Back up your phone</label>
-    <p class="text-xs text-base-content/60">
-      Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to send new photos here automatically:
-    </p>
+    <label
+      class="text-sm text-base-content/60 block mb-1"
+      title="Point a WebDAV sync app (PhotoSync, FolderSync, ...) at this address to back up your phone here"
+    >
+      Phone backup (WebDAV)
+    </label>
     <code
-      class="block bg-base-200 px-2 py-1 mt-1 rounded text-xs break-all select-all"
+      class="block bg-base-200 px-2 py-1 rounded text-xs break-all select-all"
       x-text="importDavUrl()"
     ></code>
   </div>

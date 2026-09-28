@@ -128,7 +128,7 @@ window.chatPanelsMixin = function chatPanelsMixin() {
         this.showInfoPanel = false;
         this.closeThread?.();
         this.$nextTick(() => {
-          this.$refs.searchInput?.focus();
+          this._visibleSearchPanelEl('[data-search-input]')?.focus();
         });
       } else {
         this.closeSearchPanel();
@@ -227,9 +227,17 @@ window.chatPanelsMixin = function chatPanelsMixin() {
 
     _scrollSearchResultIntoView() {
       this.$nextTick(() => {
-        const el = document.querySelector('[data-search-result-active="true"]');
-        if (el) el.scrollIntoView({ block: 'nearest' });
+        this._visibleSearchPanelEl('[data-search-result-active="true"]')
+          ?.scrollIntoView({ block: 'nearest' });
       });
+    },
+
+    // search_panel.html is rendered twice (side panel and mobile overlay) and
+    // CSS shows one copy: an x-ref in it would name the hidden copy at one of
+    // the two breakpoints.
+    _visibleSearchPanelEl(selector) {
+      return Array.from(this.$root.querySelectorAll(selector))
+        .find((el) => el.offsetParent !== null) || null;
     },
 
     // Scroll to a message on the given surface and flash it. Returns whether

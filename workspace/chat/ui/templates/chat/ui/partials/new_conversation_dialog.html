@@ -81,7 +81,7 @@
             @click.outside="userSearchShowDropdown = false"
             class="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto"
           >
-            <ul class="menu menu-sm p-1">
+            <ul class="menu menu-sm p-1" x-ref="userSearchList">
               <template x-for="(user, idx) in userSearchResults" :key="user.id">
                 <li>
                   <button

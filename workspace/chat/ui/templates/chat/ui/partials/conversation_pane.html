@@ -239,6 +239,7 @@
                  not torn down on a switch). -->
             <div
               id="messages-container"
+              data-attachment-gallery
               :data-msg-animation="chatPrefs.messageAnimation"
               @ajax:merge="_vetoStaleMerge($event)"
               @contextmenu="openMessageContextMenu($event)"
@@ -494,6 +495,7 @@
 <!-- New conversation dialog -->
 {% include "chat/ui/partials/new_conversation_dialog.html" %}
 {% include "chat/ui/partials/add_member_dialog.html" %}
+{% include "chat/ui/partials/group_avatar_cropper.html" %}
 {% if ai_enabled %}
   {% include "chat/ui/partials/agent_goal_dialog.html" %}
 {% endif %}

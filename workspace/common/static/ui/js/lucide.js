@@ -100,24 +100,6 @@ function initLucideIconsAfterAlpine() {
 }
 
 /**
- * Initialize Lucide icons in a specific DOM element.
- * Useful when you only want to initialize icons in a specific container.
- *
- * @param {HTMLElement|string} element - The DOM element or selector
- */
-function initLucideIconsInElement(element) {
-  if (typeof lucide !== 'undefined' && lucide.createIcons) {
-    const container = typeof element === 'string'
-      ? document.querySelector(element)
-      : element;
-
-    if (container) {
-      lucide.createIcons({ nameAttr: 'data-lucide', attrs: {} });
-    }
-  }
-}
-
-/**
  * Observer-based Lucide initialization.
  * Watches for DOM changes and automatically renders Lucide icons: newly
  * added `<i data-lucide>` nodes, and existing icons whose `data-lucide`
@@ -202,7 +184,6 @@ if (typeof module !== 'undefined' && module.exports) {
     initLucideIconsNextFrame,
     initLucideIconsAlpineNextTick,
     initLucideIconsAfterAlpine,
-    initLucideIconsInElement,
     observeLucideIcons,
     renderLucideIcons
   };
@@ -213,7 +194,6 @@ if (typeof module !== 'undefined' && module.exports) {
     nextFrame: initLucideIconsNextFrame,
     alpineNextTick: initLucideIconsAlpineNextTick,
     afterAlpine: initLucideIconsAfterAlpine,
-    inElement: initLucideIconsInElement,
     observe: observeLucideIcons,
     render: renderLucideIcons
   };

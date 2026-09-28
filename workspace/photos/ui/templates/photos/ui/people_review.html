@@ -4,7 +4,7 @@
   {{ review|json_script:"photos-review-data" }}
   <div x-data="facesReview()" class="min-h-full flex flex-col">
     <header
-      class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
+      class="sticky top-0 z-20 border-b border-base-300 bg-base-100/90 backdrop-blur"
     >
       <div class="flex items-center gap-3 px-4 py-3">
         {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
@@ -17,59 +17,52 @@
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
-        <h1 class="text-lg font-semibold truncate max-sm:sr-only">Review people</h1>
-        <nav
-          class="tabs tabs-boxed tabs-sm shrink-0 ml-auto grid-flow-col auto-cols-max"
-          aria-label="Review"
-        >
-          <a
-            href="{{ review_url }}?queue=name"
-            x-target.push="photos-nav photos-content"
-            class="tab gap-1.5 {% if review.queue == 'name' %}tab-active !bg-module !text-module-content{% endif %}"
-            {% if review.queue == 'name' %}aria-current="page"{% endif %}
-          >
-            <i data-lucide="user-pen" class="w-3.5 h-3.5 shrink-0 max-sm:hidden"></i>
-            <span class="leading-5">To name</span>
-            <span class="tabular-nums opacity-70" x-text="unnamed.length">{{ review.unnamed|length }}</span>
-          </a>
-          <a
-            href="{{ review_url }}?queue=check"
-            x-target.push="photos-nav photos-content"
-            class="tab gap-1.5 {% if review.queue == 'check' %}tab-active !bg-module !text-module-content{% endif %}"
-            {% if review.queue == 'check' %}aria-current="page"{% endif %}
-          >
-            <i data-lucide="user-check" class="w-3.5 h-3.5 shrink-0 max-sm:hidden"></i>
-            <span class="leading-5">To check</span>
-            <span class="tabular-nums opacity-70" x-text="doubtCount()">{{ doubt_count }}</span>
-          </a>
-          <a
-            href="{{ review_url }}?queue=unassigned"
-            x-target.push="photos-nav photos-content"
-            class="tab gap-1.5 {% if review.queue == 'unassigned' %}tab-active !bg-module !text-module-content{% endif %}"
-            {% if review.queue == 'unassigned' %}aria-current="page"{% endif %}
-            title="Faces in nobody's group: taken out of one, or never grouped"
-          >
-            <i
-              data-lucide="user-round-search"
-              class="w-3.5 h-3.5 shrink-0 max-sm:hidden"
-            ></i>
-            <span class="leading-5">Unassigned</span>
-            <span class="tabular-nums opacity-70" x-text="unassignedCount()">{{ unassigned_count }}</span>
-          </a>
-        </nav>
+        <h1 class="text-lg font-semibold truncate">Review people</h1>
+        {% if review.left %}
+          <span
+            class="ml-auto text-sm text-base-content/60 tabular-nums whitespace-nowrap"
+            x-show="left > 0"
+            x-text="left === 1 ? '1 group left' : left + ' groups left'"
+          >{% if review.left == 1 %}1 group left{% else %}{{ review.left }} groups left{% endif %}</span>
+        {% endif %}
       </div>
     </header>
 
-    <div class="flex-1">
-      {% if review.queue == "name" %}
-        {% include "photos/ui/partials/review_name.html" %}
-      {% elif review.queue == "check" %}
-        {% include "photos/ui/partials/review_check.html" %}
-      {% else %}
-        {% include "photos/ui/partials/review_unassigned.html" %}
-      {% endif %}
+    <div class="flex-1 w-full max-w-5xl mx-auto p-4 space-y-4">
+      <template x-if="cards.length">
+        <p class="flex items-center gap-2 text-sm text-base-content/60">
+          <i data-lucide="mouse-pointer-click" class="w-4 h-4 shrink-0"></i>
+          <span>Say who each group is. <span class="sm:hidden">Tap</span><span class="max-sm:hidden">Click</span> a face that isn't them to leave it out: it comes back in a group of its own.</span>
+        </p>
+      </template>
+      <template x-for="card in cards" :key="card.key">
+        {% include "photos/ui/partials/review_card.html" %}
+      </template>
+      <p
+        x-show="cards.length && left > cards.length"
+        x-cloak
+        class="text-xs text-center text-base-content/60"
+        x-text="'The next ' + (left - cards.length) + ' come once these are settled.'"
+      ></p>
+
+      <template x-if="!cards.length">
+        <div
+          class="flex flex-col items-center justify-center text-center gap-3 px-6 py-24"
+        >
+          <div class="rounded-full bg-module/10 p-5">
+            <i data-lucide="user-check" class="w-10 h-10 text-module"></i>
+          </div>
+          <h2 class="text-lg font-semibold">Everyone is sorted out</h2>
+          <p class="text-sm text-base-content/60 max-w-sm">
+            New people and faces to check show up here as more photos are read for faces.
+          </p>
+          <a
+            href="{{ people_url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-module btn-sm"
+          >Back to People</a>
+        </div>
+      </template>
     </div>
-    {% include "photos/ui/partials/face_selection_bar.html" %}
-    {% include "photos/ui/partials/face_assign_dialog.html" %}
   </div>
 {% endblock %}

@@ -170,25 +170,39 @@ only leaves its groups unnamed.
 
 ### Reviewing people
 
-*Review* on the People tab settles the grouping in a row, in three queues:
+*Review* on the People tab lists everything the grouping is waiting on, one
+card per group of faces, each asking the same question - *who is this?* - and
+answered the same way whatever it holds:
 
-- **To name**: the unnamed groups, largest first, one at a time with the name
-  field focused. Enter picks the highlighted contact, or adds the typed name
-  to People. A group whose centroid is within the grouping threshold of a
-  named person's suggests that person first, unless they are already in one
-  of its photos.
-- **To check**: faces the grouping put under a named person on its own and
-  that sit further than half the threshold from their group's centroid, most
-  doubtful first. A person's button confirms the faces left unpicked. A
-  confirmed face never comes back to this list.
-- **Unassigned**: faces in no group, either taken out of one by the user or
-  never grouped (clear ones only: the blurred crowd behind a subject would
-  bury the rest). Look-alikes come side by side.
+- **An unnamed group**, its faces least like the rest first (the others go
+  with the answer unseen). A group whose centroid is within the grouping
+  threshold of a named person's suggests that person, unless they are
+  already in one of its photos.
+- **A named person's doubtful faces** (*Is this Léa?*): faces the grouping put
+  with them on its own that sit further than half the threshold from their
+  group's centroid, most doubtful first. A confirmed face never comes back.
+- **Look-alike faces in no group**, taken out of one by the user or never
+  grouped (clear ones only: the blurred crowd behind a subject would bury the
+  rest), with the named person they look like when there is one - never the
+  one they were taken out of.
+
+Clicking a face leaves it out of its card's answer; everything else on the
+card goes with it. The answer is the guess, a contact or a new name typed in
+the card's field, or *Hide* for nobody to name. Faces left out are taken out of the group the answer settles,
+or left where they were, and come back in a card of their own. A settled card
+leaves the list; the cards settling the most photos come first, 30 at a time.
+
+The review runs from the keyboard: the card at hand has the focus in its name
+field, from the first card on and after each answer (on a touch screen, only
+after a keyboard answer). Enter takes the guess, or the highlighted contact
+once the list is open; the arrows open and walk the contacts, Tab and
+Shift+Tab move between cards, Alt+H hides, Escape closes the contacts then
+clears the name. Clicking a face hands the keyboard back to its card.
 
 ### Correcting several faces at once
 
-The review queues, the *Faces* tab of a person's page and the hidden faces on
-the *Hidden* page are boards of face tiles: click to pick (Shift picks a
+The *Faces* tab of a person's page and the hidden faces on the *Hidden* page
+are boards of face tiles: click to pick (Shift picks a
 range), then act from the bar under them:
 
 - **This is...** puts the faces with a contact (their closest group, or one

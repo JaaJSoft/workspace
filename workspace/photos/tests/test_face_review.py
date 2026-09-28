@@ -1,4 +1,6 @@
-"""The review page: naming people one after the other, checking doubtful faces."""
+"""The review page: one group of faces after the other, and who they are."""
+
+from unittest.mock import patch
 
 import numpy as np
 from django.contrib.auth import get_user_model
@@ -12,13 +14,10 @@ from workspace.photos.services.face_corrections import hide_face, reject_face
 from workspace.photos.services.face_grouping import cluster_owner, refresh_clusters
 from workspace.photos.services.face_preferences import FACES_ENABLED, MODULE
 from workspace.photos.services.face_review import (
-    REJECTED,
-    UNGROUPED,
-    by_likeness,
     doubtful_faces,
     hidden_faces,
-    unassigned_counts,
-    unassigned_faces,
+    likeness_groups,
+    unassigned_groups,
     unnamed_queue,
 )
 from workspace.users.services.settings import set_setting
@@ -66,16 +65,26 @@ class UnnamedQueueTests(ReviewTestCase):
         (item,) = unnamed_queue(self.user)
 
         self.assertEqual(item.cluster.pk, self.bob.pk)
-        # The cover is shown apart: the samples are the other faces.
-        self.bob.refresh_from_db()
-        self.assertEqual(
-            list(item.sample_face_ids),
-            [
-                f.pk
-                for f in Face.objects.filter(cluster=self.bob)
-                if f.pk != self.bob.cover_id
-            ],
+        self.assertCountEqual(
+            item.face_ids,
+            Face.objects.filter(cluster=self.bob).values_list("pk", flat=True),
         )
+
+    def test_the_face_least_like_the_rest_comes_first(self):
+        # Name Alice's cluster's person off: it is the unnamed one to look at.
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=None)
+        stray = self._stray_alice_face()
+
+        queue = {item.cluster.pk: item for item in unnamed_queue(self.user)}
+
+        self.assertEqual(queue[self.alice.pk].face_ids[0], stray.pk)
+
+    def test_a_limit_keeps_the_largest(self):
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=None)
+
+        (item,) = unnamed_queue(self.user, limit=1)
+
+        self.assertEqual(item.cluster.pk, self.alice.pk)
 
     def test_hidden_clusters_are_left_out(self):
         FaceCluster.objects.filter(pk=self.bob.pk).update(hidden=True)
@@ -199,67 +208,86 @@ class ReviewEndpointTests(ReviewTestCase):
 
 
 class ReviewPageTests(ReviewTestCase):
-    def test_opens_on_the_people_to_name(self):
+    def _cards(self):
         response = self.client.get(REVIEW)
-
         self.assertEqual(response.status_code, 200)
-        review = response.context["review"]
-        self.assertEqual(review["queue"], "name")
-        self.assertEqual([c["uuid"] for c in review["unnamed"]], [str(self.bob.pk)])
+        return response.context["review"]["cards"]
 
-    def test_opens_on_the_faces_to_check_when_everyone_has_a_name(self):
+    def test_asks_who_an_unnamed_cluster_is(self):
+        (card,) = self._cards()
+
+        self.assertEqual(card["kind"], "cluster")
+        self.assertEqual(card["cluster"], str(self.bob.pk))
+        self.assertEqual(card["photo_count"], 2)
+        self.assertCountEqual(
+            [f["uuid"] for f in card["faces"]],
+            [str(f.pk) for f in Face.objects.filter(cluster=self.bob)],
+        )
+
+    def test_asks_about_the_faces_a_named_person_got_without_being_sure(self):
         FaceCluster.objects.filter(pk=self.bob.pk).update(
             person=create_person(owner=self.user, display_name="Bob")
         )
         stray = self._stray_alice_face()
 
-        response = self.client.get(REVIEW)
+        (card,) = self._cards()
 
-        review = response.context["review"]
-        self.assertEqual(review["queue"], "check")
-        (block,) = review["doubts"]
-        self.assertEqual(block["person"]["name"], "Alice Martin")
-        self.assertEqual([f["uuid"] for f in block["faces"]], [str(stray.pk)])
-        self.assertEqual(response.context["doubt_count"], 1)
+        self.assertEqual(card["kind"], "check")
+        self.assertEqual(card["guess"]["name"], "Alice Martin")
+        self.assertEqual(card["guess"]["uuid"], str(self.contact.pk))
+        self.assertEqual([f["uuid"] for f in card["faces"]], [str(stray.pk)])
 
-    def test_lists_the_faces_taken_out_of_a_group(self):
+    def test_asks_about_the_faces_in_no_group(self):
+        FaceCluster.objects.filter(pk=self.bob.pk).update(
+            person=create_person(owner=self.user, display_name="Bob")
+        )
         face = self.face("alice-2.png")
         reject_face(face)
         # Seen in a video: the tile opens it at that moment.
         Face.objects.filter(pk=face.pk).update(timestamp=12.0)
 
-        response = self.client.get(REVIEW, {"queue": "unassigned"})
+        (card,) = self._cards()
 
-        unassigned = response.context["review"]["unassigned"]
-        self.assertEqual(unassigned["kind"], REJECTED)
-        (item,) = unassigned["faces"]
+        self.assertEqual(card["kind"], "loose")
+        (item,) = card["faces"]
         self.assertEqual(item["uuid"], str(face.pk))
         self.assertEqual(item["file"], str(self.photos["alice-2.png"].pk))
         self.assertEqual(item["file_name"], "alice-2.png")
         self.assertEqual(item["timestamp"], 12.0)
-        self.assertEqual(response.context["unassigned_count"], 1)
 
-    def test_the_faces_never_grouped_are_one_filter_away(self):
-        face = self.face("alice-2.png")
-        Face.objects.filter(pk=face.pk).update(cluster=None)
+    def test_the_cards_settling_the_most_photos_come_first(self):
+        stray = self._stray_alice_face()
+        Face.objects.filter(file__name__in=["alice-1.png", "alice-2.png"]).exclude(
+            pk=stray.pk
+        ).update(cluster=None)
 
-        response = self.client.get(REVIEW, {"queue": "unassigned", "kind": UNGROUPED})
+        cards = self._cards()
 
-        unassigned = response.context["review"]["unassigned"]
-        self.assertEqual([f["uuid"] for f in unassigned["faces"]], [str(face.pk)])
-        kinds = {k["kind"]: k for k in response.context["unassigned_kinds"]}
-        self.assertTrue(kinds[UNGROUPED]["active"])
-        self.assertEqual(kinds[UNGROUPED]["count"], 1)
-
-    def test_opens_on_the_unassigned_faces_when_nothing_else_waits(self):
-        FaceCluster.objects.filter(pk=self.bob.pk).update(
-            person=create_person(owner=self.user, display_name="Bob")
+        # Bob's 2 photos, the 1 loose face, Alice's 1 doubtful face: a doubt
+        # comes before a loose face of the same weight.
+        self.assertEqual(
+            [card["kind"] for card in cards], ["cluster", "check", "loose"]
         )
-        reject_face(self.face("alice-2.png"))
+
+    @patch("workspace.photos.ui.views.REVIEW_CARDS", 1)
+    def test_counts_the_cards_past_the_page(self):
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=None)
 
         response = self.client.get(REVIEW)
 
-        self.assertEqual(response.context["review"]["queue"], "unassigned")
+        review = response.context["review"]
+        self.assertEqual(len(review["cards"]), 1)
+        self.assertEqual(review["left"], 2)
+
+    def test_nothing_to_review(self):
+        FaceCluster.objects.filter(pk=self.bob.pk).update(
+            person=create_person(owner=self.user, display_name="Bob")
+        )
+
+        response = self.client.get(REVIEW)
+
+        self.assertEqual(response.context["review"], {"cards": [], "left": 0})
+        self.assertContains(response, "Everyone is sorted out")
 
     def test_the_people_tab_links_to_it(self):
         response = self.client.get("/photos/people")
@@ -279,35 +307,43 @@ class ReviewPageTests(ReviewTestCase):
         self.assertEqual(self.client.get(REVIEW).status_code, 404)
 
 
-class UnassignedQueueTests(ReviewTestCase):
+class UnassignedGroupsTests(ReviewTestCase):
     def test_rejected_faces_wait_for_a_person(self):
         face = self.face("alice-2.png")
         reject_face(face)
 
-        page = unassigned_faces(self.user, REJECTED)
+        (group,) = unassigned_groups(self.user)
 
-        self.assertEqual(page.face_ids, (face.pk,))
-        self.assertEqual(page.total, 1)
+        self.assertEqual(group.face_ids, (face.pk,))
 
-    def test_faces_grouping_never_placed_are_apart_from_the_rejected(self):
+    def test_faces_grouping_never_placed_wait_too(self):
         face = self.face("alice-2.png")
         Face.objects.filter(pk=face.pk).update(cluster=None)
 
-        self.assertEqual(unassigned_faces(self.user, UNGROUPED).face_ids, (face.pk,))
-        self.assertEqual(unassigned_faces(self.user, REJECTED).face_ids, ())
-        self.assertEqual(unassigned_counts(self.user), {REJECTED: 0, UNGROUPED: 1})
+        (group,) = unassigned_groups(self.user)
+
+        self.assertEqual(group.face_ids, (face.pk,))
+
+    def test_look_alikes_come_in_one_group(self):
+        faces = [self.face("alice-1.png"), self.face("alice-2.png")]
+        for face in faces:
+            reject_face(face)
+
+        (group,) = unassigned_groups(self.user)
+
+        self.assertCountEqual(group.face_ids, [f.pk for f in faces])
 
     def test_a_blurred_ungrouped_face_is_left_out(self):
         face = self.face("alice-2.png")
         Face.objects.filter(pk=face.pk).update(cluster=None, quality=0.1)
 
-        self.assertEqual(unassigned_faces(self.user, UNGROUPED).face_ids, ())
+        self.assertEqual(unassigned_groups(self.user), [])
 
     def test_hidden_faces_are_not_waiting(self):
         face = self.face("alice-2.png")
         hide_face(face)
 
-        self.assertEqual(unassigned_faces(self.user, REJECTED).face_ids, ())
+        self.assertEqual(unassigned_groups(self.user), [])
         self.assertEqual(hidden_faces(self.user).face_ids, (face.pk,))
 
     def test_a_trashed_photo_takes_its_faces_away(self):
@@ -318,9 +354,25 @@ class UnassignedQueueTests(ReviewTestCase):
 
         self.assertEqual(hidden_faces(self.user).face_ids, ())
 
+    def test_faces_like_a_named_person_suggest_them(self):
+        face = self.face("alice-2.png")
+        Face.objects.filter(pk=face.pk).update(cluster=None)
+        refresh_clusters([self.alice.pk])
 
-class ByLikenessTests(ReviewTestCase):
-    def test_look_alikes_come_side_by_side(self):
+        (group,) = unassigned_groups(self.user)
+
+        self.assertEqual(group.suggestion.person, self.contact)
+
+    def test_no_suggestion_of_the_person_a_face_was_taken_out_of(self):
+        reject_face(self.face("alice-2.png"))
+
+        (group,) = unassigned_groups(self.user)
+
+        self.assertIsNone(group.suggestion)
+
+
+class LikenessGroupsTests(ReviewTestCase):
+    def test_look_alikes_come_together(self):
         base = _stranger()
         other = np.random.default_rng(11).standard_normal(FACE_EMBEDDINGS.dims)
 
@@ -335,4 +387,6 @@ class ByLikenessTests(ReviewTestCase):
             ("b2", blob(other + 0.01)),
         ]
 
-        self.assertEqual(by_likeness(rows), ["a1", "a2", "b1", "b2", "none"])
+        self.assertEqual(
+            likeness_groups(rows, 0.5), [["a1", "a2"], ["b1", "b2"], ["none"]]
+        )

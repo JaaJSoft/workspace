@@ -38,14 +38,12 @@ from workspace.photos.services.face_preferences import faces_available, faces_en
 from workspace.photos.services.face_review import (
     ALL_FACES,
     CONFIRMED,
-    REJECTED,
     TO_CHECK,
-    UNGROUPED,
     doubtful_faces,
     hidden_faces,
     person_faces,
-    unassigned_counts,
-    unassigned_faces,
+    unassigned_groups,
+    unnamed_count,
     unnamed_queue,
 )
 from workspace.photos.services.import_folder import import_folder, import_folder_data
@@ -663,7 +661,6 @@ def people(request):
         ),
         "hidden_count": hidden_count if enabled else 0,
         "people_hidden_url": f"{reverse('photos_ui:people')}?hidden=1",
-        "review_url": reverse("photos_ui:people_review"),
         "progress": progress,
         "analyzing": progress is not None and progress["analyzed"] < progress["total"],
     }
@@ -683,6 +680,7 @@ def _people_shell_context(user):
         "timeline_url": _url_with({}),
         "favorites_url": _url_with({"favorites": "1"}),
         "albums": _sidebar_albums(user),
+        "review_url": reverse("photos_ui:people_review"),
         **_faces_context(user),
         **_display_context(user),
     }
@@ -694,20 +692,6 @@ def _person_summary(card):
         "name": card.person.display_name,
         "cover_url": _crop_url(card.cover_cluster.cover_id),
         "photo_count": card.photo_count,
-    }
-
-
-def _unnamed_item(item):
-    cluster = item.cluster
-    return {
-        "uuid": str(cluster.pk),
-        "photo_count": cluster.photo_count,
-        "cover_url": _crop_url(cluster.cover_id),
-        "samples": [_crop_url(pk) for pk in item.sample_face_ids],
-        "url": _url_with({"cluster": str(cluster.pk)}),
-        "suggestion": (
-            _person_summary(item.suggestion) if item.suggestion is not None else None
-        ),
     }
 
 
@@ -736,74 +720,93 @@ def _face_items(face_ids):
     ]
 
 
-def _doubts_item(doubts, faces):
-    return {
-        "person": _person_summary(doubts.card)
-        | {"url": _url_with({"person": str(doubts.card.person.pk)})},
-        "total": doubts.total,
-        "faces": [faces[face.face_id] for face in doubts.faces],
+# Cards the review page holds at once; the next ones come after a reload.
+REVIEW_CARDS = 30
+# Among cards of the same weight, the named people's doubts first.
+_REVIEW_ORDER = {"check": 0, "cluster": 1, "loose": 2}
+
+
+def _review_cards(user):
+    """What the review page asks about, one card at a time: a group of faces
+    and who they may be. The unnamed clusters, the faces the grouping put
+    under a named person without being sure, and the look-alike groups of
+    faces in no cluster - the cards settling the most photos first."""
+    cards = [
+        {
+            "kind": "cluster",
+            "key": f"cluster-{item.cluster.pk}",
+            "cluster": str(item.cluster.pk),
+            "guess": _person_summary(item.suggestion) if item.suggestion else None,
+            "cover_url": _crop_url(item.cluster.cover_id),
+            "url": _url_with({"cluster": str(item.cluster.pk)}),
+            "photo_count": item.cluster.photo_count,
+            "total": item.cluster.face_count,
+            "face_ids": item.face_ids,
+            "weight": item.cluster.photo_count,
+        }
+        for item in unnamed_queue(user, limit=REVIEW_CARDS)
+    ]
+    for doubts in doubtful_faces(user):
+        person = _person_summary(doubts.card)
+        cards.append(
+            {
+                "kind": "check",
+                "key": f"check-{person['uuid']}",
+                "cluster": None,
+                "guess": person,
+                "cover_url": person["cover_url"],
+                "url": _url_with({"person": person["uuid"]}),
+                "photo_count": person["photo_count"],
+                "total": doubts.total,
+                "face_ids": tuple(face.face_id for face in doubts.faces),
+                "weight": doubts.total,
+            }
+        )
+    for group in unassigned_groups(user):
+        cards.append(
+            {
+                "kind": "loose",
+                "key": f"loose-{group.face_ids[0]}",
+                "cluster": None,
+                "guess": _person_summary(group.suggestion)
+                if group.suggestion
+                else None,
+                "cover_url": _crop_url(group.face_ids[0]),
+                "url": None,
+                "photo_count": None,
+                "total": len(group.face_ids),
+                "face_ids": group.face_ids,
+                "weight": len(group.face_ids),
+            }
+        )
+    cards.sort(key=lambda card: (-card["weight"], _REVIEW_ORDER[card["kind"]]))
+    # The unnamed clusters past the first page were not read.
+    left = len(cards) + max(0, unnamed_count(user) - REVIEW_CARDS)
+    cards = cards[:REVIEW_CARDS]
+    faces = {
+        UUID(item["uuid"]): item
+        for item in _face_items([pk for card in cards for pk in card["face_ids"]])
     }
+    for card in cards:
+        face_ids = card.pop("face_ids")
+        del card["weight"]
+        card["faces"] = [faces[pk] for pk in face_ids if pk in faces]
+    return cards, left
 
 
 @login_required
 @ensure_csrf_cookie
 def people_review(request):
-    """Naming people and checking faces one after the other.
-
-    Three queues: the unnamed clusters, the faces the grouping put under a
-    named person without being sure (``?queue=check``), and the faces in no
-    cluster at all (``?queue=unassigned``, narrowed by ``?kind=``).
-    """
+    """Naming people and checking faces one card after the other."""
     if not faces_available():
         raise Http404
     if not faces_enabled(request.user):
         # The opt-in card lives on the People tab.
         return redirect("photos_ui:people")
-    unnamed = [_unnamed_item(item) for item in unnamed_queue(request.user)]
-    doubtful = doubtful_faces(request.user)
-    faces = {
-        UUID(item["uuid"]): item
-        for item in _face_items([f.face_id for d in doubtful for f in d.faces])
-    }
-    doubts = [_doubts_item(item, faces) for item in doubtful]
-    counts = unassigned_counts(request.user)
-    queue = request.GET.get("queue")
-    if queue not in ("name", "check", "unassigned"):
-        if unnamed or not (doubts or any(counts.values())):
-            queue = "name"
-        else:
-            queue = "check" if doubts else "unassigned"
-    kind = request.GET.get("kind")
-    if kind not in (REJECTED, UNGROUPED):
-        kind = REJECTED if counts[REJECTED] or not counts[UNGROUPED] else UNGROUPED
-    page = unassigned_faces(request.user, kind) if queue == "unassigned" else None
-    review_url = reverse("photos_ui:people_review")
+    cards, left = _review_cards(request.user)
     context = {
         **_people_shell_context(request.user),
-        "review": {
-            "queue": queue,
-            "unnamed": unnamed,
-            "doubts": doubts,
-            "unassigned": {
-                "kind": kind,
-                "counts": counts,
-                "total": page.total if page else 0,
-                "faces": _face_items(page.face_ids) if page else [],
-            },
-        },
-        "doubt_count": sum(item["total"] for item in doubts),
-        "unassigned_count": sum(counts.values()),
-        "unassigned_kinds": [
-            {
-                "kind": value,
-                "label": label,
-                "count": counts[value],
-                "url": f"{review_url}?queue=unassigned&kind={value}",
-                "active": value == kind,
-            }
-            for value, label in ((REJECTED, "Taken out"), (UNGROUPED, "Never grouped"))
-        ],
-        "review_url": review_url,
+        "review": {"cards": cards, "left": left},
     }
     return _render_page(request, "photos/ui/people_review.html", context)
 

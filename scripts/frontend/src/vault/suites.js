@@ -13,16 +13,16 @@ export class UnsupportedAlgorithmError extends Error {
 }
 
 // What this build can read, per axis. The AEAD axis is filled by aead.js and by
-// registerAead, the KDF axis by kdf.js; the others are fixed by the code that
-// implements them. The HPKE axis is keyed by format, as the manifest is, and
-// hpke.js refuses any format whose declared suite is not the one construction
-// it builds.
+// registerAead, the KDF axis by kdf.js, the signature axis by sign.js; the
+// others are fixed by the code that implements them. The HPKE axis is keyed by
+// format, as the manifest is, and hpke.js refuses any format whose declared
+// suite is not the one construction it builds.
 const IMPLEMENTED = {
   format: new Set([1, 2]),
   aead: new Set(),
   hpke: new Set([1, 2]),
   pubkey: new Set([1, 2]),
-  signature: new Set([1]),
+  signature: new Set(),
   payload: new Set([1]),
   kdf: new Set(),
 };

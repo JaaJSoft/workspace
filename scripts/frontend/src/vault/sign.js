@@ -1,6 +1,6 @@
 import { canonicalCbor, decodeCbor } from './cbor.js';
 import { equalBytes } from './encoding.js';
-import { CURRENT_SUITE, suiteEntry } from './suites.js';
+import { CURRENT_SUITE, markImplemented, suiteEntry } from './suites.js';
 
 // One byte in front of every persisted signature, so a future algorithm lands
 // without a data migration.
@@ -26,23 +26,45 @@ function toPkcs8(seed) {
   return out;
 }
 
+const ed25519 = {
+  async importSigningKey(seed) {
+    return crypto.subtle.importKey('pkcs8', toPkcs8(seed), 'Ed25519', false, ['sign']);
+  },
+  async sign(key, message) {
+    return new Uint8Array(await crypto.subtle.sign('Ed25519', key, message));
+  },
+  async verify(publicRaw, signature, message) {
+    const key = await crypto.subtle.importKey('raw', publicRaw, 'Ed25519', false, ['verify']);
+    return crypto.subtle.verify('Ed25519', key, signature, message);
+  },
+};
+
+// Keyed by the signature's one-byte prefix, as the server's verifiers are. The
+// prefix picks the algorithm on both sides: a second id declared in the
+// manifest stays unsupported until it lands here, instead of being checked as
+// Ed25519.
+const SIGNATURES = new Map([[1, ed25519]]);
+for (const id of SIGNATURES.keys()) markImplemented('signature', id);
+
+function currentSignature() {
+  suiteEntry('signature', CURRENT_SUITE.signatureAlg);
+  return SIGNATURES.get(CURRENT_SUITE.signatureAlg);
+}
+
 // Not everything signed is a CBOR payload: the account key attestation signs a
 // plain ASCII string built by the associated-data catalogue. Routing it through
 // sign() would wrap it in a CBOR byte string and produce a signature no
 // conforming verifier accepts.
 export async function signBytes(privateRaw, message) {
-  const key = await crypto.subtle.importKey(
-    'pkcs8', toPkcs8(privateRaw), 'Ed25519', false, ['sign']
-  );
-  return prefixed(new Uint8Array(await crypto.subtle.sign('Ed25519', key, message)));
+  const alg = currentSignature();
+  return prefixed(await alg.sign(await alg.importSigningKey(privateRaw), message));
 }
 
 export async function verifyBytes(publicRaw, message, signature) {
   if (signature.length < 1) throw new Error('signature is empty');
   const entry = suiteEntry('signature', signature[0]);
   if (signature.length !== 1 + entry.length) throw new Error('signature has the wrong length');
-  const key = await crypto.subtle.importKey('raw', publicRaw, 'Ed25519', false, ['verify']);
-  const ok = await crypto.subtle.verify('Ed25519', key, signature.slice(1), message);
+  const ok = await SIGNATURES.get(signature[0]).verify(publicRaw, signature.slice(1), message);
   if (!ok) throw new Error('signature does not verify');
 }
 
@@ -53,12 +75,11 @@ export async function sign(privateRaw, payload) {
 // The session form: a non-extractable CryptoKey, so the seed can be zeroed at
 // once and no later call needs the raw bytes back.
 export async function importSigner(seed) {
-  const key = await crypto.subtle.importKey(
-    'pkcs8', toPkcs8(seed), 'Ed25519', false, ['sign']
-  );
+  const alg = currentSignature();
+  const key = await alg.importSigningKey(seed);
   return {
     async sign(message) {
-      return prefixed(new Uint8Array(await crypto.subtle.sign('Ed25519', key, message)));
+      return prefixed(await alg.sign(key, message));
     },
   };
 }

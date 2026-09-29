@@ -22,7 +22,7 @@ dependencies = [
     "celery>=5.6.2",
     "redis>=8.1.0",
     # C-accelerated RESP parser; redis-py auto-detects and uses it when present
-    "hiredis>=3.4.1",
+    "hiredis>=3.4.2",
     # imaging
     "pillow>=12.3.0",
     # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin

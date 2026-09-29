@@ -87,7 +87,7 @@ dependencies = [
     # brute-force fallback wherever no vector extension is available.
     # sqlite-vec ships wheels for Linux x86_64/aarch64, macOS and Windows.
     "sqlite-vec>=0.1.6",
-    "numpy>=2.4.6",
+    "numpy>=2.5.3",
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.30.0",

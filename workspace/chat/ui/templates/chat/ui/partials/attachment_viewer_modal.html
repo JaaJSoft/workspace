@@ -125,6 +125,8 @@
         fileName: '',
         mimeType: '',
         downloadUrl: '',
+        // The surface whose attachments prev/next page through.
+        galleryId: 'messages-container',
 
         async openAttachment(uuid, name, mimeType) {
           this.attachmentUuid = uuid;
@@ -142,8 +144,9 @@
         },
 
         _getViewableAttachments() {
-          const els = document.querySelectorAll('#message-list [data-attachment-uuid]');
-          return Array.from(els)
+          const gallery = document.getElementById(this.galleryId);
+          if (!gallery) return [];
+          return Array.from(gallery.querySelectorAll('[data-attachment-uuid]'))
             .filter(function(el) {
               return el.offsetParent !== null;
             })
@@ -239,6 +242,7 @@
           const self = this;
           this._openHandler = function(e) {
             const d = e.detail;
+            self.galleryId = d.galleryId || 'messages-container';
             self.openAttachment(d.uuid, d.name, d.type);
           };
           this._keydownHandler = function(e) {

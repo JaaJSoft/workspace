@@ -144,7 +144,7 @@ window.contextMenu = function contextMenu() {
           }));
           break;
         case 'open':
-          document.querySelector(`a[href="/files/${nd.uuid}"]`)?.click();
+          window.folderNav.navigateTo(`/files/${nd.uuid}`);
           break;
         case 'copy_link': {
           const url = new URL(window.location.origin + window.location.pathname);

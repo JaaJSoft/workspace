@@ -8,6 +8,8 @@ against table rows.
 
 from __future__ import annotations
 
+import re
+
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -53,6 +55,22 @@ class ViewModeTests(PlaywrightTestCase):
         expect(cards.filter(has_text="beta.txt")).to_be_visible()
         expect(cards.filter(has_text="alpha.txt")).to_be_hidden()
         expect(self.page.locator("#folder-browser")).to_contain_text("1 of 3 items")
+
+    def test_context_menu_open_navigates_into_a_folder_card(self):
+        # A card has no folder <a>, so "Open" cannot look one up in the DOM.
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        folder = File.objects.create(
+            owner=self.user, name="Reports", node_type=File.NodeType.FOLDER
+        )
+        self._open_files()
+
+        self.page.locator(f'div.grid > div[data-uuid="{folder.uuid}"]').click(
+            button="right"
+        )
+        menu = self.page.locator('[x-data*="contextMenu"]')
+        # The accessible name also carries the shortcut hint.
+        menu.get_by_role("button", name=re.compile(r"^Open(?! in new tab)")).click()
+        expect(self.page.locator("#folder-browser h1")).to_have_text("Reports")
 
     def test_keyboard_shortcuts_act_on_a_selected_card(self):
         # Rows used to sit hidden behind the mosaic, so the shortcuts found

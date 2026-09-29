@@ -18,7 +18,7 @@
     <i data-lucide="search" class="w-3.5 h-3.5 opacity-50"></i>
     <input
       type="text"
-      x-ref="searchInput"
+      data-search-input
       x-model="searchQuery"
       @input.debounce.300ms="searchMessages()"
       @keydown="handleSearchKeydown($event)"

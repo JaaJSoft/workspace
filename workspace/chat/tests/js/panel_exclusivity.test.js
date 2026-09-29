@@ -39,6 +39,7 @@ function buildApp(documentOverrides = {}) {
       if (fn) fn();
     },
     $refs: {},
+    $root: { querySelectorAll: () => [] },
   });
   return app;
 }

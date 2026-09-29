@@ -31,13 +31,6 @@
           <i data-lucide="camera" class="w-4 h-4 text-white"></i>
         </div>
       </template>
-      <input
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        class="hidden"
-        x-ref="groupAvatarInput"
-        @change="uploadGroupAvatar($el)"
-      />
     </div>
     <!-- Remove avatar button -->
     <button
@@ -831,34 +824,3 @@
     </div>
   </template>
 </div>
-
-<!-- Avatar cropper modal -->
-<dialog x-ref="cropperDialog" class="modal">
-  <div class="modal-box max-w-lg">
-    <h3 class="font-bold text-lg mb-4">Crop your photo</h3>
-    <div class="w-full" style="max-height: 400px">
-      <img x-ref="cropperImage" alt="" style="display: block; max-width: 100%" />
-    </div>
-    <div class="modal-action">
-      <button
-        type="button"
-        @click="cancelAvatarCrop()"
-        class="btn btn-ghost btn-sm"
-      >
-        Cancel
-      </button>
-      <button
-        type="button"
-        @click="confirmAvatarCrop()"
-        class="btn btn-module btn-sm gap-2"
-        :disabled="_cropUploading"
-      >
-        <span x-show="_cropUploading" class="loading loading-spinner loading-sm"></span>
-        <span x-text="_cropUploading ? 'Uploading...' : 'Confirm'"></span>
-      </button>
-    </div>
-  </div>
-  <form method="dialog" class="modal-backdrop">
-    <button type="submit" @click="cancelAvatarCrop()">close</button>
-  </form>
-</dialog>

@@ -329,7 +329,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
 
     _scrollSearchHighlightIntoView() {
       this.$nextTick(() => {
-        const el = document.querySelector('[data-search-active="true"]');
+        const el = this.$refs.userSearchList?.querySelector('[data-search-active="true"]');
         if (el) el.scrollIntoView({ block: 'nearest' });
       });
     },

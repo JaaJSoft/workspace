@@ -367,7 +367,7 @@ window.notesApp = function notesApp(config) {
                 case 'R':
                     if (this.selectedNote) {
                         e.preventDefault();
-                        const input = document.querySelector('input.input-ghost.input-sm.font-semibold');
+                        const input = this.$refs.noteTitle;
                         if (input) { input.focus(); input.select(); }
                     }
                     break;

@@ -364,7 +364,12 @@
     _viewerOpener(node, item) {
       node.addEventListener('click', () => {
         window.dispatchEvent(new CustomEvent('open-chat-attachment-viewer', {
-          detail: { uuid: item.uuid, name: item.name, type: item.type },
+          detail: {
+            uuid: item.uuid,
+            name: item.name,
+            type: item.type,
+            galleryId: node.closest('[data-attachment-gallery]')?.id,
+          },
         }));
       });
     }

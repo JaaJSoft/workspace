@@ -69,6 +69,7 @@
          renders outside the paginated list so "load older" cannot sink it. -->
     <div
       id="thread-messages-container"
+      data-attachment-gallery
       @ajax:merge="_vetoStaleMerge($event)"
       @contextmenu="openMessageContextMenu($event)"
     >

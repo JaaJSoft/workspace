@@ -272,15 +272,21 @@ class SuppressionTests(_EmailTestCase):
 
     def test_a_bounce_marks_the_mail_it_names(self):
         delivery = self.send()
+        EmailDelivery.objects.filter(uuid=delivery.uuid).update(
+            provider_message_id="pm-1"
+        )
         record_bounce(
             "alice@example.com",
             EmailSuppression.Reason.HARD_BOUNCE,
-            message_id=delivery.message_id.strip("<>"),
+            provider_message_id="pm-1",
             detail="550 5.1.1 user unknown",
         )
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, EmailDelivery.Status.BOUNCED)
         self.assertIn("user unknown", delivery.error)
+
+    def test_smtp_leaves_no_provider_id(self):
+        self.assertEqual(self.send().provider_message_id, "")
 
 
 @ENABLED

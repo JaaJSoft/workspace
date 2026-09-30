@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "django_filters",
     "django_prometheus",
     "django_http_compression",
+    "anymail",
     # Workspace apps
     "workspace.core",
     "workspace.common",

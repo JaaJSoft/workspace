@@ -73,9 +73,17 @@ EMAIL_BASE_URL = os.getenv("EMAIL_BASE_URL", "").strip().rstrip("/")
 EMAIL_RATE_LIMIT_PER_RECIPIENT = int(os.getenv("EMAIL_RATE_LIMIT_PER_RECIPIENT", "20"))
 EMAIL_RATE_LIMIT_GLOBAL = int(os.getenv("EMAIL_RATE_LIMIT_GLOBAL", "500"))
 
-# Shared secret of the bounce and complaint webhook (POST /api/v1/email/bounces).
-# Empty disables the endpoint.
-EMAIL_BOUNCE_WEBHOOK_TOKEN = os.getenv("EMAIL_BOUNCE_WEBHOOK_TOKEN", "")
+# django-anymail: every ANYMAIL_<NAME> variable becomes ANYMAIL["<NAME>"], so a
+# provider is configured from the environment alone - an API backend
+# (EMAIL_BACKEND=anymail.backends.postmark.EmailBackend with
+# ANYMAIL_POSTMARK_SERVER_TOKEN) and the bounce webhooks. Those webhooks answer
+# 404 until ANYMAIL_WEBHOOK_SECRET ("user:password") is set: open, they would
+# let anyone mark any address as bounced.
+ANYMAIL = {
+    name.removeprefix("ANYMAIL_"): value
+    for name, value in os.environ.items()
+    if name.startswith("ANYMAIL_") and value
+}
 
 # Days a send record is kept. Long enough to answer "why did I get this mail"
 # about last month; suppressions are never purged.

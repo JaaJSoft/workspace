@@ -64,10 +64,6 @@ REST_FRAMEWORK = {
         # The value is a v1 starting point like the ones above - retune it
         # on telemetry from a real deployment rather than on a guess here.
         "core.csp_report.ip": "30/min",
-        # The relay's bounce webhook. Authenticated by a shared secret, so the
-        # limit only caps how fast a wrong guess can be retried; a relay
-        # batches its reports, and one that is refused retries them later.
-        "core.email_bounce.ip": "60/min",
     },
     "DEFAULT_PARSER_CLASSES": [
         "drf_orjson_renderer.parsers.ORJSONParser",

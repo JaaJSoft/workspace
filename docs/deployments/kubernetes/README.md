@@ -32,7 +32,7 @@ An **initContainer** (`migrate`) runs database migrations before the pod starts.
 | File             | Description                                                    |
 |------------------|----------------------------------------------------------------|
 | `namespace.yaml` | Namespace `workspace`                                          |
-| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `EMAIL_HOST_PASSWORD`, `EMAIL_BOUNCE_WEBHOOK_TOKEN`, `METRICS_PASSWORD`, `AI_API_KEY` |
+| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `EMAIL_HOST_PASSWORD`, `ANYMAIL_WEBHOOK_SECRET`, `METRICS_PASSWORD`, `AI_API_KEY` |
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
@@ -79,7 +79,7 @@ kubectl apply -f ingress.yaml
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |
 | `EMAIL_HOST_PASSWORD`     | SMTP relay password for the instance's own mail. See [Sending email](../../guides/email.md) |
-| `EMAIL_BOUNCE_WEBHOOK_TOKEN` | Secret of `POST /api/v1/email/bounces`; empty disables the webhook |
+| `ANYMAIL_WEBHOOK_SECRET`  | `user:password` the mail provider sends to the bounce webhooks (`/api/v1/email/<provider>/tracking`); empty keeps them off |
 | `METRICS_PASSWORD`        | HTTP Basic password for `/metrics`, plain text (`stringData` needs no base64). Endpoint returns 401 to everyone until set |
 | `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |

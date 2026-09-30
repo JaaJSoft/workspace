@@ -279,6 +279,7 @@ def deliver(delivery_id, *, subject, text, html, headers, final_attempt):
         status=EmailDelivery.Status.SENT,
         sent_at=timezone.now(),
         error="",
+        provider_message_id=_provider_message_id(message),
         updated_at=timezone.now(),
     )
     logger.info("Email %s sent to %s", delivery.uuid, scrub(delivery.to_address))
@@ -307,13 +308,15 @@ def suppress_address(address, reason, *, feature="", detail=""):
     return suppression
 
 
-def record_bounce(address, reason, *, message_id="", detail=""):
-    """A hard bounce or a complaint reported by the relay: suppress the
-    address and mark the mail it was about, when the relay said which."""
+def record_bounce(address, reason, *, provider_message_id="", detail=""):
+    """A hard bounce or a complaint the provider reported after accepting the
+    mail: suppress the address, and mark the mail it was about when the
+    provider said which."""
     suppression = suppress_address(address, reason, detail=detail)
-    if message_id:
+    if provider_message_id:
         EmailDelivery.objects.filter(
-            message_id=_bracketed(message_id), to_address=suppression.address
+            provider_message_id=provider_message_id,
+            to_address=suppression.address,
         ).update(
             status=EmailDelivery.Status.BOUNCED,
             error=f"{suppression.get_reason_display()}: {detail}"[:2000],
@@ -410,11 +413,12 @@ def _site_name():
     return parseaddr(settings.DEFAULT_FROM_EMAIL)[0] or "Workspace"
 
 
-def _bracketed(message_id):
-    message_id = message_id.strip()
-    if not message_id.startswith("<"):
-        message_id = f"<{message_id}>"
-    return message_id
+def _provider_message_id(message):
+    """The id an anymail backend got back for ``message``; empty over SMTP,
+    where nothing comes back."""
+    status = getattr(message, "anymail_status", None)
+    message_id = getattr(status, "message_id", None)
+    return message_id if isinstance(message_id, str) else ""
 
 
 def _settle(delivery, status, error):

@@ -37,6 +37,10 @@ class SensitiveNameTests(TestCase):
             "refresh_token",
             "share_token",
             "oauth2_data_encrypted",
+            "client_secret",
+            "WEBHOOK_SECRET",
+            "MAILGUN_API_KEY",
+            "MAILGUN_WEBHOOK_SIGNING_KEY",
         ):
             with self.subTest(name=name):
                 self.assertTrue(is_sensitive_name(name))
@@ -52,6 +56,8 @@ class SensitiveNameTests(TestCase):
             # Counters, not credentials - the suffix rule is singular for them.
             "prompt_tokens",
             "completion_tokens",
+            "secretary",
+            "thread_key",
         ):
             with self.subTest(name=name):
                 self.assertFalse(is_sensitive_name(name))

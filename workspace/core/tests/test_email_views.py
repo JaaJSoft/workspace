@@ -1,11 +1,12 @@
 """The bounce webhook, the unsubscribe page and the admin's test mail."""
 
 import base64
+from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
 from django.core import mail
-from django.core.cache import cache
+from django.core.mail.backends import locmem
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -15,8 +16,8 @@ from workspace.core.services.email import _unsubscribe_url, send_email
 
 User = get_user_model()
 
-TOKEN = "bounce-secret"
-BOUNCES = "/api/v1/email/bounces"
+SECRET = "relay:bounce-secret"
+POSTMARK = "/api/v1/email/postmark/tracking"
 
 ENABLED = override_settings(
     EMAIL_ENABLED=True,
@@ -25,80 +26,106 @@ ENABLED = override_settings(
 )
 
 
-@override_settings(EMAIL_BOUNCE_WEBHOOK_TOKEN=TOKEN)
-class BounceWebhookTests(TestCase):
-    def tearDown(self):
-        # The IP throttle counts in the cache.
-        cache.clear()
+class ProviderBackend(locmem.EmailBackend):
+    """What an anymail backend leaves on a message it sent: the id the
+    provider gave it."""
 
-    def post(self, payload, *, auth=f"Bearer {TOKEN}"):
-        headers = {"HTTP_AUTHORIZATION": auth} if auth else {}
+    def send_messages(self, messages):
+        for message in messages:
+            message.anymail_status = SimpleNamespace(message_id="pm-42")
+        return super().send_messages(messages)
+
+
+def _postmark_bounce(address, bounce_type="HardBounce", message_id="pm-42"):
+    return {
+        "RecordType": "Bounce",
+        "Type": bounce_type,
+        "MessageID": message_id,
+        "Email": address,
+        "Description": "The server was unable to deliver your message",
+        "Details": "550 5.1.1 user unknown",
+        "BouncedAt": "2026-09-30T10:00:00Z",
+    }
+
+
+@override_settings(ANYMAIL={"WEBHOOK_SECRET": SECRET})
+class ProviderWebhookTests(TestCase):
+    """Bounces reported through anymail's webhooks, Postmark standing in for
+    every provider: the parsing is anymail's, the suppression is ours."""
+
+    def post(self, payload, *, auth=SECRET):
+        headers = {}
+        if auth:
+            credentials = base64.b64encode(auth.encode()).decode()
+            headers["HTTP_AUTHORIZATION"] = f"Basic {credentials}"
         return self.client.post(
-            BOUNCES, payload, content_type="application/json", **headers
+            POSTMARK, payload, content_type="application/json", **headers
         )
 
-    @override_settings(EMAIL_BOUNCE_WEBHOOK_TOKEN="")
-    def test_off_without_a_token(self):
-        response = self.post({"address": "a@example.com", "type": "hard_bounce"})
+    def test_every_provider_has_a_route_without_trailing_slash(self):
+        for provider in ("amazon_ses", "mailgun", "postmark", "sendgrid", "brevo"):
+            with self.subTest(provider=provider):
+                self.assertEqual(
+                    reverse(f"anymail-{provider}_tracking_webhook"),
+                    f"/api/v1/email/{provider}/tracking",
+                )
+
+    @override_settings(ANYMAIL={})
+    def test_off_without_a_secret(self):
+        # Anymail would serve it open, with a warning.
+        response = self.post(_postmark_bounce("a@example.com"), auth=None)
         self.assertEqual(response.status_code, 404)
         self.assertFalse(EmailSuppression.objects.exists())
 
-    def test_refuses_a_missing_or_wrong_secret(self):
-        for auth in (None, "Bearer wrong", "Token bounce-secret", "Basic !!"):
+    def test_refuses_a_wrong_secret(self):
+        for auth in (None, "relay:wrong"):
             with self.subTest(auth=auth):
-                response = self.post(
-                    {"address": "a@example.com", "type": "hard_bounce"}, auth=auth
-                )
-                self.assertEqual(response.status_code, 401)
+                response = self.post(_postmark_bounce("a@example.com"), auth=auth)
+                self.assertEqual(response.status_code, 400)
         self.assertFalse(EmailSuppression.objects.exists())
 
     def test_a_hard_bounce_suppresses_the_address(self):
-        response = self.post(
-            {"address": "A@Example.com", "type": "hard_bounce", "detail": "5.1.1"}
-        )
+        response = self.post(_postmark_bounce("A@Example.com"))
+
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"suppressed": 1, "ignored": 0})
         suppression = EmailSuppression.objects.get()
         self.assertEqual(suppression.address, "a@example.com")
         self.assertEqual(suppression.feature, "")
         self.assertEqual(suppression.reason, EmailSuppression.Reason.HARD_BOUNCE)
+        self.assertIn("Postmark", suppression.detail)
 
-    def test_accepts_basic_auth(self):
-        credentials = base64.b64encode(f"relay:{TOKEN}".encode()).decode()
-        response = self.post(
-            {"address": "a@example.com", "type": "complaint"},
-            auth=f"Basic {credentials}",
-        )
-        self.assertEqual(response.status_code, 200)
+    def test_a_complaint_suppresses_the_address(self):
+        payload = {
+            "RecordType": "SpamComplaint",
+            "Type": "SpamComplaint",
+            "MessageID": "pm-42",
+            "Email": "a@example.com",
+            "BouncedAt": "2026-09-30T10:00:00Z",
+        }
+        self.assertEqual(self.post(payload).status_code, 200)
         self.assertEqual(
             EmailSuppression.objects.get().reason, EmailSuppression.Reason.COMPLAINT
         )
 
-    def test_takes_a_batch_and_ignores_soft_bounces(self):
-        response = self.post(
-            [
-                {"address": "a@example.com", "type": "hard_bounce"},
-                {"address": "b@example.com", "type": "soft_bounce"},
-                {"address": "c@example.com", "type": "complaint"},
-            ]
-        )
-        self.assertEqual(response.json(), {"suppressed": 2, "ignored": 1})
-        self.assertEqual(
-            set(EmailSuppression.objects.values_list("address", flat=True)),
-            {"a@example.com", "c@example.com"},
-        )
-
-    def test_refuses_an_invalid_event(self):
-        for payload in (
-            {"address": "not an address", "type": "hard_bounce"},
-            {"address": "a@example.com", "type": "exploded"},
-            {"type": "hard_bounce"},
-        ):
-            with self.subTest(payload=payload):
-                self.assertEqual(self.post(payload).status_code, 400)
+    def test_temporary_failures_suppress_nothing(self):
+        # A full mailbox, a DNS hiccup, a virus in the message: none of them
+        # says the address is dead.
+        for bounce_type in ("SoftBounce", "Transient", "DnsError", "VirusNotification"):
+            with self.subTest(bounce_type=bounce_type):
+                response = self.post(_postmark_bounce("a@example.com", bounce_type))
+                self.assertEqual(response.status_code, 200)
         self.assertFalse(EmailSuppression.objects.exists())
 
+    def test_an_address_the_provider_refuses_is_suppressed(self):
+        self.post(_postmark_bounce("a@example.com", "BadEmailAddress"))
+        self.assertEqual(
+            EmailSuppression.objects.get().reason, EmailSuppression.Reason.HARD_BOUNCE
+        )
+
     @ENABLED
+    @override_settings(
+        EMAIL_BACKEND="workspace.core.tests.test_email_views.ProviderBackend"
+    )
     def test_marks_the_bounced_mail(self):
         with self.captureOnCommitCallbacks(execute=True):
             delivery = send_email(
@@ -107,15 +134,14 @@ class BounceWebhookTests(TestCase):
                 feature="test",
                 context={"requested_by": User(username="a")},
             )
-        self.post(
-            {
-                "address": "a@example.com",
-                "type": "hard_bounce",
-                "message_id": delivery.message_id,
-            }
-        )
+        delivery.refresh_from_db()
+        self.assertEqual(delivery.provider_message_id, "pm-42")
+
+        self.post(_postmark_bounce("a@example.com", message_id="pm-42"))
+
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, EmailDelivery.Status.BOUNCED)
+        self.assertIn("user unknown", delivery.error)
 
 
 @ENABLED

@@ -20,7 +20,9 @@ _MODULE = Path(workspace.settings.__file__).with_name("email.py")
 def _load(env):
     """A fresh copy of the settings module read under ``env`` alone, as far
     as EMAIL_* variables go."""
-    environ = {k: v for k, v in os.environ.items() if not k.startswith("EMAIL_")}
+    environ = {
+        k: v for k, v in os.environ.items() if not k.startswith(("EMAIL_", "ANYMAIL_"))
+    }
     environ.update(env)
     spec = importlib.util.spec_from_file_location(
         "workspace.settings._email_probe", _MODULE
@@ -61,13 +63,25 @@ class EmailSettingsTests(SimpleTestCase):
         with self.assertRaises(ImproperlyConfigured):
             _load({"EMAIL_USE_SSL": "true", "EMAIL_USE_TLS": "true"})
 
+    def test_anymail_is_configured_from_the_environment(self):
+        module = _load(
+            {
+                "ANYMAIL_WEBHOOK_SECRET": "relay:s3cret",
+                "ANYMAIL_POSTMARK_SERVER_TOKEN": "pm-token",
+                "ANYMAIL_EMPTY": "",
+            }
+        )
+        self.assertEqual(module.ANYMAIL["WEBHOOK_SECRET"], "relay:s3cret")
+        self.assertEqual(module.ANYMAIL["POSTMARK_SERVER_TOKEN"], "pm-token")
+        self.assertNotIn("EMPTY", module.ANYMAIL)
+
     def test_server_email_defaults_to_the_from_address(self):
         module = _load({"DEFAULT_FROM_EMAIL": "Acme <noreply@acme.test>"})
         self.assertEqual(module.SERVER_EMAIL, "Acme <noreply@acme.test>")
 
 
 class EmailSecretsTests(SimpleTestCase):
-    SECRETS = ("EMAIL_HOST_PASSWORD", "EMAIL_BOUNCE_WEBHOOK_TOKEN")
+    SECRETS = ("EMAIL_HOST_PASSWORD", "WEBHOOK_SECRET", "POSTMARK_SERVER_TOKEN")
 
     def test_secret_settings_are_in_the_redaction_catalogue(self):
         for name in self.SECRETS:
@@ -76,9 +90,12 @@ class EmailSecretsTests(SimpleTestCase):
 
     def test_secret_settings_never_reach_the_error_page(self):
         reporter = RedactingExceptionReporterFilter()
-        for name in self.SECRETS:
-            with self.subTest(name=name):
-                self.assertEqual(
-                    reporter.cleanse_setting(name, "hunter2"),
-                    reporter.cleansed_substitute,
-                )
+        self.assertEqual(
+            reporter.cleanse_setting("EMAIL_HOST_PASSWORD", "hunter2"),
+            reporter.cleansed_substitute,
+        )
+        cleansed = reporter.cleanse_setting(
+            "ANYMAIL",
+            {"WEBHOOK_SECRET": "relay:hunter2", "MAILGUN_API_KEY": "key-hunter2"},
+        )
+        self.assertNotIn("hunter2", str(cleansed))

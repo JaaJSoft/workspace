@@ -42,10 +42,30 @@ EMAIL_BASE_URL=https://workspace.example.com     # Public origin, for links in m
 | `EMAIL_RATE_LIMIT_PER_RECIPIENT` | `20` | Mails accepted per address per rolling hour. |
 | `EMAIL_RATE_LIMIT_GLOBAL` | `500` | Mails accepted for the whole instance per rolling hour. Keep it under your relay's own quota. |
 | `EMAIL_DELIVERY_RETENTION_DAYS` | `90` | Days a send record is kept. |
-| `EMAIL_BOUNCE_WEBHOOK_TOKEN` | empty | Secret of the bounce webhook (see below). Empty disables it. |
+| `ANYMAIL_WEBHOOK_SECRET` | empty | `user:password` the provider sends to the bounce webhooks (see below). Empty keeps them off. |
+| `ANYMAIL_<NAME>` | - | Any other variable with this prefix reaches [django-anymail](https://anymail.dev) as `ANYMAIL["<NAME>"]`. |
 
-The SMTP password and the webhook secret are redacted from logs and from error
-reports. Keep them in your secret store like any other credential.
+The SMTP password, the webhook secret and the providers' API keys and tokens
+are redacted from logs and from error reports. Keep them in your secret store
+like any other credential.
+
+### Through a provider's API instead of SMTP
+
+Every provider also takes mail over SMTP, and that is all the setup above
+needs. [django-anymail](https://anymail.dev/en/stable/esps/) can send through
+the provider's HTTP API instead - point `EMAIL_BACKEND` at its backend and pass
+the provider's credentials as `ANYMAIL_*` variables, named as in anymail's page
+for that provider:
+
+```bash
+EMAIL_BACKEND=anymail.backends.postmark.EmailBackend
+ANYMAIL_POSTMARK_SERVER_TOKEN=...
+```
+
+The API is not faster for a single mail, but the provider then hands back its
+own id for each message, and the bounce it reports later is matched to the
+exact delivery in the admin. Over SMTP the address is suppressed all the same;
+only the link to the original delivery is missing.
 
 Delivery always happens in a Celery worker: a slow or unreachable relay never
 holds up a page. A mail the relay refuses temporarily (a 4xx reply, a timeout,
@@ -128,45 +148,46 @@ the admin) and never mails an address on it again:
 - a relay refusing the recipient outright (a 5xx on `RCPT TO`) suppresses the
   address immediately;
 - a bounce or complaint the relay learns about later has to be reported to the
-  webhook below;
+  webhooks below;
 - a recipient following the unsubscribe link of a notification mail
   suppresses that one kind of mail only - transactional mail still reaches
   them;
 - an administrator can add or delete a suppression by hand.
 
-### The bounce webhook
+### The bounce webhooks
 
-Set `EMAIL_BOUNCE_WEBHOOK_TOKEN` to a long random secret, then have the relay
-(or a small adapter in front of it) POST to:
+A provider reports what happened to a mail after it accepted it - the bounce
+from the recipient's server, the spam complaint - by calling a URL of yours.
+Every provider uses its own format; [django-anymail](https://anymail.dev)
+reads them all and the instance suppresses the address, whichever it is.
 
-```
-POST https://workspace.example.com/api/v1/email/bounces
-Authorization: Bearer <EMAIL_BOUNCE_WEBHOOK_TOKEN>
-Content-Type: application/json
+1. Pick a user name and a long random password, and set
+   `ANYMAIL_WEBHOOK_SECRET=user:password`. Until it is set the webhooks answer
+   404: open, they would let anyone mark any address as bounced.
+2. In the provider's dashboard, add a webhook for bounces and spam complaints
+   pointing at your instance, with the credentials in the URL:
 
-{"address": "someone@example.org", "type": "hard_bounce",
- "message_id": "<...@notify.example.com>", "detail": "550 5.1.1 user unknown"}
-```
+   ```
+   https://user:password@workspace.example.com/api/v1/email/<provider>/tracking
+   ```
 
-HTTP basic auth works too, with the secret as the password - what an Amazon SNS
-subscription can send when its URL carries credentials
-(`https://relay:<secret>@workspace.example.com/api/v1/email/bounces`).
+   `<provider>` is one of `amazon_ses`, `brevo`, `mailersend`, `mailgun`,
+   `mailjet`, `mailtrap`, `mandrill`, `postal`, `postmark`, `resend`,
+   `sendgrid`, `sparkpost`, `unisender_go`.
+3. Some providers also sign their webhooks (Mailgun, Resend, Postal, Amazon
+   SNS...). Anymail's page for the provider names the extra key; pass it as an
+   `ANYMAIL_*` variable like the others.
 
-The body is one event or a list of them. `type` is one of:
+What suppresses an address:
 
-| `type` | Effect |
+| Reported | Effect |
 |---|---|
-| `hard_bounce` | The address is suppressed for every mail. |
-| `complaint` | The recipient marked a mail as spam: suppressed for every mail. |
-| `soft_bounce` | Acknowledged and ignored - a full mailbox, a greylisting server; the relay retries those itself. |
-| `delivered` | Acknowledged and ignored. |
+| Permanent bounce (the address does not exist) | Suppressed for every mail. |
+| Spam complaint | Suppressed for every mail. |
+| The provider refusing an address it knows is bad | Suppressed for every mail. |
+| Temporary failure (full mailbox, DNS error, greylisting) | Nothing - the provider retries those itself. |
 
-`message_id` and `detail` are optional; with a `message_id` the matching
-delivery is marked *bounced* in the admin. The endpoint answers
-`{"suppressed": n, "ignored": m}`.
-
-Every provider has its own payload, so map it once in whatever sits between the
-two - a serverless function, a Lambda subscribed to the SES notification topic,
-an n8n flow. The field to look for is usually called `bounceType: Permanent`
-(SES), `Type: HardBounce` (Postmark) or `severity: permanent` (Mailgun); a
-complaint arrives as its own event type everywhere.
+A relay you run yourself (a Postfix, an Exchange) has no webhook to call: the
+bounces it receives stay in its own mailbox. Refusals it reports during the
+SMTP exchange are still suppressed, and an administrator can add any other
+address by hand.

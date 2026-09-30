@@ -37,6 +37,11 @@ class EmailDelivery(models.Model):
     subject = models.CharField(max_length=255)
     transactional = models.BooleanField(default=True)
     message_id = models.CharField(max_length=255, blank=True, default="")
+    # The id the provider gave the mail when it went out through an anymail
+    # backend; its bounce reports name the mail by this one, not by ours.
+    provider_message_id = models.CharField(
+        max_length=255, blank=True, default="", db_index=True
+    )
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.QUEUED
     )

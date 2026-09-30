@@ -69,7 +69,7 @@ All settings are configurable via environment variables or a `.env` file next to
 | `DEFAULT_FROM_EMAIL`   | `Workspace <noreply@localhost>`  | Sender of the instance's mail - its domain needs SPF, DKIM and DMARC |
 | `EMAIL_REPLY_TO`       | *(empty)*                        | Comma-separated `Reply-To` addresses |
 | `EMAIL_BASE_URL`       | *(empty)*                        | Public origin, for links in mails; notification mail is not sent without it |
-| `EMAIL_BOUNCE_WEBHOOK_TOKEN` | *(empty)*                  | Secret of `POST /api/v1/email/bounces`; empty disables the webhook |
+| `ANYMAIL_WEBHOOK_SECRET` | *(empty)*                      | `user:password` the mail provider sends to the bounce webhooks (`/api/v1/email/<provider>/tracking`); empty keeps them off. Any other `ANYMAIL_*` variable is passed to django-anymail too |
 | `OAUTH_GOOGLE_CLIENT_ID` | *(empty)* | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | *(empty)* | Google OAuth2 client secret |
 | `OAUTH_MICROSOFT_CLIENT_ID` | *(empty)* | Microsoft OAuth2 client ID (enables Outlook login) |

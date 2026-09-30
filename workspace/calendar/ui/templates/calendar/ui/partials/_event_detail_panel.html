@@ -184,10 +184,28 @@
                 <span class="badge badge-xs badge-ghost" x-text="eventMembers.length"></span>
               </div>
               <template x-for="member in eventMembers" :key="member.uuid">
-                <div class="flex items-center justify-between text-sm">
-                  <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card name></user-avatar>
+                <div class="flex items-center justify-between gap-2 text-sm">
+                  <template x-if="member.user">
+                    <user-avatar :user-id="member.user.id" :username="member.user.username" size="sm" presence card name></user-avatar>
+                  </template>
+                  <template x-if="!member.user">
+                    <div class="flex items-center gap-2 min-w-0" data-testid="event-guest">
+                      <user-avatar :username="member.name || member.email" :color-key="member.email" size="sm"></user-avatar>
+                      <div class="flex flex-col min-w-0">
+                        <span class="truncate" x-text="member.name || member.email"></span>
+                        <span class="text-xs text-base-content/50 truncate" x-show="member.name" x-text="member.email"></span>
+                      </div>
+                    </div>
+                  </template>
+                  {% comment %}An external guest has no account to answer from,
+                  so a "pending" badge would never change: it gets a fixed label.{% endcomment %}
                   <span
-                    class="badge badge-xs"
+                    x-show="!member.user"
+                    class="badge badge-xs badge-ghost shrink-0"
+                  >external</span>
+                  <span
+                    x-show="member.user"
+                    class="badge badge-xs shrink-0"
                     :class="{'badge-success': member.status==='accepted','badge-warning': member.status==='pending','badge-error': member.status==='declined'}"
                     x-text="member.status"
                   ></span>

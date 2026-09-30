@@ -19,6 +19,7 @@ from workspace.notifications.services.notifications import notify_many
 
 from ..models import Calendar, Event, EventMember
 from ..models_external import ExternalCalendar
+from .guests import copy_guests, sync_guests
 from .recurrence_rule import apply_rule, continue_after, truncate_before
 from .timezones import current_timezone_name, event_timezone, normalize_all_day
 
@@ -121,7 +122,9 @@ def sync_members(event, member_ids, owner_id):
     Returns the set of user IDs that were added or removed (already notified
     separately, so the caller must not notify them twice).
     """
-    current = set(event.members.values_list("user_id", flat=True))
+    current = set(
+        event.members.filter(user__isnull=False).values_list("user_id", flat=True)
+    )
     new_ids = set(member_ids) - {owner_id}
     to_remove = current - new_ids
     if to_remove:
@@ -156,18 +159,29 @@ def sync_members(event, member_ids, owner_id):
 
 
 def _copy_members(source, target, data, user):
-    """Give *target* the members named in *data*, or inherit *source*'s."""
+    """Give *target* the members and guests named in *data*, or inherit *source*'s.
+
+    Accounts and external guests are independent: a payload naming only one
+    of the two lists still inherits the other.
+    """
+    if "guests" in data:
+        sync_guests(target, data["guests"])
+    else:
+        copy_guests(source, target)
+
     if "member_ids" not in data:
         EventMember.objects.bulk_create(
             [
                 EventMember(event=target, user=m.user, status=m.status)
-                for m in source.members.all()
+                for m in source.members.filter(user__isnull=False)
             ]
         )
         return
 
     member_ids = set(data["member_ids"]) - {user.id}
-    existing_ids = set(source.members.values_list("user_id", flat=True))
+    existing_ids = set(
+        source.members.filter(user__isnull=False).values_list("user_id", flat=True)
+    )
     users = list(User.objects.filter(id__in=member_ids))
     EventMember.objects.bulk_create([EventMember(event=target, user=u) for u in users])
     new_users = [u for u in users if u.id not in existing_ids]
@@ -242,6 +256,8 @@ def _update_whole_event(event, data, user):
     changed_ids = set()
     if "member_ids" in data:
         changed_ids = sync_members(event, data["member_ids"], user.id)
+    if "guests" in data:
+        sync_guests(event, data["guests"])
 
     # Notify remaining members about the update, excluding the editor and
     # the users sync_members already told about their add/removal.
@@ -275,6 +291,8 @@ def _update_single_occurrence(master, data, user, original_start):
         _apply_fields(exc, data, user)
         if "member_ids" in data:
             sync_members(exc, data["member_ids"], user.id)
+        if "guests" in data:
+            sync_guests(exc, data["guests"])
         return exc
 
     start, end, all_day = _derived_times(master, data, original_start)

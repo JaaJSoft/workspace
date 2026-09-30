@@ -204,10 +204,37 @@
 
       <div>
         <div class="label"><span class="label-text">Invite guests</span></div>
-        {% include "users/ui/partials/user_selector.html" with on_select_event="calendar-member-selected" placeholder="Search users to invite..." %}
-        <div class="flex flex-wrap gap-1 mt-2">
+        {% include "calendar/ui/partials/_invitee_selector.html" with on_select_event="calendar-invitee-selected" %}
+        <template x-if="inviteeNotice">
+          <inline-alert type="warning" class="mt-2" data-testid="invitee-notice">
+            <span x-text="inviteeNotice"></span>
+            <button slot="actions" type="button" class="btn btn-xs btn-ghost" @click="inviteeNotice = ''">Dismiss</button>
+          </inline-alert>
+        </template>
+        <div class="flex flex-wrap gap-1 mt-2" data-testid="invitee-chips">
           <template x-for="member in selectedMembers" :key="member.id">
             {% include "ui/partials/user_chip.html" with user_id_expr="member.id" username_expr="member.username" remove_expr="removeMember(member.id)" %}
+          </template>
+          <template x-for="guest in selectedGuests" :key="guest.email">
+            {% comment %}An external guest: dashed outline and an envelope,
+            so it never reads as a workspace account.{% endcomment %}
+            <span
+              class="inline-flex items-center gap-1.5 rounded-full border border-dashed border-base-content/30 bg-base-100 py-0.5 pl-0.5 pr-1"
+              :title="guest.name ? guest.name + ' <' + guest.email + '>' : guest.email"
+              data-testid="guest-chip"
+            >
+              <user-avatar :username="guest.name || guest.email" :color-key="guest.email" size="xs"></user-avatar>
+              <span class="text-xs" x-text="guest.name || guest.email"></span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
+              <button
+                type="button"
+                class="btn btn-ghost btn-circle btn-xs min-h-0 h-5 w-5 p-0"
+                @click.stop="removeGuest(guest.email)"
+                :aria-label="'Remove ' + (guest.name || guest.email)"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </span>
           </template>
         </div>
       </div>

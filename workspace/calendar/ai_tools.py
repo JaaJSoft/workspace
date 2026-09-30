@@ -110,8 +110,9 @@ class UpdateEventParams(BaseModel):
     attendees: list[str] = Field(
         default_factory=list,
         description="Exact usernames of the people invited to the event. "
-        "Replaces the whole guest list, so include the ones already invited "
-        f"unless you mean to remove them; ['{CLEAR}'] removes everyone. "
+        "Replaces the invited accounts, so include the ones already invited "
+        "unless you mean to remove them; external guests invited by email are "
+        f"kept. ['{CLEAR}'] removes everyone, external guests included. "
         "Omit to leave the guest list untouched.",
     )
     confirm: bool = Field(default=False, description=CONFIRM_DESCRIPTION)
@@ -712,6 +713,7 @@ whole series before choosing. Only the owner can edit, and events from an extern
         if args.attendees:
             if [a.strip().lower() for a in args.attendees] == [CLEAR]:
                 data["member_ids"] = []
+                data["guests"] = []
             else:
                 member_ids, err = _resolve_usernames(args.attendees)
                 if err:
@@ -739,7 +741,7 @@ whole series before choosing. Only the owner can edit, and events from an extern
         # A guest-list change is externally visible whether or not the event
         # recurs: sync_members notifies everyone added and everyone removed,
         # and no confirmation afterwards un-sends those.
-        touches_guests = "member_ids" in data
+        touches_guests = "member_ids" in data or "guests" in data
         if (event.is_recurring or touches_guests) and not args.confirm:
             return request_confirmation(
                 context,

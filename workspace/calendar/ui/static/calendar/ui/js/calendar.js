@@ -65,6 +65,8 @@ window.calendarApp = function calendarApp() {
     eventMembers: [],
     myInviteStatus: null,
     selectedMembers: [],
+    selectedGuests: [],
+    inviteeNotice: '',
     saving: false,
     deleting: false,
     loadingEvent: false,

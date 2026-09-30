@@ -34,6 +34,7 @@ from ..services.event_scope import (
     is_external_calendar,
     update_event,
 )
+from ..services.guests import sync_guests
 from ..services.invitations import NotInvitedError, respond_to_invitation
 from ..services.timezones import current_timezone_name
 from ..upcoming import get_upcoming_page
@@ -309,6 +310,8 @@ class EventListView(CacheControlMixin, APIView):
                 actor=request.user,
                 source=event,
             )
+        if data["guests"]:
+            sync_guests(event, data["guests"])
 
         event = _prefetch_event(Event.objects.filter(pk=event.pk)).first()
         return Response(EventSerializer(event).data, status=status.HTTP_201_CREATED)

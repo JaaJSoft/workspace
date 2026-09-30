@@ -203,7 +203,7 @@ class WebDavFileSource:
             raise ProviderError("The URL does not point to a WebDAV folder.")
         return {
             "quota_used": _int_or_none(props.findtext(f"{DAV}quota-used-bytes")),
-            "quota_available": _int_or_none(
+            "quota_available": _quota_available(
                 props.findtext(f"{DAV}quota-available-bytes")
             ),
         }
@@ -270,6 +270,16 @@ def _int_or_none(value):
         return int(value) if value not in (None, "") else None
     except ValueError, TypeError:
         return None
+
+
+def _quota_available(value):
+    """RFC 4331 free space, or None when the server has no byte count to give.
+
+    Nextcloud answers with negative sentinels instead: -1 not computed yet,
+    -2 unknown, -3 unlimited (the default for a new account).
+    """
+    available = _int_or_none(value)
+    return available if available is not None and available >= 0 else None
 
 
 def _parse_http_date(value):

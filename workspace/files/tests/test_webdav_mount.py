@@ -380,6 +380,32 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         )
         return File.objects.filter(**filters).first()
 
+    def _wait_for_content(self, *, size, timeout=None, **filters) -> File:
+        """Block until a ``File`` row of ``size`` bytes exists and its blob too.
+
+        The live server shares the test's in-memory SQLite connection, so a
+        PUT's row update is visible here before its transaction commits: the
+        row already carries the new size while the bytes still sit in their
+        temp file, a moment before ``finalize()`` moves them onto the row's
+        storage path.  Reading the content then fails with FileNotFoundError.
+        """
+        filters["size"] = size
+
+        def blob_in_place():
+            f = File.objects.filter(**filters).first()
+            if f is None or not f.content.storage.exists(f.content.name):
+                return False
+            return f.content.storage.size(f.content.name) == size
+
+        ok = self._wait_until(blob_in_place, timeout=timeout or self.DB_POLL_TIMEOUT)
+        self.assertTrue(
+            ok,
+            f"timed out waiting for File row matching {filters} and its "
+            f"{size}-byte blob (maybe davfs2 didn't flush, or the server "
+            f"rejected the upload)",
+        )
+        return File.objects.filter(**filters).first()
+
     def _wait_for_no_file(self, **filters):
         ok = self._wait_until(
             lambda: not File.objects.filter(**filters).exists(),
@@ -471,7 +497,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         self._wait_for_file(owner=self.user, name="rewrite.txt", size=2)
 
         target.write_bytes(b"version-two")
-        f = self._wait_for_file(
+        f = self._wait_for_content(
             owner=self.user,
             name="rewrite.txt",
             deleted_at__isnull=True,
@@ -504,22 +530,13 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         target.write_bytes(payload)
 
         # 16 MiB on a slow CI runner can take longer than the default
-        # 15 s budget, so wait on the size landing in DB explicitly.
-        ok = self._wait_until(
-            lambda: File.objects.filter(
-                owner=self.user,
-                name="big.bin",
-                size=size,
-                deleted_at__isnull=True,
-            ).exists(),
-            timeout=60.0,
-        )
-        self.assertTrue(ok, "16 MiB upload never reached the DB with full size")
-
-        f = File.objects.get(
+        # 15 s budget.
+        f = self._wait_for_content(
             owner=self.user,
             name="big.bin",
+            size=size,
             deleted_at__isnull=True,
+            timeout=60.0,
         )
         h = hashlib.sha256()
         f.content.open("rb")
@@ -882,7 +899,7 @@ class WebDAVDavfs2MountTests(LiveServerTestCase):
         )
         self.assertEqual(r.returncode, 0, r.stderr)
 
-        dup = self._wait_for_file(
+        dup = self._wait_for_content(
             owner=self.user,
             name="dup.txt",
             size=7,

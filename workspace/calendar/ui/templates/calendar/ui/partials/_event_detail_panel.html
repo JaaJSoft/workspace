@@ -193,16 +193,17 @@
                       <user-avatar :username="member.name || member.email" :color-key="member.email" size="sm"></user-avatar>
                       <div class="flex flex-col min-w-0">
                         <span class="truncate" x-text="member.name || member.email"></span>
-                        <span class="text-xs text-base-content/50 truncate" x-show="member.name" x-text="member.email"></span>
+                        <span
+                          class="text-xs text-base-content/50 truncate"
+                          x-show="member.name"
+                          x-text="member.email"
+                        ></span>
                       </div>
                     </div>
                   </template>
                   {% comment %}An external guest has no account to answer from,
                   so a "pending" badge would never change: it gets a fixed label.{% endcomment %}
-                  <span
-                    x-show="!member.user"
-                    class="badge badge-xs badge-ghost shrink-0"
-                  >external</span>
+                  <span x-show="!member.user" class="badge badge-xs badge-ghost shrink-0">external</span>
                   <span
                     x-show="member.user"
                     class="badge badge-xs shrink-0"

@@ -1,0 +1,6 @@
+{% extends "core/email/base.html" %}
+{% block content %}
+  <p style="margin:0 0 16px;">Hello {{ requested_by.get_username }},</p>
+  <p style="margin:0 0 16px;">This is a test email sent from the {{ site_name }} admin dashboard.</p>
+  <p style="margin:0;">If you are reading it, the instance's outgoing email works: the relay accepted it and it reached your inbox. Check the spam folder too - landing there points at the sender domain's SPF, DKIM or DMARC records.</p>
+{% endblock %}

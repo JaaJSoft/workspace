@@ -236,6 +236,23 @@ UNFOLD = {
                 ],
             },
             {
+                "title": "Email",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Deliveries",
+                        "icon": "outgoing_mail",
+                        "link": reverse_lazy("admin:core_emaildelivery_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.failed_email_badge",
+                    },
+                    {
+                        "title": "Suppressions",
+                        "icon": "unsubscribe",
+                        "link": reverse_lazy("admin:core_emailsuppression_changelist"),
+                    },
+                ],
+            },
+            {
                 "title": "Notifications",
                 "separator": True,
                 "items": [

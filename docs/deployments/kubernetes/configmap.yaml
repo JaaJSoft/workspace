@@ -17,6 +17,12 @@ data:
   METRICS_USER: "prometheus"  # HTTP Basic user for /metrics; password lives in workspace-secrets
   WEBPUSH_VAPID_PUBLIC_KEY: ""
   WEBPUSH_VAPID_MAILTO: ""
+  # Instance email - off until EMAIL_HOST is set (docs/guides/email.md)
+  EMAIL_HOST: ""
+  EMAIL_PORT: "587"
+  EMAIL_HOST_USER: ""
+  DEFAULT_FROM_EMAIL: "Workspace <noreply@localhost>"
+  EMAIL_BASE_URL: ""
   AI_MODEL: "gpt-5"
   AI_MAX_TOKENS: "2048"
   AI_CHAT_CONTEXT_SIZE: "30"

@@ -158,6 +158,48 @@ class MultistatusParsingTests(SimpleTestCase):
         )
 
 
+def _quota_multistatus(used, available):
+    return (
+        '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response>'
+        "<d:href>/remote.php/dav/files/alice/</d:href>"
+        "<d:propstat><d:status>HTTP/1.1 200 OK</d:status><d:prop>"
+        "<d:resourcetype><d:collection/></d:resourcetype>"
+        f"<d:quota-used-bytes>{used}</d:quota-used-bytes>"
+        f"<d:quota-available-bytes>{available}</d:quota-available-bytes>"
+        "</d:prop></d:propstat></d:response></d:multistatus>"
+    ).encode()
+
+
+class ProbeQuotaTests(SimpleTestCase):
+    def _probe(self, used, available):
+        transport = httpx2.MockTransport(
+            lambda request: httpx2.Response(
+                207, content=_quota_multistatus(used, available)
+            )
+        )
+        conn = _connection()
+        source = WebDavFileSource(conn, client=build_client(conn, transport=transport))
+        return source.probe()
+
+    def test_a_byte_count_is_reported_as_is(self):
+        self.assertEqual(
+            self._probe(65575770, 1024),
+            {"quota_used": 65575770, "quota_available": 1024},
+        )
+
+    def test_a_full_quota_reports_zero_free(self):
+        self.assertEqual(self._probe(100, 0)["quota_available"], 0)
+
+    def test_nextcloud_sentinels_are_not_a_free_size(self):
+        # -1 not computed yet, -2 unknown, -3 unlimited.
+        for sentinel in (-1, -2, -3):
+            with self.subTest(sentinel=sentinel):
+                self.assertEqual(
+                    self._probe(65575770, sentinel),
+                    {"quota_used": 65575770, "quota_available": None},
+                )
+
+
 class ErrorTranslationTests(SimpleTestCase):
     def _source(self, handler):
         conn = _connection()

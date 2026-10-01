@@ -291,7 +291,7 @@
                 @click="open = false"
               ></div>
               <div
-                class="popover-sheet"
+                class="popover-sheet{% if view_mode == "mosaic" %} sm:w-56{% endif %}"
                 x-show="open"
                 x-cloak
                 x-transition
@@ -336,7 +336,7 @@
                     Tile size
                   </div>
                   <div class="px-1 pb-1">
-                    {% include "ui/partials/size_slider.html" with model="mosaicTileSize" change="setMosaicTileSize(mosaicTileSize)" %}
+                    {% include "ui/partials/size_slider.html" with model="mosaicTileSize" change="setMosaicTileSize(mosaicTileSize)" full_width=True %}
                   </div>
                 {% else %}
                   <div

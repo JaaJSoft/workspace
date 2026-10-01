@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from .views import actions, albums, faces, import_folder
+from .views import actions, albums, faces, hidden, import_folder
 
 router = SimpleRouter(trailing_slash=False)
 router.register(
@@ -39,6 +39,21 @@ urlpatterns = [
         "api/v1/photos/albums/<uuid:uuid>/reorder",
         albums.AlbumReorderView.as_view(),
         name="photo-album-reorder",
+    ),
+    path(
+        "api/v1/photos/hidden",
+        hidden.HiddenFilesView.as_view(),
+        name="photos-hidden",
+    ),
+    path(
+        "api/v1/photos/hidden/remove",
+        hidden.HiddenFilesRemoveView.as_view(),
+        name="photos-hidden-remove",
+    ),
+    path(
+        "api/v1/photos/hidden/folders",
+        hidden.HiddenFoldersView.as_view(),
+        name="photos-hidden-folders",
     ),
     path(
         "api/v1/photos/import-folder",

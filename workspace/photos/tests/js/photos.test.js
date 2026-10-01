@@ -22,6 +22,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       'workspace/files/ui/static/files/ui/js/properties_panel.js',
       'workspace/photos/ui/static/photos/ui/js/faces.js',
       'workspace/photos/ui/static/photos/ui/js/import.js',
+      'workspace/photos/ui/static/photos/ui/js/hidden.js',
       'workspace/photos/ui/static/photos/ui/js/photos.js',
     ],
     {
@@ -1331,4 +1332,144 @@ test('turning the preference off stops the preview on screen', async () => {
   await app.savePhotoPref('video_hover_preview', false);
 
   assert.equal(created[0].removed, true);
+});
+
+// ── Hidden ───────────────────────────────────────────────
+
+function hiddenPage(uuids, { hiddenView = false, folders = [] } = {}) {
+  const page = grid(uuids);
+  const day = { querySelector: () => null, remove() {} };
+  for (const t of Object.values(page.tiles)) {
+    t.closest = () => day;
+    t.remove = () => { t.removed = true; };
+  }
+  const getElementById = (id) => {
+    if (id === 'photos-hidden-view-data' && hiddenView) return { textContent: 'true' };
+    if (id === 'photos-hidden-folders-data') return { textContent: JSON.stringify(folders) };
+    return null;
+  };
+  // What is left on the grid, for the empty-state check after a write.
+  const querySelector = (selector) => (selector === '#timeline-grid [data-uuid]'
+    ? Object.values(page.tiles).find((t) => !t.removed) || null
+    : page.document.querySelector(selector));
+  return { ...page, document: { ...page.document, getElementById, querySelector } };
+}
+
+function loadHidden(page, routes, requests, alerts = [], extra = {}) {
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch(routes, requests),
+    AppAlert: { success: (m) => alerts.push(m), error: (m) => alerts.push(m), warning: (m) => alerts.push(m) },
+    location: { href: '/photos' },
+    ...extra,
+  }).ctx.photosApp();
+  const refreshed = [];
+  app.$ajax = (url, opts) => { refreshed.push(Array.from(opts.targets)); return Promise.resolve(); };
+  app.syncHiddenView();
+  return { app, refreshed };
+}
+
+test('the page tells the menus whether it is the Hidden view', () => {
+  const { app } = loadHidden(hiddenPage(['a'], { hiddenView: true }), {}, []);
+  assert.equal(app.hiddenView, true);
+
+  const other = loadHidden(hiddenPage(['a']), {}, []).app;
+  assert.equal(other.hiddenView, false);
+});
+
+test('hiding posts the selection and takes the tiles off the page', async () => {
+  const page = hiddenPage(['a', 'b', 'c']);
+  const requests = [];
+  const alerts = [];
+  const { app, refreshed } = loadHidden(page, { 'POST /api/v1/photos/hidden': { hidden: 2 } }, requests, alerts);
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+
+  await app.setPhotosHidden(app.selection, true);
+  await app._refreshing;
+
+  assert.deepEqual(requests.map((r) => r.slice(0, 3)), [
+    ['POST', '/api/v1/photos/hidden', { files: ['a', 'b'] }],
+  ]);
+  assert.equal(page.tiles.a.removed, true);
+  assert.equal(page.tiles.c.removed, undefined);
+  assert.equal(app.selection.length, 0);
+  assert.deepEqual(alerts, ['Hid 2 photos from your library']);
+  assert.deepEqual(refreshed, [['photos-nav', 'photos-header']]);
+});
+
+test('unhiding on the Hidden view posts to the remove endpoint', async () => {
+  const page = hiddenPage(['a'], { hiddenView: true });
+  const requests = [];
+  const { app } = loadHidden(page, { 'POST /api/v1/photos/hidden/remove': { unhidden: 1 } }, requests);
+
+  await app.setPhotosHidden(['a'], false);
+
+  assert.deepEqual(requests[0].slice(0, 3), ['POST', '/api/v1/photos/hidden/remove', { files: ['a'] }]);
+  assert.equal(page.tiles.a.removed, true);
+});
+
+test('a refused hide leaves the tiles where they are', async () => {
+  const page = hiddenPage(['a']);
+  const alerts = [];
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: () => Promise.resolve({ ok: false, status: 400 }),
+    AppAlert: { error: (m) => alerts.push(m) },
+  }).ctx.photosApp();
+
+  await app.setPhotosHidden(['a'], true);
+
+  assert.equal(page.tiles.a.removed, undefined);
+  assert.deepEqual(alerts, ['Failed to hide']);
+  assert.equal(app.hiddenBusy, false);
+});
+
+test('the hidden folders come from the page and leave the list once shown again', async () => {
+  const folders = [
+    { uuid: 'f1', name: 'Trips', path: 'Trips', group: null },
+    { uuid: 'f2', name: 'Family', path: 'Family', group: 'Family' },
+  ];
+  const requests = [];
+  const { app } = loadHidden(hiddenPage([], { folders }), { 'POST /api/v1/photos/hidden/remove': { unhidden: 1 } }, requests);
+
+  assert.deepEqual(Array.from(app.hiddenFolders, (f) => app.hiddenFolderLabel(f)), ['Trips', 'Family (Family)']);
+
+  await app.unhideFolder(folders[0]);
+
+  assert.deepEqual(requests[0].slice(0, 3), ['POST', '/api/v1/photos/hidden/remove', { files: ['f1'] }]);
+  assert.deepEqual(Array.from(app.hiddenFolders, (f) => f.uuid), ['f2']);
+});
+
+test('hiding a folder picked in the dialog reloads the list and the page', async () => {
+  const requests = [];
+  const { app, refreshed } = loadHidden(hiddenPage([]), {
+    'POST /api/v1/photos/hidden': { hidden: 1 },
+    'GET /api/v1/photos/hidden/folders': [{ uuid: 'f1', name: 'Trips', path: 'Trips', group: null }],
+  }, requests, [], { AppDialog: { folderPicker: () => Promise.resolve({ uuid: 'f1', name: 'Trips' }) } });
+
+  await app.hideFolder();
+  await app._refreshing;
+
+  assert.deepEqual(requests.map((r) => r.slice(0, 3)), [
+    ['POST', '/api/v1/photos/hidden', { files: ['f1'] }],
+    ['GET', '/api/v1/photos/hidden/folders', undefined],
+  ]);
+  assert.deepEqual(Array.from(app.hiddenFolders, (f) => f.uuid), ['f1']);
+  assert.deepEqual(refreshed, [['photos-nav', 'photos-content']]);
+});
+
+test('My Files itself cannot be hidden', async () => {
+  const requests = [];
+  const alerts = [];
+  const { app } = loadHidden(hiddenPage([]), {}, requests, alerts, {
+    AppDialog: { folderPicker: () => Promise.resolve({ uuid: null, name: 'My Files' }) },
+  });
+
+  await app.hideFolder();
+
+  assert.equal(requests.length, 0);
+  assert.deepEqual(alerts, ['Choose a folder inside My Files, not My Files itself']);
 });

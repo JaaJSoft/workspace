@@ -24,6 +24,7 @@ from workspace.photos.queries import (
     album_files,
     face_progress,
     has_shared_photos,
+    hidden_folders,
     library_files,
     library_groups,
     library_tags,
@@ -46,6 +47,7 @@ from workspace.photos.services.face_review import (
     unnamed_count,
     unnamed_queue,
 )
+from workspace.photos.services.hidden import hidden_folder_data
 from workspace.photos.services.import_folder import import_folder, import_folder_data
 from workspace.photos.services.preferences import (
     ALL_TYPES,
@@ -53,6 +55,7 @@ from workspace.photos.services.preferences import (
     default_media_type,
     default_scope_token,
     display_preferences,
+    show_hidden,
 )
 from workspace.photos.services.timeline import (
     START,
@@ -124,6 +127,16 @@ def _scope(request, defaults):
     if scope is None:
         raise Http404
     return scope
+
+
+def _view_scope(request, defaults, who, hidden):
+    """The library a timeline reads. Faces are only ever found in the user's
+    personal photos; what they hid may be anywhere they can open."""
+    if who is not None:
+        return MINE
+    if hidden:
+        return ALL
+    return _scope(request, defaults)
 
 
 def _scope_token(scope):
@@ -210,9 +223,12 @@ def _who(request):
     return None
 
 
-def _filtered_library(user, scope, favorites, tag, who=None):
-    """The library in *scope* narrowed by the sidebar view, every media type."""
-    files = library_files(user, scope)
+def _filtered_library(user, scope, favorites, tag, who=None, hidden=False):
+    """The library in *scope* narrowed by the sidebar view, every media type.
+
+    *hidden* swaps the library for what the user hid from it.
+    """
+    files = library_files(user, scope, hidden=hidden)
     if favorites:
         files = files.filter(favorites__owner=user)
     if tag is not None:
@@ -229,8 +245,10 @@ def _of_type(files, media_type):
     return files.filter(media_item__media_type=media_type)
 
 
-def _view_filter_params(favorites, tag, who=None):
+def _view_filter_params(favorites, tag, who=None, hidden=False):
     params = {}
+    if hidden:
+        params["hidden"] = "1"
     if favorites:
         params["favorites"] = "1"
     if tag is not None:
@@ -391,6 +409,15 @@ def _url_with(params):
     return f"{base}?{urlencode(params)}" if params else base
 
 
+def _hidden_nav_context(user, active=False):
+    """The sidebar's Hidden entry: offered while the preference is on, and
+    on the Hidden view itself whatever it says, to show where the user is."""
+    return {
+        "hidden_url": _url_with({"hidden": "1"}),
+        "show_hidden_nav": active or show_hidden(user),
+    }
+
+
 def _faces_context(user):
     """What the shell needs to offer face grouping: the People entry, and
     whether the photo menus show their face rows."""
@@ -486,6 +513,9 @@ def _render_page(request, template, context):
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
         context["photos_prefs"] = display_preferences(request.user)
+        context["hidden_folders"] = [
+            hidden_folder_data(folder) for folder in hidden_folders(request.user)
+        ]
         context["scope_choices"] = _scope_choices(request.user)
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
@@ -501,11 +531,13 @@ def index(request):
 
     ``?person=`` narrows it to the photos of one person, ``?cluster=`` to
     those of one unnamed face cluster: a person's page is their timeline.
+    ``?hidden=1`` shows what the user hid from the library instead, and
+    nothing else does.
     """
     who = _who(request)
     defaults = _defaults(request.user)
-    # Faces are only ever found in the user's personal photos.
-    scope = MINE if who is not None else _scope(request, defaults)
+    hidden = who is None and is_truthy(request.GET.get("hidden"))
+    scope = _view_scope(request, defaults, who, hidden)
     favorites, media_type, tag = _filters(request, defaults)
     tz = get_user_timezone(request.user)
     date_param = request.GET.get("date", "")
@@ -516,12 +548,12 @@ def index(request):
         except ValueError:
             return HttpResponseBadRequest("Invalid date.")
 
-    view_files = _filtered_library(request.user, scope, favorites, tag, who)
+    view_files = _filtered_library(request.user, scope, favorites, tag, who, hidden)
     files = _of_type(view_files, media_type)
     counts = media_type_counts(view_files)
-    scope_params = _scope_params(scope, defaults)
+    scope_params = {} if hidden else _scope_params(scope, defaults)
     type_params = _type_params(media_type, defaults)
-    view_filter_params = _view_filter_params(favorites, tag, who)
+    view_filter_params = _view_filter_params(favorites, tag, who, hidden)
     filter_params = view_filter_params | type_params
     view_params = scope_params | filter_params
     years = [
@@ -539,6 +571,8 @@ def index(request):
     if who is not None:
         active_view, icon = "people", "scan-face"
         title = who.person.display_name if who.person else "Unnamed person"
+    elif hidden:
+        active_view, title, icon = "hidden", "Hidden", "eye-off"
     elif tag is not None:
         active_view, title, icon = f"tag:{tag.uuid}", tag.name, tag.icon or "tag"
     elif favorites:
@@ -552,6 +586,7 @@ def index(request):
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
         "is_people_view": active_view == "people",
+        "is_hidden_view": hidden,
         "media_type": media_type,
         "title": title,
         "title_icon": icon,
@@ -567,7 +602,7 @@ def index(request):
         "latest_url": _url_with(view_params),
         "scope_tabs": (
             _scope_tabs(request.user, scope, filter_params, defaults)
-            if who is None
+            if who is None and not hidden
             else []
         ),
         "type_tabs": _type_tabs(
@@ -585,6 +620,7 @@ def index(request):
         "timeline_url": _url_with(scope_params | type_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
         "albums": _sidebar_albums(request.user),
+        **_hidden_nav_context(request.user, active=hidden),
         **_faces_context(request.user),
         **_display_context(request.user),
         **_timeline_page_context(request, files, position, tz, view_params),
@@ -597,22 +633,24 @@ def timeline(request):
     """The page after ``?cursor=``, appended to the grid by alpine-ajax."""
     who = _who(request)
     defaults = _defaults(request.user)
-    scope = MINE if who is not None else _scope(request, defaults)
+    hidden = who is None and is_truthy(request.GET.get("hidden"))
+    scope = _view_scope(request, defaults, who, hidden)
     favorites, media_type, tag = _filters(request, defaults)
     try:
         position = parse_cursor(request.GET.get("cursor", ""))
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
     files = _of_type(
-        _filtered_library(request.user, scope, favorites, tag, who), media_type
+        _filtered_library(request.user, scope, favorites, tag, who, hidden),
+        media_type,
     )
     context = _timeline_page_context(
         request,
         files,
         position,
         get_user_timezone(request.user),
-        _scope_params(scope, defaults)
-        | _view_filter_params(favorites, tag, who)
+        ({} if hidden else _scope_params(scope, defaults))
+        | _view_filter_params(favorites, tag, who, hidden)
         | _type_params(media_type, defaults),
     )
     return render(request, "photos/ui/partials/timeline_page.html", context)
@@ -653,6 +691,7 @@ def album(request, uuid):
         "timeline_url": library_url,
         "favorites_url": _url_with({"favorites": "1"}),
         "albums": _sidebar_albums(request.user, album),
+        **_hidden_nav_context(request.user),
         **_faces_context(request.user),
         **_display_context(request.user),
         **_album_page_context(request, album, files, None, tz),
@@ -741,6 +780,7 @@ def _people_shell_context(user):
         "favorites_url": _url_with({"favorites": "1"}),
         "albums": _sidebar_albums(user),
         "review_url": reverse("photos_ui:people_review"),
+        **_hidden_nav_context(user),
         **_faces_context(user),
         **_display_context(user),
     }

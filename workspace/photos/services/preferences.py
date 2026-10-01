@@ -19,6 +19,7 @@ VIDEO_HOVER_PREVIEW = "video_hover_preview"
 DEFAULT_SCOPE = "default_scope"
 DEFAULT_MEDIA_TYPE = "default_media_type"
 IMPORT_BY_DATE = "import_by_date"
+SHOW_HIDDEN = "show_hidden"
 
 SQUARE = "square"
 ORIGINAL = "original"
@@ -73,6 +74,12 @@ def import_by_date(user):
     return _flag(user, IMPORT_BY_DATE, False)
 
 
+def show_hidden(user):
+    """Whether the sidebar offers the Hidden view. Off by default: hidden
+    photos only come back through it on purpose."""
+    return _flag(user, SHOW_HIDDEN, False)
+
+
 def default_scope_token(user):
     """The library the timeline opens on when the URL names none."""
     value = _prefs(user).get(DEFAULT_SCOPE)
@@ -97,4 +104,5 @@ def display_preferences(user):
         "default_scope": default_scope_token(user),
         "default_media_type": media_type.value if media_type else ALL_TYPES,
         "import_by_date": import_by_date(user),
+        "show_hidden": show_hidden(user),
     }

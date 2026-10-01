@@ -1,6 +1,6 @@
 # Promo video
 
-A fifty-second ad for Workspace, cut to 128 BPM, in 16:9 and 9:16: flat,
+A forty-five-second ad for Workspace, cut to 128 BPM, in 16:9 and 9:16: flat,
 colourful, full screen, every module in its own colour. It is the
 trailer of the long presentation video (`scripts/presentation/`), and reuses
 its filmed takes, its soundtrack synthesizer and its pinned HyperFrames

@@ -13,48 +13,24 @@
         .open .panel-icon { width: 210px; height: 210px; color: #fff; }
         .open .panel-icon svg { width: 100%; height: 100%; stroke-width: 1.6; }
         .open .panel .slam { font-size: 170px; }
-        .open .stripes { position: absolute; inset: 0; display: flex; }
-        .open .stripe { flex: 1; height: 100%; background: var(--mc); }
-        .open .open-field { background: var(--mc); opacity: 0; }
-        .open .open-logo { position: absolute; left: 50%; top: 30%; width: 230px; height: 230px; margin: -115px 0 0 -115px; }
-        .open .your { position: absolute; left: 0; right: 0; top: 44%; text-align: center; font-size: 110px; }
-        .open .ws { position: absolute; left: 0; right: 0; top: 59%; text-align: center; font-size: 210px; }
-        .open .one { position: absolute; left: 0; right: 0; top: 85%; text-align: center; }
         @media (orientation: portrait) {
           .open .panel .slam { font-size: 110px; }
           .open .panel-icon { width: 180px; height: 180px; }
-          .open .open-logo { top: 32%; }
-          .open .your { top: 43%; font-size: 90px; }
-          .open .ws { top: 50.5%; font-size: 150px; }
-          .open .one { top: 62%; padding: 0 60px; }
         }
       </style>
-      <div class="scene open on-colour" style="--mc: #6d28d9">
+      <div class="scene open on-colour">
         <div class="panel" style="--mc: #4338ca"><div class="panel-icon"><i data-lucide="hard-drive"></i></div><div class="slam">Your files,</div></div>
         <div class="panel" style="--mc: #c2410c"><div class="panel-icon"><i data-lucide="square-kanban"></i></div><div class="slam">your projects,</div></div>
         <div class="panel" style="--mc: #0369a1"><div class="panel-icon"><i data-lucide="message-circle"></i></div><div class="slam">your chats,</div></div>
         <div class="panel" style="--mc: #7e22ce"><div class="panel-icon"><i data-lucide="database"></i></div><div class="slam">your data.</div></div>
-        <div class="field layer open-field"></div>
-        <div class="stripes">
-          <div class="stripe" style="--mc: #4338ca"></div>
-          <div class="stripe" style="--mc: #c2410c"></div>
-          <div class="stripe" style="--mc: #0369a1"></div>
-          <div class="stripe" style="--mc: #7e22ce"></div>
-        </div>
-        <div class="logo open-logo"><i data-lucide="users"></i></div>
-        <div class="slam your">your</div>
-        <div class="slam ws">Workspace.</div>
-        <div class="slam one" style="font-size: 64px">One app for <em>all of it.</em></div>
       </div>
       <script>
         (() => {
-          // kinetic-beat-slam: four full-bleed hard cuts, one per beat; the
-          // four colours slam in as stripes and wipe off onto the brand
-          // colour, where the mark and "your Workspace." land.
-          const { $, $$, at } = window.promo.scene("open");
+          // kinetic-beat-slam: four full-bleed hard cuts, one per beat. The
+          // name they add up to is kept for the close.
+          const { $$, at } = window.promo.scene("open");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
-
           const panels = $$(".panel");
           const kinds = ["scale", "left", "rise", "right"];
           panels.forEach((panel, i) => {
@@ -63,20 +39,6 @@
             slam(tl, panel.querySelector(".slam"), at(i), kinds[i]);
             pop(tl, panel.querySelector(".panel-icon"), at(i), { rotation: i % 2 ? 18 : -18, duration: 0.35 });
           });
-
-          const stripes = $$(".stripe");
-          stripes.forEach((stripe, i) => {
-            tl.fromTo(stripe, { yPercent: i % 2 ? 100 : -100 }, { yPercent: 0, duration: 0.28, ease: "power4.out" }, at(4) + i * 0.04);
-          });
-          tl.set(panels[panels.length - 1], { opacity: 0 }, at(4) + 0.3);
-          tl.set($(".open-field"), { opacity: 1 }, at(4) + 0.3);
-          stripes.forEach((stripe, i) => {
-            tl.to(stripe, { yPercent: i % 2 ? -100 : 100, duration: 0.3, ease: "power4.in" }, at(5) - 0.3 + i * 0.04);
-          });
-          pop(tl, $(".open-logo"), at(5), { duration: 0.4 });
-          slam(tl, $(".your"), at(6), "drop");
-          slam(tl, $(".ws"), at(6.5), "scale");
-          slam(tl, $(".one"), at(8), "rise");
           window.__timelines["open"] = tl;
         })();
       </script>

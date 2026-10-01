@@ -9,77 +9,63 @@
     <div id="cta-root" data-composition-id="cta" data-width="1920" data-height="1080">
       <style>
         #cta-root { position: absolute; inset: 0; }
-        .cta .field { background: var(--mc); }
-        .cta .vortex { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-        /* Radius 1200: covers the frame corners from the centre in both formats. */
-        .cta .spin { position: absolute; left: -1200px; top: -1200px; width: 2400px; height: 2400px; border-radius: 50%; overflow: hidden; }
-        .cta .spin svg { display: block; width: 100%; height: 100%; }
-        .cta .cta-logo { position: absolute; left: 50%; top: 36%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
+        /* Half-size 1500 outreaches the frame corners (1101px) at any angle. */
+        .cta .rays { position: absolute; left: 50%; top: 50%; width: 3000px; height: 3000px; margin: -1500px 0 0 -1500px; }
+        .cta .rays svg { display: block; width: 100%; height: 100%; }
+        .cta .iris { background: var(--mc); clip-path: circle(0% at 50% 50%); }
+        .cta .cta-logo { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
+        .cta .your { position: absolute; left: 0; right: 0; top: 37.5%; text-align: center; font-size: 110px; }
         .cta .title { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-size: 190px; }
         .cta .tag { position: absolute; left: 0; right: 0; top: 74%; text-align: center; font-size: 64px; }
         .cta .url { position: absolute; left: 0; right: 0; top: 87%; text-align: center; }
         @media (orientation: portrait) {
-          .cta .cta-logo { top: 34%; }
-          .cta .title { top: 44%; font-size: 150px; }
-          .cta .tag { top: 55%; font-size: 60px; padding: 0 60px; }
-          .cta .url { top: 68%; }
+          .cta .your { top: 38%; font-size: 90px; }
+          .cta .title { top: 45%; font-size: 150px; }
+          .cta .tag { top: 56%; font-size: 60px; padding: 0 60px; }
+          .cta .url { top: 69%; }
         }
       </style>
       <div class="scene cta on-colour" style="--mc: #6d28d9">
-        <div class="field layer"></div>
-        <div class="vortex" data-layout-ignore>
-          <div class="spin"><svg viewBox="-1200 -1200 2400 2400"></svg></div>
-        </div>
+        <div class="rays" data-layout-ignore><svg viewBox="-1500 -1500 3000 3000"></svg></div>
+        <div class="iris layer"></div>
         <div class="logo cta-logo"><i data-lucide="users"></i></div>
-        <div class="slam title">Workspace</div>
-        <div class="slam tag">One app. Every tool. <em>Yours.</em></div>
+        <div class="slam your">your</div>
+        <div class="slam title">Workspace.</div>
+        <div class="slam tag">One app for <em>all of it.</em></div>
         <div class="url"><span class="label">github.com/JaaJSoft/workspace</span></div>
       </div>
       <script>
         (() => {
-          // On the drop the module colours burst out as one spiral, spin
-          // faster and faster and collapse into the mark; the lockup then
-          // builds and holds while the last chord rings.
+          // The answer to the opening: on the drop the module colours fill
+          // the frame as rays and spin faster and faster; the mark lands in
+          // the middle, the brand colour irises out of it over the rays, and
+          // "your Workspace." builds while the last chord rings.
           const { $, at, PORTRAIT } = window.promo.scene("cta");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
 
-          // The module scenes' colours, in hue order.
+          // The module scenes' colours, in hue order, one straight ray each.
           const COLOURS = ["#4338ca", "#7e22ce", "#a21caf", "#be185d", "#be123c", "#c2410c", "#b45309", "#65a30d", "#047857", "#0f766e", "#0369a1"];
-          // Logarithmic arms r = R0 * e^(B * phi): thin at the centre, wide at the edge.
-          const R0 = 6, B = 1.27, REACH = 1800, STEPS = 80;
-          const turn = Math.log(REACH / R0) / B;
+          const svg = $(".rays svg");
           const width = (2 * Math.PI) / COLOURS.length;
-          const point = (phi, offset) => {
-            const r = R0 * Math.exp(B * phi);
-            return `${(r * Math.cos(phi + offset)).toFixed(1)} ${(r * Math.sin(phi + offset)).toFixed(1)}`;
-          };
-          const svg = $(".spin svg");
+          const corner = (a) => `${(2200 * Math.cos(a)).toFixed(1)} ${(2200 * Math.sin(a)).toFixed(1)}`;
           COLOURS.forEach((colour, i) => {
-            const out = [], back = [];
-            for (let k = 0; k <= STEPS; k++) {
-              const phi = (turn * k) / STEPS;
-              out.push(point(phi, i * width));
-              back.unshift(point(phi, (i + 1) * width));
-            }
             const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", `M0 0 L${out.join(" L")} L${back.join(" L")} Z`);
+            // A hair wider than its share so neighbours overlap: no seam.
+            path.setAttribute("d", `M0 0 L${corner(i * width)} L${corner((i + 1) * width + 0.004)} Z`);
             path.setAttribute("fill", colour);
             svg.appendChild(path);
           });
 
-          const vortex = $(".vortex");
-          const collapse = at(5);
-          // Clockwise, the arms flow into the centre. The spin peaks near
-          // 16 degrees a frame at 30 fps, under half an arm: no wagon-wheel.
-          tl.fromTo($(".spin"), { rotation: 0 }, { rotation: 570, duration: collapse - at(0), ease: "power2.in" }, at(0));
-          tl.fromTo(vortex, { scale: 0 }, { scale: 1, duration: 0.5, ease: "expo.out" }, at(0));
-          // It collapses into the mark, which sits above the centre.
-          const lift = PORTRAIT ? -0.16 * 1920 : -0.14 * 1080;
-          tl.to(vortex, { scale: 220 / 2400, y: lift, duration: collapse - at(2.5), ease: "power3.in" }, at(2.5));
-          tl.set(vortex, { opacity: 0 }, collapse);
-          pop(tl, $(".cta-logo"), collapse - 0.05, { duration: 0.5 });
-          slam(tl, $(".title"), at(6), "scale");
+          // Rays look frozen or reversed past half a ray (16 degrees) a
+          // frame at 30 fps: the spin peaks just under that, at the iris.
+          tl.fromTo($(".rays"), { rotation: 0 }, { rotation: 620, duration: at(5.5) - at(0), ease: "power2.in" }, at(0));
+          pop(tl, $(".cta-logo"), at(4), { duration: 0.45 });
+          tl.to($(".iris"), { clipPath: "circle(75% at 50% 50%)", duration: 0.42, ease: "power3.inOut" }, at(5) - 0.2);
+          // The mark rises to the lockup as the words come in under it.
+          tl.to($(".cta-logo"), { y: PORTRAIT ? -0.19 * 1920 : -0.24 * 1080, duration: 0.45, ease: "power3.inOut" }, at(5.5));
+          slam(tl, $(".your"), at(6), "drop");
+          slam(tl, $(".title"), at(6.5), "scale");
           slam(tl, $(".tag"), at(8), "rise");
           slam(tl, $(".url"), at(10), "drop");
           window.__timelines["cta"] = tl;

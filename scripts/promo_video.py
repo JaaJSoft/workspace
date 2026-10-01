@@ -59,7 +59,7 @@ FORMATS = {
 # built from the feature template: its title card lasts `card` beats, then its
 # take plays full screen from `media` seconds at `rate` times its speed.
 SCENES = [
-    {"id": "open", "bars": 3, "cut": None, "music": "module", "color": "#6d28d9"},
+    {"id": "open", "bars": 1, "cut": None, "music": "module", "color": "#6d28d9"},
     {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#a21caf",
      "feature": {"icon": "search", "title": ["Search", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
     {"id": "files", "bars": 2, "cut": "push-left", "music": "module", "color": "#4338ca",

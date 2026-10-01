@@ -43,4 +43,4 @@ src: compositions/cta.html
 type: cta
 blueprint: colour vortex into logo-assemble-lockup (flat)
 transition_in: overexposure (the drop)
-beat: 4 bars, drop then ring-out. Every module colour bursts out as one wheel, spins faster and faster, twists into a spiral and collapses into the mark on the brand violet; "Workspace", "One app. Every tool. Yours.", the repository.
+beat: 4 bars, drop then ring-out. The module colours burst out as one spiral centred on the frame, spin faster and faster and collapse into the mark on the brand violet; "Workspace", "One app. Every tool. Yours.", the repository.

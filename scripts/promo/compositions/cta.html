@@ -10,18 +10,16 @@
       <style>
         #cta-root { position: absolute; inset: 0; }
         .cta .field { background: var(--mc); }
-        /* Centred on the mark and wide enough to cover the frame from there. */
-        .cta .vortex { position: absolute; left: 50%; top: 36%; width: 0; height: 0; }
-        .cta .disc { position: absolute; border-radius: 50%; overflow: hidden; }
-        .cta .disc > div { position: absolute; inset: 0; }
-        .cta .hard { background: conic-gradient(#4338ca 0.00deg 32.73deg, #6d28d9 32.73deg 65.45deg, #7e22ce 65.45deg 98.18deg, #be185d 98.18deg 130.91deg, #be123c 130.91deg 163.64deg, #c2410c 163.64deg 196.36deg, #b45309 196.36deg 229.09deg, #65a30d 229.09deg 261.82deg, #047857 261.82deg 294.55deg, #0f766e 294.55deg 327.27deg, #0369a1 327.27deg 360.00deg); }
-        .cta .soft { opacity: 0; background: conic-gradient(from -16.36deg, #4338ca 0.00deg, #6d28d9 32.73deg, #7e22ce 65.45deg, #be185d 98.18deg, #be123c 130.91deg, #c2410c 163.64deg, #b45309 196.36deg, #65a30d 229.09deg, #047857 261.82deg, #0f766e 294.55deg, #0369a1 327.27deg, #4338ca 360deg); }
+        .cta .vortex { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+        /* Radius 1200: covers the frame corners from the centre in both formats. */
+        .cta .spin { position: absolute; left: -1200px; top: -1200px; width: 2400px; height: 2400px; border-radius: 50%; overflow: hidden; }
+        .cta .spin svg { display: block; width: 100%; height: 100%; }
         .cta .cta-logo { position: absolute; left: 50%; top: 36%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
         .cta .title { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-size: 190px; }
         .cta .tag { position: absolute; left: 0; right: 0; top: 74%; text-align: center; font-size: 64px; }
         .cta .url { position: absolute; left: 0; right: 0; top: 87%; text-align: center; }
         @media (orientation: portrait) {
-          .cta .vortex, .cta .cta-logo { top: 34%; }
+          .cta .cta-logo { top: 34%; }
           .cta .title { top: 44%; font-size: 150px; }
           .cta .tag { top: 55%; font-size: 60px; padding: 0 60px; }
           .cta .url { top: 68%; }
@@ -30,18 +28,7 @@
       <div class="scene cta on-colour" style="--mc: #6d28d9">
         <div class="field layer"></div>
         <div class="vortex" data-layout-ignore>
-          <div class="disc" data-size="2800"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="2203"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="1733"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="1363"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="1072"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="844"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="664"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="522"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="411"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="323"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="254"><div class="hard"></div><div class="soft"></div></div>
-          <div class="disc" data-size="200"><div class="hard"></div><div class="soft"></div></div>
+          <div class="spin"><svg viewBox="-1200 -1200 2400 2400"></svg></div>
         </div>
         <div class="logo cta-logo"><i data-lucide="users"></i></div>
         <div class="slam title">Workspace</div>
@@ -50,27 +37,46 @@
       </div>
       <script>
         (() => {
-          // On the drop every module colour bursts out as one wheel, spins
-          // faster and faster, twists into a spiral and collapses into the
-          // mark; the lockup then builds and holds while the last chord rings.
-          const { $, $$, at } = window.promo.scene("cta");
+          // On the drop the module colours burst out as one spiral, spin
+          // faster and faster and collapse into the mark; the lockup then
+          // builds and holds while the last chord rings.
+          const { $, at, PORTRAIT } = window.promo.scene("cta");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
+
+          // The module scenes' colours, in hue order.
+          const COLOURS = ["#4338ca", "#7e22ce", "#a21caf", "#be185d", "#be123c", "#c2410c", "#b45309", "#65a30d", "#047857", "#0f766e", "#0369a1"];
+          // Logarithmic arms r = R0 * e^(B * phi): thin at the centre, wide at the edge.
+          const R0 = 6, B = 1.27, REACH = 1800, STEPS = 80;
+          const turn = Math.log(REACH / R0) / B;
+          const width = (2 * Math.PI) / COLOURS.length;
+          const point = (phi, offset) => {
+            const r = R0 * Math.exp(B * phi);
+            return `${(r * Math.cos(phi + offset)).toFixed(1)} ${(r * Math.sin(phi + offset)).toFixed(1)}`;
+          };
+          const svg = $(".spin svg");
+          COLOURS.forEach((colour, i) => {
+            const out = [], back = [];
+            for (let k = 0; k <= STEPS; k++) {
+              const phi = (turn * k) / STEPS;
+              out.push(point(phi, i * width));
+              back.unshift(point(phi, (i + 1) * width));
+            }
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", `M0 0 L${out.join(" L")} L${back.join(" L")} Z`);
+            path.setAttribute("fill", colour);
+            svg.appendChild(path);
+          });
+
           const vortex = $(".vortex");
           const collapse = at(5);
-          const logoSize = 220 / 2800;
-
-          $$(".disc").forEach((disc, k) => {
-            const size = Number(disc.dataset.size);
-            gsap.set(disc, { width: size, height: size, left: -size / 2, top: -size / 2 });
-            // Inner discs turn a little further: the wedges twist into arms.
-            tl.fromTo(disc, { rotation: 0 }, { rotation: 1080 + k * 22, duration: collapse - at(0), ease: "power2.in" }, at(0));
-            // 30 fps strobes hard wedges past ~16 degrees a frame: the
-            // blended wheel takes over as the spin speeds up.
-            tl.to(disc.querySelector(".soft"), { opacity: 1, duration: at(2) - at(0), ease: "none" }, at(1.5));
-          });
+          // Clockwise, the arms flow into the centre. The spin peaks near
+          // 16 degrees a frame at 30 fps, under half an arm: no wagon-wheel.
+          tl.fromTo($(".spin"), { rotation: 0 }, { rotation: 570, duration: collapse - at(0), ease: "power2.in" }, at(0));
           tl.fromTo(vortex, { scale: 0 }, { scale: 1, duration: 0.5, ease: "expo.out" }, at(0));
-          tl.to(vortex, { scale: logoSize, duration: collapse - at(2.5), ease: "power3.in" }, at(2.5));
+          // It collapses into the mark, which sits above the centre.
+          const lift = PORTRAIT ? -0.16 * 1920 : -0.14 * 1080;
+          tl.to(vortex, { scale: 220 / 2400, y: lift, duration: collapse - at(2.5), ease: "power3.in" }, at(2.5));
           tl.set(vortex, { opacity: 0 }, collapse);
           pop(tl, $(".cta-logo"), collapse - 0.05, { duration: 0.5 });
           slam(tl, $(".title"), at(6), "scale");

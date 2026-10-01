@@ -13,9 +13,13 @@
         .open .panel-icon { width: 210px; height: 210px; color: #fff; }
         .open .panel-icon svg { width: 100%; height: 100%; stroke-width: 1.6; }
         .open .panel .slam { font-size: 170px; }
+        .open .burst { position: absolute; inset: 0; background: var(--mc); opacity: 0; }
+        .open .frame { position: absolute; left: 240px; top: 90px; width: 1440px; height: 900px; border-radius: 22px; overflow: hidden; background: #fff; }
+        .open .frame video { position: absolute; inset: 0; width: 100%; height: 100%; }
         @media (orientation: portrait) {
           .open .panel .slam { font-size: 110px; }
           .open .panel-icon { width: 180px; height: 180px; }
+          .open .frame { left: 0; top: 622px; width: 1080px; height: 675px; border-radius: 0; }
         }
       </style>
       <div class="scene open on-colour">
@@ -23,11 +27,21 @@
         <div class="panel" style="--mc: #c2410c"><div class="panel-icon"><i data-lucide="square-kanban"></i></div><div class="slam">your projects,</div></div>
         <div class="panel" style="--mc: #0369a1"><div class="panel-icon"><i data-lucide="message-circle"></i></div><div class="slam">your chats,</div></div>
         <div class="panel" style="--mc: #7e22ce"><div class="panel-icon"><i data-lucide="database"></i></div><div class="slam">your data.</div></div>
+        <!-- One eighth note each at 128 BPM, from beat 4: the burst of footage. -->
+        <div class="burst" style="--mc: #4338ca"><div class="frame"><video id="burst-files" data-hf-media-start-basis="local" src="assets/clips/files-0.mp4" muted playsinline data-start="1.8750" data-duration="0.2344" data-media-start="1.0" data-track-index="4"></video></div></div>
+        <div class="burst" style="--mc: #0369a1"><div class="frame"><video id="burst-chat" data-hf-media-start-basis="local" src="assets/clips/chat-0.mp4" muted playsinline data-start="2.1094" data-duration="0.2344" data-media-start="3.5" data-track-index="5"></video></div></div>
+        <div class="burst" style="--mc: #c2410c"><div class="frame"><video id="burst-projects" data-hf-media-start-basis="local" src="assets/clips/projects-0.mp4" muted playsinline data-start="2.3438" data-duration="0.2344" data-media-start="4.5" data-track-index="6"></video></div></div>
+        <div class="burst" style="--mc: #65a30d"><div class="frame"><video id="burst-photos" data-hf-media-start-basis="local" src="assets/clips/photos-0.mp4" muted playsinline data-start="2.5781" data-duration="0.2344" data-media-start="3.0" data-track-index="7"></video></div></div>
+        <div class="burst" style="--mc: #b45309"><div class="frame"><video id="burst-mail" data-hf-media-start-basis="local" src="assets/clips/mail-0.mp4" muted playsinline data-start="2.8125" data-duration="0.2344" data-media-start="5.5" data-track-index="8"></video></div></div>
+        <div class="burst" style="--mc: #0f766e"><div class="frame"><video id="burst-calendar" data-hf-media-start-basis="local" src="assets/clips/calendar-0.mp4" muted playsinline data-start="3.0469" data-duration="0.2344" data-media-start="4.0" data-track-index="9"></video></div></div>
+        <div class="burst" style="--mc: #047857"><div class="frame"><video id="burst-notes" data-hf-media-start-basis="local" src="assets/clips/notes-0.mp4" muted playsinline data-start="3.2812" data-duration="0.2344" data-media-start="5.0" data-track-index="10"></video></div></div>
+        <div class="burst" style="--mc: #7e22ce"><div class="frame"><video id="burst-vault" data-hf-media-start-basis="local" src="assets/clips/vault-0.mp4" muted playsinline data-start="3.5156" data-duration="0.5344" data-media-start="4.0" data-track-index="11"></video></div></div>
       </div>
       <script>
         (() => {
-          // kinetic-beat-slam: four full-bleed hard cuts, one per beat. The
-          // name they add up to is kept for the close.
+          // kinetic-beat-slam: four full-bleed hard cuts, one per beat, then
+          // a burst of footage on the eighths, one module a cut. The name
+          // they add up to is kept for the close.
           const { $$, at } = window.promo.scene("open");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
@@ -38,6 +52,13 @@
             if (i) tl.set(panels[i - 1], { opacity: 0 }, at(i));
             slam(tl, panel.querySelector(".slam"), at(i), kinds[i]);
             pop(tl, panel.querySelector(".panel-icon"), at(i), { rotation: i % 2 ? 18 : -18, duration: 0.35 });
+          });
+          const bursts = $$(".burst");
+          tl.set(panels[panels.length - 1], { opacity: 0 }, at(4));
+          bursts.forEach((burst, k) => {
+            tl.set(burst, { opacity: 1 }, at(4 + k / 2));
+            if (k) tl.set(bursts[k - 1], { opacity: 0 }, at(4 + k / 2));
+            tl.fromTo(burst.firstElementChild, { scale: 1.08 }, { scale: 1, duration: 0.2, ease: "power3.out" }, at(4 + k / 2));
           });
           window.__timelines["open"] = tl;
         })();

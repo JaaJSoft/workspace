@@ -1,7 +1,7 @@
 # Storyboard - Workspace promo
 
 This video tells teams that their files, projects, chats and data all live
-in one app of their own. 128 BPM, 24 bars (45 s). Scene lengths, cuts and
+in one app of their own. 128 BPM, 26 bars (49 s). Scene lengths, cuts and
 music sections live in `SCENES` of `scripts/promo_video.py`; the frames below
 are the plan. The style is flat and full screen throughout: module colours,
 heavy type, hard cuts on the beat, no 3D, no shadows.
@@ -11,7 +11,7 @@ status: built
 src: compositions/open.html
 type: hook
 blueprint: kinetic-beat-slam
-beat: 1 bar, drums from the first frame. "Your files, / your projects, / your chats, / your data." as full-bleed colour hard cuts, one per beat. The name they add up to is kept for the close.
+beat: 2 bars, drums from the first frame. "Your files, / your projects, / your chats, / your data." as full-bleed colour hard cuts, one per beat, then a burst of real footage on the eighths, one module a cut, each on its colour. The name they add up to is kept for the close.
 
 ## Frames 2-11 - one per module
 status: built
@@ -39,8 +39,16 @@ beat: 2 bars, breakdown and riser. "Self-hosted." / "Open source." / "Your data,
 
 ## Frame 14
 status: built
+src: compositions/roll.html
+type: build
+blueprint: kinetic-beat-slam (colour roll)
+transition_in: hard cut on the beat
+beat: 2 bars, the build into the drop. Every module again, full screen in its colour with its icon, one per hit: beats, then eighths, then sixteenths, a clap on each (the `hits` of the scene drive both).
+
+## Frame 15
+status: built
 src: compositions/cta.html
 type: cta
-blueprint: spinning colour rays into logo-assemble-lockup (flat)
+blueprint: logo-assemble-lockup (flat)
 transition_in: overexposure (the drop)
-beat: 4 bars, drop then ring-out. The module colours fill the frame as straight rays and spin faster and faster; the mark lands in the middle, the brand violet irises out of it over the rays; "your Workspace.", "One app for all of it.", the repository.
+beat: 3 bars, drop then ring-out. The mark slams in on the flash, then "your Workspace.", "One app for all of it.", the repository, on the brand violet.

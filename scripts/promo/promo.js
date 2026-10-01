@@ -33,7 +33,7 @@
     const el = document.querySelector(`[data-composition-id="${id}"]`);
     // `at(beats)` is a time on the beat grid, counted from the cut.
     const at = (beats) => data.lead + beats * BEAT;
-    return { el, $: (s) => $(el, s), $$: (s) => $$(el, s), at, BEAT, BAR, PORTRAIT, lead: data.lead, end: data.lead + data.duration };
+    return { el, $: (s) => $(el, s), $$: (s) => $$(el, s), at, BEAT, BAR, PORTRAIT, lead: data.lead, end: data.lead + data.duration, hits: data.hits || [] };
   }
 
   // -- vocabulary (kinetic-beat-slam: one beat grid, a distinct entrance per phrase)

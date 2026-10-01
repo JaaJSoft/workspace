@@ -7,7 +7,7 @@ angle: "Your everything, your Workspace"
 destination: "YouTube, website, README (16:9) and Shorts, Reels, TikTok (9:16)"
 aspect: "16:9 + 9:16"
 language: en
-length: "~45s"
+length: "~50s"
 ---
 
 # Workspace promo
@@ -16,10 +16,11 @@ length: "~45s"
 
 An ad, not a tour: very dynamic, colourful, cut to the beat. It opens on
 "your files, your projects, your chats, your data" as full-bleed colour
-panels, then gives every module the same beat - a title card in its colour,
+panels and a burst of footage, then gives every module the same beat - a title card in its colour,
 its real take full screen - through full-screen cuts, lands "self-hosted,
-open source" on the breakdown and only then answers the opening: the module
-colours spin into the logo, "your Workspace.", the repository.
+open source" on the breakdown, rolls every module colour faster and faster
+into the drop and only then answers the opening: "your Workspace.", the
+repository.
 
 ## Assets
 

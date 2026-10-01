@@ -247,8 +247,10 @@ def render_soundtrack(timeline, path: Path):
     total_bars = round(duration / bar)
     modules_seen = 0
     previous = None
-    for section in timeline["sections"]:
+    sections = timeline["sections"]
+    for index, section in enumerate(sections):
         kind = section["kind"]
+        following = sections[index + 1]["kind"] if index + 1 < len(sections) else None
         start = section["start"]
         bars = section["bars"]
         drum_bars = section.get("drumBars", 0)
@@ -267,10 +269,26 @@ def render_soundtrack(timeline, path: Path):
         if kind in ("module", "platform", "outro") and start > 0:
             fx.add(start - 0.5, whoosh(rng), gain=0.35 if kind == "module" else 0.5)
         # A drop: the groove comes back after a build, or opens the track.
-        if kind in ("module", "outro") and previous in (None, "intro", "platform"):
+        if kind in ("module", "outro") and previous in (
+            None,
+            "intro",
+            "platform",
+            "roll",
+        ):
             fx.add(start, crash_sound, gain=0.5)
             fx.add(start, boom_sound, gain=0.55)
         previous = kind
+
+        # A roll builds into the drop: one clap per hit, louder as they
+        # tighten, over a riser as long as the section.
+        if kind == "roll":
+            fx.add(start, riser(rng, bars * bar), gain=0.5)
+            hits = section["hits"]
+            for h, hit in enumerate(hits):
+                level = 0.2 + 0.6 * (h / max(1, len(hits) - 1)) ** 1.5
+                drums.add(start + hit * beat, clap_sound, gain=level)
+                if hit == int(hit):
+                    drums.add(start + hit * beat, kick_sound, gain=0.5)
 
         for b in range(bars):
             t0 = start + b * bar
@@ -334,7 +352,10 @@ def render_soundtrack(timeline, path: Path):
                             )
 
             # the bar before a drop builds up
-            leads_to_drop = b == bars - 1 and kind in ("intro", "platform")
+            # (a roll is its own build: the breakdown before it stays quiet)
+            leads_to_drop = (
+                b == bars - 1 and kind in ("intro", "platform") and following != "roll"
+            )
             if leads_to_drop:
                 fx.add(t0, riser(rng, bar), gain=0.45)
                 for s in range(16):

@@ -55,11 +55,12 @@ FORMATS = {
 # In playing order: the sub-composition, its length in bars, the full-screen
 # cut into it, and the part of the music it sits on (see soundtrack.py:
 # "module" plays the full groove, "platform" is the breakdown ending on a
-# riser, "outro" drops back in and rings out). A scene with a `feature` is
+# riser, "roll" builds with a clap on each of its `hits` (beats from its
+# start), "outro" drops back in and rings out). A scene with a `feature` is
 # built from the feature template: its title card lasts `card` beats, then its
 # take plays full screen from `media` seconds at `rate` times its speed.
 SCENES = [
-    {"id": "open", "bars": 1, "cut": None, "music": "module", "color": "#6d28d9"},
+    {"id": "open", "bars": 2, "cut": None, "music": "module", "color": "#7e22ce"},
     {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#a21caf",
      "feature": {"icon": "search", "title": ["Search", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
     {"id": "files", "bars": 2, "cut": "push-left", "music": "module", "color": "#4338ca",
@@ -82,7 +83,9 @@ SCENES = [
      "feature": {"icon": "key-round", "title": ["Passwords."], "take": "vault", "media": 2.6, "rate": 1.6, "card": 1}},
     {"id": "wall", "bars": 2, "cut": "blocks", "music": "module", "color": "#6d28d9"},
     {"id": "yours", "bars": 2, "cut": "push-up", "music": "platform", "color": "#1e1b4b"},
-    {"id": "cta", "bars": 4, "cut": "flash", "music": "outro", "color": "#6d28d9"},
+    {"id": "roll", "bars": 2, "cut": "hard", "music": "roll", "color": "#a21caf",
+     "hits": [0, 1, 2, 3, 4, 4.5, 5, 5.5, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75]},
+    {"id": "cta", "bars": 3, "cut": "flash", "music": "outro", "color": "#6d28d9"},
 ]  # fmt: skip
 
 # The takes each scene plays, from the presentation pipeline.
@@ -134,6 +137,7 @@ def timeline():
                 "key": scene["id"],
                 "start": scene["start"],
                 "bars": scene["bars"],
+                **({"hits": scene["hits"]} if "hits" in scene else {}),
             }
         )
     for section in sections:
@@ -141,6 +145,7 @@ def timeline():
             "intro": 0,
             "module": section["bars"],
             "platform": 0,
+            "roll": 0,
             "outro": 2,
         }[section["kind"]]
 
@@ -274,7 +279,11 @@ def render_index(fmt, plan, audio_name):
         "duration": duration,
         "orientation": "portrait" if height > width else "landscape",
         "scenes": [
-            {k: s[k] for k in ("id", "start", "duration", "lead", "cut", "color")}
+            {
+                k: s[k]
+                for k in ("id", "start", "duration", "lead", "cut", "color", "hits")
+                if k in s
+            }
             for s in plan["scenes"]
         ],
         "sections": plan["sections"],

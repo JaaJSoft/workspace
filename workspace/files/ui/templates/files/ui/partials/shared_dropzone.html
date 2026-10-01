@@ -3,8 +3,8 @@
   link accepts uploads (drop or both mode). Lives outside the shared-content
   swap region so the zone - and its in-flight upload queue - survives
   navigating into a subfolder; it follows the browsed folder through the
-  data-node attributes on #shared-content, re-read on every swap. Needs
-  share_token, access_token, max_file_bytes and link in context.
+  data-drop-folder attributes on #shared-content, re-read on every swap. Needs
+  share_token, access_token, max_file_bytes, drop_folder and link in context.
 {% endcomment %}
 <div
   data-testid="drop-zone"
@@ -19,7 +19,7 @@
   <div class="card-body">
     <h2 class="text-lg font-bold mb-2 flex items-center gap-2">
       <i data-lucide="upload-cloud" class="w-5 h-5"></i>
-      <span>Send files to <span x-text="targetName">{{ target.name }}</span></span>
+      <span>Send files to <span x-text="targetName">{{ drop_folder.name }}</span></span>
     </h2>
 
     <label

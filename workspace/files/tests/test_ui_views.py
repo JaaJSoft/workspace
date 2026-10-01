@@ -309,8 +309,40 @@ class SharedLinkPageTests(TestCase):
         self.assertContains(resp, 'data-testid="drop-zone"')
         self.assertContains(resp, 'x-text="targetName">Sub</span>')
         self.assertNotContains(resp, 'x-text="targetName">Docs</span>')
-        self.assertContains(resp, f'data-node="{sub.uuid}"')
+        self.assertContains(resp, f'data-drop-folder="{sub.uuid}"')
         self.assertNotContains(resp, "Send files to Sub")
+
+    def test_a_file_open_in_the_viewer_drops_into_its_folder(self):
+        """The upload endpoint only accepts a folder node: publishing the
+        open file's uuid made every drop from the viewer fail, under a
+        heading naming the file."""
+        folder = File.objects.create(
+            owner=self.owner, name="Docs", node_type=File.NodeType.FOLDER
+        )
+        sub = File.objects.create(
+            owner=self.owner,
+            name="Sub",
+            node_type=File.NodeType.FOLDER,
+            parent=folder,
+        )
+        doc = File.objects.create(
+            owner=self.owner,
+            name="report.txt",
+            node_type=File.NodeType.FILE,
+            parent=sub,
+            mime_type="text/plain",
+        )
+        link = FileShareLink.objects.create(
+            file=folder, created_by=self.owner, mode=FileShareLink.Mode.BOTH
+        )
+
+        resp = self.client.get(f"/files/shared/{link.token}", {"node": str(doc.uuid)})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context["show_viewer"])
+        self.assertContains(resp, f'data-drop-folder="{sub.uuid}"')
+        self.assertNotContains(resp, f'data-drop-folder="{doc.uuid}"')
+        self.assertContains(resp, 'x-text="targetName">Sub</span>')
 
     def test_a_drop_mode_folder_link_renders_the_drop_page_with_no_listing(self):
         folder = File.objects.create(

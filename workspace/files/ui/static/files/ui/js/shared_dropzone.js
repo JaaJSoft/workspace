@@ -19,13 +19,14 @@ window.sharedDrop = function sharedDrop(token, accessToken, maxFileBytes, rootNa
       this.syncTarget();
     },
 
-    // The browsed folder, published by #shared-content on every swap. The
-    // zone sits outside that region, so it reads the attributes rather than
-    // being re-rendered with them.
+    // The browsed folder - the file's own folder when a file is open in the
+    // viewer - published by #shared-content on every swap. The zone sits
+    // outside that region, so it reads the attributes rather than being
+    // re-rendered with them.
     syncTarget() {
       const content = document.getElementById('shared-content');
-      this.targetNode = (content && content.dataset.node) || '';
-      this.targetName = (content && content.dataset.nodeName) || this.rootName;
+      this.targetNode = (content && content.dataset.dropFolder) || '';
+      this.targetName = (content && content.dataset.dropFolderName) || this.rootName;
     },
 
     // The target is fixed when the file enters the queue: uploads run one

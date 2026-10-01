@@ -48,11 +48,7 @@ html, body {
 .layer { position: absolute; inset: 0; pointer-events: none; }
 .scene { position: absolute; inset: 0; overflow: hidden; }
 
-/* -- backdrop (index) ------------------------------------------------------ */
-
-.glow { position: absolute; width: 1400px; height: 1400px; margin: -700px 0 0 -700px; border-radius: 50%; }
-.glow.a { left: 25%; top: 30%; background: radial-gradient(circle, rgb(255 79 163 / .2), rgb(255 79 163 / 0) 62%); }
-.glow.b { left: 78%; top: 75%; background: radial-gradient(circle, rgb(124 58 237 / .28), rgb(124 58 237 / 0) 62%); }
+/* -- overlays (index) ------------------------------------------------------ */
 
 .grain {
   opacity: .07;
@@ -87,7 +83,7 @@ html, body {
 }
 .app-icon svg { width: 88px; height: 88px; color: #fff; stroke-width: 1.8; }
 
-.logo { display: grid; place-items: center; border-radius: 28%; color: #fff; background: linear-gradient(135deg, #6d28d9, #db2777); }
+.logo { display: grid; place-items: center; border-radius: 28%; color: #6d28d9; background: #fff; }
 .logo svg { width: 52%; height: 52%; }
 
 /* -- a module: title card, then its take full screen ------------------------ */

@@ -9,65 +9,70 @@
     <div id="cta-root" data-composition-id="cta" data-width="1920" data-height="1080">
       <style>
         #cta-root { position: absolute; inset: 0; }
-        .cta .arm { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-        .cta .arm .app-icon { left: 0; top: 0; width: 130px; height: 130px; margin: -65px 0 0 -65px; }
-        .cta .arm .app-icon svg { width: 64px; height: 64px; }
-        .cta .cta-logo { position: absolute; left: 50%; top: 50%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
-        .cta .ring { position: absolute; inset: -6px; border-radius: 30%; border: 6px solid #fff; opacity: 0; }
+        .cta .field { background: var(--mc); }
+        /* Centred on the mark and wide enough to cover the frame from there. */
+        .cta .vortex { position: absolute; left: 50%; top: 36%; width: 0; height: 0; }
+        .cta .disc { position: absolute; border-radius: 50%; overflow: hidden; }
+        .cta .disc > div { position: absolute; inset: 0; }
+        .cta .hard { background: conic-gradient(#4338ca 0.00deg 32.73deg, #6d28d9 32.73deg 65.45deg, #7e22ce 65.45deg 98.18deg, #be185d 98.18deg 130.91deg, #be123c 130.91deg 163.64deg, #c2410c 163.64deg 196.36deg, #b45309 196.36deg 229.09deg, #65a30d 229.09deg 261.82deg, #047857 261.82deg 294.55deg, #0f766e 294.55deg 327.27deg, #0369a1 327.27deg 360.00deg); }
+        .cta .soft { opacity: 0; background: conic-gradient(from -16.36deg, #4338ca 0.00deg, #6d28d9 32.73deg, #7e22ce 65.45deg, #be185d 98.18deg, #be123c 130.91deg, #c2410c 163.64deg, #b45309 196.36deg, #65a30d 229.09deg, #047857 261.82deg, #0f766e 294.55deg, #0369a1 327.27deg, #4338ca 360deg); }
+        .cta .cta-logo { position: absolute; left: 50%; top: 36%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
         .cta .title { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-size: 190px; }
         .cta .tag { position: absolute; left: 0; right: 0; top: 74%; text-align: center; font-size: 64px; }
         .cta .url { position: absolute; left: 0; right: 0; top: 87%; text-align: center; }
         @media (orientation: portrait) {
+          .cta .vortex, .cta .cta-logo { top: 34%; }
           .cta .title { top: 44%; font-size: 150px; }
           .cta .tag { top: 55%; font-size: 60px; padding: 0 60px; }
           .cta .url { top: 68%; }
         }
       </style>
-      <div class="scene cta">
-        <div class="arm"><div class="app-icon" style="--tile: #6d28d9"><i data-lucide="search"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #4338ca"><i data-lucide="hard-drive"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #65a30d"><i data-lucide="images"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #047857"><i data-lucide="notebook-pen"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #0369a1"><i data-lucide="message-circle"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #be185d"><i data-lucide="sparkles"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #b45309"><i data-lucide="mail"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #0f766e"><i data-lucide="calendar"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #c2410c"><i data-lucide="square-kanban"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #be123c"><i data-lucide="contact"></i></div></div>
-        <div class="arm"><div class="app-icon" style="--tile: #7e22ce"><i data-lucide="key-round"></i></div></div>
-        <div class="logo cta-logo"><i data-lucide="users"></i><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+      <div class="scene cta on-colour" style="--mc: #6d28d9">
+        <div class="field layer"></div>
+        <div class="vortex" data-layout-ignore>
+          <div class="disc" data-size="2800"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="2203"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="1733"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="1363"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="1072"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="844"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="664"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="522"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="411"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="323"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="254"><div class="hard"></div><div class="soft"></div></div>
+          <div class="disc" data-size="200"><div class="hard"></div><div class="soft"></div></div>
+        </div>
+        <div class="logo cta-logo"><i data-lucide="users"></i></div>
         <div class="slam title">Workspace</div>
         <div class="slam tag">One app. Every tool. <em>Yours.</em></div>
         <div class="url"><span class="label">github.com/JaaJSoft/workspace</span></div>
       </div>
       <script>
         (() => {
-          // logo-assemble-lockup, flat: on the drop every module bursts out
-          // of the centre, circles, and collapses back into the mark; the
-          // mark then rises to the lockup, which holds while the last chord rings.
-          const { $, $$, at, PORTRAIT } = window.promo.scene("cta");
+          // On the drop every module colour bursts out as one wheel, spins
+          // faster and faster, twists into a spiral and collapses into the
+          // mark; the lockup then builds and holds while the last chord rings.
+          const { $, $$, at } = window.promo.scene("cta");
           const { slam, pop } = window.promo;
           const tl = gsap.timeline({ paused: true });
-          const arms = $$(".arm");
-          // Tile half-size 65 + a margin: the wheel never touches the frame edge.
-          const radius = 380;
-          // The wheel turns around the frame centre; the lockup sits higher.
-          const lift = PORTRAIT ? -0.16 * 1920 : -0.14 * 1080;
-          arms.forEach((arm, i) => {
-            const base = (i / arms.length) * 360;
-            const icon = arm.firstElementChild;
-            // The arm turns and the tile turns back by as much: icons stay upright.
-            tl.fromTo(arm, { rotation: base }, { rotation: base + 140, duration: at(5), ease: "power1.in" }, 0);
-            tl.fromTo(icon, { rotation: -base }, { rotation: -base - 140, duration: at(5), ease: "power1.in" }, 0);
-            tl.fromTo(icon, { x: 0, scale: 0.2, opacity: 0 }, { x: radius, scale: 1, opacity: 1, duration: 0.45, ease: "back.out(1.8)" }, at(0) + i * 0.03);
-            tl.to(icon, { x: 0, scale: 0.3, duration: 0.5, ease: "power3.in" }, at(4.2));
-            tl.to(icon, { opacity: 0, duration: 0.12, ease: "none" }, at(5) - 0.12);
+          const vortex = $(".vortex");
+          const collapse = at(5);
+          const logoSize = 220 / 2800;
+
+          $$(".disc").forEach((disc, k) => {
+            const size = Number(disc.dataset.size);
+            gsap.set(disc, { width: size, height: size, left: -size / 2, top: -size / 2 });
+            // Inner discs turn a little further: the wedges twist into arms.
+            tl.fromTo(disc, { rotation: 0 }, { rotation: 1080 + k * 22, duration: collapse - at(0), ease: "power2.in" }, at(0));
+            // 30 fps strobes hard wedges past ~16 degrees a frame: the
+            // blended wheel takes over as the spin speeds up.
+            tl.to(disc.querySelector(".soft"), { opacity: 1, duration: at(2) - at(0), ease: "none" }, at(1.5));
           });
-          pop(tl, $(".cta-logo"), at(5), { duration: 0.6 });
-          tl.to($(".cta-logo"), { y: lift, duration: 0.4, ease: "power3.inOut" }, at(6) - 0.25);
-          $$(".ring").forEach((ring, i) => {
-            tl.fromTo(ring, { scale: 1, opacity: 1 }, { scale: 2.6, opacity: 0, duration: 1.0, ease: "power3.out" }, at(5.2 + i));
-          });
+          tl.fromTo(vortex, { scale: 0 }, { scale: 1, duration: 0.5, ease: "expo.out" }, at(0));
+          tl.to(vortex, { scale: logoSize, duration: collapse - at(2.5), ease: "power3.in" }, at(2.5));
+          tl.set(vortex, { opacity: 0 }, collapse);
+          pop(tl, $(".cta-logo"), collapse - 0.05, { duration: 0.5 });
           slam(tl, $(".title"), at(6), "scale");
           slam(tl, $(".tag"), at(8), "rise");
           slam(tl, $(".url"), at(10), "drop");

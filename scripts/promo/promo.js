@@ -87,22 +87,6 @@
     // An ad opens on its first frame: no fade in.
     tl.set(fade, { opacity: 0 }, 0);
     tl.to(fade, { opacity: 1, duration: 1.4, ease: 'none' }, P.duration - 1.5);
-
-    // Ambient glows under the dark scenes, pulsing on every kick.
-    const glows = $$(document, '.glow');
-    const drums = P.sections.map((s) => [s.start, s.start + s.drumBars * BAR]);
-    const paint = (t) => {
-      let pulse = 0;
-      for (const [a, b] of drums) if (t >= a && t < b) pulse = Math.exp(-((t - a) % BEAT) / 0.12);
-      glows.forEach((g, k) => {
-        g.style.translate = `${(Math.sin(t * 0.35 + k * 2) * 160).toFixed(1)}px ${(Math.cos(t * 0.27 + k) * 110).toFixed(1)}px`;
-        g.style.scale = (1 + 0.08 * pulse).toFixed(4);
-        g.style.opacity = (0.75 + 0.25 * pulse).toFixed(3);
-      });
-    };
-    const clock = { t: 0 };
-    tl.to(clock, { t: P.duration, duration: P.duration, ease: 'none', onUpdate: () => paint(clock.t) }, 0);
-    paint(0);
   }
 
   // Full-screen cuts between scene slots, per hyperframes-animation

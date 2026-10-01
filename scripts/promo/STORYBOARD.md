@@ -11,7 +11,7 @@ status: built
 src: compositions/open.html
 type: hook
 blueprint: kinetic-beat-slam + logo-assemble-lockup
-beat: 3 bars, drums from the first frame. "Your files, / your projects, / your chats, / your data." as full-bleed colour hard cuts, one per beat; the four colours slam in as stripes and squeeze into the mark; "your Workspace." "One app for all of it."
+beat: 3 bars, drums from the first frame. "Your files, / your projects, / your chats, / your data." as full-bleed colour hard cuts, one per beat; the four colours slam in as stripes and wipe off onto the brand violet, where the mark lands, then "your Workspace." "One app for all of it."
 
 ## Frames 2-11 - one per module
 status: built
@@ -41,6 +41,6 @@ beat: 2 bars, breakdown and riser. "Self-hosted." / "Open source." / "Your data,
 status: built
 src: compositions/cta.html
 type: cta
-blueprint: logo-assemble-lockup (flat)
+blueprint: colour vortex into logo-assemble-lockup (flat)
 transition_in: overexposure (the drop)
-beat: 4 bars, drop then ring-out. Every module bursts out and collapses into the mark; "Workspace", "One app. Every tool. Yours.", the repository.
+beat: 4 bars, drop then ring-out. Every module colour bursts out as one wheel, spins faster and faster, twists into a spiral and collapses into the mark on the brand violet; "Workspace", "One app. Every tool. Yours.", the repository.

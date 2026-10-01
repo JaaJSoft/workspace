@@ -59,8 +59,8 @@ FORMATS = {
 # built from the feature template: its title card lasts `card` beats, then its
 # take plays full screen from `media` seconds at `rate` times its speed.
 SCENES = [
-    {"id": "open", "bars": 3, "cut": None, "music": "module", "color": "#4338ca"},
-    {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#6d28d9",
+    {"id": "open", "bars": 3, "cut": None, "music": "module", "color": "#6d28d9"},
+    {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#a21caf",
      "feature": {"icon": "search", "title": ["Search", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
     {"id": "files", "bars": 2, "cut": "push-left", "music": "module", "color": "#4338ca",
      "feature": {"icon": "hard-drive", "title": ["Every file,", "every photo."], "take": "files", "media": 1.1, "rate": 1.5, "card": 2}},
@@ -82,7 +82,7 @@ SCENES = [
      "feature": {"icon": "key-round", "title": ["Passwords."], "take": "vault", "media": 2.6, "rate": 1.6, "card": 1}},
     {"id": "wall", "bars": 2, "cut": "blocks", "music": "module", "color": "#6d28d9"},
     {"id": "yours", "bars": 2, "cut": "push-up", "music": "platform", "color": "#1e1b4b"},
-    {"id": "cta", "bars": 4, "cut": "flash", "music": "outro", "color": "#0e0a16"},
+    {"id": "cta", "bars": 4, "cut": "flash", "music": "outro", "color": "#6d28d9"},
 ]  # fmt: skip
 
 # The takes each scene plays, from the presentation pipeline.
@@ -295,9 +295,6 @@ def render_index(fmt, plan, audio_name):
 </head>
 <body>
   <div id="root" data-composition-id="main" data-start="0" data-duration="{duration:.3f}" data-width="{width}" data-height="{height}">
-    <div id="backdrop" class="layer">
-      <div class="glow a"></div><div class="glow b"></div>
-    </div>
     {slots}
     <div id="cover" class="layer"><div class="block a"></div><div class="block b"></div><div class="block c"></div></div>
     <div id="flash" class="layer"></div>

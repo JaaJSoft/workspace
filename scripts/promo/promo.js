@@ -61,6 +61,13 @@
    * card is pushed off the top and the take comes up full screen under it.
    */
   function feature(tl, s, cardBeats) {
+    if (!cardBeats) {
+      // No card: the take is on screen from the cut, as the drop lands.
+      tl.set(s.$('.card'), { opacity: 0 }, 0);
+      tl.fromTo(s.$('.clip-frame'), { scale: 1.12 }, { scale: 1, duration: 0.6, ease: 'expo.out' }, s.at(0));
+      slam(tl, s.$('.tag'), s.at(0) + 0.1, 'left');
+      return;
+    }
     pop(tl, s.$('.card-icon'), s.at(0), { rotation: -20, duration: 0.4 });
     const lines = s.$$('.card-title .ln');
     slam(tl, lines[0], s.at(0), 'scale');

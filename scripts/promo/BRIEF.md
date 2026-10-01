@@ -14,12 +14,14 @@ length: "~50s"
 
 ## Intent
 
-An ad, not a tour: very dynamic, colourful, cut to the beat. It opens on
-"your files, your projects, your chats, your data" as full-bleed colour
-panels and a burst of footage, then gives every module the same beat - a title card in its colour,
-its real take full screen - through full-screen cuts, lands "self-hosted,
-open source" on the breakdown, rolls every module colour faster and faster
-into the drop and only then answers the opening: "your Workspace.", the
+An ad, not a tour: very dynamic, colourful, cut to the beat. The hook
+promises, the rest delivers: "your files, your projects, your chats, your
+mail" as full-bleed colour panels, speeding up through every other module
+into "your data."; the drop lands straight in the app, then every module gets
+the same beat - a title card in its colour, its real take full screen -
+through full-screen cuts, search last. "Self-hosted, open source, your data,
+your rules" lands on the breakdown, a roll of every module colour builds into
+the last drop, and only then comes the name: "your Workspace.", the
 repository.
 
 ## Assets

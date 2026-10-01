@@ -57,20 +57,21 @@ FORMATS = {
 # "module" plays the full groove, "platform" is the breakdown ending on a
 # riser, "roll" builds with a clap on each of its `hits` (beats from its
 # start), "outro" drops back in and rings out). A scene with a `feature` is
-# built from the feature template: its title card lasts `card` beats, then its
-# take plays full screen from `media` seconds at `rate` times its speed.
+# built from the feature template: its title card lasts `card` beats (0: no
+# card, the take is on screen from the cut), then its take plays full screen
+# from `media` seconds at `rate` times its speed.
 SCENES = [
-    {"id": "open", "bars": 2, "cut": None, "music": "module", "color": "#7e22ce"},
-    {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#a21caf",
-     "feature": {"icon": "search", "title": ["Search", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
-    {"id": "files", "bars": 2, "cut": "push-left", "music": "module", "color": "#4338ca",
-     "feature": {"icon": "hard-drive", "title": ["Every file,", "every photo."], "take": "files", "media": 1.1, "rate": 1.5, "card": 2}},
+    {"id": "open", "bars": 1, "cut": None, "music": "module", "color": "#4338ca"},
+    {"id": "rush", "bars": 1, "cut": "hard", "music": "roll", "color": "#047857",
+     "hits": [0, 0.5, 1, 1.5, 2, 2.5, 3]},
+    {"id": "files", "bars": 2, "cut": "flash", "music": "module", "color": "#4338ca",
+     "feature": {"icon": "hard-drive", "title": ["Every file,", "every photo."], "take": "files", "media": 1.1, "rate": 1.5, "card": 0}},
+    {"id": "projects", "bars": 2, "cut": "push-up", "music": "module", "color": "#c2410c",
+     "feature": {"icon": "square-kanban", "title": ["Ship", "your projects."], "take": "projects", "media": 0.5, "rate": 1.5, "card": 2}},
     {"id": "chat", "bars": 2, "cut": "blocks", "music": "module", "color": "#0369a1",
      "feature": {"icon": "message-circle", "title": ["Chat", "in real time."], "take": "chat", "media": 0.9, "rate": 1.7, "card": 2}},
     {"id": "ai", "bars": 2, "cut": "split", "music": "module", "color": "#be185d",
      "feature": {"icon": "sparkles", "title": ["Ask", "your AI."], "take": "ai", "media": 1.2, "rate": 1.9, "card": 2}},
-    {"id": "projects", "bars": 2, "cut": "push-up", "music": "module", "color": "#c2410c",
-     "feature": {"icon": "square-kanban", "title": ["Ship", "your projects."], "take": "projects", "media": 0.5, "rate": 1.5, "card": 2}},
     {"id": "notes", "bars": 1, "cut": "iris", "music": "module", "color": "#047857",
      "feature": {"icon": "notebook-pen", "title": ["Write."], "take": "notes", "media": 3.4, "rate": 1.7, "card": 1}},
     {"id": "mail", "bars": 1, "cut": "push-left", "music": "module", "color": "#b45309",
@@ -81,9 +82,11 @@ SCENES = [
      "feature": {"icon": "contact", "title": ["Contacts."], "take": "people", "media": 1.3, "rate": 1.7, "card": 1}},
     {"id": "vault", "bars": 1, "cut": "split", "music": "module", "color": "#7e22ce",
      "feature": {"icon": "key-round", "title": ["Passwords."], "take": "vault", "media": 2.6, "rate": 1.6, "card": 1}},
+    {"id": "search", "bars": 2, "cut": "iris", "music": "module", "color": "#a21caf",
+     "feature": {"icon": "search", "title": ["Find", "anything."], "take": "dashboard", "media": 1.1, "rate": 1.3, "card": 2}},
     {"id": "wall", "bars": 2, "cut": "blocks", "music": "module", "color": "#6d28d9"},
     {"id": "yours", "bars": 2, "cut": "push-up", "music": "platform", "color": "#1e1b4b"},
-    {"id": "roll", "bars": 2, "cut": "hard", "music": "roll", "color": "#a21caf",
+    {"id": "roll", "bars": 2, "cut": "hard", "music": "roll", "color": "#4338ca",
      "hits": [0, 1, 2, 3, 4, 4.5, 5, 5.5, 6, 6.25, 6.5, 6.75, 7, 7.25, 7.5, 7.75]},
     {"id": "cta", "bars": 3, "cut": "flash", "music": "outro", "color": "#6d28d9"},
 ]  # fmt: skip

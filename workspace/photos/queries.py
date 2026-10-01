@@ -17,16 +17,38 @@ the album instead of leaking through it.
 Faces and their clusters are the user's own and only ever in their personal
 photos and videos (see services/face_analysis.py); the helpers at the end
 narrow them to the files the library still shows.
+
+What the user hid (``HiddenFile``: photos, videos, and whole folders) is out
+of every helper here, albums and faces included, unless one is asked for it
+with ``hidden=True``: the Hidden view is the only way back to it.
 """
 
 from django.contrib.auth.models import Group
-from django.db.models import Count, F, Max, Min, Q, Window
-from django.db.models.functions import Lower, RowNumber
+from django.db.models import (
+    Count,
+    Exists,
+    F,
+    Max,
+    Min,
+    OuterRef,
+    Q,
+    TextField,
+    Value,
+    Window,
+)
+from django.db.models.functions import Concat, Lower, RowNumber, StrIndex
 
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
-from workspace.photos.models import Album, AlbumItem, Face, FaceCluster, MediaItem
+from workspace.photos.models import (
+    Album,
+    AlbumItem,
+    Face,
+    FaceCluster,
+    HiddenFile,
+    MediaItem,
+)
 from workspace.photos.services.analysis import library_candidates
 from workspace.photos.services.face_preferences import faces_enabled
 
@@ -44,7 +66,47 @@ def _media(files):
     return exclude_blocked(library_candidates(files))
 
 
-def _scoped_media(user, scope):
+def _hidden_q(user):
+    """The files *user* hid from their library, as a condition on ``File``:
+    those they hid one by one, and everything under a folder they hid.
+
+    Folder paths only name a node within one tree, so a folder hides what
+    shares its path prefix *and* its tree: the owner's personal files for a
+    personal folder, the group's for a group one. The path test runs in SQL
+    (no LIKE, so a ``%`` or ``_`` in a folder name is matched literally),
+    which keeps every library queryset lazy.
+    """
+    hidden = HiddenFile.objects.filter(owner=user)
+    folders = (
+        hidden.filter(file__node_type=File.NodeType.FOLDER)
+        .exclude(file__path="")
+        .annotate(
+            at=StrIndex(
+                OuterRef("path"),
+                Concat("file__path", Value("/"), output_field=TextField()),
+            )
+        )
+        .filter(at=1)
+    )
+    personal_folders = folders.filter(
+        file__group__isnull=True, file__owner_id=OuterRef("owner_id")
+    )
+    group_folders = folders.filter(file__group_id=OuterRef("group_id"))
+    return (
+        Exists(hidden.filter(file_id=OuterRef("pk")))
+        | (Q(group__isnull=True) & Exists(personal_folders))
+        | Exists(group_folders)
+    )
+
+
+def _visibility(user, files, hidden):
+    """*files* the user hid when *hidden*, else those they did not."""
+    if hidden:
+        return files.filter(_hidden_q(user))
+    return files.exclude(_hidden_q(user))
+
+
+def _scoped_media(user, scope, hidden=False):
     if scope == MINE:
         files = FileService.user_files_qs(user)
     elif scope == SHARED:
@@ -62,16 +124,17 @@ def _scoped_media(user, scope):
         # Narrowed from the user's own groups, so a group they left, or never
         # joined, reads as empty rather than as someone else's folder.
         files = FileService.user_group_files_qs(user).filter(group=scope)
-    return _media(files)
+    return _visibility(user, _media(files), hidden)
 
 
-def library_files(user, scope=MINE):
+def library_files(user, scope=MINE, *, hidden=False):
     """The analyzed photos and videos in *scope*, as live ``File`` rows.
 
     Trashed files drop out through the files helpers and come back on
-    restore: their MediaItem row is left alone the whole time.
+    restore: their MediaItem row is left alone the whole time. So do hidden
+    ones, unless *hidden* asks for them alone.
     """
-    return _scoped_media(user, scope).filter(media_item__isnull=False)
+    return _scoped_media(user, scope, hidden).filter(media_item__isnull=False)
 
 
 def unanalyzed_count(user, scope=MINE):
@@ -103,9 +166,9 @@ def library_tags(user, scope=MINE):
 
 def library_groups(user):
     """The user's groups whose folder holds at least one photo, by name."""
-    group_photos = _media(FileService.user_group_files_qs(user)).filter(
-        media_item__isnull=False
-    )
+    group_photos = _visibility(
+        user, _media(FileService.user_group_files_qs(user)), hidden=False
+    ).filter(media_item__isnull=False)
     return Group.objects.filter(pk__in=group_photos.values("group_id")).order_by(
         Lower("name")
     )
@@ -114,6 +177,47 @@ def library_groups(user):
 def has_shared_photos(user):
     """True when someone shared at least one photo with the user."""
     return library_files(user, SHARED).exists()
+
+
+def _folders(user):
+    """The live folders of *user*'s own tree and of their groups'."""
+    return (
+        FileService.user_files_qs(user) | FileService.user_group_files_qs(user)
+    ).filter(node_type=File.NodeType.FOLDER)
+
+
+def hideable_files(user):
+    """What *user* may hide: the photos and videos they can open, and their
+    own and their groups' folders. Trashed files excluded."""
+    reachable = File.objects.filter(
+        pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+    )
+    return File.objects.filter(
+        Q(pk__in=library_candidates(reachable).values("pk"))
+        | Q(pk__in=_folders(user).values("pk"))
+    )
+
+
+def hidden_folders(user):
+    """The folders *user* hid from their library that they can still open,
+    by path. A folder in the trash, or in a group they left, hides nothing
+    from them and is left out."""
+    return (
+        _folders(user)
+        .filter(pk__in=HiddenFile.objects.filter(owner=user).values("file_id"))
+        .select_related("group")
+        .order_by(Lower("path"), "pk")
+    )
+
+
+def still_hidden(user, file_uuids):
+    """The uuids among *file_uuids* that *user* still hides: on their own,
+    or through a folder they hid around them."""
+    return set(
+        File.objects.filter(pk__in=file_uuids)
+        .filter(_hidden_q(user))
+        .values_list("pk", flat=True)
+    )
 
 
 def media_type_counts(files):

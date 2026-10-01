@@ -15,6 +15,10 @@
     {% if faces_available %}
       {% include "ui/partials/drawer_item.html" with href=people_url icon="scan-face" label="People" color="module" active=is_people_view x_target="photos-nav photos-content" x_target_history="push" onclick="closeDrawer()" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
     {% endif %}
+    {# Only while the Show Hidden preference is on, or on the Hidden view itself. #}
+    {% if show_hidden_nav %}
+      {% include "ui/partials/drawer_item.html" with href=hidden_url icon="eye-off" label="Hidden" color="module" active=is_hidden_view x_target="photos-nav photos-content" x_target_history="push" onclick="closeDrawer()" collapse_expr="sidebarCollapsed()" collapsed_initial=workspace_sidebar_collapsed mobile_rail=False %}
+    {% endif %}
   </ul>
 
   {% comment %}

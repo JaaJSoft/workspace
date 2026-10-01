@@ -49,6 +49,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_scope": "mine",
                 "default_media_type": "all",
                 "import_by_date": False,
+                "show_hidden": False,
             },
         )
 
@@ -60,6 +61,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_scope": "group:4",
             "default_media_type": "video",
             "import_by_date": True,
+            "show_hidden": True,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -71,6 +73,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertEqual(prefs["default_scope"], "group:4")
         self.assertEqual(prefs["default_media_type"], "video")
         self.assertIs(prefs["import_by_date"], True)
+        self.assertIs(prefs["show_hidden"], True)
 
     def test_a_malformed_value_reads_as_the_default(self):
         """Written before the API checked it, or by hand: never a broken page."""
@@ -81,6 +84,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_scope": "group:abc",
             "default_media_type": ["photo"],
             "import_by_date": "yes",
+            "show_hidden": 1,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -93,6 +97,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_scope": "mine",
                 "default_media_type": "all",
                 "import_by_date": False,
+                "show_hidden": False,
             },
         )
 

@@ -81,6 +81,34 @@ class MediaItem(models.Model):
         return f"MediaItem: {self.file_id}"
 
 
+class HiddenFile(models.Model):
+    """A photo, a video or a folder one user took out of their photo library.
+
+    A folder takes everything under it along, at whatever depth and whatever
+    is added to it later. What a user hides is theirs alone: the file stays
+    in Files and in the library of everyone else who can open it, and only
+    the Hidden view (``?hidden=1``) shows it to them again (see
+    ``queries.library_files``).
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "file"], name="photo_hidden_file_unique"
+            ),
+        ]
+
+    def __str__(self):
+        return f"HiddenFile: {self.file_id} for {self.owner_id}"
+
+
 class Album(models.Model):
     """A titled collection of library photos and videos.
 

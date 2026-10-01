@@ -146,6 +146,7 @@ window.photosApp = function photosApp() {
     ...window.propertiesPanelMixin(),
     ...window.photosFacesMixin(),
     ...window.photosImportMixin(),
+    ...window.photosHiddenMixin(),
 
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
@@ -210,6 +211,7 @@ window.photosApp = function photosApp() {
       this.$watch('selection', () => this._loadSelectionActions());
       this.initImport();
       this.syncAlbum();
+      this.syncHiddenView();
       this._trackContentLoading();
     },
 
@@ -238,6 +240,7 @@ window.photosApp = function photosApp() {
         this.contentLoading = false;
         this.clearSelection();
         this.stopHoverPreview();
+        this.syncHiddenView();
       }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
     },
@@ -294,6 +297,8 @@ window.photosApp = function photosApp() {
       })
         .then((response) => {
           if (!response.ok) throw new Error(String(response.status));
+          // The Hidden entry of the sidebar is server-rendered.
+          if (key === 'show_hidden') this._refresh(['photos-nav']);
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;

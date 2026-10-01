@@ -2,6 +2,9 @@
 
 {% block photos_content %}
   {{ cluster|json_script:"photos-cluster-data" }}
+  {% if is_hidden_view %}
+    {{ is_hidden_view|json_script:"photos-hidden-view-data" }}
+  {% endif %}
   <header
     class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
   >
@@ -57,7 +60,7 @@
       <div class="max-sm:hidden self-center">
         {% include "ui/partials/size_slider.html" with model="tileSize" change="saveTileSize()" initial_value=tile.size %}
       </div>
-      {% if not album and not cluster %}
+      {% if not album and not cluster and not is_hidden_view %}
         <button
           type="button"
           class="btn btn-module btn-sm gap-1 self-center"
@@ -169,7 +172,7 @@
     >
       <div class="rounded-full bg-module/10 p-5">
         <i
-          data-lucide="{% if album %}book-image{% else %}images{% endif %}"
+          data-lucide="{% if album %}book-image{% elif is_hidden_view %}eye-off{% else %}images{% endif %}"
           class="w-10 h-10 text-module"
         ></i>
       </div>
@@ -184,6 +187,11 @@
           x-target.push="photos-nav photos-content"
           class="btn btn-module btn-sm"
         >Go to the timeline</a>
+      {% elif is_hidden_view and not date_param and view_empty %}
+        <h2 class="text-lg font-semibold">Nothing hidden</h2>
+        <p class="text-sm text-base-content/60 max-w-sm">
+          Hide photos from their menu, or whole folders from Preferences. Hidden photos stay out of the timeline, albums, people and search, and stay where they are in Files.
+        </p>
       {% elif is_timeline_view and not date_param and view_empty %}
         <h2 class="text-lg font-semibold">No photos yet</h2>
         <p class="text-sm text-base-content/60 max-w-sm">

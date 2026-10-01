@@ -47,10 +47,25 @@
     <button
       type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
+      x-show="!hiddenView"
       @click="openAlbumPicker(selection)"
     >
       <i data-lucide="book-plus" class="w-4 h-4"></i>
       <span class="max-sm:hidden">Add to album</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-module btn-sm rounded-full gap-1.5"
+      x-show="hiddenView"
+      x-cloak
+      title="Unhide"
+      aria-label="Unhide"
+      :disabled="hiddenBusy"
+      @click="setPhotosHidden(selection, false)"
+      data-testid="photos-unhide-selection"
+    >
+      <i data-lucide="eye" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Unhide</span>
     </button>
     <button
       type="button"
@@ -76,6 +91,18 @@
         x-show="!selectionFavoriteAdds()"
         x-cloak
       ></i>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Hide from library"
+      aria-label="Hide from library"
+      x-show="!hiddenView"
+      :disabled="hiddenBusy"
+      @click="setPhotosHidden(selection, true)"
+      data-testid="photos-hide-selection"
+    >
+      <i data-lucide="eye-off" class="w-4 h-4"></i>
     </button>
     <button
       type="button"

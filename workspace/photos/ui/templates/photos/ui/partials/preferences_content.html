@@ -75,6 +75,41 @@
     </div>
   </div>
   {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
+  <hr class="border-base-300" />
+  {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
+  <div>
+    <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>
+    <ul class="space-y-1 mb-1" data-testid="photos-hidden-folders">
+      <template x-for="folder in hiddenFolders" :key="folder.uuid">
+        <li class="flex items-center gap-2 bg-base-200 rounded px-2 py-1">
+          <i data-lucide="folder" class="w-3.5 h-3.5 shrink-0 opacity-60"></i>
+          <span
+            class="text-sm flex-1 truncate"
+            :title="hiddenFolderLabel(folder)"
+            x-text="hiddenFolderLabel(folder)"
+          ></span>
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs btn-square"
+            :aria-label="'Show ' + folder.name + ' again'"
+            title="Show in the library again"
+            @click="unhideFolder(folder)"
+          >
+            <i data-lucide="x" class="w-3 h-3"></i>
+          </button>
+        </li>
+      </template>
+    </ul>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm w-full justify-start gap-2"
+      @click="hideFolder()"
+      data-testid="photos-hide-folder"
+    >
+      <i data-lucide="folder-x" class="w-4 h-4"></i>
+      Hide a folder…
+    </button>
+  </div>
   <div x-show="importFolder && !importFolder.group">
     <label
       class="text-sm text-base-content/60 block mb-1"

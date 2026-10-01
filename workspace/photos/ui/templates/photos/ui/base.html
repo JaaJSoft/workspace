@@ -82,6 +82,7 @@
   {{ tile|json_script:"photo-tile-data" }}
   {{ import_folder|json_script:"photos-import-folder-data" }}
   {{ photos_prefs|json_script:"photos-prefs-data" }}
+  {{ hidden_folders|json_script:"photos-hidden-folders-data" }}
   <input
     id="photos-import-input"
     type="file"
@@ -201,5 +202,6 @@
   <script src="{% static 'files/ui/js/upload_queue.js' %}"></script>
   <script src="{% static 'photos/ui/js/import.js' %}"></script>
   <script src="{% static 'photos/ui/js/faces.js' %}"></script>
+  <script src="{% static 'photos/ui/js/hidden.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>
 {% endblock %}

@@ -188,6 +188,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Face grouping: the people found in your photos, and their corrections.",
         },
         {
+            "name": "Photos - Hidden",
+            "description": "Photos, videos and folders hidden from your own library.",
+        },
+        {
             "name": "Photos - Import",
             "description": "The folder photos imported from the Photos page are saved to.",
         },

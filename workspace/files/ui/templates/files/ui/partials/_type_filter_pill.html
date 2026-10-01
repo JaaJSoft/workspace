@@ -1,0 +1,18 @@
+{% comment %}
+  One choice of the listing's type filter, as a toggle pill.
+
+  Params:
+    - value: the typeFilter value it selects
+    - label: visible text
+    - icon:  lucide icon name
+{% endcomment %}
+<button
+  type="button"
+  class="btn btn-sm rounded-full gap-1.5 font-normal{% if value == 'all' %} border-module bg-module/15 text-module{% else %} btn-outline border-base-300{% endif %}"
+  :class="{ 'border-module bg-module/15 text-module': typeFilter === '{{ value }}', 'btn-outline border-base-300': typeFilter !== '{{ value }}' }"
+  :aria-pressed="(typeFilter === '{{ value }}').toString()"
+  @click="typeFilter = '{{ value }}'"
+>
+  <i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>
+  {{ label }}
+</button>

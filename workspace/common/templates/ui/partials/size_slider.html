@@ -12,9 +12,13 @@ Params:
                    save the value
   - initial_value: optional - the step the page was rendered with, so the
                    thumb sits there before Alpine binds
+  - full_width:    optional - stretch the range over the width the slider is
+                   given (a popover) instead of its compact toolbar size
 {% endcomment %}
-<div class="flex items-center gap-1.5 text-module">
-  <i data-lucide="grid-2x2" class="w-3 h-3 opacity-60"></i>
+<div
+  class="flex items-center gap-1.5 text-module{% if full_width %} w-full{% endif %}"
+>
+  <i data-lucide="grid-2x2" class="w-3 h-3 shrink-0 opacity-60"></i>
   <input
     type="range"
     min="1"
@@ -23,9 +27,9 @@ Params:
     {% if initial_value %}value="{{ initial_value }}"{% endif %}
     x-model.number="{{ model }}"
     @change="{{ change }}"
-    class="range range-xs range-module w-24"
+    class="range range-xs range-module {% if full_width %}flex-1 min-w-0{% else %}w-24{% endif %}"
     title="Tile size"
     aria-label="Tile size"
   />
-  <i data-lucide="grid-2x2" class="w-5 h-5 opacity-60"></i>
+  <i data-lucide="grid-2x2" class="w-5 h-5 shrink-0 opacity-60"></i>
 </div>

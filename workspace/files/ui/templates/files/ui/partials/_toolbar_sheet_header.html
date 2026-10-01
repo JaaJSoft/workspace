@@ -1,0 +1,21 @@
+{% comment %}
+  Title row of a listing toolbar popover, shown only while the popover is a
+  bottom sheet (below sm): a sheet covers the button that opened it, so it
+  needs its own name and a way out. Closes through the enclosing `open`.
+
+  Params:
+    - title: the sheet's heading
+{% endcomment %}
+<div
+  class="sm:hidden flex items-center justify-between pb-2 mb-1 border-b border-base-300"
+>
+  <span class="font-semibold">{{ title }}</span>
+  <button
+    type="button"
+    class="btn btn-ghost btn-sm btn-square"
+    aria-label="Close"
+    @click="open = false"
+  >
+    <i data-lucide="x" class="w-4 h-4"></i>
+  </button>
+</div>

@@ -16,6 +16,12 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+  /* A row that scrolls sideways under a hidden scrollbar: fade its trailing
+     edge so a clipped item reads as "more this way". The fade sits over
+     empty space while the row fits. */
+  .scroll-fade-end {
+    mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+  }
   .thin-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: oklch(var(--bc) / 0.15) transparent;
@@ -32,6 +38,19 @@
   }
   .thin-scrollbar::-webkit-scrollbar-thumb:hover {
     background: oklch(var(--bc) / 0.25);
+  }
+
+  /* A toolbar popover: anchored under its button (the wrapper is `relative`),
+     a bottom sheet below `sm`, where an anchored panel would run off the
+     screen edge. Pair it with `.popover-sheet-backdrop` for the sheet's dim
+     layer. Fixed positioning only escapes the toolbar while no ancestor
+     carries a transform or a filter. */
+  .popover-sheet {
+    @apply absolute right-0 top-full z-50 mt-1 w-72 rounded-box border border-base-300 bg-base-100 p-2 shadow-xl;
+    @apply max-sm:fixed max-sm:inset-x-0 max-sm:bottom-0 max-sm:top-auto max-sm:mt-0 max-sm:w-auto max-sm:max-h-[80dvh] max-sm:overflow-y-auto max-sm:rounded-b-none max-sm:border-x-0 max-sm:border-b-0 max-sm:p-3 max-sm:pb-[calc(env(safe-area-inset-bottom)+1rem)];
+  }
+  .popover-sheet-backdrop {
+    @apply fixed inset-0 z-40 bg-black/40 sm:hidden;
   }
 
   /* Drag & drop move (files/ui/js/drag_move.js toggles both classes): the

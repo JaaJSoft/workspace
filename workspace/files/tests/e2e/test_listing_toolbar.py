@@ -13,16 +13,22 @@ is decided by CSS, so these tests measure the real geometry.
 
 from __future__ import annotations
 
+from django.core.cache import cache
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import File, FileTag, Tag
+from workspace.users.services.settings import set_setting
 
 BAR = "[data-testid='listing-filter-bar']"
 ROWS = "#folder-browser tbody tr[data-uuid]"
 
 
 class ListingToolbarTests(PlaywrightTestCase):
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="toolbar")
@@ -78,6 +84,25 @@ class ListingToolbarTests(PlaywrightTestCase):
         for width in (1280, 1024, 820, 640, 390, 320):
             self._open(width)
             self._assert_single_line(f"{width}px")
+
+    def test_the_tile_slider_stays_in_the_bar_while_it_has_room(self):
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        browser = self.page.locator("#folder-browser")
+        slider = browser.get_by_role("slider", name="Tile size")
+        button = browser.get_by_role("button", name="Tile size")
+
+        self.page.set_viewport_size({"width": 1280, "height": 900})
+        self.page.goto(f"{self.live_server_url}/files")
+        expect(slider).to_be_visible()
+        expect(button).to_be_hidden()
+        self._assert_single_line("1280px mosaic")
+
+        self.page.set_viewport_size({"width": 390, "height": 844})
+        expect(slider).to_be_hidden()
+        expect(button).to_be_visible()
+        self._assert_single_line("390px mosaic")
+        button.click()
+        expect(slider).to_be_visible()
 
     def test_the_bar_stays_on_one_line_next_to_the_properties_panel(self):
         self._open(1024)

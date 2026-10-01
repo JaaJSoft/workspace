@@ -36,7 +36,6 @@ class MosaicTileSizeTests(PlaywrightTestCase):
         expect(card).to_be_visible()
         small = card.bounding_box()["width"]
 
-        self.page.get_by_role("button", name="Tile size").click()
         slider = self.page.get_by_role("slider", name="Tile size")
         slider.fill("5")
 

@@ -1410,6 +1410,45 @@ test('unhiding on the Hidden view posts to the remove endpoint', async () => {
   assert.equal(page.tiles.a.removed, true);
 });
 
+test('unhiding keeps the tiles a hidden folder still hides, and says so', async () => {
+  const page = hiddenPage(['a', 'b'], { hiddenView: true });
+  const alerts = [];
+  const { app, refreshed } = loadHidden(
+    page,
+    { 'POST /api/v1/photos/hidden/remove': { unhidden: 1, still_hidden: ['b'] } },
+    [],
+    alerts,
+  );
+
+  await app.setPhotosHidden(['a', 'b'], false);
+  await app._refreshing;
+
+  assert.equal(page.tiles.a.removed, true);
+  assert.equal(page.tiles.b.removed, undefined);
+  assert.deepEqual(alerts, [
+    '1 photo back in your library',
+    '1 photo still hidden by its folder: unhide the folder in Preferences',
+  ]);
+  assert.deepEqual(refreshed, [['photos-nav', 'photos-header']]);
+});
+
+test('a navigation to the other side while hiding refreshes the listing instead', async () => {
+  let resolve;
+  const page = hiddenPage(['a', 'b']);
+  const { app, refreshed } = loadHidden(page, {}, [], [], {
+    fetch: () => new Promise((r) => { resolve = r; }),
+  });
+
+  const done = app.setPhotosHidden(['a'], true);
+  app.hiddenView = true;
+  resolve({ ok: true, status: 200, json: () => Promise.resolve({ hidden: 1 }) });
+  await done;
+  await app._refreshing;
+
+  assert.equal(page.tiles.a.removed, undefined);
+  assert.deepEqual(refreshed, [['photos-nav', 'photos-content']]);
+});
+
 test('a refused hide leaves the tiles where they are', async () => {
   const page = hiddenPage(['a']);
   const alerts = [];

@@ -58,6 +58,8 @@
       class="btn btn-module btn-sm rounded-full gap-1.5"
       x-show="hiddenView"
       x-cloak
+      title="Unhide"
+      aria-label="Unhide"
       :disabled="hiddenBusy"
       @click="setPhotosHidden(selection, false)"
       data-testid="photos-unhide-selection"

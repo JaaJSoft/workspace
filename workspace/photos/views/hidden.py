@@ -17,7 +17,7 @@ from workspace.common.uuids import (
     parse_uuid_batch,
 )
 
-from ..queries import hidden_folders, hideable_files
+from ..queries import hidden_folders, hideable_files, still_hidden
 from ..services.hidden import hidden_folder_data, hide_files, unhide_files
 
 # A selection spanning a few long trips; the limit only bounds one request.
@@ -75,7 +75,11 @@ class HiddenFilesView(APIView):
 class HiddenFilesRemoveView(APIView):
     @extend_schema(
         summary="Unhide photos or folders",
-        description="Bring hidden photos, videos or folders back into the library.",
+        description=(
+            "Bring hidden photos, videos or folders back into the library. "
+            "`still_hidden` lists those of them a hidden folder around them "
+            "keeps out of it: only unhiding that folder brings them back."
+        ),
         request={"application/json": FILES_BODY},
         responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
     )
@@ -83,7 +87,16 @@ class HiddenFilesRemoveView(APIView):
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
             return uuids
-        return Response({"unhidden": unhide_files(request.user, uuids)})
+        unhidden = unhide_files(request.user, uuids)
+        kept = still_hidden(request.user, uuids)
+        return Response(
+            {
+                "unhidden": unhidden,
+                "still_hidden": [
+                    str(uuid) for uuid in dict.fromkeys(uuids) if uuid in kept
+                ],
+            }
+        )
 
 
 @extend_schema(tags=["Photos - Hidden"])

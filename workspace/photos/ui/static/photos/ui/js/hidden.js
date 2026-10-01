@@ -42,31 +42,52 @@ window.photosHiddenMixin = function photosHiddenMixin() {
     },
 
     // Hides the photos, or on the Hidden view brings them back: either way
-    // they leave the listing on screen.
+    // they leave the listing on screen. A photo inside a hidden folder stays
+    // hidden whatever is done to it alone: only unhiding the folder brings
+    // it back, so its tile stays.
     async setPhotosHidden(uuids, hide) {
       if (!uuids || !uuids.length || this.hiddenBusy) return;
       const files = uuids.slice();
+      const fromHiddenView = this.hiddenView;
       this.closeSelectionMenu();
       this.hiddenBusy = true;
+      let result;
       try {
-        await photosJson('POST', hide ? PHOTOS_HIDDEN_API : `${PHOTOS_HIDDEN_API}/remove`, { files });
+        result = await photosJson('POST', hide ? PHOTOS_HIDDEN_API : `${PHOTOS_HIDDEN_API}/remove`, { files });
       } catch (_) {
         window.AppAlert.error(hide ? 'Failed to hide' : 'Failed to unhide');
         return;
       } finally {
         this.hiddenBusy = false;
       }
-      if (files.includes(this.propertiesUuid)) this.closePropertiesPanel();
-      this._removeTiles(files);
+      const kept = new Set((!hide && result && result.still_hidden) || []);
+      const moved = files.filter((uuid) => !kept.has(uuid));
       this.clearSelection();
-      const count = photosCountLabel(files.length);
-      window.AppAlert.success(
-        hide ? `Hid ${count} from your library` : `${count} back in your library`,
-        { duration: 2500 },
-      );
-      // Emptied: the whole listing, for its empty state.
-      const emptied = !document.querySelector('#timeline-grid [data-uuid]');
-      this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
+      if (this.hiddenView !== fromHiddenView) {
+        // The user crossed between the library and the Hidden view while the
+        // request was out: the tiles on screen are the other side's, where
+        // these photos now belong.
+        this._refresh(['photos-nav', 'photos-content']);
+      } else {
+        if (moved.includes(this.propertiesUuid)) this.closePropertiesPanel();
+        this._removeTiles(moved);
+        // Emptied: the whole listing, for its empty state.
+        const emptied = !document.querySelector('#timeline-grid [data-uuid]');
+        this._refresh(['photos-nav', emptied ? 'photos-content' : 'photos-header']);
+      }
+      if (moved.length) {
+        const count = photosCountLabel(moved.length);
+        window.AppAlert.success(
+          hide ? `Hid ${count} from your library` : `${count} back in your library`,
+          { duration: 2500 },
+        );
+      }
+      if (kept.size) {
+        const its = kept.size === 1 ? 'its folder' : 'their folder';
+        window.AppAlert.warning(
+          `${photosCountLabel(kept.size)} still hidden by ${its}: unhide the folder in Preferences`,
+        );
+      }
     },
 
     async hideFolder() {

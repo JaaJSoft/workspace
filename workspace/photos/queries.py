@@ -210,6 +210,16 @@ def hidden_folders(user):
     )
 
 
+def still_hidden(user, file_uuids):
+    """The uuids among *file_uuids* that *user* still hides: on their own,
+    or through a folder they hid around them."""
+    return set(
+        File.objects.filter(pk__in=file_uuids)
+        .filter(_hidden_q(user))
+        .values_list("pk", flat=True)
+    )
+
+
 def media_type_counts(files):
     """How many photos and how many videos *files* holds, as a dict."""
     return files.aggregate(

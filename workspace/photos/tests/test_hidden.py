@@ -287,8 +287,23 @@ class HiddenApiTests(TestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.json(), {"unhidden": 1})
+        self.assertEqual(response.json(), {"unhidden": 1, "still_hidden": []})
         self.assertEqual(self._hidden(), {self.folder.uuid})
+
+    def test_unhiding_names_what_a_hidden_folder_still_hides(self):
+        inside = make_photo(self.user, "b.jpg", _at(2024, 7, 15), parent=self.folder)
+        hide_files(self.user, [self.folder, inside, self.photo])
+
+        response = self.client.post(
+            UNHIDE_URL,
+            {"files": [str(inside.uuid), str(self.photo.uuid)]},
+            content_type="application/json",
+        )
+
+        self.assertEqual(
+            response.json(), {"unhidden": 2, "still_hidden": [str(inside.uuid)]}
+        )
+        self.assertNotIn(inside, library_files(self.user))
 
     def test_unhiding_never_touches_another_users_rows(self):
         bob = User.objects.create_user(username="bob", password="p")

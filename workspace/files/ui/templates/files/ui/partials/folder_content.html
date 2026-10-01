@@ -273,10 +273,15 @@
                 @click="open = !open"
                 :aria-expanded="open.toString()"
                 aria-haspopup="dialog"
-                title="View options"
+                {% if view_mode == "mosaic" %}title="Tile size"{% else %}title="Columns"{% endif %}
               >
-                <i data-lucide="settings-2" class="w-4 h-4"></i>
-                <span class="hidden @3xl:inline">View</span>
+                {% if view_mode == "mosaic" %}
+                  <i data-lucide="scaling" class="w-4 h-4"></i>
+                  <span class="hidden @3xl:inline">Tile size</span>
+                {% else %}
+                  <i data-lucide="columns-2" class="w-4 h-4"></i>
+                  <span class="hidden @3xl:inline">Columns</span>
+                {% endif %}
               </button>
               <div
                 class="popover-sheet-backdrop"

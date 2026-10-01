@@ -1512,3 +1512,126 @@ test('My Files itself cannot be hidden', async () => {
   assert.equal(requests.length, 0);
   assert.deepEqual(alerts, ['Choose a folder inside My Files, not My Files itself']);
 });
+
+// #timeline-grid as the template renders it, with just enough DOM for
+// _removeTiles: rows are 'month:<Y-m>', 'day:<Y-m-d>:<uuid>,<uuid>',
+// 'undated' and 'tile:<uuid>' (an undated photo), in grid order. Appending a
+// page is pushing more rows; `more` says whether a sentinel follows the grid.
+function timeline(rows) {
+  const grid = { children: [] };
+  const tiles = {};
+  const state = { more: false };
+  const node = (attr, value, parent) => ({
+    dataset: { [attr]: value },
+    parent,
+    children: [],
+    matches: (selector) => selector.split(',').some((part) => part.trim() === `[data-${attr}]`),
+    remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.removed = true; },
+  });
+  const push = (row) => {
+    const [kind, value, uuids] = row.split(':');
+    if (kind === 'month' || kind === 'undated') {
+      grid.children.push(node(kind, value || '', grid));
+      return;
+    }
+    const day = kind === 'day' ? node('day', value, grid) : null;
+    if (day) {
+      day.querySelector = () => day.children[0] || null;
+      grid.children.push(day);
+    }
+    for (const uuid of (day ? uuids : value).split(',')) {
+      const t = node('uuid', uuid, day || grid);
+      t.closest = () => day;
+      (day || grid).children.push(t);
+      tiles[uuid] = t;
+    }
+  };
+  rows.forEach(push);
+  return {
+    state,
+    append: (more, ...next) => { next.forEach(push); state.more = more; },
+    headers: () => grid.children
+      .filter((child) => child.matches('[data-month], [data-undated]'))
+      .map((child) => child.dataset.month || 'undated'),
+    document: {
+      getElementById: (id) => ({
+        'timeline-grid': grid,
+        'timeline-more': { firstElementChild: state.more ? {} : null },
+      })[id] || null,
+      querySelector: (selector) => {
+        const match = /data-uuid="([^"]+)"/.exec(selector);
+        const t = match && tiles[match[1]];
+        return t && !t.removed ? t : null;
+      },
+    },
+  };
+}
+
+test('removing every photo of a month takes its header off with it', () => {
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a,b', 'month:2026-08', 'day:2026-08-12:c']);
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app._removeTiles(['a']);
+  assert.deepEqual(page.headers(), ['2026-09', '2026-08']);
+
+  app._removeTiles(['b']);
+  assert.deepEqual(page.headers(), ['2026-08']);
+});
+
+test('a month going on past a page boundary keeps its header while a day is left', () => {
+  // The second page continues September: no header of its own.
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a']);
+  page.append(false, 'day:2026-09-02:b', 'month:2026-08', 'day:2026-08-12:c');
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app._removeTiles(['a']);
+  assert.deepEqual(page.headers(), ['2026-09', '2026-08']);
+
+  app._removeTiles(['b']);
+  assert.deepEqual(page.headers(), ['2026-08']);
+});
+
+test('the last month stays headed until the next page says whether it goes on', () => {
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a', 'month:2026-08', 'day:2026-08-31:b']);
+  page.state.more = true;
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app._removeTiles(['b']);
+  assert.deepEqual(page.headers(), ['2026-09', '2026-08']);
+
+  page.append(false, 'month:2026-07', 'day:2026-07-04:c');
+  app.onMerged({ target: { id: 'timeline-grid' } });
+  assert.deepEqual(page.headers(), ['2026-09', '2026-07']);
+});
+
+test('the next page can still fill the last month left empty', () => {
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a']);
+  page.state.more = true;
+  const app = load({ document: page.document }).ctx.photosApp();
+  app._removeTiles(['a']);
+
+  page.append(false, 'day:2026-09-02:b');
+  app.onMerged({ target: { id: 'timeline-grid' } });
+
+  assert.deepEqual(page.headers(), ['2026-09']);
+});
+
+test('removing the last undated photo takes the Undated header off', () => {
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a', 'undated', 'tile:x', 'tile:y']);
+  const app = load({ document: page.document }).ctx.photosApp();
+
+  app._removeTiles(['x']);
+  assert.deepEqual(page.headers(), ['2026-09', 'undated']);
+
+  app._removeTiles(['y']);
+  assert.deepEqual(page.headers(), ['2026-09']);
+});
+
+test('hiding every photo of a month takes its header off with it', async () => {
+  const page = timeline(['month:2026-09', 'day:2026-09-30:a,b', 'month:2026-08', 'day:2026-08-12:c']);
+  const { app } = loadHidden(page, { 'POST /api/v1/photos/hidden': { hidden: 2 } }, []);
+
+  await app.setPhotosHidden(['a', 'b'], true);
+
+  assert.deepEqual(page.headers(), ['2026-08']);
+});

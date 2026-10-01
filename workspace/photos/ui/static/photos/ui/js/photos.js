@@ -243,6 +243,7 @@ window.photosApp = function photosApp() {
         this.syncHiddenView();
       }
       if (id === 'photos-content' || id === 'photos-header') this.syncAlbum();
+      if (id === 'timeline-grid') this._removeEmptyHeaders();
     },
 
     // The stored preference is a desktop one: below `lg` the drawer is
@@ -583,6 +584,31 @@ window.photosApp = function photosApp() {
         // A day group left without photos would keep its date over nothing.
         if (day && !day.querySelector('[data-uuid]')) day.remove();
       }
+      this._removeEmptyHeaders();
+    },
+
+    // A month (or Undated) header heads every grid child up to the next
+    // header, appended pages included: a month going on past a page boundary
+    // gets no header of its own on the next page. The last header is kept
+    // while a next page can still bring the rest of its month, and checked
+    // again once that page is in.
+    _removeEmptyHeaders() {
+      const grid = document.getElementById('timeline-grid');
+      if (!grid) return;
+      const more = document.getElementById('timeline-more');
+      let header = null;
+      let headsPhotos = false;
+      for (const child of Array.from(grid.children)) {
+        if (child.matches('[data-month], [data-undated]')) {
+          if (header && !headsPhotos) header.remove();
+          header = child;
+          headsPhotos = false;
+        } else {
+          // A day group (never left empty) or an undated tile.
+          headsPhotos = true;
+        }
+      }
+      if (header && !headsPhotos && !(more && more.firstElementChild)) header.remove();
     },
 
     // Re-renders parts of the page after a write. Chained, never concurrent:

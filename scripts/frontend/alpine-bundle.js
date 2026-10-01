@@ -5,11 +5,13 @@
 // listens for.
 import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
+import focus from '@alpinejs/focus';
 import ajax from '@imacrayon/alpine-ajax';
 
 window.Alpine = Alpine;
 
 Alpine.plugin(collapse);
+Alpine.plugin(focus);
 Alpine.plugin(ajax);
 
 Alpine.start();

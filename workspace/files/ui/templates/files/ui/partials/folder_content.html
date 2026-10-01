@@ -83,6 +83,7 @@
               x-show="open"
               x-cloak
               x-transition
+              x-trap="open && popoverIsSheet()"
               role="dialog"
               aria-label="Filters"
             >
@@ -183,6 +184,7 @@
               x-show="open"
               x-cloak
               x-transition
+              x-trap="open && popoverIsSheet()"
               role="dialog"
               aria-label="Sort"
             >
@@ -301,6 +303,7 @@
                 x-show="open"
                 x-cloak
                 x-transition
+                x-trap="open && popoverIsSheet()"
                 role="dialog"
                 aria-label="View options"
               >

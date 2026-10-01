@@ -168,3 +168,40 @@ class ListingToolbarTests(PlaywrightTestCase):
         )
         sheet.get_by_role("button", name="Close").click()
         expect(sheet).to_be_hidden()
+
+    def _focus_inside(self, sheet):
+        return sheet.evaluate("el => el.contains(document.activeElement)")
+
+    def test_a_phone_sheet_traps_the_focus_and_hands_it_back(self):
+        self._open(390, 844)
+        browser = self.page.locator("#folder-browser")
+        trigger = browser.get_by_title("Filters")
+        sheet = browser.get_by_role("dialog", name="Filters")
+
+        trigger.focus()
+        self.page.keyboard.press("Enter")
+        expect(sheet).to_be_visible()
+        self.page.wait_for_function(
+            "() => document.querySelector('[role=dialog][aria-label=Filters]')"
+            ".contains(document.activeElement)"
+        )
+        for _ in range(12):
+            self.page.keyboard.press("Tab")
+            self.assertTrue(self._focus_inside(sheet), "Tab left the sheet")
+
+        self.page.keyboard.press("Escape")
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+
+        trigger.click()
+        sheet.get_by_role("button", name="Close").click()
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+
+    def test_a_desktop_popover_leaves_the_focus_alone(self):
+        self._open(1280)
+        browser = self.page.locator("#folder-browser")
+        trigger = browser.get_by_title("Sort")
+        trigger.click()
+        expect(browser.get_by_role("dialog", name="Sort")).to_be_visible()
+        expect(trigger).to_be_focused()

@@ -1013,6 +1013,13 @@ window.fileTableControls = function fileTableControls() {
       this.saveState();
     },
 
+    // Mirrors the `max-sm` half of `.popover-sheet`: below 640px a toolbar
+    // popover is a modal bottom sheet, so it traps the focus; above, it is an
+    // anchored popover the page stays reachable around.
+    popoverIsSheet() {
+      return window.matchMedia('(max-width: 639px)').matches;
+    },
+
     // The name query is left out of the count: the search box shows it.
     activeFilterCount() {
       return (this.typeFilter !== 'all' ? 1 : 0) + this.tagFilter.length;

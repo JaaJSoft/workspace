@@ -1,6 +1,22 @@
 // Upper bound of POST /api/v1/files/actions, mirrored from the endpoint.
 const ACTIONS_BATCH_SIZE = 200;
 
+const SORT_OPTIONS = [
+  { id: 'default', label: 'Default' },
+  { id: 'name', label: 'Name' },
+  { id: 'size', label: 'Size' },
+  { id: 'created', label: 'Created' },
+  { id: 'modified', label: 'Modified' },
+  { id: 'favorite', label: 'Favorite' },
+  { id: 'type', label: 'Type' },
+];
+
+const TYPE_FILTERS = {
+  files: { label: 'Files', icon: 'file' },
+  folders: { label: 'Folders', icon: 'folder' },
+  favorites: { label: 'Favorites', icon: 'star' },
+};
+
 window.fileTableControls = function fileTableControls() {
   return {
     storageKey: 'fileTableControls:v4',
@@ -997,18 +1013,45 @@ window.fileTableControls = function fileTableControls() {
       this.saveState();
     },
 
-    resetAll() {
+    // The name query is left out of the count: the search box shows it.
+    activeFilterCount() {
+      return (this.typeFilter !== 'all' ? 1 : 0) + this.tagFilter.length;
+    },
+
+    hasActiveFilters() {
+      return this.activeFilterCount() > 0 || Boolean((this.searchQuery || '').trim());
+    },
+
+    clearFilters() {
       this.searchQuery = '';
       this.typeFilter = 'all';
       this.tagFilter = [];
-      this.sortField = window._filePrefsCache.defaultSort || 'default';
-      this.sortDir = window._filePrefsCache.defaultSortDir || 'asc';
-      this.resetColumns();
-      this.applyRows();
     },
 
-    toggleSortDir() {
-      this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+    typeFilterLabel() {
+      return TYPE_FILTERS[this.typeFilter]?.label || '';
+    },
+
+    typeFilterIcon() {
+      return TYPE_FILTERS[this.typeFilter]?.icon || '';
+    },
+
+    // The trash has no favorites: a trashed item cannot be starred.
+    sortOptions(isTrash) {
+      return SORT_OPTIONS.filter((option) => !(isTrash && option.id === 'favorite'));
+    },
+
+    sortButtonLabel() {
+      if (this.sortField === 'default') return 'Sort';
+      return SORT_OPTIONS.find((option) => option.id === this.sortField)?.label || 'Sort';
+    },
+
+    pickSort(field) {
+      if (field === this.sortField && field !== 'default') {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+        return;
+      }
+      this.sortField = field;
     },
 
     applyRows() {
@@ -1094,12 +1137,6 @@ window.fileTableControls = function fileTableControls() {
 
     clearTagFilter() {
       this.tagFilter = [];
-    },
-
-    tagFilterLabel() {
-      const count = this.tagFilter.length;
-      if (count === 0) return 'Tags';
-      return `${count} tag${count === 1 ? '' : 's'}`;
     },
 
     compareRows(a, b, dir) {

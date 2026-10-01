@@ -132,6 +132,9 @@ module.exports = {
   },
   plugins: [
     require('@tailwindcss/typography'),
+    // `@container` + `@md:` variants: a toolbar sized by the pane it sits in
+    // (sidebar and side panels eat into it), not by the viewport.
+    require('@tailwindcss/container-queries'),
     require('daisyui'),
     moduleHuesPlugin,
   ],

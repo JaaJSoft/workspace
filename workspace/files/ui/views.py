@@ -1152,6 +1152,13 @@ def shared_file_view(request, token):
     # subfolder is currently browsed, so its visibility must not depend on
     # ?node= - it is page chrome, not part of the navigable content.
     show_dropzone = link.allows_upload
+    # Drops land in the folder on screen, and a file open in the viewer is
+    # not a folder: the upload endpoint 404s a file node, so the zone gets
+    # the folder the file sits in. Upload links are folder-only, so that
+    # parent is always inside the share.
+    drop_folder = target
+    if show_dropzone and not is_folder:
+        drop_folder = target.parent
 
     # Render viewer HTML if accessible. ViewerRegistry has nothing to render
     # for a folder, so skip it entirely rather than looking up a viewer class
@@ -1214,6 +1221,7 @@ def shared_file_view(request, token):
         "show_listing": show_listing,
         "show_viewer": show_viewer,
         "show_dropzone": show_dropzone,
+        "drop_folder": drop_folder,
         "viewer_html": viewer_html,
         "quarantine_reason": quarantine_reason,
         "needs_password": link.has_password and not password_verified,

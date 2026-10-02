@@ -57,8 +57,8 @@
         class="card bg-base-100 shadow-lg overflow-hidden"
         data-view-url="{{ current_view_url }}"
         data-parent-url="{{ parent_url }}"
-        data-node="{{ target.uuid }}"
-        data-node-name="{{ target.name }}"
+        data-drop-folder="{{ drop_folder.uuid }}"
+        data-drop-folder-name="{{ drop_folder.name }}"
         x-init="$nextTick(() => window.folderNav.onNavigate($el.dataset.viewUrl))"
       >
         <!-- Header -->

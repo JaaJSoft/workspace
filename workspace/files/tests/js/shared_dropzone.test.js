@@ -66,7 +66,7 @@ test('a batch where nothing landed leaves the listing alone', async () => {
 });
 
 test('the zone names and targets the browsed folder', async () => {
-  const { drop, fields } = makeDrop([204], { node: 'abc', nodeName: 'Sub' });
+  const { drop, fields } = makeDrop([204], { dropFolder: 'abc', dropFolderName: 'Sub' });
   assert.equal(drop.targetName, 'Sub');
   drop.queue.push(drop.queued({ size: 1, name: 'a.txt' }));
   await drop.sendAll();
@@ -74,11 +74,11 @@ test('the zone names and targets the browsed folder', async () => {
 });
 
 test('a file keeps the folder it was dropped into if the visitor navigates mid-batch', async () => {
-  const dataset = { node: 'abc', nodeName: 'Sub' };
+  const dataset = { dropFolder: 'abc', dropFolderName: 'Sub' };
   const { drop, nodes } = makeDrop([204, 204], dataset);
   drop.queue.push(drop.queued({ size: 1, name: 'a.txt' }), drop.queued({ size: 1, name: 'b.txt' }));
-  dataset.node = 'xyz';
-  dataset.nodeName = 'Other';
+  dataset.dropFolder = 'xyz';
+  dataset.dropFolderName = 'Other';
   drop.syncTarget();
   await drop.sendAll();
   assert.deepStrictEqual(nodes, ['abc', 'abc']);

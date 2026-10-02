@@ -163,9 +163,13 @@ def timeline():
 
 def ensure_takes():
     missing = [name for name in TAKE_NAMES if not (TAKES / f"{name}-0.mp4").is_file()]
-    if not missing:
-        return
-    print(f"Missing takes {missing}: filming them with the presentation pipeline...")
+    if missing:
+        print(f"Missing takes {missing}: filming them...")
+        film(missing)
+
+
+def film(names):
+    """Film these takes on a freshly seeded demo, with the presentation's acts."""
     from scripts.presentation import capture
     from scripts.presentation.scenes import PLATFORM
     from scripts.presentation_video import resolve_scenes
@@ -177,7 +181,7 @@ def ensure_takes():
             TAKES.parent,
             base_url,
             context,
-            only=set(missing),
+            only=set(names),
         )
 
 
@@ -334,6 +338,13 @@ def main():
     parser.add_argument(
         "--draft", action="store_true", help="fast, lower-quality render"
     )
+    parser.add_argument(
+        "--refilm",
+        nargs="*",
+        choices=TAKE_NAMES,
+        metavar="TAKE",
+        help="film these takes again on a fresh demo (every take when none is named)",
+    )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
@@ -344,7 +355,12 @@ def main():
     from scripts.presentation.soundtrack import render_soundtrack
     from scripts.presentation_video import hyperframes
 
-    ensure_takes()
+    if args.refilm is not None:
+        names = args.refilm or TAKE_NAMES
+        print(f"Filming {names} on a fresh demo...")
+        film(names)
+    else:
+        ensure_takes()
     plan = timeline()
     out_dir = args.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -19,7 +19,8 @@ chromium`) for the takes, Node.js 22+ and `ffmpeg` on the `PATH`. The render
 toolchain ([HyperFrames](https://hyperframes.heygen.com), GSAP, the fonts) is
 pinned in `package.json` here and installed with `npm ci` on first run; the
 script turns HyperFrames telemetry off. Everything lands in
-`build/presentation/`, which git ignores.
+`build/presentation/`, which git ignores. The promo (`scripts/promo/`) cuts
+its ad from the same takes.
 
 ## How it fits together
 

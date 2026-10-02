@@ -150,6 +150,9 @@ class Take:
                     "-f", "concat", "-safe", "0", "-i", str(listing),
                     "-vf", f"fps={self.fps},format=yuv420p",
                     "-c:v", "libx264", "-preset", "slow", "-crf", "14",
+                    # A keyframe a second: the renderer seeks into the takes,
+                    # and x264's default (one every 250 frames) freezes them.
+                    "-g", str(self.fps), "-keyint_min", str(self.fps),
                     "-movflags", "+faststart", str(self.output),
                 ],
                 check=True,

@@ -153,13 +153,13 @@ def timeline():
     }
 
 
-def ensure_takes():
+def takes_to_film(refilm):
+    """The takes *refilm* names (every take when empty), plus any not filmed yet."""
     from scripts.promo.takes import TAKES
 
+    wanted = list(TAKES) if refilm == [] else list(refilm or [])
     missing = [name for name in TAKES if not (TAKES_DIR / f"{name}.mp4").is_file()]
-    if missing:
-        print(f"Missing takes {missing}: filming them...")
-        film(missing)
+    return list(dict.fromkeys([*wanted, *missing]))
 
 
 def film(names):
@@ -170,15 +170,19 @@ def film(names):
         capture.film(names, TAKES_DIR, base_url, context)
 
 
-def hyperframes(*args):
-    """Run the pinned HyperFrames CLI, installing it on first use."""
+def ensure_toolchain():
+    """Install the pinned render toolchain on first use."""
     npm = shutil.which("npm")
-    npx = shutil.which("npx")
-    if not npm or not npx:
+    if not npm or not shutil.which("npx"):
         sys.exit("Node.js 22+ is required (npm and npx on the PATH).")
     if not (NODE_MODULES / "hyperframes").is_dir():
         print("Installing the HyperFrames toolchain...")
         subprocess.run([npm, "ci", "--no-fund", "--no-audit"], cwd=SOURCE, check=True)
+
+
+def hyperframes(*args):
+    """Run the pinned HyperFrames CLI."""
+    ensure_toolchain()
     env = {
         **os.environ,
         # A repository script has no business reporting usage anywhere.
@@ -186,11 +190,15 @@ def hyperframes(*args):
         "HYPERFRAMES_SKIP_SKILLS": "1",
     }
     return subprocess.run(
-        [npx, "--no-install", "hyperframes", *args], cwd=SOURCE, env=env
+        [shutil.which("npx"), "--no-install", "hyperframes", *args],
+        cwd=SOURCE,
+        env=env,
     )
 
 
 def write_project(out_dir: Path, fmt, plan, audio: Path):
+    # GSAP and the fonts are copied out of the toolchain.
+    ensure_toolchain()
     if out_dir.exists():
         shutil.rmtree(out_dir)
     (out_dir / "compositions").mkdir(parents=True)
@@ -358,12 +366,10 @@ def main():
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
-    if args.refilm is not None:
-        names = args.refilm or list(TAKES)
+    names = takes_to_film(args.refilm)
+    if names:
         print(f"Filming {names} on a fresh demo...")
         film(names)
-    else:
-        ensure_takes()
     plan = timeline()
     out_dir = args.out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -380,11 +386,11 @@ def main():
         print(f"Writing the {aspect} composition to {project}/ ...")
         write_project(project, fmt, plan, audio)
         if args.preview:
-            hyperframes("preview", str(project))
-            return
+            sys.exit(hyperframes("preview", str(project)).returncode)
         if args.stills:
             at = ",".join(f"{t:g}" for t in args.stills)
-            hyperframes("snapshot", str(project), "--at", at)
+            if hyperframes("snapshot", str(project), "--at", at).returncode:
+                sys.exit(f"The {aspect} snapshots failed.")
             continue
         if hyperframes("check", str(project)).returncode:
             sys.exit(f"The {aspect} composition does not pass `hyperframes check`.")

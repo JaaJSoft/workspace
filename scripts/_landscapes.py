@@ -117,8 +117,7 @@ def _noise(rng, octaves, frequency):
     """Smooth 1D value noise across the width, in [0, 1]."""
     x = np.linspace(0, 1, WIDTH)
     out = np.zeros(WIDTH)
-    amplitude = total = 1.0
-    total = 0.0
+    amplitude, total = 1.0, 0.0
     for _ in range(octaves):
         points = rng.random(int(frequency) + 2)
         position = x * frequency

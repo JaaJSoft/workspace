@@ -6,7 +6,11 @@ a Lucide upgrade would render as an empty tile.
 """
 
 import re
+import subprocess
 import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.test import SimpleTestCase
@@ -20,6 +24,8 @@ LUCIDE = (
 if str(settings.BASE_DIR) not in sys.path:
     sys.path.insert(0, str(settings.BASE_DIR))
 
+from scripts import promo_video  # noqa: E402
+from scripts.promo import takes  # noqa: E402
 from scripts.promo.takes import TAKES  # noqa: E402
 from scripts.promo_video import SCENES, SOURCE, render_feature, timeline  # noqa: E402
 
@@ -78,3 +84,76 @@ class PromoVideoTests(SimpleTestCase):
             if not re.search(rf"\.{re.escape(_pascal(name))}=", LUCIDE)
         )
         self.assertEqual(unknown, [])
+
+
+class PromoBuildTests(SimpleTestCase):
+    def _run_main(self, argv, present, snapshot_rc=0):
+        """Run main() with these takes on disk; returns the takes it filmed."""
+        filmed = []
+        done = subprocess.CompletedProcess([], snapshot_rc)
+        with tempfile.TemporaryDirectory() as tmp:
+            takes_dir = Path(tmp) / "takes"
+            takes_dir.mkdir()
+            for name in present:
+                (takes_dir / f"{name}.mp4").write_bytes(b"")
+            argv = ["promo_video.py", *argv, "--out-dir", tmp]
+            with (
+                patch.object(sys, "argv", argv),
+                patch.object(promo_video, "TAKES_DIR", takes_dir),
+                patch.object(promo_video, "film", side_effect=filmed.extend),
+                patch.object(promo_video, "write_project"),
+                patch.object(promo_video, "hyperframes", return_value=done),
+                patch("scripts.promo.soundtrack.render_soundtrack"),
+            ):
+                promo_video.main()
+        return filmed
+
+    def test_a_partial_refilm_also_films_the_missing_takes(self):
+        present = [name for name in TAKES if name not in ("chat", "vault")]
+        filmed = self._run_main(["--refilm", "files", "--stills", "1"], present)
+        self.assertEqual(sorted(filmed), ["chat", "files", "vault"])
+
+    def test_a_failed_snapshot_fails_the_run(self):
+        with self.assertRaises(SystemExit) as raised:
+            self._run_main(["--stills", "1"], list(TAKES), snapshot_rc=1)
+        self.assertTrue(raised.exception.code)
+
+    def test_write_project_installs_the_toolchain_it_copies_from(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            modules = tmp / "node_modules"
+            vendor = {name: modules / name for name in promo_video.VENDOR}
+
+            def npm_ci(cmd, **kwargs):
+                (modules / "hyperframes").mkdir(parents=True)
+                for source in vendor.values():
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_bytes(b"")
+                return subprocess.CompletedProcess(cmd, 0)
+
+            (tmp / "takes").mkdir()
+            audio = tmp / "music.wav"
+            audio.write_bytes(b"")
+            with (
+                patch.object(promo_video, "NODE_MODULES", modules),
+                patch.object(promo_video, "VENDOR", vendor),
+                patch.object(promo_video, "TAKES_DIR", tmp / "takes"),
+                patch("scripts.promo_video.shutil.which", return_value="npm"),
+                patch("scripts.promo_video.subprocess.run", side_effect=npm_ci) as run,
+            ):
+                promo_video.write_project(
+                    tmp / "project", promo_video.FORMATS["landscape"], timeline(), audio
+                )
+            run.assert_called_once()
+            self.assertTrue((tmp / "project/vendor/gsap.min.js").is_file())
+
+    def test_the_assistant_take_fails_without_an_answer(self):
+        page = MagicMock()
+        page.get_by_text.return_value.count.return_value = 0
+        with (
+            patch.object(takes, "_send"),
+            patch.object(takes, "wait"),
+            patch.object(takes.time, "monotonic", side_effect=[0, 11, 11, 11]),
+            self.assertRaises(RuntimeError),
+        ):
+            takes._ask_assistant(page)

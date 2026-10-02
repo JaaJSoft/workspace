@@ -121,6 +121,8 @@ def _ask_assistant(page):
     deadline = time.monotonic() + 10
     while replies.count() <= before and time.monotonic() < deadline:
         wait(page, 0.2)
+    if replies.count() <= before:
+        raise RuntimeError("The assistant did not answer on camera.")
     wait(page, 1.4)
 
 

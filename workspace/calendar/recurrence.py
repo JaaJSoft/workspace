@@ -240,7 +240,9 @@ def _user_dict(user):
 def _member_dict(member):
     return {
         "uuid": str(member.uuid),
-        "user": _user_dict(member.user),
+        "user": _user_dict(member.user) if member.user is not None else None,
+        "email": member.email,
+        "name": member.name,
         "status": member.status,
         "created_at": member.created_at.isoformat(),
     }

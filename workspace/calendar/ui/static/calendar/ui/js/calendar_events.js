@@ -210,13 +210,13 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         // Hide declined events unless preference is enabled
         const isOwner = String(event.owner.id) === String(currentUserId);
         if (!isOwner) {
-          const membership = event.members.find(m => String(m.user.id) === String(currentUserId));
+          const membership = event.members.find(m => String(m.user?.id) === String(currentUserId));
           if (membership?.status === 'declined' && !this.prefs.showDeclined) return false;
         }
         return true;
       }).map(event => {
         const isOwner = String(event.owner.id) === String(currentUserId);
-        const membership = event.members.find(m => String(m.user.id) === String(currentUserId));
+        const membership = event.members.find(m => String(m.user?.id) === String(currentUserId));
         const isInvited = !isOwner && !!membership;
         const isPending = isInvited && membership.status === 'pending';
         const isDeclined = isInvited && membership.status === 'declined';
@@ -397,7 +397,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // outside the .fc container.
       const currentUserId = document.body.dataset.userId;
       const isOwner = String(event.owner.id) === String(currentUserId);
-      const membership = (event.members || []).find(m => String(m.user.id) === String(currentUserId));
+      const membership = (event.members || []).find(m => String(m.user?.id) === String(currentUserId));
       const isInvited = !isOwner && !!membership;
       const isPending = isInvited && membership.status === 'pending';
       const isDeclined = isInvited && membership.status === 'declined';
@@ -517,6 +517,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       };
       this._panelRaw = null;
       this.selectedMembers = [];
+      this.selectedGuests = [];
+      this.inviteeNotice = '';
       this.eventOwner = null;
       this.externalOrganizer = null;
       this.eventMembers = [];
@@ -555,8 +557,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.eventOwner = event.owner;
       this.externalOrganizer = event.external_organizer || '';
       this.eventMembers = event.members || [];
-      this.selectedMembers = (event.members || []).map(m => m.user);
-      this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user.id) === currentUserId)?.status || null);
+      this._selectInviteesFrom(this.eventMembers);
+      this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user?.id) === currentUserId)?.status || null);
       this.showPanel = true;
       this._pushUrl();
 
@@ -575,6 +577,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.eventOwner = null;
       this.eventMembers = [];
       this.selectedMembers = [];
+      this.selectedGuests = [];
       this.externalOrganizer = '';
       this.loadingEvent = true;
       this.showPanel = true;
@@ -599,6 +602,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     openEditModal() {
       this.modalMode = 'edit';
+      this._selectInviteesFrom(this.eventMembers);
       // Normalize dates for the input type (panel stores datetime format)
       if (this.form.all_day) {
         this.form.start = this.toLocalDate(this.form.start);
@@ -647,6 +651,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         all_day: this.form.all_day,
         location: this.form.location,
         member_ids: this.selectedMembers.map(u => u.id),
+        guests: this.selectedGuests.map(g => ({ email: g.email, name: g.name })),
         recurrence_rule: this.buildRecurrenceRule(tz),
       };
 
@@ -713,7 +718,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             this.eventOwner = saved.owner;
             this.externalOrganizer = saved.external_organizer || '';
             this.eventMembers = saved.members;
-            this.selectedMembers = saved.members.map(m => m.user);
+            this._selectInviteesFrom(saved.members);
 
           }
         }
@@ -791,7 +796,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
         if (resp.ok) {
           this.myInviteStatus = newStatus;
           const currentUserId = String(document.body.dataset.userId);
-          const member = this.eventMembers.find(m => String(m.user.id) === currentUserId);
+          const member = this.eventMembers.find(m => String(m.user?.id) === currentUserId);
           if (member) member.status = newStatus;
           this.calendar.refetchEvents();
           this.refetchAgenda();
@@ -800,14 +805,70 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     },
 
     // --- Members (event invitees) ---
-    addMember(event) {
-      const user = event.detail.user;
+    // Accounts and external guests share EventMember rows; the form edits
+    // them as two lists because the API takes them as two fields.
+    _selectInviteesFrom(members) {
+      this.selectedMembers = (members || []).filter(m => m.user).map(m => m.user);
+      this.selectedGuests = (members || [])
+        .filter(m => !m.user)
+        .map(m => ({ email: m.email, name: m.name }));
+      this.inviteeNotice = '';
+    },
+    _addMemberUser(user) {
       if (!this.selectedMembers.find(m => m.id === user.id)) {
         this.selectedMembers.push(user);
       }
     },
+    _addGuest(guest) {
+      const email = (guest.email || '').toLowerCase();
+      if (email && !this.selectedGuests.find(g => g.email === email)) {
+        this.selectedGuests.push({ email, name: guest.name || '' });
+      }
+    },
+    async addInvitee(event) {
+      const item = event.detail.item;
+      this.inviteeNotice = '';
+      if (item.kind === 'user') {
+        this._addMemberUser(item.user);
+        return;
+      }
+      // Persons and lists go through the server, which knows who is linked
+      // to an account: that account is invited, never a duplicate by email.
+      const body = item.kind === 'list'
+        ? { list_ids: [item.list.uuid] }
+        : { person_ids: [item.person.uuid] };
+      try {
+        const resp = await fetch('/api/v1/events/invitees', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          this.inviteeNotice = 'Could not add these invitees. Please try again.';
+          return;
+        }
+        const data = await resp.json();
+        const currentUserId = String(document.body.dataset.userId);
+        data.users
+          .filter(u => String(u.id) !== currentUserId)
+          .forEach(u => this._addMemberUser(u));
+        data.guests.forEach(g => this._addGuest(g));
+        if (data.skipped.length) {
+          const names = data.skipped.map(p => p.display_name).join(', ');
+          this.inviteeNotice = data.skipped.length === 1
+            ? `${names} has no email address and was not invited.`
+            : `${data.skipped.length} contacts have no email address and were not invited: ${names}.`;
+        }
+      } catch (e) {
+        this.inviteeNotice = 'Could not add these invitees. Please try again.';
+      }
+    },
     removeMember(userId) {
       this.selectedMembers = this.selectedMembers.filter(m => m.id !== userId);
+    },
+    removeGuest(email) {
+      this.selectedGuests = this.selectedGuests.filter(g => g.email !== email);
     },
 
     // --- Duration shortcuts ---
@@ -880,7 +941,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     openContextMenu(nativeEvent, rawEvent) {
       const currentUserId = String(document.body.dataset.userId);
       const isOwner = String(rawEvent.owner.id) === currentUserId;
-      const membership = (rawEvent.members || []).find(m => String(m.user.id) === currentUserId);
+      const membership = (rawEvent.members || []).find(m => String(m.user?.id) === currentUserId);
       const inviteStatus = (!isOwner && membership) ? membership.status : null;
 
       // Store event data in form for actions that need it

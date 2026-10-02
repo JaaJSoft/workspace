@@ -178,11 +178,18 @@ class EventMember(models.Model):
         on_delete=models.CASCADE,
         related_name="members",
     )
+    # A workspace account, or an external guest known only by ``email``:
+    # exactly one of the two is set. An external guest has no account to
+    # open the event with, so it never responds and stays pending.
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="calendar_invitations",
     )
+    email = models.EmailField(blank=True, default="")
+    name = models.CharField(max_length=255, blank=True, default="")
     status = models.CharField(
         max_length=8,
         choices=Status.choices,
@@ -196,6 +203,20 @@ class EventMember(models.Model):
                 fields=["event", "user"],
                 name="unique_event_member",
             ),
+            # Emails are stored lowercased (see services.guests), so a plain
+            # unique index is enough to keep one row per address.
+            models.UniqueConstraint(
+                fields=["event", "email"],
+                condition=~models.Q(email=""),
+                name="unique_event_guest_email",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(user__isnull=False, email="")
+                    | (models.Q(user__isnull=True) & ~models.Q(email=""))
+                ),
+                name="event_member_user_xor_email",
+            ),
         ]
         indexes = [
             models.Index(fields=["status"], name="evtmember_status"),
@@ -203,7 +224,11 @@ class EventMember(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user} — {self.event} ({self.status})"
+        return f"{self.user or self.email} — {self.event} ({self.status})"
+
+    @property
+    def is_external(self):
+        return self.user_id is None
 
 
 def _generate_share_token():

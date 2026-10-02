@@ -92,11 +92,19 @@ class CalendarCreateSerializer(serializers.Serializer):
 
 
 class EventMemberSerializer(serializers.ModelSerializer):
-    user = MemberUserSerializer()
+    # null for an external guest, which carries ``email`` and ``name`` instead.
+    user = MemberUserSerializer(allow_null=True)
 
     class Meta:
         model = EventMember
-        fields = ["uuid", "user", "status", "created_at"]
+        fields = ["uuid", "user", "email", "name", "status", "created_at"]
+
+
+class GuestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    name = serializers.CharField(
+        max_length=255, required=False, default="", allow_blank=True
+    )
 
 
 class EventSerializer(serializers.ModelSerializer):
@@ -183,6 +191,7 @@ class EventCreateSerializer(
         required=False,
         default=list,
     )
+    guests = GuestSerializer(many=True, required=False, default=list)
     recurrence_rule = serializers.CharField(
         required=False, allow_blank=True, default="", trim_whitespace=False
     )
@@ -202,6 +211,7 @@ class EventUpdateSerializer(
         child=serializers.IntegerField(),
         required=False,
     )
+    guests = GuestSerializer(many=True, required=False)
     recurrence_rule = serializers.CharField(
         required=False, allow_blank=True, trim_whitespace=False
     )
@@ -235,6 +245,33 @@ class OccurrenceSerializer(serializers.Serializer):
     recurrence_rule = serializers.CharField(allow_blank=True)
     recurrence_summary = serializers.CharField(allow_blank=True)
     recurrence_simple = serializers.DictField(allow_null=True)
+
+
+class InviteeResolveSerializer(serializers.Serializer):
+    person_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+    list_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, default=list
+    )
+
+    def validate(self, attrs):
+        if not attrs["person_ids"] and not attrs["list_ids"]:
+            raise serializers.ValidationError(
+                "Provide at least one of person_ids or list_ids."
+            )
+        return attrs
+
+
+class SkippedPersonSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField()
+    display_name = serializers.CharField()
+
+
+class ResolvedInviteesSerializer(serializers.Serializer):
+    users = MemberUserSerializer(many=True)
+    guests = GuestSerializer(many=True)
+    skipped = SkippedPersonSerializer(many=True)
 
 
 class EventRespondSerializer(serializers.Serializer):

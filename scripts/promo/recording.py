@@ -1,4 +1,4 @@
-"""Film real interactions in the app for the presentation video.
+"""Film real interactions in the app for the promo video.
 
 A take records the page through Chrome's screencast (every repaint, with its
 timestamp), then ffmpeg turns the frames into a constant-rate clip. Pages get

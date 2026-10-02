@@ -1,11 +1,11 @@
-"""Render the Workspace promo: a one-minute, beat-cut ad in 16:9 and 9:16.
+"""Render the Workspace promo: a fifty-second, beat-cut ad in 16:9 and 9:16.
 
-The long tour (``scripts/presentation_video.py``) walks through every module;
-this is its trailer. It reuses that pipeline's filmed takes, its soundtrack
-synthesizer and its pinned HyperFrames toolchain, and cuts them to 128 BPM
-around one message: the tools a team juggles fit in one app it hosts itself.
+Films real interactions in every module on a seeded throwaway demo (a visible
+cursor searching, dragging, typing), synthesizes a soundtrack locked to the
+cut, and renders one HyperFrames project per format:
 
-    uv run python scripts/promo_video.py                  # both formats
+    uv run python scripts/promo_video.py --refilm         # film every take, render both formats
+    uv run python scripts/promo_video.py                  # reuse the takes already filmed
     uv run python scripts/promo_video.py --aspect portrait
     uv run python scripts/promo_video.py --preview        # HyperFrames Studio (16:9)
     uv run python scripts/promo_video.py --stills 3 12 40 # snapshots only
@@ -13,11 +13,12 @@ around one message: the tools a team juggles fit in one app it hosts itself.
 Every module gets the same beat: a full-bleed title card in its colour, then
 its filmed take full screen, then a full-screen cut into the next colour. Those
 scenes come from one template (``scripts/promo/feature.html``) and a line each
-in ``SCENES``; the opening, the wall, the breakdown and the close are
+in ``SCENES``; the hook, the wall, the breakdown, the roll and the close are
 hand-written HyperFrames sub-compositions in ``scripts/promo/compositions/``.
 This script owns the timing (lengths in bars, cuts, music) and assembles one
-project per format under ``build/promo/``. The takes come from
-``build/presentation/clips``; missing ones are filmed first.
+project per format under ``build/promo/``. The takes land in
+``build/promo/takes``; missing ones are filmed first. See
+``scripts/promo/README.md``.
 """
 
 import argparse
@@ -32,19 +33,26 @@ from string import Template
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE = REPO_ROOT / "scripts" / "promo"
 DEFAULT_OUT = REPO_ROOT / "build" / "promo"
-TAKES = REPO_ROOT / "build" / "presentation" / "clips"
+TAKES_DIR = DEFAULT_OUT / "takes"
+NODE_MODULES = SOURCE / "node_modules"
 
 BPM = 128
 BEATS_PER_BAR = 4
 # Scenes overlap by this much, so a transition has both sides on screen.
 OVERLAP = 0.3
 
-# The display face ships with the project: the renderer only embeds the
-# families it finds written out in a font-family, not behind a CSS variable.
-PROMO_VENDOR = {
-    "fonts/archivo-black-latin-400-normal.woff2": REPO_ROOT
-    / "scripts/presentation/node_modules/@fontsource/archivo-black/files"
-    / "archivo-black-latin-400-normal.woff2",
+# Copied into each project: the faces ship with it, because the renderer only
+# embeds the families it finds written out in a font-family.
+VENDOR = {
+    "vendor/gsap.min.js": NODE_MODULES / "gsap/dist/gsap.min.js",
+    "vendor/lucide.js": REPO_ROOT
+    / "workspace/common/static/ui/js/vendor/lucide/lucide.js",
+    "fonts/archivo-black-latin-400-normal.woff2": NODE_MODULES
+    / "@fontsource/archivo-black/files/archivo-black-latin-400-normal.woff2",
+    "fonts/jetbrains-mono-latin-400-normal.woff2": NODE_MODULES
+    / "@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2",
+    "fonts/jetbrains-mono-latin-600-normal.woff2": NODE_MODULES
+    / "@fontsource/jetbrains-mono/files/jetbrains-mono-latin-600-normal.woff2",
 }
 
 FORMATS = {
@@ -91,21 +99,6 @@ SCENES = [
     {"id": "cta", "bars": 3, "cut": "flash", "music": "outro", "color": "#6d28d9"},
 ]  # fmt: skip
 
-# The takes each scene plays, from the presentation pipeline.
-TAKE_NAMES = [
-    "dashboard",
-    "files",
-    "photos",
-    "notes",
-    "chat",
-    "ai",
-    "mail",
-    "calendar",
-    "projects",
-    "people",
-    "vault",
-]
-
 
 def timeline():
     """Scene windows and the music sections, from the bar counts above."""
@@ -145,7 +138,6 @@ def timeline():
         )
     for section in sections:
         section["drumBars"] = {
-            "intro": 0,
             "module": section["bars"],
             "platform": 0,
             "roll": 0,
@@ -162,40 +154,51 @@ def timeline():
 
 
 def ensure_takes():
-    missing = [name for name in TAKE_NAMES if not (TAKES / f"{name}-0.mp4").is_file()]
+    from scripts.promo.takes import TAKES
+
+    missing = [name for name in TAKES if not (TAKES_DIR / f"{name}.mp4").is_file()]
     if missing:
         print(f"Missing takes {missing}: filming them...")
         film(missing)
 
 
 def film(names):
-    """Film these takes on a freshly seeded demo, with the presentation's acts."""
-    from scripts.presentation import capture
-    from scripts.presentation.scenes import PLATFORM
-    from scripts.presentation_video import resolve_scenes
+    """Film these takes on a freshly seeded demo."""
+    from scripts.promo import capture
 
     with capture.demo() as (base_url, context):
-        capture.capture_all(
-            resolve_scenes(),
-            PLATFORM,
-            TAKES.parent,
-            base_url,
-            context,
-            only=set(names),
-        )
+        capture.film(names, TAKES_DIR, base_url, context)
+
+
+def hyperframes(*args):
+    """Run the pinned HyperFrames CLI, installing it on first use."""
+    npm = shutil.which("npm")
+    npx = shutil.which("npx")
+    if not npm or not npx:
+        sys.exit("Node.js 22+ is required (npm and npx on the PATH).")
+    if not (NODE_MODULES / "hyperframes").is_dir():
+        print("Installing the HyperFrames toolchain...")
+        subprocess.run([npm, "ci", "--no-fund", "--no-audit"], cwd=SOURCE, check=True)
+    env = {
+        **os.environ,
+        # A repository script has no business reporting usage anywhere.
+        "HYPERFRAMES_NO_TELEMETRY": "1",
+        "HYPERFRAMES_SKIP_SKILLS": "1",
+    }
+    return subprocess.run(
+        [npx, "--no-install", "hyperframes", *args], cwd=SOURCE, env=env
+    )
 
 
 def write_project(out_dir: Path, fmt, plan, audio: Path):
-    from scripts.presentation.composition import VENDOR
-
     if out_dir.exists():
         shutil.rmtree(out_dir)
     (out_dir / "compositions").mkdir(parents=True)
-    for name, src in {**VENDOR, **PROMO_VENDOR}.items():
+    for name, src in VENDOR.items():
         target = out_dir / name
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, target)
-    shutil.copytree(TAKES, out_dir / "assets" / "clips")
+    shutil.copytree(TAKES_DIR, out_dir / "assets" / "takes")
     shutil.copy2(audio, out_dir / "assets" / audio.name)
     for name in ("promo.css", "promo.js", "hyperframes.json"):
         shutil.copy2(SOURCE / name, out_dir / name)
@@ -259,7 +262,7 @@ def render_feature(scene):
 
 def take_length(name):
     """The take's length in seconds, or None when it is not filmed yet."""
-    take = TAKES / f"{name}-0.mp4"
+    take = TAKES_DIR / f"{name}.mp4"
     if not take.is_file():
         return None
     out = subprocess.run(
@@ -329,6 +332,13 @@ def render_index(fmt, plan, audio_name):
 
 
 def main():
+    sys.path.insert(0, str(REPO_ROOT))
+    os.chdir(REPO_ROOT)
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
+
+    from scripts.promo.soundtrack import render_soundtrack
+    from scripts.promo.takes import TAKES
+
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--aspect", choices=[*FORMATS, "both"], default="both")
     parser.add_argument(
@@ -341,22 +351,15 @@ def main():
     parser.add_argument(
         "--refilm",
         nargs="*",
-        choices=TAKE_NAMES,
+        choices=list(TAKES),
         metavar="TAKE",
         help="film these takes again on a fresh demo (every take when none is named)",
     )
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
-    sys.path.insert(0, str(REPO_ROOT))
-    os.chdir(REPO_ROOT)
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
-
-    from scripts.presentation.soundtrack import render_soundtrack
-    from scripts.presentation_video import hyperframes
-
     if args.refilm is not None:
-        names = args.refilm or TAKE_NAMES
+        names = args.refilm or list(TAKES)
         print(f"Filming {names} on a fresh demo...")
         film(names)
     else:

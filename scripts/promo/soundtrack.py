@@ -1,4 +1,4 @@
-"""The presentation soundtrack, synthesized from the timeline.
+"""The promo soundtrack, synthesized from the timeline.
 
 An original synthwave loop (A minor, i-VI-III-VII) rendered with numpy, so the
 video carries no licensed audio and the music follows the cut: every scene
@@ -269,12 +269,7 @@ def render_soundtrack(timeline, path: Path):
         if kind in ("module", "platform", "outro") and start > 0:
             fx.add(start - 0.5, whoosh(rng), gain=0.35 if kind == "module" else 0.5)
         # A drop: the groove comes back after a build, or opens the track.
-        if kind in ("module", "outro") and previous in (
-            None,
-            "intro",
-            "platform",
-            "roll",
-        ):
+        if kind in ("module", "outro") and previous in (None, "platform", "roll"):
             fx.add(start, crash_sound, gain=0.5)
             fx.add(start, boom_sound, gain=0.55)
         previous = kind
@@ -300,7 +295,7 @@ def render_soundtrack(timeline, path: Path):
                 continue  # the final chord of the tail is held from the bar before
             length = bar * (2 if held else 1) + 0.8
 
-            # pads: darker in the intro, opening up as it builds
+            # pads
             for note in chord:
                 pads.add(t0, pad_note(midi_hz(note), length, rng), gain=0.115)
             if held:
@@ -316,23 +311,19 @@ def render_soundtrack(timeline, path: Path):
                         bass_note(midi_hz(root + octave), beat / 2),
                         gain=0.27,
                     )
-            elif kind != "intro" or b >= 2:
+            else:
                 sub = bass_note(midi_hz(root), bar * (2 if held else 1))
                 bass.add(t0, sub * envelope(len(sub), 0.2, 0.5), gain=0.22)
 
             # arpeggio: sixteenths through the chord tones
-            arp_on = not (held or last_bar) and not (kind == "intro" and b == 0)
-            if arp_on:
+            if not (held or last_bar):
                 tones = [*chord, chord[0] + 12, chord[1] + 12]
-                level = 0.17
-                if kind == "intro":
-                    level *= b / 3
                 for s, idx in enumerate(pattern):
                     arps.add(
                         t0 + s * beat / 4,
                         pluck(midi_hz(tones[idx] + 12)),
                         pan=(-0.35 if s % 2 else 0.35),
-                        gain=level,
+                        gain=0.17,
                     )
 
             if drums_on:
@@ -353,9 +344,7 @@ def render_soundtrack(timeline, path: Path):
 
             # the bar before a drop builds up
             # (a roll is its own build: the breakdown before it stays quiet)
-            leads_to_drop = (
-                b == bars - 1 and kind in ("intro", "platform") and following != "roll"
-            )
+            leads_to_drop = b == bars - 1 and kind == "platform" and following != "roll"
             if leads_to_drop:
                 fx.add(t0, riser(rng, bar), gain=0.45)
                 for s in range(16):
@@ -376,10 +365,10 @@ def render_soundtrack(timeline, path: Path):
         "arps": spectral_stereo(arps.stereo(), high=4200),
         "leads": spectral_stereo(leads.stereo(), high=3800),
     }
-    # the intro's pad opens from a muffled start
-    intro = timeline["sections"][0]
+    # the pad opens from a muffled start over the first section
+    first = timeline["sections"][0]
     dark = spectral_stereo(pads.stereo(), high=500)
-    open_up = np.clip((t - intro["start"]) / (intro["bars"] * bar), 0, 1) ** 1.5
+    open_up = np.clip((t - first["start"]) / (first["bars"] * bar), 0, 1) ** 1.5
     stems["pads"] = dark * (1 - open_up) + stems["pads"] * open_up
 
     arps_delayed = stems["arps"].copy()

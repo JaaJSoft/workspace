@@ -1,6 +1,6 @@
 """A stand-in OpenAI-compatible endpoint for the demo's AI assistant.
 
-The presentation films the assistant answering a question, and a real model
+The promo films the assistant answering a question, and a real model
 would make the take slow, costly and different on every run. This local
 server answers every chat completion with the same scripted reply, after a
 short pause so the typing indicator has time to show.

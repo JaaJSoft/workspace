@@ -26,18 +26,17 @@ repository.
 
 ## Assets
 
-- The filmed takes of `scripts/presentation_video.py` (`build/presentation/clips/`).
-- The soundtrack synthesizer of `scripts/presentation/soundtrack.py`, at 128 BPM.
+- One take per module, filmed in the real app on a seeded demo (`takes.py`, `build/promo/takes/`).
+- A soundtrack synthesized from the timeline (`soundtrack.py`), at 128 BPM.
 
 ## Customizations
 
 - Both formats come from the same scenes; their CSS switches layout on orientation.
 - Flat and full screen: no 3D, no shadows, no tilted fake windows next to text.
 - Module colours carry the cuts; no comparison with other products.
-- The long presentation video stays as it is; this is its trailer.
 
 ## Notes
 
 Stated by the user: angle, both formats, ~60 s, build without a storyboard
-review. Inferred: English copy (matches the app and the long video), generic
+review. Inferred: English copy (matches the app), generic
 tool names in the hook (no third-party brands), Archivo Black + JetBrains Mono.

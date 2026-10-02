@@ -3,7 +3,7 @@
 Deterministic and generated with numpy: a sky gradient, a sun or a moon with
 its glow, stars or an aurora, layered ridges fading into haze, and water
 mirroring it all. They stand in for holiday photos in the screenshots and the
-presentation video without shipping binary files or licensed images.
+promo video without shipping binary files or licensed images.
 """
 
 import io

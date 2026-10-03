@@ -28,7 +28,8 @@ from . import suites
 type Mark = tuple[str, int | str]
 
 _HEAD = 4
-_UNREADABLE: Mark = ("format", "?")
+UNREADABLE_ID = "?"
+_UNREADABLE: Mark = ("format", UNREADABLE_ID)
 
 
 def _head_bytes(head: str) -> bytes | None:

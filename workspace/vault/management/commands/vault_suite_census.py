@@ -2,7 +2,7 @@ import json
 
 from django.core.management.base import BaseCommand
 
-from workspace.vault.services.census import census
+from workspace.vault.services.census import UNREADABLE_ID, census
 from workspace.vault.services.suites import state
 
 
@@ -21,7 +21,9 @@ class Command(BaseCommand):
                 "axis": axis,
                 "id": identifier,
                 "count": count,
-                "state": state(axis, identifier) or "absent",
+                "state": "unreadable"
+                if identifier == UNREADABLE_ID
+                else state(axis, identifier) or "absent",
             }
             for (axis, identifier), count in sorted(
                 census(options["database"]).items(), key=str

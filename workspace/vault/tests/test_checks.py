@@ -1,7 +1,7 @@
 from unittest import mock
 
 from django.core.checks import Tags, registry
-from django.db import connection
+from django.db import OperationalError, connection
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from workspace.vault.checks import retired_ids_check, test_switches_check
@@ -80,5 +80,25 @@ class RetiredIdsCheckTests(TestCase):
                     "census ran on a database without vault tables"
                 ),
             ),
+        ):
+            self.assertEqual(retired_ids_check(None, databases=["default"]), [])
+
+    def test_an_unreadable_head_is_not_a_retired_id(self):
+        user, _, _ = make_account("owner")
+        make_vault(user, encrypted_name="!!!!")
+        self.assertEqual(retired_ids_check(None, databases=["default"]), [])
+
+    def test_a_control_character_in_an_id_never_reaches_the_message_raw(self):
+        user, _, identity = make_account("owner")
+        identity.kdf_algo = "bad\nalgo"
+        identity.save(update_fields=["kdf_algo"])
+        errors = retired_ids_check(None, databases=["default"])
+        self.assertEqual([error.id for error in errors], ["vault.E001"])
+        self.assertNotIn("\n", errors[0].msg)
+
+    def test_a_database_error_while_counting_is_not_an_error(self):
+        with mock.patch(
+            "workspace.vault.checks.census_service.census",
+            side_effect=OperationalError("no such column"),
         ):
             self.assertEqual(retired_ids_check(None, databases=["default"]), [])

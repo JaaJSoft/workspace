@@ -156,6 +156,8 @@ window.vaultBrowser = (function () {
       // from the server - that would say it exists in another account - so
       // saying it is the page's job.
       missing: false,
+      // Set after three passes in a row that left some rows unmigrated.
+      migrationWarning: false,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
@@ -247,9 +249,24 @@ window.vaultBrowser = (function () {
 
       afterUnlock: async function () {
         await this.load();
+        this.startMigration();
+      },
+
+      // Never awaited: the vault is on screen first, and nothing here may
+      // delay it or surface as an error. A pass that rewrote rows reloads the
+      // listing, because a later re-sign (a tag or folder removal) builds from
+      // the rows this page holds and must sign what is actually stored.
+      startMigration: function () {
+        const self = this;
+        window.vaultMigration.run(window.vaultSession).then(function (result) {
+          if (!window.vaultSession.isUnlocked()) return;
+          self.migrationWarning = result.warn;
+          if (result.wrote) self.load();
+        }, function () { /* a migration never surfaces as an error */ });
       },
 
       onLocked: function () {
+        this.migrationWarning = false;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
         // this machine.

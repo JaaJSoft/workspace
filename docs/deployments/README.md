@@ -37,6 +37,7 @@ kubectl apply -f ingress.yaml
 - **SECRET_KEY**: Always change the default secret key before deploying.
 - **Static files**: Collected at image build time via `collectstatic` and served by WhiteNoise.
 - **Metrics**: `/metrics` requires HTTP Basic credentials and answers `401` until `METRICS_USER` and `METRICS_PASSWORD` are both set. See [Monitoring with Prometheus](../guides/monitoring.md).
+- **Vault algorithm retirement**: `manage.py migrate` refuses to run (check `vault.E001`) when the vault's algorithm manifest drops an id that stored rows still use; see [Retiring an algorithm](../vault/CRYPTO.md#retiring-an-algorithm). Under Kubernetes the migration initContainer fails and stops the rollout. Under Docker Compose `migrate` runs after the new container is already serving, so the check raises the alarm but cannot prevent the deploy. `--skip-checks` bypasses it everywhere.
 
 ## Reverse Proxy
 

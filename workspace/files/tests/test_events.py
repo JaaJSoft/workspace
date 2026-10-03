@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.files.models import File, FileEvent
 from workspace.files.services.events import (
@@ -77,6 +80,52 @@ class RecordEventTests(TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(FileEvent.objects.count(), 0)
+
+    def test_record_event_stamps_last_event_at_on_the_file_row(self):
+        event = record_event(self.file, self.user, FileEvent.Action.RENAMED)
+
+        self.file.refresh_from_db(fields=["last_event_at"])
+        self.assertEqual(self.file.last_event_at, event.created_at)
+
+    def test_record_event_never_moves_last_event_at_backwards(self):
+        later = timezone.now() + timedelta(days=1)
+        File.objects.filter(pk=self.file.pk).update(last_event_at=later)
+
+        record_event(self.file, self.user, FileEvent.Action.RENAMED)
+
+        self.file.refresh_from_db(fields=["last_event_at"])
+        self.assertEqual(self.file.last_event_at, later)
+
+    def test_owner_events_leave_last_foreign_event_at_alone(self):
+        record_event(self.file, self.user, FileEvent.Action.RENAMED)
+
+        self.file.refresh_from_db(fields=["last_foreign_event_at"])
+        self.assertIsNone(self.file.last_foreign_event_at)
+
+    def test_other_and_system_events_stamp_last_foreign_event_at(self):
+        bob = User.objects.create_user(username="bob", password="pass123")
+        for actor in (bob, None):
+            with self.subTest(actor=actor):
+                event = record_event(self.file, actor, FileEvent.Action.RENAMED)
+
+                self.file.refresh_from_db(fields=["last_foreign_event_at"])
+                self.assertEqual(self.file.last_foreign_event_at, event.created_at)
+
+    def test_a_bare_create_stamps_the_file_row_too(self):
+        """Writers that skip record_event still keep the feed columns."""
+        event = FileEvent.objects.create(
+            file=self.file, actor=None, action=FileEvent.Action.DELETED
+        )
+
+        self.file.refresh_from_db(fields=["last_event_at", "last_foreign_event_at"])
+        self.assertEqual(self.file.last_event_at, event.created_at)
+        self.assertEqual(self.file.last_foreign_event_at, event.created_at)
+
+    def test_record_event_updates_the_in_memory_instance(self):
+        # A later full save() of the same instance must not write NULL back.
+        event = record_event(self.file, self.user, FileEvent.Action.RENAMED)
+
+        self.assertEqual(self.file.last_event_at, event.created_at)
 
 
 class EventsForFileTests(TestCase):
@@ -170,3 +219,38 @@ class SerializeEventTests(TestCase):
         data = serialize_event(event)
 
         self.assertEqual(data["actor"]["full_name"], "nooneknows")
+
+
+class LastEventBackfillTests(TestCase):
+    """files.0061 fills both feed columns from the existing events."""
+
+    def test_backfill_ranks_owner_and_foreign_events(self):
+        import importlib
+        from types import SimpleNamespace
+
+        from django.apps import apps
+        from django.db import connection
+
+        alice = User.objects.create_user(username="alice", password="pass123")
+        quiet, owned, shared = (
+            File.objects.create(owner=alice, name=n, node_type=File.NodeType.FILE)
+            for n in ("quiet.txt", "owned.txt", "shared.txt")
+        )
+        record_event(owned, alice, FileEvent.Action.CREATED)
+        foreign = record_event(shared, None, FileEvent.Action.CREATED)
+        newest = record_event(shared, alice, FileEvent.Action.RENAMED)
+        File.objects.update(last_event_at=None, last_foreign_event_at=None)
+
+        migration = importlib.import_module(
+            "workspace.files.migrations.0061_file_last_event_at"
+        )
+        migration.backfill_last_event_at(apps, SimpleNamespace(connection=connection))
+
+        rows = {
+            f.name: (f.last_event_at, f.last_foreign_event_at)
+            for f in File.objects.all()
+        }
+        self.assertEqual(rows["quiet.txt"], (None, None))
+        self.assertEqual(rows["owned.txt"][1], None)
+        self.assertIsNotNone(rows["owned.txt"][0])
+        self.assertEqual(rows["shared.txt"], (newest.created_at, foreign.created_at))

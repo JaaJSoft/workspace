@@ -67,28 +67,28 @@ class FilesActivityProvider(ActivityProvider):
     def get_recent_events(
         self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
     ):
-        from workspace.files.models import File, FileEvent
+        from django.contrib.auth import get_user_model
+
+        from workspace.files.models import FILE_FEED_Q
+        from workspace.files.services.events import recent_feed_events
 
         # See get_daily_counts: events are not filtered by file__deleted_at
         # so the DELETED event itself is reachable from the feed and the
         # provider stays consistent with the per-file timeline.
-        qs = FileEvent.objects.filter(
-            file__node_type=File.NodeType.FILE,
-        ).exclude(file__mime_type="text/markdown")
-        if user_id is not None:
-            qs = qs.filter(file__owner_id=user_id)
-        if exclude_actor_id is not None:
-            qs = qs.exclude(actor_id=exclude_actor_id)
-        qs = (
-            qs.filter(
-                self._event_visibility_filter(user_id, viewer_id),
-            )
-            .select_related("actor", "file")
-            .order_by("-created_at")[offset : offset + limit]
+        viewer = None
+        if viewer_id is not None and viewer_id != user_id:
+            viewer = get_user_model().objects.get(pk=viewer_id)
+        feed = recent_feed_events(
+            FILE_FEED_Q,
+            owner_id=user_id,
+            viewer=viewer,
+            exclude_actor_id=exclude_actor_id,
+            limit=limit,
+            offset=offset,
         )
 
         events = []
-        for ev in qs:
+        for ev in feed:
             # Events without an actor are system-driven (Celery cleanup,
             # sync soft-delete, ...). Reporting them as the file owner
             # would falsely attribute the action to a real user; emit a

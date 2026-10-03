@@ -457,6 +457,7 @@ def _make_file_content():
 # AFTER creation. Crucially, backdating a File also requires backdating its
 # FileEvent CREATED row — the activity feed + heatmap order/display by
 # FileEvent.created_at, so leaving it at "now" makes an old file look brand new.
+# File.last_event_at follows, since the feed picks its candidate files by it.
 
 
 def _rand_past(history_days, until=None):
@@ -474,6 +475,12 @@ def _sorted_times(n, start, end):
 def _backdate_file(file_obj, ts):
     """Rewrite a File's created/updated AND its FileEvent rows to ``ts``."""
     File.objects.filter(pk=file_obj.pk).update(created_at=ts, updated_at=ts)
+    File.objects.filter(pk=file_obj.pk, last_event_at__isnull=False).update(
+        last_event_at=ts
+    )
+    File.objects.filter(pk=file_obj.pk, last_foreign_event_at__isnull=False).update(
+        last_foreign_event_at=ts
+    )
     FileEvent.objects.filter(file=file_obj).update(created_at=ts)
 
 

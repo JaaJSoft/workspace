@@ -1,6 +1,8 @@
 from collections import Counter
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.vault.models import (
@@ -119,6 +121,51 @@ class StaleRowsTests(TestCase):
         [listed] = census.stale_rows(self.user)
         self.assertEqual(listed["folders"], [str(folder.uuid)])
         self.assertEqual(listed["tags"], [str(tag.uuid)])
+
+    def test_rows_of_a_vault_out_of_reach_are_not_listed(self):
+        stranger, _, _ = make_account("stranger")
+        theirs = make_vault(stranger)
+        make_key_wrap(theirs, stranger, hpke_suite=CURRENT_HPKE)
+        entry = VaultEntry.objects.create(
+            vault=theirs,
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("n"),
+            metadata_sig="AQ",
+        )
+        EntryField.objects.create(
+            entry=entry, field_id="password", encrypted_value=sealed("p", 1)
+        )
+        VaultEntry.objects.create(
+            vault=theirs,
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("n", 1),
+            metadata_sig="AQ",
+        )
+        VaultFolder.objects.create(
+            vault=theirs, encrypted_name=sealed("f", 1), metadata_sig="AQ"
+        )
+        VaultTag.objects.create(
+            vault=theirs, encrypted_name=sealed("t", 1), metadata_sig="AQ"
+        )
+        self.assertEqual(census.stale_rows(self.user), [])
+        self.assertEqual(len(census.stale_rows(stranger)), 1)
+
+    def test_the_query_count_does_not_grow_with_vaults_or_rows(self):
+        self._entry(name_format=1)
+        with CaptureQueriesContext(connection) as small:
+            census.stale_rows(self.user)
+        for _ in range(3):
+            vault = make_vault(self.user)
+            make_key_wrap(vault, self.user, hpke_suite=HPKE_SUITE)
+            VaultFolder.objects.create(
+                vault=vault, encrypted_name=sealed("f", 1), metadata_sig="AQ"
+            )
+            VaultTag.objects.create(
+                vault=vault, encrypted_name=sealed("t", 1), metadata_sig="AQ"
+            )
+            self._entry(name_format=1, field_format=1)
+        with self.assertNumQueries(len(small)):
+            self.assertEqual(len(census.stale_rows(self.user)), 4)
 
     def test_an_empty_description_is_not_counted(self):
         self.assertEqual(self.vault.encrypted_description, "")

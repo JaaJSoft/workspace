@@ -22,7 +22,14 @@ from ..models import (
     VaultRole,
     VaultTag,
 )
-from ..queries import user_vault_ids, vault_roles
+from ..queries import (
+    accessible_entries_q,
+    accessible_entry_fields_q,
+    accessible_folders_q,
+    accessible_tags_q,
+    user_vault_ids,
+    vault_roles,
+)
 from . import suites
 
 type Mark = tuple[str, int | str]
@@ -122,9 +129,12 @@ def stale_rows(user) -> list[dict]:
         if is_stale(hpke_marks(wrap["hpke_suite"])):
             slot(wrap["vault_id"])["wrap"] = True
 
-    for model, key in ((VaultFolder, "folders"), (VaultTag, "tags")):
+    for model, reach, key in (
+        (VaultFolder, accessible_folders_q, "folders"),
+        (VaultTag, accessible_tags_q, "tags"),
+    ):
         for row in _heads(
-            model.objects.filter(vault_id__in=vault_ids),
+            model.objects.filter(reach(user)),
             "encrypted_name",
             "metadata_sig",
         ).values("uuid", "vault_id", "h_encrypted_name", "h_metadata_sig"):
@@ -136,7 +146,7 @@ def stale_rows(user) -> list[dict]:
 
     stale_entries = {}
     for row in _heads(
-        VaultEntry.objects.filter(vault_id__in=vault_ids),
+        VaultEntry.objects.filter(accessible_entries_q(user)),
         "encrypted_name",
         "encrypted_notes",
         "metadata_sig",
@@ -151,7 +161,8 @@ def stale_rows(user) -> list[dict]:
         if is_stale(marks):
             stale_entries[row["uuid"]] = row["vault_id"]
     for row in _heads(
-        EntryField.objects.filter(entry__vault_id__in=vault_ids), "encrypted_value"
+        EntryField.objects.filter(accessible_entry_fields_q(user)),
+        "encrypted_value",
     ).values("entry_id", "entry__vault_id", "h_encrypted_value"):
         if row["entry_id"] not in stale_entries and is_stale(
             ciphertext_marks(row["h_encrypted_value"])

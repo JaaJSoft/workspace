@@ -1,3 +1,4 @@
+import copy
 from unittest import mock
 
 from django.core.checks import Tags, registry
@@ -7,7 +8,13 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from workspace.vault.checks import retired_ids_check, test_switches_check
 from workspace.vault.models import AccountIdentity
 from workspace.vault.services import suites
-from workspace.vault.tests.factories import make_account, make_vault, sealed
+from workspace.vault.tests.factories import (
+    HPKE_SUITE,
+    make_account,
+    make_key_wrap,
+    make_vault,
+    sealed,
+)
 
 
 class TestSwitchCheckTests(SimpleTestCase):
@@ -68,6 +75,21 @@ class RetiredIdsCheckTests(TestCase):
             errors = retired_ids_check(None, databases=["default"])
         self.assertEqual([error.id for error in errors], ["vault.E001"])
         self.assertIn("format 1", errors[0].msg)
+
+    def test_fails_when_wraps_use_an_hpke_format_the_manifest_dropped(self):
+        owner, _, _ = make_account("owner")
+        member, _, _ = make_account("member")
+        vault = make_vault(owner)
+        make_key_wrap(vault, member, hpke_suite=HPKE_SUITE)
+        trimmed = copy.deepcopy(suites._manifest())
+        del trimmed["hpke"]["1"]
+
+        with mock.patch(
+            "workspace.vault.services.suites._manifest", return_value=trimmed
+        ):
+            errors = retired_ids_check(None, databases=["default"])
+        self.assertEqual([error.id for error in errors], ["vault.E001"])
+        self.assertIn("hpke 1", errors[0].msg)
 
     def test_skips_without_databases(self):
         self.assertEqual(retired_ids_check(None), [])

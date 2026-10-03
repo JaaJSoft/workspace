@@ -159,13 +159,18 @@ def current_hpke_suite() -> dict:
 
 
 def hpke_format(value) -> int | None:
-    """The format a stored hpke_suite names, or None. No state filtering: the
-    census counts superseded and current descriptors alike."""
-    try:
-        check_hpke_suite(value)
-    except ValueError:
+    """The format a stored hpke_suite names, read from its shape alone, or None
+    when the shape is malformed. It never asks the manifest: the retirement
+    check must still count a format the manifest has stopped declaring, and
+    whether the ids match a declared suite is the write path's question
+    (check_hpke_suite), not the census's."""
+    if not isinstance(value, dict):
         return None
-    return value.get("format", 1)
+    ids = {key: item for key, item in value.items() if key != "format"}
+    if ids.keys() != set(_HPKE_FIELDS) or not all(map(_is_integer, ids.values())):
+        return None
+    fmt = value.get("format", 1)
+    return fmt if _is_integer(fmt) else None
 
 
 def check_current_ciphertext(raw: bytes, key_version: int) -> None:

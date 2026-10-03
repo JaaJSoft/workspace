@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import SimpleTestCase, override_settings
 
 from ..services import suites
@@ -166,9 +168,31 @@ class SuiteStateTests(SimpleTestCase):
         base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
         self.assertEqual(suites.hpke_format(base), 1)
         self.assertEqual(suites.hpke_format({**base, "format": 2}), 2)
-        self.assertIsNone(suites.hpke_format({**base, "kem_id": 33}))
-        self.assertIsNone(suites.hpke_format({**base, "format": 1}))
+        self.assertEqual(suites.hpke_format({**base, "format": 7}), 7)
         self.assertIsNone(suites.hpke_format("nope"))
+
+    def test_hpke_format_reads_the_shape_without_the_manifest(self):
+        base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        with mock.patch.object(suites, "_manifest", return_value={"hpke": {}}):
+            self.assertEqual(suites.hpke_format(base), 1)
+            self.assertEqual(suites.hpke_format({**base, "format": 2}), 2)
+        self.assertEqual(suites.hpke_format({**base, "kem_id": 33}), 1)
+
+    def test_hpke_format_of_a_malformed_descriptor_is_none(self):
+        base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        for value in (
+            {**base, "format": True},
+            {**base, "format": 2.0},
+            {**base, "format": "2"},
+            {**base, "kem_id": True},
+            {**base, "mode": 0.0},
+            {**base, "extra": 1},
+            {"kem_id": 32, "kdf_id": 1, "aead_id": 2},
+            [32, 1, 2, 0],
+            None,
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(suites.hpke_format(value))
 
     def test_check_current_ciphertext(self):
         good = bytes([2, 1, 1, 0, 1, 12]) + bytes(28)

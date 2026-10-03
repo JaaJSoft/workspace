@@ -42,13 +42,24 @@ class MarkTests(TestCase):
         self.assertEqual(census.hpke_marks(HPKE_SUITE), [("hpke", 1)])
         self.assertEqual(census.hpke_marks(CURRENT_HPKE), [("hpke", 2)])
         self.assertEqual(
-            census.hpke_marks({**HPKE_SUITE, "kem_id": 33}), [("hpke", "?")]
+            census.hpke_marks({**HPKE_SUITE, "format": True}), [("hpke", "?")]
         )
+        self.assertEqual(
+            census.hpke_marks({**HPKE_SUITE, "kem_id": 1.0}), [("hpke", "?")]
+        )
+        self.assertEqual(census.hpke_marks("nope"), [("hpke", "?")])
 
     def test_is_stale(self):
         self.assertTrue(census.is_stale([("format", 1), ("aead", 1)]))
         self.assertFalse(census.is_stale([("format", 2), ("aead", 1)]))
         self.assertFalse(census.is_stale([("format", "?")]))
+
+    def test_an_hpke_format_is_stale_only_while_declared_superseded(self):
+        self.assertTrue(census.is_stale(census.hpke_marks(HPKE_SUITE)))
+        self.assertFalse(census.is_stale(census.hpke_marks(CURRENT_HPKE)))
+        self.assertFalse(
+            census.is_stale(census.hpke_marks({**HPKE_SUITE, "format": 7}))
+        )
 
 
 class StaleRowsTests(TestCase):

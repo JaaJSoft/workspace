@@ -1,15 +1,19 @@
+import errno
 import io
 import os
 import shutil
 import tempfile
 from unittest import mock
 
+from botocore.exceptions import ClientError
 from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
 from django.core.files.base import ContentFile
 from django.test import SimpleTestCase
 
 from workspace.common.storage.backend import BlobTooLarge, checked_name, temporary_copy
 from workspace.common.storage.facade import BlobStorage
+from workspace.common.storage.s3 import MIN_PART_SIZE
+from workspace.common.tests.s3 import S3TestMixin
 
 
 def _read(storage, name):
@@ -62,6 +66,12 @@ class BlobStorageContract:
 
         self.assertEqual(name, "files/doc.txt")
         self.assertEqual(_read(storage, name), b"second")
+
+    def test_listing_nothing_is_file_not_found(self):
+        with self.assertRaises(FileNotFoundError):
+            self.storage.listdir("chat/nobody")
+        with self.assertRaises(FileNotFoundError):
+            self.storage.scan("chat/nobody")
 
     def test_listdir(self):
         self.save("chat/conv/a.png", b"a")
@@ -345,6 +355,199 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
         self.assertEqual(entry.name, "link")
         self.assertFalse(entry.is_dir)
         self.assertFalse(entry.is_file)
+
+
+class S3BlobStorageTests(S3TestMixin, BlobStorageContract, SimpleTestCase):
+    def make_storage(self, *, allow_overwrite=False):
+        return self.make_s3_storage(
+            allow_overwrite=allow_overwrite, part_size=MIN_PART_SIZE
+        )
+
+
+class S3BackendTests(S3TestMixin, SimpleTestCase):
+    MB = 1024 * 1024
+
+    def setUp(self):
+        super().setUp()
+        self.storage = self.make_s3_storage(
+            part_size=MIN_PART_SIZE, read_window=self.MB
+        )
+        self.requests = []
+        events = self.storage.backend.client.meta.events
+        events.register("before-parameter-build.s3", self._record)
+        self.addCleanup(events.unregister, "before-parameter-build.s3", self._record)
+
+    def _record(self, params, model, **kwargs):
+        self.requests.append((model.name, params.get("Range")))
+
+    def _requests(self, operation):
+        return [r for name, r in self.requests if name == operation]
+
+    def save(self, name, data):
+        return self.storage.save(name, ContentFile(data))
+
+    def test_a_seek_fetches_only_from_the_new_position(self):
+        data = bytes(range(256)) * (3 * self.MB // 256)
+        self.save("files/video.mp4", data)
+        self.requests.clear()
+
+        with self.storage.open("files/video.mp4") as handle:
+            handle.seek(2 * self.MB + 5)
+            self.assertEqual(handle.read(10), data[2 * self.MB + 5 : 2 * self.MB + 15])
+
+        self.assertEqual(
+            self._requests("GetObject"), [f"bytes={2 * self.MB + 5}-{3 * self.MB - 1}"]
+        )
+
+    def test_a_sequential_read_goes_a_window_at_a_time(self):
+        data = bytes(range(256)) * (3 * self.MB // 256)
+        self.save("files/video.mp4", data)
+        self.requests.clear()
+
+        self.assertEqual(_read(self.storage, "files/video.mp4"), data)
+        self.assertEqual(len(self._requests("GetObject")), 3)
+
+    def test_an_empty_blob_reads_without_a_request(self):
+        self.save("files/empty.txt", b"")
+        self.requests.clear()
+
+        self.assertEqual(_read(self.storage, "files/empty.txt"), b"")
+        self.assertEqual(self._requests("GetObject"), [])
+
+    def test_a_large_staged_write_goes_in_parts(self):
+        data = b"x" * (11 * self.MB)
+        writer = self.storage.staged_writer("files/big.bin")
+        for start in range(0, len(data), self.MB):
+            writer.write(data[start : start + self.MB])
+        writer.commit()
+
+        self.assertEqual(len(self._requests("UploadPart")), 3)
+        self.assertEqual(len(self._requests("CompleteMultipartUpload")), 1)
+        self.assertEqual(self.storage.size("files/big.bin"), len(data))
+
+    def test_an_aborted_multipart_write_leaves_nothing_pending(self):
+        self.save("files/doc.txt", b"old")
+        writer = self.storage.staged_writer("files/doc.txt")
+        writer.write(b"x" * (6 * self.MB))
+        writer.abort()
+
+        self.assertEqual(_read(self.storage, "files/doc.txt"), b"old")
+        self.assertEqual(
+            self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
+        )
+
+    def test_a_save_that_loses_the_race_for_a_name_takes_another(self):
+        first = self.save("mail/invoice.pdf", b"first")
+        real = self.storage.is_name_available
+        calls = []
+
+        def free_once(name, max_length=None):
+            calls.append(name)
+            return len(calls) == 1 or real(name, max_length=max_length)
+
+        with mock.patch.object(self.storage, "is_name_available", free_once):
+            second = self.save("mail/invoice.pdf", b"second")
+
+        self.assertNotEqual(second, first)
+        self.assertEqual(_read(self.storage, first), b"first")
+        self.assertEqual(_read(self.storage, second), b"second")
+
+    def test_keys_live_under_the_prefix(self):
+        storage = self.make_s3_storage(prefix="/tenant/")
+        storage.save("files/a.txt", ContentFile(b"a"))
+        storage.make_dir("files/Empty")
+
+        self.assertEqual(self.keys(), ["tenant/files/Empty/", "tenant/files/a.txt"])
+        self.assertEqual(storage.listdir("files"), (["Empty"], ["a.txt"]))
+
+    def test_a_name_past_the_key_limit_is_refused(self):
+        with self.assertRaises(OSError) as caught:
+            self.save("files/" + "é" * 600, b"x")
+        self.assertEqual(caught.exception.errno, errno.ENAMETOOLONG)
+
+    def test_there_is_no_local_path(self):
+        self.save("files/a.txt", b"a")
+        with self.assertRaises(NotImplementedError):
+            self.storage.path("files/a.txt")
+
+    def test_blobs_are_not_opened_for_writing(self):
+        with self.assertRaises(ValueError):
+            self.storage.open("files/a.txt", "wb")
+
+    def test_a_directory_cannot_move_into_itself(self):
+        self.save("files/Docs/a.txt", b"a")
+
+        with self.assertRaises(OSError) as caught:
+            self.storage.move("files/Docs", "files/Docs/Sub")
+
+        self.assertEqual(caught.exception.errno, errno.EINVAL)
+        self.assertEqual(self.keys(), ["files/Docs/a.txt"])
+
+    def test_a_failed_copy_leaves_the_sources_in_place(self):
+        self.save("files/Docs/a.txt", b"a")
+        self.save("files/Docs/b.txt", b"b")
+        failure = ClientError(
+            {
+                "Error": {"Code": "InternalError"},
+                "ResponseMetadata": {"HTTPStatusCode": 500},
+            },
+            "CopyObject",
+        )
+
+        with (
+            mock.patch.object(
+                self.storage.backend.client, "copy_object", side_effect=[{}, failure]
+            ),
+            self.assertRaises(OSError),
+        ):
+            self.storage.move("files/Docs", "files/Archive")
+
+        self.assertEqual(_read(self.storage, "files/Docs/a.txt"), b"a")
+        self.assertEqual(_read(self.storage, "files/Docs/b.txt"), b"b")
+
+    def test_sources_a_move_could_not_delete_stay_as_duplicates(self):
+        self.save("files/Docs/a.txt", b"a")
+
+        with (
+            mock.patch.object(
+                self.storage.backend,
+                "_delete_keys",
+                side_effect=lambda keys, name: keys,
+            ),
+            self.assertLogs("workspace.common.storage.s3", "WARNING"),
+        ):
+            self.storage.move("files/Docs", "files/Archive")
+
+        self.assertEqual(self.keys(), ["files/Archive/a.txt", "files/Docs/a.txt"])
+
+    def test_signed_urls(self):
+        self.save("files/a.txt", b"a")
+
+        url = self.storage.url("files/a.txt")
+        self.assertIn("files/a.txt", url)
+        self.assertIn("X-Amz-Signature=", url)
+
+        public = self.make_s3_storage(presign_endpoint_url="https://files.example.com")
+        self.assertTrue(
+            public.url("files/a.txt").startswith("https://files.example.com/")
+        )
+
+    def test_one_client_serves_every_storage_of_the_process(self):
+        other = self.make_s3_storage(allow_overwrite=True)
+
+        self.assertIs(other.backend.client, self.storage.backend.client)
+
+    def test_local_path_is_a_temporary_copy(self):
+        self.save("files/clip.webm", b"video bytes")
+
+        with self.storage.local_path("files/clip.webm", max_bytes=64) as path:
+            with open(path, "rb") as handle:
+                self.assertEqual(handle.read(), b"video bytes")
+
+        self.assertFalse(os.path.exists(path))
+        with self.assertRaises(BlobTooLarge):
+            with self.storage.local_path("files/clip.webm", max_bytes=4):
+                pass
 
 
 class BlobStorageConfigurationTests(SimpleTestCase):

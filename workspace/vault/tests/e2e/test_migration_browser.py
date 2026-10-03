@@ -165,11 +165,47 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         )
         self.assertEqual(entry_formats, Counter({2: 200, 1: 1}))
         self.assertNotEqual(stale_rows(self.user), [])
+        self._assert_opens_entirely(names)
 
         self._reload_and_unlock()
         self._wait_for_no_migration(timeout_ms=60000)
         self.assertEqual(self._formats(vault), {2})
         self.assertEqual(stale_rows(self.user), [])
+
+    def _assert_opens_entirely(self, names):
+        """A half-migrated vault is an ordinary vault: every row, whichever
+        format it is under, opens and verifies. The migration listing is
+        answered empty so that this unlock reads the vault as the cut left it."""
+        self.page.route(
+            "**/api/v1/vault/migration",
+            lambda route: route.fulfill(json={"vaults": []}),
+        )
+        self._reload_and_unlock()
+        self.page.wait_for_selector("tbody tr", timeout=30000)
+        read = self.page.evaluate(
+            """async (vaultUuid) => {
+              const A = window.vaultApi, S = window.vaultSession;
+              const vault = (await A.listVaults()).find((row) => row.uuid === vaultUuid);
+              const rows = [
+                ...(await A.listEntries(vaultUuid)),
+                ...(await A.listEntries(vaultUuid, { trashed: true })),
+              ];
+              const opened = await window.vaultReader.readVault(S, vault);
+              const read = await window.vaultReader.readEntries(S, opened, rows);
+              return {
+                listed: rows.length,
+                names: read.rows.map((row) => row.name).sort(),
+                tampered: read.tamperedCount,
+                unsupported: read.unsupportedCount,
+              };
+            }""",
+            self.vault_uuid,
+        )
+        self.page.unroute("**/api/v1/vault/migration")
+        self.assertEqual(read["listed"], MORE_THAN_A_BATCH)
+        self.assertEqual(read["names"], sorted(names))
+        self.assertEqual((read["tampered"], read["unsupported"]), (0, 0))
+        self.assertEqual(self.page.locator(TAMPERED_BANNER).count(), 0)
 
     def test_a_tampered_row_is_left_alone(self):
         self._seed_format_1()

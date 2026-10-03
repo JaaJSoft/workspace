@@ -125,6 +125,12 @@ class BlobStorage(Storage):
     def scan(self, name):
         return self.backend.scan(name)
 
+    def iter_blobs(self, name):
+        return self.backend.iter_blobs(name)
+
+    def iter_dirs(self, name):
+        return self.backend.iter_dirs(name)
+
     def make_dir(self, name):
         self.backend.make_dir(name)
 

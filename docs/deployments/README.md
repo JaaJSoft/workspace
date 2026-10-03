@@ -59,6 +59,17 @@ The credentials need `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutOb
 
 **Add a lifecycle rule that aborts incomplete multipart uploads** after a day or so. Large uploads go in parts and an interrupted one is aborted, but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise.
 
+### Moving an existing instance to a bucket
+
+The layout is the same on both sides, so moving is a copy. With the app stopped (or at least with nobody uploading):
+
+1. Keep `STORAGE_BACKEND=local` and set `S3_BUCKET` and the other `S3_*` variables.
+2. `python manage.py copy_blobs --to s3` copies every blob from `MEDIA_ROOT` to the bucket - and only the blobs: the SQLite database and the model weights stay where they are. It skips what is already there with the same size, so it can run again to catch up, and `--dry-run` shows what it would do.
+3. Set `STORAGE_BACKEND=s3` and start the app.
+4. `python manage.py verify_file_storage` checks that every file's blob is in the bucket at its place in the tree. `--fix-dirs` recreates the folders a copy left without a directory (an empty folder copied by a tool that skips empty directories).
+
+`copy_blobs --to local` goes the other way. Keep the old copy until the new one has served for a while: neither command deletes anything.
+
 What changes on object storage:
 
 - Renaming or moving a folder copies each of its files inside the store (no bytes go through the app) and then deletes the originals, so it takes longer on a large folder than on a disk.

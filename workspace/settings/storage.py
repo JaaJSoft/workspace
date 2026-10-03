@@ -42,13 +42,13 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 # key layout is the same on both: a bucket mirrors what MEDIA_ROOT would hold.
 STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower() or "local"
 
-if STORAGE_BACKEND == "local":
-    _BLOB_OPTIONS = {"backend": "local"}
-elif STORAGE_BACKEND == "s3":
-    _S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
-    if not _S3_BUCKET:
-        raise ImproperlyConfigured("STORAGE_BACKEND=s3 needs S3_BUCKET")
-    _BLOB_OPTIONS = {
+# Every backend this instance can reach, by name: the one in use, and the
+# other one while blobs are copied between them (core's copy_blobs).
+BLOB_BACKENDS = {"local": {"backend": "local"}}
+
+_S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
+if _S3_BUCKET:
+    BLOB_BACKENDS["s3"] = {
         "backend": "s3",
         "bucket": _S3_BUCKET,
         # Keys go under this prefix, so one bucket can hold several instances.
@@ -68,10 +68,14 @@ elif STORAGE_BACKEND == "s3":
         # server that rejects it; saves then rely on a check before the write.
         "conditional_writes": env_bool("S3_CONDITIONAL_WRITES", True),
     }
-else:
+
+if STORAGE_BACKEND not in ("local", "s3"):
     raise ImproperlyConfigured(
         f"STORAGE_BACKEND must be 'local' or 's3', got {STORAGE_BACKEND!r}"
     )
+if STORAGE_BACKEND not in BLOB_BACKENDS:
+    raise ImproperlyConfigured("STORAGE_BACKEND=s3 needs S3_BUCKET")
+_BLOB_OPTIONS = BLOB_BACKENDS[STORAGE_BACKEND]
 
 # Blob storage (workspace/common/storage). Two aliases over the same backend,
 # differing only in what a save under a taken name does. "files" holds

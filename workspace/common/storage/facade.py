@@ -175,6 +175,14 @@ class BlobStorage(Storage):
     def local_path(self, name, *, max_bytes):
         return self.backend.local_path(name, max_bytes=max_bytes)
 
+    def signed_url(self, name, *, filename, attachment=False, content_type=None):
+        return self.backend.signed_url(
+            name,
+            filename=filename,
+            attachment=attachment,
+            content_type=content_type or "application/octet-stream",
+        )
+
     def replace(self, name, content):
         """Put *content* at *name*, swapping the previous blob in one step.
 

@@ -236,6 +236,16 @@ class Backend(abc.ABC):
     def staged_writer(self, name):
         """A :class:`StagedWriter` that publishes under *name* on commit."""
 
+    def signed_url(self, name, *, filename, attachment, content_type):
+        """A short-lived URL a client can fetch the blob from directly, or None.
+
+        None means the app serves the bytes itself. The URL carries the
+        headers the app would have sent: *content_type*, and *filename* inline
+        or as an *attachment*. Whoever holds it can fetch the blob until it
+        expires, so it is only handed out after the access checks.
+        """
+        return None
+
     def local_path(self, name, *, max_bytes):
         """A context manager yielding a filesystem path holding the blob.
 

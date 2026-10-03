@@ -19,7 +19,7 @@ function harness(overrides = {}) {
       listVaults: async () => [{ uuid: 'v', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ', key_version: 1 }],
       listFolders: async () => [],
       listTags: async () => [],
-      listEntries: async (vault, opts) => (opts && opts.trashed ? [] : [{ uuid: 'e1', metadata_sig: 'AQ' }, { uuid: 'e2', metadata_sig: 'AQ' }]),
+      listEntries: async (vault, opts) => (opts && opts.trashed ? [] : [{ uuid: 'e1', vault: 'v', metadata_sig: 'AQ' }, { uuid: 'e2', vault: 'v', metadata_sig: 'AQ' }]),
       migrateVault: async (uuid, items) => { calls.push(['migrate', uuid, Array.from(items, (i) => i.kind + ':' + (i.uuid || ''))]); return null; },
     },
     vaultReader: {
@@ -34,7 +34,7 @@ function harness(overrides = {}) {
     buildVaultMetadataMigrateItem: async () => ({ kind: 'metadata', encrypted_name: 'x' }),
     ...overrides,
   };
-  const session = { isUnlocked: () => true, rewrapVaultKey: async () => ({ wrapped_key: 'n', hpke_suite: {} }), ...(overrides.session || {}) };
+  const session = { isUnlocked: () => true, withEntryKeyCache: async (run) => run(), rewrapVaultKey: async () => ({ wrapped_key: 'n', hpke_suite: {} }), ...(overrides.session || {}) };
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_migrate.js', globals);
   return { ctx, calls, storage, session, globals };
 }
@@ -88,7 +88,7 @@ test('batches stop at 200 items', async () => {
       ...base.vaultApi,
       migrateVault: async (uuid, items) => { sizes.push(items.length); return null; },
       fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: false, wrap: false, folders: [], tags: [], entries: many }] }),
-      listEntries: async (v, o) => (o && o.trashed ? [] : many.map((uuid) => ({ uuid, metadata_sig: 'AQ' }))),
+      listEntries: async (v, o) => (o && o.trashed ? [] : many.map((uuid) => ({ uuid, vault: 'v', metadata_sig: 'AQ' }))),
     },
   });
   await ctx.vaultMigration.run(session);
@@ -155,7 +155,7 @@ test('a lock after the first batch stops the run: no further send, counter untou
     vaultApi: {
       ...base.vaultApi,
       fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: false, wrap: false, folders: [], tags: [], entries: many }] }),
-      listEntries: async (v, o) => (o && o.trashed ? [] : many.map((uuid) => ({ uuid, metadata_sig: 'AQ' }))),
+      listEntries: async (v, o) => (o && o.trashed ? [] : many.map((uuid) => ({ uuid, vault: 'v', metadata_sig: 'AQ' }))),
       migrateVault: async (uuid, items) => { sizes.push(items.length); unlocked = false; return null; },
     },
   });
@@ -174,7 +174,7 @@ test('the builders and the reads receive the opened vault, not the listing row',
   const spy = (kind) => async (s, v) => { seen.push(kind + ':' + v.marker); return { kind, uuid: 'x', encrypted_name: 'x' }; };
   const { ctx, session } = harness({
     vaultApi: { ...base.vaultApi, fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: true, wrap: true, folders: ['f'], tags: ['t'], entries: ['e1'] }] }),
-      listFolders: async () => [{ uuid: 'f', metadata_sig: 'AQ' }], listTags: async () => [{ uuid: 't', metadata_sig: 'AQ' }] },
+      listFolders: async () => [{ uuid: 'f', vault: 'v', metadata_sig: 'AQ' }], listTags: async () => [{ uuid: 't', vault: 'v', metadata_sig: 'AQ' }] },
     vaultReader: {
       readVault: async () => opened,
       readFolders: async (s, v, rows) => { seen.push('readFolders:' + v.marker); return { rows, verifiedRows: rows }; },
@@ -246,4 +246,84 @@ test('a 5xx stops the run before the next vault', async () => {
   const result = await ctx.vaultMigration.run(session);
   assert.equal(result.outcome, 'failed');
   assert.equal(sent, 1);
+});
+
+test('a listed row of another vault is never handed to the readers or builders', async () => {
+  const base = harness().globals;
+  const read = [];
+  const { ctx, calls, session } = harness({
+    vaultApi: {
+      ...base.vaultApi,
+      fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: false, wrap: false, folders: ['f'], tags: ['t'], entries: ['e1'] }] }),
+      listFolders: async () => [{ uuid: 'f', vault: 'other', metadata_sig: 'AQ' }],
+      listTags: async () => [{ uuid: 't', vault: 'other', metadata_sig: 'AQ' }],
+      listEntries: async (v, o) => (o && o.trashed ? [] : [{ uuid: 'e1', vault: 'other', metadata_sig: 'AQ' }]),
+    },
+    vaultReader: {
+      ...base.vaultReader,
+      readFolders: async (s, v, rows) => { read.push(...rows.map((r) => r.uuid)); return { rows, verifiedRows: rows }; },
+      readTags: async (s, v, rows) => { read.push(...rows.map((r) => r.uuid)); return { rows, verifiedRows: rows }; },
+      readEntries: async (s, v, rows) => { read.push(...rows.map((r) => r.uuid)); return { rows, verifiedRows: rows }; },
+    },
+  });
+  await ctx.vaultMigration.run(session);
+  assert.deepStrictEqual(read, []);
+  assert.deepStrictEqual(calls, []);
+});
+
+test('each entry key is derived once: the entries step runs inside the key cache', async () => {
+  const base = harness().globals;
+  let cache = null;
+  let derivations = 0;
+  const openEntryKey = async (vault, uuid) => {
+    if (cache && cache.has(uuid)) return cache.get(uuid);
+    derivations += 1;
+    if (cache) cache.set(uuid, 'k');
+    return 'k';
+  };
+  const { ctx, session } = harness({
+    vaultReader: {
+      ...base.vaultReader,
+      readEntries: async (s, v, rows) => {
+        for (const row of rows) await s.openEntryKey(v, row.uuid);
+        return { rows, verifiedRows: rows };
+      },
+    },
+    buildEntryMigrateItem: async (s, v, row) => {
+      await s.openEntryKey(v, row.uuid);
+      return { kind: 'entry', uuid: row.uuid, fields: {}, encrypted_name: 'x' };
+    },
+    session: {
+      openEntryKey,
+      withEntryKeyCache: async (run) => {
+        cache = new Map();
+        try { return await run(); } finally { cache = null; }
+      },
+    },
+  });
+  await ctx.vaultMigration.run(session);
+  assert.equal(derivations, 1);
+});
+
+test('a 400 on one vault abandons it and the pass moves on to the next', async () => {
+  const base = harness().globals;
+  const refused = Object.assign(new Error('x'), { name: 'VaultApiError', status: 400 });
+  const sent = [];
+  const two = { uuid: 'v', metadata: false, wrap: true, folders: [], tags: [], entries: [] };
+  const { ctx, session, storage } = harness({
+    vaultApi: {
+      ...base.vaultApi,
+      fetchMigration: async () => ({ vaults: [two, { ...two, uuid: 'w' }] }),
+      listVaults: async () => [
+        { uuid: 'v', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ' },
+        { uuid: 'w', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ' },
+      ],
+      migrateVault: async (uuid) => { sent.push(uuid); if (uuid === 'v') throw refused; return null; },
+    },
+  });
+  const result = await ctx.vaultMigration.run(session);
+  assert.deepStrictEqual(sent, ['v', 'w']);
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.wrote, true);
+  assert.equal(storage.get('vault.migration.failures'), '1');
 });

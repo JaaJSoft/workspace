@@ -23,3 +23,11 @@ class CensusCommandTests(TestCase):
         out = StringIO()
         call_command("vault_suite_census", stdout=out)
         self.assertIn("format 2", out.getvalue())
+
+    def test_an_unparsable_head_is_reported_as_unreadable(self):
+        user, _, _ = make_account("owner")
+        make_vault(user, encrypted_name="!!!!")
+        out = StringIO()
+        call_command("vault_suite_census", "--json", stdout=out)
+        rows = {(r["axis"], str(r["id"])): r for r in json.loads(out.getvalue())}
+        self.assertEqual(rows[("format", "?")]["state"], "unreadable")

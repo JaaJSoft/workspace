@@ -67,10 +67,13 @@ def retired_ids_check(app_configs, databases=None, **kwargs):
         except DatabaseError:
             continue
         for (axis, identifier), count in sorted(counts.items(), key=str):
+            if identifier == census_service.UNREADABLE_ID:
+                continue
             if suites.state(axis, identifier) is None:
+                shown = repr(identifier) if isinstance(identifier, str) else identifier
                 errors.append(
                     Error(
-                        f"{count} stored row(s) carry {axis} {identifier}, which the "
+                        f"{count} stored row(s) carry {axis} {shown}, which the "
                         "crypto suite manifest no longer declares.",
                         hint="Run `manage.py vault_suite_census` and restore the id "
                         "until it counts zero.",

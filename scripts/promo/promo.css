@@ -1,0 +1,116 @@
+/* Shared by the promo's index and every scene. Flat on purpose: full-bleed
+   module colours, heavy type, no shadows, no 3D. Archivo Black for the words
+   that slam, JetBrains Mono for labels - both shipped with the project.
+   Scenes are authored for 16:9 and switch layout on orientation. */
+
+@font-face {
+  font-family: "Archivo Black";
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/archivo-black-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 400;
+  font-display: block;
+  src: url("fonts/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-weight: 600;
+  font-display: block;
+  src: url("fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2");
+}
+
+:root {
+  --bg: #0e0a16;
+  --fg: #ffffff;
+  --accent: #ff4fa3;
+  --display: "Archivo Black", sans-serif;
+  --mono: "JetBrains Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+[data-composition-src] { position: absolute; inset: 0; }
+.layer { position: absolute; inset: 0; pointer-events: none; }
+.scene { position: absolute; inset: 0; overflow: hidden; }
+
+/* -- overlays (index) ------------------------------------------------------ */
+
+.grain {
+  opacity: .07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+#cover .block { position: absolute; inset: 0; }
+#cover .block.b { background: #fff; }
+#flash { background: #fff; opacity: 0; }
+#fade { background: #000; }
+
+/* -- type ------------------------------------------------------------------ */
+
+.slam { font-family: var(--display); font-size: 150px; line-height: 1.08; letter-spacing: -.035em; color: var(--fg); }
+.slam em { font-style: normal; color: var(--accent); }
+.on-colour em { color: color-mix(in srgb, var(--mc) 22%, #fff); }
+
+.label { font: 600 34px var(--mono); letter-spacing: .06em; color: #fff; }
+
+/* -- flat tiles ------------------------------------------------------------ */
+
+.app-icon {
+  position: absolute;
+  width: 170px;
+  height: 170px;
+  margin: -85px 0 0 -85px;
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  background: var(--tile);
+}
+.app-icon svg { width: 88px; height: 88px; color: #fff; stroke-width: 1.8; }
+
+.logo { display: grid; place-items: center; border-radius: 28%; color: #6d28d9; background: #fff; }
+.logo svg { width: 52%; height: 52%; }
+
+/* -- a module: title card, then its take full screen ------------------------ */
+
+.feature .field { background: var(--mc); }
+.feature .card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 36px; text-align: center; }
+.feature .card-icon { width: 190px; height: 190px; color: #fff; }
+.feature .card-icon svg { width: 100%; height: 100%; stroke-width: 1.6; }
+.feature .card-title .ln { font-size: 170px; line-height: 1.05; }
+.feature .shot { background: var(--mc); }
+.feature .clip-frame { position: absolute; left: 240px; top: 90px; width: 1440px; height: 900px; border-radius: 22px; overflow: hidden; background: #fff; }
+.feature .clip-frame video { position: absolute; inset: 0; width: 100%; height: 100%; }
+.feature .tag { position: absolute; left: 240px; top: 22px; display: flex; align-items: center; gap: 16px; }
+.feature .tag svg { width: 40px; height: 40px; color: #fff; }
+.feature .tag-text { font: 600 34px var(--mono); letter-spacing: .04em; color: #fff; }
+
+/* -- portrait ---------------------------------------------------------------- */
+
+@media (orientation: portrait) {
+  .slam { font-size: 110px; }
+  .label { font-size: 30px; }
+  .app-icon { width: 150px; height: 150px; margin: -75px 0 0 -75px; }
+  .app-icon svg { width: 78px; height: 78px; }
+  .feature .card-icon { width: 170px; height: 170px; }
+  .feature .card-title .ln { font-size: 104px; }
+  .feature .clip-frame { left: 0; top: 700px; width: 1080px; height: 675px; border-radius: 0; }
+  .feature .tag { left: 70px; top: 360px; right: 70px; align-items: flex-start; }
+  .feature .tag-text { font: 400 84px/1.1 var(--display); letter-spacing: -.03em; }
+  .feature .tag svg { width: 80px; height: 80px; }
+}

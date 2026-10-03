@@ -1,8 +1,6 @@
 """Bidirectional file sync between disk storage and database."""
 
 import logging
-import os
-from contextlib import suppress
 from dataclasses import dataclass, field, fields
 
 from django.core.files.storage import default_storage
@@ -162,9 +160,9 @@ class _NodeIndex:
 
 
 def _node_type_of(entry):
-    if entry.is_dir(follow_symlinks=False):
+    if entry.is_dir:
         return File.NodeType.FOLDER
-    if entry.is_file(follow_symlinks=False):
+    if entry.is_file:
         return File.NodeType.FILE
     return None
 
@@ -198,18 +196,15 @@ class FileSyncService:
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
         result = SyncResult()
-        user_dir = os.path.join(
-            default_storage.location, "files", "users", user.username
-        )
+        storage_prefix = f"files/users/{user.username}"
 
-        if not os.path.isdir(user_dir):
+        if not default_storage.is_dir(storage_prefix):
             return result
 
         self._sync_directory_recursive(
             user=user,
-            disk_path=user_dir,
             parent_db=None,
-            storage_prefix=f"files/users/{user.username}",
+            storage_prefix=storage_prefix,
             result=result,
             index=_NodeIndex.for_subtree(user),
         )
@@ -219,29 +214,15 @@ class FileSyncService:
         """Sync immediate children of a specific folder (or root if None)."""
         result = SyncResult()
 
-        if parent_db is None:
-            disk_path = os.path.join(
-                default_storage.location, "files", "users", user.username
-            )
-            storage_prefix = f"files/users/{user.username}"
-        else:
-            disk_path = os.path.join(
-                default_storage.location,
-                "files",
-                "users",
-                user.username,
-                *parent_db.path.split("/") if parent_db.path else [parent_db.name],
-            )
-            storage_prefix = (
-                f"files/users/{user.username}/{parent_db.path or parent_db.name}"
-            )
+        storage_prefix = f"files/users/{user.username}"
+        if parent_db is not None:
+            storage_prefix = f"{storage_prefix}/{parent_db.path or parent_db.name}"
 
-        if not os.path.isdir(disk_path):
+        if not default_storage.is_dir(storage_prefix):
             return result
 
         self._sync_one_level(
             user,
-            disk_path,
             parent_db,
             storage_prefix,
             result,
@@ -249,29 +230,27 @@ class FileSyncService:
         )
         return result
 
-    def _scan(self, disk_path, result):
+    def _scan(self, storage_prefix, result):
         """Read a directory, recording (not raising) an unreadable path."""
         try:
-            return list(os.scandir(disk_path))
+            return default_storage.scan(storage_prefix)
         except OSError as e:
-            result.errors.append(f"Cannot read {disk_path}: {e}")
+            result.errors.append(f"Cannot read {storage_prefix}: {e}")
             return None
 
-    def _sync_directory_recursive(
-        self, user, disk_path, parent_db, storage_prefix, result, index
-    ):
+    def _sync_directory_recursive(self, user, parent_db, storage_prefix, result, index):
         """Sync one directory level, then recurse into subdirectories."""
-        entries = self._scan(disk_path, result)
+        entries = self._scan(storage_prefix, result)
         if entries is None:
             return
 
         renamed = self._sync_one_level(
-            user, disk_path, parent_db, storage_prefix, result, index, entries=entries
+            user, parent_db, storage_prefix, result, index, entries=entries
         )
 
         live_here = index.live_at(parent_db)
         for entry in entries:
-            if not entry.is_dir(follow_symlinks=False):
+            if not entry.is_dir:
                 continue
 
             name = renamed.get(entry.name, entry.name)
@@ -282,7 +261,6 @@ class FileSyncService:
             if folder_db:
                 self._sync_directory_recursive(
                     user=user,
-                    disk_path=os.path.join(disk_path, name),
                     parent_db=folder_db,
                     storage_prefix=f"{storage_prefix}/{name}",
                     result=result,
@@ -290,7 +268,7 @@ class FileSyncService:
                 )
 
     def _sync_one_level(
-        self, user, disk_path, parent_db, storage_prefix, result, index, entries=None
+        self, user, parent_db, storage_prefix, result, index, entries=None
     ):
         """Bidirectional sync of immediate children at one directory level.
 
@@ -300,11 +278,11 @@ class FileSyncService:
 
         # --- Read disk entries ---
         if entries is None:
-            entries = self._scan(disk_path, result)
+            entries = self._scan(storage_prefix, result)
             if entries is None:
                 return {}
 
-        disk_names = {}  # name -> DirEntry
+        disk_names = {}  # name -> Entry
         for entry in entries:
             disk_names[entry.name] = entry
 
@@ -320,8 +298,9 @@ class FileSyncService:
         for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
-                is_dir = disk_entry.is_dir(follow_symlinks=False)
-                expected_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
+                expected_type = (
+                    File.NodeType.FOLDER if disk_entry.is_dir else File.NodeType.FILE
+                )
                 if expected_type == node_type:
                     continue  # matches, nothing to do
             else:
@@ -390,8 +369,8 @@ class FileSyncService:
         # keeps its name on every run.
         renamed = {}
         for entry_name, entry in sorted(disk_names.items()):
-            is_dir = entry.is_dir(follow_symlinks=False)
-            is_file = entry.is_file(follow_symlinks=False)
+            is_dir = entry.is_dir
+            is_file = entry.is_file
 
             if not is_dir and not is_file:
                 continue  # skip symlinks, special files
@@ -442,7 +421,7 @@ class FileSyncService:
                         user, shortcut, keep_free, index, result
                     )
                 if name != entry_name:
-                    self._rename_on_disk(disk_path, entry_name, name, is_dir=is_dir)
+                    self._rename_on_disk(storage_prefix, entry_name, name)
                     renamed[entry_name] = name
                     result.disk_entries_renamed += 1
                     self.log.info(
@@ -459,7 +438,7 @@ class FileSyncService:
                     self.log.info("Created folder: %s", scrub(name))
                 else:
                     try:
-                        size = os.lstat(os.path.join(disk_path, name)).st_size
+                        size = default_storage.size(f"{storage_prefix}/{name}")
                     except OSError:
                         size = None
 
@@ -515,34 +494,13 @@ class FileSyncService:
         )
 
     @staticmethod
-    def _rename_on_disk(disk_path, old_name, new_name, *, is_dir):
+    def _rename_on_disk(storage_prefix, old_name, new_name):
         """Rename a disk entry, never replacing what holds *new_name*.
 
         Raises ``FileExistsError`` when something does, even something that
-        appeared after the walk scanned the folder. A file system without hard
-        links leaves a file where it is, with an ``OSError``.
+        appeared after the walk scanned the folder, where the backend can
+        claim the name in the same step (``move_exclusive``).
         """
-        source = os.path.join(disk_path, old_name)
-        destination = os.path.join(disk_path, new_name)
-        if os.name == "nt":
-            os.rename(source, destination)  # refuses any existing destination
-            return
-        # rename(2) replaces its destination, however recently it was checked
-        # for; each branch claims the name with a call that refuses a taken one.
-        if is_dir:
-            # Renaming onto the empty directory just made replaces nothing
-            # else, and fails if anything was put inside it meanwhile.
-            os.mkdir(destination)
-            try:
-                os.rename(source, destination)
-            except OSError:
-                with suppress(OSError):
-                    os.rmdir(destination)
-                raise
-            return
-        os.link(source, destination)
-        try:
-            os.unlink(source)
-        except OSError:
-            os.unlink(destination)
-            raise
+        default_storage.move_exclusive(
+            f"{storage_prefix}/{old_name}", f"{storage_prefix}/{new_name}"
+        )

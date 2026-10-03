@@ -11,6 +11,7 @@ Names are storage names, ``/``-separated whatever the platform.
 """
 
 import abc
+import errno
 import shutil
 import tempfile
 from contextlib import contextmanager
@@ -177,6 +178,20 @@ class Backend(abc.ABC):
         *overwrite* replaces a blob already at *destination*. Without it, a
         destination that exists is left to the backend to refuse or replace.
         """
+
+    def move_exclusive(self, source, destination):
+        """Move a blob or a whole directory to a name nothing holds.
+
+        Raises ``FileExistsError`` when something holds *destination*. A
+        backend that can claim the name in the same step as the move refuses
+        even what appeared after the caller looked; this default checks first,
+        so a write landing in between is replaced.
+        """
+        if self.exists(destination):
+            raise FileExistsError(
+                errno.EEXIST, "Destination already exists", destination
+            )
+        self.move(source, destination)
 
     @abc.abstractmethod
     def staged_writer(self, name):

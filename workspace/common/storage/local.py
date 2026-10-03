@@ -13,7 +13,7 @@ import logging
 import os
 import shutil
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from django.core.files.storage import FileSystemStorage
 
@@ -111,6 +111,43 @@ class LocalBackend(Backend):
         else:
             os.rename(source_path, destination_path)
 
+    def move_exclusive(self, source, destination):
+        source_path = self._path(source)
+        destination_path = self._path(destination)
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        if os.name == "nt":
+            os.rename(source_path, destination_path)  # refuses any existing one
+            return
+        # rename(2) replaces its destination, however recently it was checked
+        # for; each branch claims the name with a call that refuses a taken one.
+        try:
+            if os.path.isdir(source_path) and not os.path.islink(source_path):
+                # Renaming onto the empty directory just made replaces nothing
+                # else, and fails if anything was put inside it meanwhile.
+                os.mkdir(destination_path)
+                try:
+                    os.rename(source_path, destination_path)
+                except OSError:
+                    with suppress(OSError):
+                        os.rmdir(destination_path)
+                    raise
+                return
+            # A file system without hard links leaves the file where it is,
+            # with an OSError: no other call moves a file without replacing.
+            os.link(source_path, destination_path)
+        except FileExistsError:
+            # A disk that folds names holds both spellings as one entry: the
+            # move only respells it.
+            if not _same_entry(source_path, destination_path):
+                raise
+            os.rename(source_path, destination_path)
+            return
+        try:
+            os.unlink(source_path)
+        except OSError:
+            os.unlink(destination_path)
+            raise
+
     def staged_writer(self, name):
         return _StagedFile(self._path(name))
 
@@ -121,6 +158,13 @@ class LocalBackend(Backend):
         if not os.path.isfile(path):
             raise FileNotFoundError(path)
         yield path
+
+
+def _same_entry(path, other):
+    try:
+        return os.path.samefile(path, other)
+    except OSError:
+        return False
 
 
 class _StagedFile(StagedWriter):

@@ -533,3 +533,27 @@ function _parseEmails(str) {
   if (!str || typeof str !== 'string') return [];
   return str.split(/[,;]\s*/).map(s => s.trim()).filter(Boolean);
 }
+
+/**
+ * Flatten recipient suggestions into dropdown rows: one row per address, a
+ * person's addresses grouped under its name, addresses in `existing` (a Set of
+ * lowercased emails already added) dropped. `sectionStart` marks the first row
+ * of each kind, where the dropdown draws its heading.
+ */
+function _recipientRows(suggestions, existing) {
+  const rows = [];
+  for (const s of suggestions) {
+    if (s.kind === 'person') {
+      const emails = s.emails.filter(e => !existing.has(e.value.toLowerCase()));
+      emails.forEach((e, i) => rows.push({
+        kind: 'person', key: `person-${s.uuid}-${e.value}`,
+        uuid: s.uuid, name: s.name, email: e.value, type: e.type,
+        user_id: s.user_id, avatar_url: s.avatar_url, first: i === 0,
+      }));
+    } else if (!existing.has(s.email.toLowerCase())) {
+      rows.push({ ...s, key: `${s.kind}-${s.email}`, first: true, person_uuid: null, promoting: false });
+    }
+  }
+  rows.forEach((row, i) => { row.sectionStart = i === 0 || rows[i - 1].kind !== row.kind; });
+  return rows;
+}

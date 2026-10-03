@@ -270,18 +270,18 @@ class FrequencySortTests(AutocompleteTestMixin, APITestCase):
         for i in range(3):
             self._create_message(
                 imap_uid=10 + i,
-                to_addresses=[{"name": "Bob", "email": "bob@test.com"}],
+                to_addresses=[{"name": "Bob", "email": "bob@freq.com"}],
             )
         self._create_message(
             imap_uid=20,
-            to_addresses=[{"name": "Alice", "email": "alice@test.com"}],
+            to_addresses=[{"name": "Alice", "email": "alice@freq.com"}],
         )
-        resp = self.client.get(URL, {"q": "test.com"})
+        resp = self.client.get(URL, {"q": "freq.com"})
         data = resp.json()
         self.assertEqual(len(data), 2)
-        self.assertEqual(data[0]["email"], "bob@test.com")
+        self.assertEqual(data[0]["email"], "bob@freq.com")
         self.assertEqual(data[0]["count"], 3)
-        self.assertEqual(data[1]["email"], "alice@test.com")
+        self.assertEqual(data[1]["email"], "alice@freq.com")
         self.assertEqual(data[1]["count"], 1)
 
     def test_max_15_results(self):
@@ -419,3 +419,139 @@ class ResponseFormatTests(AutocompleteTestMixin, APITestCase):
         self.assertEqual(contact["name"], "Test User")
         self.assertEqual(contact["email"], "test@format.com")
         self.assertIsInstance(contact["count"], int)
+
+
+class AddressBookTests(AutocompleteTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.user)
+
+    def _person(self, name, *emails, **scope):
+        from workspace.people.services.persons import create_person
+
+        scope = scope or {"owner": self.user}
+        return create_person(
+            display_name=name,
+            emails=[{"value": value, "type": kind} for value, kind in emails],
+            **scope,
+        )
+
+    def test_persons_come_before_history(self):
+        self._create_message(from_name="Alice History", from_email="alice@old.com")
+        person = self._person("Alice Martin", ("alice@new.com", "work"))
+        data = self.client.get(URL, {"q": "alice"}).json()
+        self.assertEqual([d["kind"] for d in data], ["person", "history"])
+        self.assertEqual(data[0]["uuid"], str(person.uuid))
+        self.assertEqual(data[0]["name"], "Alice Martin")
+        self.assertEqual(data[1]["email"], "alice@old.com")
+
+    def test_person_offers_every_email_matching_one_first(self):
+        self._person(
+            "Alice Martin", ("alice@work.com", "work"), ("ally@home.org", "home")
+        )
+        data = self.client.get(URL, {"q": "home.org"}).json()
+        self.assertEqual(
+            data[0]["emails"],
+            [
+                {"value": "ally@home.org", "type": "home"},
+                {"value": "alice@work.com", "type": "work"},
+            ],
+        )
+
+    def test_person_without_email_is_skipped(self):
+        self._person("Alice Phoneonly")
+        self.assertEqual(self.client.get(URL, {"q": "phoneonly"}).json(), [])
+
+    def test_group_persons_are_included(self):
+        from django.contrib.auth.models import Group
+
+        team = Group.objects.create(name="team")
+        self.user.groups.add(team)
+        self._person("Team Alice", ("alice@team.com", "work"), group=team)
+        data = self.client.get(URL, {"q": "alice"}).json()
+        self.assertEqual(data[0]["kind"], "person")
+
+    def test_someone_elses_persons_are_hidden(self):
+        self._person(
+            "Secret Alice", ("alice@secret.com", "work"), owner=self.other_user
+        )
+        self.assertEqual(self.client.get(URL, {"q": "secret"}).json(), [])
+
+    def test_history_row_of_a_person_address_is_dropped(self):
+        self._create_message(from_name="Alice", from_email="Alice@New.com")
+        self._person("Alice Martin", ("alice@new.com", "work"))
+        data = self.client.get(URL, {"q": "alice"}).json()
+        self.assertEqual([d["kind"] for d in data], ["person"])
+
+    def test_history_survives_account_filter(self):
+        """The account filter narrows history only, never the address book."""
+        self._person("Alice Martin", ("alice@new.com", "work"))
+        data = self.client.get(
+            URL, {"q": "alice", "account_id": str(self.account2.uuid)}
+        ).json()
+        self.assertEqual([d["kind"] for d in data], ["person"])
+
+
+class DirectoryTests(AutocompleteTestMixin, APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.user)
+        self.carol = User.objects.create_user(
+            username="carol",
+            password="x",
+            email="carol@corp.com",
+            first_name="Carol",
+            last_name="Danvers",
+        )
+
+    def test_account_matched_on_name(self):
+        data = self.client.get(URL, {"q": "danvers"}).json()
+        self.assertEqual(
+            data,
+            [
+                {
+                    "kind": "account",
+                    "user_id": self.carol.pk,
+                    "username": "carol",
+                    "name": "Carol Danvers",
+                    "email": "carol@corp.com",
+                }
+            ],
+        )
+
+    def test_account_matched_on_email(self):
+        data = self.client.get(URL, {"q": "corp.com"}).json()
+        self.assertEqual([d["user_id"] for d in data], [self.carol.pk])
+
+    def test_requesting_user_and_users_without_email_are_left_out(self):
+        User.objects.create_user(username="acnomail", password="x")
+        self.assertEqual(self.client.get(URL, {"q": "ac"}).json(), [])
+
+    def test_accounts_sit_between_persons_and_history(self):
+        from workspace.people.services.persons import create_person
+
+        create_person(
+            owner=self.user,
+            display_name="Carla",
+            emails=[{"value": "carla@friends.org", "type": "home"}],
+        )
+        self._create_message(from_name="Carlos", from_email="carlos@vendor.com")
+        data = self.client.get(URL, {"q": "car"}).json()
+        self.assertEqual([d["kind"] for d in data], ["person", "account", "history"])
+
+    def test_account_linked_to_a_listed_person_is_dropped(self):
+        from workspace.people.services.persons import create_person
+
+        create_person(
+            owner=self.user,
+            display_name="Captain Carol",
+            emails=[{"value": "captain@marvel.com", "type": "work"}],
+            linked_user=self.carol,
+        )
+        data = self.client.get(URL, {"q": "carol"}).json()
+        self.assertEqual([d["kind"] for d in data], ["person"])
+
+    def test_history_row_of_an_account_address_is_dropped(self):
+        self._create_message(from_name="Carol", from_email="carol@corp.com")
+        data = self.client.get(URL, {"q": "carol"}).json()
+        self.assertEqual([d["kind"] for d in data], ["account"])

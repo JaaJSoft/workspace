@@ -36,3 +36,18 @@ def can_edit(user, obj):
     if obj.owner_id is not None:
         return obj.owner_id == user.id
     return obj.group_id in user_group_ids(user)
+
+
+def person_with_email(persons, email):
+    """The first person of ``persons`` carrying ``email``, case-insensitively.
+
+    ``search_text`` holds every email lowercased: a cheap prefilter that also
+    matches substrings, so the row's own list decides.
+    """
+    needle = email.strip().lower()
+    if not needle:
+        return None
+    for person in persons.filter(search_text__contains=needle):
+        if any(e.get("value", "").lower() == needle for e in person.emails or []):
+            return person
+    return None

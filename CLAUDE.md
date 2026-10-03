@@ -39,7 +39,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `ai` | LLM tools, AI assistants, prompt routing |
 | `calendar` | Events, recurrence, external calendar sync |
 | `chat` | Conversations, messages, typing indicators, link previews |
-| `common` | Toolbox: Python helpers, DRF plumbing, full-text search and vector index abstractions, UI kit. Names no other app - see *core vs common* below |
+| `common` | Toolbox: Python helpers, DRF plumbing, blob storage, full-text search and vector index abstractions, UI kit. Names no other app - see *core vs common* below |
 | `core` | The app itself: plugin registries (modules, search, activity, SSE), unified search and activity endpoints, health and `/metrics`, changelog, onboarding, admin dashboard, DB maintenance, project-level tests |
 | `dashboard` | User home page widgets |
 | `files` | File/folder model, permissions, WebDAV, thumbnails, sharing |
@@ -678,6 +678,15 @@ with source.content.open('rb') as f:
 - Wrap the open + save in `try/except (FileNotFoundError, OSError)` whenever copying user-uploaded content. A vanished blob otherwise surfaces as a bare 500 with no breadcrumbs. Mirror the response code of the closest read endpoint (404 for chat / mail attachment paths) and log the path through `scrub()` before re-raising or returning.
 - `ContentFile(source.read(), ...)` happens to be _committed=False so it copies correctly, but it buffers the entire file in memory before re-emitting it. For anything that could grow (>1MB), prefer the `DjangoFile(open_stream, ...)` idiom.
 - Existing precedent in the codebase: `workspace/files/webdav/resources.py:_copy_as` (already correct), `workspace/chat/views/attachments.py:AttachmentSaveToFilesView`, `workspace/mail/views/attachments.py:MailAttachmentSaveToFilesView`, `workspace/files/services/_storage_ops.py:copy_node`.
+
+### Stored blobs - go through `BlobStorage`, never a filesystem path
+
+Every FileField and `default_storage` resolve to `BlobStorage` (`workspace/common/storage/facade.py`): Django's Storage API plus the verbs it lacks - `is_dir` / `is_file`, `scan` (one directory level), `make_dir`, `remove_dir_if_empty`, `delete_prefix`, `move`, `staged_writer` (bytes that only replace the blob on `commit()`), `replace` (a save that swaps the blob in one step) and `local_path` (a path an external tool can read, a bounded temporary copy where the backend has none). A backend implements them (`backend.py`); `LocalBackend` composes Django's `FileSystemStorage` and passes straight through to it.
+
+A blob is not guaranteed a filesystem path - an object store has none - so outside `workspace/common/storage/` never call `storage.path()` or `<field_file>.path`, read `MEDIA_ROOT` or `storage.location`, or build a `FileSystemStorage`. `core/tests/test_storage_paths.py` fails on each of them. When the code needs something no verb offers, add the verb to `Backend`, implement it in every backend, and give it a case in `BlobStorageContract` (`common/tests/test_storage.py`) so every backend answers it the same way.
+
+- Storage names are `/`-separated whatever the platform: build them with `posixpath`, never `os.path`.
+- Two aliases share the backend and differ in what a save under a taken name does. `"files"` holds `File.content` and overwrites, because a node's blob lives at its tree path. `"default"` keeps both blobs, because mail attachments are keyed by their file name. A FileField whose names can collide never goes on `"files"`.
 
 ### Prefer the standard library over hand-rolled collection plumbing
 

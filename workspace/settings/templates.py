@@ -1,11 +1,16 @@
 """Template engine configuration."""
 
-from .base import BASE_DIR, DEBUG
+from .base import BASE_DIR
 
+# No explicit "loaders": Django then wraps the filesystem and app_directories
+# loaders in the cached loader in every mode, and runserver's autoreloader
+# clears that cache when a template changes. Under `runserver --noreload`
+# nothing clears it, so template edits need a server restart.
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
         "DIRS": [BASE_DIR / "templates"],
+        "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.debug",
@@ -17,21 +22,6 @@ TEMPLATES = [
                 "workspace.users.context_processors.user_preferences",
                 # Expose `request_processing_ms` au template
                 # 'workspace.ui.context_processors.request_timing',
-            ],
-            # Cache compiled templates for better performance (disabled in DEBUG mode)
-            "loaders": [
-                (
-                    "django.template.loaders.cached.Loader",
-                    [
-                        "django.template.loaders.filesystem.Loader",
-                        "django.template.loaders.app_directories.Loader",
-                    ],
-                ),
-            ]
-            if not DEBUG
-            else [
-                "django.template.loaders.filesystem.Loader",
-                "django.template.loaders.app_directories.Loader",
             ],
         },
     },

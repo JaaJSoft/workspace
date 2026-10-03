@@ -27,6 +27,7 @@ uv run python manage.py runserver "127.0.0.1:$port" --noreload
 
 - `bind(('127.0.0.1', 0))` asks the OS for an unused port. Same idiom as `free_port()` in `scripts/screenshots.py`. The socket is closed before runserver binds, so a parallel task can in principle grab that port in the gap - rare, and it fails loudly at startup with "That port is already in use". Recovery is to re-run the block: you get a different port.
 - `--noreload` keeps runserver single-process, so stopping the background task actually stops the server (the autoreloader child can outlive its parent on Windows, and survives as an orphan under a killed shell on Linux).
+- Compiled templates are cached in every mode, and only the autoreloader clears that cache. Under `--noreload`, **restart the server after editing a template** (`.html`) or Python file, or the page keeps rendering the old version. Static JS/CSS is served straight from disk and needs no restart.
 - Read the `PORT=` line from the background task output; every later URL is `http://127.0.0.1:<port>/...`.
 - Readiness check from a later call: `Invoke-WebRequest http://127.0.0.1:<port>/health/live -UseBasicParsing` (PowerShell) or `curl -sf http://127.0.0.1:<port>/health/live` (bash).
 - Need data and login credentials first? Use the seeding-demo-data skill and chain its migrate/seed commands before the lines above, in the same call.

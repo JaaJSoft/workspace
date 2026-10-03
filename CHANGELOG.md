@@ -1,5 +1,72 @@
 # Changelog
 
+## 0.41.0 - People & Address Book
+
+### Highlights
+
+Your workspace now has an address book. Keep your contacts and your team's in one place, bring them in from your phone or another cloud, and find them right where you need them: when writing an email and when inviting people to an event.
+
+### People
+
+- New People app: an address book for you and one for each of your groups. Every contact can hold several emails, phones and addresses, a picture, a title and an organization, and can be linked to a workspace account. Gather contacts into named lists, search them, and edit any field in place.
+- Import a `.vcf` file exported from your phone, Google Contacts or Nextcloud into your own address book or a group's. Contact groups become lists and pictures come along. Importing the same file again updates your contacts instead of duplicating them.
+- Export a single contact, a list or a whole address book as a `.vcf` file. The export dialog tells you how many contacts and lists it covers before downloading.
+- Hand a contact to someone by showing it as a QR code: they point their phone's camera at the screen and the contact lands in their phone. The code can also be downloaded as an image.
+
+### Mail
+
+- Typing in the To, Cc or Bcc field now suggests your contacts first, then workspace accounts, then the people you have exchanged mail with. A contact with several addresses shows each one on its own line, so picking the second is a single click.
+- Add someone to your contacts straight from the suggestions, or from the card that appears when you hover a sender or recipient. When the address already belongs to a contact, that card shows the contact's details and a link to it.
+- "Sync now" no longer keeps the page waiting while the server talks to your mail provider: the spinner simply stays up until the sync is done. Sending a message is also quicker, since it no longer waits for the Sent folder to refresh.
+- Sending a message with large attachments is lighter on the server. Attachments totalling more than 25 MB are now refused with a clear message before anything is sent.
+
+### Calendar
+
+- Invite people from your address book. The invitee field searches workspace accounts, contacts and contact lists at once. A contact without a workspace account is invited as an external guest on their email address, and picking a list invites every member in one go, telling you which ones could not be invited.
+
+### Files
+
+- The toolbar now stays on a single line whatever the width of the window, the zoom level or whether the properties panel is open. Filters, sort and view options move into their own menus, active filters show as removable chips, and on a phone those menus open as sheets from the bottom of the screen.
+- Uploads get a proper panel. Each file shows its own progress, you can pause the queue, cancel or retry a single file, and settle duplicates without a dialog per file. Adding more files while an upload is running no longer confuses the counter, and files keep going to the folder they were dropped into even if you browse elsewhere.
+- Protecting a share link with a password now offers a generated one, shown in clear so you can pass it on with the link.
+- On a public link that accepts uploads, a file dropped while another file is open now lands in that file's folder instead of failing.
+- Very large text files (over 5 MB) open as raw content in a new tab instead of freezing the browser in the viewer.
+- Emptying a large trash is faster and lighter on the server.
+
+### Search
+
+- A new "Mine only" switch in the search palette hides results coming from groups, shares, subscriptions, invitations and other people's projects. The choice is remembered, and when it finds nothing the palette offers to search everything.
+- Search now finds every file you can open, including those in your group folders and those shared with you, one of your groups or one of your projects. A file shared with you opens in "Shared with me".
+
+### Chat
+
+- Right-click a message for Reply, Add reaction, Copy text, Pin and, on your own messages, Edit and Delete. It works in the conversation, in threads and in voice rooms.
+- Web push on your phone is no longer silenced by a workspace tab left open on another computer. Messages arriving while you are away from that tab stay unread until you come back to it.
+
+### Dashboard
+
+- The activity feed always shows what others did recently, even after you uploaded or moved many files yourself, and it loads much faster for people with large libraries.
+
+### Interface
+
+- Every app now has its own colour, the same in the light and the dark theme, so no two apps look alike.
+
+### Fixes
+
+- "Open" on a folder in the mosaic view of Files works again.
+- The avatar in the navigation bar updates right after you change your profile picture.
+- In chat, the search panel focuses its input on desktop, the group picture cropper shows up again, and attachments opened from a thread can be browsed with previous and next.
+- The project sidebar counters, such as the Backlog badge, update after a task action instead of waiting for a page reload.
+- The upcoming events row on the dashboard lines up with the widgets below it.
+- The chat composer no longer shows a second border inside its own while you type.
+
+### Infrastructure
+
+- The metrics endpoint now reports the whole instance rather than whichever worker answered, so counters no longer seem to go backwards between scrapes.
+- Web and background workers use noticeably less memory. Two new settings, `CELERY_WORKER_MAX_MEMORY_PER_CHILD` and `CELERY_WORKER_CONCURRENCY`, cap how much the background workers can grow, and the attachment limit for outgoing mail can be changed with `MAIL_MAX_ATTACHMENTS_SIZE`.
+- WebDAV refuses a listing of a whole tree in a single request, as most servers do. Mounted drives on Windows, macOS and Linux are not affected.
+- Interactive work such as bot replies and notifications now goes ahead of periodic syncs and housekeeping when the server is busy.
+
 ## 0.40.0 - Timeline, Tags & Drag and Drop
 
 ### Highlights

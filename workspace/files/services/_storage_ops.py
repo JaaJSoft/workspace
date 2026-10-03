@@ -11,6 +11,7 @@ import posixpath
 
 from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
@@ -207,6 +208,18 @@ def _copy_blob(source, destination):
     return saved
 
 
+def _relocate(source, destination):
+    """Move *source* to *destination* now; drop the source once committed.
+
+    A backend that moves by copying keeps the source until the rows that
+    point at the destination are durable, so a rollback leaves duplicates
+    behind, never a row pointing at a blob that is gone. A move that cannot
+    complete raises, which takes the caller's row changes down with it.
+    """
+    relocation = default_storage.relocate(source, destination)
+    transaction.on_commit(relocation.commit)
+
+
 def _relocate_on_storage(source, destination, *, expect_dir):
     """Move a blob or a directory on storage.
 
@@ -230,7 +243,7 @@ def _relocate_on_storage(source, destination, *, expect_dir):
             "directory" if expect_dir else "file",
         )
         return False
-    default_storage.move(source, destination)
+    _relocate(source, destination)
     return True
 
 

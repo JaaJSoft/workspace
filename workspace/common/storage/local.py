@@ -19,7 +19,7 @@ from django.core.files.storage import FileSystemStorage
 
 from workspace.common.logging import scrub
 
-from .backend import Backend, Entry, StagedWriter, checked_name
+from .backend import Backend, Entry, Moved, StagedWriter, checked_name
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,11 @@ class LocalBackend(Backend):
             os.replace(source_path, destination_path)
         else:
             os.rename(source_path, destination_path)
+
+    def relocate(self, source, destination):
+        # A rename is final the moment it returns: nothing is left to drop.
+        self.move(source, destination)
+        return Moved()
 
     def staged_writer(self, name):
         return _StagedFile(self._path(name))

@@ -5,7 +5,13 @@ import re
 from django.conf import settings
 from django.test import SimpleTestCase
 
-from workspace.vault.tests.reference import ad, primitives, wire
+from workspace.vault.tests.reference import (
+    ad,
+    generate_vectors,
+    primitives,
+    suites,
+    wire,
+)
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 from workspace.vault.tests.reference.generate_fuzz_corpus import (
     CORPUS_PATH,
@@ -41,11 +47,12 @@ class VectorFileTests(SimpleTestCase):
 class AccountWrapHeaderTests(SimpleTestCase):
     """Every writer of the two account wraps, held against the frozen vector.
 
-    ``account-kex-priv-wrap`` is the format's word on how the two ciphertexts
-    that gate every vault an account owns are labelled. Nothing at runtime
-    reads those bytes - ``open`` takes the iv and the ciphertext and ignores
-    the rest - so a writer that disagrees with the vector breaks nothing today
-    and everything the day an agility step, a second AEAD or an independent
+    ``account-kex-priv-wrap-format-2`` is the format's word on how the two
+    ciphertexts that gate every vault an account owns are labelled. Format 2
+    authenticates whatever label a writer chose, so a wrap labelled unlike the
+    vector still opens - nothing at runtime compares the kdf id and the key
+    version to what the format says they mean, and a writer that disagrees
+    breaks nothing today and everything the day an independent
     re-implementation starts trusting them.
 
     It has to be checked from here rather than from JavaScript: a test on the
@@ -95,10 +102,24 @@ class AccountWrapHeaderTests(SimpleTestCase):
 
     def _bundled_constant(self, name):
         # The published object is a literal, so the key survives minification.
+        # Its value does not always: a constant the bundle also reads
+        # internally is published through its minified binding, resolved here
+        # to the one top-level declaration that assigns it.
         bundle = self.WIRE_BUNDLE.read_text(encoding="utf-8")
-        declared = re.search(rf"{name}:\s*{self.NUMBER}\b", bundle)
-        self.assertIsNotNone(declared, f"{name} is not published by the built bundle")
-        return self._as_int(declared.group(1))
+        published = re.search(rf"\b{name}:\s*({self.NUMBER}|[\w$]+)\b", bundle)
+        self.assertIsNotNone(published, f"{name} is not published by the built bundle")
+        value = published.group(1)
+        if re.fullmatch(self.NUMBER, value):
+            return self._as_int(value)
+        declared = re.findall(
+            rf"(?:\bvar\s+|,){re.escape(value)}={self.NUMBER}\b", bundle
+        )
+        self.assertEqual(
+            len(declared),
+            1,
+            f"{name} is published as {value}, not as one numeric binding",
+        )
+        return self._as_int(declared[0])
 
     def _seeder_wraps(self):
         source = self.SEEDER.read_text(encoding="utf-8")
@@ -112,17 +133,22 @@ class AccountWrapHeaderTests(SimpleTestCase):
         )
         return wraps
 
-    def _vector(self):
+    def _vector(self, case_id):
         # Counted rather than searched: two vectors under one id would have the
         # loop silently take the first, and which one that is depends on the
         # generator's ordering.
-        found = [e for e in VECTORS["aead"] if e["id"] == "account-kex-priv-wrap"]
-        self.assertEqual(len(found), 1, "the account wrap vector is gone or doubled")
+        found = [e for e in VECTORS["aead"] if e["id"] == case_id]
+        self.assertEqual(len(found), 1, f"the {case_id} vector is gone or doubled")
         return found[0]
 
     def test_the_onboarding_seals_the_wraps_as_the_vector_labels_them(self):
         key_version, kdf_name = self._sealed_literal()
-        vector = self._vector()
+        vector = self._vector("account-kex-priv-wrap-format-2")
+        # The browser pins no format either: seal writes the current one, from
+        # the same manifest the reference reads.
+        self.assertEqual(
+            suites.CURRENT_SUITE["format_version"], vector["format_version"]
+        )
         self.assertEqual(key_version, vector["key_version"])
         # Against the bundle, not the source: the byte the browser writes comes
         # from the artifact it loads.
@@ -147,7 +173,11 @@ class AccountWrapHeaderTests(SimpleTestCase):
         constant is resolved there. A seeded envelope is the copy a developer
         is most likely to open when asking what a real one carries.
         """
-        vector = self._vector()
+        vector = self._vector("account-kex-priv-wrap-format-2")
+        # The seeder pins no format: it seals at the reference's current one.
+        self.assertEqual(
+            suites.CURRENT_SUITE["format_version"], vector["format_version"]
+        )
         for kdf_name, key_version in self._seeder_wraps():
             with self.subTest(kdf_name):
                 self.assertEqual(self._as_int(key_version), vector["key_version"])
@@ -173,21 +203,50 @@ class VectorReplayTests(SimpleTestCase):
     def test_aead_vectors_replay_and_open(self):
         for vector in VECTORS["aead"]:
             with self.subTest(vector["id"]):
+                # The older format-1 cases publish their whole AD string; the
+                # others publish the context body their format builds on.
+                associated = (
+                    ad.Context(vector["context_body"])
+                    if "context_body" in vector
+                    else vector["ad"].encode()
+                )
                 raw = primitives.aead_seal(
                     from_base64url(vector["key_b64"]),
                     vector["plaintext"].encode(),
-                    vector["ad"].encode(),
+                    associated,
                     iv=from_base64url(vector["iv_b64"]),
                     key_version=vector["key_version"],
                     kdf_id=vector["kdf_id"],
+                    aead_id=vector["aead_id"],
+                    format_version=vector["format_version"],
                 )
                 self.assertEqual(to_base64url(raw), vector["expected_wire_b64"])
                 self.assertEqual(
                     primitives.aead_open(
-                        from_base64url(vector["key_b64"]), raw, vector["ad"].encode()
+                        from_base64url(vector["key_b64"]), raw, associated
                     ),
                     vector["plaintext"].encode(),
                 )
+                if "context_body" in vector:
+                    self.assertEqual(
+                        ad.associated_data(associated, raw[: wire.HEADER_LENGTH]).hex(),
+                        vector["associated_data"],
+                    )
+
+    def test_the_agility_cases_are_present(self):
+        """The cases the browser replays by name, one per format and one for
+        the test AEAD, so each is proven to open beside the others."""
+        aead_ids = [v["id"] for v in VECTORS["aead"]]
+        for case_id in (
+            "format-1-aes-256-gcm",
+            "format-2-aes-256-gcm",
+            "format-2-test-ctr-hmac",
+            "account-kex-priv-wrap",
+            "account-kex-priv-wrap-format-2",
+        ):
+            with self.subTest(case_id):
+                self.assertEqual(aead_ids.count(case_id), 1)
+        self.assertEqual([v["id"] for v in VECTORS["hpke"]], ["format-1", "format-2"])
 
     def test_hpke_vectors_replay(self):
         from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
@@ -200,13 +259,28 @@ class VectorReplayTests(SimpleTestCase):
                 recipient = X25519PrivateKey.from_private_bytes(
                     from_base64url(vector["recipient_sk_b64"])
                 )
+                # Rebuilt from the stored suite, not replayed: format 2 names
+                # the suite inside the info.
+                info = ad.vault_key_info(
+                    generate_vectors.VAULT_UUID,
+                    generate_vectors.ACCOUNT_UUID,
+                    vector["hpke_suite"],
+                )
+                self.assertEqual(info.decode("ascii"), vector["info"])
                 sealed = primitives.hpke_seal(
                     recipient.public_key(),
-                    vector["info"].encode(),
+                    info,
                     from_base64url(vector["plaintext_b64"]),
                     sender_private=sender,
+                    hpke_suite=vector["hpke_suite"],
                 )
                 self.assertEqual(to_base64url(sealed), vector["expected_sealed_b64"])
+                self.assertEqual(
+                    primitives.hpke_open(
+                        recipient, info, sealed, hpke_suite=vector["hpke_suite"]
+                    ),
+                    from_base64url(vector["plaintext_b64"]),
+                )
 
     def test_cbor_and_signature_vectors_replay(self):
         from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -256,7 +330,11 @@ class VectorReplayTests(SimpleTestCase):
                 stored = primitives.encode_public_key(key, vector["alg"])
                 self.assertEqual(to_base64url(stored), vector["expected_stored_b64"])
                 self.assertEqual(
-                    to_base64url(primitives.decode_public_key(stored)),
+                    to_base64url(
+                        primitives.decode_public_key(
+                            stored, suites.entry("pubkey", vector["alg"])["usage"]
+                        )
+                    ),
                     vector["raw_b64"],
                 )
 

@@ -450,6 +450,9 @@
 
 {% block extra_scripts %}
   <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
+  {% if vault_test_suites %}
+    <script src="{% static 'vault/ui/js/test_suites/test_aead.js' %}"></script>
+  {% endif %}
   <script src="{% static 'vault/ui/js/vendor/vault-onboarding.js' %}"></script>
   <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script src="{% static 'vault/ui/js/api.js' %}"></script>

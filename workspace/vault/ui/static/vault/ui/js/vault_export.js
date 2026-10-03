@@ -289,6 +289,10 @@ window.vaultExportMixin = function vaultExportMixin() {
           this.exportError =
             'Part of this account could not be read, so no file was written. '
             + 'A partial backup is worse than none.';
+        } else if (err && err.reason === 'unsupported') {
+          this.exportError =
+            'Part of this account was saved by a newer version of the app. '
+            + 'Reload the page, then export again.';
         } else if (err && err.reason === 'empty') {
           this.exportError = 'There is nothing to export yet.';
         } else if (err && err.reason === 'locked') {

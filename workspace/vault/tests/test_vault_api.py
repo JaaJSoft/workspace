@@ -25,6 +25,7 @@ from workspace.vault.tests.factories import (
     HPKE_SUITE,
     make_account,
     make_vault,
+    sealed,
     sign,
 )
 from workspace.vault.tests.reference.encoding import to_base64url
@@ -44,7 +45,7 @@ class VaultCreateTests(TestCase):
         fields = {
             "vault_uuid": VAULT_UUID,
             "owner_account_uuid": str(self.identity.uuid),
-            "encrypted_name": "AQEBAAABc2VhbGVk",
+            "encrypted_name": sealed("sealed"),
             "encrypted_description": "",
             "icon": "lock",
             "color": "primary",
@@ -88,7 +89,7 @@ class VaultCreateTests(TestCase):
 
     def test_a_signature_over_another_name_is_refused(self):
         body = self._body()
-        body["encrypted_name"] = "AQEBAAABdGFtcGVyZWQ"
+        body["encrypted_name"] = sealed("tampered")
         response = self.client.post(self.url, body, "application/json")
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Vault.objects.exists())
@@ -220,7 +221,7 @@ class VaultUpdateTests(TestCase):
         fields = {
             "vault_uuid": VAULT_UUID,
             "owner_account_uuid": str(self.identity.uuid),
-            "encrypted_name": "AQEBAAABcmVuYW1lZA",
+            "encrypted_name": sealed("renamed"),
             "encrypted_description": "",
             "icon": "lock",
             "color": "primary",
@@ -242,7 +243,7 @@ class VaultUpdateTests(TestCase):
         response = self.client.patch(self.url, self._body(), "application/json")
         self.assertEqual(response.status_code, 200)
         self.vault.refresh_from_db()
-        self.assertEqual(self.vault.encrypted_name, "AQEBAAABcmVuYW1lZA")
+        self.assertEqual(self.vault.encrypted_name, sealed("renamed"))
 
     def test_the_new_signature_replaces_the_old_one(self):
         body = self._body()
@@ -260,7 +261,7 @@ class VaultUpdateTests(TestCase):
 
     def test_an_unsigned_rename_leaves_the_vault_alone(self):
         body = self._body()
-        body["encrypted_name"] = "AQEBAAABdGFtcGVyZWQ"
+        body["encrypted_name"] = sealed("tampered")
         self.assertEqual(
             self.client.patch(self.url, body, "application/json").status_code, 400
         )

@@ -14,6 +14,9 @@ And it opens preview modules to everyone. Fixture users are regular users, and
 under the production audience (``staff``) a preview module refuses every
 request they make, so its own tests would test nothing but the refusal. The
 tests of the audience itself override the setting back.
+
+The vault's test algorithms (``VAULT_TEST_SUITES``) are enabled suite-wide the
+same way, so the dispatch they exist to prove is exercised by every test.
 """
 
 import os
@@ -73,6 +76,7 @@ class MediaRootTestRunner(DiscoverRunner):
         self._restore_settings = [
             _override_from_env("MEDIA_ROOT", self._media_root),
             _override_from_env("PREVIEW_VISIBILITY", "all"),
+            _override_from_env("VAULT_TEST_SUITES", "1"),
         ]
 
     def teardown_test_environment(self, **kwargs):

@@ -132,6 +132,26 @@ test('one unreadable row does not cost the others their listing', async () => {
   assert.equal(result.rows.length, 1);
 });
 
+test('a row the build cannot read is counted apart from a tampered one', async () => {
+  const { ctx, session } = reader({
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'e-2') {
+          const err = new Error('unsupported signature 9');
+          err.name = 'UnsupportedAlgorithmError';
+          throw err;
+        }
+        if (payload.entry_uuid === 'e-3') throw new Error('signature does not verify');
+      },
+    },
+  });
+  const rows = [ROW, { ...ROW, uuid: 'e-2' }, { ...ROW, uuid: 'e-3' }];
+  const result = await ctx.vaultReader.readEntries(session, VAULT, rows);
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.unsupportedCount, 1);
+  assert.equal(result.tamperedCount, 1);
+});
+
 test('a lock is not tampering', async () => {
   // Reporting an idle timeout as a forged signature would tell the user to
   // distrust a vault that merely closed.
@@ -245,6 +265,39 @@ test('a vault with no key wrap is unopenable and says nothing about itself', asy
   assert.equal(vault.unopenable, true);
   assert.equal(vault.name, '');
   assert.equal(vault.description, '');
+  // Review Focus 4: a missing hpke_suite is not an unknown one - it must
+  // never be read as the algorithm this build cannot support.
+  assert.equal(!!vault.unsupported, false);
+});
+
+test('a vault whose wrap names an unknown suite is unsupported, never tampered', async () => {
+  const { ctx, session } = vaultReaderCtx({
+    session: {
+      openVaultKey: async () => {
+        const err = new Error('unknown suite');
+        err.name = 'UnsupportedAlgorithmError';
+        throw err;
+      },
+    },
+  });
+  const vault = await ctx.vaultReader.readVault(session, VAULT_ROW);
+  assert.equal(vault.unsupported, true);
+  assert.equal(!!vault.tampered, false);
+  assert.equal(vault.name, '');
+  assert.equal(vault.description, '');
+});
+
+test('a vault whose signature algorithm this build cannot verify is unsupported, never tampered', async () => {
+  const { ctx, session } = vaultReaderCtx({
+    verifyVaultMetadata: async () => {
+      const err = new Error('signature suite 9');
+      err.name = 'UnsupportedAlgorithmError';
+      throw err;
+    },
+  });
+  const vault = await ctx.vaultReader.readVault(session, VAULT_ROW);
+  assert.equal(vault.unsupported, true);
+  assert.equal(!!vault.tampered, false);
 });
 
 test('the name and the notes open from their own columns, under their own slots', async () => {

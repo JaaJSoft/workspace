@@ -54,13 +54,39 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     switcherVaults: function () {
       const needle = this.switcherSearch.trim().toLowerCase();
       if (!needle) return this.vaults;
+      const self = this;
+      // The label, not the name: a vault this build cannot read has no name,
+      // and the search must find what the row shows.
       return this.vaults.filter(function (vault) {
-        return (vault.name || '').toLowerCase().includes(needle);
+        return self.vaultRowLabel(vault).toLowerCase().includes(needle);
       });
     },
 
     vaultIsDegraded: function (vault) {
-      return !!(vault && (vault.tampered || vault.unopenable || vault.unreadable));
+      return !!(
+        vault
+        && (vault.tampered || vault.unopenable || vault.unreadable || vault.unsupported)
+      );
+    },
+
+    // Struck through: a vault nothing on this account can repair. One written
+    // by a newer build is fine and opens after a reload, so it is not.
+    vaultIsStruckThrough: function (vault) {
+      return this.vaultIsDegraded(vault) && !vault.unsupported;
+    },
+
+    // Short enough for the switcher's width; the full instruction is the
+    // row's tooltip.
+    vaultRowLabel: function (vault) {
+      if (vault.unsupported) return 'Newer version';
+      if (this.vaultIsDegraded(vault)) return 'Unreadable vault';
+      return vault.name || 'Unnamed';
+    },
+
+    vaultRowTitle: function (vault) {
+      return vault.unsupported
+        ? 'Saved by a newer version of the app. Reload the page to read it.'
+        : null;
     },
 
     switchVault: async function (vault) {

@@ -39,8 +39,9 @@ window.buildVaultCreateRequest = async function buildVaultCreateRequest(
   const wrapped = V.toBase64Url(
     await V.hpkeSeal(
       session.accountKexPublicRaw(),
-      V.AD.vaultKeyInfo(vaultUuid, session.accountUuid()),
-      vaultKey
+      V.AD.vaultKeyInfo(vaultUuid, session.accountUuid(), V.CURRENT_SUITE.hpke),
+      vaultKey,
+      V.CURRENT_SUITE.hpke
     )
   );
   vaultKey.fill(0);
@@ -67,6 +68,6 @@ window.buildVaultCreateRequest = async function buildVaultCreateRequest(
     color: color,
     metadata_sig: await session.sign(payload),
     wrapped_key: wrapped,
-    hpke_suite: V.HPKE_SUITE_V1,
+    hpke_suite: V.CURRENT_SUITE.hpke,
   };
 };

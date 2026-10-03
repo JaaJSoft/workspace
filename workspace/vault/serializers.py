@@ -3,7 +3,9 @@
 Every opaque field is validated on shape alone. The server cannot tell a
 wrapped private key from any other base64url text, and it must not pretend
 otherwise: what it can enforce is presence, non-emptiness, and that the KDF
-parameters are the kind of thing Argon2id can be run with.
+algorithm and parameters are ones the suite manifest declares. It also refuses
+a ciphertext whose header names a format or AEAD it does not know, or a nonce
+length that AEAD does not declare.
 """
 
 import re
@@ -19,32 +21,34 @@ from .models import (
     VaultFolder,
     VaultTag,
 )
+from .services import suites
 from .services.attestation import AttestationError, decode_base64url
 from .services.fields import qualify_field_id
 
-_KDF_PARAM_KEYS = ("m", "t", "p")
 
+class _AccountKdfMixin:
+    """The algorithm and its parameters are checked together: the bounds a
+    parameter must fall in belong to the algorithm the manifest declares.
 
-def validate_kdf_params(value):
-    """Positive integers for m, t and p - no floor, no ceiling.
-
-    A floor would freeze today's cost parameters into the server, and they
-    have to be able to rise without a data migration. A client that lowers
-    them harms only its own account, and the browser owns that policy.
+    The bounds are the manifest's, not today's values, so the cost can rise
+    without a data migration - and a cost no browser can allocate is refused
+    before it becomes an account that never unlocks again.
     """
-    if not isinstance(value, dict):
-        raise serializers.ValidationError("kdf_params must be an object")
-    missing = [key for key in _KDF_PARAM_KEYS if key not in value]
-    if missing:
-        raise serializers.ValidationError(f"kdf_params is missing {', '.join(missing)}")
-    for key in _KDF_PARAM_KEYS:
-        param = value[key]
-        # bool is an int in Python, so True would otherwise pass as t=1.
-        if isinstance(param, bool) or not isinstance(param, int) or param < 1:
+
+    def validate(self, attrs):
+        try:
+            suites.check_kdf_algo(attrs["kdf_algo"])
+        except ValueError as exc:
             raise serializers.ValidationError(
-                f"kdf_params.{key} must be a positive integer"
-            )
-    return value
+                {"kdf_algo": ["unsupported kdf_algo"]}
+            ) from exc
+        try:
+            suites.check_account_kdf(attrs["kdf_algo"], attrs["kdf_params"])
+        except ValueError as exc:
+            raise serializers.ValidationError(
+                {"kdf_params": ["unsupported kdf_params"]}
+            ) from exc
+        return attrs
 
 
 def validate_base64url(value):
@@ -65,6 +69,18 @@ def validate_base64url(value):
     return value
 
 
+def validate_ciphertext(value):
+    """base64url, then a wire header this server knows how to store."""
+    if not value:
+        return value
+    validate_base64url(value)
+    try:
+        suites.check_ciphertext(decode_base64url(value))
+    except suites.UnsupportedCiphertext as exc:
+        raise serializers.ValidationError("unsupported ciphertext header") from exc
+    return value
+
+
 _OPAQUE_MAX_LENGTH = 4096
 
 
@@ -76,6 +92,15 @@ class _OpaqueField(serializers.CharField):
         kwargs.setdefault("trim_whitespace", False)
         kwargs.setdefault("max_length", _OPAQUE_MAX_LENGTH)
         kwargs.setdefault("validators", [validate_base64url])
+        super().__init__(**kwargs)
+
+
+class _CiphertextField(_OpaqueField):
+    """A value sealed in the wire format: the server cannot open it, but it can
+    refuse a header no client will ever read."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("validators", [validate_ciphertext])
         super().__init__(**kwargs)
 
 
@@ -110,34 +135,32 @@ class AccountInitResponseSerializer(serializers.Serializer):
     kdf_salt = serializers.CharField()
 
 
-class AccountFinalizeSerializer(serializers.Serializer):
-    kdf_algo = serializers.ChoiceField(choices=["argon2id"])
-    kdf_params = serializers.JSONField(validators=[validate_kdf_params])
+class AccountFinalizeSerializer(_AccountKdfMixin, serializers.Serializer):
+    # The manifest decides which algorithms exist, not a choice list here.
+    kdf_algo = serializers.CharField(max_length=16)
+    kdf_params = serializers.JSONField()
     kex_public = _OpaqueField()
     sig_public = _OpaqueField()
-    wrapped_kex_priv = _OpaqueField()
-    wrapped_sig_priv = _OpaqueField()
+    wrapped_kex_priv = _CiphertextField()
+    wrapped_sig_priv = _CiphertextField()
     sig_over_kex_pub = _OpaqueField()
 
 
-class AccountRotateSerializer(serializers.Serializer):
-    """The three fields a password rotation rewrites.
+class AccountRotateSerializer(_AccountKdfMixin, serializers.Serializer):
+    """The four fields a password rotation rewrites.
 
     The public keys and the salt are absent by design: rotation re-wraps the
     same private keys under a key derived from the new password, it never
     mints new ones, and a regenerated salt would orphan the envelope outright.
+    ``kdf_algo`` travels with ``kdf_params`` because the two describe one
+    derivation.
     """
 
-    kdf_params = serializers.JSONField(validators=[validate_kdf_params])
-    wrapped_kex_priv = _OpaqueField()
-    wrapped_sig_priv = _OpaqueField()
+    kdf_algo = serializers.CharField(max_length=16)
+    kdf_params = serializers.JSONField()
+    wrapped_kex_priv = _CiphertextField()
+    wrapped_sig_priv = _CiphertextField()
 
-
-# The only HPKE suite v1 defines: DHKEM(X25519, HKDF-SHA256), HKDF-SHA256,
-# AES-256-GCM, mode_base. The column exists so a second suite can land without
-# a migration; until one does, anything else is a client bug, and storing it
-# would produce a wrap nobody can open.
-HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 0x00}
 
 # The trailing anchor is \Z, not $: $ also matches before a final newline,
 # and RegexField validates with search(), so an icon ending in one would
@@ -155,8 +178,12 @@ _TAG_COLOR = re.compile(r"^(#[0-9a-f]{6}|[a-z0-9-]{1,32})\Z")
 
 
 def validate_hpke_suite(value):
-    if value != HPKE_SUITE_V1:
-        raise serializers.ValidationError("unsupported HPKE suite")
+    """A suite the manifest declares, spelled the way its format spells it.
+    Storing any other would produce a wrap nobody can open."""
+    try:
+        suites.check_hpke_suite(value)
+    except ValueError as exc:
+        raise serializers.ValidationError("unsupported HPKE suite") from exc
     return value
 
 
@@ -225,11 +252,12 @@ class VaultCreateSerializer(serializers.Serializer):
     the request is built, so the server cannot be the one to choose it."""
 
     uuid = serializers.UUIDField()
-    encrypted_name = _OpaqueField()
-    encrypted_description = _OpaqueField(allow_blank=True)
+    encrypted_name = _CiphertextField()
+    encrypted_description = _CiphertextField(allow_blank=True)
     icon = serializers.RegexField(_ICON)
     color = serializers.RegexField(_COLOR)
     metadata_sig = _OpaqueField()
+    # HPKE output, headerless: its agility lives in hpke_suite.
     wrapped_key = _OpaqueField()
     hpke_suite = serializers.JSONField(validators=[validate_hpke_suite])
 
@@ -239,8 +267,8 @@ class VaultUpdateSerializer(serializers.Serializer):
     partial write would leave the row carrying a signature over values it no
     longer holds."""
 
-    encrypted_name = _OpaqueField()
-    encrypted_description = _OpaqueField(allow_blank=True)
+    encrypted_name = _CiphertextField()
+    encrypted_description = _CiphertextField(allow_blank=True)
     icon = serializers.RegexField(_ICON)
     color = serializers.RegexField(_COLOR)
     is_favorite = serializers.BooleanField()
@@ -270,7 +298,7 @@ class VaultFolderWriteSerializer(serializers.Serializer):
     uuid = serializers.UUIDField()
     vault = serializers.UUIDField()
     parent = serializers.UUIDField(allow_null=True, required=False, default=None)
-    encrypted_name = _OpaqueField()
+    encrypted_name = _CiphertextField()
     # Capped rather than unbounded: it enters a PositiveIntegerField, and a
     # value above its range is a 500 from the database rather than a 400 here.
     position = serializers.IntegerField(min_value=0, max_value=100_000)
@@ -297,7 +325,7 @@ class VaultTagWriteSerializer(serializers.Serializer):
 
     uuid = serializers.UUIDField()
     vault = serializers.UUIDField()
-    encrypted_name = _OpaqueField()
+    encrypted_name = _CiphertextField()
     color = serializers.RegexField(_TAG_COLOR)
     metadata_sig = _OpaqueField()
 
@@ -366,7 +394,7 @@ def validate_field_map(value):
         # doing so.
         if len(ciphertext) > _OPAQUE_MAX_LENGTH:
             raise serializers.ValidationError("a field value is too long")
-        validate_base64url(ciphertext)
+        validate_ciphertext(ciphertext)
     return value
 
 
@@ -387,8 +415,8 @@ class VaultEntryWriteSerializer(serializers.Serializer):
         child=serializers.UUIDField(), allow_empty=True, max_length=64, default=list
     )
     is_favorite = serializers.BooleanField()
-    encrypted_name = _OpaqueField()
-    encrypted_notes = _OpaqueField(allow_blank=True)
+    encrypted_name = _CiphertextField()
+    encrypted_notes = _CiphertextField(allow_blank=True)
     fields = serializers.JSONField(validators=[validate_field_map])
     metadata_sig = _OpaqueField()
 

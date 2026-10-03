@@ -28,6 +28,7 @@ def index(request, vault_uuid=None):
             # applied as the session opens, and a round trip for it would
             # leave the first minutes of every visit on the default.
             "vault_prefs": get_module_settings(request.user, "vault"),
+            "vault_test_suites": bool(settings.VAULT_TEST_SUITES),
         },
     )
 
@@ -40,4 +41,8 @@ def onboarding(request):
     # the only path back to every VaultKeyWrap the account holds.
     if active_identity(request.user) is not None:
         return redirect("vault_ui:index")
-    return render(request, "vault/ui/onboarding.html")
+    return render(
+        request,
+        "vault/ui/onboarding.html",
+        {"vault_test_suites": bool(settings.VAULT_TEST_SUITES)},
+    )

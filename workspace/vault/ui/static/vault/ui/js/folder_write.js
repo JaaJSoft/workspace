@@ -12,7 +12,7 @@ window.buildFolderWriteRequest = async function buildFolderWriteRequest(
   draft,
 ) {
   const V = window.vaultCrypto;
-  const key = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+  const key = await session.openVaultKey(vault);
   const encryptedName = V.toBase64Url(
     await V.seal(
       key,

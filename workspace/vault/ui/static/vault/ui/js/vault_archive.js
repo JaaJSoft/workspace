@@ -31,7 +31,7 @@ window.vaultArchive = (function () {
   // written at.
   async function buildArchive({ tree, passphrase, salt, iv, params }) {
     const V = window.vaultCrypto;
-    const cost = params || V.ARGON2_PARAMS;
+    const cost = params || V.CURRENT_SUITE.kdf.params;
     // A fresh salt per export means a fresh key, which means exactly one seal
     // under it: far below the birthday bound the 96-bit nonce relies on. An
     // incremental archive sealing twice under one key would break that.

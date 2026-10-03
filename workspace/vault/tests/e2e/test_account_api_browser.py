@@ -48,32 +48,46 @@ async () => {
   const seed = pkcs8.slice(-32);
 
   const kexPublic = V.toBase64Url(
-    V.encodePublicKey(await rawPublic(kexPair.publicKey), V.PUBKEY_ALG_X25519)
+    V.encodePublicKey(await rawPublic(kexPair.publicKey), V.CURRENT_SUITE.kexPublicKeyAlg)
   );
   const sigPublic = V.toBase64Url(
-    V.encodePublicKey(await rawPublic(sigPair.publicKey), V.PUBKEY_ALG_ED25519)
+    V.encodePublicKey(await rawPublic(sigPair.publicKey), V.CURRENT_SUITE.sigPublicKeyAlg)
   );
   const attestation = V.toBase64Url(
     await V.signBytes(seed, V.AD.kexPubPayload(accountUuid, kexPublic))
   );
 
+  // Not real ciphertexts: sealing them needs the vault password, which
+  // belongs to the onboarding screen. The server cannot open them, so it
+  // checks only the wire header, which is what this builds.
+  const ivLength = V.suiteEntry('aead', V.CURRENT_SUITE.aeadId).iv_length;
+  const wrapped = () => V.toBase64Url(V.encodeCiphertext({
+    aeadId: V.CURRENT_SUITE.aeadId,
+    kdfId: V.KDF_HKDF_SHA256,
+    keyVersion: 1,
+    iv: V.randomBytes(ivLength),
+    ciphertext: V.randomBytes(48),
+  }));
+
   const body = {
-    kdf_algo: 'argon2id',
-    kdf_params: { m: 65536, t: 3, p: 2 },
+    kdf_algo: V.CURRENT_SUITE.kdf.algo,
+    kdf_params: V.CURRENT_SUITE.kdf.params,
     kex_public: kexPublic,
     sig_public: sigPublic,
-    // Not real ciphertexts: sealing them needs the vault password, which
-    // belongs to the onboarding screen. The server stores them opaquely and
-    // checks only that they are base64url, which is what is exercised here.
-    wrapped_kex_priv: V.toBase64Url(V.randomBytes(64)),
-    wrapped_sig_priv: V.toBase64Url(V.randomBytes(64)),
+    wrapped_kex_priv: wrapped(),
+    wrapped_sig_priv: wrapped(),
     sig_over_kex_pub: attestation,
   };
 
   const finalized = await post('/api/v1/vault/account/finalize', body);
   const envelope = await fetch('/api/v1/vault/account/envelope');
 
-  const tampered = { ...body, sig_over_kex_pub: V.toBase64Url(V.randomBytes(65)) };
+  // The current signature id, then 64 bytes nobody signed: a forgery under
+  // an algorithm the server knows, never an id it has not heard of.
+  const forged = new Uint8Array(65);
+  forged[0] = V.CURRENT_SUITE.signatureAlg;
+  forged.set(V.randomBytes(64), 1);
+  const tampered = { ...body, sig_over_kex_pub: V.toBase64Url(forged) };
 
   return {
     initStatus: started.status,

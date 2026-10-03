@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.template.loader import render_to_string
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 from workspace.users.services.settings import set_setting
@@ -248,3 +248,39 @@ class OnboardingStrengthMeterTests(TestCase):
         # The include's own explanation is a {% comment %} block, not a {# #}
         # one, which would have rendered it into the page verbatim.
         self.assertNotIn("under the field they measure", self.html)
+
+
+class TestSuiteScriptTests(TestCase):
+    """The test AEAD registers itself with the crypto bundle the moment it
+    loads, so on a page it reaches, the browser would read and write an
+    algorithm that exists only to prove the dispatch."""
+
+    SCRIPT = "vault/ui/js/test_suites/test_aead.js"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _pages(self):
+        yield "onboarding", self.client.get(reverse("vault_ui:onboarding"))
+        AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+        yield "index", self.client.get(reverse("vault_ui:index"))
+
+    @override_settings(VAULT_TEST_SUITES=True)
+    def test_both_pages_load_it_under_the_switch(self):
+        for name, response in self._pages():
+            with self.subTest(page=name):
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, self.SCRIPT)
+
+    @override_settings(VAULT_TEST_SUITES=False)
+    def test_neither_page_loads_it_without_the_switch(self):
+        for name, response in self._pages():
+            with self.subTest(page=name):
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, self.SCRIPT)

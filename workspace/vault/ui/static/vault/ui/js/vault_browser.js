@@ -356,7 +356,7 @@ window.vaultBrowser = (function () {
       // could have made it earlier.
       resolveLandingVault: function (vaults) {
         const openable = vaults.filter(function (vault) {
-          return !(vault.tampered || vault.unopenable || vault.unreadable);
+          return !(vault.tampered || vault.unopenable || vault.unreadable || vault.unsupported);
         });
         if (!openable.length) return null;
         const remembered = String(readPreference(LAST_VAULT_KEY) || '');
@@ -401,6 +401,18 @@ window.vaultBrowser = (function () {
         return !this.loading && !this.openVault && !this.missing && this.vaults.length > 0;
       },
 
+      // Why none opened, for the sentence that says so. A vault written by a
+      // newer build is not a failed verification: telling the two apart is
+      // what points the user at a reload rather than at a forgery.
+      // 'newer' when every vault needs a newer build, 'mixed' when some do,
+      // 'refused' when none do, null when something opened.
+      noOpenableVaultReason: function () {
+        if (!this.hasNoOpenableVault()) return null;
+        const newer = this.vaults.filter(function (vault) { return vault.unsupported; }).length;
+        if (newer === 0) return 'refused';
+        return newer === this.vaults.length ? 'newer' : 'mixed';
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },
@@ -437,6 +449,7 @@ window.vaultBrowser = (function () {
           // is a broken listing, not a row hidden from the user, and the
           // banner speaks about entries.
           tamperedCount: entries.tamperedCount,
+          unsupportedCount: entries.unsupportedCount,
         });
         // Every row is rebuilt from the fresh listing, so whatever the panel
         // had decrypted belongs to a row this pass no longer vouches for - a

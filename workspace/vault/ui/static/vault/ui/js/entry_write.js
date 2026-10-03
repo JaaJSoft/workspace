@@ -20,7 +20,7 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
 ) {
   const V = window.vaultCrypto;
   const keyVersion = vault.key_version || 1;
-  const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, draft.uuid);
+  const key = await session.openEntryKey(vault, draft.uuid);
   const seal = async (text, fieldId) =>
     V.toBase64Url(
       await V.seal(key, new TextEncoder().encode(text), V.AD.entryFieldAd(draft.uuid, fieldId), {

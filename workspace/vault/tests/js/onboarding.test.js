@@ -151,14 +151,21 @@ test('the password and the secret bytes are gone once the kit is shown', () => {
 // for. The bytes themselves are the vector suites' business; what is checked
 // here is the label the component puts on them.
 const SEAL_CALLS = [];
+// Every other call whose arguments name an algorithm, in call order.
+const CRYPTO_CALLS = [];
+const SENT_BODIES = {};
 
 const CRYPTO_STUB = {
   uuidV7: () => 'first-vault-uuid',
   KDF_DIRECT: 0,
   KDF_HKDF_SHA256: 1,
-  ARGON2_PARAMS: {},
-  PUBKEY_ALG_X25519: 1,
-  PUBKEY_ALG_ED25519: 2,
+  // Values no real suite carries, so a test can tell the suite's answer from
+  // anything the component could have spelled on its own.
+  CURRENT_SUITE: {
+    kexPublicKeyAlg: 0x71,
+    sigPublicKeyAlg: 0x72,
+    kdf: { algo: 'suite-kdf', params: { v: 'suite', m: 1, t: 2, p: 3 } },
+  },
   AD: {
     unwrapInfo: () => 'unwrap',
     kexPrivAd: () => 'kex',
@@ -172,16 +179,19 @@ const CRYPTO_STUB = {
   crockfordEncode: (bytes) => 'SECRET' + bytes[0],
   fromBase64Url: () => new Uint8Array(16),
   toBase64Url: () => 'b64',
-  deriveAmk: async () => new Uint8Array(32),
+  deriveAmk: async (options) => {
+    CRYPTO_CALLS.push(['deriveAmk', options.params], ['deriveAmk:algo', options.algo]);
+    return new Uint8Array(32);
+  },
   hkdf: async () => new Uint8Array(32),
   seal: async (key, plaintext, ad, options) => {
     SEAL_CALLS.push({ ad, options });
     return new Uint8Array(8);
   },
   signBytes: async () => new Uint8Array(64),
-  encodePublicKey: () => new Uint8Array(33),
+  encodePublicKey: (raw, alg) => { CRYPTO_CALLS.push(['encodePublicKey', alg]); return new Uint8Array(33); },
   importSigner: async () => ({ sign: async () => new Uint8Array(64) }),
-  decodePublicKey: () => new Uint8Array(32),
+  decodePublicKey: (stored, usage) => { CRYPTO_CALLS.push(['decodePublicKey', usage]); return new Uint8Array(32); },
 };
 
 const SUBTLE_STUB = {
@@ -191,12 +201,14 @@ const SUBTLE_STUB = {
 
 function sealing({ responses, ...extra } = {}) {
   SEAL_CALLS.length = 0;
+  CRYPTO_CALLS.length = 0;
   const calls = [];
   const app = component({
     vaultCrypto: CRYPTO_STUB,
     crypto: { subtle: SUBTLE_STUB, getRandomValues: (a) => a },
-    fetch: async (url) => {
+    fetch: async (url, init) => {
       calls.push(url);
+      if (init && init.body) SENT_BODIES[url] = JSON.parse(init.body);
       const reply = responses[url];
       if (typeof reply === 'function') return reply(calls);
       return reply;
@@ -250,6 +262,30 @@ test('the account wraps declare the derivation that actually produced them', asy
     assert.equal(wrap.options.kdfId, CRYPTO_STUB.KDF_DIRECT);
     assert.equal(wrap.options.keyVersion, 0);
   }
+});
+
+test('every algorithm the envelope names comes from the current suite', async () => {
+  const { app } = sealing({
+    responses: {
+      '/api/v1/vault/account/init': INIT_OK,
+      '/api/v1/vault/account/finalize': { ok: true, status: 201 },
+    },
+  });
+  const suite = CRYPTO_STUB.CURRENT_SUITE;
+  await app.generateAndSeal();
+  const finalized = SENT_BODIES['/api/v1/vault/account/finalize'];
+  assert.equal(finalized.kdf_algo, suite.kdf.algo);
+  assert.deepStrictEqual({ ...finalized.kdf_params }, suite.kdf.params);
+  assert.deepStrictEqual(
+    CRYPTO_CALLS.map(([name, arg]) => [name, typeof arg === 'object' ? { ...arg } : arg]),
+    [
+      ['deriveAmk', suite.kdf.params],
+      ['deriveAmk:algo', suite.kdf.algo],
+      ['encodePublicKey', suite.kexPublicKeyAlg],
+      ['encodePublicKey', suite.sigPublicKeyAlg],
+      ['decodePublicKey', 'kex'],
+    ]
+  );
 });
 
 test('an init the server refuses does not reach the kit step', async () => {

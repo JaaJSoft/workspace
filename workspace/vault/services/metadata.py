@@ -13,22 +13,19 @@ built proves the signature covers the row.
 import unicodedata
 
 import cbor2
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .attestation import (
     PUBKEY_ALG_ED25519,
-    SIG_ALG_ED25519,
     AttestationError,
     decode_base64url,
     decode_public_key,
+    verify_signature,
 )
 
 VAULT_METADATA_TYPE = "vault-metadata"
 ENTRY_METADATA_TYPE = "entry-metadata"
 FOLDER_METADATA_TYPE = "folder-metadata"
 TAG_METADATA_TYPE = "tag-metadata"
-_ED25519_SIGNATURE_LENGTH = 64
 
 
 def vault_metadata_payload(
@@ -185,17 +182,9 @@ def verify_record(payload, sig_public_b64, metadata_sig_b64) -> None:
     sig_public_raw = decode_public_key(
         decode_base64url(sig_public_b64), PUBKEY_ALG_ED25519
     )
-    signature = decode_base64url(metadata_sig_b64)
-    if signature[0] != SIG_ALG_ED25519:
-        raise AttestationError("unsupported signature algorithm")
-    if len(signature) != 1 + _ED25519_SIGNATURE_LENGTH:
-        raise AttestationError("signature has the wrong length")
-    try:
-        Ed25519PublicKey.from_public_bytes(sig_public_raw).verify(
-            signature[1:], canonical_cbor(payload)
-        )
-    except InvalidSignature as exc:
-        raise AttestationError("record signature does not verify") from exc
+    verify_signature(
+        sig_public_raw, decode_base64url(metadata_sig_b64), canonical_cbor(payload)
+    )
 
 
 # The name views/vaults.py calls. Kept because a vault's signature is verified

@@ -277,7 +277,7 @@ window.vaultOnboarding = function vaultOnboarding() {
     async captureVaultSigningMaterial(sigSeed, kexPrivate, kexPublic) {
       const V = window.vaultCrypto;
       this.vaultSigner = await V.importSigner(sigSeed);
-      this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic));
+      this.accountKexPublic = V.decodePublicKey(V.fromBase64Url(kexPublic), 'kex');
       sigSeed.fill(0);
       kexPrivate.fill(0);
     },
@@ -320,9 +320,11 @@ window.vaultOnboarding = function vaultOnboarding() {
         }
 
         const amk = await V.deriveAmk({
+          algo: V.CURRENT_SUITE.kdf.algo,
           password: this.password.normalize('NFC'),
           secretKey: this.secretBytes,
           salt: V.fromBase64Url(account.kdf_salt),
+          params: V.CURRENT_SUITE.kdf.params,
         });
         const unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
 
@@ -346,20 +348,20 @@ window.vaultOnboarding = function vaultOnboarding() {
         kexPublic = V.toBase64Url(
           V.encodePublicKey(
             new Uint8Array(await crypto.subtle.exportKey('raw', kexPair.publicKey)),
-            V.PUBKEY_ALG_X25519
+            V.CURRENT_SUITE.kexPublicKeyAlg
           )
         );
         const sigPublic = V.toBase64Url(
           V.encodePublicKey(
             new Uint8Array(await crypto.subtle.exportKey('raw', sigPair.publicKey)),
-            V.PUBKEY_ALG_ED25519
+            V.CURRENT_SUITE.sigPublicKeyAlg
           )
         );
 
         // The unwrap key seals these two as it is - there is no per-ciphertext
         // derivation between them and it - and a password change re-seals them
         // rather than bumping a version. So the header says direct, version
-        // zero. The frozen vector account-kex-priv-wrap is what these two
+        // zero. The frozen vector account-kex-priv-wrap-format-2 is what these two
         // numbers answer to, and a test holds them against it: nothing at
         // runtime reads the bytes, so nothing else would notice them drift.
         const sealed = {
@@ -367,8 +369,8 @@ window.vaultOnboarding = function vaultOnboarding() {
           kdfId: V.KDF_DIRECT,
         };
         const body = {
-          kdf_algo: 'argon2id',
-          kdf_params: V.ARGON2_PARAMS,
+          kdf_algo: V.CURRENT_SUITE.kdf.algo,
+          kdf_params: V.CURRENT_SUITE.kdf.params,
           kex_public: kexPublic,
           sig_public: sigPublic,
           wrapped_kex_priv: V.toBase64Url(

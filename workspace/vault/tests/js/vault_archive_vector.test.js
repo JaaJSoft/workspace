@@ -94,7 +94,7 @@ async function buildVector(params) {
     params: params ? vm.runInContext(`(${JSON.stringify(params)})`, ctx) : undefined,
   });
   assert.ok(bytes.length > 50);
-  const declared = params || ctx.vaultCrypto.ARGON2_PARAMS;
+  const declared = params || ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   return `${JSON.stringify({
     passphrase: PASSPHRASE,
     params: { m: declared.m, t: declared.t, p: declared.p },
@@ -135,7 +135,7 @@ test('the low-cost vector is not the default cost in disguise', async () => {
     ['workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js'],
     { crypto: globalThis.crypto, TextEncoder: globalThis.TextEncoder, TextDecoder: globalThis.TextDecoder }
   );
-  const defaults = ctx.vaultCrypto.ARGON2_PARAMS;
+  const defaults = ctx.vaultCrypto.CURRENT_SUITE.kdf.params;
   for (const name of ['m', 't', 'p']) {
     assert.notEqual(LOW_COST[name], defaults[name], `low-cost ${name} equals the default`);
   }

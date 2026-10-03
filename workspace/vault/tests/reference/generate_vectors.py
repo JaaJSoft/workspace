@@ -15,7 +15,7 @@ import pathlib
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from . import ad, metadata, primitives, totp
+from . import ad, metadata, primitives, suites, totp, wire
 from .encoding import to_base64url
 
 VECTORS_PATH = pathlib.Path(__file__).resolve().parent.parent / "crypto_vectors.json"
@@ -32,6 +32,8 @@ SECRET_KEY = bytes(range(1, 33))
 KDF_SALT = bytes(range(0xA0, 0xC0))
 AEAD_KEY = bytes(range(32))
 AEAD_IV = bytes(range(12))
+# The test AEAD declares a 16-byte nonce.
+TEST_AEAD_IV = bytes(range(16))
 SENDER_SK = bytes([0x11]) * 32
 RECIPIENT_SK = bytes([0x22]) * 32
 SIG_SK = bytes([0x33]) * 32
@@ -68,6 +70,82 @@ def _totp_vectors():
     return out
 
 
+FORMAT_1_HPKE = dict(suites.manifest()["hpke"]["1"]["suite"])
+
+
+def _format_1_ad(context) -> str:
+    """The whole AD string of a format-1 ciphertext, the shape the vectors
+    written before format 2 publish."""
+    return suites.entry("format", 1)["ad_prefix"] + context.body
+
+
+def _aead_case(
+    case_id,
+    key,
+    iv,
+    context,
+    plaintext,
+    *,
+    key_version,
+    kdf_id,
+    format_version,
+    aead_id,
+):
+    """An AEAD vector carrying the context body, not a prebuilt AD string.
+
+    Which prefix the body gets, and whether the wire header goes in front, is
+    the format's decision; publishing the resulting associated data lets the
+    browser check its own construction byte for byte.
+    """
+    raw = primitives.aead_seal(
+        key,
+        plaintext,
+        context,
+        iv=iv,
+        key_version=key_version,
+        kdf_id=kdf_id,
+        aead_id=aead_id,
+        format_version=format_version,
+    )
+    return {
+        "id": case_id,
+        "key_b64": to_base64url(key),
+        "iv_b64": to_base64url(iv),
+        "context_body": context.body,
+        "associated_data": ad.associated_data(context, raw[: wire.HEADER_LENGTH]).hex(),
+        "plaintext": plaintext.decode("utf-8"),
+        "key_version": key_version,
+        "kdf_id": kdf_id,
+        "aead_id": aead_id,
+        "format_version": format_version,
+        "expected_wire_b64": to_base64url(raw),
+    }
+
+
+def _hpke_case(case_id, hpke_suite, *, sender, recipient, vault_key):
+    info = ad.vault_key_info(VAULT_UUID, ACCOUNT_UUID, hpke_suite)
+    sealed = primitives.hpke_seal(
+        recipient.public_key(),
+        info,
+        vault_key,
+        sender_private=sender,
+        hpke_suite=hpke_suite,
+    )
+    return {
+        "id": case_id,
+        # As the VaultKeyWrap column stores it: the info depends on it.
+        "hpke_suite": hpke_suite,
+        "sender_sk_b64": to_base64url(SENDER_SK),
+        "recipient_sk_b64": to_base64url(RECIPIENT_SK),
+        "recipient_pk_b64": to_base64url(
+            primitives.public_bytes(recipient.public_key())
+        ),
+        "info": info.decode("ascii"),
+        "plaintext_b64": to_base64url(vault_key),
+        "expected_sealed_b64": to_base64url(sealed),
+    }
+
+
 def build_vectors() -> dict:
     amk = primitives.derive_amk("Tr0ub4dor&3", SECRET_KEY, KDF_SALT)
     unwrap_key = primitives.hkdf(amk, ad.unwrap_info())
@@ -76,14 +154,12 @@ def build_vectors() -> dict:
     recipient = X25519PrivateKey.from_private_bytes(RECIPIENT_SK)
     signer = Ed25519PrivateKey.from_private_bytes(SIG_SK)
 
-    hpke_info = ad.vault_key_info(VAULT_UUID, ACCOUNT_UUID)
     vault_key = bytes(range(0x40, 0x60))
-    sealed = primitives.hpke_seal(
-        recipient.public_key(), hpke_info, vault_key, sender_private=sender
-    )
 
     # The stored form, prefix included: it is what the attestation signs.
-    kex_pub_stored = primitives.encode_public_key(recipient.public_key())
+    kex_pub_stored = primitives.encode_public_key(
+        recipient.public_key(), primitives.PUBKEY_ALG_X25519
+    )
 
     entry_payload = metadata.entry_metadata_payload(
         entry_uuid=ENTRY_UUID,
@@ -127,6 +203,7 @@ def build_vectors() -> dict:
                 iv=AEAD_IV,
                 key_version=1,
                 kdf_id=0x01,
+                format_version=1,
             )
         ),
         encrypted_description="",
@@ -144,7 +221,7 @@ def build_vectors() -> dict:
                 "password": "Tr0ub4dor&3",
                 "secret_key_b64": to_base64url(SECRET_KEY),
                 "salt_b64": to_base64url(KDF_SALT),
-                "params": primitives.ARGON2_PARAMS,
+                "params": suites.CURRENT_SUITE["kdf"]["params"],
                 "expected_amk_b64": to_base64url(amk),
             },
             {
@@ -155,7 +232,7 @@ def build_vectors() -> dict:
                 "password": "café",
                 "secret_key_b64": to_base64url(SECRET_KEY),
                 "salt_b64": to_base64url(KDF_SALT),
-                "params": primitives.ARGON2_PARAMS,
+                "params": suites.CURRENT_SUITE["kdf"]["params"],
                 "expected_amk_b64": to_base64url(
                     primitives.derive_amk("café", SECRET_KEY, KDF_SALT)
                 ),
@@ -183,15 +260,20 @@ def build_vectors() -> dict:
                 "expected_b64": to_base64url(vault_meta_key),
             },
         ],
+        # The first three are format 1 and publish their AD string whole, the
+        # shape they had before format 2; every other case publishes its
+        # context body and the associated data its format builds from it.
         "aead": [
             {
                 "id": "entry-field-password",
                 "key_b64": to_base64url(AEAD_KEY),
                 "iv_b64": to_base64url(AEAD_IV),
-                "ad": ad.entry_field_ad(ENTRY_UUID, "password").decode("ascii"),
+                "ad": _format_1_ad(ad.entry_field_ad(ENTRY_UUID, "password")),
                 "plaintext": "hunter2",
                 "key_version": 1,
                 "kdf_id": 0x01,
+                "aead_id": wire.AEAD_AES_256_GCM,
+                "format_version": 1,
                 "expected_wire_b64": to_base64url(
                     primitives.aead_seal(
                         AEAD_KEY,
@@ -200,6 +282,7 @@ def build_vectors() -> dict:
                         iv=AEAD_IV,
                         key_version=1,
                         kdf_id=0x01,
+                        format_version=1,
                     )
                 ),
             },
@@ -207,10 +290,12 @@ def build_vectors() -> dict:
                 "id": "account-kex-priv-wrap",
                 "key_b64": to_base64url(unwrap_key),
                 "iv_b64": to_base64url(AEAD_IV),
-                "ad": ad.kex_priv_ad(ACCOUNT_UUID).decode("ascii"),
+                "ad": _format_1_ad(ad.kex_priv_ad(ACCOUNT_UUID)),
                 "plaintext": "private-key-bytes",
                 "key_version": 0,
                 "kdf_id": 0x00,
+                "aead_id": wire.AEAD_AES_256_GCM,
+                "format_version": 1,
                 "expected_wire_b64": to_base64url(
                     primitives.aead_seal(
                         unwrap_key,
@@ -219,6 +304,7 @@ def build_vectors() -> dict:
                         iv=AEAD_IV,
                         key_version=0,
                         kdf_id=0x00,
+                        format_version=1,
                     )
                 ),
             },
@@ -226,25 +312,74 @@ def build_vectors() -> dict:
                 "id": "vault-field-name",
                 "key_b64": to_base64url(vault_meta_key),
                 "iv_b64": to_base64url(AEAD_IV),
-                "ad": ad.vault_field_ad(VAULT_UUID, "name").decode("ascii"),
+                "ad": _format_1_ad(ad.vault_field_ad(VAULT_UUID, "name")),
                 "plaintext": "Personal",
                 "key_version": 1,
                 "kdf_id": 0x01,
+                "aead_id": wire.AEAD_AES_256_GCM,
+                "format_version": 1,
                 "expected_wire_b64": vault_metadata["encrypted_name"],
             },
+            _aead_case(
+                "format-1-aes-256-gcm",
+                AEAD_KEY,
+                AEAD_IV,
+                ad.entry_field_ad(ENTRY_UUID, "password"),
+                b"hunter2",
+                key_version=1,
+                kdf_id=0x01,
+                format_version=1,
+                aead_id=wire.AEAD_AES_256_GCM,
+            ),
+            _aead_case(
+                "format-2-aes-256-gcm",
+                AEAD_KEY,
+                AEAD_IV,
+                ad.entry_field_ad(ENTRY_UUID, "password"),
+                b"hunter2",
+                key_version=1,
+                kdf_id=0x01,
+                format_version=2,
+                aead_id=wire.AEAD_AES_256_GCM,
+            ),
+            _aead_case(
+                "format-2-test-ctr-hmac",
+                AEAD_KEY,
+                TEST_AEAD_IV,
+                ad.entry_field_ad(ENTRY_UUID, "password"),
+                b"hunter2",
+                key_version=1,
+                kdf_id=0x01,
+                format_version=2,
+                aead_id=wire.AEAD_TEST_CTR_HMAC,
+            ),
+            _aead_case(
+                "account-kex-priv-wrap-format-2",
+                unwrap_key,
+                AEAD_IV,
+                ad.kex_priv_ad(ACCOUNT_UUID),
+                b"private-key-bytes",
+                key_version=0,
+                kdf_id=wire.KDF_DIRECT,
+                format_version=2,
+                aead_id=wire.AEAD_AES_256_GCM,
+            ),
         ],
         "hpke": [
-            {
-                "id": "vault-key-self-wrap",
-                "sender_sk_b64": to_base64url(SENDER_SK),
-                "recipient_sk_b64": to_base64url(RECIPIENT_SK),
-                "recipient_pk_b64": to_base64url(
-                    primitives.public_bytes(recipient.public_key())
-                ),
-                "info": hpke_info.decode("ascii"),
-                "plaintext_b64": to_base64url(vault_key),
-                "expected_sealed_b64": to_base64url(sealed),
-            }
+            _hpke_case(
+                "format-1",
+                FORMAT_1_HPKE,
+                sender=sender,
+                recipient=recipient,
+                vault_key=vault_key,
+            ),
+            _hpke_case(
+                "format-2",
+                suites.CURRENT_SUITE["hpke"],
+                sender=sender,
+                recipient=recipient,
+                vault_key=vault_key,
+            ),
         ],
         "cbor": [
             {

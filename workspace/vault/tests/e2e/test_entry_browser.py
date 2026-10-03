@@ -30,7 +30,7 @@ async (withTag) => {
   try {
     const vault = (await A.listVaults())[0];
     const entryUuid = V.uuidV7();
-    const entryKey = await S.openEntryKey(vault.uuid, vault.wrapped_key, entryUuid);
+    const entryKey = await S.openEntryKey(vault, entryUuid);
     const seal = async (field, text) => V.toBase64Url(
       await V.seal(entryKey, enc.encode(text), V.AD.entryFieldAd(entryUuid, field), {
         keyVersion: 1,
@@ -41,7 +41,7 @@ async (withTag) => {
     let tagUuids = [];
     if (withTag) {
       const tagUuid = V.uuidV7();
-      const metaKey = await S.openVaultKey(vault.uuid, vault.wrapped_key);
+      const metaKey = await S.openVaultKey(vault);
       const tagName = V.toBase64Url(
         await V.seal(metaKey, enc.encode('Work'), V.AD.tagFieldAd(tagUuid, 'name'), {
           keyVersion: 1,
@@ -130,7 +130,7 @@ async (entryUuid) => {
     });
     await S.verifyRecord(payload, entry.metadata_sig, V.ENTRY_METADATA_TYPE);
 
-    const entryKey = await S.openEntryKey(vault.uuid, vault.wrapped_key, entry.uuid);
+    const entryKey = await S.openEntryKey(vault, entry.uuid);
     const name = new TextDecoder().decode(
       await V.open(
         entryKey,

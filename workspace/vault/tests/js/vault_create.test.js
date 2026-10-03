@@ -9,6 +9,7 @@ const { loadScript } = require('../../../common/tests/js/loader');
 function builder(overrides = {}) {
   const signed = [];
   const sealed = [];
+  const hpkeSeals = [];
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_create.js', {
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
@@ -16,19 +17,22 @@ function builder(overrides = {}) {
       uuidV7: () => 'minted-uuid',
       randomBytes: () => new Uint8Array(32),
       hkdf: async () => new Uint8Array(32),
-      hpkeSeal: async () => new Uint8Array(64),
+      hpkeSeal: async (pub, info, key, suite) => {
+        hpkeSeals.push({ info, suite });
+        return new Uint8Array(64);
+      },
       toBase64Url: () => 'b64',
       // The associated data is recorded rather than the ciphertext: it is what
       // says which slot a value went into.
       seal: async (key, bytes, ad) => { sealed.push(ad); return new Uint8Array(4); },
       AD: {
         vaultFieldAd: (uuid, field) => `vault:${uuid}|${field}`,
-        vaultKeyInfo: () => 'key-info',
+        vaultKeyInfo: (vault, recipient, suite) => ({ vault, recipient, suite }),
         vaultMetaInfo: () => 'meta-info',
       },
       vaultMetadataPayload: (fields) => fields,
       KDF_HKDF_SHA256: 0x01,
-      HPKE_SUITE_V1: { kem_id: 32, kdf_id: 1, aead_id: 2, mode: 0 },
+      CURRENT_SUITE: { hpke: CURRENT_HPKE },
       ...overrides.crypto,
     },
   });
@@ -38,8 +42,12 @@ function builder(overrides = {}) {
     sign: async (payload) => { signed.push(payload); return 'signature'; },
     ...overrides.session,
   };
-  return { ctx, session, signed, sealed };
+  return { ctx, session, signed, sealed, hpkeSeals };
 }
+
+// Not a suite the manifest declares: what is checked is that the builder hands
+// on whatever the current suite says, not that it knows one.
+const CURRENT_HPKE = { suite: 'current', format: 9 };
 
 test('a new vault carries the icon and the colour it was given', async () => {
   const { ctx, session } = builder();
@@ -108,4 +116,15 @@ test('the caller keeps the uuid, because a retry has to reuse it', async () => {
   assert.equal(body.uuid, 'given-uuid');
   const minted = await ctx.buildVaultCreateRequest(session, { name: 'Work' });
   assert.equal(minted.uuid, 'minted-uuid');
+});
+
+test('the vault key is sealed and labelled with the current hpke suite', async () => {
+  const { ctx, session, hpkeSeals } = builder();
+  const body = await ctx.buildVaultCreateRequest(session, { name: 'Work' }, 'v-1');
+  assert.equal(hpkeSeals.length, 1);
+  assert.equal(hpkeSeals[0].suite, CURRENT_HPKE);
+  assert.equal(hpkeSeals[0].info.vault, 'v-1');
+  assert.equal(hpkeSeals[0].info.recipient, 'account-1');
+  assert.equal(hpkeSeals[0].info.suite, CURRENT_HPKE);
+  assert.equal(body.hpke_suite, CURRENT_HPKE);
 });

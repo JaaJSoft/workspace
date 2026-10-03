@@ -63,6 +63,7 @@
             role="option"
             tabindex="0"
             :aria-selected="candidate.uuid === vaultUuid"
+            :title="vaultRowTitle(candidate)"
             :class="candidate.uuid === vaultUuid ? 'active' : (vaultIsDegraded(candidate) ? 'opacity-70' : '')"
             @click="switchVault(candidate)"
             @keydown.enter.prevent="switchVault(candidate)"
@@ -75,8 +76,8 @@
             ></i>
             <span
               class="truncate flex-1"
-              :class="vaultIsDegraded(candidate) ? 'line-through' : ''"
-              x-text="vaultIsDegraded(candidate) ? 'Unreadable vault' : (candidate.name || 'Unnamed')"
+              :class="vaultIsStruckThrough(candidate) ? 'line-through' : ''"
+              x-text="vaultRowLabel(candidate)"
             ></span>
 
             <span

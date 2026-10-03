@@ -25,6 +25,10 @@ window.vaultStore = function vaultStore() {
     // rendered, because rendering unverified data is the defect the count
     // exists to report.
     tamperedCount: 0,
+    // Entries a newer build wrote and this one cannot read. Counted apart
+    // from tamperedCount: neither is tampering, and lumping the two together
+    // would send the user to distrust an account that a reload would fix.
+    unsupportedCount: 0,
 
     view: 'all',
     folderUuid: null,
@@ -46,6 +50,7 @@ window.vaultStore = function vaultStore() {
       this.tags = data.tags || [];
       this.entries = data.entries || [];
       this.tamperedCount = data.tamperedCount || 0;
+      this.unsupportedCount = data.unsupportedCount || 0;
       this.selected = [];
     },
 

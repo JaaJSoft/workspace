@@ -2,7 +2,9 @@
   "aead": [
     {
       "ad": "v1|entry-field|0192f3a4-5b6c-7d8e-9f01-23456789abcd|password",
+      "aead_id": 1,
       "expected_wire_b64": "AQEBAAEMAAECAwQFBgcICQoLL3e4b6CX8FW9_oUFDfT_p5rMtkgiX7U",
+      "format_version": 1,
       "id": "entry-field-password",
       "iv_b64": "AAECAwQFBgcICQoL",
       "kdf_id": 1,
@@ -12,7 +14,9 @@
     },
     {
       "ad": "v1|account-kex-priv|0192f3a4-1111-7d8e-9f01-23456789abcd",
+      "aead_id": 1,
       "expected_wire_b64": "AQEAAAAMAAECAwQFBgcICQoLWlG6XWu0BwmFkC5aqN4cAVwwLqss1AOu6GGHZXlQGegv",
+      "format_version": 1,
       "id": "account-kex-priv-wrap",
       "iv_b64": "AAECAwQFBgcICQoL",
       "kdf_id": 0,
@@ -22,13 +26,67 @@
     },
     {
       "ad": "v1|vault-field|0192f3a4-2222-7d8e-9f01-23456789abcd|name",
+      "aead_id": 1,
       "expected_wire_b64": "AQEBAAEMAAECAwQFBgcICQoLs4vePsyEAEIbLQzZItxOIWKR2Iw-ninV",
+      "format_version": 1,
       "id": "vault-field-name",
       "iv_b64": "AAECAwQFBgcICQoL",
       "kdf_id": 1,
       "key_b64": "z_Gj18v3bdBe2BbV76RruXMMeWv3rNsRFs9TifH27a0",
       "key_version": 1,
       "plaintext": "Personal"
+    },
+    {
+      "aead_id": 1,
+      "associated_data": "76317c656e7472792d6669656c647c30313932663361342d356236632d376438652d396630312d3233343536373839616263647c70617373776f7264",
+      "context_body": "entry-field|0192f3a4-5b6c-7d8e-9f01-23456789abcd|password",
+      "expected_wire_b64": "AQEBAAEMAAECAwQFBgcICQoLL3e4b6CX8FW9_oUFDfT_p5rMtkgiX7U",
+      "format_version": 1,
+      "id": "format-1-aes-256-gcm",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 1,
+      "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "key_version": 1,
+      "plaintext": "hunter2"
+    },
+    {
+      "aead_id": 1,
+      "associated_data": "02010100010c76327c656e7472792d6669656c647c30313932663361342d356236632d376438652d396630312d3233343536373839616263647c70617373776f7264",
+      "context_body": "entry-field|0192f3a4-5b6c-7d8e-9f01-23456789abcd|password",
+      "expected_wire_b64": "AgEBAAEMAAECAwQFBgcICQoLL3e4b6CX8GRU4mlsVKRt0RYkTwKwBs4",
+      "format_version": 2,
+      "id": "format-2-aes-256-gcm",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 1,
+      "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "key_version": 1,
+      "plaintext": "hunter2"
+    },
+    {
+      "aead_id": 240,
+      "associated_data": "02f00100011076327c656e7472792d6669656c647c30313932663361342d356236632d376438652d396630312d3233343536373839616263647c70617373776f7264",
+      "context_body": "entry-field|0192f3a4-5b6c-7d8e-9f01-23456789abcd|password",
+      "expected_wire_b64": "AvABAAEQAAECAwQFBgcICQoLDA0ODzjFgJ0t38RP0bRZYYkL64rffj_BLWgzP1Jahqsc34XTm0kwoz1vrg",
+      "format_version": 2,
+      "id": "format-2-test-ctr-hmac",
+      "iv_b64": "AAECAwQFBgcICQoLDA0ODw",
+      "kdf_id": 1,
+      "key_b64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+      "key_version": 1,
+      "plaintext": "hunter2"
+    },
+    {
+      "aead_id": 1,
+      "associated_data": "02010000000c76327c6163636f756e742d6b65782d707269767c30313932663361342d313131312d376438652d396630312d323334353637383961626364",
+      "context_body": "account-kex-priv|0192f3a4-1111-7d8e-9f01-23456789abcd",
+      "expected_wire_b64": "AgEAAAAMAAECAwQFBgcICQoLWlG6XWu0BwmFkC5aqN4cAVxYUEDB7RDf6gEjeRopHv_V",
+      "format_version": 2,
+      "id": "account-kex-priv-wrap-format-2",
+      "iv_b64": "AAECAwQFBgcICQoL",
+      "kdf_id": 0,
+      "key_b64": "8b43Rnlqqx3tYCG03X00vdglUqDQHYaSZKynjYYDzuY",
+      "key_version": 0,
+      "plaintext": "private-key-bytes"
     }
   ],
   "argon2id": [
@@ -36,7 +94,6 @@
       "expected_amk_b64": "mLqx1iBP8IrVNOlwcQE1189A01WGBWyulIfG7lpJ8w4",
       "id": "amk-from-password-and-secret-key",
       "params": {
-        "algo": "argon2id",
         "m": 65536,
         "p": 2,
         "t": 3,
@@ -50,7 +107,6 @@
       "expected_amk_b64": "VA1bgp7Wlo394is0Hl9qm1jdOUaRKkIlVbOwZv4WUDs",
       "id": "nfc-decomposed-password-derives-the-same-amk",
       "params": {
-        "algo": "argon2id",
         "m": 65536,
         "p": 2,
         "t": 3,
@@ -286,8 +342,30 @@
   "hpke": [
     {
       "expected_sealed_b64": "e06Qm75__kTEZaIgA31gjuNYl9Me-XLwf3SJLLD3PxOtKexYD34pj4J2f35PcuwBK6RMhBUv4msB15i_d6bQdv0YeHAvFlJV-HhtPoTORHE",
-      "id": "vault-key-self-wrap",
+      "hpke_suite": {
+        "aead_id": 2,
+        "kdf_id": 1,
+        "kem_id": 32,
+        "mode": 0
+      },
+      "id": "format-1",
       "info": "v1|vault-key|0192f3a4-2222-7d8e-9f01-23456789abcd|0192f3a4-1111-7d8e-9f01-23456789abcd",
+      "plaintext_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
+      "recipient_pk_b64": "D6poTtKIZ7l_Smot7l34zpdOdrcBjj8iocTPJnhXDyA",
+      "recipient_sk_b64": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI",
+      "sender_sk_b64": "ERERERERERERERERERERERERERERERERERERERERERE"
+    },
+    {
+      "expected_sealed_b64": "e06Qm75__kTEZaIgA31gjuNYl9Me-XLwf3SJLLD3PxPO_3R_5nzzIbYMFqFPaoN5hqPRKJx7dAaXtjcKdEw2EWnqYnyTa4gT0d4U6bMf9KA",
+      "hpke_suite": {
+        "aead_id": 2,
+        "format": 2,
+        "kdf_id": 1,
+        "kem_id": 32,
+        "mode": 0
+      },
+      "id": "format-2",
+      "info": "v2|vault-key|0192f3a4-2222-7d8e-9f01-23456789abcd|0192f3a4-1111-7d8e-9f01-23456789abcd|0020-0001-0002",
       "plaintext_b64": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl8",
       "recipient_pk_b64": "D6poTtKIZ7l_Smot7l34zpdOdrcBjj8iocTPJnhXDyA",
       "recipient_sk_b64": "IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI",

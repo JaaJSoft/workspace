@@ -251,6 +251,14 @@ test('tampered rows are counted, never listed', () => {
   assert.equal(s.visibleEntries().length + s.visibleFolders().length, 3);
 });
 
+test('unsupported rows are counted apart from tampered ones', () => {
+  // A row written by a newer build is not the account's tamper alert - the
+  // two counts stay independent all the way to the store.
+  const s = store({ tamperedCount: 2, unsupportedCount: 3 });
+  assert.equal(s.tamperedCount, 2);
+  assert.equal(s.unsupportedCount, 3);
+});
+
 test('select-all covers what is on screen and nothing else', () => {
   const s = store();
   assert.equal(s.selectAllState(), 'none');

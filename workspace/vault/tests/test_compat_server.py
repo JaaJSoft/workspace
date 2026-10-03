@@ -30,17 +30,18 @@ from . import compat
 # new corpus directory can never go unread - deriving the list from the loads
 # themselves is what stops a version being *declared* covered by a replay that
 # never reads it.
-CORPORA = (compat.load("v1"),)
+CORPORA = (compat.load("v1"), compat.load("v2"))
 COVERED = [corpus.root.name for corpus in CORPORA]
 
 
-class ServerReplayTests(TestCase):
-    fixtures = [str(CORPORA[0].rows)]
+class _ServerReplay:
+    """Every replay, run once per corpus by the classes generated below."""
+
+    corpus = None
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        (cls.corpus,) = CORPORA
         cls.manifest_vaults = cls.corpus.manifest["vaults"]
 
     def setUp(self):
@@ -267,3 +268,16 @@ class ServerReplayTests(TestCase):
             reconciled_fields,
             sum(len(e["fields"]) for v in self.manifest_vaults for e in v["entries"]),
         )
+
+
+# One test class per corpus, generated from CORPORA itself: a version added to
+# the tuple is replayed without a class to remember, and one left out of it is
+# refused by test_compat_frozen. A class each rather than a loop inside each
+# test, because the rows arrive as that class's fixture.
+for _corpus in CORPORA:
+    _name = f"ServerReplay{_corpus.root.name.upper()}Tests"
+    globals()[_name] = type(
+        _name,
+        (_ServerReplay, TestCase),
+        {"corpus": _corpus, "fixtures": [str(_corpus.rows)]},
+    )

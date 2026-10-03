@@ -94,3 +94,8 @@ VAULT_CSP = {
     # would silence Chromium's reports rather than add to them.
     "report-uri": ["/api/v1/csp-report"],
 }
+
+# The crypto suite manifest declares some algorithms in state "test": they
+# exist to prove the vault's dispatch and must never be written in production.
+# The test runner turns this on for the whole suite.
+VAULT_TEST_SUITES = env_bool("VAULT_TEST_SUITES", False)

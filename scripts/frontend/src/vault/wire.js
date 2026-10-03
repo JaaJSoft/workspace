@@ -1,40 +1,21 @@
+import { CURRENT_SUITE, suiteEntry } from './suites.js';
+
 // The persisted byte layouts: the six-byte ciphertext header, and the one-byte
 // algorithm prefix on a stored public key. HPKE-wrapped vault keys do NOT use
 // the header: they carry HPKE's own framed output, their agility living in
 // VaultKeyWrap.hpke_suite.
-export const FORMAT_VERSION = 0x01;
-export const AEAD_AES_256_GCM = 0x01;
 export const KDF_DIRECT = 0x00;
 export const KDF_HKDF_SHA256 = 0x01;
-
-// iv_len is declared rather than inferred, but it must agree with the AEAD: a
-// mismatch is how a decoder gets tricked into slicing at the wrong offset.
-const IV_LENGTHS = { [AEAD_AES_256_GCM]: 12 };
-const HEADER_LENGTH = 6;
-
-export class UnsupportedVersionError extends Error {}
+export const HEADER_LENGTH = 6;
 
 // One byte in front of every persisted public key, so a second key exchange
 // algorithm lands without a data migration. The attestation signs the prefixed
-// form: an unsigned label would be the server's to change at will.
-export const PUBKEY_ALG_X25519 = 0x01;
-// Ed25519 carries its own label even though both keys are 32 raw bytes: under
-// one shared label the two would be indistinguishable once stored. Reading the
-// label back is not this decoder's job - the attestation signs the labelled
-// form, so a swap breaks the signature the client re-checks against the signing
-// key it unwrapped. The server, which only ever sees a pair the client signed
-// itself, pins the expected algorithm instead.
-export const PUBKEY_ALG_ED25519 = 0x02;
-
-// Raw key length per algorithm: a stored key of the wrong size is refused
-// rather than truncated.
-const PUBKEY_LENGTHS = { [PUBKEY_ALG_X25519]: 32, [PUBKEY_ALG_ED25519]: 32 };
-
-export function encodePublicKey(raw, algId = PUBKEY_ALG_X25519) {
-  const expected = PUBKEY_LENGTHS[algId];
-  if (expected === undefined) throw new Error(`unknown public key algorithm ${algId}`);
-  if (raw.length !== expected) {
-    throw new Error(`public key is ${raw.length} bytes, algorithm ${algId} wants ${expected}`);
+// form: an unsigned label would be the server's to change at will. A key of
+// the wrong size is refused rather than truncated.
+export function encodePublicKey(raw, algId) {
+  const entry = suiteEntry('pubkey', algId);
+  if (raw.length !== entry.length) {
+    throw new Error(`public key is ${raw.length} bytes, algorithm ${algId} wants ${entry.length}`);
   }
   const out = new Uint8Array(1 + raw.length);
   out[0] = algId;
@@ -42,23 +23,26 @@ export function encodePublicKey(raw, algId = PUBKEY_ALG_X25519) {
   return out;
 }
 
-// The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte key,
-// so handing it the stored form would read the label as key material.
-export function decodePublicKey(stored) {
+// The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte key.
+// The usage check is what keeps a signing key from reaching the KEM, or the
+// reverse - both are 32 bytes, the label is all that tells them apart. A known
+// label of the other usage is a malformed key, not an unsupported one.
+export function decodePublicKey(stored, usage) {
   if (stored.length < 1) throw new Error('public key is empty');
-  const expected = PUBKEY_LENGTHS[stored[0]];
-  if (expected === undefined) {
-    throw new Error(`unsupported public key algorithm ${stored[0]}`);
-  }
-  if (stored.length !== 1 + expected) {
-    throw new Error(
-      `public key is ${stored.length - 1} bytes, algorithm ${stored[0]} wants ${expected}`
-    );
+  const entry = suiteEntry('pubkey', stored[0]);
+  if (entry.usage !== usage) throw new Error(`public key algorithm ${stored[0]} is not a ${usage} key`);
+  if (stored.length !== 1 + entry.length) {
+    throw new Error(`public key is ${stored.length - 1} bytes, algorithm ${stored[0]} wants ${entry.length}`);
   }
   return stored.slice(1);
 }
 
-export function encodeCiphertext({ aeadId, kdfId, keyVersion, iv, ciphertext }) {
+// The header on its own, because seal needs it before the AEAD runs: format 2
+// authenticates it. iv_len is the one the manifest declares for the AEAD.
+export function encodeHeader({
+  formatVersion = CURRENT_SUITE.formatVersion, aeadId, kdfId, keyVersion,
+}) {
+  suiteEntry('format', formatVersion);
   // Integer-ness is checked, not assumed: every header field is written into a
   // byte array, which silently truncates a float or an out-of-range value
   // instead of failing, where the reference implementation raises. A version
@@ -72,13 +56,18 @@ export function encodeCiphertext({ aeadId, kdfId, keyVersion, iv, ciphertext }) 
       throw new Error(`${name} ${id} does not fit in one byte`);
     }
   }
-  const expected = IV_LENGTHS[aeadId];
-  if (expected === undefined) throw new Error(`unknown aead_id ${aeadId}`);
+  const ivLength = suiteEntry('aead', aeadId).iv_length;
+  return Uint8Array.from([formatVersion, aeadId, kdfId, keyVersion >> 8, keyVersion & 0xff, ivLength]);
+}
+
+export function encodeCiphertext({ iv, ciphertext, ...fields }) {
+  const header = encodeHeader(fields);
+  const expected = suiteEntry('aead', fields.aeadId).iv_length;
   if (iv.length !== expected) {
-    throw new Error(`iv is ${iv.length} bytes, aead ${aeadId} wants ${expected}`);
+    throw new Error(`iv is ${iv.length} bytes, aead ${fields.aeadId} wants ${expected}`);
   }
   const out = new Uint8Array(HEADER_LENGTH + iv.length + ciphertext.length);
-  out.set([FORMAT_VERSION, aeadId, kdfId, keyVersion >> 8, keyVersion & 0xff, iv.length], 0);
+  out.set(header, 0);
   out.set(iv, HEADER_LENGTH);
   out.set(ciphertext, HEADER_LENGTH + iv.length);
   return out;
@@ -86,14 +75,14 @@ export function encodeCiphertext({ aeadId, kdfId, keyVersion, iv, ciphertext }) 
 
 export function decodeCiphertext(raw) {
   if (raw.length < HEADER_LENGTH) throw new Error('ciphertext shorter than its header');
-  if (raw[0] !== FORMAT_VERSION) {
-    // Rejected before any parsing at all, so a future layout can never be
-    // half-read by an old client.
-    throw new UnsupportedVersionError(`unsupported format_version ${raw[0]}`);
-  }
+  // Format first, before any parsing at all: a future layout must never be
+  // half-read by an old client.
+  suiteEntry('format', raw[0]);
   const aeadId = raw[1];
   const ivLen = raw[5];
-  if (IV_LENGTHS[aeadId] !== ivLen) {
+  // iv_len is declared rather than inferred, but it must agree with the AEAD: a
+  // mismatch is how a decoder gets tricked into slicing at the wrong offset.
+  if (suiteEntry('aead', aeadId).iv_length !== ivLen) {
     throw new Error(`iv_len ${ivLen} is inconsistent with aead_id ${aeadId}`);
   }
   // A truncated buffer would otherwise yield a short iv and an empty
@@ -108,5 +97,6 @@ export function decodeCiphertext(raw) {
     keyVersion: (raw[3] << 8) | raw[4],
     iv: raw.slice(HEADER_LENGTH, HEADER_LENGTH + ivLen),
     ciphertext: raw.slice(HEADER_LENGTH + ivLen),
+    header: raw.slice(0, HEADER_LENGTH),
   };
 }

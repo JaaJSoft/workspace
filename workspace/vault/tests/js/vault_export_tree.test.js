@@ -36,6 +36,7 @@ function fixtures() {
 function load(overrides = {}) {
   const f = fixtures();
   const readerCounts = overrides.readerCounts || { entries: 0, folders: 0, tags: 0 };
+  const unsupportedCounts = overrides.unsupportedCounts || { entries: 0, folders: 0, tags: 0 };
   return loadScript(SCRIPT, {
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
@@ -46,18 +47,22 @@ function load(overrides = {}) {
       listEntries: async (uuid, options) => (options && options.trashed ? f.trashed : f.live),
     },
     vaultReader: {
-      readVault: async (s, row) => Object.assign({}, row, { name: 'Perso', description: 'D' }),
+      readVault: async (s, row) => Object.assign(
+        {}, row, { name: 'Perso', description: 'D' },
+        overrides.vaultUnsupported ? { unsupported: true, name: '', description: '' } : {},
+      ),
       readEntries: async (s, v, rows) => {
         if (overrides.readerThrowsLocked) {
           const error = new Error('locked');
           error.reason = 'locked';
           throw error;
         }
-        return { rows: rows, tamperedCount: readerCounts.entries };
+        return { rows: rows, tamperedCount: readerCounts.entries, unsupportedCount: unsupportedCounts.entries };
       },
       readFolders: async (s, v, rows) => ({
         rows: rows.map((r) => Object.assign({}, r, { name: 'Banque' })),
         tamperedCount: readerCounts.folders,
+        unsupportedCount: unsupportedCounts.folders,
       }),
       // Every ciphertext in the fixtures is its own plaintext, uppercased.
       openField: async (s, v, row, fieldId) => {
@@ -70,6 +75,11 @@ function load(overrides = {}) {
         const field = (row.entry_fields || []).find((candidate) => candidate.field_id === fieldId);
         const ciphertext = fieldId in column ? column[fieldId] : field && field.encrypted_value;
         if (!ciphertext) return '';
+        if (overrides.unsupportedField === fieldId) {
+          const err = new Error('field suite 9');
+          err.name = 'UnsupportedAlgorithmError';
+          throw err;
+        }
         if (overrides.unopenableField === fieldId) {
           // What a real AEAD rejection looks like from here: bare, and
           // carrying no reason of its own.
@@ -80,6 +90,7 @@ function load(overrides = {}) {
       readTags: async (s, v, rows) => ({
         rows: rows.map((r) => Object.assign({}, r, { name: 'perso' })),
         tamperedCount: readerCounts.tags,
+        unsupportedCount: unsupportedCounts.tags,
       }),
     },
     vaultCrypto: {
@@ -170,6 +181,33 @@ test('a field that will not open names the account unreadable, not a bare failur
       `a corrupted ${field} escaped unnamed`
     );
   }
+});
+
+test('a row this build cannot read refuses as unsupported, never as unreadable', async () => {
+  // A newer build wrote it - that is not the account's tamper alert, and
+  // lumping it in would send the user to distrust a row that just needs a
+  // reload.
+  const ctx = load({ unsupportedCounts: { entries: 1, folders: 0, tags: 0 } });
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {}),
+    (err) => err.reason === 'unsupported'
+  );
+});
+
+test('a field this build cannot read reports unsupported, not a bare failure', async () => {
+  const ctx = load({ unsupportedField: 'password' });
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {}),
+    (err) => err.reason === 'unsupported'
+  );
+});
+
+test('a vault this build cannot read refuses as unsupported', async () => {
+  const ctx = load({ vaultUnsupported: true });
+  await assert.rejects(
+    () => ctx.vaultExportTree.buildTree(session, {}),
+    (err) => err.reason === 'unsupported'
+  );
 });
 
 test('a lock during the export aborts it, and is not reported as tampering', async () => {

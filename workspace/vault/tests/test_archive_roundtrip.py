@@ -5,7 +5,7 @@ import cbor2
 from cryptography.exceptions import InvalidTag
 from django.test import SimpleTestCase
 
-from .reference import archive, primitives
+from .reference import archive, primitives, suites
 
 FIXTURES = Path(__file__).parent / "fixtures"
 VECTOR = FIXTURES / "archive_vector.json"
@@ -102,7 +102,7 @@ class ArchiveCostParameterTests(SimpleTestCase):
         # starts passing again and nothing says so.
         for name, value in self.vector["params"].items():
             with self.subTest(name):
-                self.assertNotEqual(value, primitives.ARGON2_PARAMS[name])
+                self.assertNotEqual(value, suites.CURRENT_SUITE["kdf"]["params"][name])
 
     def test_an_archive_written_at_other_parameters_opens_at_those_parameters(self):
         # The container's central claim. A reader that bounds-checks the

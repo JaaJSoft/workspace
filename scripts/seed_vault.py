@@ -29,15 +29,10 @@ from workspace.vault.models import (
     VaultKeyWrap,
     VaultTag,
 )
-from workspace.vault.tests.reference import ad, metadata, primitives, wire
+from workspace.vault.tests.reference import ad, metadata, primitives, suites, wire
 from workspace.vault.tests.reference.encoding import to_base64url
 
 MASTER_PASSWORD = "demo-vault-1234"
-
-# The suite the wrap was produced with, as the column stores it: a dict, not
-# the CipherSuite object the reference works in. It is what tells a future
-# reader which primitives to open this wrap with.
-HPKE_SUITE_V1 = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 
 # The demo content. Two vaults, one with a tree and a trash, one flat - enough
 # for every view the browser offers to have something in it.
@@ -189,7 +184,9 @@ class _Signer:
                 key,
                 plaintext,
                 associated_data,
-                iv=secrets.token_bytes(12),
+                iv=secrets.token_bytes(
+                    primitives.AEADS[suites.CURRENT_SUITE["aead_id"]].iv_length
+                ),
                 key_version=key_version,
                 kdf_id=kdf_id,
             )
@@ -203,17 +200,18 @@ class _Signer:
     def write_identity(self):
         account = str(self.account_uuid)
         kex_public = primitives.encode_public_key(
-            self.kex_private.public_key(), primitives.PUBKEY_ALG_X25519
+            self.kex_private.public_key(), suites.CURRENT_SUITE["kex_public_key_alg"]
         )
         sig_public = primitives.encode_public_key(
-            self.sig_private.public_key(), primitives.PUBKEY_ALG_ED25519
+            self.sig_private.public_key(), suites.CURRENT_SUITE["sig_public_key_alg"]
         )
         identity = AccountIdentity.objects.create(
             uuid=self.account_uuid,
             user=self.user,
             # Without these the browser cannot reproduce the derivation: the
             # envelope is what tells it which cost parameters produced the key.
-            kdf_params=primitives.ARGON2_PARAMS,
+            kdf_algo=suites.CURRENT_SUITE["kdf"]["algo"],
+            kdf_params=suites.CURRENT_SUITE["kdf"]["params"],
             kdf_salt=to_base64url(self.salt),
             kex_public=to_base64url(kex_public),
             sig_public=to_base64url(sig_public),
@@ -260,11 +258,14 @@ def _vault_keys(signer, vault_uuid):
     meta_key = primitives.hkdf(vault_key, ad.vault_meta_info(vault_uuid))
     wrapped = primitives.hpke_seal(
         signer.kex_private.public_key(),
-        ad.vault_key_info(vault_uuid, str(signer.account_uuid)),
+        ad.vault_key_info(
+            vault_uuid, str(signer.account_uuid), suites.CURRENT_SUITE["hpke"]
+        ),
         vault_key,
         # HPKE draws a fresh key per wrap; the reference takes it as an
         # argument so a published vector can pin one. Here it is simply new.
         sender_private=primitives.generate_kex_keypair(),
+        hpke_suite=suites.CURRENT_SUITE["hpke"],
     )
     return vault_key, meta_key, to_base64url(wrapped)
 
@@ -322,7 +323,9 @@ def seed_vault_for(user):
             recipient=user,
             wrapped_key=wrapped_key,
             key_version=1,
-            hpke_suite=HPKE_SUITE_V1,
+            # As the column stores it: the dict, "format" included, that
+            # tells a reader which suite and which info to open the wrap with.
+            hpke_suite=suites.CURRENT_SUITE["hpke"],
         )
         counts["vaults"] += 1
 

@@ -33,6 +33,11 @@ CORPUS = json.loads(
 )
 
 BUNDLE_URL = "/static/vault/ui/js/vendor/vault-crypto.js"
+# Registers aead 0xf0 through the same public door a real algorithm would use,
+# so the format-2-test-ctr-hmac vector has something to open. The vault page
+# does not load this script itself yet, so this suite - which loads the
+# bundle into its own blank page rather than the vault page - loads it too.
+TEST_AEAD_URL = "/static/vault/ui/js/test_suites/test_aead.js"
 
 # Replays every frozen vector through the bundle and returns the ids that did
 # not reproduce. Kept as one round-trip: Argon2id alone costs a few hundred
@@ -47,6 +52,7 @@ async (vectors) => {
 
   for (const v of vectors.argon2id) {
     const amk = await V.deriveAmk({
+      algo: 'argon2id',
       password: v.password,
       secretKey: V.fromBase64Url(v.secret_key_b64),
       salt: V.fromBase64Url(v.salt_b64),
@@ -60,17 +66,60 @@ async (vectors) => {
     if (b64(out) !== v.expected_b64) failures.push('hkdf/' + v.id);
   }
 
+  // A legacy vector carries a raw associated-data string; a format-2 one
+  // carries context_body + associated_data hex instead, and its context is
+  // rebuilt through the same public AD builder the application calls -
+  // running it as raw AD is the format-1 path this suite has already left.
+  const CONTEXT_BUILDERS = {
+    'entry-field': (id, field) => V.AD.entryFieldAd(id, field),
+    'account-kex-priv': (id) => V.AD.kexPrivAd(id),
+    'account-sig-priv': (id) => V.AD.sigPrivAd(id),
+    'vault-field': (id, field) => V.AD.vaultFieldAd(id, field),
+    'folder-field': (id, field) => V.AD.folderFieldAd(id, field),
+    'tag-field': (id, field) => V.AD.tagFieldAd(id, field),
+  };
+  const contextFor = (body) => {
+    const [slot, ...args] = body.split('|');
+    return CONTEXT_BUILDERS[slot](...args);
+  };
+
   for (const v of vectors.aead) {
-    const ad = utf8(v.ad);
-    const raw = await V.seal(V.fromBase64Url(v.key_b64), utf8(v.plaintext), ad, {
-      iv: V.fromBase64Url(v.iv_b64),
-      keyVersion: v.key_version,
-      kdfId: v.kdf_id,
-    });
-    if (b64(raw) !== v.expected_wire_b64) failures.push('aead/' + v.id);
-    const plain = await V.open(V.fromBase64Url(v.key_b64), raw, ad);
-    if (new TextDecoder().decode(plain) !== v.plaintext) {
-      failures.push('aead-reopen/' + v.id);
+    if (v.ad !== undefined) {
+      const ad = utf8(v.ad);
+      // The stored wire is what a real account holds under format 1;
+      // opening it directly is the interoperability check that matters.
+      const stored = await V.open(
+        V.fromBase64Url(v.key_b64), V.fromBase64Url(v.expected_wire_b64), ad
+      );
+      if (new TextDecoder().decode(stored) !== v.plaintext) failures.push('aead/' + v.id);
+      // seal() always writes the current suite now, so a fresh seal of a
+      // format-1 vector will not reproduce its original bytes - only that
+      // it reopens.
+      const raw = await V.seal(V.fromBase64Url(v.key_b64), utf8(v.plaintext), ad, {
+        iv: V.fromBase64Url(v.iv_b64),
+        keyVersion: v.key_version,
+        kdfId: v.kdf_id,
+      });
+      const reopened = await V.open(V.fromBase64Url(v.key_b64), raw, ad);
+      if (new TextDecoder().decode(reopened) !== v.plaintext) {
+        failures.push('aead-reopen/' + v.id);
+      }
+      continue;
+    }
+    const context = contextFor(v.context_body);
+    const wire = V.fromBase64Url(v.expected_wire_b64);
+    const plain = await V.open(V.fromBase64Url(v.key_b64), wire, context);
+    if (new TextDecoder().decode(plain) !== v.plaintext) failures.push('aead/' + v.id);
+    // seal() always writes the current suite's aead, so only a vector
+    // already sealed under it can round-trip through it.
+    if (v.format_version === V.CURRENT_SUITE.formatVersion
+        && v.aead_id === V.CURRENT_SUITE.aeadId) {
+      const sealed = await V.seal(V.fromBase64Url(v.key_b64), utf8(v.plaintext), context, {
+        iv: V.fromBase64Url(v.iv_b64),
+        keyVersion: v.key_version,
+        kdfId: v.kdf_id,
+      });
+      if (b64(sealed) !== v.expected_wire_b64) failures.push('aead-reseal/' + v.id);
     }
   }
 
@@ -81,7 +130,8 @@ async (vectors) => {
     const opened = await V.hpkeOpen(
       V.fromBase64Url(v.recipient_sk_b64),
       utf8(v.info),
-      V.fromBase64Url(v.expected_sealed_b64)
+      V.fromBase64Url(v.expected_sealed_b64),
+      v.hpke_suite
     );
     if (b64(opened) !== v.plaintext_b64) failures.push('hpke/' + v.id);
   }
@@ -184,6 +234,7 @@ class EngineChecks:
     def _load_bundle(self):
         self.page.goto(f"{self.live_server_url}/login")
         self.page.add_script_tag(url=BUNDLE_URL)
+        self.page.add_script_tag(url=TEST_AEAD_URL)
         self._require_secure_curves()
 
     def _require_secure_curves(self):
@@ -308,9 +359,11 @@ class CryptoBundleBrowserTests(EngineChecks, PlaywrightTestCase):
               const V = window.vaultCrypto;
               const started = performance.now();
               await V.deriveAmk({
+                algo: V.CURRENT_SUITE.kdf.algo,
                 password: 'Tr0ub4dor&3',
                 secretKey: V.randomBytes(32),
                 salt: V.randomBytes(32),
+                params: V.CURRENT_SUITE.kdf.params,
               });
               return performance.now() - started;
             }

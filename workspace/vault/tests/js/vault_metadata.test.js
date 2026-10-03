@@ -46,10 +46,13 @@ test('the metadata key derives to the frozen bytes', async () => {
   assert.equal(V.toBase64Url(derived), frozen.expected_b64);
 });
 
+// The frozen vector is a format 1 ciphertext: its header decides the prefix
+// the context is spelled with.
 test('the field associated data matches the reference', () => {
   const frozen = vector('aead', 'vault-field-name');
   const uuid = frozen.ad.split('|')[2];
-  assert.equal(text(V.AD.vaultFieldAd(uuid, 'name')), frozen.ad);
+  const { header } = V.decodeCiphertext(V.fromBase64Url(frozen.expected_wire_b64));
+  assert.equal(text(V.associatedData(V.AD.vaultFieldAd(uuid, 'name'), header)), frozen.ad);
 });
 
 test('a field outside the catalogue is refused', () => {
@@ -59,20 +62,20 @@ test('a field outside the catalogue is refused', () => {
   }
 });
 
-test('the vault name seals to the frozen ciphertext', async () => {
+test('the frozen vault name opens, and a fresh seal of it reopens', async () => {
   const frozen = vector('aead', 'vault-field-name');
   const uuid = frozen.ad.split('|')[2];
-  const sealed = await V.seal(
-    V.fromBase64Url(frozen.key_b64),
-    new TextEncoder().encode(frozen.plaintext),
-    V.AD.vaultFieldAd(uuid, 'name'),
-    {
-      iv: V.fromBase64Url(frozen.iv_b64),
-      keyVersion: frozen.key_version,
-      kdfId: frozen.kdf_id,
-    }
-  );
-  assert.equal(V.toBase64Url(sealed), frozen.expected_wire_b64);
+  const key = V.fromBase64Url(frozen.key_b64);
+  const context = V.AD.vaultFieldAd(uuid, 'name');
+  const opened = await V.open(key, V.fromBase64Url(frozen.expected_wire_b64), context);
+  assert.equal(text(opened), frozen.plaintext);
+  const sealed = await V.seal(key, new TextEncoder().encode(frozen.plaintext), context, {
+    iv: V.fromBase64Url(frozen.iv_b64),
+    keyVersion: frozen.key_version,
+    kdfId: frozen.kdf_id,
+  });
+  assert.equal(sealed[0], V.CURRENT_SUITE.formatVersion);
+  assert.equal(text(await V.open(key, sealed, context)), frozen.plaintext);
 });
 
 test('the payload encodes to the frozen canonical CBOR', () => {
@@ -167,12 +170,12 @@ test('a folder or tag field outside its catalogue is refused', () => {
   // The accepted string first: without it, a missing builder would satisfy
   // the two refusals below by throwing a TypeError.
   assert.equal(
-    text(V.AD.folderFieldAd(target, 'name')),
-    'v1|folder-field|018f3f6e-0000-7000-8000-000000000001|name'
+    V.AD.folderFieldAd(target, 'name').body,
+    'folder-field|018f3f6e-0000-7000-8000-000000000001|name'
   );
   assert.equal(
-    text(V.AD.tagFieldAd(target, 'name')),
-    'v1|tag-field|018f3f6e-0000-7000-8000-000000000001|name'
+    V.AD.tagFieldAd(target, 'name').body,
+    'tag-field|018f3f6e-0000-7000-8000-000000000001|name'
   );
   assert.throws(() => V.AD.folderFieldAd(target, 'position'), /folder metadata field/);
   assert.throws(() => V.AD.tagFieldAd(target, 'color'), /tag metadata field/);

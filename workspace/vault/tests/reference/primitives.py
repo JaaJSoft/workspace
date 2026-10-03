@@ -8,10 +8,12 @@ convenient high-level call that drops a parameter this hierarchy depends on,
 the low-level API is used instead and the comment says why.
 """
 
+import hmac
 import unicodedata
 
 import cbor2
 from argon2.low_level import Type, core, ffi, lib
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
@@ -21,35 +23,27 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import (
     X25519PrivateKey,
     X25519PublicKey,
 )
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pyhpke import AEADId, CipherSuite, KDFId, KEMId
 from pyhpke.kem_key import KEMKeyPair
 
-from . import wire
-
-ARGON2_PARAMS = {"algo": "argon2id", "v": "1.3", "m": 65536, "t": 3, "p": 2}
+from . import ad, wire
+from .suites import CURRENT_SUITE, UnsupportedAlgorithm, entry, stored_hpke_format
 
 # One byte in front of every persisted signature and public key, so a future
-# algorithm lands without a data migration.
+# algorithm lands without a data migration. What each id is - its length, the
+# usage of a key - is the manifest's word; these only name the ids.
 SIG_ALG_ED25519 = 0x01
 PUBKEY_ALG_X25519 = 0x01
 # Ed25519 carries its own label even though both keys are 32 raw bytes: under
-# one shared label the two would be indistinguishable once stored. Reading the
-# label back is not this decoder's job - the attestation signs the labelled
-# form, so a swap breaks the signature the client re-checks against the signing
-# key it unwrapped. The server, which only ever sees a pair the client signed
-# itself, pins the expected algorithm instead.
+# one shared label the two would be indistinguishable once stored, and the
+# decoder could not refuse a signing key handed over as an exchange key.
 PUBKEY_ALG_ED25519 = 0x02
-
-# Raw key length per algorithm: a stored key of the wrong size is refused
-# rather than truncated.
-_PUBKEY_LENGTHS = {PUBKEY_ALG_X25519: 32, PUBKEY_ALG_ED25519: 32}
 
 SECRET_KEY_LENGTH = 32
 SALT_LENGTH = 32
-
-HPKE_SUITE_V1 = {"kem_id": 0x0020, "kdf_id": 0x0001, "aead_id": 0x0002, "mode": 0x00}
 
 # HKDF salt is 32 zero bytes rather than drawn: the input keying material is
 # already a uniformly random key, so a salt buys nothing and a drawn one would
@@ -112,25 +106,8 @@ def argon2id_raw(
     return bytes(ffi.buffer(out, tag_length))
 
 
-def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> bytes:
-    """Argon2id with secret_key passed as K, never concatenated.
-
-    Argon2 accepts a K and a salt of any length, so a secret_key one character
-    short derives a different AMK instead of failing, and only surfaces later
-    as a GCM tag error the UI can report as nothing but a wrong password. The
-    guard belongs here and not in argon2id_raw, which the published RFC 9106
-    vectors reach with their own lengths.
-    """
-    for name, value, expected in (
-        ("secret_key", secret_key, SECRET_KEY_LENGTH),
-        ("salt", salt, SALT_LENGTH),
-    ):
-        if len(value) != expected:
-            raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
-    params = params or ARGON2_PARAMS
-    # NFC applies to the KDF input, not just to the length check: "café"
-    # precomposed and decomposed are different byte strings otherwise.
-    password_input = unicodedata.normalize("NFC", password).encode("utf-8")
+def _argon2id_amk(password_input: bytes, secret_key: bytes, salt: bytes, params):
+    """Argon2id with secret_key passed as K, never concatenated."""
     return argon2id_raw(
         password=password_input,
         salt=salt,
@@ -141,6 +118,72 @@ def derive_amk(password: str, secret_key: bytes, salt: bytes, params=None) -> by
         p=params["p"],
         tag_length=32,
     )
+
+
+# The account KDFs the reference derives with, by the name an envelope stores
+# in kdf_algo. A name the manifest declares but this table lacks is refused:
+# declared is not the same as implemented.
+ACCOUNT_KDFS = {"argon2id": _argon2id_amk}
+
+
+def _account_kdf(algo):
+    derive = ACCOUNT_KDFS.get(algo) if isinstance(algo, str) else None
+    if derive is None:
+        raise UnsupportedAlgorithm("kdf", algo)
+    return entry("kdf", algo), derive
+
+
+def derive_amk(
+    password: str, secret_key: bytes, salt: bytes, params=None, algo=None
+) -> bytes:
+    """The account master key, derived under the envelope's kdf_algo.
+
+    Argon2 accepts a K and a salt of any length, so a secret_key one character
+    short derives a different AMK instead of failing, and only surfaces later
+    as a GCM tag error the UI can report as nothing but a wrong password. The
+    guard belongs here and not in argon2id_raw, which the published RFC 9106
+    vectors reach with their own lengths.
+    """
+    _, derive = _account_kdf(CURRENT_SUITE["kdf"]["algo"] if algo is None else algo)
+    for name, value, expected in (
+        ("secret_key", secret_key, SECRET_KEY_LENGTH),
+        ("salt", salt, SALT_LENGTH),
+    ):
+        if len(value) != expected:
+            raise ValueError(f"{name} is {len(value)} bytes, expected {expected}")
+    params = params or CURRENT_SUITE["kdf"]["params"]
+    # NFC applies to the KDF input, not just to the length check: "café"
+    # precomposed and decomposed are different byte strings otherwise.
+    password_input = unicodedata.normalize("NFC", password).encode("utf-8")
+    return derive(password_input, secret_key, salt, params)
+
+
+def _entry_for_integer(axis: str, identifier) -> dict:
+    # The manifest is keyed by strings, so "2" would find the entry 2 names;
+    # a stored integer id arriving as a string or a bool is not that id.
+    if isinstance(identifier, bool) or not isinstance(identifier, int):
+        raise UnsupportedAlgorithm(axis, identifier)
+    return entry(axis, identifier)
+
+
+def assert_account_kdf(algo: str, params: dict) -> None:
+    """Refuse, before Argon2 runs, what this build cannot or will not derive.
+
+    The bounds are not a secret: parameters a server lowers derive another
+    key and fail anyway. They stop an absurd m from killing the tab before
+    any error surfaces. Extra keys are ignored - seeded accounts carry one.
+    """
+    found, _ = _account_kdf(algo)
+    if not isinstance(params, dict) or params.get("v") != found["params"]["v"]:
+        raise UnsupportedAlgorithm("kdf", algo)
+    for name, (low, high) in found["bounds"].items():
+        value = params.get(name)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not low <= value <= high
+        ):
+            raise UnsupportedAlgorithm("kdf", algo)
 
 
 def hkdf_with_salt(ikm: bytes, salt: bytes, info: bytes, length: int) -> bytes:
@@ -157,40 +200,112 @@ def hkdf(ikm: bytes, info: bytes, length: int = 32) -> bytes:
 AEAD_KEY_LENGTH = 32
 
 
+class _AesGcm:
+    iv_length = 12
+
+    def _check(self, key):
+        # AESGCM infers the variant from the key length, so a 16-byte key would
+        # quietly produce AES-128-GCM under a header declaring AES-256-GCM.
+        if len(key) != AEAD_KEY_LENGTH:
+            raise ValueError(
+                f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+            )
+
+    def seal(self, key, iv, plaintext, associated_data):
+        self._check(key)
+        return AESGCM(key).encrypt(iv, plaintext, associated_data)
+
+    def open(self, key, iv, ciphertext, associated_data):
+        self._check(key)
+        return AESGCM(key).decrypt(iv, ciphertext, associated_data)
+
+
+class _TestCtrHmac:
+    """AES-256-CTR then HMAC-SHA256 - exists only to prove the dispatch.
+
+    Structurally unlike AES-GCM on purpose (another id, a 16-byte nonce,
+    encrypt-then-MAC), so a reader that ignored the id and decrypted as GCM
+    regardless would fail on it.
+    """
+
+    iv_length = 16
+    _TAG_LENGTH = 32
+
+    def working_keys(self, key):
+        if len(key) != AEAD_KEY_LENGTH:
+            raise ValueError(
+                f"test aead needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
+            )
+        return hkdf(key, b"test-aead|enc"), hkdf(key, b"test-aead|mac")
+
+    def _tag(self, mac_key, iv, ciphertext, associated_data):
+        message = (
+            len(associated_data).to_bytes(8, "big") + associated_data + iv + ciphertext
+        )
+        return hmac.new(mac_key, message, "sha256").digest()
+
+    def seal(self, key, iv, plaintext, associated_data):
+        enc_key, mac_key = self.working_keys(key)
+        encryptor = Cipher(algorithms.AES(enc_key), modes.CTR(iv)).encryptor()
+        ciphertext = encryptor.update(plaintext) + encryptor.finalize()
+        return ciphertext + self._tag(mac_key, iv, ciphertext, associated_data)
+
+    def open(self, key, iv, sealed, associated_data):
+        enc_key, mac_key = self.working_keys(key)
+        if len(sealed) < self._TAG_LENGTH:
+            raise InvalidTag()
+        ciphertext, tag = sealed[: -self._TAG_LENGTH], sealed[-self._TAG_LENGTH :]
+        if not hmac.compare_digest(
+            tag, self._tag(mac_key, iv, ciphertext, associated_data)
+        ):
+            raise InvalidTag()
+        decryptor = Cipher(algorithms.AES(enc_key), modes.CTR(iv)).decryptor()
+        return decryptor.update(ciphertext) + decryptor.finalize()
+
+
+AEADS = {wire.AEAD_AES_256_GCM: _AesGcm(), wire.AEAD_TEST_CTR_HMAC: _TestCtrHmac()}
+
+
 def aead_seal(
     key: bytes,
     plaintext: bytes,
-    associated_data: bytes,
+    associated_data,
     *,
     iv: bytes,
     key_version: int,
     kdf_id: int,
+    aead_id: int | None = None,
+    format_version: int | None = None,
 ) -> bytes:
-    # AESGCM infers the variant from the key length, so a 16-byte key would
-    # quietly produce AES-128-GCM under a header still declaring AES-256-GCM.
-    if len(key) != AEAD_KEY_LENGTH:
-        raise ValueError(
-            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
-        )
-    ciphertext = AESGCM(key).encrypt(iv, plaintext, associated_data)
-    return wire.encode_ciphertext(
-        aead_id=wire.AEAD_AES_256_GCM,
+    aead_id = CURRENT_SUITE["aead_id"] if aead_id is None else aead_id
+    format_version = (
+        CURRENT_SUITE["format_version"] if format_version is None else format_version
+    )
+    # The header is built first because format 2 authenticates it.
+    header = wire.encode_ciphertext(
+        format_version=format_version,
+        aead_id=aead_id,
         kdf_id=kdf_id,
         key_version=key_version,
         iv=iv,
-        ciphertext=ciphertext,
+        ciphertext=b"",
+    )[: wire.HEADER_LENGTH]
+    sealed = AEADS[aead_id].seal(
+        key, iv, plaintext, ad.associated_data(associated_data, header)
     )
+    return header + iv + sealed
 
 
-def aead_open(key: bytes, raw: bytes, associated_data: bytes) -> bytes:
-    if len(key) != AEAD_KEY_LENGTH:
-        raise ValueError(
-            f"aes-256-gcm needs a {AEAD_KEY_LENGTH}-byte key, got {len(key)}"
-        )
+def aead_open(key: bytes, raw: bytes, associated_data) -> bytes:
     decoded = wire.decode_ciphertext(raw)
     # An open failure is surfaced as-is. Never retried with another AD, never
     # returned as partial plaintext. Retrying turns the AD into an oracle.
-    return AESGCM(key).decrypt(decoded.iv, decoded.ciphertext, associated_data)
+    return AEADS[decoded.aead_id].open(
+        key,
+        decoded.iv,
+        decoded.ciphertext,
+        ad.associated_data(associated_data, decoded.header),
+    )
 
 
 def generate_kex_keypair() -> X25519PrivateKey:
@@ -207,15 +322,13 @@ def public_bytes(key) -> bytes:
     )
 
 
-def encode_public_key(key, alg: int = PUBKEY_ALG_X25519) -> bytes:
+def encode_public_key(key, alg: int) -> bytes:
     """The stored form of a public key: algorithm byte, then the raw key.
 
     The attestation signs this form, not the bare key: an unsigned algorithm
     byte would be the server's to change while the signature still verifies.
     """
-    expected = _PUBKEY_LENGTHS.get(alg)
-    if expected is None:
-        raise ValueError(f"unknown public key algorithm {alg:#04x}")
+    expected = entry("pubkey", alg)["length"]
     raw = public_bytes(key)
     if len(raw) != expected:
         raise ValueError(
@@ -224,21 +337,25 @@ def encode_public_key(key, alg: int = PUBKEY_ALG_X25519) -> bytes:
     return bytes([alg]) + raw
 
 
-def decode_public_key(stored: bytes) -> bytes:
-    """Raw key bytes from the stored form.
+def decode_public_key(stored: bytes, usage: str) -> bytes:
+    """Raw key bytes from the stored form, for a key of the given usage.
 
     The KEM never sees the prefix: DHKEM(X25519) deserializes a bare 32-byte
     key, so handing it the stored form would read the label as key material.
+    A known label of the other usage is a malformed key, not an unsupported
+    one: this build implements it, just not for this purpose.
     """
     if not stored:
         raise ValueError("public key is empty")
-    expected = _PUBKEY_LENGTHS.get(stored[0])
-    if expected is None:
-        raise ValueError(f"unsupported public key algorithm {stored[0]:#04x}")
-    if len(stored) != 1 + expected:
+    found = entry("pubkey", stored[0])
+    if found["usage"] != usage:
+        raise ValueError(
+            f"public key algorithm {stored[0]:#04x} is a {found['usage']} key, not {usage}"
+        )
+    if len(stored) != 1 + found["length"]:
         raise ValueError(
             f"public key is {len(stored) - 1} bytes, "
-            f"algorithm {stored[0]:#04x} wants {expected}"
+            f"algorithm {stored[0]:#04x} wants {found['length']}"
         )
     return stored[1:]
 
@@ -256,10 +373,41 @@ def hpke_suite(
     kdf: KDFId = KDFId.HKDF_SHA256,
     aead: AEADId = AEADId.AES256_GCM,
 ) -> CipherSuite:
-    """Suite v1 by default; the arguments exist for the published vectors,
-    which cover this KEM and KDF only in their AES-128-GCM variant.
+    """The arguments exist for the published vectors, which cover this KEM
+    and KDF only in their AES-128-GCM variant. A stored wrap goes through
+    hpke_suite_for instead.
     """
     return CipherSuite.new(kem, kdf, aead)
+
+
+# The HPKE constructions the reference seals under, keyed by format as the
+# manifest is. The ids are spelled here rather than read from the manifest: a
+# format the manifest declares under other ids is one the reference refuses.
+_X25519_HKDF_SHA256_AES256_GCM = {
+    "kem_id": KEMId.DHKEM_X25519_HKDF_SHA256.value,
+    "kdf_id": KDFId.HKDF_SHA256.value,
+    "aead_id": AEADId.AES256_GCM.value,
+    "mode": 0,
+}
+HPKE_FORMATS = {1: _X25519_HKDF_SHA256_AES256_GCM, 2: _X25519_HKDF_SHA256_AES256_GCM}
+
+
+def hpke_suite_for(stored: dict) -> CipherSuite:
+    """The suite a stored hpke_suite names, checked against the manifest.
+
+    A row carrying no "format" key is format 1. Anything other than exactly
+    the suite the manifest declares for its format is refused, before any key
+    schedule runs - and so is a declared suite the reference does not build.
+    """
+    fmt = stored_hpke_format(stored)
+    declared = entry("hpke", fmt)["suite"]
+    if HPKE_FORMATS.get(fmt) != declared:
+        raise UnsupportedAlgorithm("hpke", stored)
+    return hpke_suite(
+        KEMId(declared["kem_id"]),
+        KDFId(declared["kdf_id"]),
+        AEADId(declared["aead_id"]),
+    )
 
 
 def hpke_seal(
@@ -268,6 +416,7 @@ def hpke_seal(
     plaintext: bytes,
     *,
     sender_private: X25519PrivateKey,
+    hpke_suite: dict,
 ) -> bytes:
     """mode_base seal, aad empty - all context binding lives in info.
 
@@ -277,7 +426,7 @@ def hpke_seal(
     the suite to mode_auth, which binds the wrap to a sender identity nothing
     here verifies.
     """
-    suite = hpke_suite()
+    suite = hpke_suite_for(hpke_suite)
     pk = suite.kem.deserialize_public_key(public_bytes(recipient_public))
     ephemeral = KEMKeyPair(
         suite.kem.deserialize_private_key(private_bytes(sender_private)),
@@ -287,8 +436,10 @@ def hpke_seal(
     return enc + sender.seal(plaintext, aad=b"")
 
 
-def hpke_open(recipient_private: X25519PrivateKey, info: bytes, sealed: bytes) -> bytes:
-    suite = hpke_suite()
+def hpke_open(
+    recipient_private: X25519PrivateKey, info: bytes, sealed: bytes, *, hpke_suite: dict
+) -> bytes:
+    suite = hpke_suite_for(hpke_suite)
     enc_length = 32  # DHKEM(X25519) encapsulated key size
     enc, ciphertext = sealed[:enc_length], sealed[enc_length:]
     sk = suite.kem.deserialize_private_key(private_bytes(recipient_private))
@@ -365,14 +516,20 @@ def sign_bytes(private_key: Ed25519PrivateKey, message: bytes) -> bytes:
     through sign() would wrap it in a CBOR byte string and produce a signature
     no conforming verifier accepts.
     """
-    return bytes([SIG_ALG_ED25519]) + private_key.sign(message)
+    return bytes([CURRENT_SUITE["signature_alg"]]) + private_key.sign(message)
 
 
 def verify_bytes(
     public_key: Ed25519PublicKey, message: bytes, signature: bytes
 ) -> None:
-    if signature[0] != SIG_ALG_ED25519:
-        raise ValueError(f"unsupported signature algorithm {signature[0]:#04x}")
+    if not signature:
+        raise ValueError("signature is empty")
+    found = entry("signature", signature[0])
+    if len(signature) != 1 + found["length"]:
+        raise ValueError(
+            f"signature is {len(signature) - 1} bytes, "
+            f"algorithm {signature[0]:#04x} wants {found['length']}"
+        )
     public_key.verify(signature[1:], message)
 
 
@@ -398,8 +555,7 @@ def verify(
     Ed25519 at all.
     """
     payload = cbor2.loads(payload_bytes)  # 1. decode
-    if payload.get("v") != 1:  # 2. version
-        raise ValueError(f"unsupported payload version {payload.get('v')!r}")
+    _entry_for_integer("payload", payload.get("v"))  # 2. version
     if payload.get("type") != expected_type:  # 3. type, before any crypto
         raise ValueError(
             f"payload type {payload.get('type')!r} does not match {expected_type!r}"

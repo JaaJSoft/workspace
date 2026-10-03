@@ -118,3 +118,24 @@ test('declining the confirmation leaves the remembered key alone', async () => {
   assert.equal(component.secretRequired, false);
   assert.equal(component.remember, true);
 });
+
+test('an envelope this build cannot read gets its own message, not a password one', async () => {
+  const { component } = gate({ fail: 'unsupported' });
+  component.password = 'pw';
+  component.secretText = 'TYPED';
+  await component.unlock();
+  assert.match(component.error, /newer version of the app/);
+  assert.match(component.error, /persists after reloading, contact your administrator/);
+  assert.doesNotMatch(component.error, /master password/);
+});
+
+test('a remembered key does not turn an unreadable envelope into a password-or-key failure', async () => {
+  // Nothing about the key could have caused it, so the key stays folded away.
+  const { component, calls } = gate({ remembered: STORED, fail: 'unsupported' });
+  component.password = 'pw';
+  await component.unlock();
+  assert.match(component.error, /newer version of the app/);
+  assert.equal(component.secretRequired, false);
+  assert.equal(component.secretPanelOpen, false);
+  assert.equal(calls.forgotten, 0);
+});

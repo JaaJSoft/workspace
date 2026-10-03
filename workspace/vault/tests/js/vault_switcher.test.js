@@ -173,6 +173,47 @@ test('a vault whose signature failed cannot be switched to', async () => {
   assert.equal(component.vaultUuid, 'v-1');
 });
 
+test('a vault this build cannot read cannot be switched to either', async () => {
+  // Written by a newer build - no name to show and no key this build can
+  // unwrap, exactly like the tampered and the unopenable cases above.
+  const { component } = switcher();
+  await component.switchVault({ uuid: 'v-newer', unsupported: true });
+  assert.equal(component.loaded, 0);
+  assert.equal(component.vaultUuid, 'v-1');
+});
+
+test('a vault written by a newer build reads as a reload away, not as broken', () => {
+  const { component } = switcher();
+  const newer = { uuid: 'v-newer', unsupported: true, name: '' };
+  assert.equal(component.vaultIsDegraded(newer), true);
+  assert.equal(component.vaultIsStruckThrough(newer), false);
+  assert.equal(component.vaultRowLabel(newer), 'Newer version');
+  assert.match(component.vaultRowTitle(newer), /newer version of the app.*Reload the page/);
+});
+
+test('a vault nothing here can repair is struck through and carries no reload hint', () => {
+  const { component } = switcher();
+  for (const flag of ['tampered', 'unopenable', 'unreadable']) {
+    const vault = { uuid: 'v-' + flag, [flag]: true, name: '' };
+    assert.equal(component.vaultIsStruckThrough(vault), true, flag);
+    assert.equal(component.vaultRowLabel(vault), 'Unreadable vault', flag);
+    assert.equal(component.vaultRowTitle(vault), null, flag);
+  }
+  assert.equal(component.vaultIsStruckThrough(VAULT), false);
+  assert.equal(component.vaultRowLabel(VAULT), 'Personal');
+  assert.equal(component.vaultRowLabel({ uuid: 'v-x', name: '' }), 'Unnamed');
+});
+
+test('the search matches the label a row shows, not only the decrypted name', () => {
+  const { component } = switcher();
+  const newer = { uuid: 'v-newer', unsupported: true, name: '' };
+  component.vaults = [VAULT, OTHER, newer];
+  component.switcherSearch = 'newer';
+  assert.deepEqual(Array.from(component.switcherVaults()), [newer]);
+  component.switcherSearch = 'work';
+  assert.deepEqual(Array.from(component.switcherVaults()), [OTHER]);
+});
+
 test('the search field appears only past a handful of vaults', () => {
   const { component } = switcher();
   assert.equal(component.switcherNeedsSearch(), false);

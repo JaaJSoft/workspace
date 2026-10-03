@@ -27,7 +27,7 @@ from .compat_scripts import READ_EVERYTHING
 # new corpus directory can never go unread - deriving the list from the loads
 # themselves is what stops a version being *declared* covered by a replay that
 # never reads it.
-CORPORA = (compat.load("v1"),)
+CORPORA = (compat.load("v1"), compat.load("v2"))
 COVERED = [corpus.root.name for corpus in CORPORA]
 
 CORPUS_ROUTE = "https://api.pwnedpasswords.com/range/*"
@@ -138,12 +138,13 @@ async () => {
 """
 
 
-class CorpusBrowserReplayTests(PlaywrightTestCase):
-    fixtures = [str(CORPORA[0].rows)]
+class _CorpusBrowserReplay:
+    """Every replay, run once per corpus by the classes generated below."""
+
+    corpus = None
 
     def setUp(self):
         super().setUp()
-        (self.corpus,) = CORPORA
         self.user = get_user_model().objects.get(
             username=self.corpus.credentials["username"]
         )
@@ -268,3 +269,16 @@ class CorpusBrowserReplayTests(PlaywrightTestCase):
             ) from exc
 
         self.assertEqual(counts, expected)
+
+
+# One test class per corpus, generated from CORPORA itself: a version added to
+# the tuple is replayed without a class to remember, and one left out of it is
+# refused by test_compat_frozen. A class each because the rows arrive as that
+# class's fixture.
+for _corpus in CORPORA:
+    _name = f"CorpusBrowserReplay{_corpus.root.name.upper()}Tests"
+    globals()[_name] = type(
+        _name,
+        (_CorpusBrowserReplay, PlaywrightTestCase),
+        {"corpus": _corpus, "fixtures": [str(_corpus.rows)]},
+    )

@@ -31,7 +31,7 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
   // Re-sealed rather than carried over, because the name is what a rename
   // changes; sealing an unchanged name costs one AEAD call and keeps this
   // function with a single path instead of two that can disagree.
-  const metaKey = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+  const metaKey = await session.openVaultKey(vault);
   const encryptedName = V.toBase64Url(
     await V.seal(
       metaKey,

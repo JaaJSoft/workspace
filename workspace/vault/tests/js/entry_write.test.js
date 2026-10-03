@@ -279,3 +279,72 @@ test('a draft with no key version at all still signs under the vault key version
   await ctx.buildEntryWriteRequest(session, VAULT, { ...DRAFT });
   assert.equal(signed[0].key_version, VAULT.key_version);
 });
+
+// Against the real bundle: a write re-seals what it edits under the current
+// format and carries the rest byte for byte, so one entry ends up holding both
+// formats - and the reader has to open each under the same key.
+test('a carried format 1 field and a freshly sealed one both open through the reader', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const { loadScripts } = require('../../../common/tests/js/loader');
+  const ctx = loadScripts(
+    [
+      'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js',
+      'workspace/vault/ui/static/vault/ui/js/entry_write.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
+    ],
+    {
+      crypto: globalThis.crypto,
+      TextEncoder: globalThis.TextEncoder,
+      TextDecoder: globalThis.TextDecoder,
+      btoa: globalThis.btoa,
+      atob: globalThis.atob,
+      __vectorsText: fs.readFileSync(
+        path.join(__dirname, '..', 'crypto_vectors.json'), 'utf8'
+      ),
+    },
+  );
+  const V = ctx.vaultCrypto;
+  const frozen = vm.runInContext('JSON.parse(__vectorsText)', ctx)
+    .aead.find((entry) => entry.id === 'format-1-aes-256-gcm');
+  const entryUuid = frozen.context_body.split('|')[1];
+  const vault = {
+    uuid: '0192f3a4-2222-7d8e-9f01-23456789abcd',
+    wrapped_key: 'AQ',
+    hpke_suite: V.CURRENT_SUITE.hpke,
+    key_version: frozen.key_version,
+  };
+  const session = {
+    accountUuid: () => 'account-1',
+    sign: async () => 'signature',
+    openEntryKey: async (row, uuid) => {
+      assert.equal(row, vault, 'the entry key is opened from the vault row itself');
+      assert.equal(uuid, entryUuid);
+      return V.importAeadKey(V.fromBase64Url(frozen.key_b64));
+    },
+  };
+
+  const body = await ctx.buildEntryWriteRequest(session, vault, {
+    uuid: entryUuid,
+    type: 'login',
+    name: 'GitHub',
+    values: { username: 'ada' },
+    carriedFields: { password: frozen.expected_wire_b64 },
+    keyVersion: frozen.key_version,
+  });
+  assert.equal(body.fields.password, frozen.expected_wire_b64);
+  assert.equal(V.fromBase64Url(body.fields.password)[0], 1);
+  assert.equal(V.fromBase64Url(body.fields.username)[0], V.CURRENT_SUITE.formatVersion);
+
+  const row = {
+    uuid: entryUuid,
+    encrypted_name: body.encrypted_name,
+    entry_fields: Object.entries(body.fields).map(([fieldId, value]) => ({
+      field_id: fieldId, encrypted_value: value,
+    })),
+  };
+  assert.equal(await ctx.vaultReader.openField(session, vault, row, 'password'), frozen.plaintext);
+  assert.equal(await ctx.vaultReader.openField(session, vault, row, 'username'), 'ada');
+  assert.equal(await ctx.vaultReader.openField(session, vault, row, 'name'), 'GitHub');
+});

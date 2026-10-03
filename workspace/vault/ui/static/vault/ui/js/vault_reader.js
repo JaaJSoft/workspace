@@ -66,7 +66,7 @@ window.vaultReader = (function () {
     });
     await session.verifyRecord(payload, row.metadata_sig, 'entry-metadata');
 
-    const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
+    const key = await session.openEntryKey(vault, row.uuid);
     const entry = {
       uuid: row.uuid,
       type: row.type,
@@ -103,7 +103,7 @@ window.vaultReader = (function () {
       position: row.position,
     });
     await session.verifyRecord(payload, row.metadata_sig, 'folder-metadata');
-    const key = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+    const key = await session.openVaultKey(vault);
     return {
       uuid: row.uuid,
       parent: row.parent,
@@ -122,7 +122,7 @@ window.vaultReader = (function () {
       color: row.color,
     });
     await session.verifyRecord(payload, row.metadata_sig, 'tag-metadata');
-    const key = await session.openVaultKey(vault.uuid, vault.wrapped_key);
+    const key = await session.openVaultKey(vault);
     return {
       uuid: row.uuid,
       color: row.color,
@@ -130,22 +130,26 @@ window.vaultReader = (function () {
     };
   }
 
+  const isUnsupported = (err) => !!err && err.name === 'UnsupportedAlgorithmError';
+
   // One failed row must not cost the others their listing, so each is read on
-  // its own and a failure is counted. A lock is the one exception: it is not
-  // tampering, and reporting it as such would tell the user to distrust a
-  // vault that is merely closed.
+  // its own and a failure is counted. A lock is not tampering. Neither is a
+  // row written by a newer build: calling it tampered would accuse the server
+  // of what is only an old tab.
   async function readAll(rows, read) {
     const results = [];
     let tamperedCount = 0;
+    let unsupportedCount = 0;
     for (const row of rows) {
       try {
         results.push(await read(row));
       } catch (err) {
         if (err && err.reason === 'locked') throw err;
-        tamperedCount += 1;
+        if (isUnsupported(err)) unsupportedCount += 1;
+        else tamperedCount += 1;
       }
     }
-    return { rows: results, tamperedCount: tamperedCount };
+    return { rows: results, tamperedCount: tamperedCount, unsupportedCount: unsupportedCount };
   }
 
   // A vault's own metadata: verified, then its name opened. Both screens
@@ -164,6 +168,11 @@ window.vaultReader = (function () {
       // does, and the tamper alert is the one message the user is told to act
       // on rather than retry - so it must never stand in for an idle timeout.
       if (err && err.reason === 'locked') throw err;
+      // Written by a newer build: not a forged signature, so it must not
+      // stand in the same banner as one.
+      if (isUnsupported(err)) {
+        return Object.assign({}, row, { unsupported: true, name: '', description: '' });
+      }
       // Signed by nobody the account trusts: never shown with a name that
       // came along for the ride.
       return Object.assign({}, row, { tampered: true, name: '', description: '' });
@@ -172,7 +181,7 @@ window.vaultReader = (function () {
       return Object.assign({}, row, { unopenable: true, name: '', description: '' });
     }
     try {
-      const metaKey = await session.openVaultKey(row.uuid, row.wrapped_key);
+      const metaKey = await session.openVaultKey(row);
       return Object.assign({}, row, {
         name: await openText(
           V, metaKey, row.encrypted_name, V.AD.vaultFieldAd(row.uuid, NAME_FIELD)
@@ -188,6 +197,9 @@ window.vaultReader = (function () {
       });
     } catch (err) {
       if (err && err.reason === 'locked') throw err;
+      if (isUnsupported(err)) {
+        return Object.assign({}, row, { unsupported: true, name: '', description: '' });
+      }
       // Localised the same way a bad signature is: one row loses its name and
       // the rest of the listing keeps going.
       return Object.assign({}, row, { unreadable: true, name: '', description: '' });
@@ -212,7 +224,7 @@ window.vaultReader = (function () {
       const V = window.vaultCrypto;
       const ciphertext = fieldCiphertext(row, fieldId);
       if (!ciphertext) return '';
-      const key = await session.openEntryKey(vault.uuid, vault.wrapped_key, row.uuid);
+      const key = await session.openEntryKey(vault, row.uuid);
       return openText(V, key, ciphertext, V.AD.entryFieldAd(row.uuid, fieldId));
     },
   };

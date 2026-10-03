@@ -150,7 +150,7 @@ id, so the rework needs no data migration.
 2. Wait until the census shows zero rows for that id. There is no fixed delay: an account that never comes back keeps the count above zero.
 3. Only then remove the id from the manifest. `manage.py migrate` runs the `vault.E001` check first and refuses while any stored row still carries an id the manifest no longer declares.
 
-A superseded **signature** id carries `"resign": true | false`. `false` means the algorithm is considered broken: rows signed under it stay readable with a tamper warning and are never re-signed, because re-signing would turn a forgery into a valid signature.
+A superseded **signature** id carries `"resign": true | false`. `false` means the algorithm is considered broken: rows signed under it are never re-signed, because re-signing would turn a forgery into a valid signature. The migration on unlock leaves them as they are, and removing a tag or a folder that one of them carries is refused rather than re-signing it. The reader still opens them like any other row for as long as the manifest declares the id.
 
 ## The export archive
 

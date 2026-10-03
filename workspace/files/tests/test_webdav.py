@@ -18,6 +18,7 @@ from wsgidav.dav_error import (
     DAVError,
 )
 
+from workspace.common.storage.facade import BlobStorage
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
@@ -654,10 +655,9 @@ class FolderResourceMoveStorageTests(TestCase):
 class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     """Tests for FileResource.
 
-    Uses a real FileSystemStorage (not InMemoryStorage) because
-    ``_StreamingWriteBuffer`` writes directly to the filesystem via
-    ``os.open`` / ``os.write``. The root is isolated because one test walks it
-    to prove an overwrite left no partial file behind.
+    Uses the real storage (not InMemoryStorage) because ``_StreamingWriteBuffer``
+    writes through ``BlobStorage.staged_writer``. The root is isolated because
+    one test walks it to prove an overwrite left no partial file behind.
     """
 
     def setUp(self):
@@ -1105,8 +1105,10 @@ class StreamingWriteBufferTests(TestCase):
         import tempfile
 
         self._tmpdir = tempfile.mkdtemp()
-        path = os.path.join(self._tmpdir, name)
-        return _StreamingWriteBuffer(path, flush_size), path
+        writer = BlobStorage(location=self._tmpdir).staged_writer(name)
+        return _StreamingWriteBuffer(writer, flush_size), os.path.join(
+            self._tmpdir, name
+        )
 
     def tearDown(self):
         import shutil
@@ -1144,28 +1146,6 @@ class StreamingWriteBufferTests(TestCase):
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"12345678ABCD")
 
-    def test_flush_survives_partial_os_write(self):
-        """POSIX allows os.write to write fewer bytes than requested; the
-        flush must loop until the whole buffer is on disk or bytes are
-        silently dropped."""
-        from unittest import mock
-
-        buf, path = self._make_buf(flush_size=8)
-        real_write = os.write
-
-        def short_write(fd, data):
-            return real_write(fd, bytes(data)[:5])
-
-        with mock.patch(
-            "workspace.files.webdav.resources.os.write", side_effect=short_write
-        ):
-            buf.write(b"0123456789ABCDEF")  # crosses the flush threshold
-            buf.finalize()
-
-        self.assertEqual(buf.size, 16)
-        with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"0123456789ABCDEF")
-
     def test_abort_deletes_file(self):
         buf, path = self._make_buf()
         buf.write(b"partial data")
@@ -1173,12 +1153,16 @@ class StreamingWriteBufferTests(TestCase):
         self.assertFalse(os.path.exists(path))
         self.assertEqual(os.listdir(self._tmpdir), [])  # no temp leftovers
 
-    def test_abort_then_missing_file_is_safe(self):
-        buf, path = self._make_buf()
-        os.close(buf._fd)
-        buf._fd = None
-        os.unlink(buf._temp_path)  # in-progress file already gone
-        buf.abort()  # should not raise
+    def test_content_hash_covers_every_byte(self):
+        from workspace.files.services.content_hash import new_hasher
+
+        buf, _path = self._make_buf(flush_size=4)
+        buf.write(b"0123456789")
+        buf.finalize()
+
+        expected = new_hasher()
+        expected.update(b"0123456789")
+        self.assertEqual(buf.content_hash, expected.hexdigest())
 
 
 # ── Lock storage selection ────────────────────────────────────────────

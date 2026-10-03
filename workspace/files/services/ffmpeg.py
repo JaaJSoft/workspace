@@ -1,8 +1,8 @@
 """Run ffprobe and ffmpeg on the bytes of a stored file.
 
 Both tools need a seekable input: an MP4 whose ``moov`` atom sits at the end
-of the file cannot be read from a pipe. Local storage hands them the blob's
-own path; any other backend gets a temporary copy, bounded in size.
+of the file cannot be read from a pipe. The storage hands them a local path:
+the blob's own on disk, a temporary copy bounded in size anywhere else.
 
 The binaries are optional. Without them every call raises
 :class:`MediaToolError`, and callers degrade: no poster frame, a video with no
@@ -10,13 +10,13 @@ metadata.
 """
 
 import json
-import os
 import re
 import shutil
 import subprocess
-import tempfile
 import threading
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+
+from workspace.common.storage.backend import BlobTooLarge
 
 # Resolved once, from the deploy's PATH, so a later PATH change cannot
 # redirect the subprocess calls. Read through the module (ffmpeg.FFPROBE) so a
@@ -31,8 +31,6 @@ FRAME_TIMEOUT = 60
 # can read it; past this size the copy costs more than the result is worth.
 MAX_COPY_BYTES = 2 * 1024**3
 
-_COPY_CHUNK = 1024 * 1024
-
 
 class MediaToolError(Exception):
     """ffprobe or ffmpeg is missing, failed, or could not read the input."""
@@ -45,25 +43,14 @@ def local_path(field_file, *, max_bytes=MAX_COPY_BYTES):
     Raises ``FileNotFoundError`` when the blob is missing from storage, and
     :class:`MediaToolError` when a copy would exceed *max_bytes*.
     """
-    try:
-        path = field_file.path
-    except NotImplementedError:
-        path = None
-    if path is not None:
-        if not os.path.isfile(path):
-            raise FileNotFoundError(path)
+    with ExitStack() as stack:
+        try:
+            path = stack.enter_context(
+                field_file.storage.local_path(field_file.name, max_bytes=max_bytes)
+            )
+        except BlobTooLarge as exc:
+            raise MediaToolError("the file is too large to copy for reading") from exc
         yield path
-        return
-
-    if field_file.size > max_bytes:
-        raise MediaToolError("the file is too large to copy for reading")
-    # Closed before the path is handed out: Windows refuses to let another
-    # process open a temporary file that is still open for delete-on-close.
-    with tempfile.NamedTemporaryFile(prefix="media-", delete_on_close=False) as copy:
-        with field_file.open("rb") as source:
-            shutil.copyfileobj(source, copy, _COPY_CHUNK)
-        copy.close()
-        yield copy.name
 
 
 def _input_args(path):

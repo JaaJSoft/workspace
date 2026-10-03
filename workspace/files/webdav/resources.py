@@ -2,9 +2,7 @@
 
 import io
 import logging
-import os
 import time
-import uuid
 from contextlib import contextmanager
 
 from django.core.files.base import File as DjangoFile
@@ -33,49 +31,35 @@ logger = logging.getLogger(__name__)
 
 
 class _StreamingWriteBuffer:
-    """Write buffer that streams data directly to Django storage.
+    """Write buffer that streams data straight into a staged storage write.
 
     Instead of buffering the entire file in ``/tmp`` via
-    ``SpooledTemporaryFile``, this writes chunks directly to the final
-    storage path on disk.  A small in-memory buffer (default 2 MB)
-    accumulates data before each flush so the storage backend receives
-    large sequential writes instead of many tiny ones.
+    ``SpooledTemporaryFile``, this hands chunks to the storage as they
+    arrive.  A small in-memory buffer accumulates data before each flush so
+    the storage backend receives large sequential writes instead of many
+    tiny ones.
 
     Because flushes block on the storage I/O, TCP backpressure propagates
     naturally: slow storage → slow ``write()`` → slow ``wsgi.input.read()``
     → TCP window shrinks → client slows down.  The result is a smooth
     progress bar on the client instead of "fast upload then stuck".
 
-    Bytes land in a unique sibling temp file that ``finalize()`` atomically
-    renames over ``full_path``.  Writing to the final path directly would
-    truncate the current blob at the first byte of an overwrite PUT: an
-    interrupted upload (or its ``abort()``) would then destroy the previous
-    content, a concurrent GET would read a half-written file, and two
-    concurrent PUTs (Windows retries a slow upload) would interleave writes.
+    The bytes only replace the current blob on ``finalize()``, which commits
+    the staged write: an interrupted or refused PUT leaves the previous
+    content where it was.
     """
 
-    def __init__(self, full_path, flush_size, max_bytes=None):
-        self._full_path = full_path
-        self._temp_path = f"{full_path}.{uuid.uuid4().hex}.part"
+    def __init__(self, writer, flush_size, max_bytes=None):
+        self._writer = writer
         self._flush_size = flush_size
         self._max_bytes = max_bytes
         self._membuf = bytearray()
         self._total_size = 0
         self._hasher = new_hasher()
-        self._fd = None
-        self._open()
-
-    def _open(self):
-        os.makedirs(os.path.dirname(self._full_path), exist_ok=True)
-        self._fd = os.open(
-            self._temp_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-            0o600,
-        )
 
     def write(self, data):
-        # Per chunk, not at the end: this buffer writes straight to disk, so a
-        # client ignoring the advertised quota would fill the volume first.
+        # Per chunk, not at the end: this buffer writes straight to storage, so
+        # a client ignoring the advertised quota would fill the volume first.
         # wsgidav answers the DAVError with end_write(with_errors=True), which
         # aborts and cleans up, then a 507.
         if (
@@ -100,12 +84,7 @@ class _StreamingWriteBuffer:
     def _flush(self):
         if not self._membuf:
             return
-        # os.write may write fewer bytes than requested (POSIX); loop or
-        # the unwritten tail is silently dropped.
-        view = memoryview(self._membuf)
-        while view:
-            written = os.write(self._fd, view)
-            view = view[written:]
+        self._writer.write(self._membuf)
         self._membuf = bytearray()
 
     @property
@@ -117,26 +96,13 @@ class _StreamingWriteBuffer:
         return self._hasher.hexdigest()
 
     def finalize(self):
-        """Flush remaining data, close, and move into place atomically."""
+        """Flush remaining data and publish the blob in one step."""
         self._flush()
-        if self._fd is not None:
-            os.close(self._fd)
-            self._fd = None
-        os.replace(self._temp_path, self._full_path)
+        self._writer.commit()
 
     def abort(self):
-        """Close and delete the partially-written temp file.
-
-        The final path is never touched, so the previous content (if any)
-        survives an aborted overwrite.
-        """
-        if self._fd is not None:
-            os.close(self._fd)
-            self._fd = None
-        try:
-            os.unlink(self._temp_path)
-        except OSError:
-            logger.debug("Could not remove partial upload %s", scrub(self._temp_path))
+        """Drop the staged bytes; the previous content (if any) survives."""
+        self._writer.abort()
 
 
 class RootCollection(DAVCollection):
@@ -469,13 +435,10 @@ class FileResource(DAVNonCollection):
             self._file.content_hash if if_match and if_match != "*" else None
         )
 
-        storage = self._file.content.storage
         storage_path = file_upload_path(self._file, self._file.name)
-        full_path = storage.path(storage_path)
-
         self._storage_path = storage_path
         self._write_buf = _StreamingWriteBuffer(
-            full_path,
+            self._file.content.storage.staged_writer(storage_path),
             DjangoFile.DEFAULT_CHUNK_SIZE,
             max_bytes=ceiling,
         )
@@ -689,8 +652,8 @@ def _move_to(file_obj, user, dest_path):
     needs_move = dest_parent != file_obj.parent
 
     if needs_move:
-        # FileService.rename below moves the blob with a non-transactional
-        # os.rename, so a refusal from move() would leave it stranded. Refuse here,
+        # FileService.rename below moves the blob outside any transaction, so a
+        # refusal from move() would leave it stranded. Refuse here,
         # before anything is written.
         FileService.check_move_allowed(file_obj, dest_parent, acting_user=user)
 

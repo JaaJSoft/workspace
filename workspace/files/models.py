@@ -2,7 +2,7 @@ import posixpath
 import secrets
 
 from django.contrib.auth import get_user_model
-from django.core.files.storage import FileSystemStorage
+from django.core.files.storage import storages
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F, Q, Value
@@ -14,6 +14,15 @@ from django.utils import timezone
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
+
+
+def files_storage():
+    """The storage holding File.content (the "files" alias in STORAGES).
+
+    A blob's name is its node's tree path, so a new version is saved over the
+    previous one rather than beside it - unlike ``default_storage``.
+    """
+    return storages["files"]
 
 
 def file_upload_path(instance, filename):
@@ -87,7 +96,7 @@ class File(models.Model):
     # File-specific fields
     content = models.FileField(
         upload_to=file_upload_path,
-        storage=FileSystemStorage(allow_overwrite=True),
+        storage=files_storage,
         null=True,
         blank=True,
         max_length=1024,

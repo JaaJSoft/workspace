@@ -22,13 +22,13 @@ SIG_ALG_ED25519 = 0x01
 HPKE_SUITE = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
 
 
-def sealed(label: str, format_version: int = 2) -> str:
+def sealed(label: str, format_version: int = 2, key_version: int = 1) -> str:
     """A wire-format AES-256-GCM value whose body is *label*.
 
     The server checks a ciphertext's header on write and can never read its
     body, so this is all a write needs - and two labels give two values.
     """
-    header = bytes([format_version, 1, 1, 0, 1, 12])
+    header = bytes([format_version, 1, 1, 0, key_version, 12])
     return to_base64url(header + bytes(12) + label.encode().ljust(16, b"\0"))
 
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import numpy as np
 from django.core.files.storage import default_storage
 from django.db import transaction
+from django.utils import timezone
 from PIL import Image
 
 from workspace.common.vectors.encoding import from_bytes
@@ -68,9 +69,29 @@ def link_cluster(cluster, person, *, prefer=None):
         for incoming, existing in conflicts:
             loser = existing if incoming.pk in prefer else incoming
             reject_face(loser, touched=touched)
+        if person is not None:
+            _pin_person_cover(cluster, person)
         cluster.person = person
         cluster.save(update_fields=["person", "updated_at"])
     refresh_clusters(touched)
+
+
+def _pin_person_cover(cluster, person):
+    """Keep the face *person*'s card shows as *cluster* joins them.
+
+    Unless the user picked one, a card shows its largest cluster's cover,
+    which the newcomer may be: the cover shown now is pinned instead.
+    """
+    from ..queries import user_face_clusters
+
+    others = list(
+        user_face_clusters(cluster.owner).filter(person=person).exclude(pk=cluster.pk)
+    )
+    if not others or any(c.cover_chosen_at is not None for c in others):
+        return
+    shown = person_cards(others)[0].cover_cluster
+    if shown.cover_id is not None:
+        FaceCluster.objects.filter(pk=shown.pk).update(cover_chosen_at=timezone.now())
 
 
 def link_new_person(cluster, user, name):

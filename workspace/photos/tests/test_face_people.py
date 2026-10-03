@@ -11,8 +11,9 @@ from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
 from workspace.people.services.persons import create_person
 from workspace.photos.models import Face, FaceCluster
+from workspace.photos.queries import user_face_clusters
 from workspace.photos.services.face_grouping import cluster_owner
-from workspace.photos.services.face_people import person_clusters
+from workspace.photos.services.face_people import person_cards, person_clusters
 
 from .images import ALICE, CAROL
 from .test_face_api import CLUSTERS, FaceApiTestCase, library_photo
@@ -314,6 +315,19 @@ class MergeCoverTests(FaceApiTestCase):
             .pk,
             cover.pk,
         )
+
+    def test_naming_a_larger_cluster_after_the_person_keeps_their_face(self):
+        # The Alice cluster (3 photos) is larger than Bea's only one (2): the
+        # card would show its cover once both are Bea.
+        response = self.client.patch(
+            f"{CLUSTERS}/{self.alice.pk}",
+            {"person": str(self.bea.pk), "resolve": True},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        (card,) = person_cards(user_face_clusters(self.user))
+        self.assertEqual(card.cover_cluster.pk, self.bob.pk)
 
     def test_merging_into_a_person_keeps_their_cover(self):
         FaceCluster.objects.filter(pk=self.bob.pk).update(person=None)

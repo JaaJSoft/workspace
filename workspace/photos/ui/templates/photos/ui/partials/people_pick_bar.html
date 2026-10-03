@@ -1,0 +1,41 @@
+{% comment %}
+  Picking People cards to merge them: floats over the bottom of the grid
+  while picking, outside #photos-content like the photos' selection bar; a
+  navigation ends the picking (onMerged). The first named card picked is
+  the one the others merge into (mergeKeeper in faces.js).
+{% endcomment %}
+<div
+  x-show="peoplePicking"
+  x-cloak
+  x-transition.opacity
+  class="absolute bottom-4 inset-x-0 z-20 flex justify-center px-4 pointer-events-none"
+>
+  <div
+    class="pointer-events-auto flex items-center gap-1 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
+    role="toolbar"
+    aria-label="People picked to merge"
+  >
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Stop picking"
+      aria-label="Stop picking"
+      @click="stopPickingPeople()"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+    <span
+      class="text-sm font-medium whitespace-nowrap px-1"
+      x-text="peoplePicked.length ? peoplePicked.length + ' picked' : 'Pick who is the same person'"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-module btn-sm rounded-full gap-1.5"
+      :disabled="peoplePicked.length < 2"
+      @click="mergePickedPeople()"
+    >
+      <i data-lucide="combine" class="w-4 h-4"></i>
+      Merge
+    </button>
+  </div>
+</div>

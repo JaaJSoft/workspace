@@ -11,7 +11,7 @@ each cluster once rather than once per face.
 """
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
@@ -20,7 +20,16 @@ from .face_grouping import photo_clusters, refresh_clusters
 
 class CorrectionError(ValueError):
     """A correction that cannot apply. Each kind is its own subclass, so a
-    caller answers with its own wording rather than the exception's text."""
+    caller answers with its own wording rather than the exception's text.
+
+    ``conflicts`` holds the (incoming, existing) face pairs that stood in the
+    way, when the refusal is one face per photo per person: what a caller
+    shows the user to settle it.
+    """
+
+    def __init__(self, conflicts=()):
+        super().__init__()
+        self.conflicts = list(conflicts)
 
 
 class PhotoAlreadyInCluster(CorrectionError):
@@ -40,12 +49,30 @@ class PersonsDiffer(CorrectionError):
         self.person_ids = sorted(person_ids, key=str)
 
 
+def blocking_faces(face, cluster):
+    """The other faces of *face*'s photo that keep it out of *cluster*: one
+    in that cluster, or in another cluster of the same person."""
+    same_person = Q(cluster=cluster)
+    if cluster.person_id is not None:
+        same_person |= Q(cluster__person_id=cluster.person_id)
+    return Face.objects.filter(same_person, file_id=face.file_id).exclude(pk=face.pk)
+
+
 def _refresh(cluster_ids, touched):
     cluster_ids = set(cluster_ids) - {None}
     if touched is None:
         refresh_clusters(cluster_ids)
     else:
         touched.update(cluster_ids)
+
+
+def _cover_keeper(clusters, person_id):
+    """The cluster whose cover the merged one shows: among those already
+    carrying the kept name, the one whose cover the user picked last, else
+    the first (the target when it qualifies)."""
+    named = [c for c in clusters if c.person_id == person_id] or clusters
+    chosen = [c for c in named if c.cover_chosen_at is not None]
+    return max(chosen, key=lambda c: c.cover_chosen_at) if chosen else named[0]
 
 
 def merge_clusters(target, sources, *, person_id=None):
@@ -57,6 +84,10 @@ def merge_clusters(target, sources, *, person_id=None):
     face per photo per person rule. So does a face of *target* itself, when
     the merge gives it a person already in that photo.
 
+    The merged cluster shows the cover of the cluster that carried the kept
+    name, so merging a stranger into someone never swaps their face; that
+    cover's face wins its photo over the target's.
+
     When the clusters are named after different people, *person_id* says
     which one the merged cluster keeps; without it the merge is refused.
     """
@@ -67,6 +98,8 @@ def merge_clusters(target, sources, *, person_id=None):
     if person_id is not None and person_id not in named:
         raise PersonsDiffer(named)
     person_id = person_id if person_id is not None else next(iter(named), None)
+    keeper = _cover_keeper([target, *sources], person_id)
+    cover_id = keeper.cover_id
     merged = {target.pk, *(cluster.pk for cluster in sources)}
     with transaction.atomic():
         same_person = (
@@ -86,14 +119,22 @@ def merge_clusters(target, sources, *, person_id=None):
             Face.objects.filter(cluster=target, file_id__in=same_person_files).update(
                 cluster=None, assignment=Face.Assignment.AUTO
             )
+        if keeper is not target and cover_id is not None:
+            Face.objects.filter(
+                cluster=target,
+                file_id__in=Face.objects.filter(pk=cover_id).values("file_id"),
+            ).update(cluster=None, assignment=Face.Assignment.AUTO)
         taken = same_person_files | set(
             Face.objects.filter(cluster=target).values_list("file_id", flat=True)
         )
-        for face in (
+        faces = list(
             Face.objects.filter(cluster__in=sources)
             .order_by("-assignment", "-quality")
             .select_for_update()
-        ):
+        )
+        # The cover first, so no other face of its photo takes its place.
+        faces.sort(key=lambda face: face.pk != cover_id)
+        for face in faces:
             if face.file_id in taken:
                 face.cluster = None
                 face.assignment = Face.Assignment.AUTO
@@ -102,9 +143,16 @@ def merge_clusters(target, sources, *, person_id=None):
                 taken.add(face.file_id)
             face.save(update_fields=["cluster", "assignment"])
         FaceCluster.objects.filter(pk__in=[cluster.pk for cluster in sources]).delete()
+        changed = []
         if target.person_id != person_id:
             target.person_id = person_id
-            target.save(update_fields=["person", "updated_at"])
+            changed.append("person")
+        if keeper is not target:
+            target.cover_id = cover_id
+            target.cover_chosen_at = keeper.cover_chosen_at
+            changed += ["cover", "cover_chosen_at"]
+        if changed:
+            target.save(update_fields=[*changed, "updated_at"])
     refresh_clusters([target.pk])
 
 
@@ -181,11 +229,22 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
         refresh_clusters([cluster.pk])
 
 
-def confirm_face(face, cluster, *, touched=None):
-    """This is X: pin *face* in *cluster*, wherever it was."""
+@transaction.atomic
+def confirm_face(face, cluster, *, replace=False, touched=None):
+    """This is X: pin *face* in *cluster*, wherever it was.
+
+    With *replace*, the face of the photo already X is not X after all: it
+    is taken out of its cluster for *face* to take its place - or stays in
+    it, when *face* cannot take that place after all.
+    """
     previous = face.cluster_id
+    if replace:
+        for other in blocking_faces(face, cluster):
+            reject_face(other, touched=touched)
     if cluster.pk in photo_clusters(face.file_id, exclude_face=face.pk):
-        raise PhotoAlreadyInCluster
+        raise PhotoAlreadyInCluster(
+            (face, other) for other in blocking_faces(face, cluster)
+        )
     face.cluster = cluster
     face.assignment = Face.Assignment.CONFIRMED
     if face.rejected_cluster_id == cluster.pk:
@@ -194,7 +253,7 @@ def confirm_face(face, cluster, *, touched=None):
         with transaction.atomic():
             face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     except IntegrityError as exc:
-        raise PhotoAlreadyInCluster from exc
+        raise PhotoAlreadyInCluster() from exc
     _refresh({cluster.pk, previous}, touched)
 
 

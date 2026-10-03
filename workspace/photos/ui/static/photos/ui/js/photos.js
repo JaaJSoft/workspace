@@ -233,12 +233,14 @@ window.photosApp = function photosApp() {
     },
 
     // A navigation replaced the listing: the tiles the selection named are
-    // gone, and the album on screen may have changed.
+    // gone, the People cards picked to merge too, and the album on screen
+    // may have changed.
     onMerged(event) {
       const id = event.target && event.target.id;
       if (id === 'photos-content') {
         this.contentLoading = false;
         this.clearSelection();
+        this.stopPickingPeople();
         this.stopHoverPreview();
         this.syncHiddenView();
       }

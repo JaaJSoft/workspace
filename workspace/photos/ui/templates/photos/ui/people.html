@@ -27,6 +27,19 @@
         </span>
       {% endif %}
       {% if faces_enabled %}
+        {% if not show_hidden and people_count > 1 %}
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm gap-1"
+            :class="{ 'btn-active': peoplePicking }"
+            title="Pick several people who are the same person, then merge them"
+            aria-label="Merge people"
+            @click="peoplePicking ? stopPickingPeople() : startPickingPeople()"
+          >
+            <i data-lucide="combine" class="w-4 h-4"></i>
+            <span class="max-sm:hidden">Merge</span>
+          </button>
+        {% endif %}
         {% if not show_hidden and people_count %}
           <a
             href="{{ review_url }}"

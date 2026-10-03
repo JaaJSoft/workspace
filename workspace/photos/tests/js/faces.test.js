@@ -29,17 +29,40 @@ test('without the embedded JSON, faces are off and no person is on screen', () =
   assert.equal(faces.currentCluster(), null);
 });
 
-test('a face is never offered its own cluster, nor one another face of the photo is in', () => {
+test('a face is offered every cluster but its own, the one of another face marked taken', () => {
   const faces = mixin();
   faces.facesDialog.clusters = [ALICE, BOB, CAROL];
   faces.facesDialog.faces = [
     { uuid: 'f1', cluster: 'a', assignment: 'auto' },
     { uuid: 'f2', cluster: 'b', assignment: 'auto' },
   ];
+  const [first] = faces.facesDialog.faces;
 
-  const offered = Array.from(faces.pickableClusters(faces.facesDialog.faces[0]), (c) => c.uuid);
+  const offered = Array.from(faces.pickableClusters(first), (c) => c.uuid);
 
-  assert.deepEqual(offered, ['c']);
+  assert.deepEqual(offered, ['b', 'c']);
+  assert.equal(faces.faceClusterTaken(first, BOB).uuid, 'f2');
+  assert.equal(faces.faceClusterTaken(first, CAROL), null);
+});
+
+test('picking a cluster another face of the photo is in replaces that face', async () => {
+  const requests = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 'token',
+    fetch: async (url, options) => {
+      requests.push([url, options.method, options.body && JSON.parse(options.body)]);
+      return { ok: true, status: 200, json: async () => [] };
+    },
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.facesDialog.photo = { uuid: 'photo-1' };
+  faces.facesDialog.clusters = [{ uuid: 'b', person: null }];
+  faces.facesDialog.faces = [{ uuid: 'f1', cluster: null }, { uuid: 'f2', cluster: 'b' }];
+
+  await faces.assignFace(faces.facesDialog.faces[0], { uuid: 'b' });
+
+  assert.deepEqual(requests[0], ['/api/v1/photos/faces/f1', 'PATCH', { cluster: 'b', replace: true }]);
 });
 
 test('a face says who it is', () => {
@@ -53,7 +76,7 @@ test('a face says who it is', () => {
   assert.equal(faces.faceLabel({ cluster: null, assignment: 'auto' }), 'Not grouped yet');
 });
 
-test('the picker never offers someone already in the photo, nor the face itself', () => {
+test('the picker offers someone already in the photo, as taken, never the face itself', () => {
   const faces = mixin();
   faces.facesDialog.clusters = [
     { uuid: 'c1', person: 'p-ann' },
@@ -70,14 +93,15 @@ test('the picker never offers someone already in the photo, nor the face itself'
     { uuid: 'p-cid', name: 'Cid' },
   ];
 
-  const offered = Array.from(faces.pickablePersons(faces.facesDialog.faces[0]), (p) => p.name);
+  const [first] = faces.facesDialog.faces;
+  const offered = Array.from(faces.pickablePersons(first), (p) => p.name);
 
-  // Ann is the face itself, Bea is the other face of the photo.
-  assert.deepEqual(offered, ['Cid']);
-  assert.deepEqual(
-    Array.from(faces.pickableClusters(faces.facesDialog.faces[0]), (c) => c.uuid),
-    ['c3'],
-  );
+  // Ann is the face itself; Bea is the other face of the photo, offered to
+  // say this face is her instead.
+  assert.deepEqual(offered, ['Bea', 'Cid']);
+  assert.equal(faces.facePersonTaken(first, { uuid: 'p-bea' }).uuid, 'f2');
+  assert.equal(faces.facePersonTaken(first, { uuid: 'p-cid' }), null);
+  assert.deepEqual(Array.from(faces.pickableClusters(first), (c) => c.uuid), ['c3']);
 });
 
 test('a name is offered for creation unless a contact already has it', () => {
@@ -147,12 +171,16 @@ test('a merge refused for two names asks which one to keep, then sends it', asyn
   });
   const faces = ctx.photosFacesMixin();
   faces.$ajax = async () => {};
-  faces.mergeDialog.target = { uuid: 't' };
+  faces.mergeDialog.target = { uuid: 't', person: 'p-bea' };
+  faces.mergeDialog.clusters = [{ uuid: 's', members: ['s', 's2'] }];
   faces.mergeDialog.selected = ['s'];
 
   await faces.submitMerge();
   assert.deepEqual(Array.from(faces.mergeDialog.choices, (c) => c.name), ['Ann', 'Bea']);
-  assert.equal(faces.mergeDialog.person, 'p-ann');
+  // The name of the person merged into is the one offered first.
+  assert.equal(faces.mergeDialog.person, 'p-bea');
+  // A named person is merged with every cluster of theirs.
+  assert.deepEqual(Array.from(bodies[0].clusters), ['s', 's2']);
 
   faces.mergeDialog.person = 'p-bea';
   await faces.submitMerge();
@@ -191,6 +219,48 @@ test('a merge offers each named person once, never the target itself', () => {
 
   const fromLea = Array.from(ctx.mergeCandidates(clusters, { uuid: 'lea', person: 'p-lea' }), (c) => c.uuid);
   assert.deepEqual(fromLea, ['t', 'nina-big', 'u1']);
+});
+
+test('a typed name narrows the merge candidates, accents and case aside', () => {
+  const faces = mixin();
+  faces.mergeDialog.clusters = [
+    { uuid: 'lea', person_name: 'Léa Martin' },
+    { uuid: 'u1', person_name: null },
+    { uuid: 'nina', person_name: 'Nina' },
+  ];
+  const visible = () => Array.from(faces.visibleMergeClusters(), (c) => c.uuid);
+
+  assert.deepEqual(visible(), ['lea', 'u1', 'nina']);
+  faces.mergeDialog.query = '  LEA ';
+  assert.deepEqual(visible(), ['lea']);
+  faces.mergeDialog.query = 'zoe';
+  assert.deepEqual(visible(), []);
+});
+
+test('a picked candidate stays in sight whatever is typed', () => {
+  const faces = mixin();
+  faces.mergeDialog.clusters = [
+    { uuid: 'u1', person_name: null },
+    { uuid: 'nina', person_name: 'Nina' },
+  ];
+  faces.toggleMergeSelection({ uuid: 'u1' });
+  faces.mergeDialog.query = 'nina';
+
+  assert.deepEqual(Array.from(faces.visibleMergeClusters(), (c) => c.uuid), ['u1', 'nina']);
+});
+
+test('the search is cleared each time the merge dialog opens', async () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => ({ showModal() {} }) },
+    getCSRFToken: () => 'token',
+    fetch: async () => ({ ok: true, status: 200, json: async () => [] }),
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.mergeDialog.query = 'nina';
+
+  await faces.openMergeDialog({ uuid: 't', person: null });
+
+  assert.equal(faces.mergeDialog.query, '');
 });
 
 function coverMixin(confirmAnswer) {
@@ -878,4 +948,162 @@ test('a photo\'s faces have no moment', () => {
 
   assert.equal(faces.facesDialogIsVideo(), false);
   assert.equal(faces.faceTime({ uuid: 'f', timestamp: null }), '');
+});
+
+test('a merge candidate for a named person stands for every cluster of theirs', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+  });
+  const clusters = [
+    { uuid: 'nina-big', person: 'p-nina', photo_count: 9 },
+    { uuid: 'u1', person: null, photo_count: 5 },
+    { uuid: 'nina-small', person: 'p-nina', photo_count: 6 },
+  ];
+
+  const candidates = ctx.mergeCandidates(clusters, { uuid: 't', person: null });
+
+  assert.deepEqual(Array.from(candidates[0].members), ['nina-big', 'nina-small']);
+  assert.equal(candidates[0].photo_count, 15);
+  assert.deepEqual(Array.from(candidates[1].members), ['u1']);
+  assert.equal(candidates[1].photo_count, 5);
+  // A picked card finds its candidate through any of its clusters.
+  assert.equal(ctx.candidateForCard(candidates, { clusters: ['nina-small'] }).uuid, 'nina-big');
+  assert.equal(ctx.candidateForCard(candidates, { clusters: ['gone'] }), null);
+});
+
+test('picked cards merge into the first named one, else the first picked', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+  });
+  const unnamed = { clusters: ['u1'], person: null };
+  const ann = { clusters: ['a1'], person: 'p-ann' };
+  const bea = { clusters: ['b1'], person: 'p-bea' };
+
+  assert.equal(ctx.mergeKeeper([unnamed, ann, bea]), ann);
+  assert.equal(ctx.mergeKeeper([unnamed, { clusters: ['u2'], person: null }]), unnamed);
+  assert.equal(ctx.mergeKeeper([]), null);
+});
+
+test('picking People cards toggles them, and stopping forgets them', () => {
+  const faces = mixin();
+
+  faces.startPickingPeople();
+  faces.togglePeopleCard('a1,a2');
+  faces.togglePeopleCard('u1');
+  faces.togglePeopleCard('a1,a2');
+
+  assert.equal(faces.peoplePicking, true);
+  assert.deepEqual(Array.from(faces.peoplePicked), ['u1']);
+  faces.stopPickingPeople();
+  assert.equal(faces.peoplePicking, false);
+  assert.deepEqual(Array.from(faces.peoplePicked), []);
+});
+
+function conflictContext(answer) {
+  const bodies = [];
+  const asked = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+    getCSRFToken: () => 'token',
+    CustomEvent: class {
+      constructor(type, init) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    dispatchEvent: (event) => {
+      asked.push(event.detail);
+      event.detail.resolve(answer);
+    },
+    AppAlert: { error() {} },
+    fetch: async (url, options) => {
+      if (options.method === 'GET') return { ok: true, status: 200, json: async () => [] };
+      const body = JSON.parse(options.body);
+      bodies.push([url, body]);
+      if (!body.resolve && !body.replace) {
+        return {
+          ok: false,
+          status: 409,
+          json: async () => ({
+            detail: 'already',
+            conflicts: [{ file: 'f', file_name: 'pair.jpg', incoming: { uuid: 'in' }, existing: { uuid: 'ex' } }],
+          }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ person: 'p-ann' }) };
+    },
+  });
+  return { ctx, bodies, asked };
+}
+
+test('naming a cluster in a photo the person is in asks, then settles it', async () => {
+  const { ctx, bodies, asked } = conflictContext(['in']);
+
+  await ctx.nameCluster('c1', { person: 'p-ann' }, 'Ann');
+
+  assert.equal(asked[0].name, 'Ann');
+  assert.equal(asked[0].conflicts[0].existing.uuid, 'ex');
+  assert.deepEqual(bodies[1], ['/api/v1/photos/clusters/c1', { person: 'p-ann', resolve: true, prefer: ['in'] }]);
+});
+
+test('closing the question names nothing and says so quietly', async () => {
+  const { ctx, bodies } = conflictContext(null);
+
+  await assert.rejects(ctx.nameCluster('c1', { person: 'p-ann' }, 'Ann'), (err) => err.cancelled === true);
+  assert.equal(bodies.length, 1);
+});
+
+test('a face patched into a conflict is replaced only when the user picks it', async () => {
+  for (const [answer, sent] of [[['in'], 2], [[], 1]]) {
+    const { ctx, bodies } = conflictContext(answer);
+    const faces = ctx.photosFacesMixin();
+    faces.facesDialog.photo = { uuid: 'photo-1' };
+    faces.facesDialog.faces = [{ uuid: 'in', cluster: null }];
+
+    await faces.assignFaceToPerson(faces.facesDialog.faces[0], { uuid: 'p-ann', name: 'Ann' });
+
+    const patches = bodies.filter(([url]) => url.endsWith('/faces/in'));
+    assert.equal(patches.length, sent);
+    if (sent === 2) assert.equal(patches[1][1].replace, true);
+  }
+});
+
+test('the conflict dialog answers with the faces picked over the ones already them', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+  });
+  const dialog = ctx.faceConflictsDialog();
+  dialog.$root = { showModal() {}, close() { dialog.closed(); } };
+  const answers = [];
+  const one = { incoming: { uuid: 'i1' }, existing: { uuid: 'e1' } };
+  const two = { incoming: { uuid: 'i2' }, existing: { uuid: 'e2' } };
+
+  dialog.ask({ name: 'Ann', conflicts: [one, two], resolve: (v) => answers.push(v) });
+  assert.equal(dialog.prefers(one), false);
+  dialog.choose(one, true);
+  dialog.choose(two, true);
+  dialog.choose(two, false);
+  dialog.confirm();
+
+  dialog.ask({ name: 'Ann', conflicts: [one], resolve: (v) => answers.push(v) });
+  dialog.closed();
+
+  assert.deepEqual(answers.map((a) => (a ? Array.from(a) : a)), [['i1'], null]);
+});
+
+test('an assign that skipped faces already in their photo offers to use them instead', () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => null },
+  });
+  const result = {
+    done: ['f1'],
+    skipped: [{ face: 'f2', reason: 'already_in_photo' }, { face: 'f3', reason: 'unavailable' }],
+  };
+
+  const assign = ctx.faceBatchActions({ action: 'assign', person: 'p' }, result, 'Ann', ['tok']);
+  const reject = ctx.faceBatchActions({ action: 'reject' }, result, null, ['tok']);
+
+  assert.deepEqual(Array.from(assign, (a) => a.label), ['Use it instead', 'Undo']);
+  assert.deepEqual(Array.from(reject, (a) => a.label), ['Undo']);
+  assert.deepEqual(Array.from(ctx.skippedInPhoto(result)), ['f2']);
 });

@@ -48,8 +48,9 @@ def promote_to_person(user, *, email="", name="", account=None):
     """The user's person for a mail correspondent or a workspace account.
 
     Returns ``(person, created)``. A person the user can already see that is
-    linked to ``account`` or carries the email is returned as is; otherwise a
-    new one is created in the user's own address book.
+    linked to ``account`` or carries the email is reused - linked to
+    ``account`` on the way if it has no account yet; otherwise a new one is
+    created in the user's own address book.
     """
     persons = user_persons(user)
     if account is not None:
@@ -60,6 +61,8 @@ def promote_to_person(user, *, email="", name="", account=None):
         name = name or account.get_full_name() or account.username
     existing = person_with_email(persons, email)
     if existing is not None:
+        if account is not None and existing.linked_user_id is None:
+            update_person(existing, linked_user=account)
         return existing, False
     email = email.strip()
     fields = {

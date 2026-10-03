@@ -135,6 +135,33 @@ class PromoteServiceTests(TestCase):
         self.assertFalse(created)
         self.assertEqual(person, existing)
 
+    def test_account_links_the_unlinked_person_carrying_its_email(self):
+        existing = create_person(
+            owner=self.alice,
+            display_name="Carol",
+            emails=[{"value": "carol@corp.com", "type": "work"}],
+            notes="kept",
+        )
+        promote_to_person(self.alice, account=self.carol)
+        existing.refresh_from_db()
+        self.assertEqual(existing.linked_user, self.carol)
+        self.assertEqual(existing.display_name, "Carol")
+        self.assertEqual(existing.notes, "kept")
+
+    def test_account_keeps_a_link_to_another_account(self):
+        dave = User.objects.create_user(username="dave", password="x")
+        existing = create_person(
+            owner=self.alice,
+            display_name="Shared inbox",
+            emails=[{"value": "carol@corp.com", "type": "work"}],
+            linked_user=dave,
+        )
+        person, created = promote_to_person(self.alice, account=self.carol)
+        self.assertFalse(created)
+        existing.refresh_from_db()
+        self.assertEqual(person, existing)
+        self.assertEqual(existing.linked_user, dave)
+
 
 class PromoteApiTests(APITestCase):
     def setUp(self):

@@ -4,6 +4,10 @@ Every operation a user can run on the tree - upload, read, rename, move,
 trash, restore, copy, delete, replace, a WebDAV PUT and GET - must leave the
 bucket holding exactly what a disk would: one key per blob at its node's tree
 path, and a marker for each folder kept empty.
+
+A move copies before it deletes, and the delete waits for the commit of the
+rows that point at the copies: the tests that move run their on-commit
+callbacks, as a request's commit would.
 """
 
 import base64
@@ -14,6 +18,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
+from django.db import transaction
 from django.test import TestCase
 
 from workspace.common.tests.s3 import S3StoragesMixin
@@ -61,7 +66,8 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         docs = FileService.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
-        FileService.rename(docs, "Archive")
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
 
         self.assertEqual(
             self.keys(),
@@ -69,12 +75,55 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         )
         self.assertEqual(self.read(f), b"a")
 
+    def test_a_folder_rename_that_cannot_move_its_blobs_changes_nothing(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        f = self.upload("a.txt", b"a", parent=docs)
+        self.upload("b.txt", b"b", parent=docs)
+        before = self.keys()
+        backend = storages["default"].backend
+        real_copy = backend._copy
+
+        def copy_once(*args):
+            if copy_once.calls:
+                raise OSError("the store went away")
+            copy_once.calls += 1
+            return real_copy(*args)
+
+        copy_once.calls = 0
+        with (
+            mock.patch.object(backend, "_copy", copy_once),
+            self.assertRaises(OSError),
+        ):
+            FileService.rename(docs, "Archive")
+
+        docs.refresh_from_db()
+        self.assertEqual(docs.name, "Docs")
+        self.assertEqual(self.keys(), before)
+        self.assertEqual(self.read(f), b"a")
+
+    def test_a_rename_rolled_back_after_the_move_keeps_the_originals(self):
+        """The rows go back to the originals, which are still there: the
+        copies the move made are left as duplicates, never as a gap."""
+        docs = FileService.create_folder(self.user, "Docs")
+        f = self.upload("a.txt", b"a", parent=docs)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            with self.assertRaises(RuntimeError), transaction.atomic():
+                FileService.rename(docs, "Archive")
+                raise RuntimeError("the request failed after the move")
+
+        docs.refresh_from_db()
+        self.assertEqual(docs.name, "Docs")
+        self.assertEqual(self.read(f), b"a")
+        self.assertIn("files/users/alice/Docs/a.txt", self.keys())
+
     def test_moving_a_folder_moves_its_blobs(self):
         docs = FileService.create_folder(self.user, "Docs")
         archive = FileService.create_folder(self.user, "Archive")
         f = self.upload("a.txt", b"a", parent=docs)
 
-        FileService.move(docs, archive)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.move(docs, archive)
 
         self.assertEqual(
             self.keys(),
@@ -90,8 +139,9 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         archive = FileService.create_folder(self.user, "Archive")
         f = self.upload("a.txt", b"a")
 
-        FileService.rename(f, "b.txt")
-        FileService.move(f, archive)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(f, "b.txt")
+            FileService.move(f, archive)
 
         self.assertEqual(
             self.keys(),
@@ -103,7 +153,8 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         docs = FileService.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
-        FileService.soft_delete(docs)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.soft_delete(docs)
         self.assertEqual(
             self.keys(),
             [
@@ -114,7 +165,8 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"a")
 
         docs.refresh_from_db()
-        FileService.restore(docs)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.restore(docs)
         self.assertEqual(
             self.keys(), ["files/users/alice/Docs/", "files/users/alice/Docs/a.txt"]
         )

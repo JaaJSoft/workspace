@@ -199,6 +199,19 @@ class BlobStorageContract:
         )
         self.assertEqual(_read(self.storage, "files/users/alice/Docs 2/c.txt"), b"c")
 
+    def test_relocate_then_commit(self):
+        self.save("files/users/alice/Docs/a.txt", b"a")
+
+        relocation = self.storage.relocate(
+            "files/users/alice/Docs", "files/users/alice/Archive"
+        )
+        self.assertEqual(_read(self.storage, "files/users/alice/Archive/a.txt"), b"a")
+
+        relocation.commit()
+        relocation.commit()
+        self.assertFalse(self.storage.is_dir("files/users/alice/Docs"))
+        self.assertEqual(_read(self.storage, "files/users/alice/Archive/a.txt"), b"a")
+
     def test_move_an_empty_directory(self):
         self.storage.make_dir("files/users/alice/Empty")
 
@@ -504,6 +517,36 @@ class S3BackendTests(S3TestMixin, SimpleTestCase):
 
         self.assertEqual(_read(self.storage, "files/Docs/a.txt"), b"a")
         self.assertEqual(_read(self.storage, "files/Docs/b.txt"), b"b")
+
+    def test_a_relocation_keeps_the_sources_until_commit(self):
+        self.save("files/Docs/a.txt", b"a")
+
+        relocation = self.storage.relocate("files/Docs", "files/Archive")
+        self.assertEqual(self.keys(), ["files/Archive/a.txt", "files/Docs/a.txt"])
+
+        relocation.commit()
+        self.assertEqual(self.keys(), ["files/Archive/a.txt"])
+
+    def test_a_failed_relocation_removes_the_copies_it_made(self):
+        self.save("files/Docs/a.txt", b"a")
+        self.save("files/Docs/b.txt", b"b")
+        real_copy = self.storage.backend._copy
+        failure = OSError(errno.EIO, "copy refused")
+
+        def copy_once(*args):
+            if copy_once.calls:
+                raise failure
+            copy_once.calls += 1
+            return real_copy(*args)
+
+        copy_once.calls = 0
+        with (
+            mock.patch.object(self.storage.backend, "_copy", copy_once),
+            self.assertRaises(OSError),
+        ):
+            self.storage.relocate("files/Docs", "files/Archive")
+
+        self.assertEqual(self.keys(), ["files/Docs/a.txt", "files/Docs/b.txt"])
 
     def test_sources_a_move_could_not_delete_stay_as_duplicates(self):
         self.save("files/Docs/a.txt", b"a")

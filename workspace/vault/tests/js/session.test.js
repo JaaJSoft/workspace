@@ -1185,10 +1185,47 @@ test('rewrapVaultKey never returns a wrap that does not reopen', async () => {
     sealed[sealed.length - 1] ^= 1;
     return sealed;
   };
-  await assert.rejects(session.rewrapVaultKey(vault));
+  await assert.rejects(session.rewrapVaultKey(vault), (err) => (
+    err.reason !== 'locked' && err.message !== 'the new key wrap does not open to the vault key'
+  ));
 });
 
-test('rewrapVaultKey refuses a wrap that opens to a different key', async () => {
+test('rewrapVaultKey refused when the session locks while sealing', async () => {
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const realSeal = ctx.vaultCrypto.hpkeSeal;
+  ctx.vaultCrypto.hpkeSeal = async (...args) => {
+    const sealed = await realSeal(...args);
+    session.lock();
+    return sealed;
+  };
+  await assert.rejects(session.rewrapVaultKey(vault), (err) => err.reason === 'locked');
+});
+
+test('rewrapVaultKey refused when the session locks and unlocks again while sealing', async () => {
+  const { credentials } = await fixture();
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const realSeal = ctx.vaultCrypto.hpkeSeal;
+  ctx.vaultCrypto.hpkeSeal = async (...args) => {
+    const sealed = await realSeal(...args);
+    session.lock();
+    await session.unlock(credentials);
+    return sealed;
+  };
+  await assert.rejects(session.rewrapVaultKey(vault), (err) => err.reason === 'locked');
+});
+
+test('rewrapVaultKey refused when the session locks after the wrap was compared', async () => {
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const realEqual = ctx.vaultCrypto.equalBytes;
+  ctx.vaultCrypto.equalBytes = (a, b) => {
+    const same = realEqual(a, b);
+    session.lock();
+    return same;
+  };
+  await assert.rejects(session.rewrapVaultKey(vault), (err) => err.reason === 'locked');
+});
+
+test('rewrapVaultKey refuses a wrap that opens to a different key to a different key', async () => {
   const { session, vault, ctx } = await unlockedSessionWithVault();
   const V = ctx.vaultCrypto;
   const realSeal = V.hpkeSeal;

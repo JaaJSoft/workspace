@@ -193,6 +193,48 @@ test('a merge offers each named person once, never the target itself', () => {
   assert.deepEqual(fromLea, ['t', 'nina-big', 'u1']);
 });
 
+test('a typed name narrows the merge candidates, accents and case aside', () => {
+  const faces = mixin();
+  faces.mergeDialog.clusters = [
+    { uuid: 'lea', person_name: 'Léa Martin' },
+    { uuid: 'u1', person_name: null },
+    { uuid: 'nina', person_name: 'Nina' },
+  ];
+  const visible = () => Array.from(faces.visibleMergeClusters(), (c) => c.uuid);
+
+  assert.deepEqual(visible(), ['lea', 'u1', 'nina']);
+  faces.mergeDialog.query = '  LEA ';
+  assert.deepEqual(visible(), ['lea']);
+  faces.mergeDialog.query = 'zoe';
+  assert.deepEqual(visible(), []);
+});
+
+test('a picked candidate stays in sight whatever is typed', () => {
+  const faces = mixin();
+  faces.mergeDialog.clusters = [
+    { uuid: 'u1', person_name: null },
+    { uuid: 'nina', person_name: 'Nina' },
+  ];
+  faces.toggleMergeSelection({ uuid: 'u1' });
+  faces.mergeDialog.query = 'nina';
+
+  assert.deepEqual(Array.from(faces.visibleMergeClusters(), (c) => c.uuid), ['u1', 'nina']);
+});
+
+test('the search is cleared each time the merge dialog opens', async () => {
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: { getElementById: () => ({ showModal() {} }) },
+    getCSRFToken: () => 'token',
+    fetch: async () => ({ ok: true, status: 200, json: async () => [] }),
+  });
+  const faces = ctx.photosFacesMixin();
+  faces.mergeDialog.query = 'nina';
+
+  await faces.openMergeDialog({ uuid: 't', person: null });
+
+  assert.equal(faces.mergeDialog.query, '');
+});
+
 function coverMixin(confirmAnswer) {
   const requests = [];
   const asked = [];

@@ -86,6 +86,19 @@ function mergeCandidates(clusters, target) {
   });
 }
 
+// Case and accents set aside, so "lea" finds "Léa".
+function foldName(text) {
+  return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+// The merge candidates a typed query keeps: the people whose name contains
+// it, plus whatever is already picked so the selection never drops out of sight.
+function filterMergeCandidates(clusters, query, selected) {
+  const q = foldName(query);
+  if (!q) return clusters;
+  return clusters.filter((c) => selected.includes(c.uuid) || foldName(c.person_name).includes(q));
+}
+
 function photoCount(count) {
   return `${count} photo${count === 1 ? '' : 's'}`;
 }
@@ -102,7 +115,7 @@ window.photosFacesMixin = function photosFacesMixin() {
     },
     _facesGeneration: 0,
     mergeDialog: {
-      target: null, clusters: [], selected: [], loading: false, saving: false, choices: null, person: null,
+      target: null, clusters: [], selected: [], query: '', loading: false, saving: false, choices: null, person: null,
     },
 
     // Both read from the page each time: a sidebar navigation swaps the
@@ -337,7 +350,7 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     async openMergeDialog(card) {
       this.mergeDialog = {
-        target: card, clusters: [], selected: [], loading: true, saving: false, choices: null, person: null,
+        target: card, clusters: [], selected: [], query: '', loading: true, saving: false, choices: null, person: null,
       };
       document.getElementById('merge-clusters-dialog').showModal();
       try {
@@ -350,6 +363,11 @@ window.photosFacesMixin = function photosFacesMixin() {
       } finally {
         this.mergeDialog.loading = false;
       }
+    },
+
+    visibleMergeClusters() {
+      const { clusters, query, selected } = this.mergeDialog;
+      return filterMergeCandidates(clusters, query, selected);
     },
 
     isMergeSelected(cluster) {

@@ -6,6 +6,12 @@ class VaultConfig(AppConfig):
     name = "workspace.vault"
 
     def ready(self):
+        from django.core.checks import Tags, register
+
+        from workspace.vault.checks import test_switches_check
+
+        register(test_switches_check, Tags.security)
+
         # The entry proxies are Django models, so the app registry has to hold
         # them whatever else imported them: an app registry that depends on
         # import order makes `makemigrations --check` answer differently in CI

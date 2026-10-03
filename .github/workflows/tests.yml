@@ -62,7 +62,7 @@ permissions:
 jobs:
   # Detects which parts of the tree changed so jobs that only exercise a
   # slice of it (ruff, djlint, JS unit tests, the davfs2 mount, the live
-  # Nextcloud imports) can be skipped.
+  # Nextcloud imports, the live S3 storage) can be skipped.
   # The Django and E2E matrices always run: they load templates and read
   # static assets, so nearly any non-doc change can affect them.
   changes:
@@ -75,6 +75,7 @@ jobs:
       webdav: ${{ steps.filter.outputs.webdav }}
       nextcloud: ${{ steps.filter.outputs.nextcloud }}
       vectors: ${{ steps.filter.outputs.vectors }}
+      storage: ${{ steps.filter.outputs.storage }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -121,6 +122,17 @@ jobs:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
               - 'workspace/common/tests/test_vectors*.py'
+              - 'workspace/settings/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.github/workflows/tests.yml'
+            # The blob storage layer, the files code that runs on it, and the
+            # dependency manifests.
+            storage:
+              - 'workspace/common/storage/**'
+              - 'workspace/common/tests/s3.py'
+              - 'workspace/common/tests/test_storage.py'
+              - 'workspace/files/**'
               - 'workspace/settings/**'
               - 'pyproject.toml'
               - 'uv.lock'
@@ -471,6 +483,67 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.imports.tests.test_nextcloud_live -v 2
+
+  # moto runs the object storage tests in every Django job. Here the same cases
+  # run against a real S3-compatible server, where an implementation's edge
+  # cases live: conditional writes, multipart rules, keys that name a
+  # directory. versitygw is configured from the environment alone, so it runs
+  # as a service container.
+  s3-live:
+    runs-on: ubuntu-latest
+    name: Storage (live S3)
+    needs: changes
+    if: needs.changes.outputs.storage == 'true'
+    services:
+      s3:
+        image: versity/versitygw:v1.8.0
+        env:
+          ROOT_ACCESS_KEY_ID: ci-s3-user
+          ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
+          VGW_BACKEND: posix
+          VGW_BACKEND_ARG: /tmp/vgw
+        ports:
+          - 7070:7070
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # The service container answers once it listens; an anonymous request
+      # gets a 403, which is enough to know it is up.
+      - name: Wait for the S3 server
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sS -o /dev/null http://localhost:7070/; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The S3 server did not come up in time" >&2
+          exit 1
+
+      - name: Run the storage tests against the S3 server
+        env:
+          # Every S3 test case talks to the server instead of moto.
+          WORKSPACE_S3_TESTS: '1'
+          WORKSPACE_S3_ENDPOINT_URL: http://localhost:7070
+          WORKSPACE_S3_ACCESS_KEY_ID: ci-s3-user
+          WORKSPACE_S3_SECRET_ACCESS_KEY: ci-s3-password-7d1e
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.common.tests.test_storage workspace.files.tests.test_object_storage -v 2
 
   # The Django matrix runs on SQLite, so the pgvector backend of the vector
   # index (common.vectors) only runs here, against a server that ships the

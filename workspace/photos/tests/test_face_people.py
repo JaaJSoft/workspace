@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.files.storage import default_storage
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 
 from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
@@ -258,6 +259,72 @@ class MergeIntoPersonTests(FaceApiTestCase):
             file=self.photos["pair.png"], cluster__person=bea
         ).count()
         self.assertEqual(in_pair, 1)
+
+
+class MergeCoverTests(FaceApiTestCase):
+    """Merging an unnamed cluster into a person keeps the person's face."""
+
+    def setUp(self):
+        super().setUp()
+        self.bea = create_person(owner=self.user, display_name="Bea")
+        FaceCluster.objects.filter(pk=self.bob.pk).update(person=self.bea)
+
+    def merge_bob_into_alice(self):
+        return self.client.post(
+            f"{CLUSTERS}/{self.alice.pk}/merge",
+            {"clusters": [str(self.bob.pk)]},
+            content_type="application/json",
+        )
+
+    def test_the_persons_automatic_cover_is_kept(self):
+        cover = self.face("bob.png")
+        FaceCluster.objects.filter(pk=self.bob.pk).update(cover=cover)
+
+        response = self.merge_bob_into_alice()
+
+        self.assertEqual(response.status_code, 200)
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cover_id, cover.pk)
+        self.assertIsNone(self.alice.cover_chosen_at)
+
+    def test_a_cover_the_user_picked_stays_picked(self):
+        cover = self.face("bob.png")
+        picked_at = timezone.now()
+        FaceCluster.objects.filter(pk=self.bob.pk).update(
+            cover=cover, cover_chosen_at=picked_at
+        )
+
+        self.merge_bob_into_alice()
+
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cover_id, cover.pk)
+        self.assertEqual(self.alice.cover_chosen_at, picked_at)
+
+    def test_the_persons_cover_wins_a_photo_both_clusters_are_in(self):
+        cover = self.face("pair.png", self.bob)
+        FaceCluster.objects.filter(pk=self.bob.pk).update(cover=cover)
+
+        self.merge_bob_into_alice()
+
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cover_id, cover.pk)
+        self.assertEqual(
+            Face.objects.filter(file=self.photos["pair.png"], cluster=self.alice)
+            .get()
+            .pk,
+            cover.pk,
+        )
+
+    def test_merging_into_a_person_keeps_their_cover(self):
+        FaceCluster.objects.filter(pk=self.bob.pk).update(person=None)
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=self.bea)
+        self.alice.refresh_from_db()
+        cover = self.alice.cover_id
+
+        self.merge_bob_into_alice()
+
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.cover_id, cover)
 
 
 class PersonsEndpointTests(FaceApiTestCase):

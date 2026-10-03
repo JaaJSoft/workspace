@@ -167,7 +167,8 @@ function browser(options = {}) {
       },
       vaultCrypto: {
         uuidV7: () => 'entry-uuid',
-        fromBase64Url: (value) => value,
+        fromBase64Url: (value) => (value === 'AQ' ? Uint8Array.of(1) : value),
+        mayResign: () => true,
         toBase64Url: (value) => 'b64',
         seal: async () => new Uint8Array(4),
         KDF_HKDF_SHA256: 0x01,
@@ -249,6 +250,35 @@ test('an entry whose signature does not verify is counted, never listed', async 
   await component.load();
   assert.deepStrictEqual(Array.from(component.entries), []);
   assert.equal(component.tamperedCount, 1);
+});
+
+test('load keeps only verified rows in entryRows', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryRow('good'), entryRow('bad')],
+    },
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'bad') throw new Error('forged');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(component.entryRows, (r) => r.uuid), ['good']);
+  assert.deepStrictEqual(Array.from(component.unverifiedEntryRows, (r) => r.uuid), ['bad']);
+});
+
+test('a lock forgets the rows the reader rejected too', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('bad')]) },
+    session: { verifyRecord: async () => { throw new Error('forged'); } },
+  });
+  component.init();
+  await component.load();
+  component.onLocked();
+  assert.deepStrictEqual(Array.from(component.unverifiedEntryRows), []);
 });
 
 test('the switcher lists every vault and marks the one that is open', async () => {
@@ -2245,14 +2275,23 @@ test('a refresh shuts a menu that was still open', async () => {
 test('a field that will not open leaves the form shut and says so', async () => {
   // An unhandled rejection out of a click handler would leave no dialog and
   // no message - the user would press Edit and watch nothing happen.
+  // The listing opens the name and the login too, so the failure starts only
+  // once the row is listed: a row that cannot be opened at load is rejected.
+  let listed = false;
   const { component } = typed({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
     },
-    crypto: { open: async () => { throw new Error('cannot open'); } },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (listed) throw new Error('cannot open');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
   });
   component.init();
   await component.load();
+  listed = true;
   await component.editEntry({
     uuid: 'e-1', type: 'login', fieldIds: ['username'], tags: [],
   });

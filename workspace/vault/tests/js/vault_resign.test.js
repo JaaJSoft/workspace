@@ -47,12 +47,14 @@ function resign(overrides = {}) {
       TextDecoder: globalThis.TextDecoder,
       vaultCrypto: {
         toBase64Url: () => 'b64',
-        fromBase64Url: (value) => value,
+        fromBase64Url: (value) => (value === 'AQ' ? Uint8Array.of(1) : value === 'CQ' ? Uint8Array.of(9) : value),
+        mayResign: (id) => id !== 9,
         seal: async () => { opened.push('seal'); return new Uint8Array(2); },
         open: async () => { opened.push('open'); return new Uint8Array(2); },
         AD: { entryFieldAd: (uuid, field) => uuid + '|' + field },
         entryMetadataPayload: (fields) => fields,
         KDF_HKDF_SHA256: 0x01,
+        ...overrides.crypto,
       },
       vaultSession: {
         accountUuid: () => 'account-1',
@@ -174,6 +176,36 @@ test('a tag nothing carries is deleted with no rewrite at all', async () => {
   assert.deepStrictEqual(Array.from(calls), ['delete-tag:t-1']);
 });
 
+test('a tag on an unverified entry blocks the deletion before any request', async () => {
+  const { ctx, calls } = resign();
+  const verified = [row('a', { tags: ['t'], metadata_sig: 'AQ' })];
+  const unverified = [row('b', { tags: ['t'], metadata_sig: 'AQ' })];
+  await assert.rejects(
+    ctx.vaultResign.deleteTagSafely(VAULT, 't', verified, unverified),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
+test('an unverified entry that does not carry the tag does not block it', async () => {
+  const { ctx, calls } = resign();
+  await ctx.vaultResign.deleteTagSafely(VAULT, 't', [], [row('b', { tags: ['u'], metadata_sig: 'AQ' })]);
+  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t']);
+});
+
+test('a carrier whose signature algorithm may not be re-signed blocks the deletion', async () => {
+  const { ctx, calls } = resign();
+  await assert.rejects(
+    ctx.vaultResign.deleteTagSafely(
+      VAULT, 't',
+      [row('a', { tags: ['t'], metadata_sig: 'AQ' }), row('b', { tags: ['t'], metadata_sig: 'CQ' })],
+      [],
+    ),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
 // --- dropping a folder -----------------------------------------------------
 
 test('a folder is deleted with every one of its entries, trash included', async () => {
@@ -187,6 +219,31 @@ test('a folder is deleted with every one of its entries, trash included', async 
     row('e-3', { folder: null }),
   ]);
   assert.deepStrictEqual(Array.from(calls), ['delete-folder:f-1:2']);
+});
+
+test('a folder holding an unverified entry blocks the deletion before any request', async () => {
+  const { ctx, calls } = resign();
+  await assert.rejects(
+    ctx.vaultResign.deleteFolderSafely(
+      VAULT, 'f', [{ uuid: 'f', parent: null }],
+      [], [row('b', { folder: 'f', metadata_sig: 'AQ' })],
+    ),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.deepStrictEqual(Array.from(calls), []);
+});
+
+test('an unverified entry in a subfolder blocks the deletion of its ancestor', async () => {
+  const { ctx, calls } = resign();
+  await assert.rejects(
+    ctx.vaultResign.deleteFolderSafely(
+      VAULT, 'f',
+      [{ uuid: 'f', parent: null }, { uuid: 'g', parent: 'f' }],
+      [], [row('b', { folder: 'g', metadata_sig: 'AQ' })],
+    ),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.deepStrictEqual(Array.from(calls), []);
 });
 
 test('the entries travel re-signed with no folder', async () => {

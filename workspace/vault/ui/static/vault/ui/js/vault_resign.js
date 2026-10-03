@@ -39,6 +39,25 @@ window.vaultResign = (function () {
     return ordered;
   }
 
+  function Blocked() {
+    const error = new Error('an affected entry could not be verified');
+    error.name = 'VaultResignBlocked';
+    return error;
+  }
+
+  function signaturePrefix(row) {
+    return window.vaultCrypto.fromBase64Url(row.metadata_sig)[0];
+  }
+
+  // Refused before the first request: a removal that stopped half-way would
+  // still have re-signed the rows it reached.
+  function assertResignable(affected, unverified) {
+    if (unverified.length) throw Blocked();
+    for (const row of affected) {
+      if (!window.vaultCrypto.mayResign(signaturePrefix(row))) throw Blocked();
+    }
+  }
+
   async function resignWithout(vault, row, changes) {
     const body = await window.buildEntryResignRequest(
       window.vaultSession, vault, row, changes
@@ -47,9 +66,12 @@ window.vaultResign = (function () {
   }
 
   return {
+    Blocked: Blocked,
+
     // Sequential, not parallel: a failure has to stop the ones after it, and
     // Promise.all would have already sent them.
-    deleteTagSafely: async function (vault, tagUuid, entries) {
+    deleteTagSafely: async function (vault, tagUuid, entries, unverified) {
+      assertResignable(carriers(entries, tagUuid), carriers(unverified || [], tagUuid));
       for (const row of carriers(entries, tagUuid)) {
         await resignWithout(vault, row, {
           tags: (row.tags || []).filter(function (uuid) {
@@ -65,7 +87,10 @@ window.vaultResign = (function () {
     // deleted_at is a view and folder_id is still a RESTRICT reference - each
     // re-signed with no folder. The server compares the submitted set against
     // the folder's real contents and refuses a mismatch.
-    deleteFolderSafely: async function (vault, folderUuid, folders, entries) {
+    deleteFolderSafely: async function (vault, folderUuid, folders, entries, unverified) {
+      const levels = subtree(folders, folderUuid).map(String);
+      const inSubtree = function (entry) { return levels.includes(String(entry.folder)); };
+      assertResignable(entries.filter(inSubtree), (unverified || []).filter(inSubtree));
       for (const uuid of subtree(folders, folderUuid)) {
         const occupants = entries.filter(function (entry) {
           return String(entry.folder) === String(uuid);

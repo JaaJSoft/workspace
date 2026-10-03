@@ -29,6 +29,7 @@ from workspace.common.logging import scrub
 
 from .backend import (
     Backend,
+    Blob,
     Entry,
     NameTaken,
     Relocation,
@@ -338,6 +339,26 @@ class S3Backend(Backend):
         if not found:
             raise FileNotFoundError(errno.ENOENT, "No such directory", name)
         return entries
+
+    def _name(self, key):
+        return key[len(self.prefix) :]
+
+    def iter_blobs(self, name):
+        for obj in self._objects(self._dir_prefix(name), name):
+            if not obj["Key"].endswith("/"):
+                yield Blob(name=self._name(obj["Key"]), size=obj["Size"])
+
+    def iter_dirs(self, name):
+        # A directory is any prefix a key sits under, or a kept empty one.
+        root = self._dir_prefix(name)
+        seen = set()
+        for obj in self._objects(root, name):
+            parts = obj["Key"][len(root) :].split("/")
+            for depth in range(1, len(parts)):
+                relative = "/".join(parts[:depth])
+                if relative and relative not in seen:
+                    seen.add(relative)
+                    yield f"{name}/{relative}"
 
     def _put_marker(self, key, name):
         with _translated(name):

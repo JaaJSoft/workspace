@@ -19,7 +19,7 @@ from django.core.files.storage import FileSystemStorage
 
 from workspace.common.logging import scrub
 
-from .backend import Backend, Entry, Moved, StagedWriter, checked_name
+from .backend import Backend, Blob, Entry, Moved, StagedWriter, checked_name
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +82,28 @@ class LocalBackend(Backend):
                 )
                 for entry in entries
             ]
+
+    def _walk(self, name):
+        top = self._path(name)
+        for current, dirs, files in os.walk(top):
+            relative = os.path.relpath(current, top)
+            prefix = (
+                name if relative == "." else f"{name}/{relative.replace(os.sep, '/')}"
+            )
+            yield current, prefix, dirs, files
+
+    def iter_blobs(self, name):
+        for current, prefix, _dirs, files in self._walk(name):
+            for filename in files:
+                path = os.path.join(current, filename)
+                # A symlink or a socket is not a blob the storage holds.
+                if os.path.isfile(path) and not os.path.islink(path):
+                    yield Blob(name=f"{prefix}/{filename}", size=os.path.getsize(path))
+
+    def iter_dirs(self, name):
+        for _current, prefix, dirs, _files in self._walk(name):
+            for dirname in dirs:
+                yield f"{prefix}/{dirname}"
 
     def make_dir(self, name):
         os.makedirs(self._path(name), exist_ok=True)

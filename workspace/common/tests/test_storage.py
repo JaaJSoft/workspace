@@ -97,6 +97,35 @@ class BlobStorageContract:
         self.assertFalse(self.storage.is_dir("files/users/nobody"))
         self.assertFalse(self.storage.is_file("files/users/nobody"))
 
+    def test_iter_blobs_walks_the_whole_tree(self):
+        self.save("files/users/alice/a.txt", b"a")
+        self.save("files/users/alice/Docs/Sub/b.txt", b"bb")
+        self.storage.make_dir("files/users/alice/Empty")
+        self.save("chat/c.txt", b"c")
+
+        blobs = sorted(
+            (b.name, b.size) for b in self.storage.iter_blobs("files/users/alice")
+        )
+
+        self.assertEqual(
+            blobs,
+            [("files/users/alice/Docs/Sub/b.txt", 2), ("files/users/alice/a.txt", 1)],
+        )
+        self.assertEqual(list(self.storage.iter_blobs("files/users/nobody")), [])
+
+    def test_iter_dirs_includes_the_empty_ones(self):
+        self.save("files/users/alice/Docs/Sub/b.txt", b"b")
+        self.storage.make_dir("files/users/alice/Empty")
+
+        self.assertEqual(
+            sorted(self.storage.iter_dirs("files/users/alice")),
+            [
+                "files/users/alice/Docs",
+                "files/users/alice/Docs/Sub",
+                "files/users/alice/Empty",
+            ],
+        )
+
     def test_make_dir_keeps_an_empty_directory(self):
         self.storage.make_dir("files/users/alice/Empty/Nested")
 

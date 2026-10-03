@@ -1,5 +1,5 @@
 from workspace.common.search import apply_fulltext
-from workspace.core.module_registry import SearchResult, SearchTag
+from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
@@ -30,13 +30,15 @@ def in_browsable_tree(f, user, reachable_parents):
     return f.parent_id in reachable_parents
 
 
-def search_files(query, user, limit):
+def search_files(query, user, limit, scope=SearchScope.ALL):
+    if scope == SearchScope.MINE:
+        files = FileService.user_files_qs(user)
+    else:
+        files = File.objects.filter(
+            pk__in=FileService.accessible_file_ids(user, include_deleted=False)
+        )
     qs = apply_fulltext(
-        exclude_blocked(
-            File.objects.filter(
-                pk__in=FileService.accessible_file_ids(user, include_deleted=False)
-            ).select_related("parent")
-        ),
+        exclude_blocked(files.select_related("parent")),
         query,
         index=FILES_FTS,
     ).order_by("-search_rank", "-updated_at")[:limit]

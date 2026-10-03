@@ -1,3 +1,7 @@
+// Shared by every palette of the page: scope writes are chained so rapid
+// toggles reach the server in click order and the last one is what stays saved.
+let searchScopeWrite = Promise.resolve();
+
 window.commandPaletteDropdown = function () {
   const STORAGE_KEY = 'workspace:recentCommands';
   const MAX_QUICK_ACTIONS = 5;
@@ -5,9 +9,23 @@ window.commandPaletteDropdown = function () {
   // whatever comes after it is matched against the command list alone.
   const COMMAND_PREFIX = '>';
   const MIN_SEARCH_LENGTH = 2;
+  const SCOPE_MINE = 'mine';
+  const SCOPE_ALL = 'all';
+  // The desktop, mobile and dashboard palettes each hold their own copy of the
+  // scope; this event keeps them in step when one of them flips it.
+  const SCOPE_EVENT = 'search-scope-changed';
   const allCommands = JSON.parse(
     document.getElementById('workspace-commands')?.textContent || '[]'
   );
+
+  function initialScope() {
+    try {
+      const value = JSON.parse(document.getElementById('search-scope-data')?.textContent || 'null');
+      return value === SCOPE_MINE ? SCOPE_MINE : SCOPE_ALL;
+    } catch {
+      return SCOPE_ALL;
+    }
+  }
 
   function getRecentCommands() {
     try {
@@ -68,6 +86,7 @@ window.commandPaletteDropdown = function () {
     loading: false,
     error: false,
     searchQuery: '',
+    scope: initialScope(),
     // Bumped per search(); a response whose id no longer matches is stale.
     _searchRequestId: 0,
     activeIndex: -1,
@@ -77,6 +96,13 @@ window.commandPaletteDropdown = function () {
 
     init() {
       this.quickActions = computeQuickActions();
+
+      this._onScopeChanged = (e) => {
+        if (e.detail?.scope === this.scope) return;
+        this.scope = e.detail.scope;
+        if (this.open) this.search();
+      };
+      window.addEventListener(SCOPE_EVENT, this._onScopeChanged);
 
       if (!window.__commandPaletteShortcutBound) {
         document.addEventListener('keydown', (e) => {
@@ -126,6 +152,30 @@ window.commandPaletteDropdown = function () {
       });
     },
 
+    destroy() {
+      window.removeEventListener(SCOPE_EVENT, this._onScopeChanged);
+    },
+
+    isMineOnly() {
+      return this.scope === SCOPE_MINE;
+    },
+
+    // Saved through the settings API and never awaited: the results already
+    // follow the new scope, a refused write only costs it on the next load.
+    setMineOnly(mineOnly) {
+      const scope = mineOnly ? SCOPE_MINE : SCOPE_ALL;
+      if (scope === this.scope) return;
+      this.scope = scope;
+      searchScopeWrite = searchScopeWrite.then(() => fetch('/api/v1/settings/core/search_scope', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ value: scope }),
+      }).catch(() => {}));
+      window.dispatchEvent(new CustomEvent(SCOPE_EVENT, { detail: { scope } }));
+      this.search();
+      this.$nextTick(() => this.$refs.input?.focus());
+    },
+
     trackCommand(url) {
       try {
         let recent = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -162,6 +212,12 @@ window.commandPaletteDropdown = function () {
     showEmptyState() {
       return !this.loading && !this.error
         && this.commands.length === 0 && this.results.length === 0;
+    },
+
+    // An empty list under "Mine only" offers the way out, so a forgotten
+    // switch never reads as a search that lost the user's files.
+    showMineOnlyHint() {
+      return this.showEmptyState() && !this.isCommandMode() && this.isMineOnly();
     },
 
     showMinLengthHint() {
@@ -203,7 +259,7 @@ window.commandPaletteDropdown = function () {
 
       this.loading = true;
       const q = encodeURIComponent(this.query);
-      fetch(`/api/v1/search?q=${q}`, { credentials: 'same-origin' })
+      fetch(`/api/v1/search?q=${q}&scope=${this.scope}`, { credentials: 'same-origin' })
         .then(response => {
           if (requestId !== this._searchRequestId) return null;
           if (!response.ok) throw new Error(`search responded ${response.status}`);

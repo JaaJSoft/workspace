@@ -8,7 +8,7 @@ assistant's `search_everything` tool) must go through the helpers here.
 
 from collections import defaultdict
 
-from ..module_registry import registry
+from ..module_registry import SearchScope, registry
 from .module_visibility import filter_visible_commands, is_module_slug_visible
 
 MIN_QUERY_LENGTH = 2
@@ -42,8 +42,13 @@ def _drop_refined(hits: list[dict]) -> list[dict]:
     return [hit for hit in hits if not is_superseded(hit)]
 
 
-def search_modules(query, user, limit=DEFAULT_LIMIT) -> list[dict]:
+def search_modules(
+    query, user, limit=DEFAULT_LIMIT, scope=SearchScope.ALL
+) -> list[dict]:
     """Provider hits for *query*, restricted to modules *user* can see.
+
+    *scope* narrows the providers that support it (``SearchScope.MINE``
+    drops what the user reaches through someone else); the others ignore it.
 
     *limit* is per provider, so the returned list holds up to
     ``limit * <number of registered providers>`` entries - fewer once
@@ -59,7 +64,7 @@ def search_modules(query, user, limit=DEFAULT_LIMIT) -> list[dict]:
         return []
     visible = [
         hit
-        for hit in registry.search(query, user, limit)
+        for hit in registry.search(query, user, limit, scope=scope)
         if is_module_slug_visible(user, hit["module_slug"])
     ]
     return _drop_refined(visible)

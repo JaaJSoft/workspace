@@ -38,7 +38,11 @@ class NoteShortcutTests(PlaywrightTestCase):
         self.page.locator(f'button[data-note-uuid="{self.note.uuid}"]').click()
         title = self.page.locator('input[x-ref="noteTitle"]')
         expect(title).to_have_value("Groceries")
-        expect(title).not_to_have_attribute("readonly", "")
+        # Readonly until the rename action arrives.
+        expect(title).to_be_editable()
+        # The editor mounts after the note opens; a key pressed before it is
+        # up races its mount for the focus.
+        expect(self.page.locator(".milkdown .ProseMirror")).to_be_visible()
 
         # Shortcuts are ignored while an editable element has the focus.
         self.page.evaluate("document.activeElement?.blur()")

@@ -1,6 +1,6 @@
-from workspace.core.module_registry import SearchResult
+from workspace.core.module_registry import SearchResult, SearchScope
 
-from .queries import user_persons
+from .queries import own_persons, user_persons
 
 
 def _matched_value(person, needle):
@@ -11,11 +11,12 @@ def _matched_value(person, needle):
     return person.display_name
 
 
-def search_persons(query, user, limit):
+def search_persons(query, user, limit, scope=SearchScope.ALL):
     needle = query.strip().lower()
     if not needle:
         return []
-    persons = user_persons(user).filter(search_text__contains=needle)[:limit]
+    persons = own_persons(user) if scope == SearchScope.MINE else user_persons(user)
+    persons = persons.filter(search_text__contains=needle)[:limit]
     return [
         SearchResult(
             uuid=str(p.uuid),

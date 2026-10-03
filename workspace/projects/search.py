@@ -1,10 +1,16 @@
-from workspace.core.module_registry import SearchResult, SearchTag
+from django.db.models import Q
 
+from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
+
+from .queries import personal_project_ids
 from .services.search import combined_task_search, search_projects_qs
 
 
-def search_projects(query, user, limit):
-    projects = search_projects_qs(user, query)[:limit]
+def search_projects(query, user, limit, scope=SearchScope.ALL):
+    projects = search_projects_qs(user, query)
+    if scope == SearchScope.MINE:
+        projects = projects.filter(uuid__in=personal_project_ids(user))
+    projects = projects[:limit]
     return [
         SearchResult(
             uuid=str(p.uuid),
@@ -20,8 +26,13 @@ def search_projects(query, user, limit):
     ]
 
 
-def search_project_tasks(query, user, limit):
-    tasks, reference_uuids = combined_task_search(user, query, limit=limit)
+def search_project_tasks(query, user, limit, scope=SearchScope.ALL):
+    extra_filter = None
+    if scope == SearchScope.MINE:
+        extra_filter = Q(project_id__in=personal_project_ids(user))
+    tasks, reference_uuids = combined_task_search(
+        user, query, limit=limit, extra_filter=extra_filter
+    )
     return [
         SearchResult(
             uuid=str(t.uuid),

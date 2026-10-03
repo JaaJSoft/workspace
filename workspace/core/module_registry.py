@@ -60,6 +60,19 @@ class ModuleVisibility:
         return value if value in cls.CHOICES else default
 
 
+class SearchScope:
+    """How much of what the user can open a scoped search provider returns.
+
+    ``MINE`` keeps what lives in the user's own space and drops whatever they
+    reach through a group, a share, a subscription or someone else's project.
+    """
+
+    ALL = "all"
+    MINE = "mine"
+
+    CHOICES = (ALL, MINE)
+
+
 @dataclass(frozen=True)
 class SearchTag:
     label: str
@@ -87,6 +100,10 @@ class SearchProviderInfo:
     # Provider slugs this one supersedes when both answer with the same entity:
     # `notes` refines `files`, so a markdown note keeps its editor url.
     refines: tuple[str, ...] = ()
+    # Whether search_fn takes a ``scope`` keyword (a SearchScope value). An
+    # unscoped provider has nothing reached through someone else to drop, so
+    # it answers the same under either scope.
+    scoped: bool = False
 
 
 @dataclass(frozen=True)
@@ -139,14 +156,19 @@ class ModuleRegistry:
             if provider.refines
         }
 
-    def search(self, query: str, user, limit: int = 10) -> list[dict]:
+    def search(
+        self, query: str, user, limit: int = 10, scope: str = SearchScope.ALL
+    ) -> list[dict]:
         results = []
         for provider in self._search_providers.values():
             module = self._modules.get(provider.module_slug)
             if not module or not module.active:
                 continue
             try:
-                hits = provider.search_fn(query, user, limit)
+                if provider.scoped:
+                    hits = provider.search_fn(query, user, limit, scope=scope)
+                else:
+                    hits = provider.search_fn(query, user, limit)
                 # provider_slug names the kind of entity ("mail-contacts",
                 # "project-tasks"); module_slug alone cannot tell two
                 # providers of the same module apart.

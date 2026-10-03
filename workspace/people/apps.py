@@ -29,7 +29,10 @@ class PeopleConfig(AppConfig):
 
         registry.register_search_provider(
             SearchProviderInfo(
-                slug="people", module_slug="people", search_fn=search_persons
+                slug="people",
+                module_slug="people",
+                search_fn=search_persons,
+                scoped=True,
             )
         )
         registry.register_commands(

@@ -93,9 +93,17 @@ class S3StoragesMixin(S3TestMixin):
     it; the test points such a field at ``storages[...]`` itself.
     """
 
+    # Extra backend options for both aliases, e.g. {"signed_urls": True}.
+    s3_options = {}
+
     def setUp(self):
         super().setUp()
-        options = {"backend": "s3", "bucket": self.bucket, **self.s3_connection}
+        options = {
+            "backend": "s3",
+            "bucket": self.bucket,
+            **self.s3_connection,
+            **self.s3_options,
+        }
         blobs = "workspace.common.storage.facade.BlobStorage"
         override = override_settings(
             STORAGES={

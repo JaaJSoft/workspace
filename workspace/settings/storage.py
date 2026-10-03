@@ -6,7 +6,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import BASE_DIR, DEBUG
-from .env import env_bool
+from .env import env_bool, env_non_negative_int
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
@@ -59,7 +59,7 @@ if _S3_BUCKET:
         # Unset to use boto3's own chain (AWS_* variables, instance role, ...).
         "access_key_id": os.getenv("S3_ACCESS_KEY_ID") or None,
         "secret_access_key": os.getenv("S3_SECRET_ACCESS_KEY") or None,
-        # "path" for most self-hosted servers (MinIO, Garage, ...).
+        # "path" for most self-hosted servers (Garage, SeaweedFS, ...).
         "addressing_style": os.getenv("S3_ADDRESSING_STYLE") or None,
         # The URL clients reach the store at, when it differs from
         # S3_ENDPOINT_URL (an internal service name behind a public proxy).
@@ -67,6 +67,11 @@ if _S3_BUCKET:
         # If-None-Match on writes that must not overwrite. Turn off only for a
         # server that rejects it; saves then rely on a check before the write.
         "conditional_writes": env_bool("S3_CONDITIONAL_WRITES", True),
+        # Redirect downloads to short-lived signed URLs on the store instead of
+        # streaming them through the app. Needs CORS on the bucket for the
+        # app's origin (the image viewer fetch()es what it edits).
+        "signed_urls": env_bool("S3_SIGNED_URLS", False),
+        "signed_url_ttl": env_non_negative_int("S3_SIGNED_URL_TTL") or 3600,
     }
 
 if STORAGE_BACKEND not in ("local", "s3"):

@@ -16,6 +16,7 @@ from PIL import Image
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import SOURCE_IMPORT, Person, PersonList
+from ..queries import person_with_email
 from .avatar import save_avatar
 from .lists import add_members, create_list
 from .persons import create_person, update_person
@@ -56,15 +57,11 @@ def _find_by_uid(scope, uid):
 
 
 def _find_by_email(scope, emails):
+    persons = Person.objects.filter(**scope)
     for entry in emails:
-        value = entry["value"].strip().lower()
-        if not value:
-            continue
-        # search_text carries every email lowercased: a cheap prefilter, and
-        # the row's own list decides.
-        for person in Person.objects.filter(**scope, search_text__contains=value):
-            if any(e.get("value", "").lower() == value for e in person.emails or []):
-                return person
+        person = person_with_email(persons, entry["value"])
+        if person is not None:
+            return person
     return None
 
 

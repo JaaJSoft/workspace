@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import SimpleRouter
 
-from .views import actions, avatar, lists, persons, vcard
+from .views import actions, avatar, lists, persons, promote, vcard
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"people", persons.PersonViewSet, basename="person")
@@ -14,6 +14,11 @@ urlpatterns = [
         "api/v1/people/actions",
         actions.PersonActionsView.as_view(),
         name="person-actions",
+    ),
+    path(
+        "api/v1/people/promote",
+        promote.PersonPromoteView.as_view(),
+        name="person-promote",
     ),
     path(
         "api/v1/people/import",

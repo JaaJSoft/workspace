@@ -2,34 +2,78 @@
 <div
   x-show="_acIsOpen('{{ field }}')"
   x-cloak
-  class="absolute left-0 right-0 top-full mt-1 z-50 bg-base-100 rounded-lg shadow-lg ring-1 ring-base-300 max-h-60 overflow-y-auto"
+  role="listbox"
+  class="absolute left-0 right-0 top-full mt-1 z-50 bg-base-100 rounded-lg shadow-lg ring-1 ring-base-300 max-h-80 overflow-y-auto py-1"
 >
-  <template x-for="(contact, idx) in _autocomplete.results" :key="contact.email">
-    <button
-      type="button"
-      class="flex items-center gap-3 w-full px-3 py-2 text-left transition-colors"
-      :class="idx === _autocomplete.highlight ? 'bg-base-200' : 'hover:bg-base-200/50'"
-      @mousedown.prevent="_acSelect(contact, '{{ field }}')"
-      @mouseenter="_autocomplete.highlight = idx"
-    >
-      <div class="avatar placeholder shrink-0">
-        <div
-          class="w-7 h-7 bg-module/15 text-module rounded-full flex items-center justify-center text-xs font-semibold"
-          x-text="(contact.name || contact.email).charAt(0).toUpperCase()"
-        ></div>
+  <template x-for="(row, idx) in _autocomplete.results" :key="row.key">
+    <div>
+      <div
+        x-show="row.sectionStart"
+        class="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-base-content/40"
+        :class="idx > 0 && 'mt-1 border-t border-base-200'"
+        x-text="_acSectionLabel(row.kind)"
+      ></div>
+      <div
+        role="option"
+        :aria-selected="idx === _autocomplete.highlight"
+        class="flex items-center gap-3 w-full px-3 cursor-pointer transition-colors"
+        :class="[idx === _autocomplete.highlight ? 'bg-base-200' : 'hover:bg-base-200/50', row.first ? 'py-1.5' : 'pb-1.5 -mt-0.5']"
+        @mousedown.prevent="_acSelect(row, '{{ field }}')"
+        @mouseenter="_autocomplete.highlight = idx"
+      >
+        <div class="w-8 shrink-0">
+          <template x-if="row.first">
+            <user-avatar size="sm" :user-id="row.user_id" :username="row.name || row.email" :color-key="row.uuid || row.email" :src="row.avatar_url"></user-avatar>
+          </template>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div
+            class="text-sm font-medium truncate"
+            x-show="row.first && row.name"
+            x-text="row.name"
+          ></div>
+          <div class="flex items-center gap-1.5 min-w-0">
+            <span
+              class="truncate"
+              :class="row.first && !row.name ? 'text-sm' : 'text-xs text-base-content/50'"
+              x-text="row.email"
+            ></span>
+            <span
+              x-show="row.kind === 'person' && row.type"
+              class="shrink-0 text-[10px] uppercase tracking-wide text-base-content/40"
+              x-text="row.type"
+            ></span>
+          </div>
+        </div>
+        <template x-if="row.kind !== 'person'">
+          <div class="shrink-0">
+            <a
+              x-show="row.person_uuid"
+              :href="_acPersonUrl(row)"
+              target="_blank"
+              rel="noopener"
+              class="btn btn-ghost btn-xs btn-square text-success"
+              title="Open contact"
+              aria-label="Open contact"
+              @mousedown.prevent.stop
+            >
+              <i data-lucide="user-check" class="w-4 h-4"></i>
+            </a>
+            <button
+              x-show="!row.person_uuid"
+              type="button"
+              class="btn btn-ghost btn-xs btn-square text-base-content/50 hover:text-module"
+              title="Add to contacts"
+              aria-label="Add to contacts"
+              :disabled="row.promoting"
+              @mousedown.prevent.stop
+              @click.stop="_acAddToContacts(row)"
+            >
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </template>
       </div>
-      <div class="min-w-0 flex-1">
-        <div
-          class="text-sm font-medium truncate"
-          x-show="contact.name"
-          x-text="contact.name"
-        ></div>
-        <div
-          class="text-xs truncate"
-          :class="contact.name ? 'text-base-content/50' : 'text-sm'"
-          x-text="contact.email"
-        ></div>
-      </div>
-    </button>
+    </div>
   </template>
 </div>

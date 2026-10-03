@@ -210,11 +210,10 @@ window.mailComposeMixin = function mailComposeMixin() {
           if (res.ok) {
             const data = await res.json();
             if (!isCurrent()) return;
-            // Filter out emails already added in any field
             const existing = new Set([
               ...this.compose.to, ...this.compose.cc, ...this.compose.bcc,
             ].map(e => e.toLowerCase()));
-            this._autocomplete.results = data.filter(c => !existing.has(c.email.toLowerCase()));
+            this._autocomplete.results = _recipientRows(data, existing);
             this._autocomplete.highlight = -1;
             this._autocomplete.show = this._autocomplete.results.length > 0;
           }
@@ -240,9 +239,47 @@ window.mailComposeMixin = function mailComposeMixin() {
       this._autocomplete._requestId = (this._autocomplete._requestId || 0) + 1;
     },
 
-    _acSelect(contact, field) {
+    _acSelect(row, field) {
       const f = field || this._autocomplete.field;
-      if (f) this.addTag(f, contact.email);
+      if (f) this.addTag(f, row.email);
+    },
+
+    _acSectionLabel(kind) {
+      return { person: 'Contacts', account: 'Directory', history: 'Recent' }[kind];
+    },
+
+    // Promote a directory account or a history correspondent to a person, or
+    // find the one that already carries it. The row stays where it is and
+    // links to that person from then on.
+    async _acAddToContacts(row) {
+      if (row.person_uuid || row.promoting) return;
+      row.promoting = true;
+      const body = row.kind === 'account'
+        ? { user_id: row.user_id }
+        : { email: row.email, name: row.name };
+      try {
+        const res = await this._fetch('/api/v1/people/promote', { method: 'POST', body });
+        if (!res.ok) {
+          AppAlert.error('Could not add to contacts');
+          return;
+        }
+        const person = await res.json();
+        row.person_uuid = person.uuid;
+        const open = [{ label: 'Open', onClick: () => window.open(this._acPersonUrl(row), '_blank', 'noopener') }];
+        if (res.status === 201) {
+          AppAlert.success(`${person.display_name} added to contacts`, { actions: open });
+        } else {
+          AppAlert.info(`${person.display_name} is already in your contacts`, { actions: open });
+        }
+      } catch (e) {
+        AppAlert.error('Could not add to contacts');
+      } finally {
+        row.promoting = false;
+      }
+    },
+
+    _acPersonUrl(row) {
+      return `/people?person=${row.kind === 'person' ? row.uuid : row.person_uuid}`;
     },
 
     _acIsOpen(field) {

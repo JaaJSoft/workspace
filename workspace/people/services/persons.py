@@ -1,6 +1,7 @@
 from django.db import transaction
 
 from ..models import Person
+from ..queries import person_with_email, user_persons
 
 
 def _check_one_scope(owner, group):
@@ -40,3 +41,35 @@ def delete_person(person):
 
         delete_avatar(person)
     person.delete()
+
+
+@transaction.atomic
+def promote_to_person(user, *, email="", name="", account=None):
+    """The user's person for a mail correspondent or a workspace account.
+
+    Returns ``(person, created)``. A person the user can already see that is
+    linked to ``account`` or carries the email is returned as is; otherwise a
+    new one is created in the user's own address book.
+    """
+    persons = user_persons(user)
+    if account is not None:
+        existing = persons.filter(linked_user=account).first()
+        if existing is not None:
+            return existing, False
+        email = email or account.email
+        name = name or account.get_full_name() or account.username
+    existing = person_with_email(persons, email)
+    if existing is not None:
+        return existing, False
+    email = email.strip()
+    fields = {
+        "display_name": (name.strip() or email)[:255],
+        "emails": [{"value": email, "type": "other"}] if email else [],
+    }
+    if account is not None:
+        fields.update(
+            linked_user=account,
+            given_name=account.first_name,
+            family_name=account.last_name,
+        )
+    return create_person(owner=user, **fields), True

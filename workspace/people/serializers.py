@@ -255,3 +255,22 @@ class ListMembersSerializer(serializers.Serializer):
     uuids = serializers.ListField(
         child=serializers.UUIDField(), min_length=1, max_length=200
     )
+
+
+class PersonPromoteSerializer(serializers.Serializer):
+    """A mail correspondent (``email``, ``name``) or a workspace account (``user_id``)."""
+
+    email = serializers.EmailField(max_length=254, required=False)
+    name = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=""
+    )
+    user_id = serializers.PrimaryKeyRelatedField(
+        source="account",
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+    )
+
+    def validate(self, attrs):
+        if ("email" in attrs) == ("account" in attrs):
+            raise serializers.ValidationError("Give either an email or a user_id.")
+        return attrs

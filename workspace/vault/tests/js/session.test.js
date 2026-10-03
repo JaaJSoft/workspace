@@ -4,6 +4,7 @@
 // tests/e2e/test_unlock_browser.py.
 const test = require('node:test');
 const assert = require('node:assert');
+const vm = require('node:vm');
 const { loadScripts } = require('../../../common/tests/js/loader');
 
 const ENVELOPE = {
@@ -1136,4 +1137,81 @@ test('an unreadable envelope is refused before Argon2 runs', async () => {
     await assert.rejects(session.unlock(credentials), (err) => err.reason === 'unsupported', field);
     assert.equal(derivations, 0, `${field}: Argon2 ran before the refusal`);
   }
+});
+
+// An unlocked real session and a vault whose key is wrapped under the
+// superseded HPKE format. The descriptor is built inside the context so the
+// bundle sees objects of its own realm.
+async function unlockedSessionWithVault() {
+  const { envelope, credentials } = await fixture();
+  const { ctx, session } = realSession(envelope);
+  await session.unlock(credentials);
+  const V = ctx.vaultCrypto;
+  const formatOne = vm.runInContext(
+    '(() => { const { format, ...rest } = vaultCrypto.CURRENT_SUITE.hpke; return rest; })()',
+    ctx
+  );
+  const uuid = V.uuidV7();
+  const vault = {
+    uuid,
+    hpke_suite: formatOne,
+    wrapped_key: V.toBase64Url(await V.hpkeSeal(
+      session.accountKexPublicRaw(),
+      V.AD.vaultKeyInfo(uuid, session.accountUuid(), formatOne),
+      V.randomBytes(32),
+      formatOne
+    )),
+  };
+  return { session, V, vault, ctx };
+}
+
+test('rewrapVaultKey re-seals under the current suite and opens to the same key', async () => {
+  const { session, V, vault } = await unlockedSessionWithVault();
+  const before = await session.openVaultKey(vault);
+  const rewrapped = await session.rewrapVaultKey(vault);
+  assert.equal(rewrapped.hpke_suite.format, 2);
+  assert.notEqual(rewrapped.wrapped_key, vault.wrapped_key);
+  const after = await session.openVaultKey({ ...vault, ...rewrapped });
+  const ad = V.AD.vaultFieldAd(vault.uuid, 'name');
+  const probe = await V.seal(before, new Uint8Array([1, 2, 3]), ad, { keyVersion: 1, kdfId: V.KDF_HKDF_SHA256 });
+  assert.deepStrictEqual(Array.from(await V.open(after, probe, ad)), [1, 2, 3]);
+});
+
+test('rewrapVaultKey never returns a wrap that does not reopen', async () => {
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const realSeal = ctx.vaultCrypto.hpkeSeal;
+  ctx.vaultCrypto.hpkeSeal = async (...args) => {
+    const sealed = await realSeal(...args);
+    sealed[sealed.length - 1] ^= 1;
+    return sealed;
+  };
+  await assert.rejects(session.rewrapVaultKey(vault));
+});
+
+test('rewrapVaultKey refuses a wrap that opens to a different key', async () => {
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const V = ctx.vaultCrypto;
+  const realSeal = V.hpkeSeal;
+  V.hpkeSeal = async (pub, info, plain, suite) => realSeal(pub, info, V.randomBytes(32), suite);
+  await assert.rejects(
+    session.rewrapVaultKey(vault),
+    (err) => err.message === 'the new key wrap does not open to the vault key'
+  );
+});
+
+test('rewrapVaultKey seals for the session key, not a server field', async () => {
+  const { session, vault, ctx } = await unlockedSessionWithVault();
+  const V = ctx.vaultCrypto;
+  const realSeal = V.hpkeSeal;
+  let recipientSeen = null;
+  V.hpkeSeal = async (pub, ...rest) => { recipientSeen = Array.from(pub); return realSeal(pub, ...rest); };
+  const rewrapped = await session.rewrapVaultKey({ ...vault, recipient_public_key: 'AAAA' });
+  assert.ok(rewrapped.wrapped_key);
+  assert.deepStrictEqual(recipientSeen, Array.from(session.accountKexPublicRaw()));
+});
+
+test('rewrapVaultKey after a lock is refused', async () => {
+  const { session, vault } = await unlockedSessionWithVault();
+  session.lock();
+  await assert.rejects(session.rewrapVaultKey(vault), (err) => err.reason === 'locked');
 });

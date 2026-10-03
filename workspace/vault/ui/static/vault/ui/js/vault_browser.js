@@ -416,6 +416,14 @@ window.vaultBrowser = (function () {
         return newer === this.vaults.length ? 'newer' : 'mixed';
       },
 
+      // Every row the server holds for this vault, the ones the reader
+      // rejected included. What a call acts on server-side (an action list, a
+      // trash purge) is counted on these; anything that re-signs or opens a
+      // row uses entryRows, which holds only the verified ones.
+      storedRows: function () {
+        return this.entryRows.concat(this.unverifiedEntryRows);
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },
@@ -487,7 +495,7 @@ window.vaultBrowser = (function () {
         // leave the trash button reasoning about a subset of what it destroys
         // - a trash holding nothing else would look empty of anything the
         // server allows, and there is no per-row menu to fall back on.
-        const uuids = this.entryRows.map(function (row) { return row.uuid; });
+        const uuids = this.storedRows().map(function (row) { return row.uuid; });
         if (!uuids.length) {
           this.entryActions = {};
           return;
@@ -935,7 +943,7 @@ window.vaultBrowser = (function () {
       // menu of their own ever renders.
       canEmptyTrash: function () {
         if (this.view !== 'trash' || !this.openVault) return false;
-        const rows = this.entryRows.filter(function (row) { return !!row.deleted_at; });
+        const rows = this.storedRows().filter(function (row) { return !!row.deleted_at; });
         if (!rows.length) return false;
         const self = this;
         return rows.every(function (row) {
@@ -953,7 +961,7 @@ window.vaultBrowser = (function () {
       // about three entries and destroying five would hide exactly the rows a
       // user has most reason to keep.
       trashedRowCount: function () {
-        return this.entryRows.filter(function (row) {
+        return this.storedRows().filter(function (row) {
           return !!row.deleted_at;
         }).length;
       },

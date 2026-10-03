@@ -151,6 +151,7 @@ window.vaultBrowser = (function () {
       // The stored rows behind `entries`, still sealed. A field opened on
       // demand is opened from one of these.
       entryRows: [],
+      unverifiedEntryRows: [],
       // The routed UUID names no vault this account can reach. Never a 404
       // from the server - that would say it exists in another account - so
       // saying it is the page's job.
@@ -256,6 +257,7 @@ window.vaultBrowser = (function () {
         this.setData({});
         this.vaults = [];
         this.entryRows = [];
+        this.unverifiedEntryRows = [];
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
@@ -295,6 +297,7 @@ window.vaultBrowser = (function () {
             // or gone, and leaving them there offers a way into neither.
             this.setData({});
             this.entryRows = [];
+            this.unverifiedEntryRows = [];
             this.entryActions = {};
             this.resetPanel();
           }
@@ -439,8 +442,12 @@ window.vaultBrowser = (function () {
         // Assigning anyway would put opened names back into a locked page.
         if (!session.isUnlocked()) return;
         // Kept beside the opened rows: opening one field later needs the
-        // ciphertexts, and an opened row deliberately carries none.
-        this.entryRows = rows;
+        // ciphertexts, and an opened row deliberately carries none. Only rows
+        // the reader verified: the others are kept apart so a removal can
+        // refuse to touch them rather than re-sign them.
+        const verified = new Set(entries.verifiedRows.map(function (row) { return row.uuid; }));
+        this.entryRows = entries.verifiedRows;
+        this.unverifiedEntryRows = rows.filter(function (row) { return !verified.has(row.uuid); });
         this.setData({
           folders: folders.rows,
           tags: tags.rows,
@@ -1328,10 +1335,15 @@ window.vaultBrowser = (function () {
         let failed = false;
         try {
           await window.vaultResign.deleteTagSafely(
-            this.openVault, tag.uuid, this.entryRows
+            this.openVault, tag.uuid, this.entryRows, this.unverifiedEntryRows
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error =
+              'This tag is on an entry that could not be verified. It was left untouched.';
+            return;
+          }
           failed = true;
         } finally {
           this.busy = false;
@@ -1353,10 +1365,16 @@ window.vaultBrowser = (function () {
         let failed = false;
         try {
           await window.vaultResign.deleteFolderSafely(
-            this.openVault, folder.uuid, this.folders, this.entryRows
+            this.openVault, folder.uuid, this.folders, this.entryRows,
+            this.unverifiedEntryRows
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error =
+              'This folder holds an entry that could not be verified. It was left untouched.';
+            return;
+          }
           failed = true;
         } finally {
           this.busy = false;

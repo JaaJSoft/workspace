@@ -11,7 +11,15 @@ import time
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from workspace.vault.models import AccountIdentity, Vault, VaultEntry, VaultKeyWrap
+from workspace.vault.models import (
+    AccountIdentity,
+    EntryField,
+    Vault,
+    VaultEntry,
+    VaultFolder,
+    VaultKeyWrap,
+    VaultTag,
+)
 from workspace.vault.services.suites import hpke_format
 from workspace.vault.tests.reference import ad, metadata, primitives, suites, wire
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
@@ -157,6 +165,30 @@ class ReferenceRowsMixin:
         wrap = VaultKeyWrap.objects.get(vault=vault, recipient=self.user)
         formats.add(hpke_format(wrap.hpke_suite))
         return formats
+
+    def _aeads(self, vault):
+        """Every AEAD the vault's own ciphertexts are sealed under: its name
+        and description, its folders' and tags' names, its entries' names and
+        notes and every field. The key wrap is HPKE's, not an AEAD header."""
+        values = [
+            *Vault.objects.filter(pk=vault.pk).values_list(
+                "encrypted_name", "encrypted_description"
+            )[0],
+            *VaultFolder.objects.filter(vault=vault).values_list(
+                "encrypted_name", flat=True
+            ),
+            *VaultTag.objects.filter(vault=vault).values_list(
+                "encrypted_name", flat=True
+            ),
+            *EntryField.objects.filter(entry__vault=vault).values_list(
+                "encrypted_value", flat=True
+            ),
+        ]
+        for name, notes in VaultEntry.objects.filter(vault=vault).values_list(
+            "encrypted_name", "encrypted_notes"
+        ):
+            values += [name, notes]
+        return {from_base64url(value)[1] for value in values if value}
 
     def _wait_for_no_migration(self, timeout_ms=30000):
         """Wait until the server lists nothing left to migrate for the

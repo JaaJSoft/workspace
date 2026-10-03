@@ -1,4 +1,6 @@
-"""Rehearsal 1: a format change lands, and the next unlock moves every row.
+"""The rehearsals of an algorithm replacement, in a real browser.
+
+Rehearsal 1: a format change lands, and the next unlock moves every row.
 
 Format 1 has been superseded since the format-2 release, so this runs the
 production code as it ships: rows the reference wrote under format 1 must be
@@ -8,12 +10,16 @@ and only for the account that unlocked, only for rows it could verify.
 The format-1 rows are written straight into the database: the API refuses to
 store a ciphertext under a superseded format, so only the database can stand
 in for what an older build left behind.
+
+Rehearsal 2: AES-256-GCM is superseded by the test AEAD, through the test
+bundle, and the next unlock reseals every row under it.
 """
 
 import hashlib
 from collections import Counter
 
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from playwright.sync_api import Error as PlaywrightError
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -29,6 +35,9 @@ from .test_browser import CORPUS_ROUTE, VaultBrowserCase
 from .test_compat_browser import VERIFY_EVERY_SIGNATURE
 
 TAMPERED_BANNER = "inline-alert:has-text('removed from the list')"
+# AES-256-GCM superseded by the test AEAD: the switch a real algorithm
+# replacement would ship as a manifest change.
+AEAD_SWITCH = {"aead": {"1": "superseded", "240": "current"}}
 # One more than a migrate batch holds, so a pass takes two requests and can be
 # cut between them.
 MORE_THAN_A_BATCH = 201
@@ -236,6 +245,41 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         self._wait_for_no_migration()
         self.assertEqual(self._formats(second_vault), {2})
         self.assertEqual(stale_rows(second), [])
+
+
+@override_settings(VAULT_TEST_MANIFEST=AEAD_SWITCH)
+class AeadMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
+    """Rehearsal 2: an AEAD replacement lands, and the next unlock moves every
+    row to the new algorithm.
+
+    The page that onboards and writes the first rows runs before the switch,
+    on the production bundle; the reload after it gets the test bundle with
+    the overrides installed, the way a deployment would hand a new manifest
+    to a browser that last ran the old one.
+    """
+
+    def test_one_unlock_moves_every_row_to_the_test_aead(self):
+        with override_settings(VAULT_TEST_MANIFEST=None):
+            self._open_vault()
+            self._create_entry("Before", "octocat", "hunter2")
+        vault = Vault.objects.get(uuid=self.vault_uuid)
+        self.assertEqual(self._aeads(vault), {1})
+        # Under the switch the server already counts them as stale.
+        self.assertNotEqual(stale_rows(self.user), [])
+
+        self.page.reload()
+        self._unlock()
+        self._wait_for_no_migration()
+
+        self.assertEqual(self._aeads(vault), {240})
+        self.assertEqual(self._formats(vault), {2})
+        self.assertEqual(stale_rows(self.user), [])
+        # Re-signed along the way: a signature the migration got wrong would
+        # drop the row from the listing and raise the tampered banner.
+        self.page.reload()
+        self._unlock()
+        self.page.wait_for_selector("tbody tr:has-text('Before')", timeout=30000)
+        self.assertEqual(self.page.locator(TAMPERED_BANNER).count(), 0)
 
 
 CORPUS = compat.load("v1")

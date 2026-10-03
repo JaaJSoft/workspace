@@ -5,6 +5,7 @@ from django.db import OperationalError, connection
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from workspace.vault.checks import retired_ids_check, test_switches_check
+from workspace.vault.models import AccountIdentity
 from workspace.vault.services import suites
 from workspace.vault.tests.factories import make_account, make_vault, sealed
 
@@ -102,3 +103,30 @@ class RetiredIdsCheckTests(TestCase):
             side_effect=OperationalError("no such column"),
         ):
             self.assertEqual(retired_ids_check(None, databases=["default"]), [])
+
+
+class RetirementAfterRecordMigrationTests(TestCase):
+    """What a record migration leaves behind: every vault row on format 2,
+    the account envelope still on format 1, because it is not that
+    migration's to move. Format 1 still cannot be dropped from the manifest."""
+
+    databases = {"default"}
+
+    def test_format_1_still_cannot_be_retired_while_the_envelope_uses_it(self):
+        user, _, identity = make_account("owner")
+        AccountIdentity.objects.filter(pk=identity.pk).update(
+            wrapped_kex_priv=sealed("k", 1)
+        )
+        make_vault(user)  # every record already format 2
+        real_state = suites.state
+
+        def without_format_1(axis, identifier):
+            if (axis, identifier) == ("format", 1):
+                return None
+            return real_state(axis, identifier)
+
+        with mock.patch(
+            "workspace.vault.checks.suites.state", side_effect=without_format_1
+        ):
+            errors = retired_ids_check(None, databases=["default"])
+        self.assertEqual([error.id for error in errors], ["vault.E001"])

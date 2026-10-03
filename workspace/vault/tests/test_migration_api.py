@@ -1,4 +1,5 @@
 import re
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -298,6 +299,82 @@ class MigrateBatchTests(TestCase):
         self.assertEqual(self._post([item]).status_code, 404)
         self.assertEqual(self._post([missing]).status_code, 404)
         self.assertEqual(self._post([item]).content, self._post([missing]).content)
+
+    def test_an_entry_of_another_vault_of_the_caller_is_404_like_a_missing_one(self):
+        second = make_vault(self.user)
+        make_key_wrap(second, self.user)
+        foreign = VaultEntry.objects.create(
+            vault=second,
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("x", 1),
+            metadata_sig="AQ",
+        )
+        item = {**self._entry_item(self._entry()), "uuid": str(foreign.uuid)}
+        missing = {**item, "uuid": "00000000-0000-7000-8000-000000000000"}
+        self.assertEqual(self._post([item]).status_code, 404)
+        self.assertEqual(self._post([item]).content, self._post([missing]).content)
+        self.assertEqual(
+            VaultEntry.objects.get(pk=foreign.pk).encrypted_name, foreign.encrypted_name
+        )
+
+    def test_entry_folder_and_tag_writes_leave_updated_at_alone(self):
+        entry = self._entry(fields={"password": sealed("p", 1)})
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name=sealed("f", 1), metadata_sig="AQ"
+        )
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name=sealed("t", 1), metadata_sig="AQ"
+        )
+        field = entry.fields.get()
+        long_ago = timezone.now() - timedelta(days=30)
+        for model, row in (
+            (VaultEntry, entry),
+            (VaultFolder, folder),
+            (EntryField, field),
+        ):
+            model.objects.filter(pk=row.pk).update(updated_at=long_ago)
+        folder_name, tag_name = sealed("f2"), sealed("t2")
+        folder_payload = folder_metadata_payload(
+            folder_uuid=folder.uuid,
+            vault_uuid=self.vault.uuid,
+            signer_account_uuid=self.identity.uuid,
+            parent_uuid=folder.parent_id,
+            position=folder.position,
+            encrypted_name=folder_name,
+        )
+        tag_payload = tag_metadata_payload(
+            tag_uuid=tag.uuid,
+            vault_uuid=self.vault.uuid,
+            signer_account_uuid=self.identity.uuid,
+            encrypted_name=tag_name,
+            color=tag.color,
+        )
+        response = self._post(
+            [
+                self._entry_item(entry),
+                {
+                    "kind": "folder",
+                    "uuid": str(folder.uuid),
+                    "encrypted_name": folder_name,
+                    "metadata_sig": sign(self.signer, folder_payload),
+                    "expected_sig": "AQ",
+                },
+                {
+                    "kind": "tag",
+                    "uuid": str(tag.uuid),
+                    "encrypted_name": tag_name,
+                    "metadata_sig": sign(self.signer, tag_payload),
+                    "expected_sig": "AQ",
+                },
+            ]
+        )
+        self.assertEqual(response.status_code, 204, response.content)
+        for model, row in (
+            (VaultEntry, entry),
+            (VaultFolder, folder),
+            (EntryField, field),
+        ):
+            self.assertEqual(model.objects.get(pk=row.pk).updated_at, long_ago)
 
     def test_metadata_needs_the_owner(self):
         member, member_signer, member_identity = make_account("member")

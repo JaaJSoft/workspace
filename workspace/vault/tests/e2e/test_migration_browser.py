@@ -23,7 +23,13 @@ from django.test import override_settings
 from playwright.sync_api import Error as PlaywrightError
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
-from workspace.vault.models import AccountIdentity, Vault, VaultEntry, VaultKeyWrap
+from workspace.vault.models import (
+    AccountIdentity,
+    Vault,
+    VaultEntry,
+    VaultKeyWrap,
+    VaultTag,
+)
 from workspace.vault.queries import user_vault_ids
 from workspace.vault.services.census import census, ciphertext_marks, stale_rows
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
@@ -31,7 +37,7 @@ from workspace.vault.tests.reference.encoding import from_base64url, to_base64ur
 from .. import compat
 from .compat_scripts import READ_EVERYTHING
 from .reference_rows import ReferenceRowsMixin
-from .test_browser import CORPUS_ROUTE, VaultBrowserCase
+from .test_browser import CORPUS_ROUTE, PANEL, VaultBrowserCase
 from .test_compat_browser import VERIFY_EVERY_SIGNATURE
 
 TAMPERED_BANNER = "inline-alert:has-text('removed from the list')"
@@ -291,6 +297,59 @@ def _corpus_digests():
         for path in sorted(CORPUS.root.iterdir())
         if path.is_file()
     }
+
+
+class UnverifiedCarrierBrowserTests(VaultBrowserCase):
+    def test_a_tag_on_a_tampered_entry_is_not_deleted(self):
+        """The entry's signature is inside what a tag removal re-signs, so a
+        carrier the page could not verify blocks the removal before any
+        request goes out, and the row is left byte for byte as it was."""
+        self._open_vault()
+        self.page.get_by_role("button", name="New tag").click()
+        self.page.fill(".modal-box input[type=text]", "Banking")
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_selector("aside tag-chip", timeout=30000)
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self.page.click("tbody tr:has-text('GitHub')")
+        self.page.click(f"{PANEL} button:has-text('Edit')")
+        self.page.locator(".modal-box").get_by_text("Banking").click()
+        self.page.click(".modal-box button:has-text('Save')")
+        self.page.wait_for_selector(
+            "tbody tr:has-text('GitHub') tag-chip", timeout=30000
+        )
+
+        entry = VaultEntry.objects.get(vault__uuid=self.vault_uuid)
+        signature = from_base64url(entry.metadata_sig)
+        forged = to_base64url(signature[:1] + bytes(len(signature) - 1))
+        VaultEntry.objects.filter(pk=entry.pk).update(metadata_sig=forged)
+        tag = VaultTag.objects.get()
+        deletions = []
+        self.page.on(
+            "request",
+            lambda request: (
+                deletions.append(request.url)
+                if request.url.endswith("/delete")
+                else None
+            ),
+        )
+
+        self.page.reload()
+        self._unlock()
+        self.page.wait_for_selector(TAMPERED_BANNER, timeout=30000)
+        self.page.locator("button[aria-label='Delete the tag Banking']").click(
+            force=True
+        )
+        self.page.locator(".modal-box button:has-text('Delete')").click()
+        self.page.wait_for_selector(
+            "text=This tag is on an entry that could not be verified", timeout=30000
+        )
+        self.page.wait_for_timeout(1000)
+
+        self.assertEqual(deletions, [])
+        self.assertTrue(VaultTag.objects.filter(pk=tag.pk).exists())
+        stored = VaultEntry.objects.get(pk=entry.pk)
+        self.assertEqual(stored.metadata_sig, forged)
+        self.assertEqual(list(stored.tags.values_list("pk", flat=True)), [tag.pk])
 
 
 class FrozenAccountMigrationBrowserTests(ReferenceRowsMixin, PlaywrightTestCase):

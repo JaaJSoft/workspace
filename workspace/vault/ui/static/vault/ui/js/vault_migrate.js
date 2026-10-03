@@ -16,6 +16,12 @@ window.vaultMigration = (function () {
   const WARN_AFTER = 3;
   const FAILURES_KEY = 'vault.migration.failures';
 
+  function lockedError() {
+    const error = new Error('locked');
+    error.reason = 'locked';
+    return error;
+  }
+
   function readFailures() {
     try {
       return Number(window.localStorage.getItem(FAILURES_KEY)) || 0;
@@ -78,7 +84,7 @@ window.vaultMigration = (function () {
     if (opened.tampered || opened.unsupported || opened.unreadable || opened.unopenable) return [];
     const items = [];
     if (listed.wrap) {
-      const rewrapped = await session.rewrapVaultKey(vaultRow);
+      const rewrapped = await session.rewrapVaultKey(opened);
       items.push({
         kind: 'wrap',
         wrapped_key: rewrapped.wrapped_key,
@@ -87,18 +93,18 @@ window.vaultMigration = (function () {
       });
     }
     if (listed.metadata && resignable(vaultRow)) {
-      items.push(await window.buildVaultMetadataMigrateItem(session, vaultRow));
+      items.push(await window.buildVaultMetadataMigrateItem(session, opened));
     }
     if (listed.folders.length) {
-      const read = await reader.readFolders(session, vaultRow, pick(await api.listFolders(vaultRow.uuid), listed.folders));
+      const read = await reader.readFolders(session, opened, pick(await api.listFolders(vaultRow.uuid), listed.folders));
       for (const row of read.verifiedRows.filter(resignable)) {
-        items.push(await window.buildFolderMigrateItem(session, vaultRow, row));
+        items.push(await window.buildFolderMigrateItem(session, opened, row));
       }
     }
     if (listed.tags.length) {
-      const read = await reader.readTags(session, vaultRow, pick(await api.listTags(vaultRow.uuid), listed.tags));
+      const read = await reader.readTags(session, opened, pick(await api.listTags(vaultRow.uuid), listed.tags));
       for (const row of read.verifiedRows.filter(resignable)) {
-        items.push(await window.buildTagMigrateItem(session, vaultRow, row));
+        items.push(await window.buildTagMigrateItem(session, opened, row));
       }
     }
     if (listed.entries.length) {
@@ -106,9 +112,9 @@ window.vaultMigration = (function () {
         api.listEntries(vaultRow.uuid),
         api.listEntries(vaultRow.uuid, { trashed: true }),
       ]);
-      const read = await reader.readEntries(session, vaultRow, pick(live.concat(trashed), listed.entries));
+      const read = await reader.readEntries(session, opened, pick(live.concat(trashed), listed.entries));
       for (const row of read.verifiedRows.filter(resignable)) {
-        items.push(await window.buildEntryMigrateItem(session, vaultRow, row));
+        items.push(await window.buildEntryMigrateItem(session, opened, row));
       }
     }
     return items;
@@ -122,6 +128,7 @@ window.vaultMigration = (function () {
     const items = await buildItems(session, listed, vaultRow);
     let wrote = false;
     for (const batch of batches(items)) {
+      if (!session.isUnlocked()) throw lockedError();
       try {
         await window.vaultApi.migrateVault(vaultRow.uuid, batch);
         wrote = true;
@@ -143,7 +150,7 @@ window.vaultMigration = (function () {
     return { status: 'done', wrote: wrote };
   }
 
-  async function run(session) {
+  async function pass(session) {
     let failed = false;
     let wrote = false;
     try {
@@ -163,6 +170,20 @@ window.vaultMigration = (function () {
     const next = failed ? previous + 1 : 0;
     writeFailures(next);
     return { outcome: failed ? 'failed' : 'clean', wrote: wrote, warn: next >= WARN_AFTER };
+  }
+
+  let inFlight = false;
+
+  // One pass at a time: a second caller while one runs gets 'busy' and does
+  // nothing, so two passes never rewrite the same rows against each other.
+  async function run(session) {
+    if (inFlight) return { outcome: 'busy', wrote: false, warn: false };
+    inFlight = true;
+    try {
+      return await pass(session);
+    } finally {
+      inFlight = false;
+    }
   }
 
   return {

@@ -158,6 +158,7 @@ window.vaultBrowser = (function () {
       missing: false,
       // Set after three passes in a row that left some rows unmigrated.
       migrationWarning: false,
+      migrationGeneration: 0,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
@@ -258,7 +259,12 @@ window.vaultBrowser = (function () {
       // the rows this page holds and must sign what is actually stored.
       startMigration: function () {
         const self = this;
+        const mine = this.migrationGeneration;
         window.vaultMigration.run(window.vaultSession).then(function (result) {
+          // 'busy' is the answer of a second caller; the pass that is running
+          // reports for itself. A result from before a lock belongs to keys
+          // that are gone, even if the user has unlocked again since.
+          if (result.outcome === 'busy' || mine !== self.migrationGeneration) return;
           if (!window.vaultSession.isUnlocked()) return;
           self.migrationWarning = result.warn;
           if (result.wrote) self.load();
@@ -267,6 +273,7 @@ window.vaultBrowser = (function () {
 
       onLocked: function () {
         this.migrationWarning = false;
+        this.migrationGeneration += 1;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
         // this machine.

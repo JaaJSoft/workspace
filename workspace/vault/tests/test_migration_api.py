@@ -5,6 +5,7 @@ from unittest import mock
 from django.test import TestCase
 from django.utils import timezone
 
+from workspace.vault import serializers
 from workspace.vault.models import (
     EntryField,
     EntryType,
@@ -14,7 +15,6 @@ from workspace.vault.models import (
     VaultKeyWrap,
     VaultTag,
 )
-from workspace.vault import serializers
 from workspace.vault.services import migration
 from workspace.vault.services.entries import entry_signature_payload
 from workspace.vault.services.metadata import (
@@ -452,8 +452,7 @@ class MigrateBatchTests(TestCase):
 class ClientBatchCapsTests(TestCase):
     def test_the_client_splits_at_the_serializer_caps(self):
         source = (
-            Path(serializers.__file__).parent
-            / "ui/static/vault/ui/js/vault_migrate.js"
+            Path(serializers.__file__).parent / "ui/static/vault/ui/js/vault_migrate.js"
         ).read_text(encoding="utf-8")
         items = int(re.search(r"const MAX_ITEMS = (\d+);", source).group(1))
         ciphertexts = int(re.search(r"const MAX_CIPHERTEXTS = (\d+);", source).group(1))

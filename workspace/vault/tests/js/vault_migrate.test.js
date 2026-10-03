@@ -34,7 +34,7 @@ function harness(overrides = {}) {
     buildVaultMetadataMigrateItem: async () => ({ kind: 'metadata', encrypted_name: 'x' }),
     ...overrides,
   };
-  const session = { rewrapVaultKey: async () => ({ wrapped_key: 'n', hpke_suite: {} }), ...(overrides.session || {}) };
+  const session = { isUnlocked: () => true, rewrapVaultKey: async () => ({ wrapped_key: 'n', hpke_suite: {} }), ...(overrides.session || {}) };
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_migrate.js', globals);
   return { ctx, calls, storage, session, globals };
 }
@@ -120,7 +120,7 @@ test('a 400 abandons the vault and counts a failure', async () => {
   assert.equal(storage.get('vault.migration.failures'), '1');
 });
 
-test('stops after a lock between batches', async () => {
+test('a lock while building the items stops the run before any send', async () => {
   const base = harness().globals;
   const locked = Object.assign(new Error('locked'), { reason: 'locked' });
   const { ctx, session, storage, calls } = harness({
@@ -146,15 +146,69 @@ test('warns after three failed passes in a row, never on storage errors', async 
   assert.equal((await broken.ctx.vaultMigration.run(broken.session)).warn, false);
 });
 
-test('a lock while a batch is being sent stops the run and leaves the counter alone', async () => {
+test('a lock after the first batch stops the run: no further send, counter untouched', async () => {
   const base = harness().globals;
-  const locked = Object.assign(new Error('locked'), { reason: 'locked' });
-  const { ctx, session, storage } = harness({ vaultApi: { ...base.vaultApi, migrateVault: async () => { throw locked; } } });
+  const many = Array.from({ length: 250 }, (_, i) => 'e' + i);
+  let unlocked = true;
+  const sizes = [];
+  const { ctx, session, storage } = harness({
+    vaultApi: {
+      ...base.vaultApi,
+      fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: false, wrap: false, folders: [], tags: [], entries: many }] }),
+      listEntries: async (v, o) => (o && o.trashed ? [] : many.map((uuid) => ({ uuid, metadata_sig: 'AQ' }))),
+      migrateVault: async (uuid, items) => { sizes.push(items.length); unlocked = false; return null; },
+    },
+  });
+  session.isUnlocked = () => unlocked;
   storage.set('vault.migration.failures', '2');
   const result = await ctx.vaultMigration.run(session);
   assert.equal(result.outcome, 'locked');
-  assert.equal(result.warn, false);
+  assert.deepStrictEqual(sizes, [200]);
   assert.equal(storage.get('vault.migration.failures'), '2');
+});
+
+test('the builders and the reads receive the opened vault, not the listing row', async () => {
+  const base = harness().globals;
+  const seen = [];
+  const opened = { uuid: 'v', name: 'Opened', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ', marker: 'opened' };
+  const spy = (kind) => async (s, v) => { seen.push(kind + ':' + v.marker); return { kind, uuid: 'x', encrypted_name: 'x' }; };
+  const { ctx, session } = harness({
+    vaultApi: { ...base.vaultApi, fetchMigration: async () => ({ vaults: [{ uuid: 'v', metadata: true, wrap: true, folders: ['f'], tags: ['t'], entries: ['e1'] }] }),
+      listFolders: async () => [{ uuid: 'f', metadata_sig: 'AQ' }], listTags: async () => [{ uuid: 't', metadata_sig: 'AQ' }] },
+    vaultReader: {
+      readVault: async () => opened,
+      readFolders: async (s, v, rows) => { seen.push('readFolders:' + v.marker); return { rows, verifiedRows: rows }; },
+      readTags: async (s, v, rows) => { seen.push('readTags:' + v.marker); return { rows, verifiedRows: rows }; },
+      readEntries: async (s, v, rows) => { seen.push('readEntries:' + v.marker); return { rows, verifiedRows: rows }; },
+    },
+    buildEntryMigrateItem: spy('entry'),
+    buildFolderMigrateItem: spy('folder'),
+    buildTagMigrateItem: spy('tag'),
+    buildVaultMetadataMigrateItem: spy('metadata'),
+    session: { rewrapVaultKey: async (v) => { seen.push('rewrap:' + v.marker); return { wrapped_key: 'n', hpke_suite: {} }; } },
+  });
+  await ctx.vaultMigration.run(session);
+  assert.deepStrictEqual(Array.from(seen).sort(), [
+    'entry:opened', 'folder:opened', 'metadata:opened', 'readEntries:opened',
+    'readFolders:opened', 'readTags:opened', 'rewrap:opened', 'tag:opened',
+  ]);
+});
+
+test('a second run while a pass is in flight does nothing', async () => {
+  const base = harness().globals;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  let fetches = 0;
+  const { ctx, session } = harness({
+    vaultApi: { ...base.vaultApi, fetchMigration: async () => { fetches += 1; await gate; return { vaults: [] }; } },
+  });
+  const first = ctx.vaultMigration.run(session);
+  const second = await ctx.vaultMigration.run(session);
+  assert.equal(second.outcome, 'busy');
+  release();
+  assert.equal((await first).outcome, 'clean');
+  assert.equal(fetches, 1);
+  assert.equal((await ctx.vaultMigration.run(session)).outcome, 'clean');
 });
 
 test('a clean pass resets the failure counter', async () => {

@@ -102,7 +102,11 @@ class S3StoragesMixin(S3TestMixin):
                 "default": {"BACKEND": blobs, "OPTIONS": options},
                 "files": {
                     "BACKEND": blobs,
-                    "OPTIONS": {**options, "allow_overwrite": True},
+                    "OPTIONS": {
+                        **options,
+                        "allow_overwrite": True,
+                        "verbatim_names": True,
+                    },
                 },
                 "staticfiles": settings.STORAGES["staticfiles"],
             }

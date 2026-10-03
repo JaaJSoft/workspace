@@ -32,7 +32,7 @@ class StorageSettingsTests(SimpleTestCase):
         self.assertEqual(module.STORAGES["default"]["OPTIONS"], {"backend": "local"})
         self.assertEqual(
             module.STORAGES["files"]["OPTIONS"],
-            {"backend": "local", "allow_overwrite": True},
+            {"backend": "local", "allow_overwrite": True, "verbatim_names": True},
         )
 
     def test_object_storage_from_the_environment(self):
@@ -50,7 +50,8 @@ class StorageSettingsTests(SimpleTestCase):
         self.assertEqual(default["prefix"], "tenant")
         self.assertNotIn("allow_overwrite", default)
         self.assertEqual(
-            module.STORAGES["files"]["OPTIONS"], {**default, "allow_overwrite": True}
+            module.STORAGES["files"]["OPTIONS"],
+            {**default, "allow_overwrite": True, "verbatim_names": True},
         )
 
     def test_a_configured_bucket_is_reachable_while_the_disk_is_in_use(self):

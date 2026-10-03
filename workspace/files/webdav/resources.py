@@ -96,9 +96,18 @@ class _StreamingWriteBuffer:
         return self._hasher.hexdigest()
 
     def finalize(self):
-        """Flush remaining data and publish the blob in one step."""
-        self._flush()
-        self._writer.commit()
+        """Flush remaining data and publish the blob in one step.
+
+        On failure the staged bytes are dropped: wsgidav calls end_write once,
+        and nothing else would remove them - a ``.part`` file the sync would
+        adopt as the user's, or a multipart upload left open in the bucket.
+        """
+        try:
+            self._flush()
+            self._writer.commit()
+        except BaseException:
+            self._writer.abort()
+            raise
 
     def abort(self):
         """Drop the staged bytes; the previous content (if any) survives."""
@@ -511,20 +520,20 @@ class FileResource(DAVNonCollection):
         # recreate it so the file on disk is not orphaned.
         with transaction.atomic():
             try:
-                self._file.refresh_from_db()
-            except File.DoesNotExist:
-                logger.warning(
-                    "File record deleted during upload for %s by %s, recreating",
-                    scrub(self.path),
-                    username,
-                )
-                self._file = FileService.create_file(
-                    self._user,
-                    self._file.name,
-                    parent=self._file.parent,
-                    acting_user=self._user,
-                )
-            try:
+                try:
+                    self._file.refresh_from_db()
+                except File.DoesNotExist:
+                    logger.warning(
+                        "File record deleted during upload for %s by %s, recreating",
+                        scrub(self.path),
+                        username,
+                    )
+                    self._file = FileService.create_file(
+                        self._user,
+                        self._file.name,
+                        parent=self._file.parent,
+                        acting_user=self._user,
+                    )
                 FileService.replace_content_storage(
                     self._file,
                     storage_path=self._storage_path,
@@ -536,6 +545,9 @@ class FileResource(DAVNonCollection):
             except (LockConflict, StaleContent) as exc:
                 buf.abort()
                 self._refusal_error(exc, username)
+            except BaseException:
+                buf.abort()
+                raise
             # Flush the remaining buffer and move the blob into place. Inside
             # the transaction: a storage failure here has to take the row that
             # already points at it down with it.

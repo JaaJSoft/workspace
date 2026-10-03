@@ -3,14 +3,10 @@
 // Both removals change something the signature covers - a tag uuid, a folder
 // uuid - on entries the user did not ask to touch. The server cannot fix
 // those signatures: fixing one means producing it, and producing one means
-// forging the account's. So the repair belongs here, and its order is the
-// whole point:
-//
-//   re-sign every affected entry FIRST, then ask for the removal.
-//
-// The other order leaves rows whose signature covers a tag they no longer
-// carry. Those rows read as tampered from then on - the loudest failure the
-// scheme has, for a change nobody thought was dangerous.
+// forging the account's. So the repair belongs here, and it travels with the
+// removal: the new signatures and the deletion are one request the server
+// applies in one transaction, so rows signed over something they no longer
+// carry - which read as tampered from then on - cannot be left behind.
 window.vaultResign = (function () {
   // Every entry that would be left signing something the removal takes away.
   function carriers(entries, tagUuid) {
@@ -58,28 +54,27 @@ window.vaultResign = (function () {
     }
   }
 
-  async function resignWithout(vault, row, changes) {
-    const body = await window.buildEntryResignRequest(
-      window.vaultSession, vault, row, changes
-    );
-    return window.vaultApi.updateEntry(row.uuid, body);
-  }
-
   return {
     Blocked: Blocked,
 
-    // Sequential, not parallel: a failure has to stop the ones after it, and
-    // Promise.all would have already sent them.
+    // One transactional request: the body carries every entry that holds the
+    // tag - trashed ones included - each re-signed without it. The server
+    // compares the set against the tag's real carriers and refuses a mismatch.
     deleteTagSafely: async function (vault, tagUuid, entries, unverified) {
-      assertResignable(carriers(entries, tagUuid), carriers(unverified || [], tagUuid));
-      for (const row of carriers(entries, tagUuid)) {
-        await resignWithout(vault, row, {
-          tags: (row.tags || []).filter(function (uuid) {
-            return String(uuid) !== String(tagUuid);
-          }),
-        });
+      const affected = carriers(entries, tagUuid);
+      assertResignable(affected, carriers(unverified || [], tagUuid));
+      const signed = [];
+      for (const row of affected) {
+        const body = await window.buildEntryResignRequest(
+          window.vaultSession, vault, row, {
+            tags: (row.tags || []).filter(function (uuid) {
+              return String(uuid) !== String(tagUuid);
+            }),
+          }
+        );
+        signed.push({ uuid: body.uuid, metadata_sig: body.metadata_sig });
       }
-      return window.vaultApi.deleteTag(tagUuid);
+      return window.vaultApi.deleteTag(tagUuid, signed);
     },
 
     // One transactional request per folder, deepest first. The body carries

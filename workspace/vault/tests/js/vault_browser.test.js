@@ -2052,7 +2052,7 @@ test('a bulk action stops at the first refusal rather than half-finishing quietl
 
 // --- dropping a tag or a folder from the browser ---------------------------
 
-test('deleting a tag re-signs the entries carrying it, then removes it', async () => {
+test('deleting a tag sends the re-signed carriers in the one removal request', async () => {
   const calls = [];
   const { component } = browser({
     api: {
@@ -2062,14 +2062,17 @@ test('deleting a tag re-signs the entries carrying it, then removes it', async (
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryWith('e-1', { tags: ['t-1'] })],
       updateEntry: async (uuid) => { calls.push('put:' + uuid); return {}; },
-      deleteTag: async (uuid) => { calls.push('delete:' + uuid); return null; },
+      deleteTag: async (uuid, entries) => {
+        calls.push('delete:' + uuid + ':' + entries.map((e) => e.uuid).join(','));
+        return null;
+      },
     },
   });
   component.init();
   await component.load();
   component.confirm = async () => true;
   await component.deleteTag(component.tags[0]);
-  assert.deepStrictEqual(Array.from(calls), ['put:e-1', 'delete:t-1']);
+  assert.deepStrictEqual(Array.from(calls), ['delete:t-1:e-1']);
 });
 
 test('a refused confirmation deletes nothing and re-signs nothing', async () => {

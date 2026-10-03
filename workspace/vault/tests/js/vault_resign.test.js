@@ -64,7 +64,10 @@ function resign(overrides = {}) {
       },
       vaultApi: {
         updateEntry: async (uuid, body) => { calls.push('put:' + uuid); return body; },
-        deleteTag: async (uuid) => { calls.push('delete-tag:' + uuid); return null; },
+        deleteTag: async (uuid, entries) => {
+          calls.push('delete-tag:' + uuid + ':' + entries.map((e) => e.uuid).join(','));
+          return null;
+        },
         deleteFolder: async (uuid, entries) => {
           calls.push('delete-folder:' + uuid + ':' + entries.length);
           return null;
@@ -128,52 +131,49 @@ test('the re-signed payload covers everything the row stores', async () => {
 
 // --- dropping a tag --------------------------------------------------------
 
-test('a tag is deleted only after every entry carrying it has been re-signed', async () => {
+test('a tag is deleted in one request carrying every re-signed carrier', async () => {
   const { ctx, calls } = resign();
   await ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [
     row('e-1', { tags: ['t-1', 't-2'] }),
     row('e-2', { tags: ['t-1'] }),
   ]);
-  assert.deepStrictEqual(Array.from(calls), [
-    'put:e-1',
-    'put:e-2',
-    'delete-tag:t-1',
+  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t-1:e-1,e-2']);
+});
+
+test('the carriers are sent with the new signature and nothing else', async () => {
+  let sent;
+  const { ctx } = resign({
+    api: { deleteTag: async (uuid, entries) => { sent = entries; return null; } },
+  });
+  await ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [row('e-1', { tags: ['t-1'] })]);
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(sent)), [
+    { uuid: 'e-1', metadata_sig: 'fresh-signature' },
   ]);
 });
 
-test('a failed re-signature stops the deletion', async () => {
-  // Half-done is the one outcome that must not happen: the tag would be gone
-  // and e-2 would still be signed over a tag it no longer carries.
-  const { ctx, calls } = resign({
-    api: {
-      updateEntry: async (uuid) => {
-        if (uuid === 'e-2') throw new Error('refused');
-        return {};
-      },
-    },
-  });
+test('a failed re-signature sends nothing', async () => {
+  // Half-done is the one outcome that must not happen.
+  const { ctx, calls, session } = resign();
+  session.sign = async () => { throw new Error('refused'); };
   await assert.rejects(() =>
-    ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [
-      row('e-1', { tags: ['t-1'] }),
-      row('e-2', { tags: ['t-1'] }),
-    ]),
+    ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [row('e-1', { tags: ['t-1'] })]),
   );
-  assert.ok(!calls.includes('delete-tag:t-1'));
+  assert.deepStrictEqual(Array.from(calls), []);
 });
 
-test('an entry that does not carry the tag is not rewritten', async () => {
+test('an entry that does not carry the tag is not sent', async () => {
   const { ctx, calls } = resign();
   await ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [
     row('e-1', { tags: ['t-2'] }),
     row('e-2', { tags: ['t-1'] }),
   ]);
-  assert.deepStrictEqual(Array.from(calls), ['put:e-2', 'delete-tag:t-1']);
+  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t-1:e-2']);
 });
 
-test('a tag nothing carries is deleted with no rewrite at all', async () => {
+test('a tag nothing carries is deleted with an empty set', async () => {
   const { ctx, calls } = resign();
   await ctx.vaultResign.deleteTagSafely(VAULT, 't-1', [row('e-1', { tags: [] })]);
-  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t-1']);
+  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t-1:']);
 });
 
 test('a tag on an unverified entry blocks the deletion before any request', async () => {
@@ -190,7 +190,7 @@ test('a tag on an unverified entry blocks the deletion before any request', asyn
 test('an unverified entry that does not carry the tag does not block it', async () => {
   const { ctx, calls } = resign();
   await ctx.vaultResign.deleteTagSafely(VAULT, 't', [], [row('b', { tags: ['u'], metadata_sig: 'AQ' })]);
-  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t']);
+  assert.deepStrictEqual(Array.from(calls), ['delete-tag:t:']);
 });
 
 test('a carrier whose signature algorithm may not be re-signed blocks the deletion', async () => {

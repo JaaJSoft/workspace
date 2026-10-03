@@ -439,6 +439,12 @@ class FolderDeleteSerializer(serializers.Serializer):
     )
 
 
+class TagDeleteSerializer(serializers.Serializer):
+    """The tag's carriers, re-signed without it. Capped like a folder deletion."""
+
+    entries = FolderDeleteEntrySerializer(many=True, allow_empty=True, max_length=500)
+
+
 MAX_ITEMS = 200
 MAX_CIPHERTEXTS = 2000
 

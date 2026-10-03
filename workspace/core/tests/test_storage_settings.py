@@ -39,14 +39,14 @@ class StorageSettingsTests(SimpleTestCase):
         module = self._load(
             STORAGE_BACKEND="S3",
             S3_BUCKET="workspace-media",
-            S3_ENDPOINT_URL="http://minio:9000",
+            S3_ENDPOINT_URL="http://garage:3900",
             S3_PREFIX="tenant",
         )
 
         default = module.STORAGES["default"]["OPTIONS"]
         self.assertEqual(default["backend"], "s3")
         self.assertEqual(default["bucket"], "workspace-media")
-        self.assertEqual(default["endpoint_url"], "http://minio:9000")
+        self.assertEqual(default["endpoint_url"], "http://garage:3900")
         self.assertEqual(default["prefix"], "tenant")
         self.assertNotIn("allow_overwrite", default)
         self.assertEqual(

@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 from workspace.common.http_ranges import serve_with_ranges
 from workspace.files.models import File, FileEvent, FileShareLink
 from workspace.files.services import FileService
+from workspace.files.services.downloads import signed_redirect
 from workspace.files.services.events import record_event
 from workspace.files.services.public_links import (
     resolve_within,
@@ -286,6 +287,10 @@ class SharedFileContentView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        redirect = signed_redirect(request, f, attachment=False)
+        if redirect is not None:
+            return redirect
+
         # Streamed with Range support, text included: shared videos can seek.
         try:
             fh = f.content.open("rb")
@@ -335,6 +340,10 @@ class SharedFileDownloadView(APIView):
                 {"detail": "File has no content."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+
+        redirect = signed_redirect(request, f, attachment=True)
+        if redirect is not None:
+            return redirect
 
         try:
             fh = f.content.open("rb")

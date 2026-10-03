@@ -54,10 +54,22 @@ Uploaded files live under `MEDIA_ROOT` by default. Set `STORAGE_BACKEND=s3` to k
 | `S3_ADDRESSING_STYLE`     | `auto`    | `path` for most self-hosted stores |
 | `S3_PRESIGN_ENDPOINT_URL` | `S3_ENDPOINT_URL` | Public URL of the store, when clients reach it under another name than the app does |
 | `S3_CONDITIONAL_WRITES`   | `1`       | Writes that must not replace an existing object send `If-None-Match`. Set to `0` only for a store that rejects it |
+| `S3_SIGNED_URLS`          | `0`       | `1` redirects downloads to short-lived signed URLs on the store instead of streaming them through the app (see below) |
+| `S3_SIGNED_URL_TTL`       | `3600`    | Seconds a signed download URL stays valid. Long enough for a video to play to its end |
 
 The credentials need `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its objects.
 
 **Add a lifecycle rule that aborts incomplete multipart uploads** after a day or so. Large uploads go in parts and an interrupted one is aborted, but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise.
+
+### Downloads served by the store
+
+By default the app streams every download out of the bucket itself, a window at a time. With `S3_SIGNED_URLS=1` it checks access as usual, then redirects the browser to a signed URL on the store, which serves the bytes (and video seeking) directly. The store must then be reachable by the browsers, at `S3_PRESIGN_ENDPOINT_URL` if the app reaches it under another name, and the bucket needs a CORS rule letting the app's origin `GET` - the image viewer `fetch()`es the picture it edits:
+
+```json
+[{"AllowedOrigins": ["https://workspace.example.com"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600}]
+```
+
+A signed URL works for whoever holds it until it expires; it is only handed out after the access checks.
 
 ### Moving an existing instance to a bucket
 

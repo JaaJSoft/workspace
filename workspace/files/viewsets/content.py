@@ -22,6 +22,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
+from workspace.files.services.downloads import signed_redirect
 from workspace.files.services.scanning.policy import (
     blocked_reason,
     blocked_statuses,
@@ -121,10 +122,21 @@ class ContentMixin:
 
         content_type = file_obj.mime_type or "application/octet-stream"
 
-        # Range path: when the client requests a byte range (e.g. <video> seeking),
-        # serve a 206 Partial Content. Bypasses the 304 short-circuit because the
-        # client wants a specific slice, not a cache revalidation.
+        # A Range request bypasses the 304 short-circuit: the client wants a
+        # specific slice, not a cache revalidation.
         range_header = request.META.get("HTTP_RANGE")
+        if not range_header:
+            # Return 304 if the ETag matches, before reading anything.
+            not_modified = self._check_etag_304(request, file_obj)
+            if not_modified:
+                return not_modified
+
+        redirect = signed_redirect(request, file_obj, attachment=False)
+        if redirect is not None:
+            return redirect
+
+        # Range path: when the client requests a byte range (e.g. <video> seeking),
+        # serve a 206 Partial Content.
         if range_header:
             file_size = file_obj.size or file_obj.content.size
             parsed = _parse_byte_range(range_header, file_size)
@@ -152,11 +164,6 @@ class ContentMixin:
             response["Cache-Control"] = "private, no-cache"
             FILES_DOWNLOAD_BYTES.inc(end - start + 1)
             return response
-
-        # Short-circuit: return 304 if ETag matches (avoids reading file from storage)
-        not_modified = self._check_etag_304(request, file_obj)
-        if not_modified:
-            return not_modified
 
         # Streamed whatever the type, text included: FileResponse closes the
         # handle once the body is sent.
@@ -276,6 +283,9 @@ class ContentMixin:
                 return Response(
                     {"detail": "No content."}, status=status.HTTP_404_NOT_FOUND
                 )
+            redirect = signed_redirect(request, file_obj, attachment=True)
+            if redirect is not None:
+                return redirect
             file_handle = file_obj.content.open("rb")
             response = FileResponse(
                 file_handle,

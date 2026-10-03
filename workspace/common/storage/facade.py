@@ -6,16 +6,23 @@ the name policy and hands every byte to a backend (``backend.py``), so the code
 that moves a folder or streams an upload never asks where the bytes live.
 """
 
+import errno
 import logging
 import uuid
 
 from django.core.exceptions import ImproperlyConfigured
+from django.core.files.base import File
 from django.core.files.storage import Storage
 from django.utils.deconstruct import deconstructible
 
 from workspace.common.logging import scrub
 
+from .backend import NameTaken
+
 logger = logging.getLogger(__name__)
+
+# How many fresh names a save tries when other writers keep taking them.
+_SAVE_ATTEMPTS = 10
 
 
 def _local(**options):
@@ -24,7 +31,13 @@ def _local(**options):
     return LocalBackend(**options)
 
 
-_BACKENDS = {"local": _local}
+def _s3(**options):
+    from .s3 import S3Backend
+
+    return S3Backend(**options)
+
+
+_BACKENDS = {"local": _local, "s3": _s3}
 
 
 @deconstructible(path="workspace.common.storage.facade.BlobStorage")
@@ -65,7 +78,14 @@ class BlobStorage(Storage):
         return self.backend.open(name, mode)
 
     def _save(self, name, content):
-        return self.backend.save(name, content)
+        for _attempt in range(_SAVE_ATTEMPTS):
+            try:
+                return self.backend.save(name, content)
+            except NameTaken:
+                # Another writer took the name since get_available_name said it
+                # was free.
+                name = self.get_available_name(name)
+        raise NameTaken(errno.EEXIST, "No free name found", name)
 
     def delete(self, name):
         self.backend.delete(name)
@@ -126,17 +146,29 @@ class BlobStorage(Storage):
     def replace(self, name, content):
         """Put *content* at *name*, swapping the previous blob in one step.
 
-        A backend that overwrites in place truncates the blob at the first
-        byte written: a transfer that dies halfway would leave neither the old
-        bytes nor the whole new ones, and a row rolled back to the version it
-        described before would point at content that no longer exists. Saving
-        beside the target and moving over it means the name only ever holds
-        one complete version or the other.
+        Replacing is the point, so the name policy does not apply: the blob
+        goes under *name* whatever is there. A backend that overwrites in place
+        truncates the blob at the first byte written: a transfer that dies
+        halfway would leave neither the old bytes nor the whole new ones, and a
+        row rolled back to the version it described before would point at
+        content that no longer exists. Saving beside the target and moving
+        over it means the name only ever holds one complete version or the
+        other; a backend whose writes publish whole needs no staging.
 
         Returns the name the content was stored under.
         """
+        if not hasattr(content, "chunks"):
+            content = File(content, name)
         if self.backend.atomic_save:
-            return self.save(name, content)
+            writer = self.backend.staged_writer(name)
+            try:
+                for chunk in content.chunks():
+                    writer.write(chunk)
+                writer.commit()
+            except BaseException:
+                writer.abort()
+                raise
+            return name
 
         staged = f"{name}.{uuid.uuid4().hex}.part"
         try:

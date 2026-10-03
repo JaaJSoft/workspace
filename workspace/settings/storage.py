@@ -3,7 +3,10 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import BASE_DIR, DEBUG
+from .env import env_bool
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
@@ -34,6 +37,42 @@ MEDIA_URL = "/media/"
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
+# Where blobs live: "local" (MEDIA_ROOT, the default) or "s3" (any
+# S3-compatible object storage, configured by the S3_* variables below). The
+# key layout is the same on both: a bucket mirrors what MEDIA_ROOT would hold.
+STORAGE_BACKEND = os.getenv("STORAGE_BACKEND", "local").strip().lower() or "local"
+
+if STORAGE_BACKEND == "local":
+    _BLOB_OPTIONS = {"backend": "local"}
+elif STORAGE_BACKEND == "s3":
+    _S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
+    if not _S3_BUCKET:
+        raise ImproperlyConfigured("STORAGE_BACKEND=s3 needs S3_BUCKET")
+    _BLOB_OPTIONS = {
+        "backend": "s3",
+        "bucket": _S3_BUCKET,
+        # Keys go under this prefix, so one bucket can hold several instances.
+        "prefix": os.getenv("S3_PREFIX", ""),
+        # Unset for AWS; the server's URL for any other S3-compatible store.
+        "endpoint_url": os.getenv("S3_ENDPOINT_URL") or None,
+        "region": os.getenv("S3_REGION") or None,
+        # Unset to use boto3's own chain (AWS_* variables, instance role, ...).
+        "access_key_id": os.getenv("S3_ACCESS_KEY_ID") or None,
+        "secret_access_key": os.getenv("S3_SECRET_ACCESS_KEY") or None,
+        # "path" for most self-hosted servers (MinIO, Garage, ...).
+        "addressing_style": os.getenv("S3_ADDRESSING_STYLE") or None,
+        # The URL clients reach the store at, when it differs from
+        # S3_ENDPOINT_URL (an internal service name behind a public proxy).
+        "presign_endpoint_url": os.getenv("S3_PRESIGN_ENDPOINT_URL") or None,
+        # If-None-Match on writes that must not overwrite. Turn off only for a
+        # server that rejects it; saves then rely on a check before the write.
+        "conditional_writes": env_bool("S3_CONDITIONAL_WRITES", True),
+    }
+else:
+    raise ImproperlyConfigured(
+        f"STORAGE_BACKEND must be 'local' or 's3', got {STORAGE_BACKEND!r}"
+    )
+
 # Blob storage (workspace/common/storage). Two aliases over the same backend,
 # differing only in what a save under a taken name does. "files" holds
 # File.content, whose key is the node's tree path: a new version goes over the
@@ -42,8 +81,8 @@ FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 _BLOBS = {"BACKEND": "workspace.common.storage.facade.BlobStorage"}
 
 STORAGES = {
-    "default": {**_BLOBS, "OPTIONS": {"backend": "local"}},
-    "files": {**_BLOBS, "OPTIONS": {"backend": "local", "allow_overwrite": True}},
+    "default": {**_BLOBS, "OPTIONS": _BLOB_OPTIONS},
+    "files": {**_BLOBS, "OPTIONS": {**_BLOB_OPTIONS, "allow_overwrite": True}},
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },

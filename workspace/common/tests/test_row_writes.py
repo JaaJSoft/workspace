@@ -1,3 +1,5 @@
+import inspect
+
 from django.contrib.auth import get_user_model
 from django.db.models.signals import pre_save
 from django.test import TestCase
@@ -83,9 +85,14 @@ class GuardFullRowWritesTests(TestCase):
         user = self._user()
         user.first_name = "Ada"
         with self.assertRaises(FullRowWrite) as caught:
+            call_line = inspect.currentframe().f_lineno + 1
             self._save_through_a_helper(user)
-        # The helper is stepped over, so the line named is this method's call.
-        self.assertNotIn("_save_through_a_helper", str(caught.exception))
+        # The helper is stepped over, so the line named is this method's call,
+        # spelled with slashes on every OS like the forwarded_by entries.
+        self.assertIn(
+            f"workspace/common/tests/test_row_writes.py:{call_line} ",
+            str(caught.exception),
+        )
 
     def _save_through_a_helper(self, user):
         user.save()

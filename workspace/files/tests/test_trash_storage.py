@@ -8,6 +8,7 @@ the live tree keeps mirroring exactly what the file browser shows.
 import os
 import shutil
 import tempfile
+from pathlib import Path
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -35,8 +36,8 @@ class TrashStorageLayoutTests(TestCase):
         found = []
         for directory, _subdirs, names in os.walk(self.media_root):
             for name in names:
-                full = os.path.join(directory, name)
-                found.append(os.path.relpath(full, self.media_root))
+                full = Path(directory, name)
+                found.append(full.relative_to(self.media_root).as_posix())
         return sorted(found)
 
     def _make_file(self, name, parent=None, content=b"bytes"):

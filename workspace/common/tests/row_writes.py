@@ -24,7 +24,7 @@ from django.db.models.signals import pre_save
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 # Every frame of this module is the guard walking its own stack.
-_SELF = str(Path(__file__).resolve().relative_to(_PROJECT_ROOT))
+_SELF = Path(__file__).resolve().relative_to(_PROJECT_ROOT).as_posix()
 
 
 class FullRowWrite(AssertionError):
@@ -50,11 +50,13 @@ def _calling_source(forwarded_by):
             relative = Path(frame.filename).resolve().relative_to(_PROJECT_ROOT)
         except ValueError:
             continue  # the standard library, site-packages, a test harness
-        if relative.parts[0] != "workspace" or str(relative) == _SELF:
+        # POSIX form on every OS: *forwarded_by* is written with slashes.
+        relative = relative.as_posix()
+        if not relative.startswith("workspace/") or relative == _SELF:
             continue
         if f"{relative}:{frame.name}" in forwarded_by:
             continue
-        return str(relative), frame.lineno
+        return relative, frame.lineno
     return None
 
 

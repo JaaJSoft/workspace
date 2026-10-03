@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, TestCase
 from PIL import Image
 
+from workspace.common.storage.backend import temporary_copy
 from workspace.files.services import FileService, ffmpeg
 
 from .videos import clip_bytes, requires_ffmpeg
@@ -14,19 +15,26 @@ from .videos import clip_bytes, requires_ffmpeg
 User = get_user_model()
 
 
-class _RemoteFieldFile:
-    """A stored file whose backend has no local path, as an object store."""
+class _RemoteStorage:
+    """A storage whose backend has no local path, as an object store."""
 
     def __init__(self, data):
         self._data = data
-        self.size = len(data)
 
-    @property
-    def path(self):
-        raise NotImplementedError
+    def size(self, name):
+        return len(self._data)
 
-    def open(self, mode="rb"):
+    def open(self, name, mode="rb"):
         return io.BytesIO(self._data)
+
+    def local_path(self, name, *, max_bytes):
+        return temporary_copy(self, name, max_bytes=max_bytes)
+
+
+class _RemoteFieldFile:
+    def __init__(self, data):
+        self.name = "clip.webm"
+        self.storage = _RemoteStorage(data)
 
 
 class LocalPathTests(TestCase):

@@ -2,7 +2,7 @@ import posixpath
 import secrets
 
 from django.contrib.auth import get_user_model
-from django.core.files.storage import FileSystemStorage
+from django.core.files.storage import storages
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F, Q, Value
@@ -15,6 +15,15 @@ from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
+
+
+def files_storage():
+    """The storage holding File.content (the "files" alias in STORAGES).
+
+    A blob's name is its node's tree path, so a new version is saved over the
+    previous one rather than beside it - unlike ``default_storage``.
+    """
+    return storages["files"]
 
 
 def file_upload_path(instance, filename):
@@ -34,20 +43,6 @@ def file_upload_path(instance, filename):
         parent_parts = instance.path.split("/")[:-1]
         return posixpath.join(root, *parent_parts, filename)
     return posixpath.join(root, filename)
-
-
-class TreeStorage(FileSystemStorage):
-    """Stores a file under its name exactly, as rename, move and the trash do.
-
-    The tree on disk mirrors the names in the database, and the disk sync
-    matches the two by name. Django's default would rewrite ``a b.txt`` as
-    ``a_b.txt``, which another name may also give, and which the sync no
-    longer recognises as that file. ``File.save`` rejects the names that
-    would escape their folder.
-    """
-
-    def get_valid_name(self, name):
-        return name
 
 
 class CaselessKeyField(models.CharField):
@@ -130,7 +125,7 @@ class File(models.Model):
     # File-specific fields
     content = models.FileField(
         upload_to=file_upload_path,
-        storage=TreeStorage(allow_overwrite=True),
+        storage=files_storage,
         null=True,
         blank=True,
         max_length=1024,

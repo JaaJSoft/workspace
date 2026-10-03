@@ -1,17 +1,20 @@
 """The tags endpoint.
 
 A tag's colour is plaintext, so its signature is the only thing covering it.
-Deleting one is allowed here, unlike deleting a folder: nothing points at a tag
-under RESTRICT, and the entries that lose it are left for their owner to
-re-sign - the server must never rewrite a signature on a client's behalf.
+Deleting one is a transaction, like deleting a folder: every entry carrying
+the tag arrives re-signed without it, and the server never writes a signature
+it did not verify.
 """
 
 import uuid
+from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from workspace.vault.models import EntryType, VaultEntry, VaultTag
-from workspace.vault.services.metadata import tag_metadata_payload
+from workspace.vault.services.entries import entry_signature_payload
+from workspace.vault.services.metadata import tag_metadata_payload, verify_record
 from workspace.vault.tests.factories import make_account, make_vault, sealed, sign
 
 LIST_URL = "/api/v1/vault/tags"
@@ -177,27 +180,146 @@ class TagApiTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_deleting_a_tag_detaches_it_from_its_entries(self):
-        self.entry.tags.add(self.tag)
-        response = self.client.delete(f"{LIST_URL}/{self.tag.uuid}")
-        self.assertEqual(response.status_code, 204)
-        self.entry.refresh_from_db()
-        self.assertEqual(self.entry.tags.count(), 0)
-        # The entry's signature now covers a tag set the row no longer has.
-        # That is the client's to repair; what must not happen is the server
-        # rewriting metadata_sig on its behalf.
-        self.assertEqual(self.entry.metadata_sig, self.original_sig)
-
-    def test_deleting_a_tag_of_another_vault_answers_404(self):
-        response = self.client.delete(f"{LIST_URL}/{self.other_vault_tag.uuid}")
-        self.assertEqual(response.status_code, 404)
-        self.assertTrue(
-            VaultTag.objects.filter(uuid=self.other_vault_tag.uuid).exists()
-        )
-
     # --- authentication ---------------------------------------------------
 
     def test_an_anonymous_caller_is_refused(self):
         self.client.logout()
         response = self.client.get(f"{LIST_URL}?vault={self.vault.uuid}")
         self.assertIn(response.status_code, (302, 403))
+
+
+class TagDeleteTests(TestCase):
+    def setUp(self):
+        self.user, self.signer, self.identity = make_account("owner")
+        self.client.force_login(self.user)
+        self.vault = make_vault(self.user)
+        self.tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name=sealed("t"), metadata_sig="AQ"
+        )
+        self.carriers = [self._entry(i) for i in range(2)]
+        VaultEntry.objects.filter(pk=self.carriers[1].pk).update(
+            deleted_at=timezone.now()
+        )
+
+    def _entry(self, index):
+        entry = VaultEntry.objects.create(
+            vault=self.vault,
+            type=EntryType.LOGIN,
+            encrypted_name=sealed(f"n{index}"),
+            metadata_sig="AQ",
+        )
+        entry.tags.add(self.tag)
+        return entry
+
+    def resigned(self, entry):
+        stored = VaultEntry.objects.get(pk=entry.pk)
+        payload = entry_signature_payload(
+            stored,
+            signer_account_uuid=self.identity.uuid,
+            tag_uuids=[t.uuid for t in stored.tags.all() if t.pk != self.tag.pk],
+            fields=dict(stored.fields.values_list("field_id", "encrypted_value")),
+        )
+        return {"uuid": str(entry.uuid), "metadata_sig": sign(self.signer, payload)}
+
+    def _post(self, entries):
+        return self.client.post(
+            f"{LIST_URL}/{self.tag.uuid}/delete",
+            {"entries": entries},
+            "application/json",
+        )
+
+    def test_removes_the_tag_and_keeps_every_signature_valid(self):
+        before = {
+            e.pk: e.updated_at for e in VaultEntry.objects.filter(vault=self.vault)
+        }
+        response = self._post([self.resigned(e) for e in self.carriers])
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        for entry in self.carriers:
+            stored = VaultEntry.objects.get(pk=entry.pk)
+            self.assertEqual(stored.updated_at, before[entry.pk])
+            verify_record(
+                entry_signature_payload(
+                    stored,
+                    signer_account_uuid=self.identity.uuid,
+                    tag_uuids=[],
+                    fields=dict(
+                        stored.fields.values_list("field_id", "encrypted_value")
+                    ),
+                ),
+                self.identity.sig_public,
+                stored.metadata_sig,
+            )
+
+    def test_an_incomplete_set_is_409_and_changes_nothing(self):
+        response = self._post([self.resigned(self.carriers[0])])
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+
+    def test_a_bad_signature_is_400_and_rolls_back_the_earlier_writes(self):
+        # Entries are processed newest first, so the last one in that order is
+        # the one whose bad signature is met after another carrier was written.
+        order = list(VaultEntry.objects.filter(tags=self.tag))
+        first, last = order[0], order[-1]
+        body = [self.resigned(e) for e in order]
+        body[-1]["metadata_sig"] = sign(self.signer, {"v": 1, "type": "x"})
+        self.assertEqual(self._post(body).status_code, 400)
+        self.assertEqual(VaultEntry.objects.get(pk=first.pk).metadata_sig, "AQ")
+        self.assertEqual(VaultEntry.objects.get(pk=last.pk).metadata_sig, "AQ")
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+
+    def test_an_entry_rewritten_after_it_was_read_is_409_and_changes_nothing(self):
+        body = [self.resigned(e) for e in self.carriers]
+        moved = []
+
+        def verify_then_race(payload, public, signature):
+            verify_record(payload, public, signature)
+            if not moved:
+                moved.append(payload["entry_uuid"])
+                VaultEntry.objects.filter(pk=uuid.UUID(str(moved[0]))).update(
+                    metadata_sig="ZZ"
+                )
+
+        with patch("workspace.vault.views.tags.verify_record", verify_then_race):
+            # The race hits the first carrier read; the write meets a row that
+            # no longer holds the signature it was verified against.
+            response = self._post(body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+        stored = set(VaultEntry.objects.values_list("metadata_sig", flat=True))
+        self.assertFalse(stored & {item["metadata_sig"] for item in body})
+
+    def test_an_extra_entry_of_another_vault_is_409_and_changes_nothing(self):
+        stranger, _, _ = make_account("stranger")
+        foreign = VaultEntry.objects.create(
+            vault=make_vault(stranger),
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("x"),
+            metadata_sig="AQ",
+        )
+        body = [self.resigned(e) for e in self.carriers]
+        body.append({"uuid": str(foreign.uuid), "metadata_sig": "AQ"})
+        self.assertEqual(self._post(body).status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+        self.assertEqual(VaultEntry.objects.get(pk=foreign.pk).metadata_sig, "AQ")
+
+    def test_a_tag_out_of_reach_is_404(self):
+        stranger, _, _ = make_account("stranger")
+        self.client.force_login(stranger)
+        self.assertEqual(self._post([]).status_code, 404)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+
+    def test_more_than_500_carriers_is_400(self):
+        body = [
+            {"uuid": f"00000000-0000-7000-8000-{i:012d}", "metadata_sig": "AQ"}
+            for i in range(501)
+        ]
+        self.assertEqual(self._post(body).status_code, 400)
+
+    def test_delete_is_gone(self):
+        response = self.client.delete(f"{LIST_URL}/{self.tag.uuid}")
+        self.assertEqual(response.status_code, 405)

@@ -4,7 +4,7 @@
   "description": "Build of every vendored frontend asset for the workspace Django project: the Alpine.js bundle and the Lucide icon library loaded by base.html, the Milkdown Crepe editor bundle and its theme CSS, the Monaco editor bundle with its workers and stylesheet, the emoji picker and its emoji data, the force-graph module behind the notes graph, the FullCalendar, Cropper and heic-to global builds, the vault client cryptography bundles, the password strength estimator, and the Tailwind + DaisyUI stylesheet. Everything is committed to statics and served via whitenoise so no page depends on a CDN at runtime. Rebuild with `npm run build` after bumping any pinned version.",
   "private": true,
   "scripts": {
-    "build": "npm run build:alpine && npm run build:lucide && npm run build:editor && npm run build:editor-css && npm run build:monaco && npm run build:monaco-workers && npm run build:monaco-css && npm run build:emoji-picker && npm run build:emoji-data && npm run build:force-graph && npm run build:calendar && npm run build:cropper && npm run build:heic && npm run build:vault && npm run build:vault-onboarding && npm run build:password-strength && npm run build:css",
+    "build": "npm run build:alpine && npm run build:lucide && npm run build:editor && npm run build:editor-css && npm run build:monaco && npm run build:monaco-workers && npm run build:monaco-css && npm run build:emoji-picker && npm run build:emoji-data && npm run build:force-graph && npm run build:calendar && npm run build:cropper && npm run build:heic && npm run build:vault && npm run build:vault-test && npm run build:vault-onboarding && npm run build:password-strength && npm run build:css",
     "build:alpine": "esbuild alpine-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/common/static/ui/js/vendor/alpine/alpine.js",
     "build:lucide": "node vendor-copy.mjs lucide",
     "build:editor": "esbuild milkdown-editor.js --bundle --format=esm --splitting --minify --target=es2022 --outdir=../../workspace/files/ui/static/files/ui/js/vendor/milkdown --chunk-names=chunk-[hash]",
@@ -20,7 +20,8 @@
     "build:heic": "node vendor-copy.mjs heic",
     "build:vault-onboarding": "esbuild vault-onboarding-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-onboarding.js",
     "build:password-strength": "esbuild password-strength-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/common/static/ui/js/vendor/password-strength/password-strength.js",
-    "build:vault": "esbuild vault-bundle.js --bundle --format=iife --minify --target=es2022 --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js",
+    "build:vault": "esbuild vault-bundle.js --bundle --format=iife --minify --target=es2022 --define:VAULT_TEST_BUILD=false --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js",
+    "build:vault-test": "esbuild vault-bundle.js --bundle --format=iife --minify --target=es2022 --define:VAULT_TEST_BUILD=true --outfile=../../workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto-test.js",
     "build:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --minify",
     "watch:css": "tailwindcss -i ./input.css -o ../../workspace/common/static/css/app.css --watch"
   },

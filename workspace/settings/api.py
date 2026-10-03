@@ -52,6 +52,11 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        # Vault data endpoints. Unlike the account rates above, these guard no
+        # key material: refusing one costs the user progress, so they are sized
+        # to the work - a 10,000-row migration is 50 batches - and lowered only
+        # on evidence of abuse.
+        "vault.migrate.user": "60/min",
         # Browser-posted Content-Security-Policy reports. Not one of the
         # account limits above: it guards no key material, and refusing a
         # report protects nothing - it only keeps a page stuck in a violation

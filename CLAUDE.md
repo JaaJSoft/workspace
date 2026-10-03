@@ -523,16 +523,19 @@ files = album_files(user, album)          # its items the user can open, as live
 #### Vault - `workspace.vault.queries`
 
 ```python
-from workspace.vault.models import VaultEntry
+from workspace.vault.models import VaultEntry, EntryField, VaultFolder, VaultTag
 from workspace.vault.queries import (
-    accessible_entries_q, active_identity, get_vault_role, reachable_vault, user_vault_ids,
-    visible_folders, visible_tags,
+    accessible_entries_q, accessible_entry_fields_q, accessible_folders_q, accessible_tags_q,
+    active_identity, get_vault_role, reachable_vault, user_vault_ids, visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
 vault = reachable_vault(user, vault_uuid)     # the vault or None - 404 on None
 role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
+fields = EntryField.objects.filter(accessible_entry_fields_q(user))   # trashed entries included
+folders = VaultFolder.objects.filter(accessible_folders_q(user))  # every vault, not just one
+tags = VaultTag.objects.filter(accessible_tags_q(user))           # every vault, not just one
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach
 tags = visible_tags(user, vault)              # empty queryset when the vault is out of reach
 identity = active_identity(user)              # the user's finished AccountIdentity, or None

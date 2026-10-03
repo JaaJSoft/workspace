@@ -284,3 +284,47 @@ class TestSuiteScriptTests(TestCase):
             with self.subTest(page=name):
                 self.assertEqual(response.status_code, 200)
                 self.assertNotContains(response, self.SCRIPT)
+
+
+class TestManifestBundleTests(TestCase):
+    """The rehearsal of an algorithm replacement runs on the test bundle, the
+    only build with a door for switching manifest states; every other page
+    gets the production bundle, which has none."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        AccountIdentity.objects.create(
+            user=self.user, kdf_salt="SALT", state=AccountIdentity.State.ACTIVE
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    @override_settings(
+        VAULT_TEST_SUITES=True,
+        VAULT_TEST_MANIFEST={"aead": {"1": "superseded", "240": "current"}},
+    )
+    def test_the_test_manifest_serves_the_test_bundle(self):
+        html = self.client.get("/vault").content.decode()
+        self.assertIn("vault-crypto-test.js", html)
+        self.assertNotIn("vendor/vault-crypto.js", html)
+        self.assertIn('id="vault-test-manifest"', html)
+        self.assertIn("test_manifest.js", html)
+
+    @override_settings(VAULT_TEST_MANIFEST=None)
+    def test_production_serves_the_production_bundle(self):
+        html = self.client.get("/vault").content.decode()
+        self.assertIn("vendor/vault-crypto.js", html)
+        self.assertNotIn("vault-crypto-test.js", html)
+        self.assertNotIn("vault-test-manifest", html)
+
+    @override_settings(
+        VAULT_TEST_SUITES=False,
+        VAULT_TEST_MANIFEST={"aead": {"1": "superseded", "240": "current"}},
+    )
+    def test_the_manifest_is_ignored_without_the_test_switch(self):
+        html = self.client.get("/vault").content.decode()
+        self.assertIn("vendor/vault-crypto.js", html)
+        self.assertNotIn("vault-crypto-test.js", html)
+        self.assertNotIn("vault-test-manifest", html)

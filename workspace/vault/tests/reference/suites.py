@@ -70,6 +70,15 @@ def stored_hpke_format(stored) -> int:
     return fmt
 
 
+def may_resign(signature_id: int) -> bool:
+    found = manifest()["signature"].get(str(signature_id))
+    if found is None:
+        return False
+    if found["state"] == "current":
+        return True
+    return found["state"] == "superseded" and found.get("resign") is True
+
+
 def _current(axis: str, **match) -> str:
     keys = [
         key

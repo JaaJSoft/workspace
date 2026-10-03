@@ -81,6 +81,24 @@ def accessible_entries_q(user):
     return Q(vault_id__in=user_vault_ids(user))
 
 
+def accessible_entry_fields_q(user):
+    """Q filter over the fields of every entry ``accessible_entries_q`` reaches,
+    trashed entries included."""
+    return Q(entry__vault_id__in=user_vault_ids(user))
+
+
+def accessible_folders_q(user):
+    """Q filter over the folders of every vault *user* can open - the
+    many-vault counterpart of ``visible_folders``."""
+    return Q(vault_id__in=user_vault_ids(user))
+
+
+def accessible_tags_q(user):
+    """Q filter over the tags of every vault *user* can open - the many-vault
+    counterpart of ``visible_tags``."""
+    return Q(vault_id__in=user_vault_ids(user))
+
+
 def reachable_vault(user, vault_uuid):
     """The vault *user* can open under that UUID, or None.
 

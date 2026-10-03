@@ -27,13 +27,54 @@ def _manifest() -> dict:
     return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
 
 
+_STATES = ("current", "superseded")
+
+
+def _test_overrides() -> dict:
+    """State overrides the test runner may install, validated on every read.
+
+    Only under VAULT_TEST_SUITES, only states of ids the manifest already
+    declares, and every axis still ends with exactly one current entry - an
+    override that widened what is readable would be a second manifest.
+    """
+    overrides = settings.VAULT_TEST_MANIFEST if settings.VAULT_TEST_SUITES else None
+    if not overrides:
+        return {}
+    manifest = _manifest()
+    for axis, states in overrides.items():
+        if axis not in manifest:
+            raise ValueError("test manifest names an unknown axis")
+        for identifier, wanted in states.items():
+            if identifier not in manifest[axis] or wanted not in _STATES:
+                raise ValueError("test manifest names an undeclared id or state")
+        effective = {
+            key: states.get(key, entry["state"])
+            for key, entry in manifest[axis].items()
+        }
+        if list(effective.values()).count("current") != 1:
+            raise ValueError("test manifest leaves an axis without one current entry")
+    return overrides
+
+
 def _entry(axis: str, identifier):
     found = _manifest()[axis].get(str(identifier))
     if found is None:
         return None
+    overridden = _test_overrides().get(axis, {}).get(str(identifier))
+    if overridden is not None:
+        return {**found, "state": overridden}
     if found["state"] == "test" and not settings.VAULT_TEST_SUITES:
         return None
     return found
+
+
+def state(axis: str, identifier) -> str | None:
+    found = _entry(axis, identifier)
+    return None if found is None else found["state"]
+
+
+def is_current(axis: str, identifier) -> bool:
+    return state(axis, identifier) == "current"
 
 
 def _is_integer(value) -> bool:
@@ -108,3 +149,33 @@ def pubkey_length(alg_id: int) -> int | None:
 def signature_length(alg_id: int) -> int | None:
     found = _entry("signature", alg_id)
     return None if found is None else found["length"]
+
+
+def current_hpke_suite() -> dict:
+    for fmt, entry in _manifest()["hpke"].items():
+        if is_current("hpke", fmt):
+            return {**entry["suite"], "format": int(fmt)}
+    raise ValueError("the manifest declares no current HPKE suite")
+
+
+def hpke_format(value) -> int | None:
+    """The format a stored hpke_suite names, read from its shape alone, or None
+    when the shape is malformed. It never asks the manifest: the retirement
+    check must still count a format the manifest has stopped declaring, and
+    whether the ids match a declared suite is the write path's question
+    (check_hpke_suite), not the census's."""
+    if not isinstance(value, dict):
+        return None
+    ids = {key: item for key, item in value.items() if key != "format"}
+    if ids.keys() != set(_HPKE_FIELDS) or not all(map(_is_integer, ids.values())):
+        return None
+    fmt = value.get("format", 1)
+    return fmt if _is_integer(fmt) else None
+
+
+def check_current_ciphertext(raw: bytes, key_version: int) -> None:
+    check_ciphertext(raw)
+    if not is_current("format", raw[0]) or not is_current("aead", raw[1]):
+        raise UnsupportedCiphertext("ciphertext is not under the current suite")
+    if int.from_bytes(raw[3:5], "big") != key_version:
+        raise UnsupportedCiphertext("header key version does not match the row")

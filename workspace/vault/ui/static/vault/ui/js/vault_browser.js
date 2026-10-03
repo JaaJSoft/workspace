@@ -151,10 +151,14 @@ window.vaultBrowser = (function () {
       // The stored rows behind `entries`, still sealed. A field opened on
       // demand is opened from one of these.
       entryRows: [],
+      unverifiedEntryRows: [],
       // The routed UUID names no vault this account can reach. Never a 404
       // from the server - that would say it exists in another account - so
       // saying it is the page's job.
       missing: false,
+      // Set after three passes in a row that left some rows unmigrated.
+      migrationWarning: false,
+      migrationGeneration: 0,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
@@ -246,9 +250,30 @@ window.vaultBrowser = (function () {
 
       afterUnlock: async function () {
         await this.load();
+        this.startMigration();
+      },
+
+      // Never awaited: the vault is on screen first, and nothing here may
+      // delay it or surface as an error. A pass that rewrote rows reloads the
+      // listing, because a later re-sign (a tag or folder removal) builds from
+      // the rows this page holds and must sign what is actually stored.
+      startMigration: function () {
+        const self = this;
+        const mine = this.migrationGeneration;
+        window.vaultMigration.run(window.vaultSession).then(function (result) {
+          // 'busy' is the answer of a second caller; the pass that is running
+          // reports for itself. A result from before a lock belongs to keys
+          // that are gone, even if the user has unlocked again since.
+          if (result.outcome === 'busy' || mine !== self.migrationGeneration) return;
+          if (!window.vaultSession.isUnlocked()) return;
+          self.migrationWarning = result.warn;
+          if (result.wrote) self.load();
+        }, function () { /* a migration never surfaces as an error */ });
       },
 
       onLocked: function () {
+        this.migrationWarning = false;
+        this.migrationGeneration += 1;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
         // this machine.
@@ -256,6 +281,7 @@ window.vaultBrowser = (function () {
         this.setData({});
         this.vaults = [];
         this.entryRows = [];
+        this.unverifiedEntryRows = [];
         this.openVault = null;
         this.error = '';
         this.entryActions = {};
@@ -295,6 +321,7 @@ window.vaultBrowser = (function () {
             // or gone, and leaving them there offers a way into neither.
             this.setData({});
             this.entryRows = [];
+            this.unverifiedEntryRows = [];
             this.entryActions = {};
             this.resetPanel();
           }
@@ -413,6 +440,14 @@ window.vaultBrowser = (function () {
         return newer === this.vaults.length ? 'newer' : 'mixed';
       },
 
+      // Every row the server holds for this vault, the ones the reader
+      // rejected included. What a call acts on server-side (an action list, a
+      // trash purge) is counted on these; anything that re-signs or opens a
+      // row uses entryRows, which holds only the verified ones.
+      storedRows: function () {
+        return this.entryRows.concat(this.unverifiedEntryRows);
+      },
+
       rowFor: function (uuid) {
         return this.entryRows.find(function (row) { return row.uuid === uuid; }) || null;
       },
@@ -439,8 +474,12 @@ window.vaultBrowser = (function () {
         // Assigning anyway would put opened names back into a locked page.
         if (!session.isUnlocked()) return;
         // Kept beside the opened rows: opening one field later needs the
-        // ciphertexts, and an opened row deliberately carries none.
-        this.entryRows = rows;
+        // ciphertexts, and an opened row deliberately carries none. Only rows
+        // the reader verified: the others are kept apart so a removal can
+        // refuse to touch them rather than re-sign them.
+        const verified = new Set(entries.verifiedRows.map(function (row) { return row.uuid; }));
+        this.entryRows = entries.verifiedRows;
+        this.unverifiedEntryRows = rows.filter(function (row) { return !verified.has(row.uuid); });
         this.setData({
           folders: folders.rows,
           tags: tags.rows,
@@ -480,7 +519,7 @@ window.vaultBrowser = (function () {
         // leave the trash button reasoning about a subset of what it destroys
         // - a trash holding nothing else would look empty of anything the
         // server allows, and there is no per-row menu to fall back on.
-        const uuids = this.entryRows.map(function (row) { return row.uuid; });
+        const uuids = this.storedRows().map(function (row) { return row.uuid; });
         if (!uuids.length) {
           this.entryActions = {};
           return;
@@ -928,7 +967,7 @@ window.vaultBrowser = (function () {
       // menu of their own ever renders.
       canEmptyTrash: function () {
         if (this.view !== 'trash' || !this.openVault) return false;
-        const rows = this.entryRows.filter(function (row) { return !!row.deleted_at; });
+        const rows = this.storedRows().filter(function (row) { return !!row.deleted_at; });
         if (!rows.length) return false;
         const self = this;
         return rows.every(function (row) {
@@ -946,7 +985,7 @@ window.vaultBrowser = (function () {
       // about three entries and destroying five would hide exactly the rows a
       // user has most reason to keep.
       trashedRowCount: function () {
-        return this.entryRows.filter(function (row) {
+        return this.storedRows().filter(function (row) {
           return !!row.deleted_at;
         }).length;
       },
@@ -1328,10 +1367,15 @@ window.vaultBrowser = (function () {
         let failed = false;
         try {
           await window.vaultResign.deleteTagSafely(
-            this.openVault, tag.uuid, this.entryRows
+            this.openVault, tag.uuid, this.entryRows, this.unverifiedEntryRows
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error =
+              'This tag is on an entry that could not be verified. It was left untouched.';
+            return;
+          }
           failed = true;
         } finally {
           this.busy = false;
@@ -1353,10 +1397,16 @@ window.vaultBrowser = (function () {
         let failed = false;
         try {
           await window.vaultResign.deleteFolderSafely(
-            this.openVault, folder.uuid, this.folders, this.entryRows
+            this.openVault, folder.uuid, this.folders, this.entryRows,
+            this.unverifiedEntryRows
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error =
+              'This folder holds an entry that could not be verified. It was left untouched.';
+            return;
+          }
           failed = true;
         } finally {
           this.busy = false;

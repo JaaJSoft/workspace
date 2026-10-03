@@ -32,6 +32,48 @@
         </div>
     {% endif %}
 
+    {% if email_panel %}
+        <div class="bg-white border border-base-400/10 flex flex-col gap-4 mb-6 p-4 rounded-default shadow-xs md:flex-row md:items-center dark:bg-base-900">
+            <div class="flex gap-3 grow items-start">
+                <span class="material-symbols-outlined text-base-500 dark:text-base-400">outgoing_mail</span>
+                <div>
+                    <div class="font-semibold text-base-900 dark:text-base-100">
+                        {% translate "Outgoing email" %}
+                        {% if email_panel.enabled %}
+                            <span class="font-normal text-base-500 text-sm dark:text-base-400">{{ email_panel.from_email }}</span>
+                        {% endif %}
+                    </div>
+                    {% with test=email_panel.last_test %}
+                        {% if not email_panel.enabled %}
+                            <div class="text-sm text-base-500 dark:text-base-400">{% translate "Not configured: the instance sends no email. Set EMAIL_HOST to enable it." %}</div>
+                        {% elif test %}
+                            <div class="text-sm {% if test.status == 'sent' %}text-green-700 dark:text-green-400{% elif test.status == 'queued' %}text-base-500 dark:text-base-400{% else %}text-red-700 dark:text-red-400{% endif %}">
+                                {% blocktranslate with status=test.get_status_display|lower address=test.to_address since=test.created_at|timesince %}Last test to {{ address }}: {{ status }} ({{ since }} ago){% endblocktranslate %}
+                                {% if test.status == 'queued' and test.attempts %}- {% blocktranslate count attempts=test.attempts %}{{ attempts }} attempt so far{% plural %}{{ attempts }} attempts so far{% endblocktranslate %}{% endif %}
+                            </div>
+                            {% if test.error %}
+                                <div class="break-words mt-1 text-xs text-base-500 dark:text-base-400">{{ test.error }}</div>
+                            {% endif %}
+                        {% else %}
+                            <div class="text-sm text-base-500 dark:text-base-400">{% translate "No test email sent yet." %}</div>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+            </div>
+            <form method="post" action="{% url 'admin-email-test' %}" class="flex flex-col gap-1">
+                {% csrf_token %}
+                <button type="submit"
+                        class="bg-primary-600 font-medium px-3 py-2 rounded-default text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        {% if email_panel.unavailable %}disabled title="{{ email_panel.unavailable }}"{% endif %}>
+                    {% translate "Send a test email" %}
+                </button>
+                {% if email_panel.unavailable and email_panel.enabled %}
+                    <span class="text-xs text-base-500 dark:text-base-400">{{ email_panel.unavailable }}</span>
+                {% endif %}
+            </form>
+        </div>
+    {% endif %}
+
     <div class="flex flex-col lg:flex-row lg:gap-8">
         <div class="grow">
             {% include "unfold/helpers/app_list_default.html" %}

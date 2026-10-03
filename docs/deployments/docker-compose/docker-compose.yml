@@ -19,6 +19,16 @@ services:
       # Prometheus /metrics — endpoint stays closed until both are set
       - METRICS_USER=${METRICS_USER:-}
       - METRICS_PASSWORD=${METRICS_PASSWORD:-}
+      # Instance email (optional) - the web process queues, the worker sends.
+      # Off until EMAIL_HOST is set. See docs/guides/email.md
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-Workspace <noreply@localhost>}
+      - EMAIL_REPLY_TO=${EMAIL_REPLY_TO:-}
+      - EMAIL_BASE_URL=${EMAIL_BASE_URL:-}
+      - ANYMAIL_WEBHOOK_SECRET=${ANYMAIL_WEBHOOK_SECRET:-}
       # OAuth2 Mail Providers (optional)
       - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
       - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
@@ -80,6 +90,16 @@ services:
       - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
       - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
       - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
+      # Instance email (optional) - the web process queues, the worker sends.
+      # Off until EMAIL_HOST is set. See docs/guides/email.md
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-}
+      - DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL:-Workspace <noreply@localhost>}
+      - EMAIL_REPLY_TO=${EMAIL_REPLY_TO:-}
+      - EMAIL_BASE_URL=${EMAIL_BASE_URL:-}
+      - ANYMAIL_WEBHOOK_SECRET=${ANYMAIL_WEBHOOK_SECRET:-}
       # OAuth2 Mail Providers (optional)
       - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
       - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}

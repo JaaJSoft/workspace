@@ -1,13 +1,20 @@
-"""Celery tasks for database maintenance."""
+"""Celery tasks of the core app: database maintenance and the instance's own mail."""
 
 import logging
 import os
 import time
+from datetime import timedelta
 
 from celery import shared_task
+from django.conf import settings
 from django.db import connection
+from django.utils import timezone
 
-from workspace.common.task_priority import LOW_PRIORITY
+from workspace.common.task_priority import (
+    BACKGROUND_PRIORITY,
+    LOW_PRIORITY,
+    NORMAL_PRIORITY,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +150,44 @@ def db_maintenance(self, skip_vacuum=False, skip_integrity_check=False):
     result["total_ms"] = round((time.monotonic() - t0) * 1000, 1)
     logger.info("SQLite maintenance finished in %s ms", result["total_ms"])
     return result
+
+
+# NORMAL like a notification: the call site that has someone watching (a
+# password reset, the admin test mail) passes INTERACTIVE to send_email.
+@shared_task(
+    name="core.deliver_email",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=None,
+)
+def deliver_email(self, delivery_id, *, subject, text, html, headers):
+    from workspace.core.services.email import (
+        MAX_DELIVERY_ATTEMPTS,
+        deliver,
+        retry_delay,
+    )
+
+    retries = self.request.retries
+    should_retry = deliver(
+        delivery_id,
+        subject=subject,
+        text=text,
+        html=html,
+        headers=headers,
+        # Run eagerly (development without a broker) there is no worker to
+        # come back later: a retry would run inline, inside the request that
+        # queued the mail, and raise out of it.
+        final_attempt=self.request.is_eager or retries + 1 >= MAX_DELIVERY_ATTEMPTS,
+    )
+    if should_retry:
+        raise self.retry(countdown=retry_delay(retries))
+
+
+@shared_task(name="core.purge_email_deliveries", priority=BACKGROUND_PRIORITY)
+def purge_email_deliveries():
+    from workspace.core.services.email import purge_deliveries
+
+    cutoff = timezone.now() - timedelta(days=settings.EMAIL_DELIVERY_RETENTION_DAYS)
+    deleted = purge_deliveries(cutoff)
+    logger.info("Purged %s email delivery records", deleted)
+    return deleted

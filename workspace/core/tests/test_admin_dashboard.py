@@ -9,12 +9,14 @@ from django.utils import timezone
 from workspace.ai.models import AITask
 from workspace.calendar.models import Calendar
 from workspace.calendar.models_external import ExternalCalendar
+from workspace.core.models import EmailDelivery
 from workspace.core.services import admin_dashboard
 from workspace.core.services.admin_dashboard import (
     dashboard_callback,
     environment_callback,
     external_calendar_error_count,
     failed_ai_task_count,
+    failed_email_count,
     failed_import_job_count,
     mail_sync_error_count,
     thumbnail_failure_count,
@@ -69,6 +71,7 @@ class HealthCountTests(TestCase):
             admin_dashboard.failed_ai_task_badge,
             admin_dashboard.thumbnail_failure_badge,
             admin_dashboard.failed_import_job_badge,
+            admin_dashboard.failed_email_badge,
         ):
             self.assertIsNone(badge(None))
         _make_account(self.user, "bad2@test.com", last_sync_error="boom")
@@ -139,6 +142,28 @@ class HealthCountTests(TestCase):
         self.assertEqual(failed_import_job_count(None), 1)
 
 
+class FailedEmailCountTests(TestCase):
+    def test_counts_failures_of_the_last_24_hours(self):
+        def delivery(status, age):
+            row = EmailDelivery.objects.create(
+                to_address="a@example.com",
+                feature="test",
+                template="core/email/admin_test",
+                subject="s",
+                status=status,
+            )
+            EmailDelivery.objects.filter(uuid=row.uuid).update(
+                created_at=timezone.now() - age
+            )
+
+        delivery(EmailDelivery.Status.FAILED, timedelta(hours=1))
+        delivery(EmailDelivery.Status.FAILED, timedelta(hours=30))
+        delivery(EmailDelivery.Status.SENT, timedelta(hours=1))
+
+        self.assertEqual(failed_email_count(None), 1)
+        self.assertEqual(admin_dashboard.failed_email_badge(None), 1)
+
+
 class DashboardCallbackTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(
@@ -153,7 +178,7 @@ class DashboardCallbackTests(TestCase):
         context = dashboard_callback(request, {})
 
         cards = context["health_cards"]
-        self.assertEqual(len(cards), 7)
+        self.assertEqual(len(cards), 8)
         by_title = {card["title"]: card for card in cards}
         self.assertEqual(by_title["Mail sync errors"]["value"], 1)
         self.assertEqual(by_title["Mail sync errors"]["tone"], "danger")
@@ -178,6 +203,7 @@ class DashboardCallbackTests(TestCase):
         )
         self.assertIn("?status__exact=failed", by_title["Failed AI tasks"])
         self.assertIn("?status__exact=failed", by_title["Failed imports"])
+        self.assertIn("?status__exact=failed", by_title["Failed emails"])
         self.assertIn("?status__in=", by_title["Quarantined files"])
         self.assertIn("?status__exact=error", by_title["Scanner errors"])
 

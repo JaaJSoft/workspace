@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Unsubscribe · Workspace{% endblock %}
+
+{% block body_class %}bg-gradient-to-br from-base-200 to-base-300 min-h-screen{% endblock %}
+
+{% block body %}
+  <div class="min-h-screen flex items-center justify-center p-4">
+    <div
+      class="card w-full max-w-md bg-base-100 shadow-2xl border border-base-300"
+    >
+      <div class="card-body p-8 items-center text-center">
+        <div class="mb-4">{% include "ui/partials/app_logo.html" with size="md" %}</div>
+        {% if done %}
+          <div
+            class="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mb-2"
+          >
+            <i data-lucide="mail-check" class="w-6 h-6 text-success"></i>
+          </div>
+          <h1 class="text-xl font-bold">You are unsubscribed</h1>
+          <p class="text-base-content/60 text-sm">
+            <span class="font-medium text-base-content">{{ address }}</span> will no longer receive
+            {{ feature_label }} emails. Emails you ask for, like a password reset, still arrive.
+          </p>
+        {% else %}
+          <div
+            class="w-12 h-12 rounded-full bg-base-200 flex items-center justify-center mb-2"
+          >
+            <i data-lucide="mail-x" class="w-6 h-6 text-base-content/60"></i>
+          </div>
+          <h1 class="text-xl font-bold">Unsubscribe</h1>
+          <p class="text-base-content/60 text-sm mb-4">
+            Stop sending {{ feature_label }} emails to
+            <span class="font-medium text-base-content">{{ address }}</span>?
+          </p>
+          <form method="post" class="w-full">
+            <button type="submit" class="btn btn-primary w-full">Unsubscribe</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -27,6 +27,7 @@ from .celery import *  # noqa: F403
 from .chat import *  # noqa: F403
 from .db import *  # noqa: F403
 from .debug_toolbar import *  # noqa: F403
+from .email import *  # noqa: F403
 from .files import *  # noqa: F403
 from .imports import *  # noqa: F403
 from .mail import *  # noqa: F403

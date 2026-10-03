@@ -70,6 +70,14 @@ def failed_import_job_count(request):
     return failed_job_count(_last_24h())
 
 
+def failed_email_count(request):
+    from workspace.core.models import EmailDelivery
+
+    return EmailDelivery.objects.filter(
+        status=EmailDelivery.Status.FAILED, created_at__gte=_last_24h()
+    ).count()
+
+
 # Sidebar badge wrappers: unfold renders any non-empty badge value - a count
 # of 0 would show as a red "0" pill - while None hides the badge entirely.
 
@@ -96,6 +104,10 @@ def quarantined_file_badge(request):
 
 def failed_import_job_badge(request):
     return failed_import_job_count(request) or None
+
+
+def failed_email_badge(request):
+    return failed_email_count(request) or None
 
 
 # Probing the daemon is a network call, so it runs only on the admin index -
@@ -224,6 +236,14 @@ def dashboard_callback(request, context):
             "url": reverse("admin:files_filescan_changelist") + "?status__exact=error",
         },
         {
+            "title": "Failed emails",
+            "icon": "outgoing_mail",
+            "description": "instance mail that failed in the last 24 hours",
+            "value": failed_email_count(request),
+            "url": reverse("admin:core_emaildelivery_changelist")
+            + "?status__exact=failed",
+        },
+        {
             "title": "Failed imports",
             "icon": "cloud_download",
             "description": "jobs failed in the last 24 hours",
@@ -241,4 +261,53 @@ def dashboard_callback(request, context):
     if face_health is not None:
         cards.append(face_health)
     context["health_cards"] = cards
+    context["email_panel"] = email_panel(request)
     return context
+
+
+ADMIN_TEST_FEATURE = "admin_test"
+
+
+def test_email_unavailable_reason(user):
+    from workspace.core.services.email import email_unavailable_reason
+
+    reason = email_unavailable_reason()
+    if reason is None and not user.email:
+        reason = "Your account has no email address to send the test to."
+    return reason
+
+
+def send_test_email(user):
+    """Mail ``user`` through the normal path, so the dashboard can show how a
+    real mail fares. Returns the ``EmailDelivery``."""
+    from workspace.common.task_priority import INTERACTIVE_PRIORITY
+    from workspace.core.services.email import send_email
+
+    return send_email(
+        user.email,
+        "core/email/admin_test",
+        feature=ADMIN_TEST_FEATURE,
+        user=user,
+        context={"requested_by": user},
+        priority=INTERACTIVE_PRIORITY,
+    )
+
+
+def email_panel(request):
+    """What the "send a test email" panel shows: whether the instance can
+    send, and how the administrator's latest test went."""
+    from workspace.core.models import EmailDelivery
+
+    unavailable = test_email_unavailable_reason(request.user)
+    last_test = (
+        EmailDelivery.objects.filter(feature=ADMIN_TEST_FEATURE, user=request.user)
+        .only("to_address", "status", "error", "created_at", "sent_at", "attempts")
+        .first()
+    )
+    return {
+        "enabled": settings.EMAIL_ENABLED,
+        "from_email": settings.DEFAULT_FROM_EMAIL,
+        "unavailable": unavailable,
+        "last_test": last_test,
+        "deliveries_url": reverse("admin:core_emaildelivery_changelist"),
+    }

@@ -32,6 +32,7 @@ from mozilla_django_oidc import views as oidc_views
 
 from workspace.core.metrics_auth import metrics_basic_auth
 from workspace.core.views import metrics as metrics_views
+from workspace.core.views.email import send_test_email
 from workspace.core.views.health import LiveView, ReadyView, StartupView
 from workspace.users.ui.views import WorkspaceLoginView
 
@@ -85,6 +86,8 @@ ui_urlpatterns = [
 ]
 
 urlpatterns = [
+    # Ahead of the admin: its catch-all view would answer any admin/ path first.
+    path("admin/email/test", send_test_email, name="admin-email-test"),
     path("admin/", admin.site.urls),
     # Authentication
     path("login", WorkspaceLoginView.as_view(), name="login"),

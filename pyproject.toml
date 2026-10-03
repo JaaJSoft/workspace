@@ -91,6 +91,9 @@ dependencies = [
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.30.0",
+    # Bounce and complaint webhooks of the mail providers the instance's own
+    # mail goes through (core/signals.py), and their optional API backends.
+    "django-anymail>=15.2",
 ]
 
 [build-system]

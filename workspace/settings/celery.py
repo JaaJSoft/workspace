@@ -133,6 +133,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "chat.purge_orphan_attachments",
         "schedule": crontab(hour=4, minute=0),  # Every day at 4:00 AM
     },
+    "purge-email-deliveries": {
+        "task": "core.purge_email_deliveries",
+        "schedule": crontab(hour=4, minute=15),  # Every day at 4:15 AM
+    },
     "prune-read-notifications": {
         "task": "notifications.prune_read",
         "schedule": crontab(hour=4, minute=30),  # Every day at 4:30 AM

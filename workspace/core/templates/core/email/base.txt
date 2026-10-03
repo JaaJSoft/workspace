@@ -1,0 +1,7 @@
+{% block content %}{% endblock %}
+
+--
+{{ site_name }}{% if base_url %} - {{ base_url }}{% endif %}
+{% if unsubscribe_url %}Stop receiving these emails: {{ unsubscribe_url }}
+{% else %}You received this email because of an action on your account.
+{% endif %}

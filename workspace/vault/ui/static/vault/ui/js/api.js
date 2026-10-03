@@ -34,6 +34,17 @@ window.vaultApi = (function () {
     fetchEnvelope: function () {
       return request('/api/v1/vault/account/envelope');
     },
+    // What this account still has under a superseded algorithm. A shortcut,
+    // not a guarantee: the client only ever rewrites what it verified.
+    fetchMigration: function () {
+      return request('/api/v1/vault/migration');
+    },
+    migrateVault: function (uuid, items) {
+      return request('/api/v1/vault/vaults/' + uuid + '/migrate', {
+        method: 'POST',
+        body: { items: items },
+      });
+    },
     listVaults: function () {
       return request('/api/v1/vault/vaults');
     },

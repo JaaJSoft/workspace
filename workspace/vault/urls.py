@@ -1,8 +1,13 @@
 from django.urls import path
 
-from .views import account, actions, entries, folders, tags, vaults
+from .views import account, actions, entries, folders, migration, tags, vaults
 
 urlpatterns = [
+    path(
+        "api/v1/vault/migration",
+        migration.MigrationListView.as_view(),
+        name="vault-migration",
+    ),
     path(
         "api/v1/vault/account/init",
         account.AccountInitView.as_view(),

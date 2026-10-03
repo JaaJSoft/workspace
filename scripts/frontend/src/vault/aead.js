@@ -1,5 +1,5 @@
 import { randomBytes } from './encoding.js';
-import { CURRENT_SUITE, UnsupportedAlgorithmError, declaredEntry, markImplemented } from './suites.js';
+import { currentSuite, UnsupportedAlgorithmError, declaredEntry, markImplemented } from './suites.js';
 import { decodeCiphertext, encodeHeader } from './wire.js';
 import { associatedData } from './ad.js';
 
@@ -102,7 +102,7 @@ async function handleFor(key, aeadId, usage) {
 // determinism is the point. 96 random bits are safe here only because the key
 // is per entry: the seals under one key stay far below the birthday bound.
 export async function seal(key, plaintext, context, { iv, keyVersion, kdfId }) {
-  const aeadId = CURRENT_SUITE.aeadId;
+  const aeadId = currentSuite().aeadId;
   const impl = AEADS.get(aeadId);
   const nonce = iv || randomBytes(impl.ivLength);
   if (nonce.length !== impl.ivLength) {

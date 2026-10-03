@@ -1,4 +1,4 @@
-import { CURRENT_SUITE, suiteEntry } from './suites.js';
+import { currentSuite, suiteEntry } from './suites.js';
 
 // The persisted byte layouts: the six-byte ciphertext header, and the one-byte
 // algorithm prefix on a stored public key. HPKE-wrapped vault keys do NOT use
@@ -40,7 +40,7 @@ export function decodePublicKey(stored, usage) {
 // The header on its own, because seal needs it before the AEAD runs: format 2
 // authenticates it. iv_len is the one the manifest declares for the AEAD.
 export function encodeHeader({
-  formatVersion = CURRENT_SUITE.formatVersion, aeadId, kdfId, keyVersion,
+  formatVersion = currentSuite().formatVersion, aeadId, kdfId, keyVersion,
 }) {
   suiteEntry('format', formatVersion);
   // Integer-ness is checked, not assumed: every header field is written into a

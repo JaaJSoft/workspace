@@ -318,3 +318,57 @@ test('the removed constants are gone from the bundle', () => {
     assert.equal(Object.hasOwn(V, name), false, name);
   }
 });
+
+const TEST_BUNDLE = 'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto-test.js';
+const TEST_AEAD = 'workspace/vault/ui/static/vault/ui/js/test_suites/test_aead.js';
+
+function loadTestBuild() {
+  const ctx = loadScript(TEST_BUNDLE, {
+    crypto: globalThis.crypto, TextEncoder: globalThis.TextEncoder,
+    TextDecoder: globalThis.TextDecoder, btoa: globalThis.btoa, atob: globalThis.atob,
+  });
+  loadScript(TEST_AEAD, {}, ctx); // registers 0xF0 into this context
+  return ctx.vaultCrypto;
+}
+
+test('isCurrent reads the manifest states', () => {
+  const V = freshBundle();
+  assert.equal(V.isCurrent('format', 2), true);
+  assert.equal(V.isCurrent('format', 1), false);
+  assert.equal(V.isCurrent('aead', 7), false);
+});
+
+test('mayResign: current signatures resign, unknown ones do not', () => {
+  const V = freshBundle();
+  assert.equal(V.mayResign(1), true);
+  assert.equal(V.mayResign(9), false);
+});
+
+test('the production bundle has no installTestManifest', () => {
+  assert.equal(freshBundle().installTestManifest, undefined);
+});
+
+test('the test build installs state overrides before first use', () => {
+  const T = loadTestBuild();
+  T.installTestManifest({ aead: { 1: 'superseded', 240: 'current' } });
+  assert.equal(T.CURRENT_SUITE.aeadId, 240);
+  assert.equal(T.isCurrent('aead', 1), false);
+});
+
+test('the test build refuses overrides once the suite was read', () => {
+  const T = loadTestBuild();
+  void T.CURRENT_SUITE.aeadId;
+  assert.throws(() => T.installTestManifest({ aead: { 1: 'superseded', 240: 'current' } }));
+});
+
+test('the test build refuses an override that widens the manifest', () => {
+  const T = loadTestBuild();
+  assert.throws(() => T.installTestManifest({ aead: { 7: 'current' } }));
+  assert.throws(() => T.installTestManifest({ aead: { 240: 'current' } })); // two current
+  assert.throws(() => T.installTestManifest({ aead: { 1: 'test' } }));
+});
+
+test('the test build refuses to leave an axis without a current entry', () => {
+  const T = loadTestBuild();
+  assert.throws(() => T.installTestManifest({ signature: { 1: 'superseded' } }));
+});

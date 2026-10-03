@@ -9,7 +9,8 @@ import {
   TAG_FIELD_IDS, qualifyFieldId, associatedData,
 } from './src/vault/ad.js';
 import {
-  CURRENT_SUITE, UnsupportedAlgorithmError, suiteEntry, implementedIds,
+  currentSuite, isCurrent, mayResign, installTestManifest, UnsupportedAlgorithmError, suiteEntry,
+  implementedIds,
 } from './src/vault/suites.js';
 import {
   KDF_DIRECT, KDF_HKDF_SHA256,
@@ -47,7 +48,11 @@ window.vaultCrypto = {
   TAG_FIELD_IDS,
   qualifyFieldId,
   associatedData,
-  CURRENT_SUITE,
+  // A getter on the root literal, not a spread: every read sees the suite the
+  // test build may have switched before first use.
+  get CURRENT_SUITE() { return currentSuite(); },
+  isCurrent,
+  mayResign,
   UnsupportedAlgorithmError,
   suiteEntry,
   implementedIds,
@@ -97,3 +102,6 @@ window.vaultCrypto = {
   tagMetadataPayload,
   uuidV7,
 };
+
+// eslint-disable-next-line no-undef
+if (VAULT_TEST_BUILD) window.vaultCrypto.installTestManifest = installTestManifest;

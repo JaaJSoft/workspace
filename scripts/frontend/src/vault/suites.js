@@ -102,8 +102,13 @@ export function kdfEntry(algo) {
   return entry;
 }
 
-function currentKey(axis, match = {}) {
-  const keys = Object.entries(MANIFEST[axis])
+// The manifest every reader consults for states. Only the test build can swap
+// it, and only before anything has read the current suite.
+let activeManifest = MANIFEST;
+let suiteRead = false;
+
+function currentKey(manifest, axis, match = {}) {
+  const keys = Object.entries(manifest[axis])
     .filter(([, entry]) => entry.state === 'current'
       && Object.entries(match).every(([field, wanted]) => entry[field] === wanted))
     .map(([key]) => key);
@@ -111,16 +116,67 @@ function currentKey(axis, match = {}) {
   return keys[0];
 }
 
-const hpkeFormat = currentKey('hpke');
-const kdfAlgo = currentKey('kdf');
+function buildCurrent(manifest) {
+  const hpkeFormat = currentKey(manifest, 'hpke');
+  const kdfAlgo = currentKey(manifest, 'kdf');
+  return Object.freeze({
+    formatVersion: Number(currentKey(manifest, 'format')),
+    aeadId: Number(currentKey(manifest, 'aead')),
+    hpke: Object.freeze({ ...manifest.hpke[hpkeFormat].suite, format: Number(hpkeFormat) }),
+    kexPublicKeyAlg: Number(currentKey(manifest, 'pubkey', { usage: 'kex' })),
+    sigPublicKeyAlg: Number(currentKey(manifest, 'pubkey', { usage: 'sig' })),
+    signatureAlg: Number(currentKey(manifest, 'signature')),
+    payloadVersion: Number(currentKey(manifest, 'payload')),
+    kdf: Object.freeze({
+      algo: kdfAlgo, params: Object.freeze({ ...manifest.kdf[kdfAlgo].params }),
+    }),
+  });
+}
 
-export const CURRENT_SUITE = Object.freeze({
-  formatVersion: Number(currentKey('format')),
-  aeadId: Number(currentKey('aead')),
-  hpke: Object.freeze({ ...MANIFEST.hpke[hpkeFormat].suite, format: Number(hpkeFormat) }),
-  kexPublicKeyAlg: Number(currentKey('pubkey', { usage: 'kex' })),
-  sigPublicKeyAlg: Number(currentKey('pubkey', { usage: 'sig' })),
-  signatureAlg: Number(currentKey('signature')),
-  payloadVersion: Number(currentKey('payload')),
-  kdf: Object.freeze({ algo: kdfAlgo, params: Object.freeze({ ...MANIFEST.kdf[kdfAlgo].params }) }),
-});
+let current = buildCurrent(MANIFEST);
+
+export function currentSuite() {
+  suiteRead = true;
+  return current;
+}
+
+function activeEntry(axis, id) {
+  const key = String(id);
+  return Object.hasOwn(activeManifest[axis], key) ? activeManifest[axis][key] : null;
+}
+
+export function isCurrent(axis, id) {
+  const entry = activeEntry(axis, id);
+  return !!entry && entry.state === 'current';
+}
+
+// A superseded signature is re-signed only when its entry says the algorithm
+// is still sound: re-signing under a broken one would turn a forgery into a
+// valid signature of the account.
+export function mayResign(signatureId) {
+  const entry = activeEntry('signature', signatureId);
+  if (!entry) return false;
+  if (entry.state === 'current') return true;
+  return entry.state === 'superseded' && entry.resign === true;
+}
+
+const OVERRIDE_STATES = new Set(['current', 'superseded']);
+
+export function installTestManifest(overrides) {
+  if (suiteRead) throw new Error('test manifest installed after the current suite was read');
+  const next = JSON.parse(JSON.stringify(MANIFEST));
+  for (const [axis, states] of Object.entries(overrides)) {
+    if (!Object.hasOwn(next, axis)) throw new Error(`test manifest names unknown axis ${axis}`);
+    for (const [id, wanted] of Object.entries(states)) {
+      if (!Object.hasOwn(next[axis], id) || !OVERRIDE_STATES.has(wanted)) {
+        throw new Error(`test manifest names undeclared ${axis} ${id} or state ${wanted}`);
+      }
+      next[axis][id].state = wanted;
+    }
+  }
+  const candidate = buildCurrent(next);
+  suiteEntry('aead', candidate.aeadId);
+  suiteEntry('format', candidate.formatVersion);
+  activeManifest = next;
+  current = candidate;
+}

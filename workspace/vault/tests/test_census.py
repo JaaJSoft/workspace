@@ -135,3 +135,15 @@ class CensusTests(TestCase):
         self.assertEqual(counts[("hpke", 1)], 1)
         self.assertEqual(counts[("kdf", "argon2id")], 2)
         self.assertIsInstance(counts, Counter)
+
+    def test_a_trashed_entry_is_counted(self):
+        user, _, _ = make_account("owner")
+        vault = make_vault(user)
+        VaultEntry.objects.create(
+            vault=vault,
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("n", 1),
+            metadata_sig="AQ",
+            deleted_at=timezone.now(),
+        )
+        self.assertEqual(census.census()[("format", 1)], 1)

@@ -46,7 +46,7 @@
           </div>
         </div>
         <template x-if="row.kind !== 'person'">
-          <div class="shrink-0">
+          <div class="shrink-0 flex">
             <a
               x-show="row.person_uuid"
               :href="_acPersonUrl(row)"

@@ -7,10 +7,7 @@ go through FileService methods, which delegate here.
 
 import gc
 import logging
-import os
 import posixpath
-import shutil
-import uuid
 
 from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
@@ -23,40 +20,6 @@ from . import _trash
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
-
-
-def replace_blob(storage, storage_path, content):
-    """Put *content* at *storage_path*, swapping the previous blob in one step.
-
-    The storage overwrites in place, which truncates the blob at the first byte
-    written: a transfer that dies halfway leaves neither the old bytes nor the
-    whole new ones, and the row - rolled back to the version it described
-    before - then points at content that no longer exists. Writing to a sibling
-    temp file and renaming over the target instead means the path only ever
-    holds one complete version or the other.
-
-    A backend without local paths cannot be renamed into, and saves directly;
-    it also cannot truncate a blob in place, so there is nothing to protect.
-    """
-    try:
-        final_path = storage.path(storage_path)
-    except NotImplementedError:
-        return storage.save(storage_path, content)
-
-    staged = f"{storage_path}.{uuid.uuid4().hex}.part"
-    try:
-        storage.save(staged, content)
-        os.makedirs(os.path.dirname(final_path), exist_ok=True)
-        os.replace(storage.path(staged), final_path)
-    except OSError:
-        # Including a save that died partway: the half-written bytes are in the
-        # staged file, and the target still holds the version before them.
-        try:
-            storage.delete(staged)
-        except OSError:
-            logger.warning("Could not remove staged blob %s", scrub(staged))
-        raise
-    return storage_path
 
 
 def folder_storage_path(folder):
@@ -158,17 +121,8 @@ def reconcile_trashed_children(node, trashed_at):
 
 
 def ensure_folder_on_storage(folder):
-    """Create the folder's directory on the storage backend if supported."""
-    storage_path = folder_storage_path(folder)
-    try:
-        full_path = default_storage.path(storage_path)
-        os.makedirs(full_path, exist_ok=True)
-    except NotImplementedError:
-        logger.debug(
-            "Storage backend does not support local filesystem paths; "
-            "skipping directory creation for '%s'.",
-            scrub(storage_path),
-        )
+    """Keep the folder's directory on storage, even while it is empty."""
+    default_storage.make_dir(folder_storage_path(folder))
 
 
 def delete_node_storage(node):
@@ -216,10 +170,8 @@ _STORAGE_ROOTS = ("files", _trash.TRASH_ROOT)
 def _remove_empty_parents(dir_path):
     """Climb from *dir_path* removing directories as long as they are empty."""
     while dir_path and dir_path not in _STORAGE_ROOTS:
-        full_path = default_storage.path(dir_path)
-        if not os.path.isdir(full_path) or os.listdir(full_path):
+        if not default_storage.remove_dir_if_empty(dir_path):
             break
-        os.rmdir(full_path)
         logger.info("Deleted empty directory: %s", scrub(dir_path))
         dir_path = posixpath.dirname(dir_path)
 
@@ -228,7 +180,7 @@ def _delete_folder_storage(node):
     try:
         storage_path = folder_storage_path(node)
         # Fail closed on '.'/'..' components: they resolve to an ancestor
-        # directory, and rmtree there would take unrelated data with it.
+        # directory, and deleting that prefix would take unrelated data with it.
         # File.save() rejects such names, but a legacy or hand-edited row
         # must not be able to widen the blast radius.
         if any(part in (".", "..") for part in storage_path.split("/")):
@@ -237,19 +189,11 @@ def _delete_folder_storage(node):
                 scrub(storage_path),
             )
             return
-        full_path = default_storage.path(storage_path)
-        # rmtree, not rmdir: descendant rows are deleted before the folder in
-        # the cascade, but the directory may still hold orphaned entries the
-        # DB never knew about.
-        if os.path.isdir(full_path):
-            shutil.rmtree(full_path)
+        # The whole prefix, not the directory alone: descendant rows are deleted
+        # before the folder in the cascade, but the directory may still hold
+        # orphaned entries the DB never knew about.
+        if default_storage.delete_prefix(storage_path):
             logger.info("Deleted folder and contents: %s", scrub(storage_path))
-    except NotImplementedError:
-        logger.debug(
-            "Storage backend does not support local filesystem paths; "
-            "skipping directory cleanup for folder '%s'.",
-            scrub(node.name),
-        )
     except Exception as e:
         logger.warning("Could not delete folder %s: %s", scrub(node.name), scrub(e))
 
@@ -275,53 +219,18 @@ def _relocate_on_storage(source, destination, *, expect_dir):
     caller's transaction rolls back rather than leaving rows pointing at a
     path the bytes never reached.
     """
-    try:
-        source_full = default_storage.path(source)
-        destination_full = default_storage.path(destination)
-    except NotImplementedError:
-        return _relocate_without_paths(source, destination)
-
-    if not os.path.exists(source_full):
+    is_dir = default_storage.is_dir(source)
+    if not is_dir and not default_storage.is_file(source):
         return False
-    if os.path.isdir(source_full) != expect_dir:
+    if is_dir != expect_dir:
         logger.warning(
             "Not moving '%s': it is a %s, the row says %s",
             scrub(source),
-            "directory" if os.path.isdir(source_full) else "file",
+            "directory" if is_dir else "file",
             "directory" if expect_dir else "file",
         )
         return False
-    os.makedirs(os.path.dirname(destination_full), exist_ok=True)
-    if expect_dir:
-        os.rename(source_full, destination_full)
-    else:
-        # move_node_storage refused a path another row keeps its bytes at,
-        # so a blob still there is an orphan; os.rename would refuse it on
-        # Windows.
-        try:
-            os.replace(source_full, destination_full)
-        except PermissionError:
-            # Windows will not move a file someone is reading (a download, an
-            # analysis): copy it, and leave the source if it is still held.
-            shutil.copyfile(source_full, destination_full)
-            try:
-                os.remove(source_full)
-            except OSError:
-                logger.warning("Could not remove moved blob %s", scrub(source))
-    return True
-
-
-def _relocate_without_paths(source, destination):
-    """Fallback for backends with no local filesystem paths (object storage)."""
-    if not default_storage.exists(source):
-        return False
-    saved = _copy_blob(source, destination)
-    if saved != destination:
-        # The backend picked a different name, so the caller's stored path
-        # would be wrong; undo and fail loudly rather than lose the bytes.
-        default_storage.delete(saved)
-        raise OSError(f"Storage refused the destination path {destination!r}")
-    default_storage.delete(source)
+    default_storage.move(source, destination)
     return True
 
 

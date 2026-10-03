@@ -4,9 +4,13 @@ import os
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.files.base import ContentFile
 from django.test import TestCase
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
+from workspace.files.services import FileService
 from workspace.files.sync import FileSyncService
 
 User = get_user_model()
@@ -94,3 +98,32 @@ class FileSyncServiceStoragePrefixTests(TestCase):
 
         f.refresh_from_db()
         self.assertIsNone(f.deleted_at)
+
+
+class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
+    """A username that is not a plain path segment must not widen the walk.
+
+    Django's username validator accepts ``..``, and the root of such an
+    account, ``files/users/..``, is the parent of every other user's tree: a
+    sync that followed it would register their files as the account's own.
+    """
+
+    def setUp(self):
+        super().setUp()
+        alice = User.objects.create_user(username="alice", password="pw")
+        FileService.create_file(
+            alice, "secret.txt", content=ContentFile(b"alice's secret")
+        )
+        self.intruder = User.objects.create_user(username="..", password="pw")
+
+    def test_the_recursive_sync_adopts_nothing(self):
+        with self.assertRaises(SuspiciousFileOperation):
+            FileSyncService().sync_user_recursive(self.intruder)
+
+        self.assertFalse(File.objects.filter(owner=self.intruder).exists())
+
+    def test_the_shallow_sync_adopts_nothing(self):
+        with self.assertRaises(SuspiciousFileOperation):
+            FileSyncService().sync_folder_shallow(self.intruder)
+
+        self.assertFalse(File.objects.filter(owner=self.intruder).exists())

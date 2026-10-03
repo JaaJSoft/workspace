@@ -35,6 +35,13 @@ def file_upload_path(instance, filename):
     return posixpath.join(root, filename)
 
 
+# The files and notes activity feeds split the file event stream on these two
+# conditions. The File recent-event indexes are partial on exactly them, so a
+# feed query only reads its index when it filters with the same Q.
+FILE_FEED_Q = Q(node_type="file") & ~Q(mime_type="text/markdown")
+NOTE_FEED_Q = Q(node_type="file", mime_type="text/markdown")
+
+
 class FileQuerySet(models.QuerySet):
     def name_ordered(self, *prefix_fields):
         """Sort by name case-insensitively, with optional leading fields.
@@ -142,6 +149,11 @@ class File(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # created_at of the newest FileEvent on this row, kept by FileEvent.save.
+    last_event_at = models.DateTimeField(null=True, blank=True, editable=False)
+    # Same, among events not by the owner (system events included): ranks the
+    # owner's files in a feed that hides the owner's own events.
+    last_foreign_event_at = models.DateTimeField(null=True, blank=True, editable=False)
 
     # Locking
     locked_by = models.ForeignKey(
@@ -193,6 +205,42 @@ class File(models.Model):
             ),
             models.Index(
                 fields=["parent", "deleted_at", "name"], name="file_parent_del_name"
+            ),
+            # Serve the activity feeds (services.events.recent_feed_events):
+            # each access arm reads its newest-event files in index order and
+            # stops at the limit. One pair per feed, so a notes feed never
+            # walks past thousands of photos to find its few notes.
+            models.Index(
+                fields=["owner", "-last_event_at"],
+                condition=FILE_FEED_Q & Q(last_event_at__isnull=False),
+                name="file_owner_recent_file",
+            ),
+            models.Index(
+                fields=["owner", "-last_event_at"],
+                condition=NOTE_FEED_Q & Q(last_event_at__isnull=False),
+                name="file_owner_recent_note",
+            ),
+            models.Index(
+                fields=["owner", "-last_foreign_event_at"],
+                condition=FILE_FEED_Q & Q(last_foreign_event_at__isnull=False),
+                name="file_owner_foreign_file",
+            ),
+            models.Index(
+                fields=["owner", "-last_foreign_event_at"],
+                condition=NOTE_FEED_Q & Q(last_foreign_event_at__isnull=False),
+                name="file_owner_foreign_note",
+            ),
+            models.Index(
+                fields=["group", "-last_event_at"],
+                condition=FILE_FEED_Q
+                & Q(group__isnull=False, last_event_at__isnull=False),
+                name="file_group_recent_file",
+            ),
+            models.Index(
+                fields=["group", "-last_event_at"],
+                condition=NOTE_FEED_Q
+                & Q(group__isnull=False, last_event_at__isnull=False),
+                name="file_group_recent_note",
             ),
             # Serves the "Recent" views: filter (owner, deleted_at IS NULL)
             # then ORDER BY updated_at DESC, LOWER(name) with a small LIMIT.
@@ -925,6 +973,38 @@ class FileEvent(models.Model):
         return (
             f"{self.action} on {self.file_id} by {self.actor_id} at {self.created_at}"
         )
+
+    def save(self, *args, **kwargs):
+        # The activity feeds find events through File.last_event_at and
+        # last_foreign_event_at, so an event saved without its bump would
+        # never surface. bulk_create skips this: set the columns by hand there.
+        # A value newer than the real newest event (a backdated event) only
+        # costs the feed a wider read; an older one hides events.
+        if not self._state.adding:
+            super().save(*args, **kwargs)
+            return
+        with transaction.atomic(using=kwargs.get("using")):
+            super().save(*args, **kwargs)
+            row = File.objects.using(self._state.db).filter(pk=self.file_id)
+            at = self.created_at
+            row.filter(Q(last_event_at__isnull=True) | Q(last_event_at__lt=at)).update(
+                last_event_at=at
+            )
+            if self.actor_id is not None:
+                row = row.exclude(owner_id=self.actor_id)
+            row.filter(
+                Q(last_foreign_event_at__isnull=True) | Q(last_foreign_event_at__lt=at)
+            ).update(last_foreign_event_at=at)
+        if FileEvent.file.is_cached(self):
+            # A later full save() of that instance must not write the old values back.
+            file = self.file
+            if file.last_event_at is None or file.last_event_at < at:
+                file.last_event_at = at
+            foreign = self.actor_id is None or self.actor_id != file.owner_id
+            if foreign and (
+                file.last_foreign_event_at is None or file.last_foreign_event_at < at
+            ):
+                file.last_foreign_event_at = at
 
     @property
     def icon(self):

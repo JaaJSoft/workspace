@@ -9,8 +9,9 @@ raw events into UI-ready timeline rows.
 import logging
 
 from django.db import transaction
+from django.db.models import Q
 
-from ..models import FileEvent
+from ..models import File, FileEvent
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,92 @@ def events_for_file(file):
         .select_related("actor")
         .order_by("-created_at")
     )
+
+
+# Past this many candidate files per arm, widening costs more than reading the
+# accessible set once, and the id list nears the SQL parameter limit.
+_MAX_FEED_CANDIDATES = 4096
+
+
+def _feed_arms(viewer, exclude_actor_id):
+    """``(filter, ranking column)`` for each arm of a feed read.
+
+    When the excluded actor is the viewer (the dashboard) or there is no
+    viewer, the excluded actor's own files are ranked by their newest event by
+    someone else, and dropped from every other arm: ranked by their newest
+    event, they would surface the very events the feed hides.
+    """
+    from .files import FileService
+
+    arms = [{}] if viewer is None else FileService.access_arms(viewer)
+    if exclude_actor_id is None or (
+        viewer is not None and viewer.pk != exclude_actor_id
+    ):
+        return [(Q(**arm), "last_event_at") for arm in arms]
+    ranked = [(Q(owner_id=exclude_actor_id), "last_foreign_event_at")]
+    for arm in arms:
+        if arm.keys() != {"owner"}:
+            ranked.append((Q(**arm) & ~Q(owner_id=exclude_actor_id), "last_event_at"))
+    return ranked
+
+
+def recent_feed_events(
+    feed_q, *, owner_id=None, viewer=None, exclude_actor_id=None, limit=10, offset=0
+):
+    """Newest events on files matching *feed_q*, for an activity feed.
+
+    *feed_q* is ``FILE_FEED_Q`` or ``NOTE_FEED_Q``. *owner_id* narrows to one
+    user's files; *viewer* (``None`` for no access check) narrows to the files
+    they can access, per ``FileService.access_arms``; *exclude_actor_id* drops
+    that user's events (system events, with no actor, stay).
+
+    Each arm yields a batch of its files ranked by newest event, through the
+    File recent-event indexes, and only those files' events are read: the cost
+    follows the page, not the number of accessible files. Nothing outside the
+    batch is newer than the last file of a full arm (the floor), so the
+    candidates' events from the floor up are exact, and the first batch fills
+    the page whenever each file's ranking column is its newest kept event.
+    When it is not (the viewer's events on someone else's file, a backdated
+    event), the batch widens until the page fills, then gives way to a read
+    of the whole accessible set.
+    """
+    from .files import FileService
+
+    needed = offset + limit
+    if needed <= 0:
+        return []
+    files = File.objects.filter(feed_q, last_event_at__isnull=False)
+    if owner_id is not None:
+        files = files.filter(owner_id=owner_id)
+    arms = _feed_arms(viewer, exclude_actor_id)
+    events = FileEvent.objects.select_related("actor", "file").order_by("-created_at")
+    if exclude_actor_id is not None:
+        events = events.exclude(actor_id=exclude_actor_id)
+
+    batch = needed
+    while batch <= _MAX_FEED_CANDIDATES:
+        candidate_ids, floor = set(), None
+        for arm, column in arms:
+            newest = list(
+                files.filter(arm, **{f"{column}__isnull": False})
+                .order_by(f"-{column}")
+                .values_list("pk", column)[:batch]
+            )
+            candidate_ids.update(pk for pk, _ in newest)
+            if len(newest) == batch:
+                arm_floor = newest[-1][1]
+                floor = arm_floor if floor is None else max(floor, arm_floor)
+        page = events.filter(file_id__in=candidate_ids)
+        if floor is not None:
+            page = page.filter(created_at__gte=floor)
+        page = list(page[:needed])
+        if floor is None or len(page) == needed:
+            return page[offset:]
+        batch *= 4
+
+    if viewer is not None:
+        files = files.filter(pk__in=FileService.accessible_file_ids(viewer))
+    return list(events.filter(file__in=files)[offset:needed])
 
 
 def serialize_event(event):

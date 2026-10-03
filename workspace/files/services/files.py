@@ -10,6 +10,7 @@ import enum
 import logging
 
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -66,6 +67,23 @@ class FileService:
             {"shares__shared_with_group__in": user.groups.all()},
             {"shares__shared_with_project__in": user_project_ids(user)},
         )
+
+    @staticmethod
+    def access_arms(user):
+        """``_access_branches`` with the group-folder branch split per group.
+
+        ``group_id IN (...)`` cannot be read in index order, so a caller that
+        wants the newest rows of each arm through an index range needs one
+        equality per group.
+        """
+        arms = []
+        for branch in FileService._access_branches(user):
+            if branch.keys() == {"group__in"}:
+                group_ids = branch["group__in"].values_list("pk", flat=True)
+                arms.extend({"group_id": group_id} for group_id in group_ids)
+            else:
+                arms.append(branch)
+        return arms
 
     @staticmethod
     def accessible_files_q(user):
@@ -410,7 +428,11 @@ class FileService:
 
         # Update owner when moving from group to personal
         if old_group and not new_group and new_owner:
-            File.objects.filter(file_obj._descendant_filter()).update(owner=new_owner)
+            # The old owner's events become foreign to the new one: an
+            # overestimate of last_foreign_event_at is safe, a stale one hides them.
+            File.objects.filter(file_obj._descendant_filter()).update(
+                owner=new_owner, last_foreign_event_at=F("last_event_at")
+            )
             file_obj.owner = new_owner
 
         record_event(

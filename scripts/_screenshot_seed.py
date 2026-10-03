@@ -162,6 +162,12 @@ def _seed_files(alex, sam, group, now):
 
     def backdate_file(f, ts):
         _backdate(f, ts)
+        type(f).objects.filter(pk=f.pk, last_event_at__isnull=False).update(
+            last_event_at=ts
+        )
+        type(f).objects.filter(pk=f.pk, last_foreign_event_at__isnull=False).update(
+            last_foreign_event_at=ts
+        )
         FileEvent.objects.filter(file=f).update(created_at=ts)
 
     documents = FileService.create_folder(alex, "Documents")

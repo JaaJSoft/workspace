@@ -153,6 +153,24 @@ class NotesActivityProviderTests(TestCase):
 
         self.assertIn("Group Note", {e["description"] for e in events})
 
+    def test_recent_events_reach_notes_behind_newer_files(self):
+        """Newer non-note files never crowd the viewer's notes out of the
+        bounded candidate set the feed reads."""
+        for i in range(15):
+            photo = File.objects.create(
+                owner=self.alice,
+                name=f"photo-{i}.jpg",
+                node_type=File.NodeType.FILE,
+                mime_type="image/jpeg",
+            )
+            record_event(photo, self.alice, FileEvent.Action.CREATED)
+
+        events = self.provider.get_recent_events(None, limit=3, viewer_id=self.alice.id)
+
+        self.assertEqual(
+            {e["description"] for e in events}, {"Alice Note 1", "Alice Note 2"}
+        )
+
     def test_recent_events_url_opens_note(self):
         """The activity link opens the note in the notes app."""
         events = self.provider.get_recent_events(self.alice.id)

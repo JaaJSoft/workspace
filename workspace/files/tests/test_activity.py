@@ -382,3 +382,191 @@ class FilesActivityProviderTests(TestCase):
         stats = self.provider.get_stats(self.alice.id)
 
         self.assertEqual(stats["total_files"], 2)
+
+
+class RecentFeedEventsTests(TestCase):
+    """The feed reads a bounded set of candidate files per access arm."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+
+        self.alice = User.objects.create_user(username="alice", password="x")
+        self.bob = User.objects.create_user(username="bob", password="x")
+        self.team = Group.objects.create(name="team")
+        self.alice.groups.add(self.team)
+        self.team_root = File.objects.create(
+            owner=self.bob,
+            name="team",
+            node_type=File.NodeType.FOLDER,
+            group=self.team,
+        )
+        self.base = timezone.now() - timedelta(days=1)
+        self.minute = 0
+
+    def _file(self, owner, name, group=None, mime_type="text/plain"):
+        return File.objects.create(
+            owner=owner,
+            name=name,
+            node_type=File.NodeType.FILE,
+            mime_type=mime_type,
+            group=group,
+            parent=self.team_root if group else None,
+        )
+
+    def _event(self, file_obj, actor):
+        """Record an event one minute after the previous one, so the order is total."""
+        self.minute += 1
+        at = self.base + timedelta(minutes=self.minute)
+        event = record_event(file_obj, actor, FileEvent.Action.CONTENT_REPLACED)
+        FileEvent.objects.filter(pk=event.pk).update(created_at=at)
+        File.objects.filter(pk=file_obj.pk).update(last_event_at=at)
+        return event
+
+    def _expected(self, viewer, limit, offset, exclude_actor_id=None):
+        from workspace.files.services import FileService
+
+        qs = FileEvent.objects.filter(
+            file_id__in=FileService.accessible_file_ids(viewer),
+            file__node_type=File.NodeType.FILE,
+        ).exclude(file__mime_type="text/markdown")
+        if exclude_actor_id is not None:
+            qs = qs.exclude(actor_id=exclude_actor_id)
+        return list(
+            qs.order_by("-created_at").values_list("pk", flat=True)[
+                offset : offset + limit
+            ]
+        )
+
+    def _feed(self, viewer, limit, offset, exclude_actor_id=None):
+        from workspace.files.models import FILE_FEED_Q
+        from workspace.files.services.events import recent_feed_events
+
+        events = recent_feed_events(
+            FILE_FEED_Q,
+            viewer=viewer,
+            exclude_actor_id=exclude_actor_id,
+            limit=limit,
+            offset=offset,
+        )
+        return [e.pk for e in events]
+
+    def test_pages_match_every_accessible_event_newest_first(self):
+        own = [self._file(self.alice, f"own-{i}.txt") for i in range(6)]
+        team = [
+            self._file(self.bob, f"team-{i}.txt", group=self.team) for i in range(4)
+        ]
+        shared = [self._file(self.bob, f"shared-{i}.txt") for i in range(3)]
+        private = [self._file(self.bob, f"private-{i}.txt") for i in range(3)]
+        for f in shared:
+            FileShare.objects.create(file=f, shared_by=self.bob, shared_with=self.alice)
+        # One file collects a burst of the newest events, so a page can hold
+        # several events of the same candidate.
+        files = own + team + shared + private
+        for round_ in range(3):
+            for f in files:
+                self._event(f, self.bob if round_ % 2 else self.alice)
+        for _ in range(5):
+            self._event(team[0], self.bob)
+
+        pages = [(5, 0), (5, 5), (7, 12), (100, 0), (3, 40)]
+        for exclude in (None, self.alice.id, self.bob.id):
+            for limit, offset in pages:
+                with self.subTest(limit=limit, offset=offset, exclude=exclude):
+                    self.assertEqual(
+                        self._feed(self.alice, limit, offset, exclude),
+                        self._expected(self.alice, limit, offset, exclude),
+                    )
+        private_ids = {f.pk for f in private}
+        visible = FileEvent.objects.filter(pk__in=self._feed(self.alice, 100, 0))
+        self.assertFalse(visible.filter(file_id__in=private_ids).exists())
+
+    def _bob_event_behind_alices_edits(self):
+        """Bob's event on a team file, behind Alice's edits on 20 other team
+        files Bob owns: ranked by newest event, those files hold none of the
+        events a feed hiding Alice's own can show."""
+        older = self._file(self.bob, "older.txt", group=self.team)
+        bobs = self._event(older, self.bob)
+        for i in range(20):
+            self._event(
+                self._file(self.bob, f"team-{i}.txt", group=self.team), self.alice
+            )
+        return bobs
+
+    def test_widens_past_files_whose_newest_events_are_excluded(self):
+        bobs = self._bob_event_behind_alices_edits()
+
+        self.assertEqual(self._feed(self.alice, 3, 0, self.alice.id), [bobs.pk])
+
+    def test_falls_back_to_the_accessible_set_past_the_candidate_cap(self):
+        from unittest.mock import patch
+
+        bobs = self._bob_event_behind_alices_edits()
+
+        with patch("workspace.files.services.events._MAX_FEED_CANDIDATES", 4):
+            self.assertEqual(self._feed(self.alice, 3, 0, self.alice.id), [bobs.pk])
+            self.assertEqual(
+                self._feed(self.alice, 5, 2), self._expected(self.alice, 5, 2)
+            )
+
+    def test_own_files_rank_by_their_newest_event_by_someone_else(self):
+        """Alice's files whose newest events are all hers stay out of the
+        dashboard read: one pass over the foreign ranking finds Bob's event."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        older = self._file(self.alice, "older.txt")
+        bobs = self._event(older, self.bob)
+        for i in range(20):
+            self._event(self._file(self.alice, f"own-{i}.txt"), self.alice)
+        self._event(older, self.alice)
+
+        with CaptureQueriesContext(connection) as ctx:
+            self.assertEqual(self._feed(self.alice, 3, 0, self.alice.id), [bobs.pk])
+        event_reads = [q for q in ctx.captured_queries if "files_fileevent" in q["sql"]]
+        self.assertEqual(len(event_reads), 1)
+
+    def test_moving_a_team_file_to_personal_keeps_its_owners_events_visible(self):
+        """Bob's events on a team file become someone else's events once Alice
+        moves the file into her own space: her dashboard must still show them."""
+        from workspace.files.services import FileService
+
+        doc = self._file(self.bob, "doc.txt", group=self.team)
+        bobs = self._event(doc, self.bob)
+
+        mine = File.objects.create(
+            owner=self.alice, name="Mine", node_type=File.NodeType.FOLDER
+        )
+        FileService.move(doc, mine, acting_user=self.alice)
+
+        self.assertEqual(self._feed(self.alice, 5, 0, self.alice.id), [bobs.pk])
+
+    def test_feed_reads_a_bounded_set_of_files(self):
+        """No query enumerates the files the viewer can access: every read of
+        files_file stops at a LIMIT, so the cost follows the page size."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        for i in range(12):
+            own = self._file(self.alice, f"own-{i}.txt")
+            self._event(own, self.alice)
+            self._event(own, self.bob)
+        self._event(self._file(self.bob, "team.txt", group=self.team), self.bob)
+
+        # None is the profile read, Alice's own id the dashboard one.
+        for exclude in (None, self.alice.id):
+            with (
+                self.subTest(exclude=exclude),
+                CaptureQueriesContext(connection) as ctx,
+            ):
+                events = FilesActivityProvider().get_recent_events(
+                    None, limit=3, viewer_id=self.alice.id, exclude_actor_id=exclude
+                )
+
+            self.assertEqual(len(events), 3)
+            file_reads = [
+                q["sql"] for q in ctx.captured_queries if '"files_file"' in q["sql"]
+            ]
+            self.assertTrue(file_reads)
+            for sql in file_reads:
+                self.assertNotIn("UNION", sql)
+                self.assertIn("LIMIT", sql)

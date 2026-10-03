@@ -81,15 +81,25 @@ class NotesActivityProvider(ActivityProvider):
     def get_recent_events(
         self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
     ):
-        qs = self._events_qs(user_id, viewer_id)
-        if exclude_actor_id is not None:
-            qs = qs.exclude(actor_id=exclude_actor_id)
-        qs = qs.select_related("actor", "file").order_by("-created_at")[
-            offset : offset + limit
-        ]
+        from django.contrib.auth import get_user_model
+
+        from workspace.files.models import NOTE_FEED_Q
+        from workspace.files.services.events import recent_feed_events
+
+        viewer = None
+        if viewer_id is not None and viewer_id != user_id:
+            viewer = get_user_model().objects.get(pk=viewer_id)
+        feed = recent_feed_events(
+            NOTE_FEED_Q,
+            owner_id=user_id,
+            viewer=viewer,
+            exclude_actor_id=exclude_actor_id,
+            limit=limit,
+            offset=offset,
+        )
 
         events = []
-        for ev in qs:
+        for ev in feed:
             # System-driven events (Celery cleanup, sync soft-delete) have no
             # actor; emit a null actor rather than falsely crediting the owner.
             if ev.actor is not None:

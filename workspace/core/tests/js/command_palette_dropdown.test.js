@@ -17,6 +17,7 @@ const COMMANDS = [
 // Arrays built inside the vm carry that realm's prototypes; normalize before
 // comparing them with test-side literals.
 const names = (palette) => Array.from(palette.commands, (c) => c.name);
+const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 class FakeInput {
   constructor() {
@@ -32,7 +33,7 @@ class FakeInput {
   dispatchEvent(event) { this.events.push(event.type); }
 }
 
-function boot({ fetchImpl, scope = null } = {}) {
+function boot({ fetchImpl, putImpl, scope = null } = {}) {
   const listeners = {};
   const windowListeners = {};
   const input = new FakeInput();
@@ -59,7 +60,7 @@ function boot({ fetchImpl, scope = null } = {}) {
     fetch: (url, options) => {
       if (options?.method === 'PUT') {
         writes.push({ url, body: JSON.parse(options.body) });
-        return Promise.resolve({ ok: true });
+        return putImpl ? putImpl() : Promise.resolve({ ok: true });
       }
       fetchCalls.push(url);
       return fetchImpl ? fetchImpl(url) : new Promise(() => {});
@@ -364,11 +365,12 @@ describe('the "Mine only" switch', () => {
     assert.deepEqual(fetchCalls, ['/api/v1/search?q=budget&scope=mine']);
   });
 
-  test('flipping it saves the preference and searches again under the new scope', () => {
+  test('flipping it saves the preference and searches again under the new scope', async () => {
     const { palette, fetchCalls, writes, input } = boot();
     palette.query = 'budget';
     palette.search();
     palette.setMineOnly(true);
+    await flush();
 
     assert.deepEqual(writes, [{ url: '/api/v1/settings/core/search_scope', body: { value: 'mine' } }]);
     assert.deepEqual(fetchCalls, [
@@ -378,18 +380,47 @@ describe('the "Mine only" switch', () => {
     assert.equal(input.focused, true);
   });
 
-  test('setting the scope it already has writes nothing', () => {
+  test('setting the scope it already has writes nothing', async () => {
     const { palette, writes } = boot({ scope: 'mine' });
     palette.setMineOnly(true);
+    await flush();
     assert.deepEqual(writes, []);
   });
 
-  test('the other palettes of the page follow, without saving twice', () => {
+  test('the other palettes of the page follow, without saving twice', async () => {
     const { palette, mount, writes } = boot();
     const other = mount();
     palette.setMineOnly(true);
+    await flush();
     assert.equal(other.isMineOnly(), true);
     assert.equal(writes.length, 1);
+  });
+
+  test('rapid toggles are saved one after the other, so the last click is what stays', async () => {
+    const pending = [];
+    const { palette, writes } = boot({
+      putImpl: () => new Promise((resolve) => pending.push(resolve)),
+    });
+    palette.setMineOnly(true);
+    palette.setMineOnly(false);
+    await flush();
+    assert.deepEqual(writes.map((w) => w.body.value), ['mine']);
+
+    pending.shift()({ ok: true });
+    await flush();
+    assert.deepEqual(writes.map((w) => w.body.value), ['mine', 'all']);
+  });
+
+  test('a failed write does not stop the next one', async () => {
+    let calls = 0;
+    const { palette, writes } = boot({
+      putImpl: () => (++calls === 1 ? Promise.reject(new Error('offline')) : Promise.resolve({ ok: true })),
+    });
+    palette.setMineOnly(true);
+    palette.setMineOnly(false);
+    await flush();
+    await flush();
+    assert.deepEqual(writes.map((w) => w.body.value), ['mine', 'all']);
   });
 
   test('an empty result under "Mine only" offers to search everything', async () => {

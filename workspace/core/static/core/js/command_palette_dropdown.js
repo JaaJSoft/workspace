@@ -1,3 +1,7 @@
+// Shared by every palette of the page: scope writes are chained so rapid
+// toggles reach the server in click order and the last one is what stays saved.
+let searchScopeWrite = Promise.resolve();
+
 window.commandPaletteDropdown = function () {
   const STORAGE_KEY = 'workspace:recentCommands';
   const MAX_QUICK_ACTIONS = 5;
@@ -162,11 +166,11 @@ window.commandPaletteDropdown = function () {
       const scope = mineOnly ? SCOPE_MINE : SCOPE_ALL;
       if (scope === this.scope) return;
       this.scope = scope;
-      fetch('/api/v1/settings/core/search_scope', {
+      searchScopeWrite = searchScopeWrite.then(() => fetch('/api/v1/settings/core/search_scope', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value: scope }),
-      }).catch(() => {});
+      }).catch(() => {}));
       window.dispatchEvent(new CustomEvent(SCOPE_EVENT, { detail: { scope } }));
       this.search();
       this.$nextTick(() => this.$refs.input?.focus());

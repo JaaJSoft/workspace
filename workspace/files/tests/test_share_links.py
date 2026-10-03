@@ -260,7 +260,7 @@ class PublicShareLinkAPITests(APITestCase):
         self.assertIn(b"Hello World", b"".join(resp.streaming_content))
 
     def test_get_content_increments_view_count(self):
-        self.client.get(f"/api/v1/files/shared/{self.link.token}/content")
+        self.client.get(f"/api/v1/files/shared/{self.link.token}/content").close()
         self.link.refresh_from_db()
         self.assertEqual(self.link.view_count, 1)
         self.assertIsNotNone(self.link.last_accessed_at)
@@ -288,14 +288,16 @@ class PublicShareLinkAPITests(APITestCase):
             f"/api/v1/files/shared/{self.link.token}/content?access_token={access_token}"
         )
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        resp.close()
 
     def test_download_file(self):
         resp = self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIn("attachment", resp.get("Content-Disposition", ""))
+        resp.close()
 
     def test_download_increments_view_count(self):
-        self.client.get(f"/api/v1/files/shared/{self.link.token}/download")
+        self.client.get(f"/api/v1/files/shared/{self.link.token}/download").close()
         self.link.refresh_from_db()
         self.assertEqual(self.link.view_count, 1)
 

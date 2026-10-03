@@ -57,10 +57,12 @@ def local_path(field_file, *, max_bytes=MAX_COPY_BYTES):
 
     if field_file.size > max_bytes:
         raise MediaToolError("the file is too large to copy for reading")
-    with tempfile.NamedTemporaryFile(prefix="media-") as copy:
+    # Closed before the path is handed out: Windows refuses to let another
+    # process open a temporary file that is still open for delete-on-close.
+    with tempfile.NamedTemporaryFile(prefix="media-", delete_on_close=False) as copy:
         with field_file.open("rb") as source:
             shutil.copyfileobj(source, copy, _COPY_CHUNK)
-        copy.flush()
+        copy.close()
         yield copy.name
 
 

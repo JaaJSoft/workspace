@@ -99,3 +99,11 @@ VAULT_CSP = {
 # exist to prove the vault's dispatch and must never be written in production.
 # The test runner turns this on for the whole suite.
 VAULT_TEST_SUITES = env_bool("VAULT_TEST_SUITES", False)
+# State overrides for the crypto suite manifest, e.g.
+# {"aead": {"1": "superseded", "240": "current"}}. Read only under
+# VAULT_TEST_SUITES, so the algorithm-replacement rehearsal can make the test
+# AEAD the one every write uses. Set by tests through override_settings only.
+VAULT_TEST_MANIFEST = None
+# Set by workspace.test_runner, never from the environment: vault.E002 refuses
+# the two switches above in any process the runner did not start.
+VAULT_TEST_RUNNER_ACTIVE = False

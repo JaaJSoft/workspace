@@ -78,6 +78,9 @@ class MediaRootTestRunner(DiscoverRunner):
             _override_from_env("PREVIEW_VISIBILITY", "all"),
             _override_from_env("VAULT_TEST_SUITES", "1"),
         ]
+        marker = override_settings(VAULT_TEST_RUNNER_ACTIVE=True)
+        marker.enable()
+        self._restore_settings.append(marker.disable)
 
     def teardown_test_environment(self, **kwargs):
         for restore in reversed(self._restore_settings):

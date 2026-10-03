@@ -33,3 +33,16 @@ def search_people(
     if getattr(requesting_user, "pk", None):
         qs = qs.exclude(pk=requesting_user.pk)
     return qs.order_by("username")[:limit]
+
+
+def active_user_with_email(email):
+    """The active, non-bot user whose email is ``email`` (case-insensitive), or ``None``."""
+    email = (email or "").strip()
+    if not email:
+        return None
+    return (
+        get_user_model()
+        .objects.filter(email__iexact=email, is_active=True, bot_profile__isnull=True)
+        .order_by("pk")
+        .first()
+    )

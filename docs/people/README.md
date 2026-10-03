@@ -14,7 +14,7 @@ An address book for the people around your data: personal and group contacts, li
 - **vCard import** - Import a `.vcf` file from a phone, Google Contacts or Nextcloud; a contact already in the book (same card or same email) is updated rather than duplicated, and vCard groups become lists
 - **vCard export** - Download one contact, a list, an address book or everything as a vCard 4.0 file, photos included
 - **Search** - Search by name, organization, email or phone as you type, and jump to a contact from the command palette (Ctrl+K)
-- **Mail recipients** - Contacts are suggested first in the mail composer's To, Cc and Bcc fields, and a past correspondent or a workspace account can be added to your contacts from there (an existing contact with that email is reused, never duplicated)
+- **Mail integration** - Contacts are suggested first in the mail composer's To, Cc and Bcc fields, hovering an address in a message shows the matching contact's card, and a past correspondent or a workspace account can be added to your contacts from either place (an existing contact with that email is reused, never duplicated)
 - **Three-panel layout** - Address books and lists in the sidebar, an alphabetical contact list in the middle, and the contact's card on the right
 
 ## Address books and lists

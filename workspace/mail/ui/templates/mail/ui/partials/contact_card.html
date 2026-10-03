@@ -1,0 +1,115 @@
+<div
+  class="p-3 w-72"
+  data-mail-contact-card
+  data-email="{{ email }}"
+  data-name="{{ name }}"
+  {% if account %}data-user-id="{{ account.pk }}"{% endif %}
+>
+  <div class="flex items-center gap-3 mb-2">
+    {% if person.linked_user_id %}
+      <user-avatar user-id="{{ person.linked_user_id }}" username="{{ person.display_name }}" size="md"></user-avatar>
+    {% elif person %}
+      <user-avatar username="{{ person.display_name }}" color-key="{{ person.uuid }}" size="md"{% if person.has_avatar %} src="{% url 'person-avatar' person.uuid %}?v={{ person.updated_at|date:'U' }}"{% endif %}></user-avatar>
+    {% elif account %}
+      <user-avatar user-id="{{ account.pk }}" username="{{ account.username }}" size="md"></user-avatar>
+    {% else %}
+      <user-avatar username="{{ name|default:email }}" color-key="{{ email|lower }}" size="md"></user-avatar>
+    {% endif %}
+    <div class="min-w-0 flex-1">
+      <div class="font-semibold text-sm truncate">
+        {% if person %}
+          {{ person.display_name }}
+        {% elif account %}
+          {{ account.get_full_name|default:account.username }}
+        {% else %}
+          {{ name|default:email }}
+        {% endif %}
+      </div>
+      {% if person.title or person.organization %}
+        <div class="text-xs text-base-content/60 truncate">
+          {{ person.title }}
+          {% if person.title and person.organization %}&middot;{% endif %}
+          {{ person.organization }}
+        </div>
+      {% elif not person %}
+        {% if name or account %}<div class="text-xs text-base-content/50 truncate">{{ email }}</div>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if person %}
+    <div class="space-y-1 text-xs text-base-content/60 mb-3">
+      {% for entry in person.emails %}
+        <div class="flex items-center gap-1.5 min-w-0">
+          <i data-lucide="mail" class="w-3 h-3 shrink-0"></i>
+          <span
+            class="truncate{% if entry.value|lower == email|lower %} text-base-content font-medium{% endif %}"
+          >{{ entry.value }}</span>
+          <span
+            class="shrink-0 text-[10px] uppercase tracking-wide text-base-content/40"
+          >{{ entry.type }}</span>
+        </div>
+      {% endfor %}
+      {% for entry in person.phones %}
+        <a
+          href="tel:{{ entry.value }}"
+          class="flex items-center gap-1.5 min-w-0 hover:text-base-content"
+        >
+          <i data-lucide="phone" class="w-3 h-3 shrink-0"></i>
+          <span class="truncate">{{ entry.value }}</span>
+          <span
+            class="shrink-0 text-[10px] uppercase tracking-wide text-base-content/40"
+          >{{ entry.type }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% elif account %}
+    <div class="flex items-center gap-1.5 text-xs text-base-content/60 mb-3">
+      <i data-lucide="building-2" class="w-3 h-3 shrink-0"></i>
+      <span class="truncate">Workspace account &middot; @{{ account.username }}</span>
+    </div>
+  {% else %}
+    <div class="mb-1"></div>
+  {% endif %}
+
+  <div class="flex gap-1">
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs flex-1 gap-1"
+      data-mail-card-action="copy"
+    >
+      <i data-lucide="copy" class="w-3 h-3"></i>
+      <span data-label>Copy email</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs flex-1 gap-1"
+      data-mail-card-action="compose"
+    >
+      <i data-lucide="send" class="w-3 h-3"></i>
+      Send email
+    </button>
+  </div>
+  <div class="mt-2 pt-2 border-t border-base-200">
+    {% if person %}
+      <a
+        href="{% url 'people_ui:index' %}?person={{ person.uuid }}"
+        target="_blank"
+        rel="noopener"
+        class="btn btn-ghost btn-xs w-full gap-1"
+      >
+        <i data-lucide="contact" class="w-3 h-3"></i>
+        Open in People
+      </a>
+    {% else %}
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs w-full gap-1 text-module"
+        data-mail-card-action="add"
+      >
+        <i data-lucide="user-plus" class="w-3 h-3"></i>
+        Add to contacts
+      </button>
+    {% endif %}
+  </div>
+</div>

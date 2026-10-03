@@ -49,7 +49,10 @@ class _SignatureRefused(Exception):
 
 
 class _ContentsChanged(Exception):
-    """The folder does not hold what the request says it holds.
+    """The stored state is not what the request says it is.
+
+    A folder that does not hold the submitted entries, a tag carried by other
+    entries than the submitted ones, a row that moved since it was read.
 
     Raised for the same reason as the one above: the checks run inside the
     transaction, so a return would commit it. ``detail`` is chosen at the raise

@@ -46,6 +46,14 @@ class Entry:
     is_file: bool
 
 
+@dataclass(frozen=True)
+class Blob:
+    """A blob found by :meth:`Backend.iter_blobs`: its full name and size."""
+
+    name: str
+    size: int
+
+
 def checked_name(name):
     """*name*, refused when it could resolve to the root or above it.
 
@@ -180,6 +188,17 @@ class Backend(abc.ABC):
     @abc.abstractmethod
     def scan(self, name):
         """The :class:`Entry` list of directory *name*'s children, in no order."""
+
+    @abc.abstractmethod
+    def iter_blobs(self, name):
+        """Every :class:`Blob` under directory *name*, at any depth, in no order.
+
+        Nothing under a missing directory: an empty iteration, not an error.
+        """
+
+    @abc.abstractmethod
+    def iter_dirs(self, name):
+        """The full name of every directory under *name*, at any depth."""
 
     @abc.abstractmethod
     def make_dir(self, name):

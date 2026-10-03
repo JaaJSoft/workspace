@@ -981,7 +981,8 @@ class FileEvent(models.Model):
         # A value newer than the real newest event (a backdated event) only
         # costs the feed a wider read; an older one hides events.
         if not self._state.adding:
-            return super().save(*args, **kwargs)
+            super().save(*args, **kwargs)
+            return
         with transaction.atomic(using=kwargs.get("using")):
             super().save(*args, **kwargs)
             row = File.objects.using(self._state.db).filter(pk=self.file_id)

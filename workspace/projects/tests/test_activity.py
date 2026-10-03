@@ -40,6 +40,20 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
         self.assertEqual(event["actor"]["username"], "admin1")
         self.assertIsNotNone(event["timestamp"])
 
+    def test_recent_events_exclude_actor_before_the_limit(self):
+        create_task(self.project, self.member, title="Member work")
+        TaskEvent.objects.filter(actor=self.admin).update(
+            created_at=timezone.now() + timedelta(hours=1)
+        )
+
+        events = self.provider.get_recent_events(
+            None, limit=1, exclude_actor_id=self.admin.pk
+        )
+
+        self.assertEqual(
+            [e["actor"]["username"] for e in events], [self.member.username]
+        )
+
     def test_deleted_task_event_falls_back_to_project_url(self):
         expected = f"{self.project.key}-{self.task.number} · {self.task.title}"
         # Raw delete: SET_NULL keeps the created event but drops its task FK.

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -189,6 +189,27 @@ class NotesActivityProviderTests(TestCase):
 
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["actor"]["username"], "bob")
+
+    def test_recent_events_exclude_actor_before_the_limit(self):
+        """The excluded actor's events never take a slot; null actors stay."""
+        FileEvent.objects.all().delete()
+        record_event(self.alice_note1, self.bob, FileEvent.Action.CONTENT_REPLACED)
+        record_event(self.alice_note1, None, FileEvent.Action.DELETED)
+        for _ in range(3):
+            record_event(
+                self.alice_note1, self.alice, FileEvent.Action.CONTENT_REPLACED
+            )
+        FileEvent.objects.filter(actor=self.alice).update(
+            created_at=timezone.now() + timedelta(hours=1)
+        )
+
+        events = self.provider.get_recent_events(
+            None, limit=2, exclude_actor_id=self.alice.id
+        )
+
+        self.assertCountEqual(
+            [(e["actor"] or {}).get("id") for e in events], [None, self.bob.id]
+        )
 
     # -- get_stats -------------------------------------------------------
 

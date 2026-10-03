@@ -39,12 +39,16 @@ class ProjectsActivityProvider(ActivityProvider):
         )
         return {row["day"]: row["count"] for row in rows}
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+    def get_recent_events(
+        self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
+    ):
         from workspace.projects.models import TaskEvent
 
         qs = TaskEvent.objects.all()
         if user_id is not None:
             qs = qs.filter(actor_id=user_id)
+        if exclude_actor_id is not None:
+            qs = qs.exclude(actor_id=exclude_actor_id)
         qs = (
             qs.filter(self._visibility_filter(user_id, viewer_id))
             .select_related("actor", "project")

@@ -112,8 +112,7 @@ def get_recent_events(
         else:
             allowed_sources = set(activity_registry.get_all()) - hidden
 
-    needs_post_filter = exclude_user_id is not None or search
-    if needs_post_filter:
+    if search:
         fetch_limit = limit + offset + 50
     else:
         fetch_limit = limit
@@ -121,17 +120,12 @@ def get_recent_events(
     events = activity_registry.get_recent_events(
         user_id,
         limit=fetch_limit,
-        offset=0 if needs_post_filter else offset,
+        offset=0 if search else offset,
         viewer_id=viewer_id,
         source=source,
         exclude_actor_id=exclude_user_id,
         allowed_sources=allowed_sources,
     )
-
-    if exclude_user_id is not None:
-        events = [
-            e for e in events if (e.get("actor") or {}).get("id") != exclude_user_id
-        ]
 
     if search:
         q = search.lower()
@@ -147,8 +141,6 @@ def get_recent_events(
                 else ""
             ).lower()
         ]
-
-    if needs_post_filter:
         events = events[offset : offset + limit]
     return events
 

@@ -248,6 +248,19 @@ class CalendarActivityProviderTests(TestCase):
         stats = self.provider.get_stats(self.alice.id, viewer_id=None)
         self.assertEqual(stats["total_events"], 3)
 
+    def test_recent_events_exclude_actor_keeps_synced_events(self):
+        """Excluding the owner drops their native events, not synced ones."""
+        self._make_external_event_for_alice(title="Feed Sync Event")
+        Event.objects.filter(
+            owner=self.alice, calendar__external_source__isnull=True
+        ).update(updated_at=self.ts + timedelta(hours=1))
+
+        events = self.provider.get_recent_events(
+            None, limit=1, viewer_id=self.alice.id, exclude_actor_id=self.alice.id
+        )
+
+        self.assertEqual([e["description"] for e in events], ["Feed Sync Event"])
+
     # -- external events on profile mode ---------------------------------
 
     def test_profile_recent_events_excludes_external(self):

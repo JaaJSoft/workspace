@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -209,6 +209,17 @@ class MailActivityProviderTests(TestCase):
         events = self.provider.get_recent_events(None)
         evt = next(e for e in events if e["description"] == "No name sender")
         self.assertEqual(evt["actor"]["full_name"], "noname@example.com")
+
+    def test_recent_events_exclude_actor_before_the_limit(self):
+        MailMessage.objects.filter(account=self.account).update(
+            date=self.ts + timedelta(hours=1)
+        )
+
+        events = self.provider.get_recent_events(
+            None, limit=1, exclude_actor_id=self.user.id
+        )
+
+        self.assertEqual([e["description"] for e in events], ["Received by Bob"])
 
     def test_recent_events_respects_limit_and_offset(self):
         events = self.provider.get_recent_events(None, limit=2, offset=0)

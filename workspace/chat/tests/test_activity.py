@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
@@ -129,6 +131,17 @@ class ChatActivityProviderTests(TestCase):
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["description"], "Alice Group 1")
+
+    def test_recent_events_exclude_actor_before_the_limit(self):
+        Conversation.objects.filter(pk=self.bob_group.pk).update(
+            created_at=self.ts + timedelta(hours=1)
+        )
+
+        events = self.provider.get_recent_events(
+            None, limit=1, viewer_id=self.bob.id, exclude_actor_id=self.bob.id
+        )
+
+        self.assertEqual([e["description"] for e in events], ["Alice Group 1"])
 
     def test_recent_events_excludes_dm(self):
         """DM conversations never appear in recent events."""

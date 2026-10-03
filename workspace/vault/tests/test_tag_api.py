@@ -7,6 +7,7 @@ it did not verify.
 """
 
 import uuid
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -256,15 +257,55 @@ class TagDeleteTests(TestCase):
         self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
         self.assertEqual(self.tag.entries.count(), 2)
 
-    def test_a_bad_signature_is_400_and_changes_nothing(self):
-        body = [self.resigned(e) for e in self.carriers]
-        body[1]["metadata_sig"] = sign(self.signer, {"v": 1, "type": "x"})
+    def test_a_bad_signature_is_400_and_rolls_back_the_earlier_writes(self):
+        # Entries are processed newest first, so the last one in that order is
+        # the one whose bad signature is met after another carrier was written.
+        order = list(VaultEntry.objects.filter(tags=self.tag))
+        first, last = order[0], order[-1]
+        body = [self.resigned(e) for e in order]
+        body[-1]["metadata_sig"] = sign(self.signer, {"v": 1, "type": "x"})
         self.assertEqual(self._post(body).status_code, 400)
-        self.assertEqual(
-            VaultEntry.objects.get(pk=self.carriers[0].pk).metadata_sig, "AQ"
-        )
+        self.assertEqual(VaultEntry.objects.get(pk=first.pk).metadata_sig, "AQ")
+        self.assertEqual(VaultEntry.objects.get(pk=last.pk).metadata_sig, "AQ")
         self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
         self.assertEqual(self.tag.entries.count(), 2)
+
+    def test_an_entry_rewritten_after_it_was_read_is_409_and_changes_nothing(self):
+        body = [self.resigned(e) for e in self.carriers]
+        moved = []
+
+        def verify_then_race(payload, public, signature):
+            verify_record(payload, public, signature)
+            if not moved:
+                moved.append(payload["entry_uuid"])
+                VaultEntry.objects.filter(pk=uuid.UUID(str(moved[0]))).update(
+                    metadata_sig="ZZ"
+                )
+
+        with patch("workspace.vault.views.tags.verify_record", verify_then_race):
+            # The race hits the first carrier read; the write meets a row that
+            # no longer holds the signature it was verified against.
+            response = self._post(body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+        stored = set(VaultEntry.objects.values_list("metadata_sig", flat=True))
+        self.assertFalse(stored & {item["metadata_sig"] for item in body})
+
+    def test_an_extra_entry_of_another_vault_is_409_and_changes_nothing(self):
+        stranger, _, _ = make_account("stranger")
+        foreign = VaultEntry.objects.create(
+            vault=make_vault(stranger),
+            type=EntryType.LOGIN,
+            encrypted_name=sealed("x"),
+            metadata_sig="AQ",
+        )
+        body = [self.resigned(e) for e in self.carriers]
+        body.append({"uuid": str(foreign.uuid), "metadata_sig": "AQ"})
+        self.assertEqual(self._post(body).status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        self.assertEqual(self.tag.entries.count(), 2)
+        self.assertEqual(VaultEntry.objects.get(pk=foreign.pk).metadata_sig, "AQ")
 
     def test_a_tag_out_of_reach_is_404(self):
         stranger, _, _ = make_account("stranger")

@@ -77,16 +77,20 @@ if STORAGE_BACKEND not in BLOB_BACKENDS:
     raise ImproperlyConfigured("STORAGE_BACKEND=s3 needs S3_BUCKET")
 _BLOB_OPTIONS = BLOB_BACKENDS[STORAGE_BACKEND]
 
-# Blob storage (workspace/common/storage). Two aliases over the same backend,
-# differing only in what a save under a taken name does. "files" holds
-# File.content, whose key is the node's tree path: a new version goes over the
-# old one. "default" keeps both: mail attachments are keyed by their file name,
+# Blob storage (workspace/common/storage). Two aliases over the same backend.
+# "files" holds File.content, whose key is the node's tree path, name as given:
+# a new version goes over the old one, and Django's rewrite of the name would
+# send "a b.txt" and "a_b.txt" to the same key. "default" keeps a taken name's
+# blob and picks another name: mail attachments are keyed by their file name,
 # and two "invoice.pdf" in one account are two blobs.
 _BLOBS = {"BACKEND": "workspace.common.storage.facade.BlobStorage"}
 
 STORAGES = {
     "default": {**_BLOBS, "OPTIONS": _BLOB_OPTIONS},
-    "files": {**_BLOBS, "OPTIONS": {**_BLOB_OPTIONS, "allow_overwrite": True}},
+    "files": {
+        **_BLOBS,
+        "OPTIONS": {**_BLOB_OPTIONS, "allow_overwrite": True, "verbatim_names": True},
+    },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },

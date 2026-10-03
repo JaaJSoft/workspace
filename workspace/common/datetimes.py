@@ -5,17 +5,30 @@ nobody types an offset. Interpreting them as UTC silently books meetings in
 the wrong hour, so they are anchored in the caller's timezone instead.
 """
 
+import re
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.utils import timezone
+
+# "2026-10-04 00:30 (Europe/Paris)": the shape the AI tools print times in,
+# which models copy verbatim into their next tool call.
+_TRAILING_ZONE = re.compile(r"^(?P<dt>.+?)\s*\((?P<zone>[A-Za-z0-9_+\-/]+)\)$")
 
 
 def parse_local_datetime(value: str, tz):
     """Parse an ISO 8601 datetime, interpreting naive values in *tz*.
 
-    Returns ``None`` when the string cannot be parsed, so callers can report
-    the bad input rather than raise.
+    A trailing ``(Area/City)`` zone name overrides *tz*. Returns ``None`` when
+    the string cannot be parsed, so callers can report the bad input rather
+    than raise.
     """
+    if match := _TRAILING_ZONE.match(value):
+        try:
+            tz = ZoneInfo(match["zone"])
+        except ZoneInfoNotFoundError, ValueError:
+            return None
+        value = match["dt"]
     try:
         dt = datetime.fromisoformat(value)
     except ValueError:

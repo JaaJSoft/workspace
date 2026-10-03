@@ -20,6 +20,16 @@ class ParseLocalDatetimeTests(SimpleTestCase):
         parsed = parse_local_datetime("2026-07-05T14:00:00+00:00", PARIS)
         self.assertEqual(parsed, datetime(2026, 7, 5, 14, tzinfo=UTC))
 
+    def test_trailing_zone_name_echoed_from_tool_output_is_honoured(self):
+        # The goal tools print "2026-10-04 00:30 (Europe/Paris)"; models echo it back.
+        parsed = parse_local_datetime("2026-10-04 00:30 (Europe/Paris)", UTC)
+        self.assertEqual(parsed, datetime(2026, 10, 3, 22, 30, tzinfo=UTC))
+
+    def test_unknown_trailing_zone_name_returns_none(self):
+        self.assertIsNone(
+            parse_local_datetime("2026-10-04 00:30 (Mars/Olympus)", PARIS)
+        )
+
     def test_unparseable_string_returns_none(self):
         self.assertIsNone(parse_local_datetime("next tuesday", PARIS))
         self.assertIsNone(parse_local_datetime("", PARIS))

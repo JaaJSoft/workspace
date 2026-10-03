@@ -107,10 +107,10 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         docs = FileService.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
 
-        with self.captureOnCommitCallbacks(execute=True):
-            with self.assertRaises(RuntimeError), transaction.atomic():
-                FileService.rename(docs, "Archive")
-                raise RuntimeError("the request failed after the move")
+        with self.captureOnCommitCallbacks(execute=True), transaction.atomic():
+            FileService.rename(docs, "Archive")
+            # The request fails after the move: its transaction rolls back.
+            transaction.set_rollback(True)
 
         docs.refresh_from_db()
         self.assertEqual(docs.name, "Docs")

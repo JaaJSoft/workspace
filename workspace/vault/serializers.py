@@ -437,3 +437,82 @@ class FolderDeleteSerializer(serializers.Serializer):
     entries = serializers.ListField(
         child=FolderDeleteEntrySerializer(), allow_empty=True, max_length=500
     )
+
+
+MAX_ITEMS = 200
+MAX_CIPHERTEXTS = 2000
+
+ITEM_KEYS = {
+    "metadata": {
+        "kind",
+        "encrypted_name",
+        "encrypted_description",
+        "metadata_sig",
+        "expected_sig",
+    },
+    "wrap": {"kind", "wrapped_key", "hpke_suite", "wrapped_key_expected"},
+    "folder": {"kind", "uuid", "encrypted_name", "metadata_sig", "expected_sig"},
+    "tag": {"kind", "uuid", "encrypted_name", "metadata_sig", "expected_sig"},
+    "entry": {
+        "kind",
+        "uuid",
+        "encrypted_name",
+        "encrypted_notes",
+        "fields",
+        "metadata_sig",
+        "expected_sig",
+    },
+}
+
+
+class MigrateItemSerializer(serializers.Serializer):
+    """One rewrite. The key set is exact per kind: a plaintext column in the
+    body is refused rather than ignored, so a migration can never carry a
+    change the signature was not meant to cover."""
+
+    kind = serializers.ChoiceField(choices=sorted(ITEM_KEYS))
+    uuid = serializers.UUIDField(required=False)
+    encrypted_name = _CiphertextField(required=False)
+    encrypted_description = _CiphertextField(required=False, allow_blank=True)
+    encrypted_notes = _CiphertextField(required=False, allow_blank=True)
+    fields = serializers.JSONField(required=False, validators=[validate_field_map])
+    metadata_sig = _OpaqueField(required=False)
+    expected_sig = _OpaqueField(required=False)
+    wrapped_key = _OpaqueField(required=False)
+    wrapped_key_expected = _OpaqueField(required=False)
+    hpke_suite = serializers.JSONField(required=False)
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict) or data.get("kind") not in ITEM_KEYS:
+            raise serializers.ValidationError("unknown kind")
+        if set(data) != ITEM_KEYS[data["kind"]]:
+            raise serializers.ValidationError("wrong key set for this kind")
+        return super().to_internal_value(data)
+
+
+class MigrateBatchSerializer(serializers.Serializer):
+    items = serializers.ListField(
+        child=MigrateItemSerializer(), min_length=1, max_length=MAX_ITEMS
+    )
+
+    def validate_items(self, items):
+        seen = set()
+        ciphertexts = 0
+        for item in items:
+            key = (item["kind"], item.get("uuid"))
+            if key in seen:
+                raise serializers.ValidationError("an item appears twice")
+            seen.add(key)
+            ciphertexts += sum(
+                1
+                for name in (
+                    "encrypted_name",
+                    "encrypted_description",
+                    "encrypted_notes",
+                )
+                if item.get(name)
+            )
+            ciphertexts += len(item.get("fields", {}))
+        if ciphertexts > MAX_CIPHERTEXTS:
+            raise serializers.ValidationError("too many ciphertexts in one batch")
+        return items

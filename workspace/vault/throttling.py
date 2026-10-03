@@ -1,4 +1,4 @@
-"""Rate limits for the vault's account endpoints.
+"""Rate limits for the vault's account and data endpoints.
 
 The rates live in ``settings.REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']`` so they
 can be retuned on telemetry without a code change. The values there are the
@@ -67,3 +67,7 @@ class AccountEnvelopeIpThrottle(IpRateThrottle):
 
 class AccountRotateUserThrottle(UserRateThrottle):
     scope = "vault.account.rotate.user"
+
+
+class MigrateUserThrottle(UserRateThrottle):
+    scope = "vault.migrate.user"

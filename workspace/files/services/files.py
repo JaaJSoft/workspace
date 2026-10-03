@@ -564,7 +564,7 @@ class FileService:
         }
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
-            stored = _storage.replace_blob(content_field.storage, storage_path, content)
+            stored = content_field.storage.replace(storage_path, content)
             if stored != storage_path:
                 # A storage that renames around a collision moved the blob; the
                 # row is ours until this block commits, so it can follow.

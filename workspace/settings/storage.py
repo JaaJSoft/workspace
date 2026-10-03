@@ -34,11 +34,16 @@ MEDIA_URL = "/media/"
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
-# Storage backends (Django 5 style)
+# Blob storage (workspace/common/storage). Two aliases over the same backend,
+# differing only in what a save under a taken name does. "files" holds
+# File.content, whose key is the node's tree path: a new version goes over the
+# old one. "default" keeps both: mail attachments are keyed by their file name,
+# and two "invoice.pdf" in one account are two blobs.
+_BLOBS = {"BACKEND": "workspace.common.storage.facade.BlobStorage"}
+
 STORAGES = {
-    "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-    },
+    "default": {**_BLOBS, "OPTIONS": {"backend": "local"}},
+    "files": {**_BLOBS, "OPTIONS": {"backend": "local", "allow_overwrite": True}},
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
     },

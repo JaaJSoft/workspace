@@ -141,3 +141,18 @@ test('the test aead never ships in the production bundle', () => {
   const text = fs.readFileSync(BUNDLE, 'utf8');
   assert.equal(text.includes('test-aead|enc'), false);
 });
+
+const TEST_BUILD = path.join(
+  REPO_ROOT, 'workspace', 'vault', 'ui', 'static', 'vault', 'ui', 'js', 'vendor', 'vault-crypto-test.js'
+);
+
+test('the production artifact carries no test door', () => {
+  const src = fs.readFileSync(BUNDLE, 'utf8');
+  assert.doesNotMatch(src, /installTestManifest/);
+  assert.doesNotMatch(src, /test manifest/);
+});
+
+test('the test artifact exists and carries the door', () => {
+  const src = fs.readFileSync(TEST_BUILD, 'utf8');
+  assert.match(src, /installTestManifest/);
+});

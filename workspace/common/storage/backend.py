@@ -100,6 +100,21 @@ class StagedWriter(abc.ABC):
         """Drop what was written. Safe to call when nothing is left to drop."""
 
 
+class Relocation(abc.ABC):
+    """A move whose source is only dropped once the move is final."""
+
+    @abc.abstractmethod
+    def commit(self):
+        """Drop what the move left at the source. Safe to call more than once."""
+
+
+class Moved(Relocation):
+    """A relocation the backend finished on the spot (a rename on a disk)."""
+
+    def commit(self):
+        pass
+
+
 class Backend(abc.ABC):
     """Where the bytes live. Built by ``BlobStorage`` from its options."""
 
@@ -200,6 +215,18 @@ class Backend(abc.ABC):
                 errno.EEXIST, "Destination already exists", destination
             )
         self.move(source, destination)
+
+    @abc.abstractmethod
+    def relocate(self, source, destination):
+        """Move a blob or a whole directory, keeping the source until commit.
+
+        When this returns, the destination holds everything and a
+        :class:`Relocation` is handed back. A backend that moves by copying
+        keeps the source until its commit(): the caller points its rows at
+        the destination and commits once they are durable, so a failure in
+        between leaves duplicates behind, never a row pointing at nothing.
+        Raises with the source untouched when the move could not complete.
+        """
 
     @abc.abstractmethod
     def staged_writer(self, name):

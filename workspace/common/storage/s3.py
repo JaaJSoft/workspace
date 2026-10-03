@@ -27,7 +27,14 @@ from django.core.files.base import File
 
 from workspace.common.logging import scrub
 
-from .backend import Backend, Entry, NameTaken, StagedWriter, checked_name
+from .backend import (
+    Backend,
+    Entry,
+    NameTaken,
+    Relocation,
+    StagedWriter,
+    checked_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,11 +339,12 @@ class S3Backend(Backend):
             raise FileNotFoundError(errno.ENOENT, "No such directory", name)
         return entries
 
-    def make_dir(self, name):
+    def _put_marker(self, key, name):
         with _translated(name):
-            self.client.put_object(
-                Bucket=self.bucket, Key=self._dir_prefix(name), Body=b""
-            )
+            self.client.put_object(Bucket=self.bucket, Key=key, Body=b"")
+
+    def make_dir(self, name):
+        self._put_marker(self._dir_prefix(name), name)
 
     def remove_dir_if_empty(self, name):
         marker = self._dir_prefix(name)
@@ -363,46 +371,79 @@ class S3Backend(Backend):
             raise OSError(errno.EIO, f"Could not delete {len(failed)} object(s)", name)
         return deleted
 
-    def move(self, source, destination, *, overwrite=False):
-        """Copy every key server-side, then delete the sources.
+    def relocate(self, source, destination):
+        """Copy every key server-side; the sources go on commit().
 
-        A failed copy raises with the sources untouched; the copies already
-        made are duplicates, never a gap. A failed delete afterwards only
-        leaves duplicates behind, so it is logged rather than raised: by then
-        the destination holds everything, which is where the caller's rows
-        are about to point.
+        A failed copy raises after removing the copies already made, so the
+        source stays the one place the data is. Dropping the sources is left
+        to the returned relocation, where a failed delete only leaves
+        duplicates behind and is logged rather than raised.
         """
         source_key = self._key(source)
         destination_key = self._key(destination)
         head = self._head(source_key, source)
-        if head is not None:
-            self._copy(source_key, destination_key, head["ContentLength"], source)
-            sources = [source_key]
-        else:
-            prefix = source_key + "/"
-            if (destination_key + "/").startswith(prefix):
-                raise OSError(
-                    errno.EINVAL, "Cannot move a directory into itself", source
-                )
-            sources = []
-            for obj in self._objects(prefix, source):
-                target = destination_key + "/" + obj["Key"][len(prefix) :]
-                self._copy(obj["Key"], target, obj["Size"], source)
-                sources.append(obj["Key"])
-            if not sources:
-                raise FileNotFoundError(
-                    errno.ENOENT, "No such blob or directory", source
-                )
-        left = self._delete_keys(sources, source)
+        sources, copies = [], []
+        try:
+            if head is not None:
+                self._copy(source_key, destination_key, head["ContentLength"], source)
+                sources.append(source_key)
+                copies.append(destination_key)
+            else:
+                prefix = source_key + "/"
+                if (destination_key + "/").startswith(prefix):
+                    raise OSError(
+                        errno.EINVAL, "Cannot move a directory into itself", source
+                    )
+                for obj in self._objects(prefix, source):
+                    target = destination_key + "/" + obj["Key"][len(prefix) :]
+                    if obj["Key"].endswith("/"):
+                        # A marker holds nothing to copy, and some stores
+                        # refuse CopyObject on a key that names a directory.
+                        self._put_marker(target, source)
+                    else:
+                        self._copy(obj["Key"], target, obj["Size"], source)
+                    sources.append(obj["Key"])
+                    copies.append(target)
+                if not sources:
+                    raise FileNotFoundError(
+                        errno.ENOENT, "No such blob or directory", source
+                    )
+        except BaseException:
+            self._delete_quietly(copies, destination)
+            raise
+        return _DropSources(self, sources, source)
+
+    def move(self, source, destination, *, overwrite=False):
+        self.relocate(source, destination).commit()
+
+    def _delete_quietly(self, keys, name):
+        """Delete *keys* as far as possible; what remains is only logged."""
+        if not keys:
+            return
+        try:
+            left = self._delete_keys(keys, name)
+        except OSError:
+            left = keys
         if left:
             logger.warning(
-                "Moved %s but could not delete %d source object(s)",
-                scrub(source),
+                "Could not delete %d object(s) left behind by a move of %s",
                 len(left),
+                scrub(name),
             )
 
     def staged_writer(self, name):
         return _Upload(self, self._key(name), name, exclusive=False)
+
+
+class _DropSources(Relocation):
+    def __init__(self, backend, keys, name):
+        self._backend = backend
+        self._keys = keys
+        self._name = name
+
+    def commit(self):
+        keys, self._keys = self._keys, []
+        self._backend._delete_quietly(keys, self._name)
 
 
 class _RangeReader(io.RawIOBase):

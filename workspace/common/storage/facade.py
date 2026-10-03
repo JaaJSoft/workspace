@@ -140,6 +140,9 @@ class BlobStorage(Storage):
     def move_exclusive(self, source, destination):
         self.backend.move_exclusive(source, destination)
 
+    def relocate(self, source, destination):
+        return self.backend.relocate(source, destination)
+
     def staged_writer(self, name):
         return self.backend.staged_writer(name)
 

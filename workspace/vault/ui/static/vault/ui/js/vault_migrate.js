@@ -72,9 +72,13 @@ window.vaultMigration = (function () {
     return window.vaultCrypto.mayResign(window.vaultCrypto.fromBase64Url(row.metadata_sig)[0]);
   }
 
-  function pick(rows, uuids) {
+  // The builders sign the vault's UUID into every rewrite, so a row listed
+  // under this vault but carrying another one must never reach them.
+  function pick(rows, uuids, vaultRow) {
     const wanted = new Set(uuids.map(String));
-    return rows.filter(function (row) { return wanted.has(String(row.uuid)); });
+    return rows.filter(function (row) {
+      return wanted.has(String(row.uuid)) && String(row.vault) === String(vaultRow.uuid);
+    });
   }
 
   async function buildItems(session, listed, vaultRow) {
@@ -96,13 +100,13 @@ window.vaultMigration = (function () {
       items.push(await window.buildVaultMetadataMigrateItem(session, opened));
     }
     if (listed.folders.length) {
-      const read = await reader.readFolders(session, opened, pick(await api.listFolders(vaultRow.uuid), listed.folders));
+      const read = await reader.readFolders(session, opened, pick(await api.listFolders(vaultRow.uuid), listed.folders, vaultRow));
       for (const row of read.verifiedRows.filter(resignable)) {
         items.push(await window.buildFolderMigrateItem(session, opened, row));
       }
     }
     if (listed.tags.length) {
-      const read = await reader.readTags(session, opened, pick(await api.listTags(vaultRow.uuid), listed.tags));
+      const read = await reader.readTags(session, opened, pick(await api.listTags(vaultRow.uuid), listed.tags, vaultRow));
       for (const row of read.verifiedRows.filter(resignable)) {
         items.push(await window.buildTagMigrateItem(session, opened, row));
       }
@@ -112,10 +116,14 @@ window.vaultMigration = (function () {
         api.listEntries(vaultRow.uuid),
         api.listEntries(vaultRow.uuid, { trashed: true }),
       ]);
-      const read = await reader.readEntries(session, opened, pick(live.concat(trashed), listed.entries));
-      for (const row of read.verifiedRows.filter(resignable)) {
-        items.push(await window.buildEntryMigrateItem(session, opened, row));
-      }
+      // The reader verifies each entry, then the builder reseals it: both ask
+      // for the same entry key, which the cache derives once.
+      await session.withEntryKeyCache(async function () {
+        const read = await reader.readEntries(session, opened, pick(live.concat(trashed), listed.entries, vaultRow));
+        for (const row of read.verifiedRows.filter(resignable)) {
+          items.push(await window.buildEntryMigrateItem(session, opened, row));
+        }
+      });
     }
     return items;
   }

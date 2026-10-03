@@ -38,6 +38,33 @@ kubectl apply -f ingress.yaml
 - **Static files**: Collected at image build time via `collectstatic` and served by WhiteNoise.
 - **Metrics**: `/metrics` requires HTTP Basic credentials and answers `401` until `METRICS_USER` and `METRICS_PASSWORD` are both set. See [Monitoring with Prometheus](../guides/monitoring.md).
 
+## Object Storage (S3-compatible)
+
+Uploaded files live under `MEDIA_ROOT` by default. Set `STORAGE_BACKEND=s3` to keep them in a bucket on any S3-compatible store instead - AWS S3, Garage, SeaweedFS, Ceph, Cloudflare R2, Backblaze B2 and the like. The bucket mirrors what `MEDIA_ROOT` would hold, key for key (`files/users/alice/Documents/report.pdf`), so it can be read and synced on its own, and the data does not depend on the database to make sense.
+
+| Variable                  | Default   | Effect |
+|---------------------------|-----------|--------|
+| `STORAGE_BACKEND`         | `local`   | `local` (`MEDIA_ROOT`) or `s3` |
+| `S3_BUCKET`               | -         | Bucket name, required with `s3`. The bucket must exist |
+| `S3_ENDPOINT_URL`         | AWS       | URL of the S3 API for any other store (e.g. `http://garage:3900`) |
+| `S3_REGION`               | -         | Region, when the store wants one |
+| `S3_ACCESS_KEY_ID`        | -         | Access key. Unset to use boto3's own chain (`AWS_*` variables, instance role) |
+| `S3_SECRET_ACCESS_KEY`    | -         | Secret key, with the above |
+| `S3_PREFIX`               | *(empty)* | Key prefix, so several instances can share one bucket |
+| `S3_ADDRESSING_STYLE`     | `auto`    | `path` for most self-hosted stores |
+| `S3_PRESIGN_ENDPOINT_URL` | `S3_ENDPOINT_URL` | Public URL of the store, when clients reach it under another name than the app does |
+| `S3_CONDITIONAL_WRITES`   | `1`       | Writes that must not replace an existing object send `If-None-Match`. Set to `0` only for a store that rejects it |
+
+The credentials need `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its objects.
+
+**Add a lifecycle rule that aborts incomplete multipart uploads** after a day or so. Large uploads go in parts and an interrupted one is aborted, but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise.
+
+What changes on object storage:
+
+- Renaming or moving a folder copies each of its files inside the store (no bytes go through the app) and then deletes the originals, so it takes longer on a large folder than on a disk.
+- The periodic sync that picks up files dropped into `MEDIA_ROOT` by hand is not scheduled; the on-demand sync in the files view still runs.
+- The data volume still holds the SQLite database, if you use it, and the face detection model weights (`PHOTOS_MODEL_DIR`).
+
 ## Reverse Proxy
 
 Workspace expects to run behind a TLS-terminating reverse proxy (nginx, Caddy, Traefik, an ingress controller, etc.). The application speaks plain HTTP/1.1 on port 8000 - the proxy handles TLS, HTTP/2, HTTP/3, compression, and rate limiting as the operator sees fit.

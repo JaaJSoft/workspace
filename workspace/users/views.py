@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 
 from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
+from workspace.core.module_registry import SearchScope
 from workspace.files.models import File
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.queries import (
@@ -521,6 +522,9 @@ def _validate_setting_value(module, key, value):
             ZoneInfo(str(value))
         except ZoneInfoNotFoundError, ValueError:
             return "Invalid timezone."
+    if module == "core" and key == "search_scope" and value is not None:
+        if value not in SearchScope.CHOICES:
+            return f"search_scope must be one of: {', '.join(SearchScope.CHOICES)}."
     if module == "projects" and key == "reminder_hour" and value is not None:
         if (
             not isinstance(value, int)

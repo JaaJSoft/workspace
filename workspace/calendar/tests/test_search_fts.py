@@ -5,9 +5,16 @@ from django.db import connection
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.calendar.models import Calendar, Event
+from workspace.calendar.models import (
+    Calendar,
+    CalendarSubscription,
+    Event,
+    EventMember,
+)
+from workspace.calendar.search import search_events
 from workspace.calendar.services.event_search import search_events_qs
 from workspace.common.search import fts5_available
+from workspace.core.module_registry import SearchScope
 
 User = get_user_model()
 
@@ -228,3 +235,31 @@ class ProviderAndToolTests(TestCase):
         r = search_events("Sprint", self.alice, 10)[0]
         self.assertEqual(r.match_type, "title")
         self.assertEqual(r.matched_value, "Sprint review")
+
+
+class EventSearchScopeTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.alice = User.objects.create_user(username="alice", email="al@x.io")
+        bob = User.objects.create_user(username="bob", email="bo@x.io")
+        cal_alice = Calendar.objects.create(name="Personal", owner=cls.alice)
+        cal_bob = Calendar.objects.create(name="Bob", owner=bob)
+        cal_team = Calendar.objects.create(name="Team", owner=bob)
+        CalendarSubscription.objects.create(user=cls.alice, calendar=cal_team)
+
+        make_event(cal_alice, "Kumquat tasting")
+        make_event(cal_team, "Kumquat team sync")
+        invited = make_event(cal_bob, "Kumquat with Bob")
+        EventMember.objects.create(event=invited, user=cls.alice)
+
+    def _titles(self, scope):
+        return {r.name for r in search_events("kumquat", self.alice, 10, scope=scope)}
+
+    def test_all_reaches_subscriptions_and_invitations(self):
+        self.assertEqual(
+            self._titles(SearchScope.ALL),
+            {"Kumquat tasting", "Kumquat team sync", "Kumquat with Bob"},
+        )
+
+    def test_mine_keeps_the_users_own_calendars(self):
+        self.assertEqual(self._titles(SearchScope.MINE), {"Kumquat tasting"})

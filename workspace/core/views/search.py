@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from workspace.common.cache import cached_response
 from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
+from workspace.core.module_registry import SearchScope
 from workspace.core.services import search as search_service
 
 
@@ -26,6 +27,16 @@ class UnifiedSearchView(CacheControlMixin, APIView):
                 required=False,
                 description="Max results per provider (1-50, default 10)",
             ),
+            OpenApiParameter(
+                name="scope",
+                type=str,
+                required=False,
+                enum=list(SearchScope.CHOICES),
+                description=(
+                    "`mine` drops what the user reaches through a group, a share "
+                    "or someone else's project; anything else searches all"
+                ),
+            ),
         ],
     )
     @cached_response(120)
@@ -44,7 +55,12 @@ class UnifiedSearchView(CacheControlMixin, APIView):
             default=search_service.DEFAULT_LIMIT,
             maximum=search_service.MAX_LIMIT,
         )
-        results = search_service.search_modules(query, request.user, limit)
+        # The scope travels in the query string rather than being read from
+        # the user's setting: @cached_response keys on the query params.
+        scope = request.query_params.get("scope")
+        if scope not in SearchScope.CHOICES:
+            scope = SearchScope.ALL
+        results = search_service.search_modules(query, request.user, limit, scope=scope)
         commands = search_service.search_commands(query, request.user)
 
         return Response(

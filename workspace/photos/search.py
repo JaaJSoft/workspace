@@ -5,11 +5,12 @@ from django.urls import reverse
 from django.utils import dateformat, timezone
 
 from workspace.common.search import apply_fulltext
-from workspace.core.module_registry import SearchResult, SearchTag
+from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 from workspace.photos.models import MediaItem
 from workspace.photos.queries import (
     ALL,
+    MINE,
     library_files,
     user_albums,
     user_face_clusters,
@@ -19,18 +20,19 @@ from workspace.photos.services.timeline import UNDATED
 from workspace.users.services.settings import get_user_timezone
 
 
-def search_photos(query, user, limit):
+def search_photos(query, user, limit, scope=SearchScope.ALL):
     """People named in the photos, albums whose title matches, then photos
     and videos whose name does.
 
     People and albums come first: a name or a title is something the user
-    wrote to find the photos again, and there are few of them.
+    wrote to find the photos again, and there are few of them. People are
+    only ever in the user's own photos, so *scope* leaves them alone.
     """
+    mine = scope == SearchScope.MINE
     people = search_people(query, user, limit)
-    albums = search_albums(query, user, limit - len(people))
-    return (
-        people + albums + _search_media(query, user, limit - len(people) - len(albums))
-    )
+    albums = search_albums(query, user, limit - len(people), mine=mine)
+    media = _search_media(query, user, limit - len(people) - len(albums), mine=mine)
+    return people + albums + media
 
 
 def search_people(query, user, limit):
@@ -59,12 +61,14 @@ def search_people(query, user, limit):
     ]
 
 
-def search_albums(query, user, limit):
+def search_albums(query, user, limit, *, mine=False):
     """The albums the user can open whose title holds *query*, each opening
-    the album."""
+    the album. *mine* keeps the personal ones, without their groups'."""
     if limit <= 0 or not (query or "").strip():
         return []
     albums = user_albums(user).filter(title__icontains=query.strip())
+    if mine:
+        albums = albums.filter(group__isnull=True)
     return [
         SearchResult(
             uuid=str(album.uuid),
@@ -80,7 +84,7 @@ def search_albums(query, user, limit):
     ]
 
 
-def _search_media(query, user, limit):
+def _search_media(query, user, limit, *, mine=False):
     """Photos and videos the user can open whose name matches, each opening
     the timeline on its day.
 
@@ -95,7 +99,9 @@ def _search_media(query, user, limit):
     tz = get_user_timezone(user)
     group_ids = set(user.groups.values_list("pk", flat=True))
     qs = apply_fulltext(
-        library_files(user, ALL).select_related("media_item", "parent"),
+        library_files(user, MINE if mine else ALL).select_related(
+            "media_item", "parent"
+        ),
         query,
         index=FILES_FTS,
     ).order_by("-search_rank", "-updated_at")[:limit]

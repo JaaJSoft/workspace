@@ -114,10 +114,11 @@
               <kbd class="kbd kbd-xs">&gt;</kbd>
               actions
             </button>
+            {% include "core/partials/search/scope_toggle.html" %}
             <button
               type="button"
               @click="close()"
-              class="btn btn-ghost btn-xs ml-auto"
+              class="btn btn-ghost btn-xs"
               title="Close"
               aria-label="Close search results"
             >

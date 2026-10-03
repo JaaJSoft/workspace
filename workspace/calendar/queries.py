@@ -3,6 +3,11 @@ from django.db.models import Q
 from .models import Calendar, CalendarSubscription, EventMember
 
 
+def owned_calendar_ids(user):
+    """UUIDs of the calendars *user* owns, external-source ones included."""
+    return Calendar.objects.filter(owner=user).order_by().values_list("uuid", flat=True)
+
+
 def visible_calendar_ids(user):
     """Return calendar UUIDs the user can see: owned (incl. external) + subscribed.
 
@@ -18,9 +23,7 @@ def visible_calendar_ids(user):
     queryset falls back to ``Meta.ordering``, whose columns aren't in the
     single-column result set - DatabaseError at iteration.
     """
-    owned = (
-        Calendar.objects.filter(owner=user).order_by().values_list("uuid", flat=True)
-    )
+    owned = owned_calendar_ids(user)
     subscribed = Calendar.objects.filter(subscriptions__user=user).order_by()
     return list(owned.union(subscribed.values_list("uuid", flat=True)).order_by())
 

@@ -48,6 +48,13 @@ def user_project_ids(user, *, role=None):
     return list(member_ids.union(group_ids).order_by())
 
 
+def personal_project_ids(user):
+    """UUID of the user's personal project, as a queryset of at most one row."""
+    return Project.objects.filter(
+        created_by=user, type=Project.Type.PERSONAL
+    ).values_list("uuid", flat=True)
+
+
 def due_open_tasks():
     """Open tasks across all projects that are overdue, due today or tomorrow.
 

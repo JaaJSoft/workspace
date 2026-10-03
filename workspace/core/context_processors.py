@@ -4,7 +4,7 @@ from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 
 from workspace.core.changelog import get_latest_version
-from workspace.core.module_registry import registry
+from workspace.core.module_registry import SearchScope, registry
 from workspace.core.services.module_visibility import (
     current_module,
     filter_visible_commands,
@@ -14,6 +14,7 @@ from workspace.core.setting_keys import (
     CHANGELOG_LAST_SEEN_VERSION,
     MODULE,
     ONBOARDING_COMPLETED,
+    SEARCH_SCOPE,
     SIDEBAR_COLLAPSED,
 )
 from workspace.dashboard.services.modules import switcher_modules_for
@@ -23,11 +24,14 @@ from workspace.users.services.settings import get_module_settings, get_setting
 def workspace_modules(request):
     onboarding_pending = False
     changelog_unread = False
+    search_scope = SearchScope.ALL
     if request.user.is_authenticated:
         # Both keys live in the core module; fetch them in a single query
         # (shared with the user_preferences context processor via the cache).
         core_settings = get_module_settings(request.user, MODULE)
         onboarding_pending = not core_settings.get(ONBOARDING_COMPLETED, False)
+        if core_settings.get(SEARCH_SCOPE) == SearchScope.MINE:
+            search_scope = SearchScope.MINE
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
@@ -56,6 +60,7 @@ def workspace_modules(request):
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,
         "workspace_sidebar_collapsed": sidebar_collapsed,
+        "workspace_search_scope": search_scope,
         "workspace_switcher_modules": switcher_modules,
         "workspace_commands": [
             registry.command_payload(c)

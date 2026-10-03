@@ -20,3 +20,8 @@ ONBOARDING_COMPLETED = "onboarding_completed"
 # shell reads it for whichever module the page belongs to and renders the
 # sidebar at that width before any script runs.
 SIDEBAR_COLLAPSED = "sidebar_collapsed"
+
+# The global search's "Mine only" switch: a SearchScope value, ``all`` when
+# unset. The palette sends it with every query rather than the API reading it,
+# since the search response is cached per query string.
+SEARCH_SCOPE = "search_scope"

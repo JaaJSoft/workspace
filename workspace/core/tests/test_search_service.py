@@ -11,7 +11,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from workspace.core.module_registry import CommandInfo, ModuleInfo
+from workspace.core.module_registry import CommandInfo, ModuleInfo, SearchScope
 from workspace.core.services.search import search_commands, search_modules
 
 User = get_user_model()
@@ -57,7 +57,19 @@ class SearchModulesTests(TestCase):
 
         search_modules("  alpha  ", self.user, limit=4)
 
-        mock_registry.search.assert_called_once_with("alpha", self.user, 4)
+        mock_registry.search.assert_called_once_with(
+            "alpha", self.user, 4, scope=SearchScope.ALL
+        )
+
+    @patch("workspace.core.services.search.registry")
+    def test_scope_is_forwarded_to_the_providers(self, mock_registry):
+        mock_registry.search.return_value = []
+
+        search_modules("alpha", self.user, scope=SearchScope.MINE)
+
+        mock_registry.search.assert_called_once_with(
+            "alpha", self.user, 10, scope=SearchScope.MINE
+        )
 
     @override_settings(PREVIEW_VISIBILITY="none")
     @patch("workspace.core.services.module_visibility.registry")

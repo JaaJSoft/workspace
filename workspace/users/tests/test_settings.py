@@ -399,6 +399,31 @@ class SettingCacheTests(TestCase):
         self.assertEqual(get_module_settings(self.user, "profile"), {})
 
 
+class SearchScopeSettingValidationTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="scope", password="pass")
+        self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
+
+    def _put(self, value):
+        return self.client.put(
+            "/api/v1/settings/core/search_scope",
+            data={"value": value},
+            content_type="application/json",
+        )
+
+    def test_accepts_mine_and_all(self):
+        for value in ("mine", "all"):
+            self.assertEqual(self._put(value).status_code, 200)
+            self.assertEqual(get_setting(self.user, "core", "search_scope"), value)
+
+    def test_rejects_a_scope_the_search_does_not_know(self):
+        self.assertEqual(self._put("shared").status_code, 400)
+        self.assertNotIn("search_scope", get_module_settings(self.user, "core"))
+
+
 class TimezoneSettingValidationTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="tzval", password="pass")

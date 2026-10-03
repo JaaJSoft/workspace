@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 
-from workspace.core.module_registry import registry
+from workspace.core.module_registry import SearchScope, registry
 from workspace.people.search import search_persons
 from workspace.people.services.persons import create_person
 
@@ -41,3 +42,23 @@ class SearchPersonsTests(TestCase):
         names = [c.name for c in registry.get_active_commands()]
         self.assertIn("People", names)
         self.assertIn("New contact", names)
+
+
+class SearchPersonsScopeTests(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+        team = Group.objects.create(name="Team")
+        self.alice.groups.add(team)
+        create_person(owner=self.alice, display_name="Martin Personal")
+        create_person(group=team, display_name="Martin Team")
+
+    def _names(self, scope):
+        return {r.name for r in search_persons("martin", self.alice, 10, scope=scope)}
+
+    def test_all_reaches_the_group_address_book(self):
+        self.assertEqual(
+            self._names(SearchScope.ALL), {"Martin Personal", "Martin Team"}
+        )
+
+    def test_mine_keeps_the_personal_address_book(self):
+        self.assertEqual(self._names(SearchScope.MINE), {"Martin Personal"})

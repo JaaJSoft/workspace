@@ -3,4 +3,5 @@
 {% endcomment %}
 {% load static %}
 {{ workspace_commands|json_script:"workspace-commands" }}
+{{ workspace_search_scope|json_script:"search-scope-data" }}
 <script src="{% static 'core/js/command_palette_dropdown.js' %}"></script>

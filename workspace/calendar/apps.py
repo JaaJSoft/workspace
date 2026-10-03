@@ -32,6 +32,7 @@ class CalendarConfig(AppConfig):
                 slug="calendar",
                 module_slug="calendar",
                 search_fn=search_events,
+                scoped=True,
             )
         )
 

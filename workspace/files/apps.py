@@ -51,6 +51,7 @@ class FilesConfig(AppConfig):
                 slug="files",
                 module_slug="files",
                 search_fn=search_files,
+                scoped=True,
             )
         )
 

@@ -6,12 +6,13 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 
-from workspace.core.module_registry import registry
+from workspace.core.module_registry import SearchScope, registry
 from workspace.core.services.search import search_modules
 from workspace.files.models import FileShare
 from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
+from workspace.photos.models import Album
 from workspace.photos.search import search_photos
 from workspace.photos.services.albums import create_album
 from workspace.users.services.settings import set_setting
@@ -201,4 +202,49 @@ class SearchAlbumsTests(TestCase):
 
         self.assertEqual(
             [h.name for h in search_photos("sunset", self.user, 1)], ["Sunset walks"]
+        )
+
+
+class SearchPhotosScopeTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        bob = User.objects.create_user(username="bob", password="p")
+        family = Group.objects.create(name="Family")
+        self.user.groups.add(family)
+        day = datetime(2024, 7, 14, tzinfo=UTC)
+
+        make_photo(self.user, "sunset-mine.jpg", day)
+        root = FileService.create_folder(owner=bob, name="Family", group=family)
+        make_photo(bob, "sunset-family.jpg", day, parent=root)
+        shared = make_photo(bob, "sunset-shared.jpg", day)
+        share_file(
+            shared,
+            target_user=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+            acting_user=bob,
+        )
+        create_album(self.user, "Sunset walks")
+        Album.objects.create(owner=bob, group=family, title="Sunset family")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _names(self, scope):
+        return {h.name for h in search_photos("sunset", self.user, 10, scope=scope)}
+
+    def test_all_reaches_group_and_shared_photos_and_albums(self):
+        self.assertEqual(
+            self._names(SearchScope.ALL),
+            {
+                "sunset-mine.jpg",
+                "sunset-family.jpg",
+                "sunset-shared.jpg",
+                "Sunset walks",
+                "Sunset family",
+            },
+        )
+
+    def test_mine_keeps_personal_photos_and_albums(self):
+        self.assertEqual(
+            self._names(SearchScope.MINE), {"sunset-mine.jpg", "Sunset walks"}
         )

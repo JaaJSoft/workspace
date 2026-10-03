@@ -61,6 +61,7 @@ class PhotosConfig(AppConfig):
                 slug="photos",
                 module_slug="photos",
                 search_fn=search_photos,
+                scoped=True,
                 refines=("files",),
             )
         )

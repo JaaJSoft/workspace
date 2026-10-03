@@ -15,6 +15,11 @@ def user_persons(user):
     return Person.objects.filter(_scope_q(user))
 
 
+def own_persons(user):
+    """The user's personal address book, without their groups' contacts."""
+    return Person.objects.filter(owner=user)
+
+
 def user_person_lists(user):
     return PersonList.objects.filter(_scope_q(user))
 

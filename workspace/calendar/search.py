@@ -1,8 +1,9 @@
 import unicodedata
 
-from workspace.core.module_registry import SearchResult, SearchTag
+from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 
 from .models import Poll
+from .queries import owned_calendar_ids
 from .services.event_search import search_events_qs
 
 
@@ -35,8 +36,12 @@ def _event_match_display(event, query):
     return event.title, "title"
 
 
-def search_events(query, user, limit):
-    events = search_events_qs(user, query).select_related("calendar")[:limit]
+def search_events(query, user, limit, scope=SearchScope.ALL):
+    events = search_events_qs(user, query)
+    if scope == SearchScope.MINE:
+        # Subscribed calendars and invitations to someone else's event go.
+        events = events.filter(calendar_id__in=owned_calendar_ids(user))
+    events = events.select_related("calendar")[:limit]
 
     results = []
     for e in events:

@@ -1,0 +1,13 @@
+{# The palette footer's "Mine only" switch; reads and writes the commandPaletteDropdown() scope. #}
+<label
+  class="flex items-center gap-1.5 self-center ml-auto cursor-pointer select-none hover:text-base-content"
+  title="Hide what you reach through groups, shares and other people's projects"
+>
+  <input
+    type="checkbox"
+    class="toggle toggle-xs toggle-primary"
+    :checked="isMineOnly()"
+    @change="setMineOnly($event.target.checked)"
+  />
+  Mine only
+</label>

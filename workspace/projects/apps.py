@@ -34,6 +34,7 @@ class ProjectsConfig(AppConfig):
                 slug="projects",
                 module_slug="projects",
                 search_fn=search_projects,
+                scoped=True,
             )
         )
         registry.register_search_provider(
@@ -41,6 +42,7 @@ class ProjectsConfig(AppConfig):
                 slug="project-tasks",
                 module_slug="projects",
                 search_fn=search_project_tasks,
+                scoped=True,
             )
         )
 

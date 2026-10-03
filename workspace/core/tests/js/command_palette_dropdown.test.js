@@ -32,32 +32,55 @@ class FakeInput {
   dispatchEvent(event) { this.events.push(event.type); }
 }
 
-function boot({ fetchImpl } = {}) {
+function boot({ fetchImpl, scope = null } = {}) {
   const listeners = {};
+  const windowListeners = {};
   const input = new FakeInput();
   const fetchCalls = [];
+  const writes = [];
+  const embedded = {
+    'workspace-commands': JSON.stringify(COMMANDS),
+    'search-scope-data': JSON.stringify(scope),
+  };
   const ctx = loadScript('workspace/core/static/core/js/command_palette_dropdown.js', {
     document: {
-      getElementById: (id) => (id === 'workspace-commands' ? { textContent: JSON.stringify(COMMANDS) } : null),
+      getElementById: (id) => (id in embedded ? { textContent: embedded[id] } : null),
       querySelector: () => ({ querySelector: () => input }),
       addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
     },
     localStorage: { getItem: () => null, setItem: () => {} },
-    CustomEvent: class { constructor(type) { this.type = type; } },
-    fetch: (url) => { fetchCalls.push(url); return fetchImpl ? fetchImpl(url) : new Promise(() => {}); },
+    CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    addEventListener: (type, fn) => { (windowListeners[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => {
+      windowListeners[type] = (windowListeners[type] || []).filter((f) => f !== fn);
+    },
+    dispatchEvent: (event) => { for (const fn of windowListeners[event.type] || []) fn(event); },
+    getCSRFToken: () => 'token',
+    fetch: (url, options) => {
+      if (options?.method === 'PUT') {
+        writes.push({ url, body: JSON.parse(options.body) });
+        return Promise.resolve({ ok: true });
+      }
+      fetchCalls.push(url);
+      return fetchImpl ? fetchImpl(url) : new Promise(() => {});
+    },
   });
-  const palette = ctx.commandPaletteDropdown();
-  palette.$watch = () => {};
-  palette.$nextTick = (fn) => fn();
-  palette.$refs = { input };
-  palette.init();
+  const mount = () => {
+    const palette = ctx.commandPaletteDropdown();
+    palette.$watch = () => {};
+    palette.$nextTick = (fn) => fn();
+    palette.$refs = { input };
+    palette.init();
+    return palette;
+  };
+  const palette = mount();
   const keydown = (init) => {
     const event = { key: 'k', ctrlKey: false, metaKey: false, shiftKey: false, prevented: false, ...init };
     event.preventDefault = () => { event.prevented = true; };
     for (const fn of listeners.keydown) fn(event);
     return event;
   };
-  return { palette, input, fetchCalls, keydown };
+  return { palette, input, fetchCalls, writes, keydown, mount };
 }
 
 describe('command mode detection', () => {
@@ -129,7 +152,7 @@ describe('searching in command mode', () => {
     const { palette, fetchCalls } = boot();
     palette.query = 'notes';
     palette.search();
-    assert.deepEqual(fetchCalls, ['/api/v1/search?q=notes']);
+    assert.deepEqual(fetchCalls, ['/api/v1/search?q=notes&scope=all']);
     assert.equal(palette.loading, true);
   });
 
@@ -324,5 +347,62 @@ describe('when the search endpoint fails', () => {
     await new Promise((r) => setTimeout(r, 0));
     palette.close();
     assert.equal(palette.error, false);
+  });
+});
+
+describe('the "Mine only" switch', () => {
+  test('starts from the scope the page embedded, all when none was saved', () => {
+    assert.equal(boot().palette.isMineOnly(), false);
+    assert.equal(boot({ scope: 'mine' }).palette.isMineOnly(), true);
+    assert.equal(boot({ scope: 'shared' }).palette.isMineOnly(), false);
+  });
+
+  test('every search carries the scope, since the response is cached per query string', () => {
+    const { palette, fetchCalls } = boot({ scope: 'mine' });
+    palette.query = 'budget';
+    palette.search();
+    assert.deepEqual(fetchCalls, ['/api/v1/search?q=budget&scope=mine']);
+  });
+
+  test('flipping it saves the preference and searches again under the new scope', () => {
+    const { palette, fetchCalls, writes, input } = boot();
+    palette.query = 'budget';
+    palette.search();
+    palette.setMineOnly(true);
+
+    assert.deepEqual(writes, [{ url: '/api/v1/settings/core/search_scope', body: { value: 'mine' } }]);
+    assert.deepEqual(fetchCalls, [
+      '/api/v1/search?q=budget&scope=all',
+      '/api/v1/search?q=budget&scope=mine',
+    ]);
+    assert.equal(input.focused, true);
+  });
+
+  test('setting the scope it already has writes nothing', () => {
+    const { palette, writes } = boot({ scope: 'mine' });
+    palette.setMineOnly(true);
+    assert.deepEqual(writes, []);
+  });
+
+  test('the other palettes of the page follow, without saving twice', () => {
+    const { palette, mount, writes } = boot();
+    const other = mount();
+    palette.setMineOnly(true);
+    assert.equal(other.isMineOnly(), true);
+    assert.equal(writes.length, 1);
+  });
+
+  test('an empty result under "Mine only" offers to search everything', async () => {
+    const { palette } = boot({
+      scope: 'mine',
+      fetchImpl: () => Promise.resolve({ ok: true, json: () => ({ commands: [], results: [] }) }),
+    });
+    palette.query = 'budget';
+    palette.search();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(palette.showMineOnlyHint(), true);
+
+    palette.query = '>';
+    assert.equal(palette.showMineOnlyHint(), false);
   });
 });

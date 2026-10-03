@@ -34,11 +34,11 @@ function setup() {
     loadScript(JS + file + '.js', {}, ctx);
   }
   vm.runInContext(`
-    var fmt1 = async function (rawB64, adText, text, headerKeyVersion) {
+    globalThis.fmt1 = async function (rawB64, adText, text, headerKeyVersion, kdfId = 1, ivBytes) {
       const V = vaultCrypto;
       const key = await crypto.subtle.importKey('raw', V.fromBase64Url(rawB64), 'AES-GCM', false, ['encrypt']);
-      const iv = new Uint8Array(12).fill(9);
-      const header = Uint8Array.of(1, 1, 1, headerKeyVersion >> 8, headerKeyVersion & 255, 12);
+      const iv = ivBytes || new Uint8Array(12).fill(9);
+      const header = Uint8Array.of(1, 1, kdfId, headerKeyVersion >> 8, headerKeyVersion & 255, 12);
       const body = new Uint8Array(await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode('v1|' + adText) },
         key, new TextEncoder().encode(text)));
@@ -205,4 +205,32 @@ test('a vault with no description keeps an empty one', async () => {
   const { ctx, V, signed } = setup();
   const item = await ctx.buildVaultMetadataMigrateItem(sessionFor(V, signed), await vaultRow(ctx, ''));
   assert.equal(item.encrypted_description, '');
+});
+
+test('fmt1 reproduces the shared format-1 vector byte for byte', async () => {
+  const { ctx } = setup();
+  const iv = vm.runInContext('Uint8Array.from({ length: 12 }, (_, i) => i)', ctx);
+  const wire = await ctx.fmt1(KEY_B64, `entry-field|${ENTRY}|password`, 'hunter2', 1, 1, iv);
+  assert.equal(wire, 'AQEBAAEMAAECAwQFBgcICQoLL3e4b6CX8FW9_oUFDfT_p5rMtkgiX7U');
+});
+
+test('a direct-kdf header keeps its kdf id when resealed', async () => {
+  const { ctx, V } = setup();
+  const key = await V.importAeadKey(V.fromBase64Url(KEY_B64));
+  const context = V.AD.entryFieldAd(ENTRY, 'password');
+  const old = await ctx.fmt1(KEY_B64, `entry-field|${ENTRY}|password`, 'hunter2', 1, 0);
+  const out = await ctx.vaultReseal(V, key, old, context, 3);
+  assert.equal(V.decodeCiphertext(V.fromBase64Url(out)).kdfId, 0);
+});
+
+test('an entry takes its key version from the row, not the vault', async () => {
+  const { ctx, V, signed } = setup();
+  const row = await entryRow(ctx, { notes: 'n', fields: { password: 'p' } });
+  await ctx.buildEntryMigrateItem(sessionFor(V, signed), { uuid: VAULT_UUID, key_version: 2 }, row)
+    .then((item) => {
+      const versions = [item.encrypted_name, item.encrypted_notes, item.fields.password]
+        .map((b64) => V.decodeCiphertext(V.fromBase64Url(b64)).keyVersion);
+      assert.deepStrictEqual(versions, [3, 3, 3]);
+    });
+  assert.equal(signed.at(-1).key_version, 3);
 });

@@ -11,6 +11,7 @@ import posixpath
 
 from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 
 from workspace.common.logging import scrub
 
@@ -194,6 +195,18 @@ def _copy_blob(source, destination):
     return saved
 
 
+def _relocate(source, destination):
+    """Move *source* to *destination* now; drop the source once committed.
+
+    A backend that moves by copying keeps the source until the rows that
+    point at the destination are durable, so a rollback leaves duplicates
+    behind, never a row pointing at a blob that is gone. A move that cannot
+    complete raises, which takes the caller's row changes down with it.
+    """
+    relocation = default_storage.relocate(source, destination)
+    transaction.on_commit(relocation.commit)
+
+
 def rename_file_storage(file_obj, new_name):
     """Rename a single file on disk."""
     old_path = file_obj.content.name
@@ -264,16 +277,8 @@ def rename_folder_storage(folder, old_folder_name, new_folder_name):
     storage_path = folder_storage_path(folder)
     new_storage_path = posixpath.join(posixpath.dirname(storage_path), new_folder_name)
 
-    try:
-        if default_storage.is_dir(storage_path):
-            default_storage.move(storage_path, new_storage_path)
-    except OSError as e:
-        logger.warning(
-            "Could not rename folder '%s' -> '%s': %s",
-            scrub(storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
+    if default_storage.is_dir(storage_path):
+        _relocate(storage_path, new_storage_path)
 
     update_descendant_content_names(folder, old_folder_name, new_folder_name)
 
@@ -288,16 +293,8 @@ def move_folder_storage(folder, new_parent, *, new_owner=None):
     if old_storage_path == new_storage_path:
         return
 
-    try:
-        if default_storage.is_dir(old_storage_path):
-            default_storage.move(old_storage_path, new_storage_path)
-    except OSError as e:
-        logger.warning(
-            "Could not move folder '%s' -> '%s': %s",
-            scrub(old_storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
+    if default_storage.is_dir(old_storage_path):
+        _relocate(old_storage_path, new_storage_path)
 
     # Update content.name for all descendant files
     folder_path = folder.path or folder.get_path()
@@ -336,17 +333,9 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
     if old_path == new_path:
         return
 
-    try:
-        if default_storage.is_file(old_path):
-            default_storage.move(old_path, new_path)
-            file_obj.content.name = new_path
-    except OSError as e:
-        logger.warning(
-            "Could not move file '%s' -> '%s': %s",
-            scrub(old_path),
-            scrub(new_path),
-            scrub(e),
-        )
+    if default_storage.is_file(old_path):
+        _relocate(old_path, new_path)
+        file_obj.content.name = new_path
 
 
 def _relocate_on_storage(source, destination, *, expect_dir):
@@ -372,7 +361,7 @@ def _relocate_on_storage(source, destination, *, expect_dir):
             "directory" if expect_dir else "file",
         )
         return False
-    default_storage.move(source, destination)
+    _relocate(source, destination)
     return True
 
 

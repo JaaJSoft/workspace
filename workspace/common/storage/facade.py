@@ -13,6 +13,7 @@ import uuid
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import File
 from django.core.files.storage import Storage
+from django.core.files.utils import validate_file_name
 from django.utils.deconstruct import deconstructible
 
 from workspace.common.logging import scrub
@@ -46,10 +47,19 @@ class BlobStorage(Storage):
 
     *allow_overwrite* is the name policy, the same as FileSystemStorage's: a
     save under a taken name replaces the blob, where the default picks a free
-    name beside it. The remaining options configure the backend.
+    name beside it. *verbatim_names* keeps the name a FileField generates as it
+    is, where Django rewrites it into a "valid" one. The remaining options
+    configure the backend.
     """
 
-    def __init__(self, backend="local", *, allow_overwrite=False, **options):
+    def __init__(
+        self,
+        backend="local",
+        *,
+        allow_overwrite=False,
+        verbatim_names=False,
+        **options,
+    ):
         try:
             build = _BACKENDS[backend]
         except KeyError:
@@ -58,9 +68,22 @@ class BlobStorage(Storage):
                 f"expected one of {sorted(_BACKENDS)}"
             ) from None
         self.allow_overwrite = allow_overwrite
+        self.verbatim_names = verbatim_names
         self.backend = build(allow_overwrite=allow_overwrite, **options)
 
     # Name policy.
+
+    def get_valid_name(self, name):
+        if self.verbatim_names:
+            return name
+        return super().get_valid_name(name)
+
+    def generate_filename(self, filename):
+        if not self.verbatim_names:
+            return super().generate_filename(filename)
+        # Django's version also reads a backslash as a separator and
+        # normalizes the path; a name kept verbatim keeps those too.
+        return validate_file_name(str(filename), allow_relative_path=True)
 
     def is_name_available(self, name, max_length=None):
         if self.allow_overwrite:

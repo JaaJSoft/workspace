@@ -1,8 +1,11 @@
 """A correction that would put one person twice in a photo: the conflict is
 named, and the user settles it instead of being refused."""
 
+from unittest.mock import patch
+
 from workspace.people.services.persons import create_person
 from workspace.photos.models import Face, FaceCluster
+from workspace.photos.services.face_corrections import PhotoAlreadyInCluster
 from workspace.photos.services.face_grouping import cluster_owner
 
 from .images import CAROL
@@ -104,6 +107,41 @@ class FaceConflictTests(ConflictTestCase):
         self.bob_in_pair.refresh_from_db()
         self.assertEqual(self.bob_in_pair.cluster_id, self.alice.pk)
         self.assert_set_aside(self.alice_in_pair, self.alice)
+
+    def test_a_replace_that_fails_leaves_the_face_it_displaced(self):
+        # The photo is found taken anyway, after the faces in the way left.
+        with patch(
+            "workspace.photos.services.face_corrections.photo_clusters",
+            return_value={self.alice.pk},
+        ):
+            response = self.patch(
+                f"{FACES}/{self.bob_in_pair.pk}",
+                {"cluster": str(self.alice.pk), "replace": True},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.alice_in_pair.refresh_from_db()
+        self.assertEqual(self.alice_in_pair.cluster_id, self.alice.pk)
+
+    def test_a_replace_to_a_person_that_fails_leaves_the_face_it_displaced(self):
+        refused = PhotoAlreadyInCluster()
+        with (
+            patch(
+                "workspace.photos.services.face_people.confirm_face",
+                side_effect=refused,
+            ),
+            patch(
+                "workspace.photos.services.face_people.start_cluster",
+                side_effect=refused,
+            ),
+        ):
+            self.patch(
+                f"{FACES}/{self.bob_in_pair.pk}",
+                {"to_person": str(self.ann.pk), "replace": True},
+            )
+
+        self.alice_in_pair.refresh_from_db()
+        self.assertEqual(self.alice_in_pair.cluster_id, self.alice.pk)
 
     def test_a_person_in_the_photo_through_another_cluster_is_refused(self):
         # Ann is the Alice cluster (in pair.png) and a Carol cluster that is

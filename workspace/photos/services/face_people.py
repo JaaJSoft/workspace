@@ -118,6 +118,7 @@ def person_faces_in_photo(face, person):
     )
 
 
+@transaction.atomic
 def assign_face_to_person(face, person, *, replace=False, new_look=None, touched=None):
     """This is *person*: pin *face* in the person's closest cluster.
 

@@ -229,11 +229,13 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
         refresh_clusters([cluster.pk])
 
 
+@transaction.atomic
 def confirm_face(face, cluster, *, replace=False, touched=None):
     """This is X: pin *face* in *cluster*, wherever it was.
 
     With *replace*, the face of the photo already X is not X after all: it
-    is taken out of its cluster for *face* to take its place.
+    is taken out of its cluster for *face* to take its place - or stays in
+    it, when *face* cannot take that place after all.
     """
     previous = face.cluster_id
     if replace:

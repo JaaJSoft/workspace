@@ -3,7 +3,8 @@
   an unnamed cluster. `card` comes from _person_card / _cluster_card in
   photos/ui/views.py; the data-* attributes are what the card's menu reads
   (see openClusterMenu in faces.js). While cards are picked to be merged, a
-  layer over the card takes the click: it picks instead of opening.
+  layer over the card takes the click and the keyboard: it picks instead of
+  opening, and the card's own link and button leave the tab order.
 {% endcomment %}
 {% with key=card.clusters|join:"," %}
   <div
@@ -21,6 +22,7 @@
       x-target.push="photos-nav photos-content"
       class="block w-full aspect-square overflow-hidden rounded-full bg-base-200 ring-offset-2 ring-offset-base-100 transition hover:ring-2 hover:ring-module focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
       :class="{ 'ring-2 ring-module': peoplePicking && isPeopleCardPicked('{{ key }}') }"
+      :tabindex="peoplePicking ? -1 : null"
       title="{% if card.person %}{{ card.person.name }}, {% endif %}{{ card.photo_count }} photo{{ card.photo_count|pluralize }}"
     >
       {% if card.cover_url %}
@@ -46,6 +48,7 @@
       <button
         type="button"
         class="mt-1 text-sm font-medium text-module hover:underline focus-visible:outline-none focus-visible:underline"
+        :tabindex="peoplePicking ? -1 : null"
         @click="openNameDialog({ uuid: '{{ card.uuid }}', cover_url: '{{ card.cover_url|default:''|escapejs }}' })"
       >
         Add a name

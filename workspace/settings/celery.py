@@ -8,6 +8,7 @@ from celery.schedules import crontab
 from .base import DEBUG, TIME_ZONE
 from .cache import _REDIS_CELERY_URL
 from .env import available_cpus, env_non_negative_int
+from .storage import STORAGE_BACKEND
 
 # Use dedicated Redis DB as broker if available, otherwise fall back to in-memory
 CELERY_BROKER_URL = _REDIS_CELERY_URL or "memory://"
@@ -74,13 +75,6 @@ CELERY_BEAT_SCHEDULE_FILENAME = (
 )
 
 CELERY_BEAT_SCHEDULE = {
-    "sync-all-user-files": {
-        "task": "files.sync_all_users",
-        "schedule": FILES_SYNC_INTERVAL,
-        # Drop a tick that has not started by the time the next one fires,
-        # so a backed-up broker cannot accumulate stale fan-outs.
-        "options": {"expires": FILES_SYNC_INTERVAL},
-    },
     "catch-up-readers": {
         "task": "files.catch_up",
         # The primary path is event-driven; this catches what it missed.
@@ -179,3 +173,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=7, minute=15),  # Every day at 7:15 AM
     },
 }
+
+# The periodic sync adopts files dropped into MEDIA_ROOT out of band. On object
+# storage it would list every user's prefix on a timer to catch a change that
+# rarely happens there; the on-demand sync (files UI, sync_files) still runs.
+if STORAGE_BACKEND == "local":
+    CELERY_BEAT_SCHEDULE["sync-all-user-files"] = {
+        "task": "files.sync_all_users",
+        "schedule": FILES_SYNC_INTERVAL,
+        # Drop a tick that has not started by the time the next one fires,
+        # so a backed-up broker cannot accumulate stale fan-outs.
+        "options": {"expires": FILES_SYNC_INTERVAL},
+    }

@@ -92,6 +92,9 @@ dependencies = [
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.31.0",
     "fastembed>=0.9.0",
+    # S3-compatible object storage (common/storage/s3.py), imported only when
+    # STORAGE_BACKEND=s3: a filesystem deployment never loads it.
+    "boto3>=1.43.0",
 ]
 
 [build-system]
@@ -136,6 +139,10 @@ dev = [
     # A third-party CalDAV client, driven against a live server by the calendar
     # E2E suite: the server is tested with somebody else's reading of the RFCs.
     "caldav>=3.6.0",
+    # An in-process S3 for the object storage backend's tests
+    # (common/tests/test_storage.py); the live S3 CI job runs the same cases
+    # against a real server.
+    "moto[s3]>=5.2.0",
 ]
 
 [tool.uv]

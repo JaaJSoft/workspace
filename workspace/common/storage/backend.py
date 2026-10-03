@@ -25,6 +25,14 @@ class BlobTooLarge(Exception):
     """A local copy of a blob would exceed the size its caller allowed."""
 
 
+class NameTaken(FileExistsError):
+    """A save that must not overwrite found its name taken by another writer.
+
+    Raised by a backend whose check and write are one request; BlobStorage
+    then picks another name, as FileSystemStorage does on ``O_EXCL``.
+    """
+
+
 @dataclass(frozen=True)
 class Entry:
     """One child of a directory, as :meth:`Backend.scan` lists it.

@@ -14,6 +14,7 @@ import base64
 import io
 from unittest import mock
 
+from botocore.exceptions import ClientError
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.base import ContentFile
@@ -21,6 +22,7 @@ from django.core.files.storage import storages
 from django.db import transaction
 from django.test import TestCase
 
+from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
@@ -213,6 +215,9 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
 
 
 class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
+    # The smallest part S3 allows, so a large PUT is a multipart upload.
+    s3_options = {"part_size": MIN_PART_SIZE}
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -278,3 +283,29 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         self.assertEqual(
             self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
         )
+
+    def test_an_overwrite_the_store_fails_to_complete_keeps_nothing_open(self):
+        """wsgidav calls end_write once: an upload the store refused to
+        complete would stay open in the bucket, holding its parts."""
+        self.dav("PUT", "/notes.txt", b"first")
+        refused = ClientError(
+            {
+                "Error": {"Code": "InternalError"},
+                "ResponseMetadata": {"HTTPStatusCode": 500},
+            },
+            "CompleteMultipartUpload",
+        )
+
+        with mock.patch.object(
+            storages["files"].backend.client,
+            "complete_multipart_upload",
+            side_effect=refused,
+        ):
+            status, _ = self.dav("PUT", "/notes.txt", b"x" * (MIN_PART_SIZE + 1))
+
+        self.assertEqual(status, 500)
+        self.assertEqual(
+            self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
+        )
+        _, body = self.dav("GET", "/notes.txt")
+        self.assertEqual(body, b"first")

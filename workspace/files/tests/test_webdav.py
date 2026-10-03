@@ -1,14 +1,17 @@
 """Tests for the WebDAV integration (domain controller, provider, resources)."""
 
 import base64
+import errno
 import io
 import os
 from datetime import timedelta
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.db import DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
@@ -892,10 +895,52 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.write(b"new content")
         buf.close()
         self.res.end_write(with_errors=False)
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+
+    def _files_on_disk(self):
         on_disk = []
         for _root, _dirs, names in os.walk(settings.MEDIA_ROOT):
             on_disk.extend(names)
-        self.assertEqual(on_disk, ["test.txt"])
+        return on_disk
+
+    def test_a_publish_the_disk_refuses_leaves_no_partial_file(self):
+        """wsgidav calls end_write once: a ``.part`` left behind by a failed
+        last write is never cleaned up, and the sync adopts it as a file."""
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        disk_full = OSError(errno.ENOSPC, "No space left on device")
+        with (
+            mock.patch(
+                "workspace.common.storage.local.os.write", side_effect=disk_full
+            ),
+            self.assertRaises(OSError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 11)
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+
+    def test_a_database_error_before_the_publish_leaves_no_partial_file(self):
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        with (
+            mock.patch.object(
+                FileService,
+                "replace_content_storage",
+                side_effect=DatabaseError("the database went away"),
+            ),
+            self.assertRaises(DatabaseError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
 
     def test_end_write_accepts_complete_upload(self):
         """Complete transfer (size == Content-Length) must save."""

@@ -33,14 +33,15 @@ class ChatActivityProvider(ActivityProvider):
         )
         return {row["day"]: row["count"] for row in rows}
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-        qs = (
-            self._base_qs(user_id, viewer_id)
-            .select_related(
-                "created_by",
-            )
-            .order_by("-created_at")[offset : offset + limit]
-        )
+    def get_recent_events(
+        self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
+    ):
+        qs = self._base_qs(user_id, viewer_id)
+        if exclude_actor_id is not None:
+            qs = qs.exclude(created_by_id=exclude_actor_id)
+        qs = qs.select_related(
+            "created_by",
+        ).order_by("-created_at")[offset : offset + limit]
 
         events = []
         for conv in qs:

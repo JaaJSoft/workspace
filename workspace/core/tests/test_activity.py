@@ -25,7 +25,7 @@ class StubProvider(ActivityProvider):
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         return self._daily_counts
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+    def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
         return self._events[offset : offset + limit]
 
     def get_stats(self, user_id, *, viewer_id=None):
@@ -110,14 +110,14 @@ class ActivityRegistryTests(TestCase):
         ts3 = timezone.make_aware(datetime(2026, 3, 1, 11, 0))
 
         class ProviderA(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [
                     {"label": "e1", "timestamp": ts1},
                     {"label": "e2", "timestamp": ts2},
                 ]
 
         class ProviderB(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "e3", "timestamp": ts3}]
 
         self.registry.register(
@@ -148,11 +148,11 @@ class ActivityRegistryTests(TestCase):
         ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
 
         class ProviderA(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "from_a", "timestamp": ts}]
 
         class ProviderB(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "from_b", "timestamp": ts}]
 
         self.registry.register(
@@ -183,7 +183,7 @@ class ActivityRegistryTests(TestCase):
         base = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
 
         class BigProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [
                     {"label": f"e{i}", "timestamp": base + timedelta(hours=i)}
                     for i in range(5)
@@ -245,163 +245,36 @@ class ActivityRegistryTests(TestCase):
         stats = self.registry.get_stats(1)
         self.assertEqual(stats, {})
 
-    def test_get_recent_events_exclude_actor_in_all_mode(self):
-        """Events from the excluded actor must not crowd out other actors.
+    def test_exclude_actor_id_is_forwarded_to_providers(self):
+        """Exclusion happens inside each provider's query, before its slice.
 
-        Regression test: when source=None (ALL), the registry merges events
-        from every provider, sorts by timestamp, and slices.  If the excluded
-        actor has many recent events across providers, they used to push other
-        actors' events out of the window *before* the exclude filter ran,
-        resulting in an empty feed even though other actors had activity.
+        Filtering after the slice let a burst of the excluded actor's events
+        fill every provider's window and hide older events by others.
         """
-        from datetime import datetime, timedelta
+        received = []
 
-        from django.utils import timezone
-
-        now = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
-
-        class DominantProvider(StubProvider):
-            """Returns many events from actor 1 (the excluded user)."""
-
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-                return [
-                    {
-                        "label": f"dominant-{i}",
-                        "timestamp": now - timedelta(minutes=i),
-                        "actor": {"id": 1, "username": "excluded"},
-                    }
-                    for i in range(limit)
-                ]
-
-        class MinorProvider(StubProvider):
-            """Returns a single older event from actor 2 (another user)."""
-
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-                return [
-                    {
-                        "label": "minor-event",
-                        "timestamp": now - timedelta(hours=2),
-                        "actor": {"id": 2, "username": "other"},
-                    },
-                ]
+        class RecordingProvider(StubProvider):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
+                received.append(kwargs.get("exclude_actor_id"))
+                return []
 
         self.registry.register(
             ActivityProviderInfo(
-                slug="dominant",
-                label="D",
-                icon="d",
-                provider_cls=DominantProvider,
-            )
-        )
-        self.registry.register(
-            ActivityProviderInfo(
-                slug="minor",
-                label="M",
-                icon="m",
-                provider_cls=MinorProvider,
+                slug="rec", label="R", icon="r", provider_cls=RecordingProvider
             )
         )
 
-        # Without exclude: ALL returns dominant events first
-        events = self.registry.get_recent_events(None, limit=5)
-        self.assertTrue(all(e["actor"]["id"] == 1 for e in events))
-
-        # With exclude_actor_id: the minor provider's event must survive
-        events = self.registry.get_recent_events(
-            None,
-            limit=5,
-            exclude_actor_id=1,
-        )
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]["label"], "minor-event")
-        self.assertEqual(events[0]["actor"]["id"], 2)
-
-    def test_exclude_actor_id_passes_through_null_actor_events(self):
-        """Events with actor=None must not be excluded when exclude_actor_id is set.
-
-        Regression test for activity_registry.py: the filter previously
-        used e.get('actor', {}).get('id') which crashed on actor=None
-        (because None.get(...) raises AttributeError, not because the
-        default {} was used). The fix is (e.get('actor') or {}).get('id').
-        """
-        from datetime import datetime, timedelta
-
-        from django.utils import timezone
-
-        now = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
-
-        class MixedActorProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-                return [
-                    {
-                        "label": "null-actor-event",
-                        "timestamp": now - timedelta(minutes=1),
-                        "actor": None,
-                    },
-                    {
-                        "label": "excluded-actor-event",
-                        "timestamp": now - timedelta(minutes=2),
-                        "actor": {"id": 2, "username": "excluded"},
-                    },
-                ]
-
-        self.registry.register(
-            ActivityProviderInfo(
-                slug="mixed_actor",
-                label="MA",
-                icon="m",
-                provider_cls=MixedActorProvider,
-            )
-        )
-
-        events = self.registry.get_recent_events(None, limit=10, exclude_actor_id=2)
-        labels = [e["label"] for e in events]
-        self.assertIn("null-actor-event", labels)
-        self.assertNotIn("excluded-actor-event", labels)
-
-    def test_exclude_actor_not_applied_to_single_source(self):
-        """exclude_actor_id in the registry only filters in ALL mode.
-
-        For single-source queries, the service layer handles exclusion
-        with its own over-fetch buffer.
-        """
-        from datetime import datetime
-
-        from django.utils import timezone
-
-        ts = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
-
-        class MixedProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
-                return [
-                    {"label": "own", "timestamp": ts, "actor": {"id": 1}},
-                    {"label": "other", "timestamp": ts, "actor": {"id": 2}},
-                ]
-
-        self.registry.register(
-            ActivityProviderInfo(
-                slug="mixed",
-                label="M",
-                icon="m",
-                provider_cls=MixedProvider,
-            )
-        )
-
-        # Single-source: exclude_actor_id is NOT applied at registry level
-        events = self.registry.get_recent_events(
-            None,
-            limit=10,
-            source="mixed",
-            exclude_actor_id=1,
-        )
-        self.assertEqual(len(events), 2)
+        self.registry.get_recent_events(None, limit=5, exclude_actor_id=1)
+        self.registry.get_recent_events(None, limit=5, source="rec", exclude_actor_id=1)
+        self.registry.get_recent_events(None, limit=5)
+        self.assertEqual(received, [1, 1, None])
 
     def test_provider_exception_is_handled_gracefully(self):
         class FailingProvider(ActivityProvider):
             def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
                 raise RuntimeError("boom")
 
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 raise RuntimeError("boom")
 
             def get_stats(self, user_id, *, viewer_id=None):
@@ -428,11 +301,11 @@ class ActivityRegistryTests(TestCase):
         ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
 
         class FilesProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "f", "timestamp": ts}]
 
         class OrphanProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "o", "timestamp": ts}]
 
         self.registry.register(
@@ -462,11 +335,11 @@ class ActivityRegistryAllowedSourcesTests(TestCase):
         ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
 
         class ProviderA(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "from_a", "timestamp": ts}]
 
         class ProviderB(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "from_b", "timestamp": ts}]
 
         self.registry.register(
@@ -512,11 +385,11 @@ class ActivityModuleVisibilityTests(TestCase):
         ts = timezone.make_aware(datetime(2026, 3, 1, 10, 0))
 
         class FilesProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "files-event", "timestamp": ts}]
 
         class LabProvider(StubProvider):
-            def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+            def get_recent_events(self, user_id, limit=10, offset=0, **kwargs):
                 return [{"label": "lab-event", "timestamp": ts}]
 
         self.activity_registry = ActivityRegistry()
@@ -649,41 +522,28 @@ class ActivityModuleVisibilityTests(TestCase):
 class ActivityServiceTests(TestCase):
     """Tests for workspace.core.services.activity."""
 
-    def test_exclude_user_id_passes_through_null_actor_events(self):
-        """Events with actor=None must not crash the exclude filter.
-
-        Regression test: activity_service.get_recent_events did
-        e.get('actor', {}).get('id'), which crashes on actor=None
-        (dict.get returns the stored None, not the default). The
-        calendar provider emits actor=None for external-feed events,
-        and the dashboard view calls the service with exclude_user_id
-        set, so a user with any external calendar event hit a 500 on /.
-        """
+    def test_exclude_user_id_is_pushed_down_without_over_fetching(self):
+        """The service forwards the exclusion and lets the providers paginate."""
         from unittest.mock import patch
 
         from workspace.core.services import activity as activity_service
 
-        events_from_registry = [
-            {"label": "null-actor", "actor": None, "timestamp": None},
-            {"label": "other-actor", "actor": {"id": 42}, "timestamp": None},
-            {"label": "excluded", "actor": {"id": 7}, "timestamp": None},
-        ]
-
         with patch.object(
             activity_service.activity_registry,
             "get_recent_events",
-            return_value=list(events_from_registry),
-        ):
+            return_value=[{"label": "kept", "actor": {"id": 7}, "timestamp": None}],
+        ) as registry_call:
             result = activity_service.get_recent_events(
                 viewer_id=7,
                 exclude_user_id=7,
                 limit=10,
+                offset=20,
             )
 
-        labels = [e["label"] for e in result]
-        self.assertIn("null-actor", labels)
-        self.assertIn("other-actor", labels)
-        self.assertNotIn("excluded", labels)
+        kwargs = registry_call.call_args.kwargs
+        self.assertEqual(kwargs["exclude_actor_id"], 7)
+        self.assertEqual((kwargs["limit"], kwargs["offset"]), (10, 20))
+        self.assertEqual([e["label"] for e in result], ["kept"])
 
     def test_search_filter_handles_null_actor(self):
         """Search filter must also tolerate actor=None."""
@@ -800,3 +660,62 @@ class AnnotateTimeAgoTimezoneTests(TestCase):
         with patch("django.utils.timezone.now", return_value=fixed_now):
             events = annotate_time_ago([{"timestamp": ts}])
         self.assertEqual(events[0]["time_ago"], "Feb 01")
+
+
+class ExcludedActorBurstTests(TestCase):
+    """A burst of the viewer's own events must not hide older events by others."""
+
+    def setUp(self):
+        from workspace.files.models import File
+
+        self.alice = User.objects.create_user(username="alice", password="pass123")
+        self.bob = User.objects.create_user(username="bob", password="pass123")
+        self.file = File.objects.create(
+            owner=self.alice,
+            name="report.txt",
+            node_type=File.NodeType.FILE,
+            mime_type="text/plain",
+            size=10,
+        )
+
+    def _seed(self, own_events):
+        from datetime import timedelta
+
+        from workspace.files.models import FileEvent
+
+        now = dj_timezone.now()
+        bob_event = FileEvent.objects.create(
+            file=self.file, actor=self.bob, action=FileEvent.Action.CONTENT_REPLACED
+        )
+        FileEvent.objects.filter(pk=bob_event.pk).update(
+            created_at=now - timedelta(days=1)
+        )
+        for i in range(own_events):
+            own = FileEvent.objects.create(
+                file=self.file,
+                actor=self.alice,
+                action=FileEvent.Action.CONTENT_REPLACED,
+            )
+            FileEvent.objects.filter(pk=own.pk).update(
+                created_at=now - timedelta(minutes=i)
+            )
+
+    def _feed(self, **kwargs):
+        from workspace.core.services import activity as activity_service
+
+        return activity_service.get_recent_events(
+            viewer_id=self.alice.id,
+            exclude_user_id=self.alice.id,
+            visible_to=self.alice,
+            **kwargs,
+        )
+
+    def test_other_actor_event_survives_a_large_burst(self):
+        self._seed(own_events=70)
+        events = self._feed(limit=11)
+        self.assertEqual([e["actor"]["id"] for e in events], [self.bob.id])
+
+    def test_other_actor_event_survives_a_large_burst_in_single_source(self):
+        self._seed(own_events=70)
+        events = self._feed(limit=11, source="files")
+        self.assertEqual([e["actor"]["id"] for e in events], [self.bob.id])

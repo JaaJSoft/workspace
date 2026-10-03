@@ -50,24 +50,24 @@ class MailActivityProvider(ActivityProvider):
 
         return {row["day"]: row["count"] for row in rows}
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+    def get_recent_events(
+        self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
+    ):
         from workspace.mail.models import MailMessage
 
         is_sent = user_id is not None
 
-        qs = (
-            MailMessage.objects.filter(
-                deleted_at__isnull=True,
-            )
-            .filter(
-                self._base_filter(user_id),
-                self._viewer_filter(user_id, viewer_id),
-            )
-            .select_related(
-                "account__owner",
-            )
-            .order_by("-date")[offset : offset + limit]
+        qs = MailMessage.objects.filter(
+            deleted_at__isnull=True,
+        ).filter(
+            self._base_filter(user_id),
+            self._viewer_filter(user_id, viewer_id),
         )
+        if exclude_actor_id is not None:
+            qs = qs.exclude(account__owner_id=exclude_actor_id)
+        qs = qs.select_related(
+            "account__owner",
+        ).order_by("-date")[offset : offset + limit]
 
         events = []
         for msg in qs:

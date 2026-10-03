@@ -42,7 +42,9 @@ class CalendarActivityProvider(ActivityProvider):
 
         return {row["day"]: row["count"] for row in rows}
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+    def get_recent_events(
+        self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
+    ):
         from workspace.calendar.models import Event
 
         qs = Event.objects.filter(
@@ -52,6 +54,12 @@ class CalendarActivityProvider(ActivityProvider):
             qs = qs.filter(
                 owner_id=user_id,
                 calendar__external_source__isnull=True,
+            )
+        if exclude_actor_id is not None:
+            # Synced events carry no actor, so they are never the excluded one.
+            qs = qs.filter(
+                ~Q(owner_id=exclude_actor_id)
+                | Q(calendar__external_source__isnull=False)
             )
         qs = (
             qs.filter(

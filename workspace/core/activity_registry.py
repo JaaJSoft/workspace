@@ -54,10 +54,14 @@ class ActivityProvider(ABC):
         offset: int = 0,
         *,
         viewer_id: int | None = None,
+        exclude_actor_id: int | None = None,
     ) -> list[dict]:
         """Return recent activity events for the activity feed.
 
         When user_id is None, return events from all users (filtered by viewer_id access).
+        exclude_actor_id drops events whose actor is that user inside the query,
+        before limit/offset, so a burst of that user's events cannot crowd out
+        older events by others. Events with a null actor are kept.
 
         Each dict must contain:
             icon        - CSS icon class (e.g. "hard-drive")
@@ -143,6 +147,7 @@ class ActivityRegistry:
                     limit=limit,
                     offset=offset,
                     viewer_id=viewer_id,
+                    exclude_actor_id=exclude_actor_id,
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
@@ -166,16 +171,11 @@ class ActivityRegistry:
                     limit=fetch_count,
                     offset=0,
                     viewer_id=viewer_id,
+                    exclude_actor_id=exclude_actor_id,
                 )
                 for event in events:
                     event.setdefault("source", info.slug)
                     event.setdefault("source_color", module_color(info.slug))
-                if exclude_actor_id is not None:
-                    events = [
-                        e
-                        for e in events
-                        if (e.get("actor") or {}).get("id") != exclude_actor_id
-                    ]
                 all_events.extend(events)
             except Exception:
                 logger.exception(

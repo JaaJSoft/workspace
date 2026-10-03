@@ -64,7 +64,9 @@ class FilesActivityProvider(ActivityProvider):
 
         return {row["day"]: row["count"] for row in rows}
 
-    def get_recent_events(self, user_id, limit=10, offset=0, *, viewer_id=None):
+    def get_recent_events(
+        self, user_id, limit=10, offset=0, *, viewer_id=None, exclude_actor_id=None
+    ):
         from workspace.files.models import File, FileEvent
 
         # See get_daily_counts: events are not filtered by file__deleted_at
@@ -75,6 +77,8 @@ class FilesActivityProvider(ActivityProvider):
         ).exclude(file__mime_type="text/markdown")
         if user_id is not None:
             qs = qs.filter(file__owner_id=user_id)
+        if exclude_actor_id is not None:
+            qs = qs.exclude(actor_id=exclude_actor_id)
         qs = (
             qs.filter(
                 self._event_visibility_filter(user_id, viewer_id),

@@ -4,11 +4,9 @@ A tag's colour is plaintext, so metadata_sig is the only thing covering it -
 the server rebuilds the payload from the columns it is about to write and
 refuses anything else.
 
-Unlike a folder, a tag can be deleted outright: nothing points at it under
-RESTRICT, and the M2M rows go with it. The entries that lose it are then
-carrying a signature over a tag set they no longer have, which is theirs to
-repair by re-signing. The server never rewrites metadata_sig on their behalf -
-that would be a server forging a client's signature.
+Deleting one is a transaction: the entries that carry it arrive re-signed
+without it, and the server writes only signatures it has verified. It never
+signs on a client's behalf.
 """
 
 from django.db import IntegrityError, transaction
@@ -22,11 +20,17 @@ from rest_framework.views import APIView
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.uuids import parse_uuid_or_none
 
-from ..models import VaultTag
+from ..models import VaultEntry, VaultTag
 from ..queries import active_identity, reachable_vault, visible_tags
-from ..serializers import VaultTagSerializer, VaultTagWriteSerializer
+from ..serializers import (
+    TagDeleteSerializer,
+    VaultTagSerializer,
+    VaultTagWriteSerializer,
+)
 from ..services.attestation import AttestationError
+from ..services.entries import entry_signature_payload
 from ..services.metadata import tag_metadata_payload, verify_record
+from .folders import _ContentsChanged, _SignatureRefused
 
 SENSITIVE_BODY_FIELDS = ("encrypted_name", "metadata_sig")
 
@@ -165,10 +169,89 @@ class TagDetailView(_TagWriteMixin, CacheControlMixin, APIView):
         tag.save(update_fields=["encrypted_name", "color", "metadata_sig"])
         return Response(VaultTagSerializer(tag).data)
 
-    @extend_schema(tags=["Vault"], summary="Delete a tag", responses={204: None})
-    def delete(self, request, uuid):
+
+@method_decorator(sensitive_post_parameters("metadata_sig"), name="dispatch")
+class TagDeleteView(CacheControlMixin, APIView):
+    """Deleting a tag re-signs every entry that carries it, in one go.
+
+    tag_uuids is inside each carrier's signature, so removing the tag without
+    the new signatures would leave rows signed over a tag set they no longer
+    have. Either the whole removal lands or none of it does.
+    """
+
+    cache_no_store = True
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Delete a tag, re-signing the entries that carry it",
+        request=TagDeleteSerializer,
+        responses={204: None},
+    )
+    @sensitive_variables()
+    def post(self, request, uuid):
+        identity = active_identity(request.user)
         tag = VaultTag.objects.filter(uuid=uuid).first()
-        if tag is None or reachable_vault(request.user, tag.vault_id) is None:
+        if identity is None or tag is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        tag.delete()
+        vault = reachable_vault(request.user, tag.vault_id)
+        if (
+            vault is None
+            or visible_tags(request.user, vault).filter(pk=tag.pk).first() is None
+        ):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        serializer = TagDeleteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        submitted = {
+            item["uuid"]: item for item in serializer.validated_data["entries"]
+        }
+
+        try:
+            with transaction.atomic():
+                # Trashed carriers included: deleted_at is a view, and the
+                # tag is still in their signature.
+                carriers = list(
+                    VaultEntry.objects.filter(tags=tag).prefetch_related(
+                        "tags", "fields"
+                    )
+                )
+                if {entry.uuid for entry in carriers} != set(submitted):
+                    raise _ContentsChanged(
+                        "The submitted entries do not match the tag's carriers."
+                    )
+
+                for entry in carriers:
+                    item = submitted[entry.uuid]
+                    payload = entry_signature_payload(
+                        entry,
+                        signer_account_uuid=identity.uuid,
+                        tag_uuids=[t.uuid for t in entry.tags.all() if t.pk != tag.pk],
+                        fields={
+                            field.field_id: field.encrypted_value
+                            for field in entry.fields.all()
+                        },
+                    )
+                    try:
+                        verify_record(
+                            payload, identity.sig_public, item["metadata_sig"]
+                        )
+                    except AttestationError as exc:
+                        raise _SignatureRefused from exc
+                    written = VaultEntry.objects.filter(
+                        pk=entry.pk, metadata_sig=entry.metadata_sig
+                    ).update(metadata_sig=item["metadata_sig"])
+                    if written != 1:
+                        raise _ContentsChanged(
+                            "An entry changed while the tag was being deleted."
+                        )
+                    entry.tags.remove(tag)
+                tag.delete()
+        except _SignatureRefused:
+            return Response(
+                {"detail": "An entry signature does not verify."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except _ContentsChanged as refusal:
+            return Response({"detail": refusal.detail}, status=status.HTTP_409_CONFLICT)
+
         return Response(status=status.HTTP_204_NO_CONTENT)

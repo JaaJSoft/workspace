@@ -72,8 +72,13 @@ window.vaultApi = (function () {
     updateTag: function (uuid, body) {
       return request('/api/v1/vault/tags/' + uuid, { method: 'PATCH', body: body });
     },
-    deleteTag: function (uuid) {
-      return request('/api/v1/vault/tags/' + uuid, { method: 'DELETE' });
+    // Not a DELETE: every entry carrying the tag is re-signed without it, and
+    // the signatures travel with the removal so the two cannot half-happen.
+    deleteTag: function (uuid, entries) {
+      return request('/api/v1/vault/tags/' + uuid + '/delete', {
+        method: 'POST',
+        body: { entries: entries },
+      });
     },
     listEntries: function (vaultUuid, options) {
       let url = '/api/v1/vault/entries?vault=' + encodeURIComponent(vaultUuid);

@@ -69,6 +69,11 @@ urlpatterns = [
         name="vault-tag-detail",
     ),
     path(
+        "api/v1/vault/tags/<uuid:uuid>/delete",
+        tags.TagDeleteView.as_view(),
+        name="vault-tag-delete",
+    ),
+    path(
         "api/v1/vault/entries",
         entries.EntryListView.as_view(),
         name="vault-entry-list",

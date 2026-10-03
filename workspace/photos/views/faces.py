@@ -14,7 +14,7 @@ from django.urls import reverse
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import APIException, NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -57,23 +57,58 @@ def _require_faces():
         raise NotFound
 
 
-def _correction(fn, *args):
+class FaceConflict(APIException):
+    """409: the correction would put one person twice in a photo. The body
+    names each photo and the two faces, for the user to say which is them."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "face_conflict"
+
+    def __init__(self, message, conflicts):
+        super().__init__()
+        self.detail = {
+            "detail": message,
+            "conflicts": [_conflict_json(*pair) for pair in conflicts],
+        }
+
+
+def _face_ref(face):
+    return {
+        "uuid": str(face.pk),
+        "crop_url": reverse("photos-face-crop", kwargs={"pk": face.pk}),
+        "cluster": str(face.cluster_id) if face.cluster_id else None,
+        "timestamp": face.timestamp,
+    }
+
+
+def _conflict_json(incoming, existing):
+    return {
+        "file": str(incoming.file_id),
+        "file_name": incoming.file.name,
+        "incoming": _face_ref(incoming),
+        "existing": _face_ref(existing),
+    }
+
+
+def _correction(fn, *args, **kwargs):
     # Literal messages, never the exception's own text: what reaches the
     # client is decided here.
     try:
-        fn(*args)
-    except face_corrections.PhotoAlreadyInCluster:
-        raise ValidationError(
-            {"detail": "Another face of this photo is already in that group."}
-        ) from None
+        fn(*args, **kwargs)
+    except face_corrections.PhotoAlreadyInCluster as exc:
+        message = "Another face of this photo is already in that group."
+        if exc.conflicts:
+            raise FaceConflict(message, exc.conflicts) from None
+        raise ValidationError({"detail": message}) from None
     except face_corrections.CoverNotInCluster:
         raise ValidationError(
             {"detail": "The cover must be one of the group's faces."}
         ) from None
-    except face_people.PersonAlreadyInPhoto:
-        raise ValidationError(
-            {"detail": "This person is already in one of these photos."}
-        ) from None
+    except face_people.PersonAlreadyInPhoto as exc:
+        message = "This person is already in one of these photos."
+        if exc.conflicts:
+            raise FaceConflict(message, exc.conflicts) from None
+        raise ValidationError({"detail": message}) from None
     except face_people.NoCover:
         raise ValidationError(
             {"detail": "This person has no face picture to use yet."}
@@ -176,7 +211,8 @@ class FaceClusterViewSet(
                 if data["person_id"] is not None
                 else None
             )
-            _correction(face_people.link_cluster, cluster, person)
+            prefer = set(data.get("prefer", [])) if data.get("resolve") else None
+            _correction(face_people.link_cluster, cluster, person, prefer=prefer)
 
     def perform_destroy(self, instance):
         face_corrections.ungroup(instance)
@@ -289,12 +325,15 @@ class FaceViewSet(
     def perform_update(self, serializer):
         face = serializer.instance
         data = serializer.validated_data
+        replace = data.get("replace", False)
         if "new_person" in data:
             _correction(self._to_new_person, face, data["new_person"])
             return
         if "to_person" in data:
             person = _person(self.request.user, data["to_person"], "to_person")
-            _correction(face_people.assign_face_to_person, face, person)
+            _correction(
+                face_people.assign_face_to_person, face, person, replace=replace
+            )
             return
         if "cluster_id" in data:
             if data["cluster_id"] is None:
@@ -307,7 +346,7 @@ class FaceViewSet(
             )
             if cluster is None:
                 raise ValidationError({"cluster": "No such cluster."})
-            _correction(face_corrections.confirm_face, face, cluster)
+            _correction(face_corrections.confirm_face, face, cluster, replace=replace)
         elif data.get("assignment") == face.Assignment.CONFIRMED:
             if face.cluster is None:
                 raise ValidationError({"assignment": "The face is in no cluster."})
@@ -541,6 +580,7 @@ class FaceBatchView(APIView):
             data["action"],
             [faces[pk] for pk in wanted if pk in faces],
             target,
+            replace=data["replace"],
         )
         skipped = [
             {"face": str(pk), "reason": reason} for pk, reason in result.skipped

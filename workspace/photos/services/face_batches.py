@@ -4,6 +4,10 @@ A batch never fails as a whole: each face that cannot take the correction
 (another face of its photo is already that person, the action does not apply
 to it) is skipped with a reason, and the rest go through.
 
+An ``assign`` with ``replace`` settles those first: the faces of the photos
+already the target person stop being them. Never another face of the batch,
+though - two selected faces of one photo are still two people.
+
 Before touching anything a batch saves how its faces and their clusters were,
 under a token kept a few minutes in the cache. Undoing puts them back, a
 cluster the batch emptied (and so deleted) included.
@@ -14,6 +18,7 @@ from dataclasses import dataclass, field
 
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 
 from workspace.people.models import Person
 from workspace.people.services.persons import create_person
@@ -62,7 +67,7 @@ class Target:
     new_cluster: bool = False
 
 
-def apply(user, action, faces, target=None):
+def apply(user, action, faces, target=None, *, replace=False):
     """Apply *action* to each of *faces* (the user's, already checked)."""
     result = BatchResult()
     applicable = []
@@ -73,15 +78,35 @@ def apply(user, action, faces, target=None):
             result.skipped.append((face.pk, UNAVAILABLE))
     if not applicable:
         return result
-    result.undo = _save_undo(user, applicable)
+    displaced = _displaced(applicable, target) if replace and action == ASSIGN else []
+    result.undo = _save_undo(user, applicable + displaced)
     touched = set()
     with transaction.atomic():
+        for face in displaced:
+            face_corrections.reject_face(face, touched=touched)
         _run(user, action, applicable, target, result, touched)
     refresh_clusters(touched)
     if not result.done:
         cache.delete(_UNDO_KEY.format(user.pk, result.undo))
         result.undo = None
     return result
+
+
+def _displaced(faces, target):
+    """The faces outside the batch that its faces would take the place of."""
+    if target.cluster is not None:
+        same_person = Q(cluster=target.cluster)
+        if target.cluster.person_id is not None:
+            same_person |= Q(cluster__person_id=target.cluster.person_id)
+    elif target.person is not None:
+        same_person = Q(cluster__person=target.person)
+    else:
+        return []
+    return list(
+        Face.objects.filter(same_person, file_id__in={f.file_id for f in faces})
+        .exclude(pk__in=[f.pk for f in faces])
+        .select_related("cluster")
+    )
 
 
 def _run(user, action, faces, target, result, touched):

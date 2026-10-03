@@ -314,7 +314,7 @@ class FaceCorrectionTests(FaceApiTestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         face.refresh_from_db()
         self.assertEqual(face.cluster_id, self.bob.pk)
 

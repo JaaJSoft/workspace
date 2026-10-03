@@ -99,7 +99,7 @@ class NamingTests(FaceApiTestCase):
             {"person": str(self.alice_contact.pk)},
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         self.bob.refresh_from_db()
         self.assertIsNone(self.bob.person)
 
@@ -160,7 +160,7 @@ class FaceToPersonTests(FaceApiTestCase):
             self.client, self.url(face), {"to_person": str(self.alice_contact.pk)}
         )
 
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 409)
         face.refresh_from_db()
         self.assertEqual(face.cluster_id, self.bob.pk)
 

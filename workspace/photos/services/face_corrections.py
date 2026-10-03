@@ -11,7 +11,7 @@ each cluster once rather than once per face.
 """
 
 from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
@@ -20,7 +20,16 @@ from .face_grouping import photo_clusters, refresh_clusters
 
 class CorrectionError(ValueError):
     """A correction that cannot apply. Each kind is its own subclass, so a
-    caller answers with its own wording rather than the exception's text."""
+    caller answers with its own wording rather than the exception's text.
+
+    ``conflicts`` holds the (incoming, existing) face pairs that stood in the
+    way, when the refusal is one face per photo per person: what a caller
+    shows the user to settle it.
+    """
+
+    def __init__(self, conflicts=()):
+        super().__init__()
+        self.conflicts = list(conflicts)
 
 
 class PhotoAlreadyInCluster(CorrectionError):
@@ -38,6 +47,15 @@ class PersonsDiffer(CorrectionError):
     def __init__(self, person_ids):
         super().__init__()
         self.person_ids = sorted(person_ids, key=str)
+
+
+def blocking_faces(face, cluster):
+    """The other faces of *face*'s photo that keep it out of *cluster*: one
+    in that cluster, or in another cluster of the same person."""
+    same_person = Q(cluster=cluster)
+    if cluster.person_id is not None:
+        same_person |= Q(cluster__person_id=cluster.person_id)
+    return Face.objects.filter(same_person, file_id=face.file_id).exclude(pk=face.pk)
 
 
 def _refresh(cluster_ids, touched):
@@ -211,11 +229,20 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
         refresh_clusters([cluster.pk])
 
 
-def confirm_face(face, cluster, *, touched=None):
-    """This is X: pin *face* in *cluster*, wherever it was."""
+def confirm_face(face, cluster, *, replace=False, touched=None):
+    """This is X: pin *face* in *cluster*, wherever it was.
+
+    With *replace*, the face of the photo already X is not X after all: it
+    is taken out of its cluster for *face* to take its place.
+    """
     previous = face.cluster_id
+    if replace:
+        for other in blocking_faces(face, cluster):
+            reject_face(other, touched=touched)
     if cluster.pk in photo_clusters(face.file_id, exclude_face=face.pk):
-        raise PhotoAlreadyInCluster
+        raise PhotoAlreadyInCluster(
+            (face, other) for other in blocking_faces(face, cluster)
+        )
     face.cluster = cluster
     face.assignment = Face.Assignment.CONFIRMED
     if face.rejected_cluster_id == cluster.pk:
@@ -224,7 +251,7 @@ def confirm_face(face, cluster, *, touched=None):
         with transaction.atomic():
             face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     except IntegrityError as exc:
-        raise PhotoAlreadyInCluster from exc
+        raise PhotoAlreadyInCluster() from exc
     _refresh({cluster.pk, previous}, touched)
 
 

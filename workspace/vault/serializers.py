@@ -480,7 +480,7 @@ class MigrateItemSerializer(serializers.Serializer):
     expected_sig = _OpaqueField(required=False)
     wrapped_key = _OpaqueField(required=False)
     wrapped_key_expected = _OpaqueField(required=False)
-    hpke_suite = serializers.JSONField(required=False)
+    hpke_suite = serializers.JSONField(required=False, validators=[validate_hpke_suite])
 
     def to_internal_value(self, data):
         if not isinstance(data, dict) or data.get("kind") not in ITEM_KEYS:

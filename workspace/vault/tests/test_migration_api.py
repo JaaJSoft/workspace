@@ -340,6 +340,86 @@ class MigrateBatchTests(TestCase):
         item = self._entry_item(entry, name=sealed("n", 1))
         self.assertEqual(self._post([item]).status_code, 400)
 
+    def _wrap_item(self, suite):
+        return {
+            "kind": "wrap",
+            "wrapped_key": "bmV3",
+            "hpke_suite": suite,
+            "wrapped_key_expected": self.wrap.wrapped_key,
+        }
+
+    def test_a_loosely_typed_hpke_suite_is_400(self):
+        self.assertEqual(
+            self._post([self._wrap_item({**CURRENT_HPKE, "format": 2.0})]).status_code,
+            400,
+        )
+        self.assertEqual(
+            self._post([self._wrap_item({**CURRENT_HPKE, "kdf_id": True})]).status_code,
+            400,
+        )
+        self.assertEqual(
+            VaultKeyWrap.objects.get(pk=self.wrap.pk).hpke_suite, HPKE_SUITE
+        )
+
+    def test_more_than_the_ciphertext_cap_is_400(self):
+        items = []
+        for number in range(33):
+            fields = {f"custom:f{index}": sealed("x") for index in range(64)}
+            items.append(
+                {
+                    "kind": "entry",
+                    "uuid": f"00000000-0000-7000-8000-{number:012d}",
+                    "encrypted_name": sealed("n"),
+                    "encrypted_notes": "",
+                    "fields": fields,
+                    "metadata_sig": "AQ",
+                    "expected_sig": "AQ",
+                }
+            )
+        response = self._post(items)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("too many ciphertexts", str(response.json()))
+
+    def test_emptying_notes_is_400(self):
+        entry = self._entry(notes=sealed("notes", 1))
+        self.assertEqual(
+            self._post([self._entry_item(entry, notes="")]).status_code, 400
+        )
+
+    def test_emptying_a_description_is_400(self):
+        Vault.objects.filter(pk=self.vault.pk).update(
+            encrypted_description=sealed("d", 1)
+        )
+        self.vault.refresh_from_db()
+        self.assertEqual(self._post([self._metadata_item()]).status_code, 400)
+
+    def test_an_entry_ciphertext_of_another_key_version_is_400(self):
+        entry = self._entry()
+        item = self._entry_item(entry, name=sealed("n", key_version=2))
+        self.assertEqual(self._post([item]).status_code, 400)
+
+    def test_a_folder_name_of_another_key_version_is_400(self):
+        folder = VaultFolder.objects.create(
+            vault=self.vault, encrypted_name=sealed("f", 1), metadata_sig="AQ"
+        )
+        name = sealed("f2", key_version=2)
+        payload = folder_metadata_payload(
+            folder_uuid=folder.uuid,
+            vault_uuid=self.vault.uuid,
+            signer_account_uuid=self.identity.uuid,
+            parent_uuid=None,
+            position=folder.position,
+            encrypted_name=name,
+        )
+        item = {
+            "kind": "folder",
+            "uuid": str(folder.uuid),
+            "encrypted_name": name,
+            "metadata_sig": sign(self.signer, payload),
+            "expected_sig": "AQ",
+        }
+        self.assertEqual(self._post([item]).status_code, 400)
+
     def test_a_superseded_hpke_suite_is_400(self):
         item = {
             "kind": "wrap",

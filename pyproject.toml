@@ -91,6 +91,9 @@ dependencies = [
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.30.0",
+    # S3-compatible object storage (common/storage/s3.py), imported only when
+    # STORAGE_BACKEND=s3: a filesystem deployment never loads it.
+    "boto3>=1.43.0",
 ]
 
 [build-system]
@@ -132,6 +135,10 @@ dev = [
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",
     "odfpy>=1.4.1",
+    # An in-process S3 for the object storage backend's tests
+    # (common/tests/test_storage.py); the live S3 CI job runs the same cases
+    # against a real server.
+    "moto[s3]>=5.2.0",
 ]
 
 [tool.djlint]

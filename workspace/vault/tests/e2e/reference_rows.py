@@ -6,11 +6,13 @@ straight into the database.
 """
 
 import os
+import time
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
 from workspace.vault.models import AccountIdentity, Vault, VaultEntry, VaultKeyWrap
+from workspace.vault.services.suites import hpke_format
 from workspace.vault.tests.reference import ad, metadata, primitives, suites, wire
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 
@@ -81,32 +83,41 @@ class ReferenceRowsMixin:
         this is how a row written by another build - older or newer - lands in
         the table.
         """
+        self._write_entries_as_reference(
+            [name], format_version=format_version, aead_id=aead_id
+        )
+
+    def _write_entries_as_reference(self, names, *, format_version=None, aead_id=None):
+        """One entry per name, as _write_entry_as_reference writes it.
+
+        The account keys are opened once for the lot: each opening runs the
+        password KDF, which is what a few hundred rows would otherwise cost.
+        """
         account_uuid, kex_priv, sig_priv = self._account_keys()
         vault = Vault.objects.get(uuid=self.vault_uuid)
-        entry = VaultEntry(vault=vault, key_version=vault.key_version)
-        entry_key = primitives.hkdf(
-            self._vault_key(vault, account_uuid, kex_priv),
-            ad.entry_key_info(str(entry.uuid)),
-        )
+        vault_key = self._vault_key(vault, account_uuid, kex_priv)
         aead = suites.CURRENT_SUITE["aead_id"] if aead_id is None else aead_id
-        entry.encrypted_name = to_base64url(
-            primitives.aead_seal(
-                entry_key,
-                name.encode("utf-8"),
-                ad.entry_field_ad(str(entry.uuid), "name"),
-                iv=os.urandom(suites.entry("aead", aead)["iv_length"]),
-                key_version=vault.key_version,
-                kdf_id=wire.KDF_HKDF_SHA256,
-                format_version=format_version,
-                aead_id=aead,
+        for name in names:
+            entry = VaultEntry(vault=vault, key_version=vault.key_version)
+            entry_key = primitives.hkdf(vault_key, ad.entry_key_info(str(entry.uuid)))
+            entry.encrypted_name = to_base64url(
+                primitives.aead_seal(
+                    entry_key,
+                    name.encode("utf-8"),
+                    ad.entry_field_ad(str(entry.uuid), "name"),
+                    iv=os.urandom(suites.entry("aead", aead)["iv_length"]),
+                    key_version=vault.key_version,
+                    kdf_id=wire.KDF_HKDF_SHA256,
+                    format_version=format_version,
+                    aead_id=aead,
+                )
             )
-        )
-        # An unsaved row has no tags or fields to ask for, and this one has
-        # neither.
-        entry.metadata_sig = self._signature(
-            entry, account_uuid, sig_priv, tag_uuids=[], fields={}
-        )
-        entry.save()
+            # An unsaved row has no tags or fields to ask for, and this one has
+            # neither.
+            entry.metadata_sig = self._signature(
+                entry, account_uuid, sig_priv, tag_uuids=[], fields={}
+            )
+            entry.save()
 
     def _rewrite_header_byte(self, entry, field, index, value):
         """Patch one header byte of a stored ciphertext, then sign the row
@@ -130,3 +141,46 @@ class ReferenceRowsMixin:
         VaultEntry.objects.filter(uuid=entry.uuid).update(
             **{field: getattr(entry, field), "metadata_sig": entry.metadata_sig}
         )
+
+    # ---- what is stored -----------------------------------------------------
+
+    def _formats(self, vault):
+        """Every format the vault's rows are stored under: its entries' names,
+        its own name and this account's key wrap."""
+        values = list(
+            VaultEntry.objects.filter(vault=vault).values_list(
+                "encrypted_name", flat=True
+            )
+        )
+        values.append(Vault.objects.get(pk=vault.pk).encrypted_name)
+        formats = {from_base64url(value)[0] for value in values if value}
+        wrap = VaultKeyWrap.objects.get(vault=vault, recipient=self.user)
+        formats.add(hpke_format(wrap.hpke_suite))
+        return formats
+
+    def _wait_for_no_migration(self, timeout_ms=30000):
+        """Wait until the server lists nothing left to migrate for the
+        account the page is signed in as.
+
+        The migration POSTs a few seconds after the unlock resolves, so the
+        database is only worth reading once the listing has emptied. Polled
+        from Python through evaluate, which awaits the fetch: wait_for_function
+        takes the pending promise itself for a truthy answer.
+        """
+        deadline = time.monotonic() + timeout_ms / 1000
+        while True:
+            remaining = self.page.evaluate(
+                """async () => {
+                    const response = await fetch('/api/v1/vault/migration', {
+                        headers: { Accept: 'application/json' },
+                    });
+                    return response.ok ? (await response.json()).vaults.length : -1;
+                }"""
+            )
+            if remaining == 0:
+                return
+            if time.monotonic() > deadline:
+                raise AssertionError(
+                    f"the migration listing still names {remaining} vault(s)"
+                )
+            self.page.wait_for_timeout(500)

@@ -39,6 +39,11 @@ urlpatterns = [
         name="vault-detail",
     ),
     path(
+        "api/v1/vault/vaults/<uuid:uuid>/migrate",
+        migration.VaultMigrateView.as_view(),
+        name="vault-migrate",
+    ),
+    path(
         "api/v1/vault/folders",
         folders.FolderListView.as_view(),
         name="vault-folder-list",

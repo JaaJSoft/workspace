@@ -250,7 +250,6 @@ Remaining ideas per shipped module, not yet prioritized (P1/P2/P3 items above ar
 ## Infrastructure & ops backlog
 
 - [ ] **Session cleanup** - Celery task for `clearsessions` (expired DB sessions when Redis is not used)
-- [ ] **CDN / S3 storage backend** - django-storages for scalable file storage (MinIO for self-hosted)
 - [ ] **Rate limiting** - django-ratelimit on sensitive endpoints (login, file upload, chat send)
 - [ ] **Structured logging** - JSON logs with request_id tracing (django-structlog)
 - [ ] **E2E tests** - Playwright suite for critical flows (login, file upload, chat send, mail compose)

@@ -24,6 +24,7 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from django.core.files.base import File
+from django.utils.http import content_disposition_header
 
 from workspace.common.logging import scrub
 
@@ -144,6 +145,8 @@ class S3Backend(Backend):
         addressing_style=None,
         presign_endpoint_url=None,
         url_ttl=300,
+        signed_urls=False,
+        signed_url_ttl=3600,
         conditional_writes=True,
         part_size=8 * 1024 * 1024,
         read_window=8 * 1024 * 1024,
@@ -154,6 +157,12 @@ class S3Backend(Backend):
         self.bucket = bucket
         self.prefix = f"{prefix.strip('/')}/" if prefix.strip("/") else ""
         self.url_ttl = url_ttl
+        # Serving through signed URLs is opt-in: a browser fetch() that follows
+        # the redirect needs the bucket to answer CORS for the app's origin.
+        self.signed_urls = signed_urls
+        # Long enough for a video to play to its end: a player can keep
+        # fetching ranges from the URL it was redirected to.
+        self.signed_url_ttl = signed_url_ttl
         self.part_size = part_size
         self.read_window = read_window
         # A save under a taken name must not replace the blob there. A
@@ -301,6 +310,22 @@ class S3Backend(Backend):
             "get_object",
             Params={"Bucket": self.bucket, "Key": self._key(name)},
             ExpiresIn=self.url_ttl,
+        )
+
+    def signed_url(self, name, *, filename, attachment, content_type):
+        if not self.signed_urls:
+            return None
+        return _client(**self._presign_connection).generate_presigned_url(
+            "get_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": self._key(name),
+                "ResponseContentType": content_type,
+                "ResponseContentDisposition": content_disposition_header(
+                    attachment, filename
+                ),
+            },
+            ExpiresIn=self.signed_url_ttl,
         )
 
     def get_modified_time(self, name):

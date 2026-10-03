@@ -53,6 +53,13 @@ class StorageSettingsTests(SimpleTestCase):
             module.STORAGES["files"]["OPTIONS"], {**default, "allow_overwrite": True}
         )
 
+    def test_a_configured_bucket_is_reachable_while_the_disk_is_in_use(self):
+        module = self._load(S3_BUCKET="workspace-media")
+
+        self.assertEqual(module.STORAGE_BACKEND, "local")
+        self.assertEqual(module.STORAGES["default"]["OPTIONS"], {"backend": "local"})
+        self.assertEqual(module.BLOB_BACKENDS["s3"]["bucket"], "workspace-media")
+
     def test_object_storage_needs_a_bucket(self):
         with self.assertRaises(ImproperlyConfigured):
             self._load(STORAGE_BACKEND="s3")

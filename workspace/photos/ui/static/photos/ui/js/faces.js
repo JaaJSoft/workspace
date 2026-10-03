@@ -44,6 +44,7 @@ async function facesRequest(url, { method = 'GET', body } = {}) {
     }
     const error = new Error(detail || `Request failed (${response.status})`);
     error.data = data;
+    error.status = response.status;
     throw error;
   }
   return response.status === 204 ? null : response.json();
@@ -71,24 +72,88 @@ function personsUrl(query) {
   return q ? `${FACES_API}/persons?q=${encodeURIComponent(q)}` : `${FACES_API}/persons?contacts=1`;
 }
 
+// A 409 from a correction that would put one person twice in a photo: its
+// body names each photo and the two faces.
+function isFaceConflict(err) {
+  return !!(err && err.status === 409 && err.data && Array.isArray(err.data.conflicts) && err.data.conflicts.length);
+}
+
+// The user closed the "which one is them?" question without answering:
+// nothing is reported, nothing was changed.
+function faceConflictCancelled() {
+  const error = new Error('Cancelled');
+  error.cancelled = true;
+  return error;
+}
+
+// Asks the conflict dialog which face is `name` in each photo of
+// `conflicts`. Resolves to the uuids of the incoming faces picked over the
+// ones already them, or null when the dialog is closed without an answer.
+function askFaceConflicts(name, conflicts) {
+  return new Promise((resolve) => {
+    window.dispatchEvent(new CustomEvent('face-conflicts-ask', { detail: { name, conflicts, resolve } }));
+  });
+}
+
+// Names a cluster (`body` holds person or new_person). A photo the person
+// is already in is asked about, then settled; a cancel rejects with
+// faceConflictCancelled().
+async function nameCluster(uuid, body, name) {
+  const url = `${FACES_API}/clusters/${uuid}`;
+  try {
+    return await facesRequest(url, { method: 'PATCH', body });
+  } catch (err) {
+    if (!isFaceConflict(err)) throw err;
+    const prefer = await askFaceConflicts(name, err.data.conflicts);
+    if (prefer === null) throw faceConflictCancelled();
+    return facesRequest(url, { method: 'PATCH', body: { ...body, resolve: true, prefer } });
+  }
+}
+
 // What a merge may take in: every unnamed cluster, and one entry per named
 // person - their largest cluster, the list being largest first - since the
 // others of theirs are that same person already. Never the target, nor
-// another cluster of the target's own person.
+// another cluster of the target's own person. `members` lists the clusters
+// an entry stands for, and `photo_count` counts them all: every one of a
+// named person's.
 function mergeCandidates(clusters, target) {
+  const byPerson = {};
+  for (const c of clusters) {
+    if (c.person) (byPerson[c.person] = byPerson[c.person] || []).push(c);
+  }
   const seen = new Set(target.person ? [target.person] : []);
-  return clusters.filter((c) => {
-    if (c.uuid === target.uuid) return false;
-    if (!c.person) return true;
-    if (seen.has(c.person)) return false;
-    seen.add(c.person);
-    return true;
-  });
+  return clusters
+    .filter((c) => {
+      if (c.uuid === target.uuid) return false;
+      if (!c.person) return true;
+      if (seen.has(c.person)) return false;
+      seen.add(c.person);
+      return true;
+    })
+    .map((c) => {
+      const members = c.person ? byPerson[c.person] : [c];
+      return {
+        ...c,
+        members: members.map((m) => m.uuid),
+        photo_count: members.reduce((sum, m) => sum + m.photo_count, 0),
+      };
+    });
+}
+
+// The candidate a picked People card stands for: the one sharing a cluster
+// with it.
+function candidateForCard(candidates, card) {
+  return candidates.find((c) => c.members.some((uuid) => card.clusters.includes(uuid))) || null;
+}
+
+// Which picked card a merge keeps: the first named one, else the first.
+function mergeKeeper(cards) {
+  return cards.find((card) => card.person) || cards[0] || null;
 }
 
 // Case and accents set aside, so "lea" finds "Léa".
 function foldName(text) {
-  return (text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  return (text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
 // The merge candidates a typed query keeps: the people whose name contains
@@ -117,6 +182,9 @@ window.photosFacesMixin = function photosFacesMixin() {
     mergeDialog: {
       target: null, clusters: [], selected: [], query: '', loading: false, saving: false, choices: null, person: null,
     },
+    // Picking several People cards to merge them: their data-clusters keys.
+    peoplePicking: false,
+    peoplePicked: [],
 
     // Both read from the page each time: a sidebar navigation swaps the
     // content they are embedded in.
@@ -307,9 +375,13 @@ window.photosFacesMixin = function photosFacesMixin() {
       document.getElementById('name-person-dialog').close();
     },
 
+    // One cluster after the other: each may ask about the photos the person
+    // is already in.
     async chooseName(person) {
       await this._name(async (target) => {
-        await this._patchClusters(target, { person: person.uuid });
+        for (const uuid of target.clusters) {
+          await nameCluster(uuid, { person: person.uuid }, person.name);
+        }
         return person.uuid;
       });
     },
@@ -319,11 +391,10 @@ window.photosFacesMixin = function photosFacesMixin() {
       if (!name) return;
       await this._name(async (target) => {
         const [first, ...rest] = target.clusters;
-        const named = await facesRequest(`${FACES_API}/clusters/${first}`, {
-          method: 'PATCH',
-          body: { new_person: name },
-        });
-        await this._patchClusters({ clusters: rest }, { person: named.person });
+        const named = await nameCluster(first, { new_person: name }, name);
+        for (const uuid of rest) {
+          await nameCluster(uuid, { person: named.person }, name);
+        }
         return named.person;
       });
     },
@@ -340,7 +411,7 @@ window.photosFacesMixin = function photosFacesMixin() {
           this._isOnPageOf(target) ? `/photos?person=${encodeURIComponent(personUuid)}` : window.location.href,
         );
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not name this person');
+        if (!err.cancelled) window.AppAlert.error(err.message || 'Could not name this person');
       } finally {
         this.nameDialog.saving = false;
       }
@@ -348,16 +419,24 @@ window.photosFacesMixin = function photosFacesMixin() {
 
     // ── Merge dialog ────────────────────────────────────
 
-    async openMergeDialog(card) {
+    // `card` is what the others merge into: a named person (their largest
+    // cluster takes the rest) or an unnamed cluster. `picked`, cards ticked
+    // on the People grid, start selected.
+    async openMergeDialog(card, picked = []) {
       this.mergeDialog = {
         target: card, clusters: [], selected: [], query: '', loading: true, saving: false, choices: null, person: null,
       };
       document.getElementById('merge-clusters-dialog').showModal();
       try {
         const clusters = await facesRequest(`${FACES_API}/clusters`);
-        const target = clusters.find((c) => c.uuid === card.uuid);
-        if (target) this.mergeDialog.target = target;
-        this.mergeDialog.clusters = mergeCandidates(clusters, target || card);
+        const uuid = card.uuid || card.clusters[0];
+        const target = clusters.find((c) => c.uuid === uuid) || { ...card, uuid };
+        this.mergeDialog.target = target;
+        this.mergeDialog.clusters = mergeCandidates(clusters, target);
+        this.mergeDialog.selected = picked
+          .map((other) => candidateForCard(this.mergeDialog.clusters, other))
+          .filter(Boolean)
+          .map((c) => c.uuid);
       } catch (err) {
         window.AppAlert.error(err.message || 'Could not load people');
       } finally {
@@ -392,24 +471,71 @@ window.photosFacesMixin = function photosFacesMixin() {
       const target = this.mergeDialog.target;
       if (!target || !this.mergeDialog.selected.length) return;
       this.mergeDialog.saving = true;
-      const body = { clusters: this.mergeDialog.selected };
+      // A named person stands for all of their clusters.
+      const picked = new Set(this.mergeDialog.selected);
+      const clusters = this.mergeDialog.clusters.filter((c) => picked.has(c.uuid)).flatMap((c) => c.members);
+      const body = { clusters };
       if (this.mergeDialog.person) body.person = this.mergeDialog.person;
       try {
         await facesRequest(`${FACES_API}/clusters/${target.uuid}/merge`, { method: 'POST', body });
         this.closeMergeDialog();
+        this.stopPickingPeople();
         await this._reloadView();
       } catch (err) {
         const persons = err.data && err.data.persons;
         if (persons && persons.length) {
-          // Named after different people: the user picks the name to keep.
+          // Named after different people: the user picks the name to keep,
+          // the one of the person merged into unless they say otherwise.
           this.mergeDialog.choices = persons;
-          this.mergeDialog.person = persons[0].uuid;
+          this.mergeDialog.person = (persons.find((p) => p.uuid === target.person) || persons[0]).uuid;
         } else {
           window.AppAlert.error(err.message || 'Could not merge');
         }
       } finally {
         this.mergeDialog.saving = false;
       }
+    },
+
+    // ── Picking People cards to merge ───────────────────
+
+    startPickingPeople() {
+      this.peoplePicking = true;
+      this.peoplePicked = [];
+    },
+
+    stopPickingPeople() {
+      this.peoplePicking = false;
+      this.peoplePicked = [];
+    },
+
+    isPeopleCardPicked(key) {
+      return this.peoplePicked.includes(key);
+    },
+
+    togglePeopleCard(key) {
+      this.peoplePicked = this.isPeopleCardPicked(key)
+        ? this.peoplePicked.filter((k) => k !== key)
+        : [...this.peoplePicked, key];
+    },
+
+    // The picked cards, read off the grid in the order they were picked.
+    _pickedCards() {
+      return this.peoplePicked
+        .map((key) => document.querySelector(`#people-grid [data-clusters="${CSS.escape(key)}"]`))
+        .filter(Boolean)
+        .map((el) => ({
+          uuid: el.dataset.cluster || null,
+          clusters: el.dataset.clusters.split(',').filter(Boolean),
+          person: el.dataset.person || null,
+          cover_url: el.querySelector('img') ? el.querySelector('img').getAttribute('src') : null,
+        }));
+    },
+
+    mergePickedPeople() {
+      const cards = this._pickedCards();
+      const keeper = mergeKeeper(cards);
+      if (!keeper || cards.length < 2) return null;
+      return this.openMergeDialog(keeper, cards.filter((card) => card !== keeper));
     },
 
     // ── "People in this photo" ──────────────────────────
@@ -471,33 +597,32 @@ window.photosFacesMixin = function photosFacesMixin() {
       return 'Not grouped yet';
     },
 
-    // The people other faces of this photo already are: never offered.
-    _personsInPhoto(face) {
-      return new Set(
-        this.facesDialog.faces
-          .filter((f) => f.uuid !== face.uuid)
-          .map((f) => this.clusterOf(f))
-          .filter((c) => c && c.person)
-          .map((c) => c.person),
-      );
+    // The other face of this photo that already is `person`, or null: picking
+    // the person for `face` takes that one's place.
+    facePersonTaken(face, person) {
+      return this.facesDialog.faces.find((f) => {
+        const cluster = f.uuid !== face.uuid ? this.clusterOf(f) : null;
+        return !!cluster && cluster.person === person.uuid;
+      }) || null;
     },
 
+    // The same, for an unnamed cluster.
+    faceClusterTaken(face, cluster) {
+      return this.facesDialog.faces.find((f) => f.uuid !== face.uuid && f.cluster === cluster.uuid) || null;
+    },
+
+    // Everyone but who the face already is; the people other faces of the
+    // photo are come too, to say this face is them instead.
     pickablePersons(face) {
       const own = this.clusterOf(face);
-      const taken = this._personsInPhoto(face);
       const source = this.facesDialog.results || this.facesDialog.persons;
-      return source.filter((p) => !taken.has(p.uuid) && !(own && own.person === p.uuid));
+      return source.filter((p) => !(own && own.person === p.uuid));
     },
 
     // Unnamed clusters, while no name is typed: someone who has no name yet.
     pickableClusters(face) {
       if (this.facesDialog.query.trim()) return [];
-      const taken = new Set(
-        this.facesDialog.faces.filter((f) => f.uuid !== face.uuid && f.cluster).map((f) => f.cluster),
-      );
-      return this.facesDialog.clusters.filter(
-        (c) => !c.person && c.uuid !== face.cluster && !taken.has(c.uuid),
-      );
+      return this.facesDialog.clusters.filter((c) => !c.person && c.uuid !== face.cluster);
     },
 
     async searchFacePersons() {
@@ -538,16 +663,26 @@ window.photosFacesMixin = function photosFacesMixin() {
         this.facesDialog.results = null;
         this.facesDialog.changed = true;
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not correct the face');
+        if (!err.cancelled) window.AppAlert.error(err.message || 'Could not correct the face');
       } finally {
         this.facesDialog.busy = false;
       }
     },
 
-    _patchFace(face, body) {
-      return this._correctFace(face, () => facesRequest(
-        `${FACES_API}/faces/${face.uuid}`, { method: 'PATCH', body },
-      ));
+    // A conflict the dialog did not see coming (the photo changed since it
+    // was read) is asked about: replaced when the user picks this face.
+    _patchFace(face, body, name) {
+      const url = `${FACES_API}/faces/${face.uuid}`;
+      return this._correctFace(face, async () => {
+        try {
+          return await facesRequest(url, { method: 'PATCH', body });
+        } catch (err) {
+          if (!isFaceConflict(err) || body.replace) throw err;
+          const prefer = await askFaceConflicts(name || 'this person', err.data.conflicts);
+          if (prefer === null || !prefer.includes(face.uuid)) throw faceConflictCancelled();
+          return facesRequest(url, { method: 'PATCH', body: { ...body, replace: true } });
+        }
+      });
     },
 
     confirmFace(face) {
@@ -559,11 +694,13 @@ window.photosFacesMixin = function photosFacesMixin() {
     },
 
     assignFace(face, cluster) {
-      return this._patchFace(face, { cluster: cluster.uuid });
+      const replace = !!this.faceClusterTaken(face, cluster);
+      return this._patchFace(face, { cluster: cluster.uuid, replace }, 'this person');
     },
 
     assignFaceToPerson(face, person) {
-      return this._patchFace(face, { to_person: person.uuid });
+      const replace = !!this.facePersonTaken(face, person);
+      return this._patchFace(face, { to_person: person.uuid, replace }, person.name);
     },
 
     newPersonForFace(face) {
@@ -765,6 +902,46 @@ function faceRange(uuids, from, to) {
   return uuids.slice(Math.min(start, end), Math.max(start, end) + 1);
 }
 
+// The faces of a batch assign skipped because their photo already shows
+// that person.
+function skippedInPhoto(result) {
+  return result.skipped.filter((s) => s.reason === 'already_in_photo').map((s) => s.face);
+}
+
+// Sends those faces again, the face of each photo already that person
+// making way this time. The page reloads after, as for an undo.
+async function replaceSkippedFaces(body, uuids, target) {
+  let result;
+  try {
+    result = await facesRequest(`${FACES_API}/faces/batch`, {
+      method: 'POST',
+      body: { ...body, faces: uuids, replace: true },
+    });
+  } catch (err) {
+    window.AppAlert.error(err.message || 'Could not correct the faces');
+    return;
+  }
+  window.AppAlert.success(faceBatchMessage(body.action, result, target), {
+    duration: 8000,
+    actions: result.undo ? [{ label: 'Undo', onClick: () => undoFaceBatch([result.undo]) }] : [],
+  });
+  window.dispatchEvent(new CustomEvent('photos-faces-changed'));
+}
+
+// The toast buttons of a batch's answer: Undo when something changed, and
+// for an assign that skipped faces already in their photo, the offer to
+// use them instead.
+function faceBatchActions(body, result, target, undoTokens) {
+  const actions = [];
+  const skipped = body.action === 'assign' ? skippedInPhoto(result) : [];
+  if (skipped.length) {
+    const label = skipped.length === 1 ? 'Use it instead' : 'Use them instead';
+    actions.push({ label, onClick: () => replaceSkippedFaces(body, skipped, target) });
+  }
+  if (undoTokens.length) actions.push({ label: 'Undo', onClick: () => undoFaceBatch(undoTokens) });
+  return actions;
+}
+
 // The photosApp() root reloads the page once it hears the event: an undo can
 // put faces back anywhere, and the board that asked may be gone by then.
 // Several tokens are undone last first, each batch having saved the faces as
@@ -929,13 +1106,11 @@ window.faceSelectionMixin = function faceSelectionMixin() {
       this.selectedFaces = this.selectedFaces.filter((uuid) => !done.has(uuid));
       if (result.done.length) this.facesSettled(result.done, body.action);
       const message = faceBatchMessage(body.action, result, target);
+      const actions = faceBatchActions(body, result, target, result.undo ? [result.undo] : []);
       if (!result.done.length) {
-        window.AppAlert.warning(message);
+        window.AppAlert.warning(message, { duration: 8000, actions });
       } else {
-        window.AppAlert.success(message, {
-          duration: 8000,
-          actions: result.undo ? [{ label: 'Undo', onClick: () => undoFaceBatch([result.undo]) }] : [],
-        });
+        window.AppAlert.success(message, { duration: 8000, actions });
       }
       return result;
     },
@@ -1390,14 +1565,16 @@ window.facesReview = function facesReview() {
           if (step.batch) {
             const result = await facesRequest(`${FACES_API}/faces/batch`, { method: 'POST', body: step.batch });
             if (result.undo) undo.push(result.undo);
-            if (!main) main = { action: step.batch.action, result };
-          } else {
+            if (!main) main = { action: step.batch.action, body: step.batch, result };
+          } else if (step.cluster.hidden) {
             await facesRequest(`${FACES_API}/clusters/${card.cluster}`, { method: 'PATCH', body: step.cluster });
+          } else {
+            await nameCluster(card.cluster, step.cluster, answer.name);
           }
           sent += 1;
         }
       } catch (err) {
-        window.AppAlert.error(err.message || 'Could not save');
+        if (!err.cancelled) window.AppAlert.error(err.message || 'Could not save');
         // What went through changed the card: start again from the server.
         if (sent) this._reloadQueue();
         return false;
@@ -1433,14 +1610,12 @@ window.facesReview = function facesReview() {
       }
       if (!main) return;
       const message = faceBatchMessage(main.action, main.result, answer.name);
+      const actions = faceBatchActions(main.body, main.result, answer.name, undo);
       if (!main.result.done.length) {
-        window.AppAlert.warning(message);
+        window.AppAlert.warning(message, { duration: 8000, actions });
         return;
       }
-      window.AppAlert.success(message, {
-        duration: 8000,
-        actions: undo.length ? [{ label: 'Undo', onClick: () => undoFaceBatch(undo) }] : [],
-      });
+      window.AppAlert.success(message, { duration: 8000, actions });
     },
 
     _reloadQueue() {
@@ -1448,6 +1623,58 @@ window.facesReview = function facesReview() {
         targets: ['photos-nav', 'photos-content'],
         focus: false,
       });
+    },
+  };
+};
+
+// "Which one is them?": a correction would put one person twice in some
+// photos, and the user picks the right face in each. Its own component,
+// answering askFaceConflicts() from any page; the face already the person
+// is the default.
+window.faceConflictsDialog = function faceConflictsDialog() {
+  return {
+    name: '',
+    conflicts: [],
+    prefer: [],
+    _resolve: null,
+
+    ask(detail) {
+      this._settle(null);
+      this.name = detail.name;
+      this.conflicts = detail.conflicts;
+      this.prefer = [];
+      this._resolve = detail.resolve;
+      this.$root.showModal();
+    },
+
+    prefers(conflict) {
+      return this.prefer.includes(conflict.incoming.uuid);
+    },
+
+    choose(conflict, incoming) {
+      const uuid = conflict.incoming.uuid;
+      const others = this.prefer.filter((u) => u !== uuid);
+      this.prefer = incoming ? [...others, uuid] : others;
+    },
+
+    confirm() {
+      this._settle(this.prefer.slice());
+      this.$root.close();
+    },
+
+    // Escape, the backdrop or Cancel: no answer.
+    closed() {
+      this._settle(null);
+    },
+
+    _settle(value) {
+      const resolve = this._resolve;
+      this._resolve = null;
+      if (resolve) resolve(value);
+    },
+
+    faceTime(face) {
+      return face.timestamp == null ? '' : faceTimeLabel(face.timestamp);
     },
   };
 };

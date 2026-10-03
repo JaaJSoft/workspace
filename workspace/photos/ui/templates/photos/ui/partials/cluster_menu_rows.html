@@ -4,6 +4,7 @@
   Alpine expression giving the card: { uuid, clusters, person, hidden }
   (see openClusterMenu in faces.js). A named person gathers several
   clusters and has no uuid of its own; an unnamed cluster has no person.
+  Merging into a named person keeps them: their largest cluster takes the rest.
   Written out rather than built on context_menu_item.html: every row binds
   the same caller expression, which that partial's params cannot compose.
 {% endcomment %}
@@ -59,7 +60,7 @@
     <span>Show in People</span>
   </button>
 </li>
-<li x-show="!({{ cluster_expr }})?.person">
+<li>
   <button
     type="button"
     class="gap-3 rounded"

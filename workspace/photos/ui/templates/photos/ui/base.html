@@ -170,6 +170,9 @@
   </div>
 
   {% include "photos/ui/partials/selection_bar.html" %}
+  {% if faces_available %}
+    {% include "photos/ui/partials/people_pick_bar.html" %}
+  {% endif %}
   {% include "files/ui/partials/upload_panel.html" %}
 
   {# Inside the photosApp() scope: they bind the tags mixin and the menu state. #}
@@ -186,6 +189,7 @@
     {% include "photos/ui/partials/faces_dialog.html" %}
     {% include "photos/ui/partials/merge_dialog.html" %}
     {% include "photos/ui/partials/name_dialog.html" %}
+    {% include "photos/ui/partials/face_conflicts_dialog.html" %}
   {% endif %}
 {% endblock %}
 

@@ -10,10 +10,9 @@ number of queries per user back to a per-folder number is invisible in
 correctness terms and very visible in production.
 """
 
-import os
-import shutil
-
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -40,19 +39,25 @@ class SyncReconciliationTestCase(IsolatedMediaRootMixin, TestCase):
         )
 
     def _root(self):
-        return os.path.join(self.media_root, "files", "users", self.user.username)
+        return f"files/users/{self.user.username}"
 
     def _write(self, *parts, contents=b"data"):
-        full = os.path.join(self._root(), *parts)
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "wb") as fh:
-            fh.write(contents)
-        return full
+        self._keep_root()
+        name = "/".join([self._root(), *parts])
+        default_storage.replace(name, ContentFile(contents))
+        return name
 
     def _mkdir(self, *parts):
-        full = os.path.join(self._root(), *parts)
-        os.makedirs(full, exist_ok=True)
-        return full
+        self._keep_root()
+        name = "/".join([self._root(), *parts])
+        default_storage.make_dir(name)
+        return name
+
+    def _keep_root(self):
+        # A disk keeps the user's directory once its last entry goes; a key
+        # prefix vanishes with it, and the walk takes a missing root for a
+        # store it cannot see rather than an empty one.
+        default_storage.make_dir(self._root())
 
     def _sync(self):
         return FileSyncService().sync_user_recursive(self.user)
@@ -120,7 +125,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deletes_file_missing_from_disk(self):
         path = self._write("gone.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         result = self._sync()
 
@@ -133,7 +138,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deletes_nested_file_missing_from_disk(self):
         path = self._write("A", "B", "deep.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         result = self._sync()
 
@@ -146,7 +151,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deleting_folder_cascades_to_descendants(self):
         self._write("A", "B", "deep.txt")
         self._sync()
-        shutil.rmtree(os.path.join(self._root(), "A"))
+        default_storage.delete_prefix(f"{self._root()}/A")
 
         result = self._sync()
 
@@ -161,7 +166,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
         self._sync()
         self.assertIsNotNone(self._live("swap"))
 
-        os.remove(path)
+        default_storage.delete(path)
         self._mkdir("swap")
         result = self._sync()
 
@@ -174,29 +179,27 @@ class DbToDiskTests(SyncReconciliationTestCase):
         # Trashing a file moves its blob out of the tree. The row still says
         # "file" while the path is now a directory, and moving that would
         # take content the row never owned along with it.
-        with self.settings(MEDIA_ROOT=self.media_root):
-            path = self._write("swap")
-            self._sync()
+        path = self._write("swap")
+        self._sync()
 
-            os.remove(path)
-            self._mkdir("swap")
-            inside = self._write("swap", "inside.txt", contents=b"KEEP")
+        default_storage.delete(path)
+        self._mkdir("swap")
+        inside = self._write("swap", "inside.txt", contents=b"KEEP")
 
-            result = self._sync()
+        result = self._sync()
 
-            self.assertEqual(result.files_soft_deleted, 1)
-            self.assertEqual(result.folders_created, 1)
-            self.assertTrue(os.path.isfile(inside))
-            with open(inside, "rb") as fh:
-                self.assertEqual(fh.read(), b"KEEP")
-            self.assertFalse(os.path.exists(os.path.join(self.media_root, "trash")))
+        self.assertEqual(result.files_soft_deleted, 1)
+        self.assertEqual(result.folders_created, 1)
+        with default_storage.open(inside, "rb") as fh:
+            self.assertEqual(fh.read(), b"KEEP")
+        self.assertFalse(default_storage.is_dir("trash"))
 
     def test_records_a_delete_event_for_sync_detected_removals(self):
         from workspace.files.models import FileEvent
 
         path = self._write("audited.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         self._sync()
 

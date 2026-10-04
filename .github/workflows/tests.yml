@@ -547,6 +547,61 @@ jobs:
         run: |
           uv run python manage.py test workspace.common.tests.test_storage workspace.files.tests.test_object_storage workspace.files.tests.test_verify_file_storage workspace.files.tests.test_relocations workspace.files.tests.test_signed_downloads workspace.core.tests.test_copy_blobs -v 2
 
+  # The files suite a second time, every blob of it in a bucket: the same
+  # tests on both backends is what keeps them behaving alike. Tests that can
+  # only hold on a disk skip themselves (common.tests.media).
+  files-s3:
+    runs-on: ubuntu-latest
+    name: Tests (files on S3)
+    needs: changes
+    if: needs.changes.outputs.storage == 'true'
+    services:
+      s3:
+        image: versity/versitygw:v1.8.0
+        env:
+          ROOT_ACCESS_KEY_ID: ci-s3-user
+          ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
+          VGW_BACKEND: posix
+          VGW_BACKEND_ARG: /tmp/vgw
+        ports:
+          - 7070:7070
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Wait for the S3 server
+        run: |
+          for _ in $(seq 1 30); do
+            if curl -sS -o /dev/null http://localhost:7070/; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The S3 server did not come up in time" >&2
+          exit 1
+
+      - name: Run the files tests with every blob on the S3 server
+        env:
+          WORKSPACE_TEST_STORAGE: s3
+          WORKSPACE_S3_ENDPOINT_URL: http://localhost:7070
+          WORKSPACE_S3_ACCESS_KEY_ID: ci-s3-user
+          WORKSPACE_S3_SECRET_ACCESS_KEY: ci-s3-password-7d1e
+          PYTHONWARNINGS: default
+        run: uv run python manage.py test workspace.files -v 2
+
   # The Django matrix runs on SQLite, so the pgvector backend of the vector
   # index (common.vectors) only runs here, against a server that ships the
   # extension. The test database is created by a superuser, which pgvector

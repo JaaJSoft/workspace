@@ -4,13 +4,14 @@ import base64
 import errno
 import io
 import os
+import posixpath
 from datetime import timedelta
 from unittest import mock
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -22,7 +23,7 @@ from wsgidav.dav_error import (
 )
 
 from workspace.common.storage.facade import BlobStorage
-from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
 from workspace.files.webdav import dc as dc_module
@@ -569,11 +570,12 @@ class FolderResourceMoveStorageTests(TestCase):
             parent=src,
             content=ContentFile(b"hello", name="note.txt"),
         )
-        old_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
+        old_name = note.content.name
+        self.assertTrue(default_storage.is_file(old_name))
 
         res = FolderResource("/Src", self.environ, src)
-        res.move_recursive("/Dest/Src")
+        with self.captureOnCommitCallbacks(execute=True):
+            res.move_recursive("/Dest/Src")
 
         note.refresh_from_db()
         new_content_name = note.content.name.replace("\\", "/")
@@ -581,9 +583,8 @@ class FolderResourceMoveStorageTests(TestCase):
             new_content_name.startswith("files/users/davmove/Dest/Src/"),
             f"Expected new path under Dest/Src/, got {new_content_name}",
         )
-        new_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
-        self.assertFalse(os.path.isfile(old_full_path))
+        self.assertTrue(default_storage.is_file(note.content.name))
+        self.assertFalse(default_storage.is_file(old_name))
 
     def test_move_recursive_rename_collision_with_old_sibling(self):
         """MOVE /A/Sub -> /B/Target while /A/Target exists: renaming before
@@ -602,24 +603,19 @@ class FolderResourceMoveStorageTests(TestCase):
         )
 
         res = FolderResource("/A/Sub", self.environ, sub)
-        res.move_recursive("/B/Target")
+        with self.captureOnCommitCallbacks(execute=True):
+            res.move_recursive("/B/Target")
 
         sub.refresh_from_db()
         self.assertEqual(sub.name, "Target")
         self.assertEqual(sub.parent, b)
         note.refresh_from_db()
-        blob = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(blob), f"missing blob at {note.content.name}")
-        with open(blob, "rb") as f:
+        blob = note.content.name
+        self.assertTrue(default_storage.is_file(blob), f"missing blob at {blob}")
+        with default_storage.open(blob, "rb") as f:
             self.assertEqual(f.read(), b"payload")
         # The colliding sibling's directory must be left alone.
-        self.assertTrue(
-            os.path.isdir(
-                os.path.join(
-                    settings.MEDIA_ROOT, "files", "users", "davmove", "A", "Target"
-                )
-            )
-        )
+        self.assertTrue(default_storage.is_dir("files/users/davmove/A/Target"))
 
     def test_move_file_with_rename_keeps_colliding_sibling(self):
         """MOVE /A/x.txt -> /B/y.txt while /A/y.txt exists must leave the
@@ -640,15 +636,16 @@ class FolderResourceMoveStorageTests(TestCase):
         )
 
         res = FileResource("/A/x.txt", self.environ, x)
-        res.copy_move_single("/B/y.txt", is_move=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            res.copy_move_single("/B/y.txt", is_move=True)
 
         x.refresh_from_db()
         self.assertEqual(x.name, "y.txt")
         self.assertEqual(x.path, "B/y.txt")
-        with open(os.path.join(settings.MEDIA_ROOT, x.content.name), "rb") as f:
+        with default_storage.open(x.content.name, "rb") as f:
             self.assertEqual(f.read(), b"xdata")
         sibling.refresh_from_db()
-        with open(os.path.join(settings.MEDIA_ROOT, sibling.content.name), "rb") as f:
+        with default_storage.open(sibling.content.name, "rb") as f:
             self.assertEqual(f.read(), b"ydata")
 
 
@@ -918,11 +915,15 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(self._files_on_disk(), ["test.txt"])
 
     def _files_on_disk(self):
-        on_disk = []
-        for _root, _dirs, names in os.walk(settings.MEDIA_ROOT):
-            on_disk.extend(names)
-        return on_disk
+        """The names of the tree's blobs, once no staged write is left either."""
+        leftover = default_storage.purge_staged(timezone.now() + timedelta(days=1))
+        self.assertEqual(leftover, 0, "a staged write was left behind")
+        return sorted(
+            posixpath.basename(blob.name)
+            for blob in default_storage.iter_blobs("files")
+        )
 
+    @local_storage_only
     def test_a_publish_the_disk_refuses_leaves_no_partial_file(self):
         """wsgidav calls end_write once: a ``.part`` left behind by a failed
         last write is never cleaned up, and the sync adopts it as a file."""
@@ -1001,8 +1002,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(self.file.name, "renamed.txt")
         self.assertEqual(self.file.parent, original_parent)
         # Bytes follow the rename.
-        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertTrue(default_storage.is_file(self.file.content.name))
 
     def test_copy_move_single_move_migrates_content_storage(self):
         """A WebDAV MOVE on a file must migrate its bytes on disk.
@@ -1012,19 +1012,19 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         reads served stale storage state.
         """
         FileService.create_folder(self.user, "Target")
-        old_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
+        old_name = self.file.content.name
+        self.assertTrue(default_storage.is_file(old_name))
 
-        self.res.copy_move_single("/Target/moved.txt", is_move=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.res.copy_move_single("/Target/moved.txt", is_move=True)
         self.file.refresh_from_db()
 
         # New content.name must reflect the new parent.
         new_content_name = self.file.content.name.replace("\\", "/")
         self.assertIn("Target/", new_content_name)
         # And the bytes must actually live there.
-        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
-        self.assertFalse(os.path.isfile(old_full_path))
+        self.assertTrue(default_storage.is_file(self.file.content.name))
+        self.assertFalse(default_storage.is_file(old_name))
 
     def test_copy_move_single_copy(self):
         folder = FileService.create_folder(self.user, "CopyDest")

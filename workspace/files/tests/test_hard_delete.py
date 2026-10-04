@@ -7,14 +7,13 @@ receivers below see a batch's ``pre_delete`` signals all fire before any of
 its ``post_delete`` ones.
 """
 
-import os
 from contextlib import contextmanager
 from datetime import timedelta
 from unittest import mock
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db.models.signals import post_delete, pre_delete
 from django.test import override_settings
 from django.utils import timezone
@@ -76,13 +75,13 @@ class HardDeleteBatchingTests(APITestCase):
         return root
 
     def _trash_dir_on_disk(self, root):
-        return os.path.join(settings.MEDIA_ROOT, trash_dir(root))
+        return trash_dir(root)
 
     def test_emptying_the_trash_deletes_in_bounded_batches(self):
         root = self._build_tree()
         tree_size = File.objects.filter(owner=self.user).count()
         self.assertEqual(tree_size, 111)
-        self.assertTrue(os.path.isdir(self._trash_dir_on_disk(root)))
+        self.assertTrue(default_storage.is_dir(self._trash_dir_on_disk(root)))
 
         with collector_peak() as state:
             response = self.client.delete("/api/v1/files/trash/clean?force=1")
@@ -91,7 +90,7 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertEqual(response.data["deleted"], tree_size)
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
-        self.assertFalse(os.path.exists(self._trash_dir_on_disk(root)))
+        self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))
 
     def test_retention_clean_leaves_recent_trash_alone(self):
         old = self._build_tree("Old")
@@ -118,7 +117,7 @@ class HardDeleteBatchingTests(APITestCase):
         self.assertEqual(response.status_code, 204)
         self.assertLessEqual(state["peak"], BATCH_SIZE)
         self.assertFalse(File.objects.filter(owner=self.user).exists())
-        self.assertFalse(os.path.exists(self._trash_dir_on_disk(root)))
+        self.assertFalse(default_storage.exists(self._trash_dir_on_disk(root)))
 
     def test_purging_a_folder_spares_a_trashed_folder_with_the_same_path(self):
         first = FileService.create_folder(self.user, "Docs")

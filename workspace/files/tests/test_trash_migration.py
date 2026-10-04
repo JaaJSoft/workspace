@@ -14,6 +14,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
 
 migration = importlib.import_module(
@@ -28,6 +29,9 @@ class _FakeSchemaEditor:
         alias = "default"
 
 
+# The migration moved the bytes of instances that kept them on a disk; one
+# that starts on object storage has none to move.
+@local_storage_only
 class MoveTrashedBlobsTests(TestCase):
     def setUp(self):
         self.media_root = tempfile.mkdtemp()

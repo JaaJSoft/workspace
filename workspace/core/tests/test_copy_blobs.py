@@ -1,6 +1,8 @@
 import io
+import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from django.core.files.base import ContentFile
@@ -26,6 +28,13 @@ class CopyBlobsTests(S3TestMixin, SimpleTestCase):
         override.enable()
         self.addCleanup(override.disable)
 
+    def save_local(self, name, data):
+        """Save *name* on disk as last written an hour ago, like a blob nobody
+        is editing while the copy runs."""
+        self.local.save(name, ContentFile(data))
+        an_hour_ago = time.time() - 3600
+        os.utime(Path(self.root, name), (an_hour_ago, an_hour_ago))
+
     def copy(self, *args):
         output = io.StringIO()
         call_command("copy_blobs", *args, stdout=output, stderr=io.StringIO())
@@ -50,7 +59,7 @@ class CopyBlobsTests(S3TestMixin, SimpleTestCase):
         self.assertIn("Copied 2 blob(s), 3 bytes, from local to s3", output)
 
     def test_a_second_run_copies_nothing_again(self):
-        self.local.save("files/users/alice/a.txt", ContentFile(b"a"))
+        self.save_local("files/users/alice/a.txt", b"a")
         self.copy("--to", "s3")
 
         output = self.copy("--to", "s3")
@@ -68,6 +77,18 @@ class CopyBlobsTests(S3TestMixin, SimpleTestCase):
 
         with self.bucket_storage.open("files/users/alice/a.txt") as handle:
             self.assertEqual(handle.read(), b"longer")
+
+    def test_an_edit_that_kept_the_size_is_copied_back(self):
+        """Back to the disk after a while on the bucket: the stale copy left
+        on disk is the same size as the edited blob, and older."""
+        self.save_local("files/users/alice/a.txt", b"draft")
+        self.copy("--to", "s3")
+        self.bucket_storage.replace("files/users/alice/a.txt", ContentFile(b"final"))
+
+        self.copy("--to", "local")
+
+        with self.local.open("files/users/alice/a.txt") as handle:
+            self.assertEqual(handle.read(), b"final")
 
     def test_bucket_to_disk(self):
         self.bucket_storage.save("files/users/alice/a.txt", ContentFile(b"a"))

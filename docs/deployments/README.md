@@ -76,7 +76,7 @@ A signed URL works for whoever holds it until it expires; it is only handed out 
 The layout is the same on both sides, so moving is a copy. With the app stopped (or at least with nobody uploading):
 
 1. Keep `STORAGE_BACKEND=local` and set `S3_BUCKET` and the other `S3_*` variables.
-2. `python manage.py copy_blobs --to s3` copies every blob from `MEDIA_ROOT` to the bucket - and only the blobs: the SQLite database and the model weights stay where they are. It skips what is already there with the same size, so it can run again to catch up, and `--dry-run` shows what it would do.
+2. `python manage.py copy_blobs --to s3` copies every blob from `MEDIA_ROOT` to the bucket - and only the blobs: the SQLite database and the model weights stay where they are. It skips a blob already there with the same size and copied after the source last changed, so it can run again to catch up, and `--dry-run` shows what it would do.
 3. Set `STORAGE_BACKEND=s3` and start the app.
 4. `python manage.py verify_file_storage` checks that every file's blob is in the bucket at its place in the tree. `--fix-dirs` recreates the folders a copy left without a directory (an empty folder copied by a tool that skips empty directories).
 

@@ -5,7 +5,6 @@ Module-level functions extracted from FileService so the facade in
 go through FileService methods, which delegate here.
 """
 
-import gc
 import logging
 import posixpath
 
@@ -199,15 +198,6 @@ def _delete_folder_storage(node):
         logger.warning("Could not delete folder %s: %s", scrub(node.name), scrub(e))
 
 
-def _copy_blob(source, destination):
-    """Save *source* under *destination* a chunk at a time; the name the
-    storage picked comes back, as from ``default_storage.save``."""
-    with default_storage.open(source, "rb") as handle:
-        saved = default_storage.save(destination, handle)
-    gc.collect()  # release handles on Windows
-    return saved
-
-
 def _relocate(source, destination):
     """Move *source* to *destination* now; drop the source once committed.
 
@@ -215,6 +205,11 @@ def _relocate(source, destination):
     point at the destination are durable, so a rollback leaves duplicates
     behind, never a row pointing at a blob that is gone. A move that cannot
     complete raises, which takes the caller's row changes down with it.
+
+    The caller claims the rows of every blob it moves before calling this.
+    A content write claims its row before it writes a byte, so the claim
+    holds it back until the move commits; a write let through mid-copy would
+    land on a source after its copy was taken, and go with the source.
     """
     relocation = default_storage.relocate(source, destination)
     transaction.on_commit(relocation.commit)

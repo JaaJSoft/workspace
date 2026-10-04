@@ -10,6 +10,7 @@ from django.test import TestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.locking import Relocated
 
 User = get_user_model()
 
@@ -518,6 +519,30 @@ class TestReplaceContentStorage(TestCase):
         )
         f.refresh_from_db()
         self.assertEqual(f.content.name, "dav/streamed/doc.txt")
+
+    def test_refused_for_a_file_moved_since_it_was_loaded(self):
+        """The caller staged its bytes under a path derived from the row as it
+        loaded it; a move that committed while the claim waited empties it."""
+        folder = FileService.create_folder(self.user, "Docs")
+        f = FileService.create_file(
+            self.user,
+            "doc.txt",
+            parent=folder,
+            content=ContentFile(b"a", name="doc.txt"),
+        )
+        loaded = File.objects.get(pk=f.pk)
+        FileService.rename(folder, "Archive")
+
+        with self.assertRaises(Relocated):
+            FileService.replace_content_storage(
+                loaded,
+                storage_path=loaded.content.name,
+                size=1,
+                content_hash="0" * 64,
+            )
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, "files/users/svcuser_rcs/Archive/doc.txt")
 
 
 class TestCopy(TestCase):

@@ -1,5 +1,6 @@
 import posixpath
 import secrets
+import unicodedata
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import storages
@@ -14,6 +15,26 @@ from django.utils import timezone
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
+
+
+def canonical_name(name):
+    """*name* in the form node names are stored in: Unicode NFC.
+
+    macOS writes names decomposed (NFD), Linux and Windows composed, so one
+    visible name reaches the app as two different strings - two rows that
+    look alike, two storage keys - unless every name is composed on its way
+    in.
+    """
+    return unicodedata.normalize("NFC", name)
+
+
+def name_forms(name):
+    """The strings a lookup of *name* must match: as given, and composed.
+
+    A node named before names were composed can still be stored decomposed,
+    and a client on macOS asks for a composed one decomposed.
+    """
+    return list(dict.fromkeys((name, canonical_name(name))))
 
 
 def files_storage():
@@ -313,6 +334,12 @@ class File(models.Model):
         return f"{self.get_node_type_display()}: {self.name}"
 
     def save(self, *args, **kwargs):
+        written = kwargs.get("update_fields")
+        if self._state.adding or (written is not None and "name" in written):
+            # The service composes every name it is handed; this catches a
+            # row built without it. The blob path follows the content's own
+            # name, which the creator has to give in the same form.
+            self.name = canonical_name(self.name)
         if "/" in self.name:
             raise ValueError("File and folder names must not contain '/'.")
         # '.'/'..' would resolve to a parent directory in every storage path

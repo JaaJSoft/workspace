@@ -21,7 +21,7 @@ from wsgidav.dav_error import (
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
-from workspace.files.models import File, file_upload_path
+from workspace.files.models import File, canonical_name, file_upload_path, name_forms
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 from workspace.files.services.locking import (
@@ -165,8 +165,9 @@ class RootCollection(DAVCollection):
 
     def get_member(self, name):
         self._prefetch_members()
+        forms = name_forms(name)
         for f in self._members_cache:
-            if f.name == name:
+            if f.name in forms:
                 return self._wrap(f)
         return None
 
@@ -197,7 +198,7 @@ class RootCollection(DAVCollection):
         # (e.g. Windows retries while a slow upload is still in progress).
         file_obj = File.objects.filter(
             FileService.accessible_files_q(self._user),
-            name=name,
+            name__in=name_forms(name),
             parent__isnull=True,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
@@ -292,8 +293,9 @@ class FolderResource(DAVCollection):
 
     def get_member(self, name):
         self._prefetch_members()
+        forms = name_forms(name)
         for f in self._members_cache:
-            if f.name == name:
+            if f.name in forms:
                 return self._wrap(f)
         return None
 
@@ -325,7 +327,7 @@ class FolderResource(DAVCollection):
         # members in group folders — not just files owned by self._user.
         file_obj = File.objects.filter(
             FileService.accessible_files_q(self._user),
-            name=name,
+            name__in=name_forms(name),
             parent=self._file,
             node_type=File.NodeType.FILE,
             deleted_at__isnull=True,
@@ -700,7 +702,7 @@ def _move_to(file_obj, user, dest_path):
     renaming first is the default.
     """
     dest_parts = _dest_parts(dest_path)
-    new_name = dest_parts[-1]
+    new_name = canonical_name(dest_parts[-1])
     dest_parent = _resolve_parent(user, dest_parts[:-1])
 
     needs_rename = new_name != file_obj.name
@@ -730,7 +732,7 @@ def _live_child_exists(user, parent, name):
     return File.objects.filter(
         FileService.accessible_files_q(user),
         parent=parent,
-        name=name,
+        name__in=name_forms(name),
         deleted_at__isnull=True,
     ).exists()
 
@@ -769,7 +771,7 @@ def _resolve_parent(user, path_parts):
     target_path = "/".join(path_parts)
     return File.objects.filter(
         FileService.accessible_files_q(user),
-        path=target_path,
+        path__in=name_forms(target_path),
         node_type=File.NodeType.FOLDER,
         deleted_at__isnull=True,
     ).first()

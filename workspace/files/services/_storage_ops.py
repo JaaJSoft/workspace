@@ -14,7 +14,7 @@ from django.db import transaction
 
 from workspace.common.logging import scrub
 
-from ..models import File
+from ..models import File, canonical_name
 from . import _trash
 from .content_hash import hash_stream
 
@@ -440,7 +440,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
         )
 
     new_name = unique_copy_name(
-        node.name,
+        canonical_name(node.name),
         node.node_type,
         _sibling_names,
     )

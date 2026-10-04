@@ -16,7 +16,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File, FileEvent
+from ..models import File, FileEvent, canonical_name
 from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
@@ -223,6 +223,7 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
+        name = canonical_name(name)
         if group is None and parent and parent.group_id:
             group = parent.group
 
@@ -292,6 +293,7 @@ class FileService:
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
         """Create a new folder record and its directory, or neither."""
+        name = canonical_name(name)
         if group is None and parent and parent.group_id:
             group = parent.group
 
@@ -322,10 +324,15 @@ class FileService:
         size=None,
         acting_user=None,
     ):
-        """Register a file that already exists on disk (used by sync)."""
+        """Register a file that already exists on disk (used by sync).
+
+        *content_path* names the blob as it is stored, which the caller
+        has put under the composed *name* first.
+        """
         from workspace.files.services.content_hash import hash_storage_file
         from workspace.files.services.detection import detect_from_name
 
+        name = canonical_name(name)
         detection = detect_from_name(name)
         if not mime_type:
             mime_type = detection.mime_type
@@ -463,6 +470,7 @@ class FileService:
     def rename(file_obj, new_name, *, acting_user=None):
         """Rename a file or folder, moving physical storage files as needed."""
         old_name = file_obj.name
+        new_name = canonical_name(new_name)
         if old_name == new_name:
             return file_obj
 
@@ -558,8 +566,10 @@ class FileService:
 
         # What ``FileField.pre_save`` would resolve on the way to storage,
         # resolved early because the row write has to name the path in the same
-        # statement that claims the row.
-        storage_path = blob_path(file_obj, content.name)
+        # statement that claims the row. From the node's name, not the
+        # upload's: a "Report.PDF" replacing "report.pdf" still belongs at the
+        # node's tree path.
+        storage_path = blob_path(file_obj, file_obj.name)
         fields = {
             "content": storage_path,
             "content_hash": hash_stream(content),

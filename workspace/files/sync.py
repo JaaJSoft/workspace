@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 from workspace.files.models import File, canonical_name
-from workspace.files.services import FileService
+from workspace.files.services import FileService, relocations
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,8 @@ class FileSyncService:
     def __init__(self, *, dry_run=False, log=None):
         self.dry_run = dry_run
         self.log = log or logger
+        # Paths a move has not settled yet; read once per walk.
+        self._unsettled = set()
 
     def sync_user_recursive(self, user) -> SyncResult:
         """Full recursive sync for a single user."""
@@ -127,6 +129,7 @@ class FileSyncService:
         if not default_storage.is_dir(storage_prefix):
             return result
 
+        self._unsettled = relocations.journaled_paths()
         self._sync_directory_recursive(
             user=user,
             parent_db=None,
@@ -147,6 +150,7 @@ class FileSyncService:
         if not default_storage.is_dir(storage_prefix):
             return result
 
+        self._unsettled = relocations.journaled_paths()
         self._sync_one_level(
             user,
             parent_db,
@@ -155,6 +159,10 @@ class FileSyncService:
             _NodeIndex.for_level(user, parent_db),
         )
         return result
+
+    def _moving(self, name):
+        """Whether *name* lies on either side of a move not settled yet."""
+        return relocations.covers(self._unsettled, name)
 
     def _scan(self, storage_prefix, result):
         """Read a directory, recording (not raising) an unreadable path."""
@@ -228,6 +236,9 @@ class FileSyncService:
                 if expected_type == node_type:
                     continue  # matches, nothing to do
 
+            if self._moving(f"{storage_prefix}/{db_record.name}"):
+                continue  # its bytes may be on the other side of the move
+
             # Not found on disk or type mismatch -> soft-delete
             if self.dry_run:
                 self.log.info(
@@ -287,6 +298,9 @@ class FileSyncService:
 
             if index.is_trashed(parent_db, entry_name, node_type):
                 continue  # in trash, don't create a duplicate
+
+            if self._moving(f"{storage_prefix}/{entry.name}"):
+                continue  # a copy or a source of a move: no file of its own
 
             if self.dry_run:
                 self.log.info(

@@ -5,6 +5,7 @@ import logging
 from django.db import close_old_connections
 from wsgidav.dav_provider import DAVProvider
 
+from workspace.files.models import name_forms
 from workspace.files.services import FileService
 
 from .resources import FileResource, FolderResource, RootCollection, dav_nodes
@@ -39,7 +40,7 @@ class WorkspaceDAVProvider(DAVProvider):
         # create_empty_resource).
         file_obj = dav_nodes(
             FileService.accessible_files_q(user),
-            path="/".join(parts),
+            path__in=name_forms("/".join(parts)),
         ).first()
 
         if file_obj is None:
@@ -66,20 +67,20 @@ class WorkspaceDAVProvider(DAVProvider):
             return dav_nodes(
                 accessible,
                 parent__isnull=True,
-                name=parts[0],
+                name__in=name_forms(parts[0]),
             ).first()
 
         parent_path = "/".join(parts[:-1])
         parent = dav_nodes(
             accessible,
-            path=parent_path,
+            path__in=name_forms(parent_path),
         ).first()
         if parent is None:
             return None
         return dav_nodes(
             accessible,
             parent=parent,
-            name=parts[-1],
+            name__in=name_forms(parts[-1]),
         ).first()
 
     @staticmethod

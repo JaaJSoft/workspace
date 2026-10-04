@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
-from workspace.files.models import File
+from workspace.files.models import File, canonical_name
 from workspace.files.services import FileService
 from workspace.files.services._storage_ops import unique_copy_name
 from workspace.files.services.shortcuts import rename_aside
@@ -55,9 +55,9 @@ class _NodeIndex:
     once and grouping them in memory makes the whole walk a constant number
     of queries regardless of tree size or depth.
 
-    Trashed rows are held separately and only as keys: they exist to stop
-    phase 1 from creating a live duplicate next to a node the user deleted,
-    never as candidates to recurse into.
+    Trashed rows are held separately and only as keys, composed: they exist
+    to stop phase 1 from creating a live duplicate next to a node the user
+    deleted, never as candidates to recurse into.
 
     Live rows are also held by caseless name, the key of the live name
     constraint, which is what a disk entry has to be registered under.
@@ -69,7 +69,7 @@ class _NodeIndex:
     def __init__(self):
         self._live = {}  # parent_id -> {(name, node_type): File}, no shortcut
         self._holders = {}  # parent_id -> {caseless(name): File}
-        self._trashed = {}  # parent_id -> {(name, node_type)}
+        self._trashed = {}  # parent_id -> {(composed name, node_type)}
 
     @classmethod
     def for_subtree(cls, user):
@@ -97,7 +97,9 @@ class _NodeIndex:
         for record in live_qs:
             self._hold(record)
         for name, node_type, parent_id in trashed_values:
-            self._trashed.setdefault(parent_id, set()).add((name, node_type))
+            self._trashed.setdefault(parent_id, set()).add(
+                (canonical_name(name), node_type)
+            )
 
     @staticmethod
     def _key(parent_db):
@@ -108,7 +110,8 @@ class _NodeIndex:
         return self._live.get(self._key(parent_db), {})
 
     def is_trashed(self, parent_db, name, node_type):
-        return (name, node_type) in self._trashed.get(self._key(parent_db), set())
+        key = (canonical_name(name), node_type)
+        return key in self._trashed.get(self._key(parent_db), set())
 
     def holder_of(self, parent_db, name):
         """The live node of that level whose name *name* clashes with."""
@@ -187,6 +190,9 @@ class FileSyncService:
       side - is reconciled before it is registered: the shortcut, which has
       no name on disk, gives the name up; otherwise the newcomer is renamed
       to ``name (Copy N)`` on disk.
+    - Names are stored composed (NFC), so an entry written decomposed (a Mac)
+      is respelled composed on disk: before it is registered, or when the
+      row of that name already exists.
     """
 
     def __init__(self, *, dry_run=False, log=None):
@@ -295,6 +301,7 @@ class FileSyncService:
         spellings = None  # caseless(name) -> disk names, built on first need
         followed = set()  # disk names a row of this level took over
         untrashed = set()  # pks of the rows phase 1 failed to trash
+        renamed = {}  # disk name scanned -> disk name given
         for (name, node_type), db_record in list(db_by_name.items()):
             if name in disk_names:
                 disk_entry = disk_names[name]
@@ -318,7 +325,22 @@ class FileSyncService:
                 )
                 if new_name is not None:
                     followed.add(new_name)
-                    self._follow_rename(user, db_record, new_name, index, result)
+                    if canonical_name(new_name) == name:
+                        # The row's own name, decomposed on disk: names are
+                        # stored composed, so the entry is respelled instead.
+                        self._respell_on_disk(
+                            storage_prefix, new_name, name, renamed, result
+                        )
+                    else:
+                        self._follow_rename(
+                            user,
+                            db_record,
+                            new_name,
+                            storage_prefix,
+                            renamed,
+                            index,
+                            result,
+                        )
                     continue
 
             # Not found on disk or type mismatch -> soft-delete
@@ -366,9 +388,12 @@ class FileSyncService:
 
         # --- Phase 2: Disk -> DB (create missing) ---
         # By name, so that of two newcomers clashing caselessly the same one
-        # keeps its name on every run.
-        renamed = {}
-        for entry_name, entry in sorted(disk_names.items()):
+        # keeps its name on every run, composed names first: a name written
+        # composed keeps it, its decomposed twin is the newcomer.
+        for entry_name, entry in sorted(
+            disk_names.items(),
+            key=lambda item: (item[0] != canonical_name(item[0]), item[0]),
+        ):
             is_dir = entry.is_dir
             is_file = entry.is_file
 
@@ -383,7 +408,7 @@ class FileSyncService:
             if index.is_trashed(parent_db, entry_name, node_type):
                 continue  # in trash, don't create a duplicate
 
-            name = entry_name
+            name = canonical_name(entry_name)
             shortcut = None
             holder = index.holder_of(parent_db, entry_name)
             if holder is not None and holder.pk in untrashed:
@@ -392,7 +417,7 @@ class FileSyncService:
                 shortcut = holder
             elif holder is not None:
                 taken = {*index.names_at(parent_db), *disk_names, *renamed.values()}
-                name = unique_copy_name(entry_name, node_type, taken)
+                name = unique_copy_name(name, node_type, taken)
 
             if self.dry_run:
                 if shortcut is not None:
@@ -425,9 +450,10 @@ class FileSyncService:
                     renamed[entry_name] = name
                     result.disk_entries_renamed += 1
                     self.log.info(
-                        "Renamed on disk: %s -> %s, a sibling holds the name",
+                        "Renamed on disk: %s -> %s, %s",
                         scrub(entry_name),
                         scrub(name),
+                        "a sibling holds the name" if holder else "names are composed",
                     )
                 if is_dir:
                     created = FileService.create_folder(
@@ -460,7 +486,9 @@ class FileSyncService:
 
         return renamed
 
-    def _follow_rename(self, user, db_record, new_name, index, result):
+    def _follow_rename(
+        self, user, db_record, new_name, storage_prefix, renamed, index, result
+    ):
         old_name = db_record.name
         if self.dry_run:
             self.log.info(
@@ -481,6 +509,35 @@ class FileSyncService:
         index.renamed(db_record, old_name)
         result.renames_followed += 1
         self.log.info("Followed rename: %s -> %s", scrub(old_name), scrub(new_name))
+        if db_record.name != new_name:
+            # The row took the name composed; the entry follows it there.
+            self._respell_on_disk(
+                storage_prefix, new_name, db_record.name, renamed, result
+            )
+
+    def _respell_on_disk(self, storage_prefix, disk_name, name, renamed, result):
+        """Move the entry *disk_name* under *name*, its composed spelling."""
+        if self.dry_run:
+            self.log.info(
+                "[DRY-RUN] Would rename on disk: %s -> %s",
+                scrub(disk_name),
+                scrub(name),
+            )
+            result.disk_entries_renamed += 1
+            return
+        try:
+            self._rename_on_disk(storage_prefix, disk_name, name)
+        except OSError as e:
+            result.errors.append(f"Error renaming {disk_name}: {e}")
+            self.log.warning("Error renaming %s: %s", scrub(disk_name), scrub(e))
+            return
+        renamed[disk_name] = name
+        result.disk_entries_renamed += 1
+        self.log.info(
+            "Renamed on disk: %s -> %s, names are composed",
+            scrub(disk_name),
+            scrub(name),
+        )
 
     def _rename_shortcut_aside(self, user, shortcut, keep_free, index, result):
         old_name = shortcut.name

@@ -126,6 +126,7 @@ test_db.sqlite3*
 
 /files/
 /.staging/
+/.relocations/
 /trash/
 /NUL
 .claude/*

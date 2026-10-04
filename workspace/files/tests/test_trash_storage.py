@@ -17,6 +17,7 @@ from django.test import TestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
+from workspace.files.services.relocations import JOURNAL_DIR
 
 User = get_user_model()
 
@@ -33,12 +34,14 @@ class TrashStorageLayoutTests(TestCase):
         shutil.rmtree(self.media_root, ignore_errors=True)
 
     def _blobs(self):
+        """Every blob of the tree; the journal entries of moves a test case
+        never commits stay out of it."""
         found = []
         for directory, _subdirs, names in os.walk(self.media_root):
             for name in names:
                 full = Path(directory, name)
                 found.append(full.relative_to(self.media_root).as_posix())
-        return sorted(found)
+        return sorted(name for name in found if not name.startswith(f"{JOURNAL_DIR}/"))
 
     def _make_file(self, name, parent=None, content=b"bytes"):
         return FileService.create_file(

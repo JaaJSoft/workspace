@@ -577,6 +577,38 @@ class S3BackendTests(S3TestMixin, SimpleTestCase):
         self.assertEqual(_read(self.storage, "files/empty.txt"), b"")
         self.assertEqual(self._requests("GetObject"), [])
 
+    def test_a_read_refuses_a_replacement_written_while_it_runs(self):
+        """Each window is a GET of its own: unconditioned, the windows after a
+        replacement would splice the new bytes into the old ones."""
+        old = b"a" * (3 * self.MB)
+        self.save("files/video.mp4", old)
+
+        with self.storage.open("files/video.mp4") as handle:
+            start = handle.read(self.MB)
+            self.storage.replace("files/video.mp4", ContentFile(b"b" * len(old)))
+            with self.assertRaises(OSError) as caught:
+                handle.read()
+
+        self.assertEqual(start, old[: self.MB])
+        self.assertEqual(caught.exception.errno, errno.EIO)
+
+    def test_a_read_finishes_the_version_it_opened_on_a_bucket_that_keeps_them(self):
+        try:
+            self.s3.put_bucket_versioning(
+                Bucket=self.bucket, VersioningConfiguration={"Status": "Enabled"}
+            )
+        except ClientError:
+            self.skipTest("This store does not keep versions.")
+        old = bytes(range(256)) * (3 * self.MB // 256)
+        self.save("files/video.mp4", old)
+
+        with self.storage.open("files/video.mp4") as handle:
+            start = handle.read(self.MB)
+            self.storage.replace("files/video.mp4", ContentFile(b"b" * len(old)))
+            rest = handle.read()
+
+        self.assertEqual(start + rest, old)
+
     def test_a_large_staged_write_goes_in_parts(self):
         data = b"x" * (11 * self.MB)
         writer = self.storage.staged_writer("files/big.bin")

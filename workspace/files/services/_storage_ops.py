@@ -203,16 +203,9 @@ def _relocate(source, destination):
 
 
 def rename_file_storage(file_obj, new_name):
-    """Rename a single file on disk."""
+    """Move a single file's blob to its new name."""
     old_path = file_obj.content.name
-    dir_path = posixpath.dirname(old_path)
-
-    _, ext = posixpath.splitext(old_path)
-    if "." not in new_name and ext:
-        new_filename = f"{new_name}{ext}"
-    else:
-        new_filename = new_name
-    new_path = posixpath.join(dir_path, new_filename)
+    new_path = posixpath.join(posixpath.dirname(old_path), new_name)
 
     if not default_storage.exists(old_path):
         logger.warning("Old file does not exist: '%s'", scrub(old_path))

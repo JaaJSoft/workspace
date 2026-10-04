@@ -69,7 +69,7 @@ By default the app streams every download out of the bucket itself, a window at 
 [{"AllowedOrigins": ["https://workspace.example.com"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 3600}]
 ```
 
-A signed URL works for whoever holds it until it expires; it is only handed out after the access checks.
+A signed URL works for whoever holds it until it expires; it is only handed out after the access checks. It names the file's path, so until then it also serves a newer version written there - unless the bucket keeps versions: with versioning enabled, the URL names the version that passed the checks (the credentials then also need `s3:GetObjectVersion`, and a lifecycle rule should expire noncurrent versions). Revoking a share or quarantining the file does not withdraw a URL already handed out: where access must end the moment it is revoked, leave `S3_SIGNED_URLS` off.
 
 ### Moving an existing instance to a bucket
 

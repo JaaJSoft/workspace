@@ -4,6 +4,7 @@ from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 import requests
+from botocore.exceptions import ClientError
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
@@ -94,6 +95,24 @@ class SignedDownloadTests(_ObjectStorageContent):
         self.assertEqual(query["response-content-type"], ["video/mp4"])
         self.assertTrue(query["response-content-disposition"][0].startswith("inline;"))
         self.assertIn("X-Amz-Signature", query)
+        self.assertEqual(requests.get(location, timeout=10).content, self.payload)
+
+    def test_a_url_names_the_version_on_a_bucket_that_keeps_them(self):
+        """A URL naming the key would hand whoever holds it a replacement
+        written after it was issued, checked by nobody."""
+        try:
+            self.s3.put_bucket_versioning(
+                Bucket=self.bucket, VersioningConfiguration={"Status": "Enabled"}
+            )
+        except ClientError:
+            self.skipTest("This store does not keep versions.")
+        blobs = storages["files"]
+        blobs.replace(self.file.content.name, ContentFile(self.payload))
+
+        location, query = self._redirect(self.client.get(self.content_url))
+        blobs.replace(self.file.content.name, ContentFile(b"replaced"))
+
+        self.assertIn("versionId", query)
         self.assertEqual(requests.get(location, timeout=10).content, self.payload)
 
     def test_a_range_request_is_redirected_too(self):

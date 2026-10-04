@@ -315,17 +315,27 @@ class S3Backend(Backend):
     def signed_url(self, name, *, filename, attachment, content_type):
         if not self.signed_urls:
             return None
+        key = self._key(name)
+        params = {
+            "Bucket": self.bucket,
+            "Key": key,
+            "ResponseContentType": content_type,
+            "ResponseContentDisposition": content_disposition_header(
+                attachment, filename
+            ),
+        }
+        # A URL naming the key serves whatever is written there until it
+        # expires. A bucket that keeps versions lets it name the version read
+        # now, which is the one the caller just checked.
+        try:
+            head = self._head(key, name)
+        except OSError:
+            return None
+        version = (head or {}).get("VersionId")
+        if version and version != "null":
+            params["VersionId"] = version
         return _client(**self._presign_connection).generate_presigned_url(
-            "get_object",
-            Params={
-                "Bucket": self.bucket,
-                "Key": self._key(name),
-                "ResponseContentType": content_type,
-                "ResponseContentDisposition": content_disposition_header(
-                    attachment, filename
-                ),
-            },
-            ExpiresIn=self.signed_url_ttl,
+            "get_object", Params=params, ExpiresIn=self.signed_url_ttl
         )
 
     def get_modified_time(self, name):

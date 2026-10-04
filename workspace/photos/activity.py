@@ -142,10 +142,7 @@ class PhotosActivityProvider(ActivityProvider):
         return events[offset:wanted]
 
     def get_stats(self, user_id, *, viewer_id=None):
-        from workspace.photos.models import Album
-
-        albums = Album.objects.all()
-        if user_id is not None:
-            albums = albums.filter(owner_id=user_id)
-        albums = albums.filter(self._album_filter(user_id, viewer_id, field="pk"))
-        return {"total_albums": albums.count()}
+        # No stat card reads an album count: the dashboard and the settings
+        # pages render every provider's stats, so a count would cost a
+        # query on each of them for nothing.
+        return {}

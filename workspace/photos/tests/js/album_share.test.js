@@ -2,15 +2,15 @@ const assert = require('node:assert');
 const { test } = require('node:test');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-// A fetch answering from `routes` ("METHOD url" -> body, or a function),
-// recording every request.
+// A fetch answering from `routes` ("METHOD url" -> body), recording every
+// request.
 function fakeFetch(routes, requests = [], { failing = [] } = {}) {
   return (url, opts = {}) => {
     const method = opts.method || 'GET';
     requests.push([method, url, opts.body ? JSON.parse(opts.body) : undefined]);
     const key = `${method} ${url}`;
     const ok = !failing.includes(key);
-    const body = typeof routes === 'function' ? routes(key) : routes[key];
+    const body = routes[key];
     return Promise.resolve({ ok, status: ok ? 200 : 500, json: () => Promise.resolve(body) });
   };
 }

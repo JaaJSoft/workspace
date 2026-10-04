@@ -1149,7 +1149,7 @@ window.photosApp = function photosApp() {
             break;
           case 'download': {
             const a = document.createElement('a');
-            a.href = `${url}/download`;
+            a.href = `${ALBUMS_API}/${encodeURIComponent(album.uuid)}/download`;
             a.download = '';
             document.body.appendChild(a);
             a.click();

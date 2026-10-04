@@ -124,10 +124,6 @@ class PhotosActivityTests(TestCase):
             {},
         )
 
-    def test_stats(self):
-        self.assertEqual(self.provider.get_stats(self.owner.pk), {"total_albums": 1})
-        self.assertEqual(
-            self.provider.get_stats(self.owner.pk, viewer_id=self.outsider.pk),
-            {"total_albums": 0},
-        )
-        self.assertEqual(self.provider.get_stats(None), {"total_albums": 1})
+    def test_no_stats_and_no_query(self):
+        with self.assertNumQueries(0):
+            self.assertEqual(self.provider.get_stats(self.owner.pk), {})

@@ -40,7 +40,13 @@ class StreamedBlobMoveTests(TestCase):
 
     def test_rename_streams_the_blob(self):
         old_path = self.file.content.name
-        peak = self._peak_during(lambda: FileService.rename(self.file, "renamed.mp4"))
+
+        def rename():
+            # Object storage drops the source once the move commits.
+            with self.captureOnCommitCallbacks(execute=True):
+                FileService.rename(self.file, "renamed.mp4")
+
+        peak = self._peak_during(rename)
 
         self.file.refresh_from_db()
         self.assertLess(peak, 8 * MB)

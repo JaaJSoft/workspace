@@ -10,18 +10,17 @@ number of queries per user back to a per-folder number is invisible in
 correctness terms and very visible in production.
 """
 
-import os
-import shutil
 import unicodedata
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 
-from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files.models import File, FileEvent
 from workspace.files.services import FileService
 from workspace.files.services.shortcuts import create_shortcut
@@ -44,22 +43,36 @@ class SyncReconciliationTestCase(IsolatedMediaRootMixin, TestCase):
         )
 
     def _root(self):
-        return os.path.join(self.media_root, "files", "users", self.user.username)
+        return f"files/users/{self.user.username}"
 
     def _write(self, *parts, contents=b"data"):
-        full = os.path.join(self._root(), *parts)
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "wb") as fh:
-            fh.write(contents)
-        return full
+        self._keep_root()
+        name = "/".join([self._root(), *parts])
+        default_storage.replace(name, ContentFile(contents))
+        return name
 
     def _mkdir(self, *parts):
-        full = os.path.join(self._root(), *parts)
-        os.makedirs(full, exist_ok=True)
-        return full
+        self._keep_root()
+        name = "/".join([self._root(), *parts])
+        default_storage.make_dir(name)
+        return name
+
+    def _keep_root(self):
+        # A disk keeps the user's directory once its last entry goes; a key
+        # prefix vanishes with it, and the walk takes a missing root for a
+        # store it cannot see rather than an empty one.
+        default_storage.make_dir(self._root())
 
     def _sync(self):
         return FileSyncService().sync_user_recursive(self.user)
+
+    def _listing(self, *parts):
+        """The names one directory of the tree holds, sorted."""
+        name = "/".join([self._root(), *parts])
+        if not default_storage.is_dir(name):
+            return []
+        directories, files = default_storage.listdir(name)
+        return sorted([*directories, *files])
 
     def _live(self, name):
         return File.objects.filter(
@@ -124,7 +137,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deletes_file_missing_from_disk(self):
         path = self._write("gone.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         result = self._sync()
 
@@ -137,7 +150,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deletes_nested_file_missing_from_disk(self):
         path = self._write("A", "B", "deep.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         result = self._sync()
 
@@ -150,7 +163,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
     def test_soft_deleting_folder_cascades_to_descendants(self):
         self._write("A", "B", "deep.txt")
         self._sync()
-        shutil.rmtree(os.path.join(self._root(), "A"))
+        default_storage.delete_prefix(f"{self._root()}/A")
 
         result = self._sync()
 
@@ -165,7 +178,7 @@ class DbToDiskTests(SyncReconciliationTestCase):
         self._sync()
         self.assertIsNotNone(self._live("swap"))
 
-        os.remove(path)
+        default_storage.delete(path)
         self._mkdir("swap")
         result = self._sync()
 
@@ -178,29 +191,27 @@ class DbToDiskTests(SyncReconciliationTestCase):
         # Trashing a file moves its blob out of the tree. The row still says
         # "file" while the path is now a directory, and moving that would
         # take content the row never owned along with it.
-        with self.settings(MEDIA_ROOT=self.media_root):
-            path = self._write("swap")
-            self._sync()
+        path = self._write("swap")
+        self._sync()
 
-            os.remove(path)
-            self._mkdir("swap")
-            inside = self._write("swap", "inside.txt", contents=b"KEEP")
+        default_storage.delete(path)
+        self._mkdir("swap")
+        inside = self._write("swap", "inside.txt", contents=b"KEEP")
 
-            result = self._sync()
+        result = self._sync()
 
-            self.assertEqual(result.files_soft_deleted, 1)
-            self.assertEqual(result.folders_created, 1)
-            self.assertTrue(os.path.isfile(inside))
-            with open(inside, "rb") as fh:
-                self.assertEqual(fh.read(), b"KEEP")
-            self.assertFalse(os.path.exists(os.path.join(self.media_root, "trash")))
+        self.assertEqual(result.files_soft_deleted, 1)
+        self.assertEqual(result.folders_created, 1)
+        with default_storage.open(inside, "rb") as fh:
+            self.assertEqual(fh.read(), b"KEEP")
+        self.assertFalse(default_storage.is_dir("trash"))
 
     def test_records_a_delete_event_for_sync_detected_removals(self):
         from workspace.files.models import FileEvent
 
         path = self._write("audited.txt")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
 
         self._sync()
 
@@ -452,14 +463,14 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
 
     def _write_clashing(self, *names, contents=None):
         contents = contents or [b"data"] * len(names)
-        before = len(os.listdir(self._root())) if os.path.isdir(self._root()) else 0
+        before = len(self._listing())
         for name, data in zip(names, contents, strict=True):
             self._write(name, contents=data)
-        if len(os.listdir(self._root())) < before + len(names):
+        if len(self._listing()) < before + len(names):
             self.skipTest("this file system folds the names into one")
 
     def _on_disk(self):
-        return sorted(os.listdir(self._root()))
+        return self._listing()
 
     def test_a_newcomer_is_renamed_on_disk_and_registered(self):
         self._write("Report.txt", contents=b"first")
@@ -560,8 +571,9 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
         self.assertEqual(result.errors, [])
         self.assertEqual(result.disk_entries_renamed, 1)
         self.assertIsNotNone(self._live(composed))
+        # Composed, like every name the file service stores.
         self.assertIsNotNone(
-            self._live(unicodedata.normalize("NFD", "café (Copy).txt"))
+            self._live(unicodedata.normalize("NFC", "café (Copy).txt"))
         )
 
     def test_a_row_that_could_not_be_trashed_renames_nothing_on_disk(self):
@@ -569,7 +581,7 @@ class CaselessDuplicateTests(SyncReconciliationTestCase):
         # the directory aside would answer a failure that the next run clears.
         path = self._write("swap")
         self._sync()
-        os.remove(path)
+        default_storage.delete(path)
         self._write("swap", "inside.txt")
 
         with patch.object(File, "soft_delete", side_effect=OSError("busy")):
@@ -612,13 +624,13 @@ class FollowedRenameTests(SyncReconciliationTestCase):
     """
 
     def _rename(self, old, new, *parent):
-        os.rename(
-            os.path.join(self._root(), *parent, old),
-            os.path.join(self._root(), *parent, new),
+        default_storage.move(
+            "/".join([self._root(), *parent, old]),
+            "/".join([self._root(), *parent, new]),
         )
 
     def _on_disk(self, *parts):
-        return sorted(os.listdir(os.path.join(self._root(), *parts)))
+        return self._listing(*parts)
 
     def test_the_row_of_a_file_follows_its_new_case(self):
         self._write("Report.txt", contents=b"kept")
@@ -684,31 +696,54 @@ class FollowedRenameTests(SyncReconciliationTestCase):
     def test_a_folder_gone_below_a_followed_one_takes_its_children_along(self):
         # The walk renames the folder from rows it loaded before: trashing a
         # folder below it builds the subtree from that folder's path, which
-        # has to be the new one. Accent encodings, because SQLite's LIKE
-        # would match a stale prefix that differs in case only.
-        composed = unicodedata.normalize("NFC", "Café")
-        decomposed = unicodedata.normalize("NFD", "Café")
-        self._write(composed, "Sub", "b.txt")
+        # has to be the new one. A non-ASCII case, because SQLite's LIKE
+        # would match a stale prefix that differs in ASCII case only.
+        self._write("Été", "Sub", "b.txt")
         self._sync()
-        self._rename(composed, decomposed)
-        if self._on_disk() != [decomposed]:
-            self.skipTest("this file system normalizes names")
-        shutil.rmtree(os.path.join(self._root(), decomposed, "Sub"))
+        self._rename("Été", "été")
+        default_storage.delete_prefix(f"{self._root()}/été/Sub")
 
         result = self._sync()
 
         self.assertEqual(result.errors, [])
         self.assertEqual(result.renames_followed, 1)
         self.assertEqual(result.folders_soft_deleted, 1)
-        self.assertIsNotNone(self._live(decomposed))
+        self.assertIsNotNone(self._live("été"))
         self.assertIsNone(self._live("Sub"))
         self.assertIsNone(self._live("b.txt"))
+
+    def test_the_other_encoding_of_its_name_is_respelled_on_disk(self):
+        # Names are stored composed: the row keeps its name, and the entry
+        # goes back under it rather than the row taking the decomposed one.
+        composed = unicodedata.normalize("NFC", "Café")
+        decomposed = unicodedata.normalize("NFD", "Café")
+        self._write(composed, "Sub", "b.txt")
+        self._sync()
+        folder = self._live(composed)
+        self._rename(composed, decomposed)
+        if self._on_disk() != [decomposed]:
+            self.skipTest("this file system normalizes names")
+
+        result = self._sync()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.renames_followed, 0)
+        self.assertEqual(result.disk_entries_renamed, 1)
+        self.assertEqual(result.folders_soft_deleted + result.files_soft_deleted, 0)
+        self.assertEqual(self._on_disk(), [composed])
+        folder.refresh_from_db()
+        self.assertEqual(folder.name, composed)
+        self.assertIsNone(folder.deleted_at)
+        self.assertEqual(
+            self._live("b.txt").content.name,
+            f"files/users/{self.user.username}/{composed}/Sub/b.txt",
+        )
 
     def test_of_two_new_spellings_the_first_by_name_is_followed(self):
         self._write("Report.txt")
         self._sync()
         row = self._live("Report.txt")
-        os.remove(os.path.join(self._root(), "Report.txt"))
+        default_storage.delete(f"{self._root()}/Report.txt")
         self._write("report.txt")
         self._write("REPORT.txt")
         if len(self._on_disk()) < 2:
@@ -749,7 +784,7 @@ class FollowedRenameTests(SyncReconciliationTestCase):
         self._mkdir("Docs")
         self._sync()
         folder = self._live("Docs")
-        os.rmdir(os.path.join(self._root(), "Docs"))
+        default_storage.remove_dir_if_empty(f"{self._root()}/Docs")
         self._write("docs")
 
         result = self._sync()
@@ -779,16 +814,18 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
     """Renaming a disk entry aside never replaces what holds the new name.
 
     The name is picked from a scan that is already stale when the rename
-    runs: a writer can put a file there in between.
+    runs: a writer can put a file there in between. Only a disk claims the
+    name in the same step as the rename; object storage checks first.
     """
 
-    def _rename(self, old, new, *, is_dir=False):
-        FileSyncService._rename_on_disk(self._root(), old, new, is_dir=is_dir)
+    def _rename(self, old, new):
+        FileSyncService._rename_on_disk(self._root(), old, new)
 
-    def _read(self, name):
-        with open(os.path.join(self._root(), name), "rb") as handle:
+    def _read(self, *parts):
+        with default_storage.open("/".join([self._root(), *parts]), "rb") as handle:
             return handle.read()
 
+    @local_storage_only
     def test_a_file_written_after_the_check_is_not_replaced(self):
         self._write("a.txt", contents=b"newcomer")
         self._write("a (Copy).txt", contents=b"theirs")
@@ -806,9 +843,10 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
 
         self._rename("a.txt", "a (Copy).txt")
 
-        self.assertEqual(sorted(os.listdir(self._root())), ["a (Copy).txt"])
+        self.assertEqual(self._listing(), ["a (Copy).txt"])
         self.assertEqual(self._read("a (Copy).txt"), b"newcomer")
 
+    @local_storage_only
     def test_without_hard_links_a_file_stays_where_it_is(self):
         # No other call renames a file without replacing what holds the name.
         self._write("a.txt", contents=b"newcomer")
@@ -817,18 +855,19 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
             with self.assertRaises(OSError):
                 self._rename("a.txt", "a (Copy).txt")
 
-        self.assertEqual(sorted(os.listdir(self._root())), ["a.txt"])
+        self.assertEqual(self._listing(), ["a.txt"])
 
     def test_a_directory_is_not_renamed_onto_an_existing_entry(self):
         self._write("d", "inside.txt")
         self._write("d (Copy)", contents=b"theirs")
 
         with self.assertRaises(FileExistsError):
-            self._rename("d", "d (Copy)", is_dir=True)
+            self._rename("d", "d (Copy)")
 
         self.assertEqual(self._read("d (Copy)"), b"theirs")
-        self.assertTrue(os.path.isfile(os.path.join(self._root(), "d", "inside.txt")))
+        self.assertEqual(self._read("d", "inside.txt"), b"data")
 
+    @local_storage_only
     def test_an_empty_directory_made_after_the_check_is_not_replaced(self):
         # rename(2) replaces an empty directory without a word.
         self._write("d", "inside.txt")
@@ -836,19 +875,20 @@ class RenameOnDiskTests(SyncReconciliationTestCase):
 
         with patch("os.path.lexists", return_value=False):
             with self.assertRaises(FileExistsError):
-                self._rename("d", "d (Copy)", is_dir=True)
+                self._rename("d", "d (Copy)")
 
-        self.assertEqual(os.listdir(os.path.join(self._root(), "d (Copy)")), [])
-        self.assertTrue(os.path.isfile(os.path.join(self._root(), "d", "inside.txt")))
+        self.assertEqual(self._listing("d (Copy)"), [])
+        self.assertEqual(self._read("d", "inside.txt"), b"data")
 
+    @local_storage_only
     def test_a_directory_rename_that_fails_releases_the_name(self):
         self._write("d", "inside.txt")
 
         with patch("os.rename", side_effect=OSError("busy")):
             with self.assertRaises(OSError):
-                self._rename("d", "d (Copy)", is_dir=True)
+                self._rename("d", "d (Copy)")
 
-        self.assertEqual(sorted(os.listdir(self._root())), ["d"])
+        self.assertEqual(self._listing(), ["d"])
 
 
 class SyncEndpointTests(SyncReconciliationTestCase):

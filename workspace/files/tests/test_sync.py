@@ -1,11 +1,9 @@
 """Tests for FileSyncService disk <-> DB synchronization."""
 
-import os
-
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
@@ -32,15 +30,10 @@ class FileSyncServiceStoragePrefixTests(TestCase):
             password="pass",
         )
 
-    def _user_root(self):
-        return os.path.join(settings.MEDIA_ROOT, "files", "users", self.user.username)
-
     def _write(self, *parts, contents=b"data"):
-        full = os.path.join(self._user_root(), *parts)
-        os.makedirs(os.path.dirname(full), exist_ok=True)
-        with open(full, "wb") as fh:
-            fh.write(contents)
-        return full
+        name = "/".join(["files", "users", self.user.username, *parts])
+        default_storage.replace(name, ContentFile(contents))
+        return name
 
     def test_recursive_sync_registers_files_under_canonical_prefix(self):
         self._write("report.pdf", contents=b"%PDF-1.4 test")

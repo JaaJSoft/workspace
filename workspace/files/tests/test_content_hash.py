@@ -1,11 +1,9 @@
 """Content hashing: computed on every write path, drives duplicate detection."""
 
 import hashlib
-import os
 from io import BytesIO
 from unittest.mock import patch
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
@@ -167,10 +165,9 @@ class SyncHashTests(TestCase):
         self.user = User.objects.create_user(username="synchash", password="pass")
 
     def test_disk_synced_files_are_hashed(self):
-        root = os.path.join(settings.MEDIA_ROOT, "files", "users", self.user.username)
-        os.makedirs(root, exist_ok=True)
-        with open(os.path.join(root, "found.txt"), "wb") as fh:
-            fh.write(HELLO)
+        default_storage.replace(
+            f"files/users/{self.user.username}/found.txt", ContentFile(HELLO)
+        )
 
         FileSyncService().sync_user_recursive(self.user)
 

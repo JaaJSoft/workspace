@@ -21,7 +21,7 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
 from workspace.files.sync import SyncResult
@@ -296,6 +296,7 @@ class PurgeTrashTaskTests(TestCase):
 
 
 class PurgeStagedWritesTaskTests(IsolatedMediaRootMixin, TestCase):
+    @local_storage_only
     def test_drops_an_abandoned_write_and_keeps_a_live_one(self):
         storage = storages["files"]
         abandoned = storage.staged_writer("files/users/alice/old.bin")

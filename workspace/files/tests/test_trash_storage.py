@@ -5,43 +5,49 @@ outermost trashed node of its chain. Everything below rides inside it, and
 the live tree keeps mirroring exactly what the file browser shows.
 """
 
-import os
-import shutil
-import tempfile
-from pathlib import Path
+import posixpath
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services.relocations import JOURNAL_DIR
 
 User = get_user_model()
 
 
-class TrashStorageLayoutTests(TestCase):
+class TrashStorageTestCase(IsolatedMediaRootMixin, TestCase):
+    """Each move commits: object storage drops what it copied only then."""
+
+    def _trash(self, node):
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.soft_delete(node, acting_user=self.user)
+
+    def _restore(self, node):
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.restore(node, acting_user=self.user)
+
+    def _purge(self, node):
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.hard_delete(node, acting_user=self.user)
+
+
+class TrashStorageLayoutTests(TrashStorageTestCase):
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
-        self._override = self.settings(MEDIA_ROOT=self.media_root)
-        self._override.enable()
+        super().setUp()
         self.user = User.objects.create_user(username="bob", password="pass")
 
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self.media_root, ignore_errors=True)
-
     def _blobs(self):
-        """Every blob of the tree; the journal entries of moves a test case
-        never commits stay out of it."""
-        found = []
-        for directory, _subdirs, names in os.walk(self.media_root):
-            for name in names:
-                full = Path(directory, name)
-                found.append(full.relative_to(self.media_root).as_posix())
-        return sorted(name for name in found if not name.startswith(f"{JOURNAL_DIR}/"))
+        return sorted(
+            blob.name
+            for root in ("files", "trash")
+            if default_storage.is_dir(root)
+            for blob in default_storage.iter_blobs(root)
+        )
 
     def _make_file(self, name, parent=None, content=b"bytes"):
         return FileService.create_file(
@@ -52,7 +58,7 @@ class TrashStorageLayoutTests(TestCase):
         f = self._make_file("report.pdf")
         self.assertEqual(self._blobs(), ["files/users/bob/report.pdf"])
 
-        FileService.soft_delete(f, acting_user=self.user)
+        self._trash(f)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, f"trash/users/bob/{f.uuid}/report.pdf")
@@ -61,17 +67,17 @@ class TrashStorageLayoutTests(TestCase):
     def test_the_name_on_disk_is_the_one_the_trash_view_shows(self):
         f = self._make_file("Quarterly Report.pdf")
 
-        FileService.soft_delete(f, acting_user=self.user)
+        self._trash(f)
 
         f.refresh_from_db()
-        self.assertEqual(os.path.basename(f.content.name), "Quarterly Report.pdf")
+        self.assertEqual(posixpath.basename(f.content.name), "Quarterly Report.pdf")
 
     def test_a_trashed_folder_keeps_its_subtree_inside(self):
         folder = FileService.create_folder(self.user, "Docs")
         sub = FileService.create_folder(self.user, "Sub", parent=folder)
         deep = self._make_file("deep.txt", parent=sub)
 
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
 
         deep.refresh_from_db()
         self.assertEqual(
@@ -84,7 +90,7 @@ class TrashStorageLayoutTests(TestCase):
         folder = FileService.create_folder(self.user, "Docs")
         inner = self._make_file("deep.txt", parent=folder)
 
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
 
         inner.refresh_from_db()
         # Keyed by the folder's uuid, not the file's: the file rides inside.
@@ -94,9 +100,9 @@ class TrashStorageLayoutTests(TestCase):
     def test_restoring_puts_the_bytes_back_in_the_live_tree(self):
         folder = FileService.create_folder(self.user, "Docs")
         deep = self._make_file("deep.txt", parent=folder)
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
 
-        FileService.restore(folder, acting_user=self.user)
+        self._restore(folder)
 
         deep.refresh_from_db()
         self.assertEqual(deep.content.name, "files/users/bob/Docs/deep.txt")
@@ -106,11 +112,11 @@ class TrashStorageLayoutTests(TestCase):
         folder = FileService.create_folder(self.user, "Docs")
         wanted = self._make_file("wanted.txt", parent=folder)
         other = self._make_file("other.txt", parent=folder)
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
 
         # As the API does: the row is re-read, so it knows it is trashed.
         wanted.refresh_from_db()
-        FileService.restore(wanted, acting_user=self.user)
+        self._restore(wanted)
 
         folder.refresh_from_db()
         wanted.refresh_from_db()
@@ -135,10 +141,10 @@ class TrashStorageLayoutTests(TestCase):
     def test_two_trashed_namesakes_keep_separate_directories(self):
         first = FileService.create_folder(self.user, "Docs")
         old = self._make_file("deep.txt", parent=first, content=b"FIRST")
-        FileService.soft_delete(first, acting_user=self.user)
+        self._trash(first)
         second = FileService.create_folder(self.user, "Docs")
         new = self._make_file("deep.txt", parent=second, content=b"SECOND")
-        FileService.soft_delete(second, acting_user=self.user)
+        self._trash(second)
 
         old.refresh_from_db()
         new.refresh_from_db()
@@ -155,13 +161,13 @@ class TrashStorageLayoutTests(TestCase):
         # younger one, whose directory has nothing to do with this file.
         first = FileService.create_folder(self.user, "Docs")
         older = self._make_file("deep.txt", parent=first, content=b"FIRST")
-        FileService.soft_delete(first, acting_user=self.user)
+        self._trash(first)
         second = FileService.create_folder(self.user, "Docs")
         younger = self._make_file("deep.txt", parent=second, content=b"SECOND")
-        FileService.soft_delete(second, acting_user=self.user)
+        self._trash(second)
 
         older.refresh_from_db()
-        FileService.restore(older, acting_user=self.user)
+        self._restore(older)
 
         older.refresh_from_db()
         younger.refresh_from_db()
@@ -179,10 +185,10 @@ class TrashStorageLayoutTests(TestCase):
 
     def test_restoring_onto_a_taken_name_renames_instead_of_overwriting(self):
         original = self._make_file("report.pdf", content=b"OLD")
-        FileService.soft_delete(original, acting_user=self.user)
+        self._trash(original)
         rival = self._make_file("report.pdf", content=b"NEW")
 
-        FileService.restore(original, acting_user=self.user)
+        self._restore(original)
 
         original.refresh_from_db()
         rival.refresh_from_db()
@@ -196,10 +202,10 @@ class TrashStorageLayoutTests(TestCase):
     def test_a_restored_folder_is_renamed_the_same_way(self):
         folder = FileService.create_folder(self.user, "Docs")
         inner = self._make_file("deep.txt", parent=folder)
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
         FileService.create_folder(self.user, "Docs")
 
-        FileService.restore(folder, acting_user=self.user)
+        self._restore(folder)
 
         folder.refresh_from_db()
         inner.refresh_from_db()
@@ -209,41 +215,31 @@ class TrashStorageLayoutTests(TestCase):
     def test_purging_a_trashed_node_removes_its_trash_directory(self):
         folder = FileService.create_folder(self.user, "Docs")
         self._make_file("deep.txt", parent=folder)
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
 
-        FileService.hard_delete(folder, acting_user=self.user)
+        self._purge(folder)
 
         self.assertEqual(self._blobs(), [])
-        self.assertFalse(
-            os.path.isdir(
-                os.path.join(self.media_root, "trash", "users", "bob", str(folder.uuid))
-            )
-        )
+        self.assertFalse(default_storage.is_dir(f"trash/users/bob/{folder.uuid}"))
 
     def test_an_empty_folder_trashes_and_restores_without_a_directory(self):
         folder = FileService.create_folder(self.user, "Empty")
-        os.rmdir(os.path.join(self.media_root, "files", "users", "bob", "Empty"))
+        default_storage.remove_dir_if_empty("files/users/bob/Empty")
 
-        FileService.soft_delete(folder, acting_user=self.user)
-        FileService.restore(folder, acting_user=self.user)
+        self._trash(folder)
+        self._restore(folder)
 
         folder.refresh_from_db()
         self.assertIsNone(folder.deleted_at)
 
 
-class GroupTrashStorageTests(TestCase):
+class GroupTrashStorageTests(TrashStorageTestCase):
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
-        self._override = self.settings(MEDIA_ROOT=self.media_root)
-        self._override.enable()
+        super().setUp()
         self.user = User.objects.create_user(username="alice", password="pass")
         self.group = Group.objects.create(name="Marketing")
         self.user.groups.add(self.group)
         self.root = FileService.create_folder(self.user, "Marketing", group=self.group)
-
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self.media_root, ignore_errors=True)
 
     def test_a_trashed_group_file_leaves_the_shared_tree(self):
         f = FileService.create_file(
@@ -254,7 +250,7 @@ class GroupTrashStorageTests(TestCase):
         )
         self.assertEqual(f.content.name, "files/groups/Marketing/report.pdf")
 
-        FileService.soft_delete(f, acting_user=self.user)
+        self._trash(f)
 
         f.refresh_from_db()
         self.assertEqual(f.content.name, f"trash/groups/{f.uuid}/report.pdf")
@@ -268,7 +264,7 @@ class GroupTrashStorageTests(TestCase):
             parent=self.root,
             content=ContentFile(b"MINE", name="report.pdf"),
         )
-        FileService.soft_delete(first, acting_user=self.user)
+        self._trash(first)
 
         second = FileService.create_file(
             mate,
@@ -291,26 +287,21 @@ class GroupTrashStorageTests(TestCase):
             content=ContentFile(b"shared", name="report.pdf"),
         )
 
-        self.group.delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            self.group.delete()
 
         f.refresh_from_db()
         self.assertIsNotNone(f.deleted_at)
         self.assertTrue(f.content.name.startswith("trash/"))
-        self.assertTrue(os.path.isfile(os.path.join(self.media_root, f.content.name)))
+        self.assertTrue(default_storage.is_file(f.content.name))
 
 
-class NameCollisionTests(TestCase):
+class NameCollisionTests(TrashStorageTestCase):
     """The other two ways two rows used to land on one storage path."""
 
     def setUp(self):
-        self.media_root = tempfile.mkdtemp()
-        self._override = self.settings(MEDIA_ROOT=self.media_root)
-        self._override.enable()
+        super().setUp()
         self.user = User.objects.create_user(username="dave", password="pass")
-
-    def tearDown(self):
-        self._override.disable()
-        shutil.rmtree(self.media_root, ignore_errors=True)
 
     def test_two_folders_cannot_share_a_name_in_one_parent(self):
         FileService.create_folder(self.user, "Docs")
@@ -359,5 +350,5 @@ class NameCollisionTests(TestCase):
 
     def test_a_trashed_name_is_free_again(self):
         folder = FileService.create_folder(self.user, "Docs")
-        FileService.soft_delete(folder, acting_user=self.user)
+        self._trash(folder)
         FileService.create_folder(self.user, "Docs")

@@ -520,6 +520,7 @@ class FileResource(DAVNonCollection):
         # The record may have been hard-deleted by a concurrent retry's
         # end_write(with_errors=True) during our (slow) upload.  If so,
         # recreate it so the file on disk is not orphaned.
+        refusal = None
         with transaction.atomic():
             try:
                 try:
@@ -550,14 +551,21 @@ class FileResource(DAVNonCollection):
                 )
             except (LockConflict, StaleContent, Relocated) as exc:
                 buf.abort()
-                self._refusal_error(exc, username)
+                refusal = exc
             except BaseException:
                 buf.abort()
                 raise
-            # Flush the remaining buffer and move the blob into place. Inside
-            # the transaction: a storage failure here has to take the row that
-            # already points at it down with it.
-            buf.finalize()
+            else:
+                # Flush the remaining buffer and move the blob into place.
+                # Inside the transaction: a storage failure here has to take
+                # the row that already points at it down with it.
+                buf.finalize()
+        if refusal is not None:
+            # The empty row do_PUT created for a new file stays behind a
+            # refused upload unless it goes now, outside the block it would
+            # have been rolled back with.
+            self._discard_placeholder()
+            self._refusal_error(refusal, username)
 
         logger.info(
             "PUT completed for %s by %s (%d bytes, %.2fs)",

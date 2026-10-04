@@ -372,6 +372,17 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
             self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
         )
 
+    def _resource(self, path, file_obj):
+        environ = {
+            "REQUEST_METHOD": "PUT",
+            "SCRIPT_NAME": "",
+            "PATH_INFO": path,
+            "wsgi.input": io.BytesIO(b""),
+            "wsgidav.provider": None,
+            "workspace.user": self.user,
+        }
+        return FileResource(path, environ, file_obj)
+
     def test_an_upload_the_file_was_moved_under_is_refused(self):
         """Its bytes are staged under the path the file had when the PUT began,
         which the move empties once it commits."""
@@ -379,15 +390,7 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         f = FileService.create_file(
             self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
         )
-        environ = {
-            "REQUEST_METHOD": "PUT",
-            "SCRIPT_NAME": "",
-            "PATH_INFO": "/Docs/a.txt",
-            "wsgi.input": io.BytesIO(b""),
-            "wsgidav.provider": None,
-            "workspace.user": self.user,
-        }
-        resource = FileResource("/Docs/a.txt", environ, f)
+        resource = self._resource("/Docs/a.txt", f)
         buf = resource.begin_write()
         buf.write(b"new")
         buf.close()
@@ -405,6 +408,24 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
             self.keys(),
             ["files/users/davs3/Archive/", "files/users/davs3/Archive/a.txt"],
         )
+
+    def test_a_new_file_refused_because_its_folder_moved_leaves_nothing(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        # The empty row a PUT of a new file creates before its first byte.
+        placeholder = FileService.create_file(self.user, "a.txt", parent=docs)
+        resource = self._resource("/Docs/a.txt", placeholder)
+        buf = resource.begin_write()
+        buf.write(b"new")
+        buf.close()
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
+
+        with self.assertRaises(DAVError) as refused:
+            resource.end_write(with_errors=False)
+
+        self.assertEqual(refused.exception.value, 409)
+        self.assertFalse(File.objects.filter(pk=placeholder.pk).exists())
+        self.assertEqual(self.keys(), ["files/users/davs3/Archive/"])
 
     def test_an_overwrite_the_store_fails_to_complete_keeps_nothing_open(self):
         """wsgidav calls end_write once: an upload the store refused to

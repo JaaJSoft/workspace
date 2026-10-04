@@ -16,6 +16,9 @@ class ResolveBannerGradientTest(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username="testuser", password="testpass")
 
+    def tearDown(self):
+        cache.clear()
+
     def test_returns_none_when_no_setting(self):
         self.assertIsNone(resolve_banner_gradient(self.user))
 
@@ -121,6 +124,9 @@ class ProfileViewContextTest(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username="viewuser", password="testpass")
         self.client.login(username="viewuser", password="testpass")
+
+    def tearDown(self):
+        cache.clear()
 
     def test_profile_view_has_banner_gradient_none_by_default(self):
         resp = self.client.get("/users/profile")

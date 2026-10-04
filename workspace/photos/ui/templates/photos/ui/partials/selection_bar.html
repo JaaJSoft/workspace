@@ -7,6 +7,8 @@
   disabled until the registry has answered for every selected photo, then
   for good when one of them does not offer it (selectionAllows). The same
   actions open from a right-click on a selected tile (selection_menu.html).
+  On an album the album decides the download (selectionDownloadable), and
+  a photo only the album serves takes Add to album and Hide away.
 {% endcomment %}
 <div
   x-show="selection.length > 0"
@@ -47,7 +49,7 @@
     <button
       type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
-      x-show="!hiddenView"
+      x-show="!hiddenView && !selectionAlbumScoped()"
       @click="openAlbumPicker(selection)"
     >
       <i data-lucide="book-plus" class="w-4 h-4"></i>
@@ -70,7 +72,7 @@
     <button
       type="button"
       class="btn btn-ghost btn-sm rounded-full gap-1.5"
-      x-show="albumAllows('remove_items')"
+      x-show="selectionRemovable()"
       @click="removeFromAlbum(selection)"
     >
       <i data-lucide="image-minus" class="w-4 h-4"></i>
@@ -97,7 +99,7 @@
       class="btn btn-ghost btn-sm btn-circle"
       title="Hide from library"
       aria-label="Hide from library"
-      x-show="!hiddenView"
+      x-show="!hiddenView && !selectionAlbumScoped()"
       :disabled="hiddenBusy"
       @click="setPhotosHidden(selection, true)"
       data-testid="photos-hide-selection"
@@ -109,7 +111,7 @@
       class="btn btn-ghost btn-sm btn-circle"
       title="Download"
       aria-label="Download"
-      :disabled="!selectionAllows('download')"
+      :disabled="!selectionDownloadable()"
       @click="downloadSelection()"
     >
       <i data-lucide="download" class="w-4 h-4"></i>

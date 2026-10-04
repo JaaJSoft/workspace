@@ -1,6 +1,5 @@
-// Photos: the module shell (sidebar, viewer hand-off, selection, albums) and
-// the sentinel that appends the next page of the timeline as it scrolls into
-// view.
+// Photos: the module shell (sidebar, viewer hand-off, selection, albums).
+// The sentinel paging the timeline is timeline_sentinel.js.
 
 const PHOTOS_MOBILE_QUERY = '(max-width: 1023px)';
 
@@ -30,7 +29,9 @@ const PHOTOS_WRITE_BATCH = 6;
 
 // The album actions its header menu offers: the ones on the album as a whole.
 // The rest (add, remove, cover, reorder) gate controls elsewhere on the page.
-const ALBUM_MENU_ACTIONS = ['rename', 'edit_description', 'change_sort', 'delete'];
+const ALBUM_MENU_ACTIONS = [
+  'rename', 'edit_description', 'change_sort', 'share', 'download', 'leave', 'delete',
+];
 
 // Room the context menu needs, to keep it inside the viewport.
 const PHOTOS_MENU_WIDTH = 224;
@@ -81,6 +82,18 @@ function photosRange(ordered, from, to) {
 
 function photosCountLabel(count) {
   return count === 1 ? '1 photo' : `${count} photos`;
+}
+
+// Saves a response body as a file named `filename`.
+async function photosSaveBlob(response, filename) {
+  const url = URL.createObjectURL(await response.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function photosBatches(items, size) {
@@ -191,6 +204,10 @@ window.photosApp = function photosApp() {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
+      // Members came or went: the header's faces and the sidebar's groups.
+      window.addEventListener('album-shares-changed', () => {
+        this._refresh(['photos-nav', 'photos-header']);
+      });
       window.addEventListener('rename-item', (e) => this.renamePhoto(e.detail.uuid, e.detail.name));
       // Tag counts in the sidebar follow assignments made from the panel.
       window.addEventListener('tags-changed', () => {
@@ -327,7 +344,7 @@ window.photosApp = function photosApp() {
         video.className = 'absolute inset-0 w-full h-full object-cover pointer-events-none';
         video.setAttribute('aria-hidden', 'true');
         video.dataset.hoverPreview = '';
-        video.src = `/api/v1/files/${tile.dataset.uuid}/content`;
+        video.src = tile.dataset.contentUrl || `/api/v1/files/${tile.dataset.uuid}/content`;
         tile.querySelector('button').appendChild(video);
         video.play().catch(() => {});
         this._hoverPreview = { tile, timer: null, video };
@@ -376,6 +393,20 @@ window.photosApp = function photosApp() {
 
     _tile(uuid) {
       return document.querySelector(`#timeline-grid [data-uuid="${uuid}"]`);
+    },
+
+    // A photo of a shared album the viewer cannot open in Files: the album
+    // serves it, and no file action applies to it (see photo_tile.html).
+    _albumScoped(uuid) {
+      const tile = this._tile(uuid);
+      return !!tile && tile.dataset.albumScoped === '1';
+    },
+
+    // Whether the viewer may take the photo out of the album on screen: the
+    // tile says so for the album's photos, and only the album has any.
+    _removable(uuid) {
+      const tile = this._tile(uuid);
+      return !!tile && tile.dataset.removable === '1';
     },
 
     // ── Properties ──────────────────────────────────────
@@ -443,9 +474,17 @@ window.photosApp = function photosApp() {
         type: tile.dataset.fileType,
         mediaType: tile.dataset.mediaType,
         filesUrl: tile.dataset.filesUrl,
+        albumScoped: tile.dataset.albumScoped === '1',
+        removable: tile.dataset.removable === '1',
+        downloadUrl: tile.dataset.downloadUrl || '',
       };
       const generation = ++this._ctxGeneration;
       this.ctxMenu = { open: true, x, y, photo, actions: null };
+      // The files registry knows nothing of a file the viewer cannot open.
+      if (photo.albumScoped) {
+        this.ctxMenu.actions = [];
+        return;
+      }
 
       window.fileActions.fetchActions([photo.uuid]).then((data) => {
         if (generation !== this._ctxGeneration) return;
@@ -702,6 +741,10 @@ window.photosApp = function photosApp() {
     async _loadSelectionActions() {
       const uuids = this.selection.slice();
       const generation = ++this._selectionGeneration;
+      // No file action applies to a photo only the album serves.
+      uuids.filter((uuid) => this._albumScoped(uuid)).forEach((uuid) => {
+        this._actionsCache[uuid] = [];
+      });
       const missing = uuids.filter((uuid) => !(uuid in this._actionsCache));
       if (missing.length) {
         this.selectionActions = null;
@@ -742,6 +785,26 @@ window.photosApp = function photosApp() {
 
     closeSelectionMenu() {
       this.selectionMenu.open = false;
+    },
+
+    // The selection holds a photo only the album serves: what needs Files
+    // (adding it elsewhere, hiding it) does not apply.
+    selectionAlbumScoped() {
+      return this.selection.some((uuid) => this._albumScoped(uuid));
+    },
+
+    // Every selected photo may leave the album on screen.
+    selectionRemovable() {
+      return this.albumAllows('remove_items')
+        && this.selection.length > 0
+        && this.selection.every((uuid) => this._removable(uuid));
+    },
+
+    // On an album the album decides, for every photo it shows; elsewhere
+    // the files registry, photo by photo.
+    selectionDownloadable() {
+      if (this.albumUuid) return !this.selectionBusy && this.albumAllows('download');
+      return this.selectionAllows('download');
     },
 
     // One request per photo, a few at a time. Resolves to the uuids the
@@ -793,8 +856,25 @@ window.photosApp = function photosApp() {
 
     downloadSelection() {
       this.closeSelectionMenu();
-      if (!this.selectionAllows('download')) return Promise.resolve();
+      if (!this.selectionDownloadable()) return Promise.resolve();
+      if (this.albumUuid) return this._downloadFromAlbum(this.selection.slice());
       return window.fileActions.downloadArchive(this.selection.slice(), 'photos.zip');
+    },
+
+    async _downloadFromAlbum(files) {
+      this.selectionBusy = true;
+      try {
+        const response = await fetch(`${ALBUMS_API}/${this.albumUuid}/download`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ files }),
+        });
+        if (!response.ok) throw new Error(String(response.status));
+        await photosSaveBlob(response, 'photos.zip');
+      } catch (_) {
+        window.AppAlert.error('Failed to download the photos');
+      }
+      this.selectionBusy = false;
     },
 
     async trashSelection() {
@@ -984,6 +1064,7 @@ window.photosApp = function photosApp() {
     async removeFromAlbum(uuids) {
       const uuid = this.albumUuid;
       if (!uuid || !this.albumAllows('remove_items') || !uuids.length) return;
+      if (!uuids.every((u) => this._removable(u))) return;
       const files = uuids.slice();
       try {
         await photosJson('POST', `${ALBUMS_API}/${uuid}/items/remove`, { files });
@@ -1063,6 +1144,32 @@ window.photosApp = function photosApp() {
             this._refresh(['photos-nav', 'photos-content']);
             break;
           }
+          case 'share':
+            this.openAlbumShare();
+            break;
+          case 'download': {
+            const a = document.createElement('a');
+            a.href = `${url}/download`;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            break;
+          }
+          case 'leave': {
+            const ok = await AppDialog.confirm({
+              title: 'Leave album',
+              message: `Leave "${album.title}"? The photos you added stay in it.`,
+              okLabel: 'Leave album',
+              okClass: 'btn-error',
+              icon: 'log-out',
+              iconClass: 'bg-error/10 text-error',
+            });
+            if (!ok) return;
+            await photosJson('POST', `${url}/leave`, {});
+            window.location.href = '/photos';
+            break;
+          }
           case 'delete': {
             const ok = await AppDialog.confirm({
               title: 'Delete album',
@@ -1081,6 +1188,15 @@ window.photosApp = function photosApp() {
       } catch (_) {
         window.AppAlert.error('Failed to update the album');
       }
+    },
+
+    // The album share modal (album_share.js), on the album on screen.
+    openAlbumShare() {
+      const album = photosCurrentAlbum();
+      if (!album || !this.albumAllows('share')) return;
+      window.dispatchEvent(new CustomEvent('open-album-share', {
+        detail: { uuid: album.uuid, title: album.title },
+      }));
     },
 
     // ── Manual order ────────────────────────────────────
@@ -1146,46 +1262,6 @@ window.photosApp = function photosApp() {
       } else {
         tile.after(...moved);
       }
-    },
-  };
-};
-
-// Each page ends with its own sentinel, which the next page replaces: the
-// observer lives and dies with the element it watches, so there is never
-// more than one, and never one watching a page that is already loaded.
-window.timelineSentinel = function timelineSentinel(url) {
-  return {
-    loading: false,
-    _observer: null,
-
-    init() {
-      if (!('IntersectionObserver' in window)) return;
-      // Observed against the scroll container, not the viewport: the margin
-      // only reaches ahead of the fold relative to the root, and the
-      // viewport never scrolls on this page.
-      this._observer = new IntersectionObserver(
-        (entries) => {
-          if (entries.some((entry) => entry.isIntersecting)) this.load();
-        },
-        { root: this.$el.closest('#photos-content'), rootMargin: '0px 0px 800px 0px' },
-      );
-      this._observer.observe(this.$el);
-    },
-
-    destroy() {
-      if (this._observer) this._observer.disconnect();
-    },
-
-    async load() {
-      if (this.loading) return;
-      this.loading = true;
-      try {
-        await this.$ajax(url, { targets: ['timeline-grid', 'timeline-more'], focus: false });
-      } catch (_) {
-        // The button stays for a retry; the observer will not fire again
-        // while the sentinel sits still in view.
-      }
-      this.loading = false;
     },
   };
 };

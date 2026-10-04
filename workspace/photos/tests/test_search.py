@@ -14,6 +14,7 @@ from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album
 from workspace.photos.search import search_photos
+from workspace.photos.services.album_sharing import share_album
 from workspace.photos.services.albums import create_album
 from workspace.users.services.settings import set_setting
 
@@ -225,6 +226,12 @@ class SearchPhotosScopeTests(TestCase):
         )
         create_album(self.user, "Sunset walks")
         Album.objects.create(owner=bob, group=family, title="Sunset family")
+        share_album(
+            create_album(bob, "Sunset trip"),
+            role="viewer",
+            acting_user=bob,
+            user=self.user,
+        )
 
     def tearDown(self):
         cache.clear()
@@ -241,6 +248,7 @@ class SearchPhotosScopeTests(TestCase):
                 "sunset-shared.jpg",
                 "Sunset walks",
                 "Sunset family",
+                "Sunset trip",
             },
         )
 

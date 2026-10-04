@@ -12,6 +12,12 @@ class AlbumSerializer(serializers.Serializer):
     description = serializers.CharField(source="album.description")
     sort_mode = serializers.CharField(source="album.sort_mode")
     group = serializers.IntegerField(source="album.group_id", allow_null=True)
+    owner = serializers.CharField(source="album.owner.username")
+    role = serializers.CharField(
+        allow_null=True,
+        help_text="The caller's role: owner, manager, contributor or viewer.",
+    )
+    allow_download = serializers.BooleanField(source="album.allow_download")
     count = serializers.IntegerField()
     cover = serializers.SerializerMethodField()
     cover_url = serializers.CharField()
@@ -37,7 +43,7 @@ class AlbumWriteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Album
-        fields = ["title", "description", "sort_mode"]
+        fields = ["title", "description", "sort_mode", "allow_download"]
 
 
 def _crop_url(face_id):

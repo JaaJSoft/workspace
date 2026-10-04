@@ -372,8 +372,9 @@ class AlbumSummariesTests(TestCase):
         albums = list(Album.objects.filter(owner=self.user))
 
         # The project reach of the file access helper, the counts, the chosen
-        # covers, the fallback covers and the cover files.
-        with self.assertNumQueries(5):
+        # covers, the fallback covers, the viewer's groups (for the roles) and
+        # the cover files.
+        with self.assertNumQueries(6):
             cards = album_cards(self.user, albums)
 
         self.assertEqual(len(cards), 4)

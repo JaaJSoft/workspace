@@ -43,6 +43,21 @@ class PhotosConfig(AppConfig):
 
         register_vector_index(FACE_EMBEDDINGS)
 
+        from workspace.core.activity_registry import (
+            ActivityProviderInfo,
+            activity_registry,
+        )
+        from workspace.photos.activity import PhotosActivityProvider
+
+        activity_registry.register(
+            ActivityProviderInfo(
+                slug="photos",
+                label="Photos",
+                icon="images",
+                provider_cls=PhotosActivityProvider,
+            )
+        )
+
         registry.register(
             ModuleInfo(
                 name="Photos",

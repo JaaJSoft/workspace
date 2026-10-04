@@ -69,3 +69,9 @@ PHOTOS_FACES_VIDEO_MAX_DURATION = int(
 PHOTOS_FACES_VIDEO_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_FACES_VIDEO_MAX_FILE_BYTES", str(2 * 1024**3))
 )
+
+# Seconds a burst of additions to a shared album is gathered before its
+# members are told, in one notification per contributor.
+PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS = int(
+    os.getenv("PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS", "60")
+)

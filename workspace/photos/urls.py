@@ -1,7 +1,16 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from .views import actions, albums, faces, hidden, import_folder
+from .views import (
+    actions,
+    album_files,
+    album_links,
+    album_sharing,
+    albums,
+    faces,
+    hidden,
+    import_folder,
+)
 
 router = SimpleRouter(trailing_slash=False)
 router.register(
@@ -39,6 +48,71 @@ urlpatterns = [
         "api/v1/photos/albums/<uuid:uuid>/reorder",
         albums.AlbumReorderView.as_view(),
         name="photo-album-reorder",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/shares",
+        album_sharing.AlbumSharesView.as_view(),
+        name="photo-album-shares",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/leave",
+        album_sharing.AlbumLeaveView.as_view(),
+        name="photo-album-leave",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/links",
+        album_sharing.AlbumLinksView.as_view(),
+        name="photo-album-links",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/links/<uuid:link_uuid>",
+        album_sharing.AlbumLinkDetailView.as_view(),
+        name="photo-album-link-detail",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/download",
+        album_files.AlbumDownloadView.as_view(),
+        name="photo-album-download",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/files/<uuid:file_uuid>/thumbnail",
+        album_files.AlbumFileThumbnailView.as_view(),
+        name="photo-album-file-thumbnail",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/files/<uuid:file_uuid>/content",
+        album_files.AlbumFileContentView.as_view(),
+        name="photo-album-file-content",
+    ),
+    path(
+        "api/v1/photos/albums/<uuid:uuid>/files/<uuid:file_uuid>/download",
+        album_files.AlbumFileDownloadView.as_view(),
+        name="photo-album-file-download",
+    ),
+    path(
+        "api/v1/photos/shared/<str:token>/verify",
+        album_links.AlbumLinkVerifyView.as_view(),
+        name="photo-album-link-verify",
+    ),
+    path(
+        "api/v1/photos/shared/<str:token>/download",
+        album_links.AlbumLinkArchiveView.as_view(),
+        name="photo-album-link-archive",
+    ),
+    path(
+        "api/v1/photos/shared/<str:token>/files/<uuid:file_uuid>/thumbnail",
+        album_links.AlbumLinkThumbnailView.as_view(),
+        name="photo-album-link-thumbnail",
+    ),
+    path(
+        "api/v1/photos/shared/<str:token>/files/<uuid:file_uuid>/content",
+        album_links.AlbumLinkContentView.as_view(),
+        name="photo-album-link-content",
+    ),
+    path(
+        "api/v1/photos/shared/<str:token>/files/<uuid:file_uuid>/download",
+        album_links.AlbumLinkDownloadView.as_view(),
+        name="photo-album-link-download",
     ),
     path(
         "api/v1/photos/hidden",

@@ -15,6 +15,7 @@ from django.db.models import Max
 from django.utils import timezone
 
 from ..models import Album, AlbumItem
+from .album_notifications import schedule_additions_notification
 
 POSITION_GAP = 1 << 16
 
@@ -50,7 +51,8 @@ def create_album(owner, title, *, description="", sort_mode=None, files=()):
 def add_items(album, files, *, added_by):
     """Append *files* to the end of *album*, skipping those already in it.
 
-    Returns how many were added.
+    Returns how many were added. The album's other members hear about them
+    once the burst is over (``album_notifications``).
     """
     with transaction.atomic():
         _locked(album)
@@ -78,7 +80,24 @@ def add_items(album, files, *, added_by):
             ]
         )
         _touch(album)
+        transaction.on_commit(
+            lambda: schedule_additions_notification(album), robust=True
+        )
     return len(new)
+
+
+def removable(album, file_ids, *, user, role):
+    """The ids among *file_ids* that *user*, holding *role*, may take out of
+    *album*: any item for a manager or an owner, the ones they added
+    themselves for a contributor, none for anyone else."""
+    from ..queries import CONTRIBUTOR, MANAGER, OWNER
+
+    items = AlbumItem.objects.filter(album=album, file_id__in=file_ids)
+    if role == CONTRIBUTOR:
+        items = items.filter(added_by=user)
+    elif role not in (MANAGER, OWNER):
+        return set()
+    return set(items.values_list("file_id", flat=True))
 
 
 def remove_items(album, file_ids):
@@ -89,6 +108,9 @@ def remove_items(album, file_ids):
     """
     file_ids = set(file_ids)
     with transaction.atomic():
+        # Under the lock adds and moves take, so a move never picks an
+        # anchor a concurrent removal is taking away.
+        _locked(album)
         removed, _ = AlbumItem.objects.filter(
             album=album, file_id__in=file_ids
         ).delete()

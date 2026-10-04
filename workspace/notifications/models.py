@@ -17,6 +17,7 @@ SOURCE_FIELD_NAMES = (
     "event",
     "poll",
     "mail_message",
+    "album",
 )
 
 
@@ -111,6 +112,13 @@ class Notification(models.Model):
     )
     mail_message = models.ForeignKey(
         "mail.MailMessage",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    album = models.ForeignKey(
+        "photos.Album",
         on_delete=models.CASCADE,
         null=True,
         blank=True,

@@ -1,0 +1,36 @@
+{% comment %}
+  A tile of a public album link's grid (timeline_page.html with this as its
+  tile_template): the thumbnail, through the link, opening the photo on the
+  page in place. Nothing else: a visitor has no selection and no menu.
+  shared_thumbnail_url and shared_view_url come from ui.views._shared_tiles.
+{% endcomment %}
+<a
+  href="{{ file.shared_view_url }}"
+  x-target.push="shared-album-content"
+  class="group relative block shrink-0 w-[calc((100vw-3.5rem)/3)] sm:w-40 aspect-square overflow-hidden rounded-lg bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
+  title="{{ file.name }}"
+  data-shared-photo="{{ file.uuid }}"
+>
+  {% if file.has_thumbnail %}
+    <img
+      src="{{ file.shared_thumbnail_url }}"
+      alt="{{ file.name }}"
+      class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+      loading="lazy"
+      decoding="async"
+      draggable="false"
+    />
+  {% else %}
+    <span
+      class="absolute inset-0 flex items-center justify-center text-base-content/30"
+    >
+      <i
+        data-lucide="{% if file.media_item.media_type == 'video' %}video{% else %}image{% endif %}"
+        class="w-8 h-8"
+      ></i>
+    </span>
+  {% endif %}
+  {% if file.media_item.media_type == "video" %}
+    {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}
+  {% endif %}
+</a>

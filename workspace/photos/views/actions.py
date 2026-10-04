@@ -21,7 +21,7 @@ from workspace.common.uuids import (
 )
 
 from ..actions import AlbumActionRegistry
-from ..queries import album_roles, user_albums
+from ..queries import album_roles, direct_share_album_ids, user_albums
 
 MAX_BATCH = 200
 
@@ -78,9 +78,13 @@ class AlbumActionsView(CacheControlMixin, APIView):
 
         albums = list(user_albums(request.user).filter(uuid__in=parsed))
         roles = album_roles(request.user, albums)
+        direct = direct_share_album_ids(request.user, albums)
         for album in albums:
             actions = AlbumActionRegistry.get_available_actions(
-                request.user, album, role=roles.get(album.uuid)
+                request.user,
+                album,
+                role=roles.get(album.uuid),
+                direct=album.uuid in direct,
             )
             for key in spellings[album.uuid]:
                 result[key] = actions

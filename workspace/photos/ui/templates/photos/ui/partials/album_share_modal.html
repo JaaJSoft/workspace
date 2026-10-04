@@ -1,0 +1,322 @@
+{% comment %}
+  Who an album is shared with, and its public links: the Files share modal's
+  layout, with a role per member instead of a permission. Opened by the
+  `open-album-share` event (photosApp().openAlbumShare); its state lives in
+  albumShareModal() (album_share.js). Member changes and the download
+  setting are staged and saved together; links are created and revoked at
+  once, as in Files.
+{% endcomment %}
+<div x-data="albumShareModal()">
+  <dialog
+    x-ref="dialog"
+    class="modal"
+    @close="closeModal()"
+    data-album-share-modal
+  >
+    <div class="modal-box max-w-md">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="bg-module/10 rounded-lg p-2">
+          <i data-lucide="share-2" class="w-5 h-5 text-module"></i>
+        </div>
+        <div class="min-w-0">
+          <h3 class="font-bold text-lg">Share album</h3>
+          <p class="text-sm text-base-content/60 truncate" x-text="albumTitle"></p>
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="text-sm font-medium mb-1 block">Add people</label>
+        {% include "users/ui/partials/user_selector.html" with on_select_event="album-share-user-selected" placeholder="Search by username or name..." %}
+      </div>
+
+      <div class="mb-4">
+        <label class="text-sm font-medium mb-1 block">Add a group</label>
+        {% include "ui/partials/group_selector.html" with on_select_event="album-share-group-selected" local_source="selectableGroups()" placeholder="Search groups..." %}
+      </div>
+
+      <div class="mb-4">
+        <label class="text-sm font-medium mb-2 block">Members</label>
+        <div class="space-y-1 max-h-56 overflow-y-auto">
+          <div x-show="loading" class="flex justify-center py-4">
+            <span class="loading loading-spinner loading-sm"></span>
+          </div>
+          <template x-if="!loading && owner">
+            <div class="flex items-center gap-2 p-2 rounded-lg" data-album-owner>
+              <template x-if="owner.type === 'group'">
+                <span
+                  class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                >
+                  <i data-lucide="users" class="w-4 h-4 opacity-70"></i>
+                </span>
+              </template>
+              <template x-if="owner.type === 'user'">
+                <user-avatar :user-id="owner.id" :username="owner.username" size="sm" presence card></user-avatar>
+              </template>
+              <div class="flex-1 min-w-0">
+                <div class="font-medium text-sm truncate" x-text="entryName(owner)"></div>
+                <div
+                  class="text-xs text-base-content/60 truncate"
+                  x-show="entrySubtitle(owner)"
+                  x-text="entrySubtitle(owner)"
+                ></div>
+              </div>
+              <span class="badge badge-sm badge-ghost">Owner</span>
+            </div>
+          </template>
+          <template x-for="entry in displayList()" :key="entry.key">
+            <div
+              class="flex items-center gap-2 p-2 rounded-lg"
+              :class="entry._removed ? 'bg-error/5 opacity-50' : 'hover:bg-base-200'"
+              :data-album-member="entry.key"
+            >
+              <template x-if="entry.type === 'group'">
+                <span
+                  class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                >
+                  <i data-lucide="users" class="w-4 h-4 opacity-70"></i>
+                </span>
+              </template>
+              <template x-if="entry.type === 'project'">
+                <span
+                  class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center shrink-0"
+                >
+                  <i data-lucide="square-kanban" class="w-4 h-4 opacity-70"></i>
+                </span>
+              </template>
+              <template x-if="entry.type === 'user'">
+                <user-avatar :user-id="entry.id" :username="entry.username" size="sm" presence card></user-avatar>
+              </template>
+              <div class="flex-1 min-w-0">
+                <div
+                  class="font-medium text-sm truncate"
+                  :class="entry._removed ? 'line-through' : ''"
+                  x-text="entryName(entry)"
+                ></div>
+                <div
+                  class="text-xs text-base-content/60 truncate"
+                  x-show="entrySubtitle(entry)"
+                  x-text="entrySubtitle(entry)"
+                ></div>
+              </div>
+              <template x-if="!entry._removed">
+                <select
+                  class="select select-xs select-bordered w-28"
+                  :value="entry.role"
+                  :title="roleHint(entry.role)"
+                  aria-label="Role"
+                  @change="stageRoleChange(entry.key, $event.target.value, entry._pending)"
+                >
+                  <template x-for="role in roles" :key="role.value">
+                    <option
+                      :value="role.value"
+                      x-text="role.label"
+                      :selected="role.value === entry.role"
+                    ></option>
+                  </template>
+                </select>
+              </template>
+              <template x-if="entry._pending && !entry._removed">
+                <span class="badge badge-sm badge-info">New</span>
+              </template>
+              <template x-if="entry._removed">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs"
+                  title="Undo removal"
+                  @click="undoRemove(entry.key)"
+                >
+                  Undo
+                </button>
+              </template>
+              <template x-if="!entry._removed">
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-xs btn-square text-error"
+                  title="Remove from the album"
+                  aria-label="Remove from the album"
+                  @click="stageRemove(entry.key)"
+                >
+                  &times;
+                </button>
+              </template>
+            </div>
+          </template>
+          <div
+            x-show="!loading && displayList().length === 0"
+            class="text-sm text-base-content/60 text-center py-2"
+          >
+            Not shared with anyone yet
+          </div>
+        </div>
+        <p class="text-xs text-base-content/50 mt-2">
+          Viewers browse the album, contributors also add their own photos, managers can change everything.
+        </p>
+      </div>
+
+      <label class="flex items-center gap-3 mb-4 cursor-pointer">
+        <input
+          type="checkbox"
+          class="toggle toggle-sm toggle-module"
+          :checked="allowDownload()"
+          @change="stageAllowDownload($event.target.checked)"
+          data-album-allow-download
+        />
+        <span class="text-sm">Viewers can download the originals</span>
+      </label>
+
+      <div class="mb-4">
+        <div class="divider my-2 text-xs text-base-content/40">Public links</div>
+        <div x-show="linksLoading" class="flex justify-center py-2">
+          <span class="loading loading-spinner loading-sm"></span>
+        </div>
+        <div class="space-y-2" x-show="!linksLoading">
+          <template x-for="link in links" :key="link.uuid">
+            <div
+              class="flex items-center gap-2 p-2 rounded-lg hover:bg-base-200 text-sm"
+              data-album-link
+            >
+              <i data-lucide="link" class="w-4 h-4 text-module flex-shrink-0"></i>
+              <div class="flex-1 min-w-0">
+                <div class="font-mono text-xs truncate" x-text="link.url"></div>
+                <div
+                  class="flex flex-wrap items-center gap-x-2 text-xs text-base-content/50"
+                >
+                  <span x-text="formatExpiry(link.expires_at)"></span>
+                  <template x-if="link.has_password">
+                    <span class="flex items-center gap-0.5"><i data-lucide="lock" class="w-3 h-3"></i> Password</span>
+                  </template>
+                  <template x-if="link.allow_download">
+                    <span
+                      class="flex items-center gap-0.5"
+                    ><i
+  data-lucide="download"
+  class="w-3 h-3"
+></i> Download</span>
+                  </template>
+                  <span x-text="viewsLabel(link.view_count)"></span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square"
+                title="Copy link"
+                aria-label="Copy link"
+                @click="copyLink(link.url)"
+              >
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs btn-square text-error"
+                title="Revoke"
+                aria-label="Revoke link"
+                @click="revokeLink(link.uuid)"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </template>
+          <div
+            x-show="!linksLoading && links.length === 0 && !showLinkForm"
+            class="text-sm text-base-content/60 text-center py-2"
+          >
+            No public links
+          </div>
+        </div>
+
+        <template x-if="showLinkForm">
+          <div
+            class="mt-2 p-3 bg-base-200 rounded-lg space-y-2"
+            data-album-link-form
+          >
+            <div class="form-control">
+              <label class="label py-0.5"><span class="label-text text-xs">Expiration (optional)</span></label>
+              <input
+                type="date"
+                class="input input-bordered input-sm"
+                x-model="newLinkExpiry"
+              />
+            </div>
+            <div class="form-control">
+              <label class="label py-0.5"><span class="label-text text-xs">Password (optional)</span></label>
+              <div class="flex items-center gap-1.5">
+                <input
+                  :type="linkPasswordRevealed ? 'text' : 'password'"
+                  class="input input-bordered input-sm flex-1 min-w-0"
+                  :class="linkPasswordRevealed && 'font-mono'"
+                  autocomplete="new-password"
+                  spellcheck="false"
+                  x-model="newLinkPassword"
+                  placeholder="Leave empty for no password"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm btn-square"
+                  :title="linkPasswordRevealed ? 'Hide password' : 'Show password'"
+                  :aria-label="linkPasswordRevealed ? 'Hide password' : 'Show password'"
+                  @click="linkPasswordRevealed = !linkPasswordRevealed"
+                >
+                  <i data-lucide="eye" class="w-4 h-4" x-show="!linkPasswordRevealed"></i>
+                  <i data-lucide="eye-off" class="w-4 h-4" x-show="linkPasswordRevealed"></i>
+                </button>
+              </div>
+            </div>
+            <label class="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                class="checkbox checkbox-sm checkbox-module mt-0.5"
+                x-model="newLinkAllowDownload"
+              />
+              <span class="text-xs">
+                Allow downloading the originals
+                <span
+                  class="block text-base-content/50"
+                >They keep their EXIF metadata, the place they were taken included.</span>
+              </span>
+            </label>
+            <div class="flex gap-2 justify-end">
+              <button type="button" class="btn btn-ghost btn-xs" @click="closeLinkForm()">Cancel</button>
+              <button
+                type="button"
+                class="btn btn-module btn-xs"
+                @click="createLink()"
+                :disabled="creatingLink"
+                data-album-link-create
+              >
+                <span x-show="creatingLink" class="loading loading-spinner loading-xs"></span>
+                Create
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs gap-1 mt-2"
+          x-show="!showLinkForm"
+          @click="showLinkForm = true"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          Create link
+        </button>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" @click="closeModal()">Cancel</button>
+        <button
+          type="button"
+          class="btn btn-sm btn-module"
+          :disabled="!hasChanges() || saving"
+          @click="save()"
+          data-album-share-save
+        >
+          <span x-show="saving" class="loading loading-spinner loading-xs"></span>
+          <span x-text="saving ? 'Saving...' : 'Save'"></span>
+        </button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button type="submit">close</button>
+    </form>
+  </dialog>
+</div>

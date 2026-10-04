@@ -63,12 +63,13 @@ def search_people(query, user, limit):
 
 def search_albums(query, user, limit, *, mine=False):
     """The albums the user can open whose title holds *query*, each opening
-    the album. *mine* keeps the personal ones, without their groups'."""
+    the album. *mine* keeps their personal ones, without their groups' nor
+    those shared with them."""
     if limit <= 0 or not (query or "").strip():
         return []
     albums = user_albums(user).filter(title__icontains=query.strip())
     if mine:
-        albums = albums.filter(group__isnull=True)
+        albums = albums.filter(owner=user, group__isnull=True)
     return [
         SearchResult(
             uuid=str(album.uuid),

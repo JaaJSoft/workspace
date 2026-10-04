@@ -162,3 +162,15 @@ def file_imports_by_date(user_id, file_uuids):
     if user is None:
         return 0
     return file_by_date(user, file_uuids)
+
+
+@shared_task(
+    name="photos.notify_album_additions",
+    priority=NORMAL_PRIORITY,
+    ignore_result=True,
+)
+def notify_album_additions(album_uuid):
+    """Tell an album's members about the photos its last burst added."""
+    from workspace.photos.services.album_notifications import announce_additions
+
+    announce_additions(album_uuid)

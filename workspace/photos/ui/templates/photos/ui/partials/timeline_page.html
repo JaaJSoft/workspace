@@ -8,6 +8,9 @@
   whole line; day groups sit side by side while they fit, so a day of two
   photos does not cost a row of its own. Undated photos are direct children,
   which lets the next page go on filling the row this one stopped on.
+
+  tile_template swaps the tile: a public album link draws its own, with
+  nothing but the picture and the way to open it.
 {% endcomment %}
 <div
   id="timeline-grid"
@@ -41,7 +44,7 @@
         {% endif %}
         <div class="flex flex-wrap gap-1">
           {% for file in entry.photos %}
-            {% include "photos/ui/partials/photo_tile.html" %}
+            {% include tile_template|default:"photos/ui/partials/photo_tile.html" %}
           {% endfor %}
         </div>
       </section>
@@ -51,7 +54,7 @@
         <p class="text-sm text-base-content/60">No capture date in these files. Most recent upload first.</p>
       </div>
     {% else %}
-      {% include "photos/ui/partials/photo_tile.html" with file=entry.file %}
+      {% include tile_template|default:"photos/ui/partials/photo_tile.html" with file=entry.file %}
     {% endif %}
   {% endfor %}
 </div>

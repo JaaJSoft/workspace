@@ -28,11 +28,11 @@
              request, but a live-looking button on the refusal screen would
              contradict it. -->
         <a
-          :href="`/api/v1/files/${fileUuid}/content`"
+          :href="downloadUrl"
           download
           class="btn btn-ghost btn-sm btn-square"
           title="Download file"
-          x-show="fileUuid && !viewerBlocked"
+          x-show="fileUuid && downloadUrl && !viewerBlocked"
         >
           <i data-lucide="download" class="w-4 h-4"></i>
         </a>
@@ -136,6 +136,9 @@
         fileUuid: null,
         fileName: '',
         fileType: '',
+        // Where the panel and the download come from: the Files endpoints,
+        // unless the listing row names its own (see _rowUrls).
+        downloadUrl: '',
         expanded: false,
         // Set from the merged panel's marker element (see openFile) rather
         // than the HTTP status: loadViewerPanel goes through $ajax, which
@@ -213,11 +216,26 @@
           }, 500);
         },
 
+        // A listing whose rows are not Files' to serve (an album shared
+        // with the viewer) names the panel and the download on the row:
+        // data-viewer-url, and data-download-url, left empty when the file
+        // may not be downloaded.
+        _rowUrls(uuid) {
+          const row = document.querySelector(`[data-uuid="${uuid}"][data-node-type="file"]`);
+          const data = row ? row.dataset : {};
+          return {
+            viewer: data.viewerUrl || `/files/view/${uuid}`,
+            download: 'downloadUrl' in data ? data.downloadUrl : `/api/v1/files/${uuid}/content`,
+          };
+        },
+
         // `at`, in seconds, starts a video there rather than at its beginning.
         async openFile(uuid, name, fileType, updateUrl = true, at = null) {
+          const urls = this._rowUrls(uuid);
           this.fileUuid = uuid;
           this.fileName = name || 'File';
           this.fileType = fileType || '';
+          this.downloadUrl = urls.download;
           this.viewerBlocked = false;
           this.open = true;
           // Gallery navigation re-opens over an already-open dialog: the
@@ -233,7 +251,7 @@
             window.history.pushState({}, '', url);
           }
 
-          await this.loadViewerPanel(`/files/view/${uuid}`);
+          await this.loadViewerPanel(urls.viewer);
           const panel = document.getElementById(this._viewerPanelId());
           this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
           const video = at != null && panel ? panel.querySelector('video') : null;
@@ -251,6 +269,7 @@
           this.fileUuid = null;
           this.fileName = '';
           this.fileType = '';
+          this.downloadUrl = '';
           this.viewerBlocked = false;
           this.viewerError = null;
         },

@@ -381,6 +381,21 @@ class PublicPageTests(LinkTestCase):
         unlocked = self.client.get(f"{self.page}?access_token={token}").content.decode()
         self.assertIn(f"thumbnail?{urlencode({'access_token': token})}", unlocked)
 
+    def test_a_page_carrying_the_access_token_is_never_stored(self):
+        self.link.password = make_password("s3cret")
+        self.link.save(update_fields=["password"])
+        token = access_token_for(self.link)
+
+        unlocked = self.client.get(f"{self.page}?access_token={token}")
+
+        self.assertIn("no-store", unlocked["Cache-Control"])
+        self.assertIn("private", unlocked["Cache-Control"])
+
+    def test_a_page_without_access_token_keeps_its_caching(self):
+        response = self.client.get(self.page)
+
+        self.assertNotIn("no-store", response.get("Cache-Control", ""))
+
     def test_an_expired_link(self):
         AlbumLink.objects.filter(pk=self.link.pk).update(
             expires_at=timezone.now() - timedelta(minutes=1)

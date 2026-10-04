@@ -112,16 +112,23 @@ def _share_entry(share):
     return entry | {"role": share.role, "shared_at": share.created_at}
 
 
-def _resolve_target(request, data):
+def _resolve_target(request, data, *, active_only=True):
     """The share target *data* names, as keyword arguments for the sharing
-    service, or a Response refusing it."""
+    service, or a Response refusing it.
+
+    *active_only* refuses a deactivated user: nobody new is shared with
+    one, but their existing share can still be removed.
+    """
     if "shared_with" in data:
         if data["shared_with"] == request.user.pk:
             return Response(
                 {"detail": "Cannot share with yourself."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        user = User.objects.filter(pk=data["shared_with"], is_active=True).first()
+        users = User.objects.filter(pk=data["shared_with"])
+        if active_only:
+            users = users.filter(is_active=True)
+        user = users.first()
         return {"user": user} if user is not None else _not_found()
     if "group" in data:
         group = Group.objects.filter(pk=data["group"]).first()
@@ -217,7 +224,7 @@ class AlbumSharesView(CacheControlMixin, APIView):
             return error
         serializer = ShareTargetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        target = _resolve_target(request, serializer.validated_data)
+        target = _resolve_target(request, serializer.validated_data, active_only=False)
         if isinstance(target, Response):
             return target
         if not unshare_album(album, acting_user=request.user, **target):

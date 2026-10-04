@@ -13,6 +13,7 @@ import logging
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models import Count
 from django.urls import reverse
 from django.utils import timezone
@@ -152,16 +153,22 @@ def announce_additions(album_uuid):
     """
     from ..queries import album_members, link_items
 
-    album = Album.objects.filter(uuid=album_uuid).first()
-    if album is None:
-        cache.delete(additions_cache_key(album_uuid))
-        return
-    now = timezone.now()
-    items = link_items(album).filter(added_at__lte=now)
-    if album.notified_at is not None:
-        items = items.filter(added_at__gt=album.notified_at)
-    counts = dict(items.order_by().values_list("added_by").annotate(count=Count("pk")))
-    Album.objects.filter(pk=album.pk).update(notified_at=now)
+    # Under the album's row lock, the one adds take: two runs of this task
+    # (the election key expired or was evicted) never both read the same
+    # notified_at and announce the same photos twice.
+    with transaction.atomic():
+        album = Album.objects.select_for_update().filter(uuid=album_uuid).first()
+        if album is None:
+            cache.delete(additions_cache_key(album_uuid))
+            return
+        now = timezone.now()
+        items = link_items(album).filter(added_at__lte=now)
+        if album.notified_at is not None:
+            items = items.filter(added_at__gt=album.notified_at)
+        counts = dict(
+            items.order_by().values_list("added_by").annotate(count=Count("pk"))
+        )
+        Album.objects.filter(pk=album.pk).update(notified_at=now)
 
     if counts:
         adders = {u.pk: u for u in User.objects.filter(pk__in=counts)}

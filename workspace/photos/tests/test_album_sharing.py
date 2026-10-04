@@ -500,6 +500,20 @@ class SharesApiTests(SharingTestCase):
         )
         self.assertEqual(again.status_code, 404)
 
+    def test_a_deactivated_member_is_removed_but_never_added(self):
+        self.share()
+        self.bob.is_active = False
+        self.bob.save(update_fields=["is_active"])
+
+        response = self.client.delete(
+            self.url(), {"shared_with": self.bob.pk}, content_type="application/json"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(AlbumShare.objects.filter(album=self.album).exists())
+        added = self.post({"shared_with": self.bob.pk, "role": "viewer"})
+        self.assertEqual(added.status_code, 404)
+
     def test_remove_a_project(self):
         project = Project.objects.create(
             name="Website", created_by=self.owner, key="P5"

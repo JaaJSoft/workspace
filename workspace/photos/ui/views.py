@@ -982,6 +982,9 @@ def shared_album(request, token):
     record_view(link)
     response = render(request, "photos/ui/shared_album.html", context)
     patch_vary_headers(response, ["X-Alpine-Request"])
+    if access_token:
+        # Every link on the page carries the access token: not for any cache.
+        patch_cache_control(response, private=True, no_store=True)
     return response
 
 

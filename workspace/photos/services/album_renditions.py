@@ -19,6 +19,7 @@ import subprocess
 import tempfile
 from io import BytesIO
 
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 
@@ -34,10 +35,31 @@ REMUX_TIMEOUT = 300
 
 RENDITIONS_ROOT = "photos/renditions"
 
+# The demuxers a remux may read with: video containers alone. A playlist
+# demuxer (HLS, concat) would follow the references a crafted upload holds,
+# local files included, and the remux would hand their bytes back.
+DEMUXERS = "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi"
+
+# What a remux writes, by the file's type label, as (extension, muxer,
+# content type): fixed here rather than read off the file's own name, which
+# its uploader chose.
+CONTAINERS = {
+    "mp4": (".mp4", "mp4", "video/mp4"),
+    "qt": (".mov", "mov", "video/quicktime"),
+    "3gp": (".mp4", "mp4", "video/mp4"),
+    "webm": (".webm", "webm", "video/webm"),
+}
+# Matroska takes whatever codec the others refuse.
+DEFAULT_CONTAINER = (".mkv", "matroska", "video/x-matroska")
+
 
 class RenditionUnavailable(Exception):
     """The file could not be turned into a rendition: undecodable, or a
     video on a deployment without ffmpeg. Nothing is served instead."""
+
+
+class RenditionBusy(Exception):
+    """Another request is making this very rendition right now."""
 
 
 def renditions_dir(file_uuid):
@@ -80,7 +102,7 @@ def _photo(file_obj):
     return ContentFile(out.getvalue())
 
 
-def _video(file_obj, extension):
+def _video(file_obj, extension, muxer):
     if ffmpeg.FFMPEG is None:
         raise RenditionUnavailable("ffmpeg is not installed")
     with ffmpeg.local_path(file_obj.content) as source:
@@ -90,6 +112,8 @@ def _video(file_obj, extension):
                 ffmpeg.FFMPEG,
                 "-v",
                 "error",
+                "-format_whitelist",
+                DEMUXERS,
                 *ffmpeg._input_args(source),
                 # Picture and sound only: a phone's timed metadata track
                 # holds the location too.
@@ -105,6 +129,8 @@ def _video(file_obj, extension):
                 "copy",
                 "-movflags",
                 "+faststart",
+                "-f",
+                muxer,
                 "-y",
                 f"file:{target}",
             ]
@@ -119,34 +145,46 @@ def rendition(file_obj):
     """The path in storage of *file_obj*'s rendition, made when missing, and
     its content type.
 
-    Raises RenditionUnavailable when none can be made.
+    Raises RenditionUnavailable when none can be made, and RenditionBusy
+    while another request is making it: one at a time per file version, so
+    a burst of visitors on a fresh link costs one remux, not one each.
     """
+    from PIL import Image
+
     media_type = getattr(getattr(file_obj, "media_item", None), "media_type", None)
     if media_type == MediaItem.MediaType.VIDEO:
-        extension = os.path.splitext(file_obj.name)[1].lower() or ".mp4"
-        path = _path(file_obj, extension)
-        content_type = file_obj.mime_type or "video/mp4"
+        extension, muxer, content_type = CONTAINERS.get(
+            file_obj.type, DEFAULT_CONTAINER
+        )
     else:
-        path = _path(file_obj, ".webp")
-        content_type = "image/webp"
+        extension, muxer, content_type = ".webp", None, "image/webp"
+    path = _path(file_obj, extension)
     if default_storage.exists(path):
         return path, content_type
+    lock = f"photos:rendition:{path}"
+    if not cache.add(lock, 1, timeout=REMUX_TIMEOUT + 60):
+        raise RenditionBusy(path)
     try:
-        if media_type == MediaItem.MediaType.VIDEO:
-            content = _video(file_obj, extension)
+        if muxer is not None:
+            content = _video(file_obj, extension, muxer)
         else:
             content = _photo(file_obj)
+        _store(file_obj, path, content)
     except (
         OSError,
         ValueError,
+        Image.DecompressionBombError,
         subprocess.SubprocessError,
         ffmpeg.MediaToolError,
     ) as exc:
         logger.warning(
-            "Could not make a rendition of %s: %s", scrub(file_obj.uuid), scrub(exc)
+            "Could not make a rendition of %s: %s",
+            scrub(file_obj.uuid),
+            scrub(type(exc).__name__),
         )
-        raise RenditionUnavailable(str(exc)) from exc
-    _store(file_obj, path, content)
+        raise RenditionUnavailable(type(exc).__name__) from exc
+    finally:
+        cache.delete(lock)
     return path, content_type
 
 

@@ -33,7 +33,11 @@ from ..queries import (
     get_album_role,
     reachable_album,
 )
-from ..services.album_renditions import RenditionUnavailable, rendition
+from ..services.album_renditions import (
+    RenditionBusy,
+    RenditionUnavailable,
+    rendition,
+)
 
 # One request's worth of a selection; the whole album has no limit.
 MAX_FILES = 2000
@@ -72,11 +76,15 @@ def content_response(request, file_obj, *, attachment=False):
 def rendition_response(request, file_obj):
     """What someone who may not download gets inline: the rendition of
     *file_obj* (``services.album_renditions``), never the original; a 404
-    when none can be made."""
+    when none can be made, a 503 while another request is making it."""
     try:
         path, content_type = rendition(file_obj)
     except RenditionUnavailable:
         return Response(status=status.HTTP_404_NOT_FOUND)
+    except RenditionBusy:
+        return Response(
+            status=status.HTTP_503_SERVICE_UNAVAILABLE, headers={"Retry-After": "5"}
+        )
     stem = file_obj.name.rsplit(".", 1)[0]
     extension = path.rsplit(".", 1)[-1]
     return serve_with_ranges(

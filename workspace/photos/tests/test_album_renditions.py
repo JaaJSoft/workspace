@@ -21,6 +21,7 @@ from workspace.files.services import ffmpeg
 from workspace.photos.models import AlbumShare, MediaItem
 from workspace.photos.services.album_renditions import (
     PREVIEW_MAX_SIDE,
+    RenditionBusy,
     RenditionUnavailable,
     drop_renditions,
     rendition,
@@ -115,6 +116,23 @@ class PhotoRenditionTests(RenditionTestCase):
         with self.assertRaises(RenditionUnavailable):
             rendition(broken)
 
+    def test_one_rendition_at_a_time(self):
+        path = rendition(self.photo)[0]
+        default_storage.delete(path)
+        cache.add(f"photos:rendition:{path}", 1)
+
+        with self.assertRaises(RenditionBusy):
+            rendition(self.photo)
+
+    def test_a_decompression_bomb_has_none(self):
+        with patch(
+            "PIL.Image.open", side_effect=Image.DecompressionBombError("too big")
+        ):
+            with self.assertRaises(RenditionUnavailable):
+                rendition(self.photo)
+        # The lock went with the failure: a later try is not turned away.
+        self.assertEqual(rendition(self.photo)[1], "image/webp")
+
     def test_leaving_the_library_drops_the_renditions(self):
         path, _ = rendition(self.photo)
 
@@ -162,6 +180,34 @@ class VideoRenditionTests(RenditionTestCase):
         self.assertNotIn("apple", tags)
         self.assertTrue(any(s["codec_type"] == "video" for s in report["streams"]))
         self.assertFalse(any(s["codec_type"] == "data" for s in report["streams"]))
+
+    def test_a_playlist_posing_as_a_video_reads_nothing(self):
+        # A playlist whose segment is someone else's private video: remuxed
+        # as is, it would hand that video to whoever opens the album.
+        stranger = User.objects.create_user(username="stranger", password="p")
+        private = make_video(stranger, "private.mov", _at(14), clip="clip_iphone.mov")
+        playlist = (
+            "#EXTM3U\n#EXT-X-TARGETDURATION:3\n#EXTINF:3,\n"
+            f"file:{private.content.path.replace(os.sep, '/')}\n#EXT-X-ENDLIST\n"
+        ).encode()
+        fake = upload(self.owner, "trip.m3u8", playlist)
+        File.objects.filter(pk=fake.pk).update(type="mp4")
+        MediaItem.objects.create(
+            file=fake, media_type=MediaItem.MediaType.VIDEO, analyzed_at=_at(14)
+        )
+        fake = File.objects.select_related("media_item").get(pk=fake.pk)
+
+        with self.assertRaises(RenditionUnavailable):
+            rendition(fake)
+
+    def test_the_container_follows_the_type_not_the_name(self):
+        video = make_video(self.owner, "clip.txt", _at(15))
+        video = File.objects.select_related("media_item").get(pk=video.pk)
+
+        path, content_type = rendition(video)
+
+        self.assertTrue(path.endswith(".webm"))
+        self.assertEqual(content_type, "video/webm")
 
     def test_without_ffmpeg_a_video_has_none(self):
         video = make_video(self.owner, "clip.webm", _at(15))
@@ -224,6 +270,19 @@ class ServingTests(RenditionTestCase):
         )
         response, _ = self.content(url)
         self.assertEqual(response["Content-Type"], "image/jpeg")
+
+    def test_a_rendition_in_the_making_answers_retry_later(self):
+        link = create_link(self.album, acting_user=self.owner)
+        url = f"/api/v1/photos/shared/{link.token}/files/{self.photo.uuid}/content"
+
+        with patch(
+            "workspace.photos.views.album_files.rendition",
+            side_effect=RenditionBusy("x"),
+        ):
+            response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response["Retry-After"], "5")
 
     def test_no_rendition_no_bytes(self):
         broken = upload(self.owner, "broken.jpg", b"not a jpeg")

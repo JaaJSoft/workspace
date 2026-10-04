@@ -7,7 +7,9 @@ go through FileService methods, which delegate here.
 
 import logging
 import posixpath
+from contextlib import suppress
 
+from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
 from django.db import transaction
@@ -15,7 +17,7 @@ from django.db import transaction
 from workspace.common.logging import scrub
 
 from ..models import File, canonical_name
-from . import _trash
+from . import _trash, relocations
 from .content_hash import hash_stream
 
 logger = logging.getLogger(__name__)
@@ -197,9 +199,27 @@ def _relocate(source, destination):
     A content write claims its row before it writes a byte, so the claim
     holds it back until the move commits; a write let through mid-copy would
     land on a source after its copy was taken, and go with the source.
+
+    The move is journaled until nothing of it is left to drop: what a worker
+    that died, or a transaction that rolled back, leaves on the wrong side is
+    settled later (``relocations``).
     """
-    relocation = default_storage.relocate(source, destination)
-    transaction.on_commit(relocation.commit)
+    entry = relocations.begin(source, destination)
+    try:
+        relocation = default_storage.relocate(source, destination)
+    except BaseException:
+        # The move removed its copies as far as it could; an entry whose
+        # destination still holds something stays for the settling pass.
+        with suppress(OSError, SuspiciousFileOperation):
+            if not default_storage.exists(destination):
+                relocations.end(entry)
+        raise
+    transaction.on_commit(lambda: _finish(entry, relocation))
+
+
+def _finish(entry, relocation):
+    if relocation.commit():
+        relocations.end(entry)
 
 
 def rename_file_storage(file_obj, new_name):

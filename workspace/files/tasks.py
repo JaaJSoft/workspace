@@ -170,6 +170,35 @@ def purge_staged_writes(self):
     return {"purged": purged}
 
 
+@shared_task(
+    name="files.settle_relocations",
+    priority=BACKGROUND_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
+def settle_relocations(self):
+    """Finish or undo the moves a dead worker or a rolled-back transaction
+    left half done, once they are old enough to be no one's any more."""
+    from workspace.files.services.relocations import settle_stale
+
+    settled = settle_stale()
+    if settled.entries:
+        logger.info(
+            "Settled %d unfinished move(s): %d leftover(s) dropped, %d blob(s) "
+            "put back, %d left for review.",
+            settled.entries,
+            len(settled.dropped),
+            len(settled.restored),
+            len(settled.undecided),
+        )
+    return {
+        "settled": settled.entries,
+        "dropped": len(settled.dropped),
+        "restored": len(settled.restored),
+        "undecided": len(settled.undecided),
+    }
+
+
 # Each pass queues one catch_up_file task per pending file of every
 # registered reader (services/catch_up.py), so the work spreads over every
 # worker. The bound, per reader, caps what one pass puts on the broker; a

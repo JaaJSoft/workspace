@@ -545,7 +545,7 @@ jobs:
           WORKSPACE_S3_SECRET_ACCESS_KEY: ci-s3-password-7d1e
           PYTHONWARNINGS: default
         run: |
-          uv run python manage.py test workspace.common.tests.test_storage workspace.files.tests.test_object_storage workspace.files.tests.test_verify_file_storage workspace.files.tests.test_signed_downloads workspace.core.tests.test_copy_blobs -v 2
+          uv run python manage.py test workspace.common.tests.test_storage workspace.files.tests.test_object_storage workspace.files.tests.test_verify_file_storage workspace.files.tests.test_relocations workspace.files.tests.test_signed_downloads workspace.core.tests.test_copy_blobs -v 2
 
   # The Django matrix runs on SQLite, so the pgvector backend of the vector
   # index (common.vectors) only runs here, against a server that ships the

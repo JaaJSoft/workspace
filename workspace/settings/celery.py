@@ -85,6 +85,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_staged_writes",
         "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
     },
+    # Moves a killed worker or a rolled-back transaction left half done.
+    "settle-relocations": {
+        "task": "files.settle_relocations",
+        "schedule": crontab(hour=2, minute=50),  # Every day at 2:50 AM
+    },
     "db-maintenance": {
         "task": "core.db_maintenance",
         # Mon-Sat at 3:00 AM: cheap pass only (optimize + WAL checkpoint).

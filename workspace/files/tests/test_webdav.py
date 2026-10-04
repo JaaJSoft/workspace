@@ -900,7 +900,8 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf = res.begin_write()
         buf.write(b"new")
         buf.close()
-        FileService.rename(docs, "Archive")
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
 
         with self.assertRaises(DAVError) as refused:
             res.end_write(with_errors=False)

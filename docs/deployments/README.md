@@ -78,13 +78,14 @@ The layout is the same on both sides, so moving is a copy. With the app stopped 
 1. Keep `STORAGE_BACKEND=local` and set `S3_BUCKET` and the other `S3_*` variables.
 2. `python manage.py copy_blobs --to s3` copies every blob from `MEDIA_ROOT` to the bucket - and only the blobs: the SQLite database and the model weights stay where they are. It skips a blob already there with the same size and copied after the source last changed, so it can run again to catch up, and `--dry-run` shows what it would do.
 3. Set `STORAGE_BACKEND=s3` and start the app.
-4. `python manage.py verify_file_storage` checks that every file's blob is in the bucket at its place in the tree. `--fix-dirs` recreates the folders a copy left without a directory (an empty folder copied by a tool that skips empty directories).
+4. `python manage.py verify_file_storage` checks that every file's blob is in the bucket at its place in the tree. `--repair` puts right what it can: it recreates the folders a copy left without a directory (an empty folder copied by a tool that skips empty directories), moves blobs stored off their tree path back onto it, and composes the names stored decomposed (macOS writes "é" as "e" plus an accent; names are stored composed).
 
 `copy_blobs --to local` goes the other way. Keep the old copy until the new one has served for a while: neither command deletes anything.
 
 What changes on object storage:
 
 - Renaming or moving a folder copies each of its files inside the store (no bytes go through the app) and then deletes the originals, so it takes longer on a large folder than on a disk. Saves to the files it moves wait until it is done - and on SQLite, which takes one writer at a time, every write does, so prefer PostgreSQL with object storage.
+- A move is journaled under `.relocations/` until it is done. One a killed worker left half done - copies nobody points at, or originals it never deleted - is settled by a nightly task once it is a day old, and the sync leaves both sides alone until then rather than show them as extra files. `verify_file_storage` lists unfinished moves; with the app stopped, `--repair --settle-after 0` settles them at once.
 - The periodic sync that picks up files dropped into `MEDIA_ROOT` by hand is not scheduled; the on-demand sync in the files view still runs.
 - The data volume still holds the SQLite database, if you use it, and the face detection model weights (`PHOTOS_MODEL_DIR`).
 

@@ -115,14 +115,18 @@ class Relocation(abc.ABC):
 
     @abc.abstractmethod
     def commit(self):
-        """Drop what the move left at the source. Safe to call more than once."""
+        """Drop what the move left at the source. Safe to call more than once.
+
+        Returns whether nothing of the move is left there: False when a
+        delete failed, so the caller knows duplicates remain to settle.
+        """
 
 
 class Moved(Relocation):
     """A relocation the backend finished on the spot (a rename on a disk)."""
 
     def commit(self):
-        pass
+        return True
 
 
 class Backend(abc.ABC):

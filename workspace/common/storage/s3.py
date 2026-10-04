@@ -621,7 +621,9 @@ class _RangeReader(io.RawIOBase):
         else:
             raise ValueError(f"invalid whence ({whence})")
         if position < 0:
-            raise ValueError(f"negative seek position {position}")
+            # What a file answers; zipfile probes a short archive with a seek
+            # back from its end and reads OSError as "not a zip".
+            raise OSError(errno.EINVAL, "Invalid argument")
         if position != self._pos:
             self._drop_window()
             self._pos = position

@@ -484,9 +484,12 @@ class S3Backend(Backend):
         self.relocate(source, destination).commit()
 
     def _delete_quietly(self, keys, name):
-        """Delete *keys* as far as possible; what remains is only logged."""
+        """Delete *keys* as far as possible; returns the keys that remain.
+
+        What remains is logged rather than raised.
+        """
         if not keys:
-            return
+            return []
         try:
             left = self._delete_keys(keys, name)
         except OSError:
@@ -497,6 +500,7 @@ class S3Backend(Backend):
                 len(left),
                 scrub(name),
             )
+        return left
 
     def staged_writer(self, name):
         return _Upload(self, self._key(name), name, exclusive=False)
@@ -554,7 +558,7 @@ class _DropSources(Relocation):
     def commit(self):
         copied, self._copied = self._copied, {}
         if not copied:
-            return
+            return True
         try:
             current = self._backend._generations(copied, self._prefix, self._name)
         except OSError as exc:
@@ -564,7 +568,8 @@ class _DropSources(Relocation):
                 scrub(self._name),
                 scrub(exc),
             )
-            return
+            self._copied = copied  # a second commit tries again
+            return False
         unchanged = [key for key, seen in copied.items() if current.get(key) == seen]
         rewritten = sum(
             1 for key, seen in copied.items() if current.get(key, seen) != seen
@@ -575,7 +580,9 @@ class _DropSources(Relocation):
                 rewritten,
                 scrub(self._name),
             )
-        self._backend._delete_quietly(unchanged, self._name)
+        # A rewritten source holds another write's bytes: keeping it leaves
+        # nothing of this move behind.
+        return not self._backend._delete_quietly(unchanged, self._name)
 
 
 class _RangeReader(io.RawIOBase):

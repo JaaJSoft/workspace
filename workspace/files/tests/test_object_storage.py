@@ -44,12 +44,6 @@ def deep_folder(user):
 class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
     def setUp(self):
         super().setUp()
-        # File.content resolved its storage when the model was imported.
-        patcher = mock.patch.object(
-            File._meta.get_field("content"), "storage", storages["files"]
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.user = User.objects.create_user(username="alice", password="pw")
 
     def upload(self, name, data, parent=None):
@@ -335,11 +329,6 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
 
     def setUp(self):
         super().setUp()
-        patcher = mock.patch.object(
-            File._meta.get_field("content"), "storage", storages["files"]
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.addCleanup(cache.clear)
         self.user = User.objects.create_user(username="davs3", password="pass123")
 

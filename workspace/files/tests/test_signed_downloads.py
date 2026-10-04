@@ -1,6 +1,5 @@
 """Serving file content from object storage: streamed, or signed and redirected."""
 
-from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
 import requests
@@ -32,12 +31,6 @@ def _body(response):
 class _ObjectStorageContent(S3StoragesMixin, APITestCase):
     def setUp(self):
         super().setUp()
-        # File.content resolved its storage when the model was imported.
-        patcher = mock.patch.object(
-            File._meta.get_field("content"), "storage", storages["files"]
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.user = User.objects.create_user(username="alice", password="pw")
         self.client.force_authenticate(user=self.user)
         self.payload = bytes(i % 256 for i in range(4096))

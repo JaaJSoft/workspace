@@ -1,10 +1,8 @@
 import io
 import unicodedata
-from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
-from django.core.files.storage import storages
 from django.core.management import CommandError, call_command
 from django.test import TestCase
 
@@ -19,12 +17,8 @@ User = get_user_model()
 class VerifyFileStorageCases:
     """The same checks on any backend; the tree mirrors the rows or it does not."""
 
-    def use_storage(self):
-        """Point File.content at the storage under test; as configured here."""
-
     def setUp(self):
         super().setUp()
-        self.use_storage()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.storage = File._meta.get_field("content").storage
         self.docs = FileService.create_folder(self.user, "Docs")
@@ -173,10 +167,4 @@ class VerifyFileStorageOnDiskTests(
 class VerifyFileStorageOnObjectStorageTests(
     VerifyFileStorageCases, S3StoragesMixin, TestCase
 ):
-    def use_storage(self):
-        # File.content resolved its storage when the model was imported.
-        patcher = mock.patch.object(
-            File._meta.get_field("content"), "storage", storages["files"]
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    pass

@@ -5,6 +5,7 @@ import unicodedata
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.storage import storages
+from django.core.signals import setting_changed
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import Case, F, Q, Value, When
@@ -12,6 +13,7 @@ from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
+from django.utils.functional import LazyObject, empty
 from django.utils.translation import gettext_lazy, pgettext_lazy
 
 from workspace.common.text import caseless
@@ -40,13 +42,35 @@ def name_forms(name):
     return list(dict.fromkeys((name, canonical_name(name))))
 
 
+class _FilesStorage(LazyObject):
+    """``storages["files"]``, looked up when used rather than when imported.
+
+    A FileField calls its storage callable once, when its model is built: a
+    plain ``storages["files"]`` would pin that instance for good, and a
+    ``STORAGES`` override (a test on object storage) would reach
+    ``default_storage`` but never File.content.
+    """
+
+    def _setup(self):
+        self._wrapped = storages["files"]
+
+
+_files_storage = _FilesStorage()
+
+
+@receiver(setting_changed)
+def _forget_files_storage(*, setting, **kwargs):
+    if setting == "STORAGES":
+        _files_storage._wrapped = empty
+
+
 def files_storage():
     """The storage holding File.content (the "files" alias in STORAGES).
 
     A blob's name is its node's tree path, so a new version is saved over the
     previous one rather than beside it - unlike ``default_storage``.
     """
-    return storages["files"]
+    return _files_storage
 
 
 def file_upload_path(instance, filename):

@@ -1,14 +1,17 @@
 """Tests for the WebDAV integration (domain controller, provider, resources)."""
 
 import base64
+import errno
 import io
 import os
 from datetime import timedelta
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.db import DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
@@ -18,6 +21,7 @@ from wsgidav.dav_error import (
     DAVError,
 )
 
+from workspace.common.storage.facade import BlobStorage
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
@@ -654,10 +658,9 @@ class FolderResourceMoveStorageTests(TestCase):
 class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     """Tests for FileResource.
 
-    Uses a real FileSystemStorage (not InMemoryStorage) because
-    ``_StreamingWriteBuffer`` writes directly to the filesystem via
-    ``os.open`` / ``os.write``. The root is isolated because one test walks it
-    to prove an overwrite left no partial file behind.
+    Uses the real storage (not InMemoryStorage) because ``_StreamingWriteBuffer``
+    writes through ``BlobStorage.staged_writer``. The root is isolated because
+    one test walks it to prove an overwrite left no partial file behind.
     """
 
     def setUp(self):
@@ -892,10 +895,52 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         buf.write(b"new content")
         buf.close()
         self.res.end_write(with_errors=False)
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+
+    def _files_on_disk(self):
         on_disk = []
         for _root, _dirs, names in os.walk(settings.MEDIA_ROOT):
             on_disk.extend(names)
-        self.assertEqual(on_disk, ["test.txt"])
+        return on_disk
+
+    def test_a_publish_the_disk_refuses_leaves_no_partial_file(self):
+        """wsgidav calls end_write once: a ``.part`` left behind by a failed
+        last write is never cleaned up, and the sync adopts it as a file."""
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        disk_full = OSError(errno.ENOSPC, "No space left on device")
+        with (
+            mock.patch(
+                "workspace.common.storage.local.os.write", side_effect=disk_full
+            ),
+            self.assertRaises(OSError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 11)
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+
+    def test_a_database_error_before_the_publish_leaves_no_partial_file(self):
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        with (
+            mock.patch.object(
+                FileService,
+                "replace_content_storage",
+                side_effect=DatabaseError("the database went away"),
+            ),
+            self.assertRaises(DatabaseError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
 
     def test_end_write_accepts_complete_upload(self):
         """Complete transfer (size == Content-Length) must save."""
@@ -1105,8 +1150,10 @@ class StreamingWriteBufferTests(TestCase):
         import tempfile
 
         self._tmpdir = tempfile.mkdtemp()
-        path = os.path.join(self._tmpdir, name)
-        return _StreamingWriteBuffer(path, flush_size), path
+        writer = BlobStorage(location=self._tmpdir).staged_writer(name)
+        return _StreamingWriteBuffer(writer, flush_size), os.path.join(
+            self._tmpdir, name
+        )
 
     def tearDown(self):
         import shutil
@@ -1144,28 +1191,6 @@ class StreamingWriteBufferTests(TestCase):
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"12345678ABCD")
 
-    def test_flush_survives_partial_os_write(self):
-        """POSIX allows os.write to write fewer bytes than requested; the
-        flush must loop until the whole buffer is on disk or bytes are
-        silently dropped."""
-        from unittest import mock
-
-        buf, path = self._make_buf(flush_size=8)
-        real_write = os.write
-
-        def short_write(fd, data):
-            return real_write(fd, bytes(data)[:5])
-
-        with mock.patch(
-            "workspace.files.webdav.resources.os.write", side_effect=short_write
-        ):
-            buf.write(b"0123456789ABCDEF")  # crosses the flush threshold
-            buf.finalize()
-
-        self.assertEqual(buf.size, 16)
-        with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"0123456789ABCDEF")
-
     def test_abort_deletes_file(self):
         buf, path = self._make_buf()
         buf.write(b"partial data")
@@ -1173,12 +1198,16 @@ class StreamingWriteBufferTests(TestCase):
         self.assertFalse(os.path.exists(path))
         self.assertEqual(os.listdir(self._tmpdir), [])  # no temp leftovers
 
-    def test_abort_then_missing_file_is_safe(self):
-        buf, path = self._make_buf()
-        os.close(buf._fd)
-        buf._fd = None
-        os.unlink(buf._temp_path)  # in-progress file already gone
-        buf.abort()  # should not raise
+    def test_content_hash_covers_every_byte(self):
+        from workspace.files.services.content_hash import new_hasher
+
+        buf, _path = self._make_buf(flush_size=4)
+        buf.write(b"0123456789")
+        buf.finalize()
+
+        expected = new_hasher()
+        expected.update(b"0123456789")
+        self.assertEqual(buf.content_hash, expected.hexdigest())
 
 
 # ── Lock storage selection ────────────────────────────────────────────

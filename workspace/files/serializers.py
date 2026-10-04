@@ -27,7 +27,7 @@ from workspace.files.services.locking import (
 from workspace.files.services.scanning.policy import QuarantinedSource
 from workspace.files.services.uploads import CHUNK_SIZE
 
-from .models import File, FileComment, UploadSession
+from .models import File, FileComment, UploadSession, canonical_name
 
 
 class FileLocked(APIException):
@@ -111,7 +111,10 @@ def ensure_replaceable(user, target):
 
 
 def validate_node_name(value):
-    """Refuse the path separators a name would be split on downstream."""
+    """Refuse the path separators a name would be split on downstream.
+
+    Returns *value* composed, the form node names are stored in.
+    """
     if "/" in value:
         raise serializers.ValidationError("File and folder names must not contain '/'.")
     if "\\" in value:
@@ -122,7 +125,7 @@ def validate_node_name(value):
         raise serializers.ValidationError(
             "File and folder names must not be '.' or '..'."
         )
-    return value
+    return canonical_name(value)
 
 
 def _require_annotation(obj, name):

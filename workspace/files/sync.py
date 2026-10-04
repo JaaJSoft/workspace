@@ -7,7 +7,7 @@ from django.core.files.storage import default_storage
 from django.utils import timezone
 
 from workspace.common.logging import scrub
-from workspace.files.models import File
+from workspace.files.models import File, canonical_name
 from workspace.files.services import FileService
 
 logger = logging.getLogger(__name__)
@@ -42,11 +42,15 @@ class _NodeIndex:
     Trashed rows are held separately and only as keys: they exist to stop
     phase 1 from creating a live duplicate next to a node the user deleted,
     never as candidates to recurse into.
+
+    Names are keyed composed (NFC): a row named before names were composed
+    still matches the entry it was created for, and an entry written
+    decomposed matches the row named after it.
     """
 
     def __init__(self):
-        self._live = {}  # parent_id -> {(name, node_type): File}
-        self._trashed = {}  # parent_id -> {(name, node_type)}
+        self._live = {}  # parent_id -> {(composed name, node_type): File}
+        self._trashed = {}  # parent_id -> {(composed name, node_type)}
 
     @classmethod
     def for_subtree(cls, user):
@@ -75,9 +79,11 @@ class _NodeIndex:
     def _absorb(self, live_qs, trashed_values):
         for record in live_qs:
             bucket = self._live.setdefault(record.parent_id, {})
-            bucket[(record.name, record.node_type)] = record
+            bucket[(canonical_name(record.name), record.node_type)] = record
         for name, node_type, parent_id in trashed_values:
-            self._trashed.setdefault(parent_id, set()).add((name, node_type))
+            self._trashed.setdefault(parent_id, set()).add(
+                (canonical_name(name), node_type)
+            )
 
     @staticmethod
     def _key(parent_db):
@@ -88,7 +94,8 @@ class _NodeIndex:
         return self._live.get(self._key(parent_db), {})
 
     def is_trashed(self, parent_db, name, node_type):
-        return (name, node_type) in self._trashed.get(self._key(parent_db), set())
+        key = (canonical_name(name), node_type)
+        return key in self._trashed.get(self._key(parent_db), set())
 
     def add(self, file_obj):
         """Register a row the walk just created.
@@ -97,7 +104,7 @@ class _NodeIndex:
         so a freshly created node has to be visible to the same walk.
         """
         bucket = self._live.setdefault(file_obj.parent_id, {})
-        bucket[(file_obj.name, file_obj.node_type)] = file_obj
+        bucket[(canonical_name(file_obj.name), file_obj.node_type)] = file_obj
 
 
 class FileSyncService:
@@ -159,47 +166,52 @@ class FileSyncService:
 
     def _sync_directory_recursive(self, user, parent_db, storage_prefix, result, index):
         """Sync one directory level, then recurse into subdirectories."""
+        subdirectories = self._sync_one_level(
+            user, parent_db, storage_prefix, result, index
+        )
+        for folder_db, stored_name in subdirectories:
+            self._sync_directory_recursive(
+                user=user,
+                parent_db=folder_db,
+                storage_prefix=f"{storage_prefix}/{stored_name}",
+                result=result,
+                index=index,
+            )
+
+    def _read_level(self, storage_prefix, result):
+        """``{composed name: Entry}`` for one directory, or None if unreadable.
+
+        Two entries whose names differ only in their Unicode form would be
+        one node: the composed one is kept, the other is reported and left
+        alone, never adopted over it.
+        """
         entries = self._scan(storage_prefix, result)
         if entries is None:
-            return
-
-        self._sync_one_level(
-            user, parent_db, storage_prefix, result, index, entries=entries
-        )
-
-        live_here = index.live_at(parent_db)
-        for entry in entries:
-            if not entry.is_dir:
-                continue
-
-            if index.is_trashed(parent_db, entry.name, File.NodeType.FOLDER):
-                continue
-
-            folder_db = live_here.get((entry.name, File.NodeType.FOLDER))
-            if folder_db:
-                self._sync_directory_recursive(
-                    user=user,
-                    parent_db=folder_db,
-                    storage_prefix=f"{storage_prefix}/{entry.name}",
-                    result=result,
-                    index=index,
+            return None
+        by_name = {}
+        for entry in sorted(entries, key=lambda e: e.name != canonical_name(e.name)):
+            name = canonical_name(entry.name)
+            if name in by_name:
+                result.errors.append(
+                    f"Skipped {storage_prefix}/{entry.name}: "
+                    f"{by_name[name].name} has the same name in another Unicode form"
                 )
+                continue
+            by_name[name] = entry
+        return by_name
 
-    def _sync_one_level(
-        self, user, parent_db, storage_prefix, result, index, entries=None
-    ):
-        """Bidirectional sync of immediate children at one directory level."""
+    def _sync_one_level(self, user, parent_db, storage_prefix, result, index):
+        """Bidirectional sync of immediate children at one directory level.
+
+        Returns ``(folder row, stored name)`` for each directory the level
+        holds a live row for, which is where a recursive walk goes next.
+        """
         now = timezone.now()
 
         # --- Read disk entries ---
-        if entries is None:
-            entries = self._scan(storage_prefix, result)
-            if entries is None:
-                return
-
-        disk_names = {}  # name -> Entry
-        for entry in entries:
-            disk_names[entry.name] = entry
+        disk_names = self._read_level(storage_prefix, result)
+        if disk_names is None:
+            return []
 
         db_by_name = index.live_at(parent_db)
 
@@ -257,6 +269,7 @@ class FileSyncService:
                 self.log.warning("Error soft-deleting %s: %s", scrub(name), scrub(e))
 
         # --- Phase 2: Disk -> DB (create missing) ---
+        subdirectories = []
         for entry_name, entry in disk_names.items():
             is_dir = entry.is_dir
             is_file = entry.is_file
@@ -266,8 +279,11 @@ class FileSyncService:
 
             node_type = File.NodeType.FOLDER if is_dir else File.NodeType.FILE
 
-            if (entry_name, node_type) in db_by_name:
-                continue  # already tracked
+            tracked = db_by_name.get((entry_name, node_type))
+            if tracked is not None:
+                if is_dir:
+                    subdirectories.append((tracked, entry.name))
+                continue
 
             if index.is_trashed(parent_db, entry_name, node_type):
                 continue  # in trash, don't create a duplicate
@@ -283,11 +299,19 @@ class FileSyncService:
                 continue
 
             try:
+                if entry.name != entry_name:
+                    # Written decomposed (a Mac), named composed: the blob
+                    # moves to the name the row will carry first.
+                    default_storage.move(
+                        f"{storage_prefix}/{entry.name}",
+                        f"{storage_prefix}/{entry_name}",
+                    )
                 if is_dir:
                     created = FileService.create_folder(
                         user, entry_name, parent_db, acting_user=user
                     )
                     index.add(created)
+                    subdirectories.append((created, entry_name))
                     result.folders_created += 1
                     self.log.info("Created folder: %s", scrub(entry_name))
                 else:
@@ -315,3 +339,4 @@ class FileSyncService:
             except Exception as e:
                 result.errors.append(f"Error creating {entry_name}: {e}")
                 self.log.warning("Error creating %s: %s", scrub(entry_name), scrub(e))
+        return subdirectories

@@ -15,7 +15,7 @@ from django.db import transaction
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
-from ..models import File
+from ..models import File, canonical_name
 from . import _trash
 from .content_hash import hash_stream
 
@@ -354,7 +354,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
 
     copied = File(
         owner=owner,
-        name=node.name,
+        name=canonical_name(node.name),
         node_type=node.node_type,
         parent=parent,
         # file_upload_path reads instance.group_id, so the group must be set
@@ -375,7 +375,9 @@ def copy_node(node, parent, owner, _sibling_names=None):
             # existing folder's name would merge the two trees.
             insert_node_keeping_both(copied, content)
         else:
-            copied.name = unique_copy_name(node.name, node.node_type, _sibling_names)
+            copied.name = unique_copy_name(
+                canonical_name(node.name), node.node_type, _sibling_names
+            )
             _sibling_names.add(copied.name)
             insert_node(copied, content)
 

@@ -16,7 +16,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File, FileEvent
+from ..models import File, FileEvent, canonical_name
 from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
@@ -347,6 +347,7 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
+        name = canonical_name(name)
         group = FileService.node_group(parent, group)
 
         # Before the detection and hashing passes read the stream. Not the
@@ -418,6 +419,7 @@ class FileService:
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
         """Create a new folder record and its directory, or neither."""
+        name = canonical_name(name)
         group = FileService.node_group(parent, group)
 
         _name_helpers.check_name_available(owner, parent, name, File.NodeType.FOLDER)
@@ -461,10 +463,15 @@ class FileService:
         size=None,
         acting_user=None,
     ):
-        """Register a file that already exists on disk (used by sync)."""
+        """Register a file that already exists on disk (used by sync).
+
+        *content_path* names the blob as it is stored, which the caller
+        has put under the composed *name* first.
+        """
         from workspace.files.services.content_hash import hash_storage_file
         from workspace.files.services.detection import detect_from_name
 
+        name = canonical_name(name)
         detection = detect_from_name(name)
         if not mime_type:
             mime_type = detection.mime_type
@@ -603,6 +610,7 @@ class FileService:
     def rename(file_obj, new_name, *, acting_user=None):
         """Rename a file or folder, moving physical storage files as needed."""
         old_name = file_obj.name
+        new_name = canonical_name(new_name)
         if old_name == new_name:
             return file_obj
         if FileService.is_group_root(file_obj):

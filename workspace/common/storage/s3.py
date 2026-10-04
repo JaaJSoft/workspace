@@ -432,11 +432,12 @@ class S3Backend(Backend):
         source_key = self._key(source)
         destination_key = self._key(destination)
         head = self._head(source_key, source)
-        sources, copies = [], []
+        prefix = None
+        sources, copies = {}, []
         try:
             if head is not None:
                 self._copy(source_key, destination_key, head["ContentLength"], source)
-                sources.append(source_key)
+                sources[source_key] = _generation(head)
                 copies.append(destination_key)
             else:
                 prefix = source_key + "/"
@@ -452,7 +453,7 @@ class S3Backend(Backend):
                         self._put_marker(target, source)
                     else:
                         self._copy(obj["Key"], target, obj["Size"], source)
-                    sources.append(obj["Key"])
+                    sources[obj["Key"]] = _generation(obj)
                     copies.append(target)
                 if not sources:
                     raise FileNotFoundError(
@@ -461,7 +462,15 @@ class S3Backend(Backend):
         except BaseException:
             self._delete_quietly(copies, destination)
             raise
-        return _DropSources(self, sources, source)
+        return _DropSources(self, sources, source, prefix)
+
+    def _generations(self, keys, prefix, name):
+        """What each of *keys* holds now, as :func:`_generation` reads it."""
+        if prefix is None:
+            (key,) = keys
+            head = self._head(key, name)
+            return {} if head is None else {key: _generation(head)}
+        return {obj["Key"]: _generation(obj) for obj in self._objects(prefix, name)}
 
     def move(self, source, destination, *, overwrite=False):
         self.relocate(source, destination).commit()
@@ -485,15 +494,54 @@ class S3Backend(Backend):
         return _Upload(self, self._key(name), name, exclusive=False)
 
 
+def _generation(meta):
+    """Which write an object holds, from its HEAD or its listing entry.
+
+    The ETag alone repeats when the same bytes are written again; the time
+    tells such a rewrite apart, to the precision the store keeps.
+    """
+    return meta.get("ETag"), meta.get("LastModified")
+
+
 class _DropSources(Relocation):
-    def __init__(self, backend, keys, name):
+    """Deletes the sources a relocation copied, as they were when it copied them.
+
+    A source path is free once the move commits, so a new file can be written
+    there before the delete reaches the store: that object holds the new
+    file's bytes, not the ones the move copied, and stays.
+    """
+
+    def __init__(self, backend, copied, name, prefix):
         self._backend = backend
-        self._keys = keys
+        self._copied = copied
         self._name = name
+        self._prefix = prefix
 
     def commit(self):
-        keys, self._keys = self._keys, []
-        self._backend._delete_quietly(keys, self._name)
+        copied, self._copied = self._copied, {}
+        if not copied:
+            return
+        try:
+            current = self._backend._generations(copied, self._prefix, self._name)
+        except OSError as exc:
+            logger.warning(
+                "Left the %d source(s) of a move of %s in place: %s",
+                len(copied),
+                scrub(self._name),
+                scrub(exc),
+            )
+            return
+        unchanged = [key for key, seen in copied.items() if current.get(key) == seen]
+        rewritten = sum(
+            1 for key, seen in copied.items() if current.get(key, seen) != seen
+        )
+        if rewritten:
+            logger.warning(
+                "Kept %d object(s) rewritten after a move of %s copied them",
+                rewritten,
+                scrub(self._name),
+            )
+        self._backend._delete_quietly(unchanged, self._name)
 
 
 class _RangeReader(io.RawIOBase):

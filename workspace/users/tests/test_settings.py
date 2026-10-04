@@ -20,6 +20,9 @@ class GetUserTimezoneTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
 
+    def tearDown(self):
+        cache.clear()
+
     def test_returns_utc_when_no_setting(self):
         tz = get_user_timezone(self.user)
         self.assertEqual(str(tz), "UTC")
@@ -44,6 +47,9 @@ class GetSettingTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     def test_returns_default_when_not_found(self):
         self.assertIsNone(get_setting(self.user, "core", "missing"))
@@ -250,6 +256,9 @@ class DeleteSettingTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
 
+    def tearDown(self):
+        cache.clear()
+
     def test_returns_true_when_deleted(self):
         set_setting(self.user, "core", "theme", "dark")
         self.assertTrue(delete_setting(self.user, "core", "theme"))
@@ -263,6 +272,9 @@ class GetModuleSettingsTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     def test_returns_empty_dict_when_none(self):
         self.assertEqual(get_module_settings(self.user, "core"), {})
@@ -279,6 +291,9 @@ class GetAllSettingsTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     def test_returns_empty_list_when_none(self):
         self.assertEqual(get_all_settings(self.user), [])
@@ -401,6 +416,7 @@ class SettingCacheTests(TestCase):
 
 class SearchScopeSettingValidationTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username="scope", password="pass")
         self.client.force_login(self.user)
 
@@ -426,6 +442,7 @@ class SearchScopeSettingValidationTests(TestCase):
 
 class TimezoneSettingValidationTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username="tzval", password="pass")
         self.client.force_login(self.user)
 
@@ -479,6 +496,9 @@ class GetUserTimezonePathValueTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="tzpath", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     def test_returns_utc_for_path_like_value(self):
         # ZoneInfo raises ValueError (not ZoneInfoNotFoundError) for path-like

@@ -22,6 +22,9 @@ class HasAvatarTests(TestCase):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
 
+    def tearDown(self):
+        cache.clear()
+
     def test_false_by_default(self):
         self.assertFalse(avatar_service.has_avatar(self.user))
 
@@ -63,6 +66,9 @@ class ProcessAndSaveAvatarTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     def _make_image(self, size=(200, 200)):
         buf = BytesIO()
@@ -108,6 +114,9 @@ class DeleteAvatarTests(TestCase):
     def setUp(self):
         cache.clear()
         self.user = User.objects.create_user(username="alice", password="pass")
+
+    def tearDown(self):
+        cache.clear()
 
     @patch("workspace.users.services.avatar.delete_image")
     def test_deletes_file_and_clears_setting(self, mock_delete):

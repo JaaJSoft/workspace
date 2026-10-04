@@ -171,10 +171,10 @@
     background-color: rgb(var(--module));
     color: rgb(var(--module-content));
   }
+  /* Unchecked keeps daisyUI's neutral border: the hue marks selection only. */
   .checkbox-module {
     --chkbg: rgb(var(--module));
     --chkfg: rgb(var(--module-content));
-    border-color: rgb(var(--module));
   }
   .checkbox-module:focus-visible {
     outline-color: rgb(var(--module));

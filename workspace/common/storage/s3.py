@@ -253,7 +253,7 @@ class S3Backend(Backend):
             head = self.client.head_object(Bucket=self.bucket, Key=key)
         size = head["ContentLength"]
         reader = io.BufferedReader(
-            _RangeReader(self, key, size, name), buffer_size=256 * 1024
+            _RangeReader(self, key, size, name, _pinned(head)), buffer_size=256 * 1024
         )
         handle = File(
             reader if "b" in mode else io.TextIOWrapper(reader, encoding="utf-8"),
@@ -541,6 +541,23 @@ def _generation(meta):
     return meta.get("ETag"), meta.get("LastModified")
 
 
+def _pinned(head):
+    """GET parameters that hold every window of a read to the object *head* saw.
+
+    A bucket that keeps versions serves the version opened to the end, as a
+    file replaced on a disk keeps serving whoever holds it open. Without
+    versions the replaced bytes are gone: the ETag refuses the window rather
+    than letting it splice the replacement into the bytes already read.
+    """
+    params = {}
+    if head.get("ETag"):
+        params["IfMatch"] = head["ETag"]
+    version = head.get("VersionId")
+    if version and version != "null":
+        params["VersionId"] = version
+    return params
+
+
 class _DropSources(Relocation):
     """Deletes the sources a relocation copied, as they were when it copied them.
 
@@ -590,14 +607,16 @@ class _RangeReader(io.RawIOBase):
 
     A window is read to its end before the next is requested, so its
     connection goes back to the pool; a seek elsewhere drops it. Nothing
-    before the position is ever fetched.
+    before the position is ever fetched. Every window asks for the object
+    the reader opened (``_pinned``).
     """
 
-    def __init__(self, backend, key, size, name):
+    def __init__(self, backend, key, size, name, pinned):
         self._backend = backend
         self._key = key
         self._size = size
         self.name = name
+        self._pinned = pinned
         self._pos = 0
         self._body = None
         self._window_end = 0
@@ -661,11 +680,19 @@ class _RangeReader(io.RawIOBase):
     def _open_window(self):
         end = min(self._pos + self._backend.read_window, self._size)
         with _translated(self.name):
-            response = self._backend.client.get_object(
-                Bucket=self._backend.bucket,
-                Key=self._key,
-                Range=f"bytes={self._pos}-{end - 1}",
-            )
+            try:
+                response = self._backend.client.get_object(
+                    Bucket=self._backend.bucket,
+                    Key=self._key,
+                    Range=f"bytes={self._pos}-{end - 1}",
+                    **self._pinned,
+                )
+            except ClientError as exc:
+                if _status(exc) == 412 or _code(exc) == "PreconditionFailed":
+                    raise OSError(
+                        errno.EIO, "The blob was replaced during the read", self.name
+                    ) from exc
+                raise
         self._body = response["Body"]
         self._window_end = end
 

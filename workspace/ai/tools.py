@@ -1265,7 +1265,7 @@ Call this when the user asks you to send a message later, set a reminder, or cre
 IMPORTANT: Before creating a new schedule, always call list_schedules first to check for existing \
 schedules with a similar prompt — update or cancel the old one instead of creating duplicates."""
         import calendar
-        from datetime import datetime, time, timedelta
+        from datetime import time, timedelta
 
         from django.utils import timezone as dj_timezone
 
@@ -1290,13 +1290,9 @@ schedules with a similar prompt — update or cancel the old one instead of crea
 
         if at:
             # One-time schedule
-            try:
-                dt = datetime.fromisoformat(at)
-            except ValueError:
+            dt = parse_local_datetime(at, user_tz)
+            if dt is None:
                 return f'Error: could not parse datetime "{at}". Use ISO format like 2026-03-10T09:00'
-            # Interpret naive datetimes in the user's timezone
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=user_tz)
             if dt <= now:
                 return "Error: scheduled time must be in the future"
 

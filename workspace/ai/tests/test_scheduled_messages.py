@@ -1,6 +1,7 @@
 import uuid
 from datetime import time, timedelta
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -831,6 +832,18 @@ class ScheduleToolTests(TestCase):
             ).count(),
             1,
         )
+
+    def test_schedule_once_accepts_the_datetime_format_the_tools_print(self):
+        when = (timezone.now() + timedelta(hours=2)).replace(second=0, microsecond=0)
+        echoed = when.astimezone(ZoneInfo("Europe/Paris")).strftime(
+            "%Y-%m-%d %H:%M (Europe/Paris)"
+        )
+        result = self._call(
+            "schedule_message", ScheduleMessageParams(prompt="Say hello", at=echoed)
+        )
+        self.assertIn("Scheduled one-time", result)
+        schedule = ScheduledMessage.objects.get(conversation=self.conversation)
+        self.assertEqual(schedule.next_run_at, when)
 
     def test_schedule_recurring(self):
         result = self._call(

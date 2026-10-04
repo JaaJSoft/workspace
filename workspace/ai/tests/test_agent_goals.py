@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -1048,6 +1049,21 @@ class AgentGoalToolTests(TestCase):
         goal.refresh_from_db()
         self.assertEqual(goal.notes, "New findings recorded.")
         self.assertGreater(goal.next_check_at, timezone.now() + timedelta(days=1))
+
+    def test_update_accepts_the_datetime_format_the_tools_print(self):
+        # list_agent_goals shows "2026-10-04 00:30 (Europe/Paris)"; models echo it back.
+        goal = self._goal()
+        when = (timezone.now() + timedelta(days=2)).replace(second=0, microsecond=0)
+        echoed = when.astimezone(ZoneInfo("Europe/Paris")).strftime(
+            "%Y-%m-%d %H:%M (Europe/Paris)"
+        )
+        result = self._call(
+            "update_agent_goal",
+            UpdateAgentGoalParams(goal_id=goal.uuid, next_check_at=echoed),
+        )
+        self.assertIn("Updated goal", result)
+        goal.refresh_from_db()
+        self.assertEqual(goal.next_check_at, when)
 
     def test_update_unknown_goal(self):
         result = self._call(

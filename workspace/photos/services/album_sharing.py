@@ -61,7 +61,7 @@ def unshare_album(album, *, acting_user, user=None, group=None, project=None):
     """Take the target out of *album*'s members; returns whether it was one.
 
     What they contributed stays: an item is served while its contributor
-    can share the file, member or not (see ``queries._vouched_q``).
+    can share the file, member or not (see ``queries.vouched_items_q``).
     """
     target = _target_filter(user=user, group=group, project=project)
     share = (

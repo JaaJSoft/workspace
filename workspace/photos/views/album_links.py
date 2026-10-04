@@ -18,7 +18,12 @@ from workspace.files.views.share_links import ShareLinkVerifyThrottle
 
 from ..queries import link_files
 from ..services.album_links import access_token_for, find_link, has_access
-from .album_files import archive_response, content_response, thumbnail_response
+from .album_files import (
+    archive_response,
+    content_response,
+    rendition_response,
+    thumbnail_response,
+)
 
 
 def _open_link(request, token):
@@ -44,7 +49,8 @@ def _link_file(request, token, file_uuid):
     link, error = _open_link(request, token)
     if error:
         return None, None, error
-    file_obj = link_files(link.album).filter(uuid=file_uuid).first()
+    files = link_files(link.album).select_related("media_item")
+    file_obj = files.filter(uuid=file_uuid).first()
     if file_obj is None:
         return None, None, Response(status=status.HTTP_404_NOT_FOUND)
     return link, file_obj, None
@@ -107,11 +113,19 @@ class AlbumLinkThumbnailView(_PublicView):
 
 @extend_schema(tags=["Photos - Album links"])
 class AlbumLinkContentView(_PublicView):
-    @extend_schema(summary="A photo or video of a linked album, inline")
+    @extend_schema(
+        summary="A photo or video of a linked album, inline",
+        description=(
+            "The original when the link allows downloads, otherwise a "
+            "rendition without metadata."
+        ),
+    )
     def get(self, request, token, file_uuid):
-        _, file_obj, error = _link_file(request, token, file_uuid)
+        link, file_obj, error = _link_file(request, token, file_uuid)
         if error:
             return error
+        if not link.allow_download:
+            return rendition_response(request, file_obj)
         return content_response(request, file_obj)
 
 

@@ -15,7 +15,7 @@ from workspace.common.vectors.indexing import drop_vector
 from workspace.users.models import UserSetting
 
 from .indexes import FACE_EMBEDDINGS
-from .models import Face
+from .models import Face, MediaItem
 from .services.face_preferences import FACES_ENABLED, MODULE
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,16 @@ def _delete_crop(name):
         default_storage.delete(name)
     except OSError:
         logger.warning("Could not delete face crop %s", scrub(name))
+
+
+@receiver(post_delete, sender=MediaItem)
+def drop_renditions(sender, instance, using, **kwargs):
+    """A file leaving the library (hard deleted, or no longer a photo) takes
+    the renditions albums served of it along, once the delete commits."""
+    from .services.album_renditions import drop_renditions as drop
+
+    file_id = instance.file_id
+    transaction.on_commit(lambda: drop(file_id), using=using)
 
 
 @receiver(post_save, sender=UserSetting)

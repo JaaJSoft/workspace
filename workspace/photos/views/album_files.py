@@ -33,6 +33,7 @@ from ..queries import (
     get_album_role,
     reachable_album,
 )
+from ..services.album_renditions import RenditionUnavailable, rendition
 
 # One request's worth of a selection; the whole album has no limit.
 MAX_FILES = 2000
@@ -65,6 +66,26 @@ def content_response(request, file_obj, *, attachment=False):
         content_type=file_obj.mime_type or "application/octet-stream",
         cache_control="private, no-cache",
         **name,
+    )
+
+
+def rendition_response(request, file_obj):
+    """What someone who may not download gets inline: the rendition of
+    *file_obj* (``services.album_renditions``), never the original; a 404
+    when none can be made."""
+    try:
+        path, content_type = rendition(file_obj)
+    except RenditionUnavailable:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    stem = file_obj.name.rsplit(".", 1)[0]
+    extension = path.rsplit(".", 1)[-1]
+    return serve_with_ranges(
+        request,
+        file_handle=default_storage.open(path, "rb"),
+        file_size=default_storage.size(path),
+        content_type=content_type,
+        cache_control="private, no-cache",
+        inline_filename=f"{stem}.{extension}",
     )
 
 
@@ -113,7 +134,8 @@ def _album_and_file(request, uuid, file_uuid):
     album = reachable_album(request.user, uuid)
     if album is None:
         return None, None
-    return album, album_files(request.user, album).filter(uuid=file_uuid).first()
+    files = album_files(request.user, album).select_related("media_item")
+    return album, files.filter(uuid=file_uuid).first()
 
 
 def _may_download(user, album):
@@ -143,13 +165,19 @@ class AlbumFileThumbnailView(APIView):
 class AlbumFileContentView(APIView):
     @extend_schema(
         summary="An album photo or video, inline",
-        description="For the viewer: Range requests let a video seek.",
+        description=(
+            "For the viewer: Range requests let a video seek. A caller the "
+            "album does not let download gets a rendition without metadata "
+            "instead of the original."
+        ),
         responses={200: OpenApiResponse(description="The file's bytes.")},
     )
     def get(self, request, uuid, file_uuid):
-        _, file_obj = _album_and_file(request, uuid, file_uuid)
+        album, file_obj = _album_and_file(request, uuid, file_uuid)
         if file_obj is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if not _may_download(request.user, album):
+            return rendition_response(request, file_obj)
         return content_response(request, file_obj)
 
 

@@ -8,6 +8,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.core.activity_registry import activity_registry
+from workspace.files.models import File
+from workspace.files.services.sharing import share_file
 from workspace.photos.activity import PhotosActivityProvider
 from workspace.photos.models import AlbumItem
 from workspace.photos.services.album_sharing import share_album
@@ -66,6 +68,21 @@ class PhotosActivityTests(TestCase):
 
         self.assertEqual(events[0]["description"], "1 photo to Trip")
         self.assertEqual(events[0]["actor"]["username"], "bob")
+
+    def test_photos_nobody_else_may_see_are_not_counted(self):
+        stranger = User.objects.create_user(username="stranger", password="p")
+        theirs = make_photo(stranger, "theirs.jpg", _at(16))
+        share_file(
+            theirs, target_user=self.owner, permission="ro", acting_user=stranger
+        )
+        add_items(self.album, [theirs], added_by=self.owner)
+        File.objects.filter(pk=self.album.items.first().file_id).update(
+            deleted_at=timezone.now()
+        )
+
+        events = self.provider.get_recent_events(self.owner.pk, viewer_id=self.bob.pk)
+
+        self.assertEqual(events[1]["description"], "2 photos to Trip")
 
     def test_limit_offset_and_excluded_actor(self):
         events = self.provider.get_recent_events(self.owner.pk, limit=1, offset=1)

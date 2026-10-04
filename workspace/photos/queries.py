@@ -362,7 +362,7 @@ def _live_media():
     )
 
 
-def _vouched_q():
+def vouched_items_q():
     """Album items whose contributor can still share the file in Files: it
     is theirs, or it sits in a group of theirs.
 
@@ -384,7 +384,7 @@ def _vouched_q():
 def visible_album_items(user, albums):
     """The items of *albums* whose file *user* can see there.
 
-    A member sees every item its contributor vouches for (``_vouched_q``),
+    A member sees every item its contributor vouches for (``vouched_items_q``),
     plus those they can open through Files anyway. Trashed and quarantined
     files drop out, and what *user* hid from their library stays hidden.
     """
@@ -392,7 +392,7 @@ def visible_album_items(user, albums):
     return AlbumItem.objects.filter(
         album__in=albums, file_id__in=media.values("pk")
     ).filter(
-        _vouched_q()
+        vouched_items_q()
         | Q(file_id__in=FileService.accessible_file_ids(user, include_deleted=False))
     )
 
@@ -423,7 +423,7 @@ def link_items(album):
     whoever opens them."""
     return AlbumItem.objects.filter(
         album=album, file_id__in=_live_media().values("pk")
-    ).filter(_vouched_q())
+    ).filter(vouched_items_q())
 
 
 def link_files(album):

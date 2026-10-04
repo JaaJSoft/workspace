@@ -9,11 +9,12 @@ so a disk behaves exactly as it does under a bare FileSystemStorage.
 The one module allowed to turn a storage name into a filesystem path.
 """
 
+import errno
 import logging
 import os
 import shutil
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 
 from django.core.files.storage import FileSystemStorage
@@ -23,6 +24,13 @@ from workspace.common.logging import scrub
 from .backend import Backend, Blob, Entry, Moved, StagedWriter, checked_name
 
 logger = logging.getLogger(__name__)
+
+# Where staged writes wait for their commit: under the storage root, so a
+# commit is a rename, but outside every tree a walk reads (the sync,
+# copy_blobs, verify_file_storage). An upload in flight is never taken for a
+# file, and one whose process died is not stranded in a user's folder, nor
+# carried along when that folder is renamed.
+STAGING_DIR = ".staging"
 
 
 class LocalBackend(Backend):
@@ -145,7 +153,29 @@ class LocalBackend(Backend):
         return Moved()
 
     def staged_writer(self, name):
-        return _StagedFile(self._path(name))
+        return _StagedFile(self, self._path(name))
+
+    def _staging_dir(self):
+        return os.path.join(self._fs.location, STAGING_DIR)
+
+    def purge_staged(self, before):
+        cutoff = before.timestamp()
+        try:
+            entries = list(os.scandir(self._staging_dir()))
+        except FileNotFoundError:
+            return 0
+        purged = 0
+        for entry in entries:
+            try:
+                if (
+                    entry.is_file(follow_symlinks=False)
+                    and entry.stat(follow_symlinks=False).st_mtime < cutoff
+                ):
+                    os.unlink(entry.path)
+                    purged += 1
+            except FileNotFoundError:
+                continue  # committed or aborted since it was listed
+        return purged
 
     @contextmanager
     def local_path(self, name, *, max_bytes):
@@ -157,7 +187,7 @@ class LocalBackend(Backend):
 
 
 class _StagedFile(StagedWriter):
-    """A sibling temp file renamed over the target on commit.
+    """A temp file in the staging directory, renamed over the target on commit.
 
     Writing the target directly would truncate the current blob at the first
     byte of an overwrite: an interrupted upload (or its abort) would destroy
@@ -166,10 +196,12 @@ class _StagedFile(StagedWriter):
     their bytes.
     """
 
-    def __init__(self, full_path):
+    def __init__(self, backend, full_path):
         self._full_path = full_path
-        self._temp_path = f"{full_path}.{uuid.uuid4().hex}.part"
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        self._permissions = backend._fs.file_permissions_mode
+        staging = backend._staging_dir()
+        os.makedirs(staging, mode=0o700, exist_ok=True)
+        self._temp_path = os.path.join(staging, f"{uuid.uuid4().hex}.part")
         self._fd = os.open(
             self._temp_path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL,
@@ -186,7 +218,30 @@ class _StagedFile(StagedWriter):
 
     def commit(self):
         self._close()
-        os.replace(self._temp_path, self._full_path)
+        if self._permissions is not None:
+            os.chmod(self._temp_path, self._permissions)
+        os.makedirs(os.path.dirname(self._full_path), exist_ok=True)
+        try:
+            os.replace(self._temp_path, self._full_path)
+        except OSError as exc:
+            if exc.errno != errno.EXDEV:
+                raise
+            self._replace_across_filesystems()
+
+    def _replace_across_filesystems(self):
+        # The target is on a volume mounted inside the storage root, which no
+        # rename from the staging directory reaches: copy beside the target
+        # first, so the name still changes in one step.
+        sibling = f"{self._full_path}.{uuid.uuid4().hex}.part"
+        try:
+            shutil.copy2(self._temp_path, sibling)
+            os.replace(sibling, self._full_path)
+        except BaseException:
+            with suppress(OSError):
+                os.unlink(sibling)
+            raise
+        with suppress(OSError):
+            os.unlink(self._temp_path)
 
     def abort(self):
         self._close()

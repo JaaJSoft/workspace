@@ -7,8 +7,6 @@ that moves a folder or streams an upload never asks where the bytes live.
 """
 
 import errno
-import logging
-import uuid
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import File
@@ -16,11 +14,7 @@ from django.core.files.storage import Storage
 from django.core.files.utils import validate_file_name
 from django.utils.deconstruct import deconstructible
 
-from workspace.common.logging import scrub
-
 from .backend import NameTaken
-
-logger = logging.getLogger(__name__)
 
 # How many fresh names a save tries when other writers keep taking them.
 _SAVE_ATTEMPTS = 10
@@ -183,43 +177,30 @@ class BlobStorage(Storage):
             content_type=content_type or "application/octet-stream",
         )
 
+    def purge_staged(self, before):
+        return self.backend.purge_staged(before)
+
     def replace(self, name, content):
         """Put *content* at *name*, swapping the previous blob in one step.
 
         Replacing is the point, so the name policy does not apply: the blob
-        goes under *name* whatever is there. A backend that overwrites in place
-        truncates the blob at the first byte written: a transfer that dies
-        halfway would leave neither the old bytes nor the whole new ones, and a
-        row rolled back to the version it described before would point at
-        content that no longer exists. Saving beside the target and moving
-        over it means the name only ever holds one complete version or the
-        other; a backend whose writes publish whole needs no staging.
+        goes under *name* whatever is there. Writing the name in place would
+        truncate the blob at the first byte: a transfer that dies halfway
+        would leave neither the old bytes nor the whole new ones, and a row
+        rolled back to the version it described before would point at content
+        that no longer exists. Through a staged writer the name only ever
+        holds one complete version or the other.
 
         Returns the name the content was stored under.
         """
         if not hasattr(content, "chunks"):
             content = File(content, name)
-        if self.backend.atomic_save:
-            writer = self.backend.staged_writer(name)
-            try:
-                for chunk in content.chunks():
-                    writer.write(chunk)
-                writer.commit()
-            except BaseException:
-                writer.abort()
-                raise
-            return name
-
-        staged = f"{name}.{uuid.uuid4().hex}.part"
+        writer = self.backend.staged_writer(name)
         try:
-            staged = self.save(staged, content)
-            self.backend.move(staged, name, overwrite=True)
-        except OSError:
-            # Including a save that died partway: the half-written bytes are in
-            # the staged blob, and the target still holds the version before.
-            try:
-                self.delete(staged)
-            except OSError:
-                logger.warning("Could not remove staged blob %s", scrub(staged))
+            for chunk in content.chunks():
+                writer.write(chunk)
+            writer.commit()
+        except BaseException:
+            writer.abort()
             raise
         return name

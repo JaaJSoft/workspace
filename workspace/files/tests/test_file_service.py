@@ -326,7 +326,7 @@ class TestUpdateContent(TestCase):
 
         storage = File._meta.get_field("content").storage
         with (
-            patch.object(storage, "save", side_effect=OSError("disk full")),
+            patch.object(storage, "replace", side_effect=OSError("disk full")),
             self.assertRaises(OSError),
         ):
             FileService.update_content(
@@ -338,20 +338,22 @@ class TestUpdateContent(TestCase):
         self.assertEqual(stored.size, original_size)
 
     def _dying_storage_write(self, partial):
-        """Patch the storage so a write lands *partial* bytes, then fails.
+        """Patch the disk so a write lands *partial* bytes, then fails.
 
         A transfer cut off mid-flight, which is the case the staged write
-        exists for: the storage truncates its target at the first byte, so
-        whichever path it was handed is left holding neither version.
+        exists for: written in place, the target would be left holding
+        neither version.
         """
-        storage = File._meta.get_field("content").storage
+        real_write = os.write
+        writes = []
 
-        def write_then_die(name, content, max_length=None):
-            with open(storage.path(name), "wb") as handle:
-                handle.write(partial)
-            raise OSError("connection reset mid-transfer")
+        def write_then_die(fd, data):
+            if writes:
+                raise OSError("connection reset mid-transfer")
+            writes.append(data)
+            return real_write(fd, bytes(data)[: len(partial)])
 
-        return patch.object(storage, "save", write_then_die)
+        return patch("workspace.common.storage.local.os.write", write_then_die)
 
     def _blobs_in(self, directory):
         return sorted(os.listdir(directory))

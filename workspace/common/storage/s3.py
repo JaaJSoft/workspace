@@ -130,8 +130,6 @@ def _translated(name):
 
 
 class S3Backend(Backend):
-    atomic_save = True
-
     def __init__(
         self,
         *,
@@ -502,6 +500,32 @@ class S3Backend(Backend):
 
     def staged_writer(self, name):
         return _Upload(self, self._key(name), name, exclusive=False)
+
+    def purge_staged(self, before):
+        # Only a multipart upload holds anything before its commit: a write
+        # under a part is buffered in memory and dies with its process.
+        paginator = self.client.get_paginator("list_multipart_uploads")
+        params = {"Prefix": self.prefix} if self.prefix else {}
+        with _translated(self.prefix):
+            stale = [
+                upload
+                for page in paginator.paginate(Bucket=self.bucket, **params)
+                for upload in page.get("Uploads", ())
+                if upload["Initiated"] < before
+            ]
+        purged = 0
+        for upload in stale:
+            try:
+                with _translated(upload["Key"]):
+                    self.client.abort_multipart_upload(
+                        Bucket=self.bucket,
+                        Key=upload["Key"],
+                        UploadId=upload["UploadId"],
+                    )
+            except FileNotFoundError:
+                continue  # completed or aborted since it was listed
+            purged += 1
+        return purged
 
 
 def _generation(meta):

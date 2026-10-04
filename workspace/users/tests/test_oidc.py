@@ -111,6 +111,13 @@ class GenerateUsernameTests(TestCase):
         u = self.backend._generate_username({"preferred_username": "jean dupont!"})
         self.assertEqual(u, "jeandupont")
 
+    def test_a_path_segment_claim_falls_back_to_user(self):
+        # The username is a segment of the account's storage paths.
+        for raw in (".", "..", "../"):
+            with self.subTest(raw=raw):
+                u = self.backend._generate_username({"preferred_username": raw})
+                self.assertEqual(u, "user")
+
     def test_dedupes_on_collision(self):
         User.objects.create_user("jdoe")
         u = self.backend._generate_username({"preferred_username": "jdoe"})

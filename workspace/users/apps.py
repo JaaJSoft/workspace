@@ -25,6 +25,8 @@ class UsersConfig(AppConfig):
 
         tool_registry.register_provider(UsersToolProvider())
 
+        from workspace.users import signals  # noqa: F401
+
     @staticmethod
     def _on_logout(sender, request, user, **kwargs):
         if user and user.is_authenticated:

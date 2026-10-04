@@ -103,9 +103,10 @@ class FileSyncServiceStoragePrefixTests(TestCase):
 class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
     """A username that is not a plain path segment must not widen the walk.
 
-    Django's username validator accepts ``..``, and the root of such an
-    account, ``files/users/..``, is the parent of every other user's tree: a
-    sync that followed it would register their files as the account's own.
+    New accounts cannot be named ``..`` any more, but one named so before that
+    rule still is, and its root, ``files/users/..``, is the parent of every
+    other user's tree: a sync that followed it would register their files as
+    the account's own.
     """
 
     def setUp(self):
@@ -114,7 +115,9 @@ class SyncUnsafeUsernameTests(IsolatedMediaRootMixin, TestCase):
         FileService.create_file(
             alice, "secret.txt", content=ContentFile(b"alice's secret")
         )
-        self.intruder = User.objects.create_user(username="..", password="pw")
+        self.intruder = User.objects.create_user(username="intruder", password="pw")
+        User.objects.filter(pk=self.intruder.pk).update(username="..")
+        self.intruder.refresh_from_db()
 
     def test_the_recursive_sync_adopts_nothing(self):
         with self.assertRaises(SuspiciousFileOperation):

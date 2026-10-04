@@ -287,10 +287,11 @@ class FileService:
         return file_obj
 
     @staticmethod
+    @transaction.atomic
     def create_folder(
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
-        """Create a new folder record."""
+        """Create a new folder record and its directory, or neither."""
         if group is None and parent and parent.group_id:
             group = parent.group
 

@@ -28,9 +28,17 @@ from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.sync import FileSyncService
-from workspace.files.webdav.resources import FileResource
+from workspace.files.webdav.resources import FileResource, FolderResource
 
 User = get_user_model()
+
+
+def deep_folder(user):
+    """A folder whose key is a few bytes short of the 1024 S3 allows."""
+    parent = None
+    for depth in range(4):
+        parent = FileService.create_folder(user, f"{depth}" + "x" * 249, parent=parent)
+    return parent
 
 
 class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
@@ -239,6 +247,18 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.read(f), b"new")
         self.assertEqual(self.keys(), ["files/users/alice/b.txt"])
 
+    def test_a_name_too_long_for_the_store_is_a_bad_request(self):
+        parent = deep_folder(self.user)
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            "/api/v1/files",
+            {"name": "y" * 100, "node_type": "folder", "parent": str(parent.uuid)},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(File.objects.filter(name="y" * 100).exists())
+
     def test_trash_then_restore(self):
         docs = FileService.create_folder(self.user, "Docs")
         f = self.upload("a.txt", b"a", parent=docs)
@@ -408,6 +428,18 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
             self.keys(),
             ["files/users/davs3/Archive/", "files/users/davs3/Archive/a.txt"],
         )
+
+    def test_a_collection_too_long_for_the_store_is_a_bad_request(self):
+        parent = deep_folder(self.user)
+        resource = FolderResource(
+            "/deep", self._resource("/deep", parent).environ, parent
+        )
+
+        with self.assertRaises(DAVError) as refused:
+            resource.create_collection("y" * 100)
+
+        self.assertEqual(refused.exception.value, 400)
+        self.assertFalse(File.objects.filter(name="y" * 100).exists())
 
     def test_a_new_file_refused_because_its_folder_moved_leaves_nothing(self):
         docs = FileService.create_folder(self.user, "Docs")

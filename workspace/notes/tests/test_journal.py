@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 
@@ -40,6 +41,9 @@ class IsJournalNoteTests(TestCase):
                 "journalFolderUuid": str(self.journal_folder.uuid),
             },
         )
+
+    def tearDown(self):
+        cache.clear()
 
     def _make_note(self, parent, name="2026-04-17.md"):
         return File.objects.create(

@@ -21,12 +21,14 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.db import transaction
 from django.test import TestCase
+from wsgidav.dav_error import DAVError
 
 from workspace.common.storage.s3 import MIN_PART_SIZE
 from workspace.common.tests.s3 import S3StoragesMixin
 from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.files.sync import FileSyncService
+from workspace.files.webdav.resources import FileResource
 
 User = get_user_model()
 
@@ -150,6 +152,92 @@ class ObjectStorageFilesTests(S3StoragesMixin, TestCase):
             ["files/users/alice/Archive/", "files/users/alice/Archive/b.txt"],
         )
         self.assertEqual(self.read(f), b"a")
+
+    def _row_during_copy(self, file_obj, move):
+        """Where *file_obj*'s row points while *move* copies its blob."""
+        backend = storages["default"].backend
+        real_copy = backend._copy
+        seen = []
+
+        def copy(*args):
+            seen.append(File.objects.get(pk=file_obj.pk).content.name)
+            return real_copy(*args)
+
+        with (
+            self.captureOnCommitCallbacks(execute=True),
+            mock.patch.object(backend, "_copy", copy),
+        ):
+            move()
+        return seen
+
+    def test_a_move_claims_the_rows_before_it_copies(self):
+        """A content write claims its row before writing a byte. A move that
+        claims the rows first holds such a write back until it commits; one
+        let through mid-copy would land on a source after its copy was taken,
+        and go with that source when the move commits."""
+        docs = FileService.create_folder(self.user, "Docs")
+        archive = FileService.create_folder(self.user, "Archive")
+        f = self.upload("a.txt", b"a", parent=docs)
+        cases = [
+            (
+                "folder rename",
+                lambda: FileService.rename(docs, "Papers"),
+                "Papers/a.txt",
+            ),
+            (
+                "folder move",
+                lambda: FileService.move(docs, archive),
+                "Archive/Papers/a.txt",
+            ),
+            (
+                "file rename",
+                lambda: FileService.rename(f, "b.txt"),
+                "Archive/Papers/b.txt",
+            ),
+            ("file move", lambda: FileService.move(f, None), "b.txt"),
+        ]
+        for label, move, destination in cases:
+            with self.subTest(label):
+                for node in (docs, archive, f):
+                    node.refresh_from_db()
+                seen = self._row_during_copy(f, move)
+
+                self.assertEqual(seen, [f"files/users/alice/{destination}"])
+        self.assertEqual(self.read(f), b"a")
+
+    def test_a_save_that_waited_on_a_folder_move_follows_it(self):
+        docs = FileService.create_folder(self.user, "Docs")
+        f = self.upload("a.txt", b"old", parent=docs)
+        loaded = File.objects.get(pk=f.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
+
+        FileService.update_content(
+            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
+        )
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, "files/users/alice/Archive/a.txt")
+        self.assertEqual(self.read(f), b"new")
+        self.assertEqual(
+            self.keys(),
+            ["files/users/alice/Archive/", "files/users/alice/Archive/a.txt"],
+        )
+
+    def test_a_save_that_waited_on_a_rename_follows_it(self):
+        f = self.upload("a.txt", b"old")
+        loaded = File.objects.get(pk=f.pk)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(f, "b.txt")
+
+        FileService.update_content(
+            loaded, ContentFile(b"new", name="a.txt"), acting_user=self.user
+        )
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, "files/users/alice/b.txt")
+        self.assertEqual(self.read(f), b"new")
+        self.assertEqual(self.keys(), ["files/users/alice/b.txt"])
 
     def test_trash_then_restore(self):
         docs = FileService.create_folder(self.user, "Docs")
@@ -282,6 +370,40 @@ class ObjectStorageWebDavTests(S3StoragesMixin, TestCase):
         self.assertEqual(self.keys(), ["files/users/davs3/notes.txt"])
         self.assertEqual(
             self.s3.list_multipart_uploads(Bucket=self.bucket).get("Uploads", []), []
+        )
+
+    def test_an_upload_the_file_was_moved_under_is_refused(self):
+        """Its bytes are staged under the path the file had when the PUT began,
+        which the move empties once it commits."""
+        docs = FileService.create_folder(self.user, "Docs")
+        f = FileService.create_file(
+            self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
+        )
+        environ = {
+            "REQUEST_METHOD": "PUT",
+            "SCRIPT_NAME": "",
+            "PATH_INFO": "/Docs/a.txt",
+            "wsgi.input": io.BytesIO(b""),
+            "wsgidav.provider": None,
+            "workspace.user": self.user,
+        }
+        resource = FileResource("/Docs/a.txt", environ, f)
+        buf = resource.begin_write()
+        buf.write(b"new")
+        buf.close()
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
+
+        with self.assertRaises(DAVError) as refused:
+            resource.end_write(with_errors=False)
+
+        self.assertEqual(refused.exception.value, 409)
+        f.refresh_from_db()
+        with f.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"old")
+        self.assertEqual(
+            self.keys(),
+            ["files/users/davs3/Archive/", "files/users/davs3/Archive/a.txt"],
         )
 
     def test_an_overwrite_the_store_fails_to_complete_keeps_nothing_open(self):

@@ -10,6 +10,7 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.files.services import FileService
@@ -27,8 +28,9 @@ class FailedStorageMoveTests(TestCase):
         )
 
     def _renames_fail(self):
-        return mock.patch(
-            "workspace.common.storage.local.os.rename",
+        return mock.patch.object(
+            type(default_storage.backend),
+            "relocate",
             side_effect=OSError(errno.EXDEV, "Invalid cross-device link"),
         )
 

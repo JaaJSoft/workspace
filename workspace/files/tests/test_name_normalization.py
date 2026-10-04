@@ -91,7 +91,8 @@ class ServiceNameTests(NameFormsTestCase):
             self.user, "a.txt", content=ContentFile(b"x", name="a.txt")
         )
 
-        FileService.rename(f, DECOMPOSED)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(f, DECOMPOSED)
 
         f.refresh_from_db()
         self.assertEqual(f.name, COMPOSED)

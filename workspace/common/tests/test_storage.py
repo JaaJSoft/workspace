@@ -326,6 +326,15 @@ class BlobStorageContract:
             [e.name for e in self.storage.scan("files/users/alice")], ["doc.txt"]
         )
 
+    def test_a_seek_before_the_start_is_refused_as_a_file_refuses_it(self):
+        """zipfile probes a short archive by seeking back from its end, and
+        takes OSError for "not a zip" - anything else escapes as a crash."""
+        self.save("files/users/alice/doc.txt", b"hello")
+
+        with self.storage.open("files/users/alice/doc.txt", "rb") as handle:
+            with self.assertRaises(OSError):
+                handle.seek(-10, io.SEEK_END)
+
     # Local paths, for external tools
 
     def test_local_path_holds_the_bytes(self):

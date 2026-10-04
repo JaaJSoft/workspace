@@ -413,10 +413,11 @@ class FileService:
         return file_obj
 
     @staticmethod
+    @transaction.atomic
     def create_folder(
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
-        """Create a new folder record."""
+        """Create a new folder record and its directory, or neither."""
         group = FileService.node_group(parent, group)
 
         _name_helpers.check_name_available(owner, parent, name, File.NodeType.FOLDER)

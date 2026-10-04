@@ -1,5 +1,7 @@
 """DAV resource classes wrapping the File model."""
 
+import errno
+import functools
 import io
 import logging
 import os
@@ -48,6 +50,21 @@ def _require_permission(user, file_obj, level, verb):
     permission = FileService.get_permission(user, file_obj)
     if permission is None or permission < level:
         raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
+
+
+def _refuse_overlong_names(method):
+    """Answer a name the storage cannot hold with a 400, not a server error."""
+
+    @functools.wraps(method)
+    def wrapper(*args, **kwargs):
+        try:
+            return method(*args, **kwargs)
+        except OSError as exc:
+            if exc.errno != errno.ENAMETOOLONG:
+                raise
+            raise DAVError(HTTP_BAD_REQUEST, "Name too long to be stored.") from exc
+
+    return wrapper
 
 
 class _StreamingWriteBuffer:
@@ -192,6 +209,7 @@ class RootCollection(DAVCollection):
             return FolderResource(child_path, self.environ, file_obj)
         return FileResource(child_path, self.environ, file_obj)
 
+    @_refuse_overlong_names
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs
         # (e.g. Windows retries while a slow upload is still in progress).
@@ -212,6 +230,7 @@ class RootCollection(DAVCollection):
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
+    @_refuse_overlong_names
     def create_collection(self, name):
         FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
         return True
@@ -278,6 +297,7 @@ class FolderResource(DAVCollection):
             return FolderResource(child_path, self.environ, file_obj)
         return FileResource(child_path, self.environ, file_obj)
 
+    @_refuse_overlong_names
     def create_empty_resource(self, name):
         # Reuse an existing file to avoid duplicates from concurrent PUTs.
         # Use accessible_files_q so we also find files created by other
@@ -300,6 +320,7 @@ class FolderResource(DAVCollection):
         child_path = self.path.rstrip("/") + "/" + name
         return FileResource(child_path, self.environ, file_obj)
 
+    @_refuse_overlong_names
     def create_collection(self, name):
         _require_permission(self._user, self._file, FilePermission.EDIT, "MKCOL")
         FileService.create_folder(
@@ -314,6 +335,7 @@ class FolderResource(DAVCollection):
         _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
         FileService.soft_delete(self._file, acting_user=self._user)
 
+    @_refuse_overlong_names
     def copy_move_single(self, dest_path, *, is_move):
         # WsgiDAV's copy/move loop visits every descendant itself, so this
         # hook must only create the destination collection, without members
@@ -335,6 +357,7 @@ class FolderResource(DAVCollection):
         return True
 
     @transaction.atomic
+    @_refuse_overlong_names
     def move_recursive(self, dest_path):
         with _as_insufficient_storage():
             _move_to(self._file, self._user, dest_path)
@@ -403,6 +426,7 @@ class FileResource(DAVNonCollection):
         )
         raise DAVError(HTTP_LOCKED, f"File is locked by {holder.username}")
 
+    @_refuse_overlong_names
     def begin_write(self, content_type=None):
         _require_permission(self._user, self._file, FilePermission.WRITE, "PUT")
         self._refuse_if_locked("PUT")
@@ -616,6 +640,7 @@ class FileResource(DAVNonCollection):
             target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
         return True
 
+    @_refuse_overlong_names
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
             self._refuse_if_locked("MOVE")

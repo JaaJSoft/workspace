@@ -9,16 +9,19 @@ purge_trash is not mocked at all — it runs the real ORM filter against
 File rows created by the test.
 """
 
+import os
 from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.core.files.storage import storages
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files import tasks as files_tasks
 from workspace.files.models import File
 from workspace.files.sync import SyncResult
@@ -290,6 +293,25 @@ class PurgeTrashTaskTests(TestCase):
             result = files_tasks.purge_trash.run()
 
         self.assertEqual(result["retention_days"], 30)
+
+
+class PurgeStagedWritesTaskTests(IsolatedMediaRootMixin, TestCase):
+    def test_drops_an_abandoned_write_and_keeps_a_live_one(self):
+        storage = storages["files"]
+        abandoned = storage.staged_writer("files/users/alice/old.bin")
+        abandoned.write(b"old")
+        abandoned._close()
+        two_days_ago = (timezone.now() - timedelta(days=2)).timestamp()
+        os.utime(abandoned._temp_path, (two_days_ago, two_days_ago))
+        live = storage.staged_writer("files/users/alice/new.bin")
+        live.write(b"new")
+
+        result = files_tasks.purge_staged_writes.run()
+
+        self.assertEqual(result, {"purged": 1})
+        self.assertFalse(os.path.exists(abandoned._temp_path))
+        live.commit()
+        self.assertTrue(storage.exists("files/users/alice/new.bin"))
 
 
 class SyncFolderTaskTests(TestCase):

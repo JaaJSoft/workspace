@@ -504,6 +504,9 @@ jobs:
           ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
           VGW_BACKEND: posix
           VGW_BACKEND_ARG: /tmp/vgw
+          # The runner prints a service's output after the job: a line per
+          # request would bury the test report under thousands of them.
+          VGW_QUIET: 'true'
         ports:
           - 7070:7070
     steps:
@@ -563,6 +566,9 @@ jobs:
           ROOT_SECRET_ACCESS_KEY: ci-s3-password-7d1e
           VGW_BACKEND: posix
           VGW_BACKEND_ARG: /tmp/vgw
+          # The runner prints a service's output after the job: a line per
+          # request would bury the test report under thousands of them.
+          VGW_QUIET: 'true'
         ports:
           - 7070:7070
     steps:
@@ -592,6 +598,13 @@ jobs:
           done
           echo "The S3 server did not come up in time" >&2
           exit 1
+
+      # As in the files job of the test matrix: the media tests run the
+      # binaries.
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          DEBIAN_FRONTEND=noninteractive sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Run the files tests with every blob on the S3 server
         env:

@@ -371,7 +371,11 @@ class S3Backend(Backend):
     def iter_blobs(self, name):
         for obj in self._objects(self._dir_prefix(name), name):
             if not obj["Key"].endswith("/"):
-                yield Blob(name=self._name(obj["Key"]), size=obj["Size"])
+                yield Blob(
+                    name=self._name(obj["Key"]),
+                    size=obj["Size"],
+                    modified=obj["LastModified"],
+                )
 
     def iter_dirs(self, name):
         # A directory is any prefix a key sits under, or a kept empty one.

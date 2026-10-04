@@ -7,6 +7,8 @@ also hold the SQLite database and the face detection weights, which are not
 blobs and never belong in a bucket.
 """
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
@@ -27,12 +29,31 @@ BLOB_ROOTS = (
     "faces",  # face crops
 )
 
+# Object stores report modification times to the second: a copy is only known
+# to postdate its source when it is at least that much newer.
+_TIMESTAMP_RESOLUTION = timedelta(seconds=1)
+
+
+def _is_current(copy, blob):
+    """Whether *copy*, at the destination, already holds *blob*'s bytes.
+
+    The size alone cannot tell: an edit that kept it - a byte fixed in a text
+    file - would leave the stale copy looking current, and copying back after
+    a while on the other backend would serve the old version.
+    """
+    return (
+        copy is not None
+        and copy.size == blob.size
+        and copy.modified >= blob.modified + _TIMESTAMP_RESOLUTION
+    )
+
 
 class Command(BaseCommand):
     help = (
         "Copy every blob from one storage backend to another (see STORAGE_BACKEND "
         "and the S3_* variables). Safe to run again: a blob already at the "
-        "destination with the same size is skipped."
+        "destination with the same size, copied after the source last changed, "
+        "is skipped."
     )
 
     def add_arguments(self, parser):
@@ -76,12 +97,12 @@ class Command(BaseCommand):
         for root in BLOB_ROOTS:
             if not origin.is_dir(root):
                 continue
-            existing = {blob.name: blob.size for blob in destination.iter_blobs(root)}
+            existing = {blob.name: blob for blob in destination.iter_blobs(root)}
             for directory in origin.iter_dirs(root):
                 if not dry_run:
                     destination.make_dir(directory)
             for blob in origin.iter_blobs(root):
-                if existing.get(blob.name) == blob.size:
+                if _is_current(existing.get(blob.name), blob):
                     skipped += 1
                     continue
                 if not dry_run:

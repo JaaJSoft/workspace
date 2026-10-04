@@ -15,6 +15,7 @@ import shutil
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 
 from django.core.exceptions import SuspiciousFileOperation
 
@@ -48,10 +49,12 @@ class Entry:
 
 @dataclass(frozen=True)
 class Blob:
-    """A blob found by :meth:`Backend.iter_blobs`: its full name and size."""
+    """A blob found by :meth:`Backend.iter_blobs`: its full name, its size and
+    when it was last written (timezone-aware)."""
 
     name: str
     size: int
+    modified: datetime
 
 
 def checked_name(name):

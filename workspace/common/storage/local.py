@@ -14,6 +14,7 @@ import os
 import shutil
 import uuid
 from contextlib import contextmanager
+from datetime import UTC, datetime
 
 from django.core.files.storage import FileSystemStorage
 
@@ -98,7 +99,12 @@ class LocalBackend(Backend):
                 path = os.path.join(current, filename)
                 # A symlink or a socket is not a blob the storage holds.
                 if os.path.isfile(path) and not os.path.islink(path):
-                    yield Blob(name=f"{prefix}/{filename}", size=os.path.getsize(path))
+                    stat = os.stat(path)
+                    yield Blob(
+                        name=f"{prefix}/{filename}",
+                        size=stat.st_size,
+                        modified=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+                    )
 
     def iter_dirs(self, name):
         for _current, prefix, dirs, _files in self._walk(name):

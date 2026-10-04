@@ -35,7 +35,7 @@
         </button>
         <button
           type="button"
-          class="btn btn-primary btn-sm"
+          class="btn btn-module btn-sm"
           @click="rulesOpenForm()"
           aria-label="New rule"
         >
@@ -242,7 +242,7 @@
           <div class="tabs tabs-boxed">
             <button
               type="button"
-              class="tab tab-sm"
+              class="tab tab-sm tab-module"
               :class="rulesForm.mode === 'simple' ? 'tab-active' : ''"
               @click="rulesSetMode('simple')"
             >
@@ -250,7 +250,7 @@
             </button>
             <button
               type="button"
-              class="tab tab-sm"
+              class="tab tab-sm tab-module"
               :class="rulesForm.mode === 'advanced' ? 'tab-active' : ''"
               @click="rulesSetMode('advanced')"
             >
@@ -439,7 +439,7 @@
         <label class="flex items-center gap-2 mt-3">
           <input
             type="checkbox"
-            class="checkbox checkbox-sm"
+            class="checkbox checkbox-sm checkbox-module"
             x-model="rulesEditing.is_enabled"
           />
           <span class="text-sm">Enabled</span>
@@ -447,7 +447,7 @@
         <label class="flex items-center gap-2">
           <input
             type="checkbox"
-            class="checkbox checkbox-sm"
+            class="checkbox checkbox-sm checkbox-module"
             x-model="rulesEditing.stop_processing"
           />
           <span class="text-sm">Stop processing more rules after this one</span>
@@ -464,7 +464,7 @@
           </button>
           <button
             type="button"
-            class="btn btn-primary btn-sm"
+            class="btn btn-module btn-sm"
             @click="rulesSave()"
             :disabled="!rulesEditing.name || rulesForm.saving"
           >

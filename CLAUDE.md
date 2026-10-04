@@ -687,6 +687,7 @@ A blob is not guaranteed a filesystem path - an object store has none - so outsi
 
 - Storage names are `/`-separated whatever the platform: build them with `posixpath`, never `os.path`.
 - Two aliases share the backend and differ in what a save under a taken name does. `"files"` holds `File.content` and overwrites, because a node's blob lives at its tree path. `"default"` keeps both blobs, because mail attachments are keyed by their file name. A FileField whose names can collide never goes on `"files"`.
+- On object storage a move copies, and drops the sources once its transaction commits (`_storage_ops._relocate`). A content write that lands on a source between its copy and that drop is lost with it, so the two are serialized through the row: a move writes the rows of every blob it moves **before** it copies, and a content write claims its row before writing a byte and then writes where the row says the file is now (`FileService.update_content`, `replace_content_storage`). A new move or a new content write follows the same order.
 
 ### Prefer the standard library over hand-rolled collection plumbing
 

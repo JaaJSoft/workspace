@@ -9,6 +9,7 @@ from django.core.files.base import File as DjangoFile
 from django.db import transaction
 from wsgidav.dav_error import (
     HTTP_BAD_REQUEST,
+    HTTP_CONFLICT,
     HTTP_FORBIDDEN,
     HTTP_INSUFFICIENT_STORAGE,
     HTTP_LOCKED,
@@ -23,6 +24,7 @@ from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 from workspace.files.services.locking import (
     LockConflict,
+    Relocated,
     StaleContent,
     conflicting_lock,
 )
@@ -534,6 +536,10 @@ class FileResource(DAVNonCollection):
                         parent=self._file.parent,
                         acting_user=self._user,
                     )
+                # The bytes are staged under the path the file had when the PUT
+                # began; a rename or a move since has its blob somewhere else.
+                if file_upload_path(self._file, self._file.name) != self._storage_path:
+                    raise Relocated()
                 FileService.replace_content_storage(
                     self._file,
                     storage_path=self._storage_path,
@@ -542,7 +548,7 @@ class FileResource(DAVNonCollection):
                     acting_user=self._user,
                     expected_hash=getattr(self, "_expected_hash", None),
                 )
-            except (LockConflict, StaleContent) as exc:
+            except (LockConflict, StaleContent, Relocated) as exc:
                 buf.abort()
                 self._refusal_error(exc, username)
             except BaseException:
@@ -572,6 +578,10 @@ class FileResource(DAVNonCollection):
         if isinstance(exc, LockConflict):
             holder = getattr(exc.holder, "username", "another user")
             raise DAVError(HTTP_LOCKED, f"File is locked by {holder}") from exc
+        if isinstance(exc, Relocated):
+            raise DAVError(
+                HTTP_CONFLICT, "The file was moved while it was being uploaded."
+            ) from exc
         raise DAVError(
             HTTP_PRECONDITION_FAILED, "The file changed since it was loaded."
         ) from exc

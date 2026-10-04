@@ -5,7 +5,6 @@ Module-level functions extracted from FileService so the facade in
 go through FileService methods, which delegate here.
 """
 
-import gc
 import logging
 import posixpath
 
@@ -186,15 +185,6 @@ def _delete_folder_storage(node):
         logger.warning("Could not delete folder %s: %s", scrub(node.name), scrub(e))
 
 
-def _copy_blob(source, destination):
-    """Save *source* under *destination* a chunk at a time; the name the
-    storage picked comes back, as from ``default_storage.save``."""
-    with default_storage.open(source, "rb") as handle:
-        saved = default_storage.save(destination, handle)
-    gc.collect()  # release handles on Windows
-    return saved
-
-
 def _relocate(source, destination):
     """Move *source* to *destination* now; drop the source once committed.
 
@@ -202,6 +192,11 @@ def _relocate(source, destination):
     point at the destination are durable, so a rollback leaves duplicates
     behind, never a row pointing at a blob that is gone. A move that cannot
     complete raises, which takes the caller's row changes down with it.
+
+    The caller claims the rows of every blob it moves before calling this.
+    A content write claims its row before it writes a byte, so the claim
+    holds it back until the move commits; a write let through mid-copy would
+    land on a source after its copy was taken, and go with the source.
     """
     relocation = default_storage.relocate(source, destination)
     transaction.on_commit(relocation.commit)
@@ -223,16 +218,9 @@ def rename_file_storage(file_obj, new_name):
         logger.warning("Old file does not exist: '%s'", scrub(old_path))
         return
 
-    saved_path = _copy_blob(old_path, new_path)
-    file_obj.content.name = saved_path
-
-    if old_path != saved_path:
-        try:
-            default_storage.delete(old_path)
-        except Exception as e:
-            logger.warning(
-                "Could not delete old file '%s': %s", scrub(old_path), scrub(e)
-            )
+    File.objects.filter(pk=file_obj.pk).update(content=new_path)
+    _relocate(old_path, new_path)
+    file_obj.content.name = new_path
 
 
 def update_descendant_content_names(folder, old_seg, new_seg):
@@ -277,10 +265,9 @@ def rename_folder_storage(folder, old_folder_name, new_folder_name):
     storage_path = folder_storage_path(folder)
     new_storage_path = posixpath.join(posixpath.dirname(storage_path), new_folder_name)
 
+    update_descendant_content_names(folder, old_folder_name, new_folder_name)
     if default_storage.is_dir(storage_path):
         _relocate(storage_path, new_storage_path)
-
-    update_descendant_content_names(folder, old_folder_name, new_folder_name)
 
 
 def move_folder_storage(folder, new_parent, *, new_owner=None):
@@ -292,9 +279,6 @@ def move_folder_storage(folder, new_parent, *, new_owner=None):
 
     if old_storage_path == new_storage_path:
         return
-
-    if default_storage.is_dir(old_storage_path):
-        _relocate(old_storage_path, new_storage_path)
 
     # Update content.name for all descendant files
     folder_path = folder.path or folder.get_path()
@@ -322,6 +306,9 @@ def move_folder_storage(folder, new_parent, *, new_owner=None):
     if updated:
         File.objects.bulk_update(updated, ["content"], batch_size=500)
 
+    if default_storage.is_dir(old_storage_path):
+        _relocate(old_storage_path, new_storage_path)
+
 
 def move_file_storage(file_obj, new_parent, *, new_owner=None):
     """Move a single file on storage to a new parent directory."""
@@ -334,6 +321,7 @@ def move_file_storage(file_obj, new_parent, *, new_owner=None):
         return
 
     if default_storage.is_file(old_path):
+        File.objects.filter(pk=file_obj.pk).update(content=new_path)
         _relocate(old_path, new_path)
         file_obj.content.name = new_path
 

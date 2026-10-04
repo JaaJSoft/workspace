@@ -182,6 +182,18 @@ class TestRename(TestCase):
         f.refresh_from_db()
         self.assertEqual(f.name, "new.txt")
 
+    def test_rename_to_a_name_without_extension_keeps_the_blob_at_that_name(self):
+        """The blob lives at the node's tree path, the name it was given."""
+        content = ContentFile(b"data", name="notes.txt")
+        f = FileService.create_file(self.user, "notes.txt", content=content)
+
+        FileService.rename(f, "README")
+
+        f.refresh_from_db()
+        self.assertEqual(f.content.name, f"files/users/{self.user.username}/README")
+        with f.content.open("rb") as handle:
+            self.assertEqual(handle.read(), b"data")
+
     def test_rename_noop_when_same_name(self):
         f = FileService.create_file(self.user, "same.txt", mime_type="text/plain")
         result = FileService.rename(f, "same.txt")

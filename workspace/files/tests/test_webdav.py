@@ -889,6 +889,25 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         with self.file.content.storage.open(self.file.content.name, "rb") as f:
             self.assertEqual(f.read(), b"hello world")
 
+    def test_an_upload_refused_because_its_folder_moved_leaves_no_partial_file(self):
+        """Its bytes wait outside the user's tree: the rename does not carry
+        them into the renamed folder, where the sync would adopt them."""
+        docs = FileService.create_folder(self.user, "Docs")
+        f = FileService.create_file(
+            self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
+        )
+        res = FileResource("/Docs/a.txt", self.environ, f)
+        buf = res.begin_write()
+        buf.write(b"new")
+        buf.close()
+        FileService.rename(docs, "Archive")
+
+        with self.assertRaises(DAVError) as refused:
+            res.end_write(with_errors=False)
+
+        self.assertEqual(refused.exception.value, 409)
+        self.assertEqual(sorted(self._files_on_disk()), ["a.txt", "test.txt"])
+
     def test_successful_overwrite_leaves_single_file_on_disk(self):
         """After a completed overwrite no temp/partial files may remain."""
         buf = self.res.begin_write()
@@ -1196,7 +1215,8 @@ class StreamingWriteBufferTests(TestCase):
         buf.write(b"partial data")
         buf.abort()
         self.assertFalse(os.path.exists(path))
-        self.assertEqual(os.listdir(self._tmpdir), [])  # no temp leftovers
+        leftovers = [name for _, _, names in os.walk(self._tmpdir) for name in names]
+        self.assertEqual(leftovers, [])
 
     def test_content_hash_covers_every_byte(self):
         from workspace.files.services.content_hash import new_hasher

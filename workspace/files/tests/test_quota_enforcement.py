@@ -378,7 +378,7 @@ class WebDavWriteBufferTests(TestCase):
             buf.abort()
             self.assertFalse(os.path.exists(target))
             self.assertEqual(
-                [p for p in os.listdir(tmp) if p.endswith(".part")],
+                [name for _, _, names in os.walk(tmp) for name in names],
                 [],
                 "the partial upload must be cleaned up",
             )

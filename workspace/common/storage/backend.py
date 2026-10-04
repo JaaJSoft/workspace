@@ -128,11 +128,6 @@ class Moved(Relocation):
 class Backend(abc.ABC):
     """Where the bytes live. Built by ``BlobStorage`` from its options."""
 
-    # Whether a save() that dies halfway publishes what it wrote. A disk
-    # truncates the blob it overwrites at the first byte; a backend that
-    # publishes a write whole or not at all sets this.
-    atomic_save = False
-
     # Django's Storage API, which BlobStorage passes straight through. The name
     # reaching save() is final: BlobStorage has already applied its policy.
 
@@ -237,7 +232,20 @@ class Backend(abc.ABC):
 
     @abc.abstractmethod
     def staged_writer(self, name):
-        """A :class:`StagedWriter` that publishes under *name* on commit."""
+        """A :class:`StagedWriter` that publishes under *name* on commit.
+
+        Until then nothing of it is listed under any directory: a walk over
+        the tree never mistakes an upload in flight for a blob.
+        """
+
+    @abc.abstractmethod
+    def purge_staged(self, before):
+        """Drop the staged writes left pending since before *before*.
+
+        A writer that died mid-write never commits nor aborts, and its bytes
+        would stay forever. A write is dated by its last byte where the
+        backend records it, by its start otherwise. Returns how many went.
+        """
 
     def signed_url(self, name, *, filename, attachment, content_type):
         """A short-lived URL a client can fetch the blob from directly, or None.

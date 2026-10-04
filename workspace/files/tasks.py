@@ -149,6 +149,27 @@ def purge_trash(self):
     }
 
 
+# A staged write untouched for this long belongs to an upload whose worker
+# died: nothing will commit or abort it any more.
+STAGED_WRITE_TTL = timedelta(days=1)
+
+
+@shared_task(
+    name="files.purge_staged_writes",
+    priority=BACKGROUND_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
+def purge_staged_writes(self):
+    """Drop the bytes of uploads left unfinished by a worker that died."""
+    from django.core.files.storage import storages
+
+    purged = storages["files"].purge_staged(timezone.now() - STAGED_WRITE_TTL)
+    if purged:
+        logger.info("Dropped %d abandoned staged write(s).", purged)
+    return {"purged": purged}
+
+
 # Each pass queues one catch_up_file task per pending file of every
 # registered reader (services/catch_up.py), so the work spreads over every
 # worker. The bound, per reader, caps what one pass puts on the broker; a

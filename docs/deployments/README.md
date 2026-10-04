@@ -57,9 +57,9 @@ Uploaded files live under `MEDIA_ROOT` by default. Set `STORAGE_BACKEND=s3` to k
 | `S3_SIGNED_URLS`          | `0`       | `1` redirects downloads to short-lived signed URLs on the store instead of streaming them through the app (see below) |
 | `S3_SIGNED_URL_TTL`       | `3600`    | Seconds a signed download URL stays valid. Long enough for a video to play to its end |
 
-The credentials need `s3:ListBucket` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its objects.
+The credentials need `s3:ListBucket` and `s3:ListBucketMultipartUploads` on the bucket and `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its objects.
 
-**Add a lifecycle rule that aborts incomplete multipart uploads** after a day or so. Large uploads go in parts and an interrupted one is aborted, but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise.
+Large uploads go in parts, and an interrupted one is aborted - but a worker killed in the middle of an upload cannot abort it, and most stores keep (and bill) the parts until told otherwise. A nightly task aborts the uploads left pending for more than a day. Where the store supports it, a lifecycle rule that aborts incomplete multipart uploads does the same on its side.
 
 ### Downloads served by the store
 

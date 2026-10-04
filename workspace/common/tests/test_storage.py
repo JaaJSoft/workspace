@@ -3,7 +3,8 @@ import io
 import os
 import shutil
 import tempfile
-from unittest import mock
+from datetime import UTC, datetime, timedelta
+from unittest import mock, skipUnless
 
 from botocore.exceptions import ClientError
 from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
@@ -13,7 +14,7 @@ from django.test import SimpleTestCase
 from workspace.common.storage.backend import BlobTooLarge, checked_name, temporary_copy
 from workspace.common.storage.facade import BlobStorage
 from workspace.common.storage.s3 import MIN_PART_SIZE
-from workspace.common.tests.s3 import S3TestMixin
+from workspace.common.tests.s3 import LIVE, S3TestMixin
 
 
 def _read(storage, name):
@@ -281,6 +282,39 @@ class BlobStorageContract:
             [e.name for e in self.storage.scan("files/users/alice")], ["doc.txt"]
         )
 
+    def test_a_pending_staged_write_is_not_listed(self):
+        """A walk over the tree (the sync) must not take an upload in flight
+        for a file of its own."""
+        writer = self.storage.staged_writer("files/users/alice/new.bin")
+        self.addCleanup(writer.abort)
+        writer.write(b"x" * MIN_PART_SIZE)
+
+        self.assertEqual(list(self.storage.iter_blobs("files")), [])
+
+    def test_purging_drops_a_staged_write_left_pending(self):
+        # Large enough for a backend that writes in parts to have begun.
+        writer = self.storage.staged_writer("files/users/alice/big.bin")
+        self.addCleanup(writer.abort)
+        writer.write(b"x" * MIN_PART_SIZE)
+        cutoff = datetime.now(UTC) + timedelta(minutes=1)
+
+        self.assertEqual(self.storage.purge_staged(cutoff), 1)
+        self.assertEqual(self.storage.purge_staged(cutoff), 0)
+
+    def test_purging_keeps_a_staged_write_begun_after_the_cutoff(self):
+        writer = self.storage.staged_writer("files/users/alice/big.bin")
+        self.addCleanup(writer.abort)
+        writer.write(b"x" * MIN_PART_SIZE)
+
+        purged = self.storage.purge_staged(datetime.now(UTC) - timedelta(hours=1))
+
+        self.assertEqual(purged, 0)
+        writer.commit()
+        self.assertEqual(self.storage.size("files/users/alice/big.bin"), MIN_PART_SIZE)
+
+    def test_purging_with_nothing_staged(self):
+        self.assertEqual(self.storage.purge_staged(datetime.now(UTC)), 0)
+
     def test_replace(self):
         self.save("files/users/alice/doc.txt", b"old")
 
@@ -350,6 +384,13 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
 
         self.assertEqual(_read(self.storage, "upload.bin"), b"0123456789ABCDEF")
 
+    def files_on_disk(self):
+        return sorted(
+            os.path.relpath(os.path.join(current, name), self.root)
+            for current, _dirs, names in os.walk(self.root)
+            for name in names
+        )
+
     def test_aborting_after_the_staged_file_vanished_is_safe(self):
         writer = self.storage.staged_writer("upload.bin")
         writer.write(b"partial")
@@ -359,29 +400,96 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
 
         writer.abort()
 
-        self.assertEqual(os.listdir(self.root), [])
+        self.assertEqual(self.files_on_disk(), [])
 
-    def test_replace_survives_a_save_that_dies_halfway(self):
+    def test_replace_survives_a_write_that_dies_halfway(self):
         """The name holds one complete version or the other, never a stump.
 
-        A disk truncates in place, so a save that dies after writing part of
-        the bytes would otherwise leave neither the old version nor the new.
+        A disk truncates in place, so a write that dies after part of the
+        bytes would otherwise leave neither the old version nor the new.
         """
         self.save("files/doc.txt", b"the original bytes")
+        real_write = os.write
+        writes = []
 
-        def write_then_die(name, content, max_length=None):
-            with open(self.storage.path(name), "wb") as handle:
-                handle.write(b"a new and lon")
-            raise OSError("connection reset mid-transfer")
+        def write_then_die(fd, data):
+            writes.append(data)
+            if len(writes) > 1:
+                raise OSError("connection reset mid-transfer")
+            return real_write(fd, data)
 
+        body = ContentFile(b"a new and longer body")
+        body.DEFAULT_CHUNK_SIZE = 4
         with (
-            mock.patch.object(self.storage, "save", write_then_die),
+            mock.patch("workspace.common.storage.local.os.write", write_then_die),
             self.assertRaises(OSError),
         ):
-            self.storage.replace("files/doc.txt", ContentFile(b"a new and longer body"))
+            self.storage.replace("files/doc.txt", body)
 
         self.assertEqual(_read(self.storage, "files/doc.txt"), b"the original bytes")
-        self.assertEqual(os.listdir(os.path.join(self.root, "files")), ["doc.txt"])
+        self.assertEqual(self.files_on_disk(), ["files/doc.txt"])
+
+    def test_a_staged_write_waits_outside_the_tree_it_targets(self):
+        """A folder renamed during an upload moves without the upload, which
+        can then still be aborted rather than stranded in the renamed folder."""
+        self.save("files/users/alice/Docs/old.txt", b"old")
+        writer = self.storage.staged_writer("files/users/alice/Docs/new.txt")
+        writer.write(b"new")
+
+        self.storage.move("files/users/alice/Docs", "files/users/alice/Archive")
+        writer.abort()
+
+        self.assertEqual(self.files_on_disk(), ["files/users/alice/Archive/old.txt"])
+
+    def test_a_staged_write_takes_the_configured_permissions(self):
+        storage = BlobStorage(location=self.root, file_permissions_mode=0o640)
+
+        storage.replace("files/doc.txt", ContentFile(b"bytes"))
+
+        self.assertEqual(os.stat(storage.path("files/doc.txt")).st_mode & 0o777, 0o640)
+
+    def test_a_commit_onto_another_filesystem_still_replaces_in_one_step(self):
+        """A volume mounted inside the storage root is out of a rename's
+        reach from the staging directory."""
+        self.save("files/doc.txt", b"old")
+        real_replace = os.replace
+        staging = os.path.join(self.root, ".staging")
+
+        def cross_device(source, destination):
+            if os.path.dirname(source) == staging:
+                raise OSError(errno.EXDEV, "Invalid cross-device link")
+            return real_replace(source, destination)
+
+        with mock.patch(
+            "workspace.common.storage.local.os.replace", side_effect=cross_device
+        ):
+            self.storage.replace("files/doc.txt", ContentFile(b"new"))
+
+        self.assertEqual(_read(self.storage, "files/doc.txt"), b"new")
+        self.assertEqual(self.files_on_disk(), ["files/doc.txt"])
+
+    def test_a_purged_staged_write_cannot_commit(self):
+        writer = self.storage.staged_writer("files/doc.txt")
+        writer.write(b"bytes")
+        self.storage.purge_staged(datetime.now(UTC) + timedelta(minutes=1))
+
+        with self.assertRaises(OSError):
+            writer.commit()
+        writer.abort()
+
+        self.assertEqual(self.files_on_disk(), [])
+
+    def test_purging_keeps_a_staged_write_still_receiving_bytes(self):
+        writer = self.storage.staged_writer("files/doc.txt")
+        self.addCleanup(writer.abort)
+        writer.write(b"early")
+        two_hours_ago = (datetime.now(UTC) - timedelta(hours=2)).timestamp()
+        os.utime(writer._temp_path, (two_hours_ago, two_hours_ago))
+        writer.write(b" and late")
+
+        self.assertEqual(
+            self.storage.purge_staged(datetime.now(UTC) - timedelta(hours=1)), 0
+        )
 
     def test_scan_lists_a_symlink_as_neither_directory_nor_file(self):
         self.storage.make_dir("files/users/alice")
@@ -404,6 +512,10 @@ class S3BlobStorageTests(S3TestMixin, BlobStorageContract, SimpleTestCase):
         return self.make_s3_storage(
             allow_overwrite=allow_overwrite, part_size=MIN_PART_SIZE
         )
+
+    @skipUnless(LIVE, "moto dates every multipart upload in 2010")
+    def test_purging_keeps_a_staged_write_begun_after_the_cutoff(self):
+        super().test_purging_keeps_a_staged_write_begun_after_the_cutoff()
 
 
 class S3BackendTests(S3TestMixin, SimpleTestCase):

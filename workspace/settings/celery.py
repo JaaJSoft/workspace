@@ -80,6 +80,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
     },
+    # Uploads a killed worker could neither finish nor abort.
+    "purge-staged-writes": {
+        "task": "files.purge_staged_writes",
+        "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
+    },
     "db-maintenance": {
         "task": "core.db_maintenance",
         # Mon-Sat at 3:00 AM: cheap pass only (optimize + WAL checkpoint).

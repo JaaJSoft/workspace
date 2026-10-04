@@ -33,6 +33,18 @@ class StaleContent(Exception):
         super().__init__("The file changed since it was loaded.")
 
 
+class Relocated(Exception):
+    """A write was refused because the file moved while its bytes were staged.
+
+    An upload staged under the path the file had when it began cannot follow
+    a rename or a move that committed meanwhile: that move deletes what is
+    left under the old path once it commits, bytes published there included.
+    """
+
+    def __init__(self):
+        super().__init__("The file was moved while it was being written.")
+
+
 class LockConflict(Exception):
     """A write was refused because somebody else holds the lock on the row.
 

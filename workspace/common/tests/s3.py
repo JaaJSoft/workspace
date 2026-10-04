@@ -6,10 +6,12 @@ S3-compatible server instead, which is what the live CI job does: moto agrees
 with S3 on the API, a real server is where the edge cases live.
 """
 
+import contextlib
 import os
 import uuid
 
 import boto3
+from botocore.exceptions import ClientError
 from django.conf import settings
 from django.test import override_settings
 from moto import mock_aws
@@ -69,6 +71,22 @@ class S3TestMixin:
             self.s3.abort_multipart_upload(
                 Bucket=self.bucket, Key=upload["Key"], UploadId=upload["UploadId"]
             )
+        # A test that turned versioning on leaves older versions behind, and a
+        # bucket holding any of them cannot be deleted.
+        versions = self.s3.get_paginator("list_object_versions")
+        with contextlib.suppress(ClientError):
+            for page in versions.paginate(Bucket=self.bucket):
+                kept = [*page.get("Versions", ()), *page.get("DeleteMarkers", ())]
+                if kept:
+                    self.s3.delete_objects(
+                        Bucket=self.bucket,
+                        Delete={
+                            "Objects": [
+                                {"Key": v["Key"], "VersionId": v["VersionId"]}
+                                for v in kept
+                            ]
+                        },
+                    )
         self.s3.delete_bucket(Bucket=self.bucket)
 
     def make_s3_storage(self, **options):

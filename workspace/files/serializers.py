@@ -19,7 +19,7 @@ from workspace.files.services.locking import (
     conflicting_lock,
 )
 
-from .models import File, FileComment
+from .models import File, FileComment, canonical_name
 
 
 class FileLocked(APIException):
@@ -385,7 +385,7 @@ class FileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "File and folder names must not contain a backslash."
             )
-        return value
+        return canonical_name(value)
 
     def validate(self, attrs):
         # A request knob, never a model attribute: pop it before the

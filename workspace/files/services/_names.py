@@ -12,7 +12,7 @@ from django.db import IntegrityError, transaction
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
-from ..models import File
+from ..models import File, canonical_name
 from ._storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
@@ -264,7 +264,7 @@ def available_node_name(owner, parent, name, node_type, *, avoiding=()):
     taken = set(sibling_nodes(owner, parent).values_list("name", flat=True))
     for other in avoiding:
         taken.update(sibling_nodes(owner, other).values_list("name", flat=True))
-    return unique_copy_name(name, node_type, taken)
+    return unique_copy_name(canonical_name(name), node_type, taken)
 
 
 def available_file_name(owner, parent, name, *, avoiding=()):

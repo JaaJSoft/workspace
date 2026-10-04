@@ -84,7 +84,7 @@ The layout is the same on both sides, so moving is a copy. With the app stopped 
 
 What changes on object storage:
 
-- Renaming or moving a folder copies each of its files inside the store (no bytes go through the app) and then deletes the originals, so it takes longer on a large folder than on a disk.
+- Renaming or moving a folder copies each of its files inside the store (no bytes go through the app) and then deletes the originals, so it takes longer on a large folder than on a disk. Saves to the files it moves wait until it is done - and on SQLite, which takes one writer at a time, every write does, so prefer PostgreSQL with object storage.
 - The periodic sync that picks up files dropped into `MEDIA_ROOT` by hand is not scheduled; the on-demand sync in the files view still runs.
 - The data volume still holds the SQLite database, if you use it, and the face detection model weights (`PHOTOS_MODEL_DIR`).
 

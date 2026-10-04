@@ -556,6 +556,33 @@ class S3BackendTests(S3TestMixin, SimpleTestCase):
         relocation.commit()
         self.assertEqual(self.keys(), ["files/Archive/a.txt"])
 
+    def test_a_source_rewritten_before_the_cleanup_stays(self):
+        """Once the move commits its source paths are free, and a new file can
+        land on one before the delete reaches the store."""
+        self.save("files/Docs/a.txt", b"a")
+        self.save("files/Docs/b.txt", b"b")
+        relocation = self.storage.relocate("files/Docs", "files/Archive")
+        self.s3.put_object(Bucket=self.bucket, Key="files/Docs/a.txt", Body=b"new")
+
+        relocation.commit()
+
+        self.assertEqual(
+            self.keys(),
+            ["files/Archive/a.txt", "files/Archive/b.txt", "files/Docs/a.txt"],
+        )
+        self.assertEqual(_read(self.storage, "files/Docs/a.txt"), b"new")
+        self.assertEqual(_read(self.storage, "files/Archive/a.txt"), b"a")
+
+    def test_a_moved_blob_rewritten_before_the_cleanup_stays(self):
+        self.save("files/a.txt", b"a")
+        relocation = self.storage.relocate("files/a.txt", "files/b.txt")
+        self.s3.put_object(Bucket=self.bucket, Key="files/a.txt", Body=b"new")
+
+        relocation.commit()
+
+        self.assertEqual(_read(self.storage, "files/a.txt"), b"new")
+        self.assertEqual(_read(self.storage, "files/b.txt"), b"a")
+
     def test_a_failed_relocation_removes_the_copies_it_made(self):
         self.save("files/Docs/a.txt", b"a")
         self.save("files/Docs/b.txt", b"b")

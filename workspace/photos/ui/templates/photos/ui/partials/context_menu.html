@@ -12,6 +12,10 @@ rows, offered while the user has face grouping on, and Hide, which never
 touches the file: it only takes it out of the viewer's own library. On the
 Hidden view the photo is out of albums and faces, so those rows give way to
 Unhide.
+
+A photo of a shared album the viewer cannot open in Files (albumScoped) has
+no file action and no place in Files: its menu is the viewer, the download
+the album allows (through the album), and the album rows.
 {% endcomment %}
 <ul class="menu menu-sm p-0">
   <li x-show="ctxMenu.actions === null">
@@ -28,7 +32,15 @@ Unhide.
       {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id !== 'download'" icon_expr="action.icon" icon_class_expr="action.id === 'toggle_favorite' && action.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="action.label" class_expr="action.css_class || ''" click="runCtxAction(action)" only %}
     </li>
   </template>
-  <template x-if="ctxMenu.actions !== null">
+  <template x-if="ctxMenu.actions !== null && ctxMenu.photo.albumScoped">
+    {% include "ui/partials/context_menu_item.html" with icon="eye" label="View" click="closeCtxMenu(); openPhoto(_tile(ctxMenu.photo.uuid))" only %}
+  </template>
+  <template
+    x-if="ctxMenu.actions !== null && ctxMenu.photo.albumScoped && ctxMenu.photo.downloadUrl"
+  >
+    {% include "ui/partials/context_menu_item.html" with icon="download" label="Download" href_expr="ctxMenu.photo.downloadUrl" download_expr="ctxMenu.photo.name" click="closeCtxMenu()" only %}
+  </template>
+  <template x-if="ctxMenu.actions !== null && ctxMenu.photo.filesUrl">
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
   </template>
   {% comment %}
@@ -36,16 +48,22 @@ Unhide.
     the albums the viewer may add to. The two others act on the album on
     screen, as its action registry allows (albumAllows).
   {% endcomment %}
-  <template x-if="ctxMenu.actions !== null && !hiddenView">
+  <template
+    x-if="ctxMenu.actions !== null && !hiddenView && !ctxMenu.photo.albumScoped"
+  >
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="book-plus" label="Add to album" click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
   </template>
   <template x-if="ctxMenu.actions !== null && albumAllows('set_cover')">
     {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && albumAllows('remove_items')">
+  <template
+    x-if="ctxMenu.actions !== null && albumAllows('remove_items') && ctxMenu.photo.removable"
+  >
     {% include "ui/partials/context_menu_item.html" with icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && !hiddenView">
+  <template
+    x-if="ctxMenu.actions !== null && !hiddenView && !ctxMenu.photo.albumScoped"
+  >
     {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hide from library" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}
   </template>
   <template x-if="ctxMenu.actions !== null && hiddenView">
@@ -53,12 +71,12 @@ Unhide.
   </template>
   {# Face rows: only the owner's photos have faces, so a photo of someone else's opens an empty dialog at worst. #}
   <template
-    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && ctxMenu.photo.mediaType !== 'video'"
+    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType !== 'video'"
   >
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this photo" click="openFacesDialog(ctxMenu.photo)" only %}
   </template>
   <template
-    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && ctxMenu.photo.mediaType === 'video'"
+    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType === 'video'"
   >
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this video" click="openFacesDialog(ctxMenu.photo)" only %}
   </template>

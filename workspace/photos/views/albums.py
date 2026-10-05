@@ -23,14 +23,23 @@ from workspace.common.uuids import (
 from ..actions import AlbumActionRegistry
 from ..queries import (
     ALL,
+    OWNER,
     album_files,
+    contributable_files,
+    direct_share_album_ids,
     get_album_role,
     library_files,
     reachable_album,
 )
 from ..serializers import AlbumSerializer, AlbumWriteSerializer
 from ..services.album_cards import album_cards, user_album_cards
-from ..services.albums import add_items, create_album, move_items, remove_items
+from ..services.albums import (
+    add_items,
+    create_album,
+    move_items,
+    removable,
+    remove_items,
+)
 
 # A selection spanning a few long trips; the limit only bounds one request.
 MAX_FILES = 2000
@@ -41,6 +50,7 @@ FIELD_ACTIONS = {
     "description": "edit_description",
     "sort_mode": "change_sort",
     "cover": "set_cover",
+    "allow_download": "share",
 }
 
 FILES_BODY = {
@@ -60,9 +70,13 @@ def _not_found():
     return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-def _allowed(action_id, user, album):
+def _allowed(action_id, user, album, role=None):
     return AlbumActionRegistry.is_action_available(
-        action_id, user, album, role=get_album_role(user, album)
+        action_id,
+        user,
+        album,
+        role=role or get_album_role(user, album),
+        direct=bool(direct_share_album_ids(user, [album])),
     )
 
 
@@ -80,10 +94,16 @@ def _parse_files(data, *, required=True):
         return _refused("files must be a non-empty list.")
 
 
-def _library_files(user, uuids):
+def _library_files(user, uuids, *, role=OWNER):
     """The photos *uuids* names in the caller's library, in that order, or
-    None when one of them is not a photo or video the caller can open."""
-    found = library_files(user, ALL).in_bulk(uuids)
+    None when one of them is not a photo or video the caller can add.
+
+    An owner may add anything they can open: what others may not open
+    stays theirs alone (see ``queries.visible_album_items``). An invited
+    member adds their own photos and their groups', the ones they can share.
+    """
+    pool = library_files(user, ALL) if role == OWNER else contributable_files(user)
+    found = pool.in_bulk(uuids)
     unique = list(dict.fromkeys(uuids))
     if len(found) != len(unique):
         return None
@@ -142,9 +162,10 @@ class AlbumDetailView(APIView):
     @extend_schema(
         summary="Update an album",
         description=(
-            "Rename it, change its description or its sort mode, or pick its "
+            "Rename it, change its description or its sort mode, pick its "
             "cover (`cover`: the uuid of one of its photos, or null to fall "
-            "back to the most recently added one)."
+            "back to the most recently added one), or say whether viewers may "
+            "download (`allow_download`)."
         ),
         request=AlbumWriteSerializer,
         responses=AlbumSerializer,
@@ -154,8 +175,9 @@ class AlbumDetailView(APIView):
         if album is None:
             return _not_found()
         data = request.data if isinstance(request.data, dict) else {}
+        role = get_album_role(request.user, album)
         for field, action_id in FIELD_ACTIONS.items():
-            if field in data and not _allowed(action_id, request.user, album):
+            if field in data and not _allowed(action_id, request.user, album, role):
                 return Response(status=status.HTTP_403_FORBIDDEN)
 
         serializer = AlbumWriteSerializer(album, data=data, partial=True)
@@ -212,12 +234,13 @@ class AlbumItemsView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return _not_found()
-        if not _allowed("add_items", request.user, album):
+        role = get_album_role(request.user, album)
+        if not _allowed("add_items", request.user, album, role):
             return Response(status=status.HTTP_403_FORBIDDEN)
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
             return uuids
-        files = _library_files(request.user, uuids)
+        files = _library_files(request.user, uuids, role=role)
         if files is None:
             return _refused("One or more files are not photos you can open.")
         added = add_items(album, files, added_by=request.user)
@@ -228,7 +251,11 @@ class AlbumItemsView(APIView):
 class AlbumItemsRemoveView(APIView):
     @extend_schema(
         summary="Remove photos from an album",
-        description="The files themselves stay where they are in Files.",
+        description=(
+            "The files themselves stay where they are in Files. A "
+            "contributor may only remove the photos they added: naming any "
+            "other refuses the whole request."
+        ),
         request={"application/json": FILES_BODY},
         responses={200: OpenApiResponse(response=OpenApiTypes.OBJECT)},
     )
@@ -236,11 +263,17 @@ class AlbumItemsRemoveView(APIView):
         album = reachable_album(request.user, uuid)
         if album is None:
             return _not_found()
-        if not _allowed("remove_items", request.user, album):
+        role = get_album_role(request.user, album)
+        if not _allowed("remove_items", request.user, album, role):
             return Response(status=status.HTTP_403_FORBIDDEN)
         uuids = _parse_files(request.data)
         if isinstance(uuids, Response):
             return uuids
+        present = set(
+            album.items.filter(file_id__in=uuids).values_list("file_id", flat=True)
+        )
+        if not present <= removable(album, present, user=request.user, role=role):
+            return Response(status=status.HTTP_403_FORBIDDEN)
         return Response({"removed": remove_items(album, uuids)})
 
 

@@ -1,0 +1,153 @@
+{% extends "files/ui/shared_base.html" %}
+{% load static %}
+{% comment %}
+  The page a public album link opens, for anyone with the link: the album's
+  grid without the app shell, and the viewer. The expired and password cards
+  are the file links' (files/ui/shared_base.html), pointed at the album's
+  verify endpoint.
+
+  #shared-album-content is the swap target of every navigation: a tile opens
+  the photo in place, the arrows go to the ones around it, the album name
+  goes back to the grid. Each URL carries the visitor's access token.
+{% endcomment %}
+{% block title %}{{ album.title|default:"Shared album" }} - Workspace{% endblock %}
+{% block module_class %}module-lime{% endblock %}
+{% block head_extra %}
+  {# Not base.html: what the viewers and the grid use is loaded here. #}
+  <script src="{% static 'ui/js/inline_alert.js' %}"></script>
+  <script src="{% static 'photos/ui/js/timeline_sentinel.js' %}"></script>
+{% endblock %}
+{% block content %}
+  {% comment %}
+    A swap whose answer lacks the target (the access token went stale, the
+    link expired or was revoked) reloads the page, which renders the real
+    gate instead of an empty card.
+  {% endcomment %}
+  <div
+    x-data="{
+      onArrowKey(event) {
+        if (event.target.closest('input, textarea, select, [contenteditable]')) return;
+        const id = { ArrowLeft: 'shared-prev', ArrowRight: 'shared-next' }[event.key];
+        const link = id && document.getElementById(id);
+        if (link) { event.preventDefault(); link.click(); }
+      },
+    }"
+    @ajax:missing="window.location.reload()"
+    @ajax:error="window.location.reload()"
+    @keydown.window="onArrowKey($event)"
+  >
+    {% partialdef shared-album-content inline %}
+      <div
+        id="shared-album-content"
+        class="card bg-base-100 shadow-lg overflow-hidden"
+        data-shared-album
+      >
+        <div class="bg-module text-module-content px-6 py-5">
+          <div class="flex items-center gap-3">
+            <div
+              class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0"
+            >
+              <i data-lucide="book-image" class="w-5 h-5"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h1 class="text-xl font-bold truncate">
+                {% if photo %}
+                  <a
+                    href="{{ album_url }}"
+                    x-target.push="shared-album-content"
+                    class="hover:underline"
+                  >{{ album.title }}</a>
+                {% else %}
+                  {{ album.title }}
+                {% endif %}
+              </h1>
+              <p class="text-sm opacity-80">
+                {{ count_label }}{% if date_range %} · {{ date_range }}{% endif %}
+                · shared by {{ album.owner.get_full_name|default:album.owner.username }}
+              </p>
+            </div>
+            {% if archive_url and not photo %}
+              <a
+                href="{{ archive_url }}"
+                class="btn btn-sm bg-white/20 border-0 text-inherit hover:bg-white/30 gap-1"
+                data-shared-archive
+              >
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span class="max-sm:hidden">Download all</span>
+              </a>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if photo %}
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-base-300">
+            <a
+              href="{{ album_url }}"
+              x-target.push="shared-album-content"
+              class="btn btn-ghost btn-sm btn-square"
+              title="Back to the album"
+              aria-label="Back to the album"
+            >
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </a>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium truncate">{{ photo.file.name }}</div>
+              <div class="text-xs text-base-content/60">{{ photo.position }} / {{ photo.total }}</div>
+            </div>
+            {% if photo.download_url %}
+              <a
+                href="{{ photo.download_url }}"
+                class="btn btn-ghost btn-sm gap-1"
+                data-shared-download
+              >
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span class="max-sm:hidden">Download</span>
+              </a>
+            {% endif %}
+          </div>
+          <div class="relative bg-base-200" data-shared-viewer>
+            {% if photo.viewer_html %}
+              {# The viewers size themselves with h-full: this card grows with its content, so the box needs a height. #}
+              <div class="h-[70vh]">{{ photo.viewer_html|safe }}</div>
+            {% else %}
+              <div class="p-12 text-center text-base-content/60">No preview for this file.</div>
+            {% endif %}
+            {% if photo.previous_url %}
+              <a
+                id="shared-prev"
+                href="{{ photo.previous_url }}"
+                x-target.push="shared-album-content"
+                class="btn btn-circle absolute left-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
+                title="Previous photo"
+                aria-label="Previous photo"
+              >
+                <i data-lucide="chevron-left" class="w-5 h-5"></i>
+              </a>
+            {% endif %}
+            {% if photo.next_url %}
+              <a
+                id="shared-next"
+                href="{{ photo.next_url }}"
+                x-target.push="shared-album-content"
+                class="btn btn-circle absolute right-3 inset-y-0 my-auto z-10 bg-base-100/80 hover:bg-base-100 border-base-300 shadow no-animation"
+                title="Next photo"
+                aria-label="Next photo"
+              >
+                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+              </a>
+            {% endif %}
+          </div>
+        {% else %}
+          {% if album.description %}
+            <p class="px-6 pt-4 text-sm text-base-content/70">{{ album.description|linebreaksbr }}</p>
+          {% endif %}
+          {% if entries %}
+            <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
+          {% else %}
+            <div class="p-12 text-center text-base-content/60">This album is empty.</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    {% endpartialdef %}
+  </div>
+{% endblock %}

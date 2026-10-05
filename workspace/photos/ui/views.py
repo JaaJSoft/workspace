@@ -4,7 +4,8 @@ from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
-from django.http import Http404, HttpResponseBadRequest
+from django.db.models import F
+from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import dateformat, timezone
@@ -14,26 +15,38 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
+from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.ui.viewers import ViewerRegistry, render_viewer_panel
+from workspace.notifications.services.notifications import mark_source_read
 from workspace.people.queries import reachable_person
 from workspace.photos.models import Album, Face, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
+    OWNER,
     SHARED,
     album_date_range,
     album_files,
+    album_members,
     face_progress,
+    get_album_role,
     has_shared_photos,
     hidden_folders,
     library_files,
     library_groups,
     library_tags,
+    link_files,
     media_type_counts,
     reachable_album,
     unanalyzed_count,
     user_face_clusters,
 )
-from workspace.photos.services.album_cards import album_cards, user_album_cards
+from workspace.photos.services.album_cards import (
+    album_cards,
+    own_album_cards,
+    shared_album_cards,
+)
+from workspace.photos.services.album_links import find_link, has_access, record_view
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
 from workspace.photos.services.face_review import (
@@ -61,12 +74,13 @@ from workspace.photos.services.timeline import (
     START,
     UNDATED,
     manual_page,
+    mark_album_tiles,
     mark_favorite_toggles,
     parse_cursor,
     parse_date_position,
     parse_manual_cursor,
     timeline_page,
-    with_album_positions,
+    with_album_fields,
     with_timeline_fields,
     year_counts,
 )
@@ -317,8 +331,8 @@ def _scope_tabs(user, scope, filter_params, defaults):
     ]
 
 
-def _page_context(request, page, page_url, view_params=None):
-    mark_favorite_toggles(page.photos, request.user)
+def _paging(page, page_url, view_params=None):
+    """The entries of *page* and the URL of the one after it, if any."""
     next_url = None
     if page.next_cursor:
         params = (view_params or {}) | {"cursor": page.next_cursor}
@@ -326,38 +340,62 @@ def _page_context(request, page, page_url, view_params=None):
     return {"entries": page.entries, "next_url": next_url}
 
 
+def _page_context(request, page, page_url, view_params=None):
+    mark_favorite_toggles(page.photos, request.user)
+    return _paging(page, page_url, view_params)
+
+
 def _timeline_page_context(request, files, position, tz, view_params):
     page = timeline_page(with_timeline_fields(files, request.user), position, tz)
     return _page_context(request, page, reverse("photos_ui:timeline"), view_params)
 
 
-def _album_page_context(request, album, files, cursor, tz):
-    """The first page of *album* when *cursor* is None, else the one after it.
+def _album_page(album, files, cursor, tz):
+    """The first page of *album*'s *files* when *cursor* is None, else the
+    one after it, in the album's sort mode.
 
     ValueError on a cursor that is not one of the album's sort mode.
     """
-    files = with_timeline_fields(files, request.user)
+    files = with_album_fields(files, album)
     if album.sort_mode == Album.SortMode.MANUAL:
         after = parse_manual_cursor(cursor) if cursor is not None else None
-        page = manual_page(with_album_positions(files, album), after)
-    else:
-        position = parse_cursor(cursor) if cursor is not None else START
-        page = timeline_page(files, position, tz)
+        return manual_page(files, after)
+    position = parse_cursor(cursor) if cursor is not None else START
+    return timeline_page(files, position, tz)
+
+
+def _album_page_context(request, album, role, files, cursor, tz):
+    """The page of *album* after *cursor* (the first for None), its tiles
+    marked for the viewer's *role* (``timeline.mark_album_tiles``).
+
+    ValueError on a cursor that is not one of the album's sort mode.
+    """
+    page = _album_page(album, with_timeline_fields(files, request.user), cursor, tz)
+    mark_album_tiles(page.photos, request.user, album, role)
     page_url = reverse("photos_ui:album_timeline", args=[album.uuid])
-    return _page_context(request, page, page_url) | {
-        "manual_order": album.sort_mode == Album.SortMode.MANUAL
+    return _paging(page, page_url) | {
+        "manual_order": album.sort_mode == Album.SortMode.MANUAL,
     }
 
 
 def _sidebar_albums(user, active_album=None):
-    return [
-        {
-            "card": card,
-            "url": reverse("photos_ui:album", args=[card.album.uuid]),
-            "active": active_album is not None and card.album.pk == active_album.pk,
-        }
-        for card in user_album_cards(user)
-    ]
+    """The sidebar's two album lists: the user's own, and the ones shared
+    with them."""
+
+    def items(cards):
+        return [
+            {
+                "card": card,
+                "url": reverse("photos_ui:album", args=[card.album.uuid]),
+                "active": active_album is not None and card.album.pk == active_album.pk,
+            }
+            for card in cards
+        ]
+
+    return {
+        "albums": items(own_album_cards(user)),
+        "shared_albums": items(shared_album_cards(user)),
+    }
 
 
 def _date_range_label(first, last, tz):
@@ -619,7 +657,7 @@ def index(request):
         ],
         "timeline_url": _url_with(scope_params | type_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
-        "albums": _sidebar_albums(request.user),
+        **_sidebar_albums(request.user),
         **_hidden_nav_context(request.user, active=hidden),
         **_faces_context(request.user),
         **_display_context(request.user),
@@ -656,13 +694,38 @@ def timeline(request):
     return render(request, "photos/ui/partials/timeline_page.html", context)
 
 
+# Members a shared album's header shows by their avatar; the rest are a count.
+HEADER_MEMBERS = 5
+
+
+def _album_sharing(album, role):
+    """Who an album page says the album is shared with, or None for an
+    album nobody else can open: its members' first avatars and their
+    count, and who shared it when the viewer was invited."""
+    if album.group_id is None and not album.shares.exists():
+        return None
+    members = album_members(album).order_by("username")
+    return {
+        "members": list(members[:HEADER_MEMBERS]),
+        "count": members.count(),
+        "shared_by": album.owner if role != OWNER and album.group_id is None else None,
+        "role": role,
+    }
+
+
 @login_required
 @ensure_csrf_cookie
 def album(request, uuid):
-    """An album, as the timeline shows it: by capture date or in its own order."""
+    """An album, as the timeline shows it: by capture date or in its own order.
+
+    Opening it reads the notifications about it: the invitation and the
+    photos added since.
+    """
     album = reachable_album(request.user, uuid)
     if album is None:
         raise Http404
+    role = get_album_role(request.user, album)
+    mark_source_read(request.user, album)
     tz = get_user_timezone(request.user)
     files = album_files(request.user, album)
     card = album_cards(request.user, [album])[0]
@@ -677,12 +740,15 @@ def album(request, uuid):
             "card": card,
             "manual": album.sort_mode == Album.SortMode.MANUAL,
             "date_range": _date_range_label(first, last, tz),
+            "sharing": _album_sharing(album, role),
         },
         "album_data": {
             "uuid": str(album.uuid),
             "title": album.title,
             "description": album.description,
             "sort_mode": album.sort_mode,
+            "role": role,
+            "allow_download": album.allow_download,
         },
         "tags": [
             {"tag": t, "url": _url_with({"tag": str(t.uuid)}), "active": False}
@@ -690,11 +756,11 @@ def album(request, uuid):
         ],
         "timeline_url": library_url,
         "favorites_url": _url_with({"favorites": "1"}),
-        "albums": _sidebar_albums(request.user, album),
+        **_sidebar_albums(request.user, album),
         **_hidden_nav_context(request.user),
         **_faces_context(request.user),
         **_display_context(request.user),
-        **_album_page_context(request, album, files, None, tz),
+        **_album_page_context(request, album, role, files, None, tz),
     }
     return _render_page(request, "photos/ui/index.html", context)
 
@@ -709,9 +775,231 @@ def album_timeline(request, uuid):
         context = _album_page_context(
             request,
             album,
+            get_album_role(request.user, album),
             album_files(request.user, album),
             request.GET.get("cursor", ""),
             get_user_timezone(request.user),
+        )
+    except ValueError:
+        return HttpResponseBadRequest("Invalid cursor.")
+    return render(request, "photos/ui/partials/timeline_page.html", context)
+
+
+def _viewer_html(request, file_obj, content_url):
+    """*file_obj* in the Files viewer that fits it, read-only, its bytes
+    fetched from *content_url*; empty when no viewer fits it."""
+    if not file_obj.is_viewable():
+        return ""
+    viewer_class = get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
+        file_obj.type, file_obj.name
+    )
+    if viewer_class is None:
+        return ""
+    viewer = viewer_class(file_obj)
+    viewer._user_can_edit = False
+    viewer._content_url = content_url
+    return viewer.render(request)
+
+
+@login_required
+def album_viewer(request, uuid, file_uuid):
+    """The Files viewer panel for a photo of an album the viewer cannot open
+    in Files: read-only, its bytes served through the album."""
+    album = reachable_album(request.user, uuid)
+    if album is None:
+        raise Http404
+    file_obj = album_files(request.user, album).filter(uuid=file_uuid).first()
+    if file_obj is None:
+        raise Http404
+    html = _viewer_html(
+        request,
+        file_obj,
+        reverse("photo-album-file-content", args=[album.uuid, file_obj.uuid]),
+    )
+    if not html:
+        return HttpResponse(
+            render_viewer_panel(
+                '<div class="p-8 text-center text-error">No preview for this file</div>'
+            ),
+            status=400,
+        )
+    return HttpResponse(render_viewer_panel(html))
+
+
+def _link_url(name, link, access_token, *args, **params):
+    """The URL *name* for *link*, carrying the visitor's access token."""
+    if access_token:
+        params["access_token"] = access_token
+    url = reverse(name, args=[link.token, *args])
+    return f"{url}?{urlencode(params)}" if params else url
+
+
+def _shared_tiles(link, access_token, photos):
+    """Point each photo of a linked album's page at its thumbnail and at the
+    page that shows it, both through the link."""
+    for photo in photos:
+        photo.shared_thumbnail_url = _link_url(
+            "photo-album-link-thumbnail", link, access_token, photo.uuid
+        )
+        photo.shared_view_url = _link_url(
+            "photos_ui:shared_album", link, access_token, photo=photo.uuid
+        )
+
+
+def _album_tz(album):
+    """The time zone a linked album's days are cut in: its owner's, since a
+    visitor has none."""
+    return get_user_timezone(album.owner)
+
+
+def _shared_page_context(link, access_token, cursor):
+    """The page of the linked album after *cursor* (the first for None).
+
+    ValueError on a malformed cursor.
+    """
+    album = link.album
+    files = link_files(album).select_related("media_item", "media_info")
+    page = _album_page(album, files, cursor, _album_tz(album))
+    _shared_tiles(link, access_token, page.photos)
+    page_url = reverse("photos_ui:shared_album_timeline", args=[link.token])
+    params = {"access_token": access_token} if access_token else {}
+    return _paging(page, page_url, params) | {
+        "tile_template": "photos/ui/partials/shared_tile.html",
+    }
+
+
+def _shared_neighbours(link, access_token, files, file_obj):
+    """Where the photos around *file_obj* are, in the album's order, as
+    ``(previous_url, next_url, position, total)``; the URLs are empty at
+    either end."""
+    album = link.album
+    if album.sort_mode == Album.SortMode.MANUAL:
+        ordered = with_album_fields(files, album).order_by("album_position", "uuid")
+    else:
+        ordered = files.order_by(
+            F("media_item__taken_at").desc(nulls_last=True), "-created_at", "-uuid"
+        )
+    uuids = list(ordered.values_list("uuid", flat=True))
+    index = uuids.index(file_obj.uuid)
+
+    def url(i):
+        if 0 <= i < len(uuids):
+            return _link_url(
+                "photos_ui:shared_album", link, access_token, photo=uuids[i]
+            )
+        return ""
+
+    return url(index - 1), url(index + 1), index + 1, len(uuids)
+
+
+def _shared_photo_context(request, link, access_token, files, file_obj):
+    previous_url, next_url, position, total = _shared_neighbours(
+        link, access_token, files, file_obj
+    )
+    download_url = ""
+    if link.allow_download:
+        download_url = _link_url(
+            "photo-album-link-download", link, access_token, file_obj.uuid
+        )
+    content_url = _link_url(
+        "photo-album-link-content", link, access_token, file_obj.uuid
+    )
+    return {
+        "file": file_obj,
+        "viewer_html": _viewer_html(request, file_obj, content_url),
+        "download_url": download_url,
+        "previous_url": previous_url,
+        "next_url": next_url,
+        "position": position,
+        "total": total,
+    }
+
+
+@ensure_csrf_cookie
+def shared_album(request, token):
+    """The page a public album link opens, without an account.
+
+    The grid of the album, or with ``?photo=`` one of its photos in the
+    viewer, between the ones before and after it. Going from one to the
+    other swaps ``#shared-album-content`` alone.
+    """
+    link = find_link(token)
+    if link is None:
+        raise Http404
+    if link.is_expired:
+        return render(request, "photos/ui/shared_album.html", {"expired": True})
+    access_token = request.GET.get("access_token", "")
+    if not has_access(link, access_token):
+        return render(
+            request,
+            "photos/ui/shared_album.html",
+            {
+                "needs_password": True,
+                "share_token": token,
+                "verify_url": reverse("photo-album-link-verify", args=[token]),
+                "page_url": reverse("photos_ui:shared_album", args=[token]),
+            },
+        )
+
+    album = link.album
+    files = link_files(album)
+    first, last = album_date_range(files)
+    context = {
+        "link": link,
+        "album": album,
+        "access_token": access_token,
+        "count_label": _count_label(media_type_counts(files), None),
+        "date_range": _date_range_label(first, last, _album_tz(album)),
+        "album_url": _link_url("photos_ui:shared_album", link, access_token),
+        "archive_url": (
+            _link_url("photo-album-link-archive", link, access_token)
+            if link.allow_download
+            else ""
+        ),
+    }
+    if request.GET.get("photo"):
+        photo_uuid = parse_uuid_or_none(request.GET["photo"])
+        file_obj = None
+        if photo_uuid is not None:
+            file_obj = (
+                files.select_related("media_item").filter(uuid=photo_uuid).first()
+            )
+        if file_obj is None:
+            raise Http404
+        context["photo"] = _shared_photo_context(
+            request, link, access_token, files, file_obj
+        )
+    else:
+        context.update(_shared_page_context(link, access_token, None))
+
+    if request.headers.get("X-Alpine-Request"):
+        response = render(
+            request, "photos/ui/shared_album.html#shared-album-content", context
+        )
+        patch_vary_headers(response, ["X-Alpine-Request"])
+        patch_cache_control(response, private=True, no_store=True)
+        return response
+    record_view(link)
+    response = render(request, "photos/ui/shared_album.html", context)
+    patch_vary_headers(response, ["X-Alpine-Request"])
+    if access_token:
+        # Every link on the page carries the access token: not for any cache.
+        patch_cache_control(response, private=True, no_store=True)
+    return response
+
+
+def shared_album_timeline(request, token):
+    """The page of a linked album after ``?cursor=``, appended as the
+    visitor scrolls."""
+    link = find_link(token)
+    if link is None or link.is_expired:
+        raise Http404
+    access_token = request.GET.get("access_token", "")
+    if not has_access(link, access_token):
+        raise Http404
+    try:
+        context = _shared_page_context(
+            link, access_token, request.GET.get("cursor", "")
         )
     except ValueError:
         return HttpResponseBadRequest("Invalid cursor.")
@@ -778,7 +1066,7 @@ def _people_shell_context(user):
         ],
         "timeline_url": _url_with({}),
         "favorites_url": _url_with({"favorites": "1"}),
-        "albums": _sidebar_albums(user),
+        **_sidebar_albums(user),
         "review_url": reverse("photos_ui:people_review"),
         **_hidden_nav_context(user),
         **_faces_context(user),

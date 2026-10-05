@@ -4,7 +4,10 @@
   registry decides, see albumMenuActions in photos.js). The rest of the
   header row (size slider) is index.html's.
 
-  Context: album (card, manual, date_range), count_label.
+  Context: album (card, manual, date_range, sharing), count_label. sharing
+  (ui.views._album_sharing) is None for an album nobody else can open;
+  otherwise the line under the title shows its members, and who shared it
+  with a viewer who was invited.
 {% endcomment %}
 {% comment %}
   Top-aligned, not centered: on a phone the metadata wraps and the
@@ -34,6 +37,18 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square shrink-0"
+        title="Share album"
+        aria-label="Share album"
+        x-show="albumAllows('share')"
+        x-cloak
+        @click="openAlbumShare()"
+        data-album-share
+      >
+        <i data-lucide="share-2" class="w-4 h-4"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost btn-xs btn-square shrink-0"
         title="Album actions"
         aria-label="Album actions"
         aria-haspopup="menu"
@@ -57,6 +72,25 @@
         {% endif %}
       </span>
     </div>
+    {% if album.sharing %}
+      <div
+        class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-sm text-base-content/60"
+        data-album-sharing
+      >
+        <span class="flex -space-x-1">
+          {% for member in album.sharing.members %}
+            <user-avatar user-id="{{ member.pk }}" username="{{ member.username }}" size="xs" card></user-avatar>
+          {% endfor %}
+        </span>
+        <span class="whitespace-nowrap">
+          {{ album.sharing.count }} member{{ album.sharing.count|pluralize }}
+          {% if album.sharing.shared_by %}· Shared by {{ album.sharing.shared_by.username }}{% endif %}
+        </span>
+        {% if album.sharing.role != "owner" %}
+          <span class="badge badge-sm badge-ghost capitalize" data-album-role>{{ album.sharing.role }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
     {% if album.card.album.description %}
       <p class="text-sm text-base-content/70 mt-0.5 line-clamp-2">{{ album.card.album.description|linebreaksbr }}</p>
     {% endif %}

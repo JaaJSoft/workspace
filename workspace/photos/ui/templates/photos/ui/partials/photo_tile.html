@@ -13,6 +13,14 @@
   Tiles drag only in an album sorted by hand (manual_order), onto one
   another; the handlers ignore every other drag.
 
+  On an album page a photo the viewer cannot open in Files carries
+  album_urls (see timeline.mark_album_tiles): it is read through the album,
+  its thumbnail, the viewer panel (data-viewer-url), its bytes
+  (data-content-url) and, when the album lets the viewer download, the
+  original (data-download-url, empty otherwise). It has no place in Files
+  to open. data-removable says whether the viewer may take a photo out of
+  the album on screen.
+
   isolate makes the tile its own stacking context: the overlays' z-10 then
   ranks them within the tile only, never against the sticky header (z-10
   too), which they would otherwise paint over while scrolling under it.
@@ -34,7 +42,9 @@
   data-media-type="{{ file.media_item.media_type }}"
   data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
   data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"
-  data-files-url="{{ file|files_url }}"
+  data-files-url="{% if not file.album_urls %}{{ file|files_url }}{% endif %}"
+  {% if file.album_urls %} data-album-scoped="1" data-viewer-url="{{ file.album_urls.viewer }}" data-content-url="{{ file.album_urls.content }}" data-download-url="{{ file.album_urls.download }}" {% endif %}
+  {% if file.album_uuid %} data-removable="{{ file.removable|yesno:'1,0' }}" {% endif %}
   data-selected="0"
   @contextmenu.prevent="openCtxMenu($event, $el)"
   @touchstart.passive="startLongPress($el)"
@@ -58,7 +68,7 @@
   >
     {% if file.has_thumbnail %}
       <img
-        src="{{ file|thumbnail_url }}"
+        src="{% if file.album_urls %}{{ file.album_urls.thumbnail }}{% else %}{{ file|thumbnail_url }}{% endif %}"
         alt="{{ file.name }}"
         class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
         loading="lazy"

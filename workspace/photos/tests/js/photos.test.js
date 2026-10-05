@@ -23,6 +23,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       'workspace/photos/ui/static/photos/ui/js/faces.js',
       'workspace/photos/ui/static/photos/ui/js/import.js',
       'workspace/photos/ui/static/photos/ui/js/hidden.js',
+      'workspace/photos/ui/static/photos/ui/js/timeline_sentinel.js',
       'workspace/photos/ui/static/photos/ui/js/photos.js',
     ],
     {
@@ -703,6 +704,7 @@ test('removing from the album takes the tiles off the page', async () => {
   const day = { querySelector: () => null, remove() { this.removed = true; } };
   const page = grid(['a', 'b'], { uuid: 'al1' });
   for (const t of Object.values(page.tiles)) {
+    t.dataset.removable = '1';
     t.closest = () => day;
     t.remove = () => { t.removed = true; };
   }
@@ -1634,4 +1636,182 @@ test('hiding every photo of a month takes its header off with it', async () => {
   await app.setPhotosHidden(['a', 'b'], true);
 
   assert.deepEqual(page.headers(), ['2026-08']);
+});
+
+// ── Shared albums ───────────────────────────────────
+
+test('a photo only the album serves gets its menu without asking Files', () => {
+  const { fileActions, calls } = fetchActionsReturning({});
+  const app = load({ fileActions }).ctx.photosApp();
+
+  app.openCtxMenu({ clientX: 10, clientY: 10 }, tile({
+    albumScoped: '1', removable: '0', filesUrl: '', downloadUrl: '/api/v1/photos/albums/al1/files/u1/download',
+  }));
+
+  assert.deepEqual(calls, []);
+  assert.deepEqual(Array.from(app.ctxMenu.actions), []);
+  assert.equal(app.ctxMenu.photo.albumScoped, true);
+  assert.equal(app.ctxMenu.photo.removable, false);
+  assert.equal(app.ctxMenu.photo.downloadUrl, '/api/v1/photos/albums/al1/files/u1/download');
+});
+
+test('the selection knows what an album-scoped photo rules out', () => {
+  const page = grid(['a', 'b'], { uuid: 'al1' });
+  page.tiles.a.dataset.albumScoped = '1';
+  page.tiles.a.dataset.removable = '0';
+  page.tiles.b.dataset.removable = '1';
+  const app = load({ document: page.document }).ctx.photosApp();
+  app.albumUuid = 'al1';
+  app.albumActions = ['remove_items', 'download'];
+
+  app.toggleTileSelection(page.tiles.b, { shiftKey: false });
+  assert.equal(app.selectionAlbumScoped(), false);
+  assert.equal(app.selectionRemovable(), true);
+  assert.equal(app.selectionDownloadable(), true);
+
+  app.toggleTileSelection(page.tiles.a, { shiftKey: false });
+  assert.equal(app.selectionAlbumScoped(), true);
+  assert.equal(app.selectionRemovable(), false);
+});
+
+test('the files registry is not asked about album-scoped photos', async () => {
+  const page = grid(['a', 'b']);
+  page.tiles.a.dataset.albumScoped = '1';
+  const { fileActions, calls } = fetchActionsReturning({ b: [BULK('download')] });
+  const app = load({ document: page.document, fileActions }).ctx.photosApp();
+  app.selection = ['a', 'b'];
+
+  await app._loadSelectionActions();
+
+  assert.deepEqual(calls, [['b']]);
+  assert.deepEqual(Array.from(app.selectionActions), []);
+});
+
+test('removing refuses a selection holding a photo the viewer may not remove', async () => {
+  const requests = [];
+  const page = grid(['a'], { uuid: 'al1' });
+  page.tiles.a.dataset.removable = '0';
+  const app = load({ document: page.document, fetch: jsonFetch({}, requests) }).ctx.photosApp();
+  app.albumUuid = 'al1';
+  app.albumActions = ['remove_items'];
+
+  await app.removeFromAlbum(['a']);
+
+  assert.equal(requests.length, 0);
+});
+
+test('on an album the selection downloads through the album', async () => {
+  const saved = [];
+  const requests = [];
+  const page = grid(['a', 'b'], { uuid: 'al1' });
+  const anchor = { click() { saved.push(this.download); }, remove() {} };
+  const app = load({
+    document: { ...page.document, createElement: () => anchor, body: { appendChild() {} } },
+    getCSRFToken: () => 't',
+    URL: { createObjectURL: () => 'blob:x', revokeObjectURL() {} },
+    fetch: (url, opts) => {
+      requests.push([opts.method, url, JSON.parse(opts.body)]);
+      return Promise.resolve({ ok: true, blob: () => Promise.resolve('zip') });
+    },
+    AppAlert: { error() {} },
+  }).ctx.photosApp();
+  app.albumUuid = 'al1';
+  app.albumActions = ['download'];
+  app.selectAll();
+
+  await app.downloadSelection();
+
+  assert.deepEqual(requests, [['POST', '/api/v1/photos/albums/al1/download', { files: ['a', 'b'] }]]);
+  assert.deepEqual(saved, ['photos.zip']);
+  assert.equal(app.selectionBusy, false);
+});
+
+test('a failed album download says so', async () => {
+  const alerts = [];
+  const page = grid(['a'], { uuid: 'al1' });
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: () => Promise.resolve({ ok: false, status: 403 }),
+    AppAlert: { error: (m) => alerts.push(m) },
+  }).ctx.photosApp();
+  app.albumUuid = 'al1';
+  app.albumActions = ['download'];
+  app.selectAll();
+
+  await app.downloadSelection();
+
+  assert.deepEqual(alerts, ['Failed to download the photos']);
+});
+
+test('the share action opens the album share modal', () => {
+  const page = grid([], { uuid: 'al1', title: 'Trip' });
+  const { ctx, dispatched } = load({ document: page.document });
+  const app = ctx.photosApp();
+
+  app.openAlbumShare();
+  assert.equal(dispatched.length, 0);
+
+  app.albumUuid = 'al1';
+  app.albumActions = ['share'];
+  app.runAlbumAction({ id: 'share' });
+
+  assert.equal(dispatched[0].type, 'open-album-share');
+  assert.deepEqual({ ...dispatched[0].detail }, { uuid: 'al1', title: 'Trip' });
+});
+
+test('leaving asks first, then leaves for the timeline', async () => {
+  const requests = [];
+  const location = { href: '/photos/albums/al1' };
+  const page = grid([], { uuid: 'al1', title: 'Trip' });
+  let answer = false;
+  const app = load({
+    document: page.document,
+    getCSRFToken: () => 't',
+    fetch: jsonFetch({ 'POST /api/v1/photos/albums/al1/leave': null }, requests),
+    AppDialog: { confirm: () => Promise.resolve(answer) },
+    AppAlert: { error() {} },
+    location,
+  }).ctx.photosApp();
+
+  await app.runAlbumAction({ id: 'leave' });
+  assert.equal(requests.length, 0);
+
+  answer = true;
+  await app.runAlbumAction({ id: 'leave' });
+  assert.deepEqual(requests.map((r) => [r[0], r[1]]), [['POST', '/api/v1/photos/albums/al1/leave']]);
+  assert.equal(location.href, '/photos');
+});
+
+test('downloading the album follows its archive link', async () => {
+  const clicked = [];
+  const page = grid([], { uuid: 'al1', title: 'Trip' });
+  const anchor = { click() { clicked.push(this.href); }, remove() {} };
+  const app = load({
+    document: { ...page.document, createElement: () => anchor, body: { appendChild() {} } },
+  }).ctx.photosApp();
+
+  await app.runAlbumAction({ id: 'download' });
+
+  assert.deepEqual(clicked, ['/api/v1/photos/albums/al1/download']);
+});
+
+test('a hover preview of an album-scoped video reads through the album', () => {
+  const timers = [];
+  const appended = [];
+  const video = { play: () => Promise.resolve(), pause() {}, removeAttribute() {}, load() {}, remove() {}, dataset: {}, setAttribute() {} };
+  const app = load({
+    setTimeout: (fn) => { timers.push(fn); return 1; },
+    clearTimeout() {},
+    matchMedia: () => ({ matches: false }),
+    document: { getElementById: () => null, querySelector: () => null, createElement: () => video },
+  }).ctx.photosApp();
+  app.photoPrefs = { video_hover_preview: true };
+  const t = tile({ contentUrl: '/api/v1/photos/albums/al1/files/u1/content' });
+  t.querySelector = () => ({ appendChild: (el) => appended.push(el) });
+
+  app.startHoverPreview(t);
+  timers[0]();
+
+  assert.equal(video.src, '/api/v1/photos/albums/al1/files/u1/content');
 });

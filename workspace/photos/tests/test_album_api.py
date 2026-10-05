@@ -8,6 +8,7 @@ from django.test import TestCase
 from workspace.files.models import FileShare
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album, AlbumItem
+from workspace.photos.services.album_sharing import share_album
 from workspace.photos.services.albums import create_album
 
 from .images import make_photo
@@ -314,8 +315,20 @@ class AlbumActionsApiTests(AlbumApiTestCase):
                 "add_items",
                 "remove_items",
                 "set_cover",
+                "share",
+                "download",
                 "delete",
             ],
+        )
+
+    def test_a_member_by_name_is_offered_to_leave(self):
+        album = create_album(self.bob, "Bob's")
+        share_album(album, role="viewer", acting_user=self.bob, user=self.user)
+
+        data = self._actions([str(album.uuid)]).json()
+
+        self.assertEqual(
+            [a["id"] for a in data[str(album.uuid)]], ["download", "leave"]
         )
 
     def test_reorder_and_the_sort_label_follow_the_sort_mode(self):

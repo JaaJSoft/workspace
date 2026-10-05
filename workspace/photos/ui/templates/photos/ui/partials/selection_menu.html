@@ -10,9 +10,9 @@ The file rows wait for the registry's answer about every selected photo
   <li class="menu-title py-1">
     <span x-text="countLabel(selection.length) + ' selected'"></span>
   </li>
-  {% include "ui/partials/context_menu_item.html" with show="!hiddenView" icon="book-plus" label="Add to album" click="closeSelectionMenu(); openAlbumPicker(selection)" only %}
-  {% include "ui/partials/context_menu_item.html" with show="albumAllows('remove_items')" icon="image-minus" label="Remove from album" click="closeSelectionMenu(); removeFromAlbum(selection)" only %}
-  {% include "ui/partials/context_menu_item.html" with show="!hiddenView" icon="eye-off" label="Hide from library" click="setPhotosHidden(selection, true)" only %}
+  {% include "ui/partials/context_menu_item.html" with show="!hiddenView && !selectionAlbumScoped()" icon="book-plus" label="Add to album" click="closeSelectionMenu(); openAlbumPicker(selection)" only %}
+  {% include "ui/partials/context_menu_item.html" with show="selectionRemovable()" icon="image-minus" label="Remove from album" click="closeSelectionMenu(); removeFromAlbum(selection)" only %}
+  {% include "ui/partials/context_menu_item.html" with show="!hiddenView && !selectionAlbumScoped()" icon="eye-off" label="Hide from library" click="setPhotosHidden(selection, true)" only %}
   {% include "ui/partials/context_menu_item.html" with show="hiddenView" icon="eye" label="Unhide" click="setPhotosHidden(selection, false)" only %}
   <li x-show="selectionActions === null">
     <span class="gap-3 rounded pointer-events-none">
@@ -21,7 +21,7 @@ The file rows wait for the registry's answer about every selected photo
     </span>
   </li>
   {% include "ui/partials/context_menu_item.html" with show="selectionAllows('toggle_favorite')" li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="star" icon_alt="star-off" icon_toggle="selectionFavoriteAdds()" label_expr="selectionFavoriteAdds() ? 'Add to favorites' : 'Remove from favorites'" click="favoriteSelection()" only %}
-  {% include "ui/partials/context_menu_item.html" with show="selectionAllows('download')" icon="download" label="Download as ZIP" click="downloadSelection()" only %}
+  {% include "ui/partials/context_menu_item.html" with show="selectionDownloadable()" icon="download" label="Download as ZIP" click="downloadSelection()" only %}
   <template x-if="selectionMenu.open && currentCluster()">
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="user-x" label="Not this person" click="rejectSelectionFromCluster()" only %}
   </template>

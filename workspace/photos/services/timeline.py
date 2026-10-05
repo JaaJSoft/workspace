@@ -36,6 +36,7 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import ExtractYear
+from django.urls import reverse
 from django.utils import timezone
 
 from workspace.files.actions import ActionRegistry
@@ -236,17 +237,59 @@ def timeline_page(files_qs, position, tz, *, page_size=None):
     )
 
 
-def mark_favorite_toggles(photos, user):
+def mark_favorite_toggles(photos, user, permissions=None):
     """Set ``can_favorite`` on each photo, as the files action registry decides.
 
     The tile's star is a file action like any other; asking the registry keeps
     it from offering what the favorite endpoint would refuse. Permissions are
-    read in one pass for the whole page.
+    read in one pass for the whole page, unless the caller already has them.
     """
-    permissions = FileService.get_permissions_bulk(user, photos)
+    if permissions is None:
+        permissions = FileService.get_permissions_bulk(user, photos)
     for photo in photos:
         photo.can_favorite = ActionRegistry.is_action_available(
             "toggle_favorite", user, photo, permission=permissions[photo.pk]
+        )
+
+
+def _album_urls(album, photo, download):
+    """Where a tile reads a photo of *album* through the album: its
+    thumbnail, the viewer panel, its bytes, and the download, empty when
+    *download* is False."""
+    args = [album.uuid, photo.uuid]
+    return {
+        "thumbnail": reverse("photo-album-file-thumbnail", args=args),
+        "viewer": reverse("photos_ui:album_viewer", args=args),
+        "content": reverse("photo-album-file-content", args=args),
+        "download": reverse("photo-album-file-download", args=args) if download else "",
+    }
+
+
+def mark_album_tiles(photos, user, album, role):
+    """Set what an album tile needs on each photo of a page of *album*.
+
+    ``album_urls``: the viewer cannot open the file in Files, so the tile
+    reads it through the album's endpoints (``_album_urls``) and offers no
+    file action; None otherwise.
+    ``removable``: *role* lets the viewer take it out of the album (any item
+    for a manager or an owner, the ones they added for a contributor). The
+    favorite star is set as on the timeline, from the same permissions.
+    """
+    from workspace.photos.actions import AlbumActionRegistry
+    from workspace.photos.queries import CONTRIBUTOR, MANAGER, OWNER
+
+    permissions = FileService.get_permissions_bulk(user, photos)
+    mark_favorite_toggles(photos, user, permissions)
+    download = AlbumActionRegistry.is_action_available(
+        "download", user, album, role=role
+    )
+    for photo in photos:
+        photo.album_uuid = album.uuid
+        photo.album_urls = None
+        if permissions[photo.pk] is None:
+            photo.album_urls = _album_urls(album, photo, download)
+        photo.removable = role in (OWNER, MANAGER) or (
+            role == CONTRIBUTOR and photo.album_added_by_id == user.pk
         )
 
 
@@ -303,14 +346,13 @@ def year_counts(files_qs, tz):
     return counts
 
 
-def with_album_positions(files_qs, album):
-    """Annotate each file of *album* with ``album_position``, its manual rank."""
+def with_album_fields(files_qs, album):
+    """Annotate each file of *album* with ``album_position``, its manual
+    rank, and ``album_added_by_id``, who added it."""
+    item = AlbumItem.objects.filter(album=album, file_id=OuterRef("pk"))
     return files_qs.annotate(
-        album_position=Subquery(
-            AlbumItem.objects.filter(album=album, file_id=OuterRef("pk")).values(
-                "position"
-            )[:1]
-        )
+        album_position=Subquery(item.values("position")[:1]),
+        album_added_by_id=Subquery(item.values("added_by")[:1]),
     )
 
 
@@ -326,7 +368,7 @@ def parse_manual_cursor(raw):
 def manual_page(files_qs, after=None, *, page_size=None):
     """The page of *files_qs* in album order, starting after *after*.
 
-    *files_qs* carries ``album_position`` (``with_album_positions``) and the
+    *files_qs* carries ``album_position`` (``with_album_fields``) and the
     tile fields. *after* is a decoded cursor, None for the first page. Ties
     on a position, left by two concurrent adds, break on the file's uuid.
     """

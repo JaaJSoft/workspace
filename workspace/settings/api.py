@@ -184,6 +184,18 @@ SPECTACULAR_SETTINGS = {
             "description": "Albums gathering photos and videos from the library.",
         },
         {
+            "name": "Photos - Album files",
+            "description": "An album's photos and videos, served to its members through the album.",
+        },
+        {
+            "name": "Photos - Album links",
+            "description": "Public album links, opened without an account: the token is the credential.",
+        },
+        {
+            "name": "Photos - Album sharing",
+            "description": "Album members, their roles, leaving an album, and its public links.",
+        },
+        {
             "name": "Photos - Faces",
             "description": "Face grouping: the people found in your photos, and their corrections.",
         },

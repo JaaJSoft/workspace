@@ -9,10 +9,12 @@ default, the user's personal files), ``SHARED`` (files other people shared
 with the user, their groups or their projects), ``ALL`` (every file the user
 can open), or a ``Group`` instance for that group's folder alone.
 
-Albums are a second way in, never a wider one: an album lists its items that
-the viewer can already open (``ALL``), so an item whose file went to the
-trash, was quarantined or stopped being shared with the viewer drops out of
-the album instead of leaking through it.
+Albums are a way in of their own. Their members (the owner, and whoever a
+share reaches) see the items each contributor vouches for, the files the
+contributor could share in Files anyway, plus any item they can open
+themselves. An item whose file went to the trash, was quarantined, or that
+nobody in reach may pass on drops out of the album instead of leaking
+through it. Album-scoped endpoints serve those files, never ``FileService``.
 
 Faces and their clusters are the user's own and only ever in their personal
 photos and videos (see services/face_analysis.py); the helpers at the end
@@ -23,6 +25,7 @@ of every helper here, albums and faces included, unless one is asked for it
 with ``hidden=True``: the Hidden view is the only way back to it.
 """
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db.models import (
     Count,
@@ -44,6 +47,7 @@ from workspace.files.services.scanning.policy import exclude_blocked
 from workspace.photos.models import (
     Album,
     AlbumItem,
+    AlbumShare,
     Face,
     FaceCluster,
     HiddenFile,
@@ -51,14 +55,22 @@ from workspace.photos.models import (
 )
 from workspace.photos.services.analysis import library_candidates
 from workspace.photos.services.face_preferences import faces_enabled
+from workspace.projects.models import Project
+from workspace.projects.queries import project_users
+
+User = get_user_model()
 
 MINE = "mine"
 SHARED = "shared"
 ALL = "all"
 
-# The one album role until albums can be shared: whoever may open an album
-# may do everything to it. Sharing adds roles below it.
+# Album roles, lowest first. The owner of a personal album, and every member
+# of a group album's group, hold OWNER; shares grant the three others.
+VIEWER = AlbumShare.Role.VIEWER.value
+CONTRIBUTOR = AlbumShare.Role.CONTRIBUTOR.value
+MANAGER = AlbumShare.Role.MANAGER.value
 OWNER = "owner"
+ROLE_RANK = {VIEWER: 0, CONTRIBUTOR: 1, MANAGER: 2, OWNER: 3}
 
 
 def _media(files):
@@ -228,36 +240,89 @@ def media_type_counts(files):
     )
 
 
+def _own_albums_q(user):
+    """The albums *user* holds without being invited: their personal ones
+    and their groups'."""
+    return Q(owner=user, group__isnull=True) | Q(group__in=user.groups.values("pk"))
+
+
 def user_albums(user):
-    """The albums *user* can open: their personal ones and their groups'."""
+    """The albums *user* can open: their own, their groups', and those
+    shared with them, their groups or their projects."""
     return Album.objects.filter(
-        Q(owner=user, group__isnull=True) | Q(group__in=user.groups.values("pk"))
+        _own_albums_q(user)
+        | Q(pk__in=AlbumShare.objects.reaching(user).values("album_id"))
     )
 
 
+def own_albums(user):
+    """The albums *user* holds: their personal ones and their groups'."""
+    return Album.objects.filter(_own_albums_q(user))
+
+
+def shared_albums(user):
+    """The albums shared with *user* that are not already theirs."""
+    return Album.objects.filter(
+        pk__in=AlbumShare.objects.reaching(user).values("album_id")
+    ).exclude(_own_albums_q(user))
+
+
+def highest_role(roles):
+    """The highest of *roles*, or None when there are none."""
+    return max(roles, key=ROLE_RANK.__getitem__, default=None)
+
+
 def get_album_role(user, album):
-    """*user*'s role in *album* (``OWNER``), or None when they cannot open it."""
+    """*user*'s role in *album* (``OWNER``, ``MANAGER``, ``CONTRIBUTOR`` or
+    ``VIEWER``), or None when they cannot open it."""
     if album.group_id is None:
-        return OWNER if album.owner_id == user.pk else None
-    if user.groups.filter(pk=album.group_id).exists():
+        if album.owner_id == user.pk:
+            return OWNER
+    elif user.groups.filter(pk=album.group_id).exists():
         return OWNER
-    return None
+    return highest_role(
+        AlbumShare.objects.reaching(user)
+        .filter(album=album)
+        .values_list("role", flat=True)
+    )
 
 
 def album_roles(user, albums):
-    """*user*'s role in each of *albums*, keyed by album uuid, in one query.
+    """*user*'s role in each of *albums*, keyed by album uuid, in a few
+    queries whatever their number.
 
     Albums out of reach are absent rather than mapped to None.
     """
     group_ids = set(user.groups.values_list("pk", flat=True))
     roles = {}
+    invited = []
     for album in albums:
-        if album.group_id is None:
-            if album.owner_id == user.pk:
-                roles[album.uuid] = OWNER
-        elif album.group_id in group_ids:
+        if album.group_id is None and album.owner_id == user.pk:
             roles[album.uuid] = OWNER
+        elif album.group_id is not None and album.group_id in group_ids:
+            roles[album.uuid] = OWNER
+        else:
+            invited.append(album.uuid)
+    if invited:
+        shares = (
+            AlbumShare.objects.reaching(user)
+            .filter(album_id__in=invited)
+            .values_list("album_id", "role")
+        )
+        for album_id, role in shares:
+            roles[album_id] = highest_role([role, roles.get(album_id, role)])
     return roles
+
+
+def direct_share_album_ids(user, albums):
+    """The uuids among *albums* shared with *user* by name: the ones they
+    can leave. A share with one of their groups or projects is not theirs
+    to give up."""
+    return set(
+        AlbumShare.objects.filter(album__in=albums, shared_with=user).values_list(
+            "album_id", flat=True
+        )
+    )
 
 
 def reachable_album(user, album_uuid):
@@ -269,6 +334,69 @@ def reachable_album(user, album_uuid):
     return user_albums(user).filter(uuid=album_uuid).first()
 
 
+def album_members(album):
+    """The active users who can open *album*: its owner (every member of its
+    group for a group album) and everyone a share reaches."""
+    shares = AlbumShare.objects.filter(album=album)
+    if album.group_id is None:
+        holders = Q(pk=album.owner_id)
+    else:
+        holders = Q(groups=album.group_id)
+    members = User.objects.filter(
+        holders
+        | Q(pk__in=shares.values("shared_with"))
+        | Q(groups__in=shares.values("shared_with_group")),
+        is_active=True,
+    )
+    ids = set(members.values_list("pk", flat=True))
+    for project in Project.objects.filter(pk__in=shares.values("shared_with_project")):
+        ids.update(user.pk for user in project_users(project))
+    return User.objects.filter(pk__in=ids, is_active=True)
+
+
+def _live_media():
+    """Every analyzed photo and video still out of the trash, quarantined
+    ones excluded."""
+    return _media(File.objects.filter(deleted_at__isnull=True)).filter(
+        media_item__isnull=False
+    )
+
+
+def vouched_items_q():
+    """Album items whose contributor can still share the file in Files: it
+    is theirs, or it sits in a group of theirs.
+
+    Those are the items an album shows every member and every link: adding a
+    file one can share is sharing it. A file someone else shared with the
+    contributor is not theirs to pass on, and a file that changed hands, or
+    whose contributor left its group or lost their account, stops being
+    vouched for.
+    """
+    group_member = User.groups.through.objects.filter(
+        user_id=OuterRef("added_by_id"), group_id=OuterRef("file__group_id")
+    )
+    return Q(added_by__isnull=False) & (
+        Q(file__group__isnull=True, file__owner_id=F("added_by_id"))
+        | Exists(group_member)
+    )
+
+
+def visible_album_items(user, albums):
+    """The items of *albums* whose file *user* can see there.
+
+    A member sees every item its contributor vouches for (``vouched_items_q``),
+    plus those they can open through Files anyway. Trashed and quarantined
+    files drop out, and what *user* hid from their library stays hidden.
+    """
+    media = _visibility(user, _live_media(), hidden=False)
+    return AlbumItem.objects.filter(
+        album__in=albums, file_id__in=media.values("pk")
+    ).filter(
+        vouched_items_q()
+        | Q(file_id__in=FileService.accessible_file_ids(user, include_deleted=False))
+    )
+
+
 def album_files(user, album):
     """The album's photos and videos *user* can see, as live ``File`` rows.
 
@@ -276,31 +404,39 @@ def album_files(user, album):
     """
     if get_album_role(user, album) is None:
         return File.objects.none()
-    return library_files(user, ALL).filter(
-        pk__in=AlbumItem.objects.filter(album=album).values("file_id")
+    return File.objects.filter(
+        pk__in=visible_album_items(user, [album]).values("file_id")
     )
 
 
-def visible_album_items(user, albums):
-    """The items of *albums* whose file *user* can see in the library."""
+def contributable_files(user):
+    """The photos and videos *user* may add to an album as an invited
+    member: their own and their groups', the files they can vouch for."""
+    files = FileService.user_files_qs(user) | FileService.user_group_files_qs(user)
+    return _visibility(user, _media(files), hidden=False).filter(
+        media_item__isnull=False
+    )
+
+
+def link_items(album):
+    """The items of *album* its public links show: the vouched ones alone,
+    whoever opens them."""
     return AlbumItem.objects.filter(
-        album__in=albums, file_id__in=library_files(user, ALL).values("pk")
-    )
+        album=album, file_id__in=_live_media().values("pk")
+    ).filter(vouched_items_q())
 
 
-def album_summaries(user, albums):
-    """What a listing shows of each album, keyed by album uuid.
+def link_files(album):
+    """``link_items`` as live ``File`` rows."""
+    return File.objects.filter(pk__in=link_items(album).values("file_id"))
 
-    Each value is ``{"count": int, "cover_id": uuid | None}``. The cover is
-    the one the album names while it is an item the viewer can see, and the
-    most recently added visible item otherwise; None for an album showing
-    nothing. Three queries whatever the number of albums.
-    """
-    albums = list(albums)
+
+def _summaries(albums, items):
+    """``{"count": int, "cover_id": uuid | None}`` per album of *albums*,
+    counting *items* alone. See ``album_summaries``."""
     summaries = {album.uuid: {"count": 0, "cover_id": None} for album in albums}
     if not albums:
         return summaries
-    items = visible_album_items(user, [album.uuid for album in albums])
     for row in items.order_by().values("album_id").annotate(count=Count("pk")):
         summaries[row["album_id"]]["count"] = row["count"]
 
@@ -331,6 +467,23 @@ def album_summaries(user, albums):
         for album_id, file_id in latest:
             summaries[album_id]["cover_id"] = file_id
     return summaries
+
+
+def album_summaries(user, albums):
+    """What a listing shows of each album, keyed by album uuid.
+
+    Each value is ``{"count": int, "cover_id": uuid | None}``. The cover is
+    the one the album names while it is an item the viewer can see, and the
+    most recently added visible item otherwise; None for an album showing
+    nothing. Three queries whatever the number of albums.
+    """
+    albums = list(albums)
+    return _summaries(albums, visible_album_items(user, [a.uuid for a in albums]))
+
+
+def link_summary(album):
+    """``album_summaries`` for one album, as its public links show it."""
+    return _summaries([album], link_items(album))[album.uuid]
 
 
 def album_date_range(files):

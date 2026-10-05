@@ -1,3 +1,5 @@
+import secrets
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -154,6 +156,12 @@ class Album(models.Model):
     sort_mode = models.CharField(
         max_length=16, choices=SortMode.choices, default=SortMode.CAPTURE_DATE
     )
+    # Whether members with the viewer role may download the originals.
+    # Contributors and managers always may.
+    allow_download = models.BooleanField(default=True)
+    # Additions up to this moment have been announced to the members (see
+    # services/album_notifications.py).
+    notified_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -165,6 +173,168 @@ class Album(models.Model):
 
     def __str__(self):
         return f"Album: {self.title}"
+
+
+class AlbumShareQuerySet(models.QuerySet):
+    def reaching(self, user):
+        """Shares that let *user* in: addressed to them, to a group they
+        belong to or to a project they can open."""
+        from workspace.projects.queries import user_project_ids
+
+        return self.filter(
+            models.Q(shared_with=user)
+            | models.Q(shared_with_group__in=user.groups.all())
+            | models.Q(shared_with_project__in=user_project_ids(user))
+        )
+
+
+class AlbumShare(models.Model):
+    """A member of an album: a user, an ``auth.Group`` or a project.
+
+    Exactly one target column is set. Group and project shares are resolved
+    at read time through the viewer's membership, so joining or leaving
+    needs no row change. Someone reached by several shares holds the highest
+    of their roles.
+    """
+
+    class Role(models.TextChoices):
+        VIEWER = "viewer", "Viewer"
+        CONTRIBUTOR = "contributor", "Contributor"
+        MANAGER = "manager", "Manager"
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name="shares")
+    shared_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    shared_with = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="album_shares",
+    )
+    shared_with_group = models.ForeignKey(
+        "auth.Group",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="album_shares",
+    )
+    shared_with_project = models.ForeignKey(
+        "projects.Project",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="album_shares",
+    )
+    role = models.CharField(max_length=12, choices=Role.choices, default=Role.VIEWER)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = AlbumShareQuerySet.as_manager()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        shared_with__isnull=False,
+                        shared_with_group__isnull=True,
+                        shared_with_project__isnull=True,
+                    )
+                    | models.Q(
+                        shared_with__isnull=True,
+                        shared_with_group__isnull=False,
+                        shared_with_project__isnull=True,
+                    )
+                    | models.Q(
+                        shared_with__isnull=True,
+                        shared_with_group__isnull=True,
+                        shared_with_project__isnull=False,
+                    )
+                ),
+                name="photo_album_share_one_target",
+            ),
+            models.UniqueConstraint(
+                fields=["album", "shared_with"],
+                condition=models.Q(shared_with__isnull=False),
+                name="photo_album_share_unique_user",
+            ),
+            models.UniqueConstraint(
+                fields=["album", "shared_with_group"],
+                condition=models.Q(shared_with_group__isnull=False),
+                name="photo_album_share_unique_group",
+            ),
+            models.UniqueConstraint(
+                fields=["album", "shared_with_project"],
+                condition=models.Q(shared_with_project__isnull=False),
+                name="photo_album_share_unique_project",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["shared_with"], name="photo_album_share_user_idx"),
+            models.Index(
+                fields=["shared_with_group"], name="photo_album_share_group_idx"
+            ),
+            models.Index(
+                fields=["shared_with_project"], name="photo_album_share_proj_idx"
+            ),
+        ]
+
+    def __str__(self):
+        return f"AlbumShare: {self.album_id} -> {self.target}"
+
+    @property
+    def target(self):
+        """The user, group or project this share is addressed to."""
+        return self.shared_with or self.shared_with_group or self.shared_with_project
+
+
+def _album_link_token():
+    return secrets.token_urlsafe(24)
+
+
+class AlbumLink(models.Model):
+    """A public link to an album: a grid and a viewer, without an account.
+
+    The token is the only credential. It reaches the album's items alone,
+    and only those its contributors vouch for (see ``queries.link_files``).
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name="links")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    token = models.CharField(max_length=44, unique=True, default=_album_link_token)
+    # A password hash (make_password), empty for none.
+    password = models.CharField(max_length=128, blank=True, default="")
+    expires_at = models.DateTimeField(null=True, blank=True)
+    # Off by default: the originals carry their EXIF, the place included.
+    allow_download = models.BooleanField(default=False)
+    view_count = models.PositiveIntegerField(default=0)
+    last_accessed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["album", "created_at"], name="photo_album_link_idx"),
+        ]
+
+    def __str__(self):
+        return f"AlbumLink: {self.album_id}"
+
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and self.expires_at <= timezone.now()
+
+    @property
+    def has_password(self):
+        return bool(self.password)
 
 
 class AlbumItem(models.Model):

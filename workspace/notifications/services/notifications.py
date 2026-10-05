@@ -28,6 +28,7 @@ SOURCE_FIELDS = {
     "calendar.event": "event",
     "calendar.poll": "poll",
     "mail.mailmessage": "mail_message",
+    "photos.album": "album",
 }
 
 

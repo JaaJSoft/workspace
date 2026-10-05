@@ -1,0 +1,35 @@
+{% comment %}
+  One album of the sidebar: its cover, its title and how many photos the
+  viewer sees in it. Context: item (card, url, active) from
+  _sidebar_albums; shared, for an album someone else shared, names its
+  owner in the tooltip.
+{% endcomment %}
+<li class="list-none">
+  <a
+    href="{{ item.url }}"
+    x-target.push="photos-nav photos-content"
+    @click="closeDrawer()"
+    class="flex items-center gap-3 px-2 py-1.5 rounded-lg text-base transition-colors {% if item.active %}bg-module/15 text-module hover:bg-module/25{% else %}text-base-content/70 hover:bg-base-content/5 hover:text-module{% endif %}"
+    {% if item.active %}aria-current="page"{% endif %}
+    {% if shared %}title="Shared by {{ item.card.album.owner.username }}"{% endif %}
+    data-album="{{ item.card.album.uuid }}"
+  >
+    {% if item.card.cover_url %}
+      <img
+        src="{{ item.card.cover_url }}"
+        alt=""
+        class="w-6 h-6 rounded object-cover flex-shrink-0"
+        loading="lazy"
+        draggable="false"
+      />
+    {% else %}
+      <span
+        class="w-6 h-6 rounded bg-base-300 flex items-center justify-center flex-shrink-0"
+      >
+        <i data-lucide="book-image" class="w-3.5 h-3.5 opacity-60"></i>
+      </span>
+    {% endif %}
+    <span class="flex-1 truncate text-sm">{{ item.card.album.title }}</span>
+    <span class="badge badge-sm badge-ghost tabular-nums">{{ item.card.count }}</span>
+  </a>
+</li>

@@ -45,7 +45,7 @@ dependencies = [
     "pygments>=2.21.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.3.6",
-    "python-dotenv>=1.2.3",
+    "python-dotenv>=1.2.4",
     # webdav
     "wsgidav>=4.3.5",
     # server

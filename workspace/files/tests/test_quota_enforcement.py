@@ -361,11 +361,16 @@ class WebDavWriteBufferTests(TestCase):
 
         from wsgidav.dav_error import DAVError
 
+        from workspace.common.storage.facade import BlobStorage
         from workspace.files.webdav.resources import _StreamingWriteBuffer
 
         with tempfile.TemporaryDirectory() as tmp:
             target = os.path.join(tmp, "upload.bin")
-            buf = _StreamingWriteBuffer(target, 1024, max_bytes=10)
+            buf = _StreamingWriteBuffer(
+                BlobStorage(location=tmp).staged_writer("upload.bin"),
+                1024,
+                max_bytes=10,
+            )
             buf.write(b"x" * 8)
             with self.assertRaises(DAVError) as caught:
                 buf.write(b"x" * 8)
@@ -373,19 +378,21 @@ class WebDavWriteBufferTests(TestCase):
             buf.abort()
             self.assertFalse(os.path.exists(target))
             self.assertEqual(
-                [p for p in os.listdir(tmp) if p.endswith(".part")],
+                [name for _, _, names in os.walk(tmp) for name in names],
                 [],
                 "the partial upload must be cleaned up",
             )
 
     def test_no_ceiling_means_no_limit(self):
-        import os
         import tempfile
 
+        from workspace.common.storage.facade import BlobStorage
         from workspace.files.webdav.resources import _StreamingWriteBuffer
 
         with tempfile.TemporaryDirectory() as tmp:
-            buf = _StreamingWriteBuffer(os.path.join(tmp, "u.bin"), 1024)
+            buf = _StreamingWriteBuffer(
+                BlobStorage(location=tmp).staged_writer("u.bin"), 1024
+            )
             buf.write(b"x" * 100_000)
             buf.finalize()
             self.assertEqual(buf.size, 100_000)

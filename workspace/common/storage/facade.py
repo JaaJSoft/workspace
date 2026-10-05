@@ -1,0 +1,206 @@
+"""The one storage class the app holds: Django's Storage API plus the verbs it
+lacks.
+
+``FileField`` and ``default_storage`` both resolve to a BlobStorage. It owns
+the name policy and hands every byte to a backend (``backend.py``), so the code
+that moves a folder or streams an upload never asks where the bytes live.
+"""
+
+import errno
+
+from django.core.exceptions import ImproperlyConfigured
+from django.core.files.base import File
+from django.core.files.storage import Storage
+from django.core.files.utils import validate_file_name
+from django.utils.deconstruct import deconstructible
+
+from .backend import NameTaken
+
+# How many fresh names a save tries when other writers keep taking them.
+_SAVE_ATTEMPTS = 10
+
+
+def _local(**options):
+    from .local import LocalBackend
+
+    return LocalBackend(**options)
+
+
+def _s3(**options):
+    from .s3 import S3Backend
+
+    return S3Backend(**options)
+
+
+_BACKENDS = {"local": _local, "s3": _s3}
+
+
+@deconstructible(path="workspace.common.storage.facade.BlobStorage")
+class BlobStorage(Storage):
+    """A Django storage over a blob backend.
+
+    *allow_overwrite* is the name policy, the same as FileSystemStorage's: a
+    save under a taken name replaces the blob, where the default picks a free
+    name beside it. *verbatim_names* keeps the name a FileField generates as it
+    is, where Django rewrites it into a "valid" one. The remaining options
+    configure the backend.
+    """
+
+    def __init__(
+        self,
+        backend="local",
+        *,
+        allow_overwrite=False,
+        verbatim_names=False,
+        **options,
+    ):
+        try:
+            build = _BACKENDS[backend]
+        except KeyError:
+            raise ImproperlyConfigured(
+                f"Unknown blob storage backend {backend!r}; "
+                f"expected one of {sorted(_BACKENDS)}"
+            ) from None
+        self.allow_overwrite = allow_overwrite
+        self.verbatim_names = verbatim_names
+        self.backend = build(allow_overwrite=allow_overwrite, **options)
+
+    # Name policy.
+
+    def get_valid_name(self, name):
+        if self.verbatim_names:
+            return name
+        return super().get_valid_name(name)
+
+    def generate_filename(self, filename):
+        if not self.verbatim_names:
+            return super().generate_filename(filename)
+        # Django's version also reads a backslash as a separator and
+        # normalizes the path; a name kept verbatim keeps those too.
+        return validate_file_name(str(filename), allow_relative_path=True)
+
+    def is_name_available(self, name, max_length=None):
+        if self.allow_overwrite:
+            return not (max_length and len(name) > max_length)
+        return super().is_name_available(name, max_length=max_length)
+
+    def get_alternative_name(self, file_root, file_ext):
+        if self.allow_overwrite:
+            return f"{file_root}{file_ext}"
+        return super().get_alternative_name(file_root, file_ext)
+
+    # Django's Storage API, passed through.
+
+    def _open(self, name, mode="rb"):
+        return self.backend.open(name, mode)
+
+    def _save(self, name, content):
+        for _attempt in range(_SAVE_ATTEMPTS):
+            try:
+                return self.backend.save(name, content)
+            except NameTaken:
+                # Another writer took the name since get_available_name said it
+                # was free.
+                name = self.get_available_name(name)
+        raise NameTaken(errno.EEXIST, "No free name found", name)
+
+    def delete(self, name):
+        self.backend.delete(name)
+
+    def exists(self, name):
+        return self.backend.exists(name)
+
+    def listdir(self, path):
+        return self.backend.listdir(path)
+
+    def size(self, name):
+        return self.backend.size(name)
+
+    def url(self, name):
+        return self.backend.url(name)
+
+    def path(self, name):
+        return self.backend.path(name)
+
+    def get_accessed_time(self, name):
+        return self.backend.get_accessed_time(name)
+
+    def get_created_time(self, name):
+        return self.backend.get_created_time(name)
+
+    def get_modified_time(self, name):
+        return self.backend.get_modified_time(name)
+
+    # What Django's API lacks. Contracts on ``Backend``.
+
+    def is_dir(self, name):
+        return self.backend.is_dir(name)
+
+    def is_file(self, name):
+        return self.backend.is_file(name)
+
+    def scan(self, name):
+        return self.backend.scan(name)
+
+    def iter_blobs(self, name):
+        return self.backend.iter_blobs(name)
+
+    def iter_dirs(self, name):
+        return self.backend.iter_dirs(name)
+
+    def make_dir(self, name):
+        self.backend.make_dir(name)
+
+    def remove_dir_if_empty(self, name):
+        return self.backend.remove_dir_if_empty(name)
+
+    def delete_prefix(self, name):
+        return self.backend.delete_prefix(name)
+
+    def move(self, source, destination):
+        self.backend.move(source, destination)
+
+    def relocate(self, source, destination):
+        return self.backend.relocate(source, destination)
+
+    def staged_writer(self, name):
+        return self.backend.staged_writer(name)
+
+    def local_path(self, name, *, max_bytes):
+        return self.backend.local_path(name, max_bytes=max_bytes)
+
+    def signed_url(self, name, *, filename, attachment=False, content_type=None):
+        return self.backend.signed_url(
+            name,
+            filename=filename,
+            attachment=attachment,
+            content_type=content_type or "application/octet-stream",
+        )
+
+    def purge_staged(self, before):
+        return self.backend.purge_staged(before)
+
+    def replace(self, name, content):
+        """Put *content* at *name*, swapping the previous blob in one step.
+
+        Replacing is the point, so the name policy does not apply: the blob
+        goes under *name* whatever is there. Writing the name in place would
+        truncate the blob at the first byte: a transfer that dies halfway
+        would leave neither the old bytes nor the whole new ones, and a row
+        rolled back to the version it described before would point at content
+        that no longer exists. Through a staged writer the name only ever
+        holds one complete version or the other.
+
+        Returns the name the content was stored under.
+        """
+        if not hasattr(content, "chunks"):
+            content = File(content, name)
+        writer = self.backend.staged_writer(name)
+        try:
+            for chunk in content.chunks():
+                writer.write(chunk)
+            writer.commit()
+        except BaseException:
+            writer.abort()
+            raise
+        return name

@@ -1,6 +1,6 @@
 """Internal naming and validation helpers for the file service."""
 
-from ..models import File
+from ..models import File, canonical_name
 from ._storage_ops import unique_copy_name
 
 
@@ -33,7 +33,7 @@ def sibling_files(owner, parent):
 
 def find_name_conflict(owner, parent, name, *, exclude_pk=None):
     """Return the live *file* already using *name* in that folder, or None."""
-    qs = sibling_files(owner, parent).filter(name__iexact=name)
+    qs = sibling_files(owner, parent).filter(name__iexact=canonical_name(name))
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.first()
@@ -41,7 +41,7 @@ def find_name_conflict(owner, parent, name, *, exclude_pk=None):
 
 def find_node_conflict(owner, parent, name, *, exclude_pk=None):
     """Return the live file *or folder* already using *name*, or None."""
-    qs = sibling_nodes(owner, parent).filter(name__iexact=name)
+    qs = sibling_nodes(owner, parent).filter(name__iexact=canonical_name(name))
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.first()
@@ -72,7 +72,7 @@ def available_node_name(owner, parent, name, node_type, *, avoiding=()):
     taken = set(sibling_nodes(owner, parent).values_list("name", flat=True))
     for other in avoiding:
         taken.update(sibling_nodes(owner, other).values_list("name", flat=True))
-    return unique_copy_name(name, node_type, taken)
+    return unique_copy_name(canonical_name(name), node_type, taken)
 
 
 def available_file_name(owner, parent, name, *, avoiding=()):

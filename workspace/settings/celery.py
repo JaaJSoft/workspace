@@ -8,6 +8,7 @@ from celery.schedules import crontab
 from .base import DEBUG, TIME_ZONE
 from .cache import _REDIS_CELERY_URL
 from .env import env_non_negative_int
+from .storage import STORAGE_BACKEND
 
 # Use dedicated Redis DB as broker if available, otherwise fall back to in-memory
 CELERY_BROKER_URL = _REDIS_CELERY_URL or "memory://"
@@ -63,13 +64,6 @@ FILES_CATCH_UP_INTERVAL = float(os.getenv("FILES_CATCH_UP_INTERVAL", "3600"))
 MAIL_SYNC_INTERVAL = float(os.getenv("MAIL_SYNC_INTERVAL", "300"))
 
 CELERY_BEAT_SCHEDULE = {
-    "sync-all-user-files": {
-        "task": "files.sync_all_users",
-        "schedule": FILES_SYNC_INTERVAL,
-        # Drop a tick that has not started by the time the next one fires,
-        # so a backed-up broker cannot accumulate stale fan-outs.
-        "options": {"expires": FILES_SYNC_INTERVAL},
-    },
     "catch-up-readers": {
         "task": "files.catch_up",
         # The primary path is event-driven; this catches what it missed.
@@ -85,6 +79,16 @@ CELERY_BEAT_SCHEDULE = {
     "purge-trash": {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
+    },
+    # Uploads a killed worker could neither finish nor abort.
+    "purge-staged-writes": {
+        "task": "files.purge_staged_writes",
+        "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
+    },
+    # Moves a killed worker or a rolled-back transaction left half done.
+    "settle-relocations": {
+        "task": "files.settle_relocations",
+        "schedule": crontab(hour=2, minute=50),  # Every day at 2:50 AM
     },
     "db-maintenance": {
         "task": "core.db_maintenance",
@@ -159,3 +163,15 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(hour=7, minute=15),  # Every day at 7:15 AM
     },
 }
+
+# The periodic sync adopts files dropped into MEDIA_ROOT out of band. On object
+# storage it would list every user's prefix on a timer to catch a change that
+# rarely happens there; the on-demand sync (files UI, sync_files) still runs.
+if STORAGE_BACKEND == "local":
+    CELERY_BEAT_SCHEDULE["sync-all-user-files"] = {
+        "task": "files.sync_all_users",
+        "schedule": FILES_SYNC_INTERVAL,
+        # Drop a tick that has not started by the time the next one fires,
+        # so a backed-up broker cannot accumulate stale fan-outs.
+        "options": {"expires": FILES_SYNC_INTERVAL},
+    }

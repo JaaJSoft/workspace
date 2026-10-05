@@ -6,12 +6,10 @@ pre-migration-0022 layout (``files/<username>/...`` instead of
 resurrected in the DB by the next filesystem sync.
 """
 
-import os
-
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.test import TestCase
 
 from workspace.files.models import File
@@ -30,7 +28,14 @@ class HardDeleteStorageTests(TestCase):
         )
 
     def _user_root(self):
-        return os.path.join(settings.MEDIA_ROOT, "files", "users", self.user.username)
+        return f"files/users/{self.user.username}"
+
+    def _purge(self, node):
+        # Object storage drops what trashing copied once the transaction commits.
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.soft_delete(node, acting_user=self.user)
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.hard_delete(node, acting_user=self.user)
 
     def test_hard_delete_file_removes_blob(self):
         f = FileService.create_file(
@@ -38,48 +43,44 @@ class HardDeleteStorageTests(TestCase):
             "doc.txt",
             content=ContentFile(b"bytes", name="doc.txt"),
         )
-        blob = os.path.join(settings.MEDIA_ROOT, f.content.name)
-        self.assertTrue(os.path.isfile(blob))
+        blob = f.content.name
+        self.assertTrue(default_storage.is_file(blob))
 
-        FileService.soft_delete(f, acting_user=self.user)
-        FileService.hard_delete(f, acting_user=self.user)
+        self._purge(f)
 
-        self.assertFalse(os.path.exists(blob))
+        self.assertFalse(default_storage.exists(blob))
 
     def test_purge_trashed_folder_removes_directory(self):
         folder = FileService.create_folder(self.user, "Docs")
-        folder_dir = os.path.join(self._user_root(), "Docs")
-        self.assertTrue(os.path.isdir(folder_dir))
+        folder_dir = f"{self._user_root()}/Docs"
+        self.assertTrue(default_storage.is_dir(folder_dir))
 
-        FileService.soft_delete(folder, acting_user=self.user)
-        FileService.hard_delete(folder, acting_user=self.user)
+        self._purge(folder)
 
-        self.assertFalse(os.path.exists(folder_dir))
+        self.assertFalse(default_storage.exists(folder_dir))
 
     def test_purge_nested_trashed_folder_removes_directory(self):
         # The old signal stripped the first segment of ``path``, so a nested
         # folder pointed at the wrong directory even relative to its base.
         parent = FileService.create_folder(self.user, "Docs")
         sub = FileService.create_folder(self.user, "Sub", parent)
-        sub_dir = os.path.join(self._user_root(), "Docs", "Sub")
-        self.assertTrue(os.path.isdir(sub_dir))
+        sub_dir = f"{self._user_root()}/Docs/Sub"
+        self.assertTrue(default_storage.is_dir(sub_dir))
 
-        FileService.soft_delete(sub, acting_user=self.user)
-        FileService.hard_delete(sub, acting_user=self.user)
+        self._purge(sub)
 
-        self.assertFalse(os.path.exists(sub_dir))
-        self.assertTrue(os.path.isdir(os.path.join(self._user_root(), "Docs")))
+        self.assertFalse(default_storage.exists(sub_dir))
+        self.assertTrue(default_storage.is_dir(f"{self._user_root()}/Docs"))
 
     def test_purge_group_folder_removes_directory(self):
         group = Group.objects.create(name="Team")
         folder = FileService.create_folder(self.user, "Team", group=group)
-        group_dir = os.path.join(settings.MEDIA_ROOT, "files", "groups", "Team")
-        self.assertTrue(os.path.isdir(group_dir))
+        group_dir = "files/groups/Team"
+        self.assertTrue(default_storage.is_dir(group_dir))
 
-        FileService.soft_delete(folder, acting_user=self.user)
-        FileService.hard_delete(folder, acting_user=self.user)
+        self._purge(folder)
 
-        self.assertFalse(os.path.exists(group_dir))
+        self.assertFalse(default_storage.exists(group_dir))
 
     def test_dot_names_are_rejected_at_save(self):
         for name in (".", ".."):
@@ -91,7 +92,7 @@ class HardDeleteStorageTests(TestCase):
         # ancestor directory; the cleanup must fail closed instead of running
         # rmtree there and taking unrelated data with it.
         keep = FileService.create_folder(self.user, "Keep")
-        keep_dir = os.path.join(self._user_root(), "Keep")
+        keep_dir = f"{self._user_root()}/Keep"
 
         for evil_name in (".", ".."):
             folder = FileService.create_folder(self.user, "Evil")
@@ -101,15 +102,14 @@ class HardDeleteStorageTests(TestCase):
 
             FileService.hard_delete(folder, acting_user=self.user)
 
-            self.assertTrue(os.path.isdir(keep_dir))
-            self.assertTrue(os.path.isdir(self._user_root()))
+            self.assertTrue(default_storage.is_dir(keep_dir))
+            self.assertTrue(default_storage.is_dir(self._user_root()))
         self.assertTrue(File.objects.filter(pk=keep.pk).exists())
 
     def test_purged_folder_does_not_reappear_after_sync(self):
         # The user-visible symptom: purge the folder, hit refresh, it's back.
         folder = FileService.create_folder(self.user, "Ghost")
-        FileService.soft_delete(folder, acting_user=self.user)
-        FileService.hard_delete(folder, acting_user=self.user)
+        self._purge(folder)
 
         FileSyncService().sync_user_recursive(self.user)
 

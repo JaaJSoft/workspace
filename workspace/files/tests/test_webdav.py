@@ -1,14 +1,18 @@
 """Tests for the WebDAV integration (domain controller, provider, resources)."""
 
 import base64
+import errno
 import io
 import os
+import posixpath
 from datetime import timedelta
+from unittest import mock
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.db import DatabaseError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from knox.models import AuthToken
@@ -18,7 +22,8 @@ from wsgidav.dav_error import (
     DAVError,
 )
 
-from workspace.common.tests.media import IsolatedMediaRootMixin
+from workspace.common.storage.facade import BlobStorage
+from workspace.common.tests.media import IsolatedMediaRootMixin, local_storage_only
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
 from workspace.files.webdav import dc as dc_module
@@ -565,11 +570,12 @@ class FolderResourceMoveStorageTests(TestCase):
             parent=src,
             content=ContentFile(b"hello", name="note.txt"),
         )
-        old_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
+        old_name = note.content.name
+        self.assertTrue(default_storage.is_file(old_name))
 
         res = FolderResource("/Src", self.environ, src)
-        res.move_recursive("/Dest/Src")
+        with self.captureOnCommitCallbacks(execute=True):
+            res.move_recursive("/Dest/Src")
 
         note.refresh_from_db()
         new_content_name = note.content.name.replace("\\", "/")
@@ -577,9 +583,8 @@ class FolderResourceMoveStorageTests(TestCase):
             new_content_name.startswith("files/users/davmove/Dest/Src/"),
             f"Expected new path under Dest/Src/, got {new_content_name}",
         )
-        new_full_path = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
-        self.assertFalse(os.path.isfile(old_full_path))
+        self.assertTrue(default_storage.is_file(note.content.name))
+        self.assertFalse(default_storage.is_file(old_name))
 
     def test_move_recursive_rename_collision_with_old_sibling(self):
         """MOVE /A/Sub -> /B/Target while /A/Target exists: renaming before
@@ -598,24 +603,19 @@ class FolderResourceMoveStorageTests(TestCase):
         )
 
         res = FolderResource("/A/Sub", self.environ, sub)
-        res.move_recursive("/B/Target")
+        with self.captureOnCommitCallbacks(execute=True):
+            res.move_recursive("/B/Target")
 
         sub.refresh_from_db()
         self.assertEqual(sub.name, "Target")
         self.assertEqual(sub.parent, b)
         note.refresh_from_db()
-        blob = os.path.join(settings.MEDIA_ROOT, note.content.name)
-        self.assertTrue(os.path.isfile(blob), f"missing blob at {note.content.name}")
-        with open(blob, "rb") as f:
+        blob = note.content.name
+        self.assertTrue(default_storage.is_file(blob), f"missing blob at {blob}")
+        with default_storage.open(blob, "rb") as f:
             self.assertEqual(f.read(), b"payload")
         # The colliding sibling's directory must be left alone.
-        self.assertTrue(
-            os.path.isdir(
-                os.path.join(
-                    settings.MEDIA_ROOT, "files", "users", "davmove", "A", "Target"
-                )
-            )
-        )
+        self.assertTrue(default_storage.is_dir("files/users/davmove/A/Target"))
 
     def test_move_file_with_rename_keeps_colliding_sibling(self):
         """MOVE /A/x.txt -> /B/y.txt while /A/y.txt exists must leave the
@@ -636,15 +636,16 @@ class FolderResourceMoveStorageTests(TestCase):
         )
 
         res = FileResource("/A/x.txt", self.environ, x)
-        res.copy_move_single("/B/y.txt", is_move=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            res.copy_move_single("/B/y.txt", is_move=True)
 
         x.refresh_from_db()
         self.assertEqual(x.name, "y.txt")
         self.assertEqual(x.path, "B/y.txt")
-        with open(os.path.join(settings.MEDIA_ROOT, x.content.name), "rb") as f:
+        with default_storage.open(x.content.name, "rb") as f:
             self.assertEqual(f.read(), b"xdata")
         sibling.refresh_from_db()
-        with open(os.path.join(settings.MEDIA_ROOT, sibling.content.name), "rb") as f:
+        with default_storage.open(sibling.content.name, "rb") as f:
             self.assertEqual(f.read(), b"ydata")
 
 
@@ -654,10 +655,9 @@ class FolderResourceMoveStorageTests(TestCase):
 class FileResourceTests(IsolatedMediaRootMixin, TestCase):
     """Tests for FileResource.
 
-    Uses a real FileSystemStorage (not InMemoryStorage) because
-    ``_StreamingWriteBuffer`` writes directly to the filesystem via
-    ``os.open`` / ``os.write``. The root is isolated because one test walks it
-    to prove an overwrite left no partial file behind.
+    Uses the real storage (not InMemoryStorage) because ``_StreamingWriteBuffer``
+    writes through ``BlobStorage.staged_writer``. The root is isolated because
+    one test walks it to prove an overwrite left no partial file behind.
     """
 
     def setUp(self):
@@ -886,16 +886,82 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         with self.file.content.storage.open(self.file.content.name, "rb") as f:
             self.assertEqual(f.read(), b"hello world")
 
+    def test_an_upload_refused_because_its_folder_moved_leaves_no_partial_file(self):
+        """Its bytes wait outside the user's tree: the rename does not carry
+        them into the renamed folder, where the sync would adopt them."""
+        docs = FileService.create_folder(self.user, "Docs")
+        f = FileService.create_file(
+            self.user, "a.txt", parent=docs, content=ContentFile(b"old", name="a.txt")
+        )
+        res = FileResource("/Docs/a.txt", self.environ, f)
+        buf = res.begin_write()
+        buf.write(b"new")
+        buf.close()
+        with self.captureOnCommitCallbacks(execute=True):
+            FileService.rename(docs, "Archive")
+
+        with self.assertRaises(DAVError) as refused:
+            res.end_write(with_errors=False)
+
+        self.assertEqual(refused.exception.value, 409)
+        self.assertEqual(sorted(self._files_on_disk()), ["a.txt", "test.txt"])
+
     def test_successful_overwrite_leaves_single_file_on_disk(self):
         """After a completed overwrite no temp/partial files may remain."""
         buf = self.res.begin_write()
         buf.write(b"new content")
         buf.close()
         self.res.end_write(with_errors=False)
-        on_disk = []
-        for _root, _dirs, names in os.walk(settings.MEDIA_ROOT):
-            on_disk.extend(names)
-        self.assertEqual(on_disk, ["test.txt"])
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+
+    def _files_on_disk(self):
+        """The names of the tree's blobs, once no staged write is left either."""
+        leftover = default_storage.purge_staged(timezone.now() + timedelta(days=1))
+        self.assertEqual(leftover, 0, "a staged write was left behind")
+        return sorted(
+            posixpath.basename(blob.name)
+            for blob in default_storage.iter_blobs("files")
+        )
+
+    @local_storage_only
+    def test_a_publish_the_disk_refuses_leaves_no_partial_file(self):
+        """wsgidav calls end_write once: a ``.part`` left behind by a failed
+        last write is never cleaned up, and the sync adopts it as a file."""
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        disk_full = OSError(errno.ENOSPC, "No space left on device")
+        with (
+            mock.patch(
+                "workspace.common.storage.local.os.write", side_effect=disk_full
+            ),
+            self.assertRaises(OSError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.size, 11)
+        with self.file.content.storage.open(self.file.content.name, "rb") as f:
+            self.assertEqual(f.read(), b"hello world")
+
+    def test_a_database_error_before_the_publish_leaves_no_partial_file(self):
+        buf = self.res.begin_write()
+        buf.write(b"new content")
+        buf.close()
+
+        with (
+            mock.patch.object(
+                FileService,
+                "replace_content_storage",
+                side_effect=DatabaseError("the database went away"),
+            ),
+            self.assertRaises(DatabaseError),
+        ):
+            self.res.end_write(with_errors=False)
+
+        self.assertEqual(self._files_on_disk(), ["test.txt"])
 
     def test_end_write_accepts_complete_upload(self):
         """Complete transfer (size == Content-Length) must save."""
@@ -936,8 +1002,7 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         self.assertEqual(self.file.name, "renamed.txt")
         self.assertEqual(self.file.parent, original_parent)
         # Bytes follow the rename.
-        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
+        self.assertTrue(default_storage.is_file(self.file.content.name))
 
     def test_copy_move_single_move_migrates_content_storage(self):
         """A WebDAV MOVE on a file must migrate its bytes on disk.
@@ -947,19 +1012,19 @@ class FileResourceTests(IsolatedMediaRootMixin, TestCase):
         reads served stale storage state.
         """
         FileService.create_folder(self.user, "Target")
-        old_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(old_full_path))
+        old_name = self.file.content.name
+        self.assertTrue(default_storage.is_file(old_name))
 
-        self.res.copy_move_single("/Target/moved.txt", is_move=True)
+        with self.captureOnCommitCallbacks(execute=True):
+            self.res.copy_move_single("/Target/moved.txt", is_move=True)
         self.file.refresh_from_db()
 
         # New content.name must reflect the new parent.
         new_content_name = self.file.content.name.replace("\\", "/")
         self.assertIn("Target/", new_content_name)
         # And the bytes must actually live there.
-        new_full_path = os.path.join(settings.MEDIA_ROOT, self.file.content.name)
-        self.assertTrue(os.path.isfile(new_full_path))
-        self.assertFalse(os.path.isfile(old_full_path))
+        self.assertTrue(default_storage.is_file(self.file.content.name))
+        self.assertFalse(default_storage.is_file(old_name))
 
     def test_copy_move_single_copy(self):
         folder = FileService.create_folder(self.user, "CopyDest")
@@ -1105,8 +1170,10 @@ class StreamingWriteBufferTests(TestCase):
         import tempfile
 
         self._tmpdir = tempfile.mkdtemp()
-        path = os.path.join(self._tmpdir, name)
-        return _StreamingWriteBuffer(path, flush_size), path
+        writer = BlobStorage(location=self._tmpdir).staged_writer(name)
+        return _StreamingWriteBuffer(writer, flush_size), os.path.join(
+            self._tmpdir, name
+        )
 
     def tearDown(self):
         import shutil
@@ -1144,41 +1211,24 @@ class StreamingWriteBufferTests(TestCase):
         with open(path, "rb") as f:
             self.assertEqual(f.read(), b"12345678ABCD")
 
-    def test_flush_survives_partial_os_write(self):
-        """POSIX allows os.write to write fewer bytes than requested; the
-        flush must loop until the whole buffer is on disk or bytes are
-        silently dropped."""
-        from unittest import mock
-
-        buf, path = self._make_buf(flush_size=8)
-        real_write = os.write
-
-        def short_write(fd, data):
-            return real_write(fd, bytes(data)[:5])
-
-        with mock.patch(
-            "workspace.files.webdav.resources.os.write", side_effect=short_write
-        ):
-            buf.write(b"0123456789ABCDEF")  # crosses the flush threshold
-            buf.finalize()
-
-        self.assertEqual(buf.size, 16)
-        with open(path, "rb") as f:
-            self.assertEqual(f.read(), b"0123456789ABCDEF")
-
     def test_abort_deletes_file(self):
         buf, path = self._make_buf()
         buf.write(b"partial data")
         buf.abort()
         self.assertFalse(os.path.exists(path))
-        self.assertEqual(os.listdir(self._tmpdir), [])  # no temp leftovers
+        leftovers = [name for _, _, names in os.walk(self._tmpdir) for name in names]
+        self.assertEqual(leftovers, [])
 
-    def test_abort_then_missing_file_is_safe(self):
-        buf, path = self._make_buf()
-        os.close(buf._fd)
-        buf._fd = None
-        os.unlink(buf._temp_path)  # in-progress file already gone
-        buf.abort()  # should not raise
+    def test_content_hash_covers_every_byte(self):
+        from workspace.files.services.content_hash import new_hasher
+
+        buf, _path = self._make_buf(flush_size=4)
+        buf.write(b"0123456789")
+        buf.finalize()
+
+        expected = new_hasher()
+        expected.update(b"0123456789")
+        self.assertEqual(buf.content_hash, expected.hexdigest())
 
 
 # ── Lock storage selection ────────────────────────────────────────────

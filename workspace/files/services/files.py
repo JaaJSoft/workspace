@@ -16,12 +16,13 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 
 from ..metrics import FILES_UPLOAD_BYTES
-from ..models import File, FileEvent
+from ..models import File, FileEvent, canonical_name
 from . import _content as _content_helpers
 from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
 from .hard_delete import hard_delete_tree
+from .locking import Relocated
 from .quota import check_write_allowed, subtree_bytes
 from .scanning.policy import exclude_blocked
 from .thumbnails.failures import clear_failure
@@ -37,6 +38,11 @@ class FilePermission(enum.IntEnum):
 
 
 logger = logging.getLogger(__name__)
+
+
+def _location(file_obj):
+    """Everything a file's blob path is derived from (``file_upload_path``)."""
+    return (file_obj.path, file_obj.group_id, file_obj.owner_id)
 
 
 class FileService:
@@ -217,6 +223,7 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
+        name = canonical_name(name)
         if group is None and parent and parent.group_id:
             group = parent.group
 
@@ -281,10 +288,12 @@ class FileService:
         return file_obj
 
     @staticmethod
+    @transaction.atomic
     def create_folder(
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
-        """Create a new folder record."""
+        """Create a new folder record and its directory, or neither."""
+        name = canonical_name(name)
         if group is None and parent and parent.group_id:
             group = parent.group
 
@@ -315,10 +324,15 @@ class FileService:
         size=None,
         acting_user=None,
     ):
-        """Register a file that already exists on disk (used by sync)."""
+        """Register a file that already exists on disk (used by sync).
+
+        *content_path* names the blob as it is stored, which the caller
+        has put under the composed *name* first.
+        """
         from workspace.files.services.content_hash import hash_storage_file
         from workspace.files.services.detection import detect_from_name
 
+        name = canonical_name(name)
         detection = detect_from_name(name)
         if not mime_type:
             mime_type = detection.mime_type
@@ -456,6 +470,7 @@ class FileService:
     def rename(file_obj, new_name, *, acting_user=None):
         """Rename a file or folder, moving physical storage files as needed."""
         old_name = file_obj.name
+        new_name = canonical_name(new_name)
         if old_name == new_name:
             return file_obj
 
@@ -542,13 +557,19 @@ class FileService:
         # ".md" reads as txt) so an edited note keeps type=markdown.
         file_type = refine_with_name(detection.label, name or file_obj.name)
         content_field = File._meta.get_field("content")
+
+        def blob_path(instance, filename):
+            return content_field.storage.get_available_name(
+                content_field.generate_filename(instance, filename),
+                max_length=content_field.max_length,
+            )
+
         # What ``FileField.pre_save`` would resolve on the way to storage,
         # resolved early because the row write has to name the path in the same
-        # statement that claims the row.
-        storage_path = content_field.storage.get_available_name(
-            content_field.generate_filename(file_obj, content.name),
-            max_length=content_field.max_length,
-        )
+        # statement that claims the row. From the node's name, not the
+        # upload's: a "Report.PDF" replacing "report.pdf" still belongs at the
+        # node's tree path.
+        storage_path = blob_path(file_obj, file_obj.name)
         fields = {
             "content": storage_path,
             "content_hash": hash_stream(content),
@@ -564,7 +585,12 @@ class FileService:
         }
         with transaction.atomic():
             FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
-            stored = _storage.replace_blob(content_field.storage, storage_path, content)
+            current = FileService._claimed_row(file_obj)
+            if _location(current) != _location(file_obj):
+                storage_path = blob_path(current, current.name)
+                File.objects.filter(pk=file_obj.pk).update(content=storage_path)
+                fields["content"] = storage_path
+            stored = content_field.storage.replace(storage_path, content)
             if stored != storage_path:
                 # A storage that renames around a collision moved the blob; the
                 # row is ours until this block commits, so it can follow.
@@ -583,6 +609,17 @@ class FileService:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
         return file_obj
+
+    @staticmethod
+    def _claimed_row(file_obj):
+        """*file_obj*'s row as it stands, read once the caller has claimed it.
+
+        A rename or a move holds the rows it relocates until it commits, so a
+        claim that had to wait for one sees it here. The bytes then go where
+        the file is now: the path the caller computed from the instance it
+        loaded is one that move is about to empty.
+        """
+        return File.objects.select_related("owner").get(pk=file_obj.pk)
 
     @staticmethod
     def _write_content_row(file_obj, acting_user, expected_hash, fields):
@@ -693,6 +730,10 @@ class FileService:
         The ordering constraint is the caller's here: the bytes must not be
         moved into place until this returns, or a refused write has already
         overwritten the content it was refused for.
+
+        *storage_path* was derived from *file_obj* as the caller holds it, so
+        a rename or a move that committed while the claim waited makes it a
+        path that move is emptying: that refuses with ``Relocated``.
         """
         from workspace.files.services.detection import detect_from_name
 
@@ -707,7 +748,10 @@ class FileService:
             "has_thumbnail": False,
             "updated_at": timezone.now(),
         }
-        FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+        with transaction.atomic():
+            FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
+            if _location(FileService._claimed_row(file_obj)) != _location(file_obj):
+                raise Relocated()
         for field, value in fields.items():
             setattr(file_obj, field, value)
         # Same ordering constraint, and the same deliberate lack of a guard, as

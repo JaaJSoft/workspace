@@ -10,6 +10,9 @@ It also arms the full-row-write guard over ``File``, the model the app mutates
 from the most places at once (``workspace.common.tests.row_writes`` explains
 what it catches and why nothing else can).
 
+With ``WORKSPACE_TEST_STORAGE=s3`` every blob of the run goes to a bucket of
+its own instead (``workspace.common.tests.s3``).
+
 And it opens preview modules to everyone. Fixture users are regular users, and
 under the production audience (``staff``) a preview module refuses every
 request they make, so its own tests would test nothing but the refusal. The
@@ -47,6 +50,12 @@ def _init_worker_with_media_root(counter, *args, **kwargs):
     # settings from the environment, so the override has to follow it.
     worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
     override_settings(MEDIA_ROOT=worker_root).enable()
+    from workspace.common.tests.s3 import ON_OBJECT_STORAGE, session_storages
+
+    if ON_OBJECT_STORAGE:
+        # One prefix of the run's bucket per worker, as one directory per
+        # worker on a disk.
+        override_settings(STORAGES=session_storages(f"worker-{os.getpid()}")).enable()
 
 
 class MediaRootParallelTestSuite(ParallelTestSuite):
@@ -78,6 +87,10 @@ class MediaRootTestRunner(DiscoverRunner):
             _override_from_env("PREVIEW_VISIBILITY", "all"),
             _override_from_env("VAULT_TEST_SUITES", "1"),
         ]
+        from workspace.common.tests.s3 import ON_OBJECT_STORAGE, use_session_bucket
+
+        if ON_OBJECT_STORAGE:
+            self._restore_settings.append(use_session_bucket())
 
     def teardown_test_environment(self, **kwargs):
         for restore in reversed(self._restore_settings):

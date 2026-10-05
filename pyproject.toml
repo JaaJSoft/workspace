@@ -39,7 +39,7 @@ dependencies = [
     # QR codes (pure Python, no dependencies): a contact as a scannable card
     "segno>=1.6.6",
     # vault
-    "cbor2>=5.7.0",
+    "cbor2>=6.1.5",
     # utils
     "mistune>=3.3.4",
     "pygments>=2.21.0",

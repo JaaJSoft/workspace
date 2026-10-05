@@ -19,6 +19,7 @@ User = get_user_model()
 
 class ThreadMessagesViewTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.alice = User.objects.create_user(username="alice", password="secret")
         self.mallory = User.objects.create_user(username="mallory", password="secret")
         self.conversation = Conversation.objects.create(
@@ -230,6 +231,7 @@ class ThreadPanelRenderingTests(TestCase):
     """Structure of the rendered panel: pagination, deletions, pins."""
 
     def setUp(self):
+        cache.clear()
         self.alice = User.objects.create_user(username="alice", password="secret")
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.alice
@@ -399,6 +401,7 @@ class QuoteIntoThreadTests(TestCase):
     not there."""
 
     def setUp(self):
+        cache.clear()
         self.alice = User.objects.create_user(username="alice", password="secret")
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.alice

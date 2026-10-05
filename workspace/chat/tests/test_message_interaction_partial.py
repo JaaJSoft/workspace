@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.template.loader import render_to_string
 from django.test import TestCase
 from django.utils import timezone
@@ -120,6 +121,7 @@ class MessageInteractionPartialTests(TestCase):
 
 class MessageInteractionQueryCountTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(
             username="alice",
             email="a@test.com",
@@ -142,6 +144,9 @@ class MessageInteractionQueryCountTests(TestCase):
         ConversationMember.objects.create(conversation=self.conv, user=self.user)
         ConversationMember.objects.create(conversation=self.conv, user=self.bot)
         ConversationMember.objects.create(conversation=self.conv, user=self.other)
+
+    def tearDown(self):
+        cache.clear()
 
     def _seed_messages(self, n_with_interaction):
         for i in range(n_with_interaction):

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -14,6 +15,7 @@ class ReadReceiptQueryCountTests(TestCase):
     count; both come out of the same rows, so one query has to serve both."""
 
     def setUp(self):
+        cache.clear()
         self.author = User.objects.create_user(username="author", password="pw")
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, title="G", created_by=self.author
@@ -35,6 +37,9 @@ class ReadReceiptQueryCountTests(TestCase):
             kwargs={"conversation_uuid": self.conversation.uuid},
         )
         self.client.force_login(self.author)
+
+    def tearDown(self):
+        cache.clear()
 
     def test_recipients_are_read_in_a_single_query(self):
         with CaptureQueriesContext(connection) as ctx:

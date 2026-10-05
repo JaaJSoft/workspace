@@ -10,6 +10,7 @@ filter is skipped (same behavior as a stale/deleted cursor).
 """
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -25,6 +26,7 @@ class MessagesCursorCrossConversationTests(ChatTestMixin, APITestCase):
     """A ?before cursor pointing at a foreign conversation's message is ignored."""
 
     def setUp(self):
+        cache.clear()
         super().setUp()
 
         # Three messages in self.group (the conversation creator can read).
@@ -77,6 +79,9 @@ class MessagesCursorCrossConversationTests(ChatTestMixin, APITestCase):
         Message.objects.filter(pk=self.late_msg.pk).update(
             created_at="2024-01-01T13:00:00Z",
         )
+
+    def tearDown(self):
+        cache.clear()
 
     def url(self):
         return f"/chat/{self.group.pk}/messages"

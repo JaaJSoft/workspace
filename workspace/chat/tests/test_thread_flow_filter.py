@@ -12,6 +12,7 @@ User = get_user_model()
 
 class MainFlowFilterTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.alice = User.objects.create_user(username="alice", password="secret")
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.GROUP, created_by=self.alice

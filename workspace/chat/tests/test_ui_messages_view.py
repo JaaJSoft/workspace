@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -17,6 +18,7 @@ class ConversationMessagesViewAttachmentTests(TestCase):
     """The messages partial must render every attachment of a message."""
 
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM, created_by=self.user
@@ -32,6 +34,9 @@ class ConversationMessagesViewAttachmentTests(TestCase):
             kwargs={"conversation_uuid": self.conversation.uuid},
         )
         self.client.force_login(self.user)
+
+    def tearDown(self):
+        cache.clear()
 
     def _attach(self, name, mime, category):
         return MessageAttachment.objects.create(

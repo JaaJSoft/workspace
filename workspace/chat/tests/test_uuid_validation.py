@@ -10,6 +10,7 @@ These tests pin the fix that routes user-supplied UUIDs through
 ``parse_uuid_or_none`` at the view boundary.
 """
 
+from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -33,6 +34,13 @@ class MessagesBeforeCursorTests(ChatTestMixin, APITestCase):
 
 class MessagesUIBeforeCursorTests(ChatTestMixin, APITestCase):
     """GET /chat/<uuid>/messages?before=<bad> (UI partial)"""
+
+    def setUp(self):
+        cache.clear()
+        super().setUp()
+
+    def tearDown(self):
+        cache.clear()
 
     def url(self):
         return f"/chat/{self.group.pk}/messages"

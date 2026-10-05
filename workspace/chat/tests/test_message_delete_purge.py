@@ -33,6 +33,7 @@ User = get_user_model()
 
 class MessageDeletePurgeTests(APITestCase):
     def setUp(self):
+        cache.clear()
         self.author = User.objects.create_user(username="author", password="pass")
         self.member = User.objects.create_user(username="member", password="pass")
 

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.urls import reverse
@@ -138,6 +139,7 @@ class VoiceMessageViewerTests(APITestCase):
     """view_attachment must honour the pin, not the detected category."""
 
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(
             username="bob", email="bob@test.com", password="pw"
         )
@@ -148,6 +150,9 @@ class VoiceMessageViewerTests(APITestCase):
         self.client.force_authenticate(self.user)
         self.client.force_login(self.user)
         self.url = f"/api/v1/chat/conversations/{self.conv.pk}/messages"
+
+    def tearDown(self):
+        cache.clear()
 
     def _send_voice(self):
         self.client.post(

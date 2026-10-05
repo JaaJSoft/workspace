@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import connection
 from django.template.loader import render_to_string
 from django.test import TestCase
@@ -107,6 +108,7 @@ class RenderAiUsageTagTests(TestCase):
 
 class ConversationMessagesUsageTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.user = User.objects.create_user(username="alice", password="pw")
         self.bot = User.objects.create_user(username="bot", password="pw")
         self.conv = Conversation.objects.create(
@@ -119,6 +121,9 @@ class ConversationMessagesUsageTests(TestCase):
         self.url = reverse(
             "chat_ui:conversation_messages", kwargs={"conversation_uuid": self.conv.pk}
         )
+
+    def tearDown(self):
+        cache.clear()
 
     def _bot_reply(self, body="hi"):
         message = Message.objects.create(
@@ -174,6 +179,10 @@ class ConversationMessagesUsageTests(TestCase):
 
     def test_usage_is_loaded_once_for_the_whole_page(self):
         self._bot_reply("one")
+        # Render once unmeasured: a render also fills per-user caches (settings,
+        # presence, the quick-reaction bar), so the first one measured would
+        # count queries the second never runs.
+        self.client.get(self.url)
         with CaptureQueriesContext(connection) as single:
             self.client.get(self.url)
 

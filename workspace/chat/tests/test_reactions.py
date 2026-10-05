@@ -24,6 +24,7 @@ User = get_user_model()
 
 class QuickReactionsServiceTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.alice = User.objects.create_user(
             username="alice", email="a@test.com", password="pw"
         )

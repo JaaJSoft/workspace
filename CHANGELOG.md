@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.42.0 - Featherweight
+
+### Highlights
+
+Your workspace now needs much less memory to run. It fits comfortably on a smaller server and has more headroom when many files arrive at once.
+
+### Performance
+
+- Everything that happens behind the scenes (preparing previews of your photos and documents, syncing your mail, sending your notifications) now uses about half as much memory when the workspace is idle, and a third less when it is busy.
+- A big batch of uploads no longer leaves the server short on memory once it is done: what the work needed is freed right away.
+- On a large server, the workspace no longer reserves memory for processing power it isn't allowed to use.
+
+### Interface
+
+- Checkboxes stay grey until you check them, so what you selected stands out in a long list.
+
+### Fixes
+
+- AI assistants can move their goals and scheduled messages to a new time again.
+- The Mail rules dialog and the signature's Save button now use the Mail colour like the rest of the app.
+
 ## 0.41.0 - People & Address Book
 
 ### Highlights

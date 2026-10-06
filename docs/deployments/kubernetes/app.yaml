@@ -64,6 +64,9 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          env:
+            - name: PROCESS_TYPE
+              value: web
           envFrom:
             - configMapRef:
                 name: workspace-config
@@ -109,7 +112,9 @@ spec:
         - name: worker
           image: ghcr.io/jaajsoft/workspace:main
           imagePullPolicy: Always
-          command: ["celery", "-A", "workspace", "worker", "--loglevel=info"]
+          env:
+            - name: PROCESS_TYPE
+              value: worker
           envFrom:
             - configMapRef:
                 name: workspace-config
@@ -123,12 +128,19 @@ spec:
               cpu: 100m
               memory: 1024Mi
             limits:
+              # Also sizes the Celery pool: one child process per CPU of the
+              # limit, each holding its own copy of the models it loads.
+              cpu: "2"
               memory: 2048Mi
 
         - name: beat
           image: ghcr.io/jaajsoft/workspace:main
           imagePullPolicy: Always
-          command: ["celery", "-A", "workspace", "beat", "--loglevel=info", "--schedule=/tmp/celerybeat-schedule"]
+          env:
+            - name: PROCESS_TYPE
+              value: beat
+            - name: CELERY_BEAT_SCHEDULE_FILENAME
+              value: /tmp/celerybeat-schedule
           envFrom:
             - configMapRef:
                 name: workspace-config

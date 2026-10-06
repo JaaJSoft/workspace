@@ -1,11 +1,18 @@
 """Celery application for the Workspace project."""
 
+import gc
 import logging
 import os
 import time
 
 from celery import Celery
-from celery.signals import task_failure, task_postrun, task_prerun, task_retry
+from celery.signals import (
+    celeryd_after_setup,
+    task_failure,
+    task_postrun,
+    task_prerun,
+    task_retry,
+)
 from prometheus_client.core import GaugeMetricFamily
 
 from workspace.common.metrics import safe_counter, safe_histogram, safe_register
@@ -17,6 +24,22 @@ logger = logging.getLogger(__name__)
 app = Celery("workspace")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
+
+
+@celeryd_after_setup.connect
+def _freeze_before_fork(**kwargs):
+    """Keep the app the worker loaded shared with the pool's children.
+
+    The signal fires once every task module is imported, right before the
+    prefork pool forks its children. They share the parent's memory until one
+    of them writes to it, and the cycle collector writes to every object it
+    examines: left alone, each child's first collections copy the whole app,
+    page by page, into memory of its own. Frozen objects are never examined
+    again. Collecting first keeps garbage out of the frozen set, where nothing
+    could ever free it.
+    """
+    gc.collect()
+    gc.freeze()
 
 
 # ---------------------------------------------------------------------------

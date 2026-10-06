@@ -4,3 +4,7 @@
 # that differs from the committed blob, so a digest check on one cannot hold.
 workspace/**/static/**/vendor/** -text
 workspace/common/static/css/app.css -text
+
+# Shell scripts run inside the Linux image whatever the host they were checked
+# out on, and CRLF line endings break them (run.sh is the image's command).
+*.sh text eol=lf

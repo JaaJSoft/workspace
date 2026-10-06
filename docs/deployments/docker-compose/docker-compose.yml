@@ -4,6 +4,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - PROCESS_TYPE=web
       - DEBUG=0
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
@@ -12,7 +13,7 @@ services:
       - USE_X_FORWARDED_PORT=${USE_X_FORWARDED_PORT:-}
       - DATABASE_URL=sqlite:////app/data/db.sqlite3
       - MEDIA_ROOT=/app/data
-      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-6}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-}
       - WEBPUSH_VAPID_PRIVATE_KEY=${WEBPUSH_VAPID_PRIVATE_KEY:-}
       - WEBPUSH_VAPID_PUBLIC_KEY=${WEBPUSH_VAPID_PUBLIC_KEY:-}
       - WEBPUSH_VAPID_MAILTO=${WEBPUSH_VAPID_MAILTO:-}
@@ -69,8 +70,10 @@ services:
 
   celery-worker:
     build: .
-    command: celery -A workspace worker -l info
     environment:
+      - PROCESS_TYPE=worker
+      # Every `celery worker` option reads CELERY_WORKER_<OPTION>: list here the
+      # ones you set (see "Processes" in docs/deployments/README.md)
       - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-}
       - CELERY_WORKER_MAX_MEMORY_PER_CHILD=${CELERY_WORKER_MAX_MEMORY_PER_CHILD:-}
       - DEBUG=0
@@ -127,8 +130,9 @@ services:
 
   celery-beat:
     build: .
-    command: celery -A workspace beat -l info --schedule=/app/data/celerybeat-schedule
     environment:
+      - PROCESS_TYPE=beat
+      - CELERY_BEAT_SCHEDULE_FILENAME=/app/data/celerybeat-schedule
       - DEBUG=0
       - SECRET_KEY=${SECRET_KEY:-change-me-to-a-real-secret-key}
       - DATABASE_URL=sqlite:////app/data/db.sqlite3

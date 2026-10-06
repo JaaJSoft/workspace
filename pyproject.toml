@@ -67,7 +67,7 @@ dependencies = [
     "ollama>=0.6.2",
     # web search & scraping
     "httpx2>=2.13.1",
-    "trafilatura>=2.2.0",
+    "trafilatura>=2.3.0",
     # Apache Tika compiled ahead of time to a native library: text and
     # metadata out of PDFs, Office and OpenDocument files without a JVM, a
     # sidecar server, or a parser of our own to keep correct. One wheel per

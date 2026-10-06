@@ -80,9 +80,16 @@ def _cpu_quota(root):
     try:
         quota, period = (root / "cpu.max").read_text(encoding="utf-8").split()
     except OSError, ValueError:
+        # The v1 controller's directory is named after whatever it is mounted
+        # with (cpu, cpu,cpuacct...), and only it holds these two files.
+        controller = next(
+            (path.parent for path in root.glob("*/cpu.cfs_quota_us")), None
+        )
+        if controller is None:
+            return None
         try:
-            quota = (root / "cpu" / "cpu.cfs_quota_us").read_text(encoding="utf-8")
-            period = (root / "cpu" / "cpu.cfs_period_us").read_text(encoding="utf-8")
+            quota = (controller / "cpu.cfs_quota_us").read_text(encoding="utf-8")
+            period = (controller / "cpu.cfs_period_us").read_text(encoding="utf-8")
         except OSError:
             return None
     try:

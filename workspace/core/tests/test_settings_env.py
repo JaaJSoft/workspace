@@ -95,6 +95,14 @@ class AvailableCpusTests(SimpleTestCase):
         self.write("cpu/cpu.cfs_period_us", "100000\n")
         self.assertEqual(available_cpus(self.root), 3)
 
+    def test_follows_a_cgroup_v1_limit_on_a_comounted_controller(self, _):
+        """Mounted together with cpuacct, the controller's directory is named
+        after both, and nothing guarantees a plain `cpu` link next to it."""
+        self.write("cpu,cpuacct/cpu.cfs_quota_us", "300000\n")
+        self.write("cpu,cpuacct/cpu.cfs_period_us", "100000\n")
+        self.write("cpuset/cpuset.cpus", "0-19\n")
+        self.assertEqual(available_cpus(self.root), 3)
+
     def test_cgroup_v1_without_a_limit_counts_the_cores(self, _):
         self.write("cpu/cpu.cfs_quota_us", "-1\n")
         self.write("cpu/cpu.cfs_period_us", "100000\n")

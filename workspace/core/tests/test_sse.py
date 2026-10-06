@@ -22,6 +22,14 @@ def _sample(name, labels=None):
     return REGISTRY.get_sample_value(name, labels or {}) or 0.0
 
 
+def _fake_hub(*notifications):
+    """A hub whose subscription hands out *notifications*, then nothing."""
+    hub = MagicMock()
+    remaining = iter(notifications)
+    hub.subscribe.return_value.wait.side_effect = lambda timeout: next(remaining, set())
+    return hub
+
+
 class StreamMaxDurationTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -43,22 +51,38 @@ class StreamMaxDurationTests(TestCase):
         self.assertEqual(chunks, [])
 
     def test_pubsub_stream_returns_and_cleans_up_when_max_duration_reached(self):
-        fake_pubsub = MagicMock()
-        fake_pubsub.get_message.return_value = None
-        fake_redis = MagicMock()
-        fake_redis.pubsub.return_value = fake_pubsub
+        hub = _fake_hub()
 
         with (
             patch.object(sse, "_MAX_CONNECTION_SECONDS", -1),
             patch.object(sse, "_init_providers", return_value={}),
         ):
-            chunks = list(sse._event_stream_pubsub(self.request, fake_redis))
+            chunks = list(sse._event_stream_pubsub(self.request, hub))
 
         self.assertEqual(chunks, [])
-        # finally block must run: subscribe was set up, unsubscribe + close must mirror it.
-        fake_pubsub.subscribe.assert_called_once_with(f"sse:user:{self.user.id}")
-        fake_pubsub.unsubscribe.assert_called_once_with(f"sse:user:{self.user.id}")
-        fake_pubsub.close.assert_called_once()
+        # finally block must run: the subscription is closed as it was opened.
+        hub.subscribe.assert_called_once_with(self.user.id)
+        hub.subscribe.return_value.close.assert_called_once()
+
+    def test_pubsub_stream_subscribes_before_building_its_initial_events(self):
+        """A notification sent while the initial events are built must not
+        fall between them and the subscription."""
+        order = []
+        hub = _fake_hub()
+        subscription = hub.subscribe.return_value
+        hub.subscribe.side_effect = lambda user_id: (
+            order.append("subscribe") or subscription
+        )
+        provider = MagicMock()
+        provider.get_initial_events.side_effect = lambda: order.append("initial") or []
+
+        with (
+            patch.object(sse, "_MAX_CONNECTION_SECONDS", -1),
+            patch.object(sse, "_init_providers", return_value={"chat": provider}),
+        ):
+            list(sse._event_stream_pubsub(self.request, hub))
+
+        self.assertEqual(order, ["subscribe", "initial"])
 
 
 class MetricsTests(TestCase):
@@ -121,27 +145,19 @@ class MetricsTests(TestCase):
 
     def test_pubsub_stream_increments_forced_reconnect_when_budget_exhausted(self):
         before = _sample("sse_forced_reconnects_total", {"transport": "pubsub"})
-        fake_pubsub = MagicMock()
-        fake_pubsub.get_message.return_value = None
-        fake_redis = MagicMock()
-        fake_redis.pubsub.return_value = fake_pubsub
         with (
             patch.object(sse, "_MAX_CONNECTION_SECONDS", -1),
             patch.object(sse, "_init_providers", return_value={}),
         ):
-            list(sse._event_stream_pubsub(self.request, fake_redis))
+            list(sse._event_stream_pubsub(self.request, _fake_hub()))
         after = _sample("sse_forced_reconnects_total", {"transport": "pubsub"})
         self.assertEqual(after - before, 1)
 
     def test_pubsub_stream_increments_pubsub_messages_on_real_message(self):
-        # One real message, then None forever; budget cuts the loop on the 2nd iter.
+        # One notification, then nothing; budget cuts the loop on the 2nd iter.
         provider = MagicMock()
         provider.poll.return_value = []
-        message = {"type": "message", "data": b'{"provider":"chat"}'}
-        fake_pubsub = MagicMock()
-        fake_pubsub.get_message.side_effect = [message, None, None, None]
-        fake_redis = MagicMock()
-        fake_redis.pubsub.return_value = fake_pubsub
+        hub = _fake_hub({"chat"})
 
         before = _sample("sse_pubsub_messages_total")
 
@@ -156,10 +172,13 @@ class MetricsTests(TestCase):
                 side_effect=lambda: next(times),
             ),
         ):
-            list(sse._event_stream_pubsub(self.request, fake_redis))
+            list(sse._event_stream_pubsub(self.request, hub))
 
         after = _sample("sse_pubsub_messages_total")
         self.assertEqual(after - before, 1)
+        # Polled for the notification, with a dirty value rather than None.
+        provider.poll.assert_called_once()
+        self.assertIsNotNone(provider.poll.call_args.args[0])
 
 
 class StreamDatabaseConnectionTests(TestCase):
@@ -182,10 +201,10 @@ class StreamDatabaseConnectionTests(TestCase):
 
     def test_pubsub_stream_releases_the_connection_before_each_wait(self):
         calls = []
-        fake_pubsub = MagicMock()
-        fake_pubsub.get_message.side_effect = lambda timeout: calls.append("wait")
-        fake_redis = MagicMock()
-        fake_redis.pubsub.return_value = fake_pubsub
+        hub = MagicMock()
+        hub.subscribe.return_value.wait.side_effect = lambda timeout: (
+            calls.append("wait") or set()
+        )
         # Two rounds, then the budget ends the stream.
         times = iter([0.0, 0.0, 0.0, 0.0, 0.0, 999.0])
         with (
@@ -201,7 +220,7 @@ class StreamDatabaseConnectionTests(TestCase):
                 side_effect=lambda: next(times),
             ),
         ):
-            list(sse._event_stream_pubsub(self.request, fake_redis))
+            list(sse._event_stream_pubsub(self.request, hub))
 
         self.assertEqual(calls, ["release", "wait", "release", "wait"])
 

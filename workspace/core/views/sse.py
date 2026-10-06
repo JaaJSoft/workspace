@@ -9,6 +9,7 @@ from django.http import StreamingHttpResponse
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
 
 from ..module_guard import is_hidden_from
+from ..sse_hub import get_hub
 from ..sse_registry import sse_registry
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,8 @@ SSE_FORCED_RECONNECTS = safe_counter(
 
 SSE_PUBSUB_MESSAGES = safe_counter(
     f"{_P}_pubsub_messages_total",
-    "Redis Pub/Sub messages received on the per-user SSE channel",
+    "Provider notifications from Redis Pub/Sub acted on by a stream, "
+    "several for one provider counting once",
 )
 
 # Force a periodic reconnect so workers/providers cycle and stale state clears.
@@ -198,20 +200,14 @@ def _poll_provider(slug, provider, cache_value, user_id, cursors):
 
 def _event_stream(request):
     """Router: use Redis Pub/Sub when available, fall back to cache polling."""
-    try:
-        from django_redis import get_redis_connection
-
-        redis = get_redis_connection("default")
-    except Exception:
-        redis = None
-
-    if redis is not None:
-        yield from _event_stream_pubsub(request, redis)
+    hub = get_hub()
+    if hub is not None:
+        yield from _event_stream_pubsub(request, hub)
     else:
         yield from _event_stream_polling(request)
 
 
-def _event_stream_pubsub(request, redis):
+def _event_stream_pubsub(request, hub):
     """Pub/Sub-based SSE generator for near-instant event delivery."""
     user = request.user
     user_id = user.id
@@ -219,13 +215,13 @@ def _event_stream_pubsub(request, redis):
 
     providers = _init_providers(user, cursors)
 
-    yield from _emit_initial_events(providers, user_id, cursors)
-
-    pubsub = redis.pubsub()
-    pubsub.subscribe(f"sse:user:{user_id}")
-
+    # Subscribed before the initial events are built: a notification sent
+    # meanwhile is then polled right after them instead of being missed.
+    subscription = hub.subscribe(user_id)
     SSE_CONNECTIONS.inc()
     try:
+        yield from _emit_initial_events(providers, user_id, cursors)
+
         start_time = time.monotonic()
         last_keepalive = start_time
 
@@ -238,40 +234,27 @@ def _event_stream_pubsub(request, redis):
             # connection goes back to the pool first, or a handful of open
             # tabs would hold every connection of the worker.
             close_old_connections()
-            # Block up to 5s waiting for message (gevent-friendly)
-            message = pubsub.get_message(timeout=5)
+            # Block up to 5s waiting for a notification (gevent-friendly)
+            notified = subscription.wait(timeout=5)
             now = time.monotonic()
 
             if now - last_keepalive >= 15:
                 yield ":keepalive\n\n"
                 last_keepalive = now
 
-            if message is None:
+            if not notified:
                 # Timeout: poll all providers with None (timer-based checks)
                 for slug, provider in providers.items():
                     yield from _poll_provider(slug, provider, None, user_id, cursors)
-            elif message["type"] == "message":
+            for slug in notified:
                 SSE_PUBSUB_MESSAGES.inc()
-                try:
-                    # Targeted: only poll the provider that published
-                    data = orjson.loads(message["data"])
-                    slug = data["provider"]
-                    if slug in providers:
-                        yield from _poll_provider(
-                            slug,
-                            providers[slug],
-                            time.monotonic(),
-                            user_id,
-                            cursors,
-                        )
-                except Exception:
-                    logger.exception(
-                        "Failed to process Pub/Sub message for user %s",
-                        user_id,
+                # Targeted: only poll the providers that published
+                if slug in providers:
+                    yield from _poll_provider(
+                        slug, providers[slug], now, user_id, cursors
                     )
     finally:
-        pubsub.unsubscribe(f"sse:user:{user_id}")
-        pubsub.close()
+        subscription.close()
         SSE_CONNECTIONS.dec()
 
 

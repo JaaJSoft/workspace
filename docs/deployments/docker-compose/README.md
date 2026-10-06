@@ -46,7 +46,7 @@ docker compose exec web python manage.py createsuperuser
 
 ## Configuration
 
-All settings are configurable via environment variables or a `.env` file next to `docker-compose.yml`.
+All settings are configurable via environment variables or a `.env` file next to `docker-compose.yml`. Each service sets `PROCESS_TYPE` to pick what the image runs; the worker and scheduler options are listed under [Processes](../README.md#processes).
 
 | Variable               | Default                          | Description                               |
 |------------------------|----------------------------------|-------------------------------------------|
@@ -55,8 +55,8 @@ All settings are configurable via environment variables or a `.env` file next to
 | `CSRF_TRUSTED_ORIGINS` | *(empty)*                        | Comma-separated list of trusted origins   |
 | `USE_X_FORWARDED_HOST` | *(empty)*                        | Set to `1` when the proxy rewrites `Host` (Cloudflare, cloud LBs) |
 | `USE_X_FORWARDED_PORT` | *(empty)*                        | Set to `1` when the proxy rewrites the public port |
-| `GUNICORN_WORKERS`     | `6`                              | Number of Gunicorn workers                |
-| `CELERY_WORKER_CONCURRENCY` | *(one per CPU)*             | Celery worker processes. Each holds its own copy of the models its tasks load, so memory grows with this number |
+| `GUNICORN_WORKERS`     | `3`                              | Number of Gunicorn workers                |
+| `CELERY_WORKER_CONCURRENCY` | *(one per CPU the container may use)* | Celery worker processes. Each holds its own copy of the models its tasks load, so memory grows with this number |
 | `CELERY_WORKER_MAX_MEMORY_PER_CHILD` | `524288`           | KiB. A Celery process that went past this is replaced after its current task; `0` disables |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | *(empty)*                   | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |
 | `WEBPUSH_VAPID_PUBLIC_KEY`  | *(empty)*                   | VAPID public key (base64url)              |

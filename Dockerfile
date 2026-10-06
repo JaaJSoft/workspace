@@ -123,11 +123,8 @@ ENV PHOTOS_MODEL_DIR=${FACE_MODELS:+/opt/face-models}
 ENV DJANGO_SETTINGS_MODULE=workspace.settings
 RUN SECRET_KEY=build-secret DEBUG=0 python manage.py collectstatic --noinput
 
-# Gunicorn workers count and logs configurable (default values)
-ENV GUNICORN_WORKERS=3 \
-    GUNICORN_LOG_LEVEL=info \
-    GUNICORN_ACCESS_LOGFORMAT="%(h)s %(l)s %(u)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s"
 EXPOSE 8000
 
-# Start command (exec replaces shell so gunicorn receives signals as PID 1)
-CMD ["sh", "-c", "exec gunicorn workspace.wsgi:application -c gunicorn.conf.py -b 0.0.0.0:8000 -k gevent -w ${GUNICORN_WORKERS} --log-level ${GUNICORN_LOG_LEVEL} --error-logfile - --access-logfile - --access-logformat \"${GUNICORN_ACCESS_LOGFORMAT}\" --capture-output"]
+# The web server, a Celery worker or the scheduler, picked by PROCESS_TYPE.
+# run.sh execs it, so it receives signals as PID 1.
+CMD ["./run.sh"]

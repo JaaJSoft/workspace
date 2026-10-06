@@ -1,6 +1,6 @@
 """Gunicorn hooks for the container image.
 
-Binding, worker count and logging stay on the Dockerfile command line; this
+Binding, worker count and logging stay on the command line in run.sh; this
 file carries what flags cannot express.
 
 Every worker is its own process with its own Prometheus values, so a scrape

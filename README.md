@@ -153,8 +153,9 @@ The most common variables are listed below. For the full, annotated list - inclu
 | `CSRF_TRUSTED_ORIGINS` | Comma-separated trusted CSRF origins              | *(none)*                     |
 | `DATABASE_URL`         | Database connection string                        | `sqlite:///db.sqlite3`       |
 | `REDIS_URL`            | Redis URL for cache and sessions                  | *(none, in-memory fallback)* |
+| `PROCESS_TYPE`         | What the image runs: `web`, `worker` or `beat`    | `web`                        |
 | `GUNICORN_WORKERS`     | Gunicorn worker count (Docker)                    | `3`                          |
-| `CELERY_WORKER_CONCURRENCY` | Celery worker processes                      | *(one per CPU)*              |
+| `CELERY_WORKER_CONCURRENCY` | Celery worker processes                      | *(one per CPU the container may use)* |
 | `CELERY_WORKER_MAX_MEMORY_PER_CHILD` | KiB before a Celery process is replaced, `0` to disable | `524288` |
 | `TRASH_RETENTION_DAYS` | Days before trashed items are permanently deleted | `30`                         |
 | `METRICS_USER`         | HTTP Basic user for `/metrics`                    | *(none, endpoint closed)*    |

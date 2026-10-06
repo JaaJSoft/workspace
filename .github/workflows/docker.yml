@@ -222,6 +222,40 @@ jobs:
           curl -fsS http://127.0.0.1:8000/health/ready   | grep -qE '"status"[[:space:]]*:[[:space:]]*"ok"'
           curl -fsS http://127.0.0.1:8000/login          | grep -q '<form'
 
+      - name: Run the worker and the scheduler from the image
+        run: |
+          # The worker gets a CPU limit below the runner's core count: Celery's
+          # own default would fork one child per core of the host, and the
+          # pool must be sized from the limit instead.
+          docker run -d --name workspace-worker --cpus 1 \
+            -e PROCESS_TYPE=worker \
+            -e DEBUG=False \
+            -e SECRET_KEY=smoke-test-key-not-secret \
+            workspace:ci
+          docker run -d --name workspace-beat \
+            -e PROCESS_TYPE=beat \
+            -e DEBUG=False \
+            -e SECRET_KEY=smoke-test-key-not-secret \
+            workspace:ci
+
+          trap 'for c in workspace-worker workspace-beat; do
+                  echo "--- $c logs ---"; docker logs "$c" 2>&1 || true
+                  docker rm -f "$c" >/dev/null 2>&1 || true
+                done' EXIT
+
+          logged() { docker logs "$1" 2>&1 | grep -q "$2"; }
+          for i in $(seq 1 45); do
+            if logged workspace-worker ' ready\.' && logged workspace-beat 'beat: Starting'; then
+              echo "Worker and scheduler up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+          logged workspace-worker ' ready\.'
+          logged workspace-beat 'beat: Starting'
+          logged workspace-worker 'concurrency: 1 (prefork)'
+
       - name: Log in to GitHub Container Registry
         if: env.SHOULD_PUSH == 'true'
         uses: docker/login-action@v4.6.0

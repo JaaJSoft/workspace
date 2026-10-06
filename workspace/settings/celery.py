@@ -66,6 +66,13 @@ FILES_CATCH_UP_INTERVAL = float(os.getenv("FILES_CATCH_UP_INTERVAL", "3600"))
 # IMAP round trips are the bottleneck.
 MAIL_SYNC_INTERVAL = float(os.getenv("MAIL_SYNC_INTERVAL", "300"))
 
+# Where beat records when each periodic task last ran, read by `celery beat`
+# and by a worker that runs it embedded (CELERY_WORKER_BEAT=1). A relative path
+# resolves against the working directory, as Celery's own default does.
+CELERY_BEAT_SCHEDULE_FILENAME = (
+    os.getenv("CELERY_BEAT_SCHEDULE_FILENAME") or "celerybeat-schedule"
+)
+
 CELERY_BEAT_SCHEDULE = {
     "sync-all-user-files": {
         "task": "files.sync_all_users",

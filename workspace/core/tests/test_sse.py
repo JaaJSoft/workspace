@@ -162,6 +162,73 @@ class MetricsTests(TestCase):
         self.assertEqual(after - before, 1)
 
 
+class StreamDatabaseConnectionTests(TestCase):
+    """A stream spends most of its ten minutes waiting, and must not hold a
+    database connection meanwhile: on PostgreSQL the pool gives each process
+    four, so a handful of open tabs would leave none for any other request.
+
+    The pool cannot be reproduced on the SQLite test database, so the contract
+    is checked where it is kept: the connection is handed back before every
+    wait.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(username="sse-db", password="p")
+
+    def setUp(self):
+        self.request = RequestFactory().get("/api/v1/stream")
+        self.request.user = self.user
+
+    def test_pubsub_stream_releases_the_connection_before_each_wait(self):
+        calls = []
+        fake_pubsub = MagicMock()
+        fake_pubsub.get_message.side_effect = lambda timeout: calls.append("wait")
+        fake_redis = MagicMock()
+        fake_redis.pubsub.return_value = fake_pubsub
+        # Two rounds, then the budget ends the stream.
+        times = iter([0.0, 0.0, 0.0, 0.0, 0.0, 999.0])
+        with (
+            patch.object(sse, "_MAX_CONNECTION_SECONDS", 1),
+            patch.object(sse, "_init_providers", return_value={}),
+            patch.object(
+                sse,
+                "close_old_connections",
+                side_effect=lambda: calls.append("release"),
+            ),
+            patch(
+                "workspace.core.views.sse.time.monotonic",
+                side_effect=lambda: next(times),
+            ),
+        ):
+            list(sse._event_stream_pubsub(self.request, fake_redis))
+
+        self.assertEqual(calls, ["release", "wait", "release", "wait"])
+
+    def test_polling_stream_releases_the_connection_before_each_wait(self):
+        calls = []
+        times = iter([0.0, 0.0, 0.0, 0.0, 999.0, 999.0])
+        with (
+            patch.object(sse, "_MAX_CONNECTION_SECONDS", 1),
+            patch.object(sse, "_init_providers", return_value={}),
+            patch.object(
+                sse,
+                "close_old_connections",
+                side_effect=lambda: calls.append("release"),
+            ),
+            patch(
+                "workspace.core.views.sse.time.time", side_effect=lambda: next(times)
+            ),
+            patch(
+                "workspace.core.views.sse.time.sleep",
+                side_effect=lambda seconds: calls.append("wait"),
+            ),
+        ):
+            list(sse._event_stream_polling(self.request))
+
+        self.assertEqual(calls, ["release", "wait"])
+
+
 class StreamConstantTests(TestCase):
     def test_max_connection_seconds_is_aligned_with_nginx_proxy_timeout(self):
         # nginx ingress proxy-read-timeout is 600s; staying below it avoids the

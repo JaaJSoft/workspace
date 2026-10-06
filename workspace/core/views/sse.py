@@ -3,6 +3,7 @@ import logging
 import time
 
 import orjson
+from django.db import close_old_connections
 from django.http import StreamingHttpResponse
 
 from workspace.common.metrics import safe_counter, safe_gauge, safe_histogram
@@ -233,6 +234,10 @@ def _event_stream_pubsub(request, redis):
                 SSE_FORCED_RECONNECTS.labels(transport="pubsub").inc()
                 return
 
+            # A stream spends most of its life waiting here: its database
+            # connection goes back to the pool first, or a handful of open
+            # tabs would hold every connection of the worker.
+            close_old_connections()
             # Block up to 5s waiting for message (gevent-friendly)
             message = pubsub.get_message(timeout=5)
             now = time.monotonic()
@@ -330,6 +335,8 @@ def _event_stream_polling(request):
                             user_id,
                         )
 
+            # Never wait holding a database connection, as in the Pub/Sub loop.
+            close_old_connections()
             time.sleep(1)
     finally:
         SSE_CONNECTIONS.dec()

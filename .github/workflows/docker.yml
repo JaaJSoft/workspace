@@ -252,9 +252,12 @@ jobs:
             sleep 1
           done
 
-          logged workspace-worker ' ready\.'
-          logged workspace-beat 'beat: Starting'
-          logged workspace-worker 'concurrency: 1 (prefork)'
+          logged workspace-worker ' ready\.' \
+            || { echo "The worker never reported ready" >&2; exit 1; }
+          logged workspace-beat 'beat: Starting' \
+            || { echo "The scheduler never started" >&2; exit 1; }
+          logged workspace-worker 'concurrency: 1 (prefork)' \
+            || { echo "The worker pool was not sized from its 1-CPU limit" >&2; exit 1; }
 
       - name: Log in to GitHub Container Registry
         if: env.SHOULD_PUSH == 'true'

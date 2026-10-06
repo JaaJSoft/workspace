@@ -64,7 +64,7 @@ dependencies = [
     "clamav-client>=0.7.2",
     # ai
     "openai>=3.24.0",
-    "ollama>=0.6.2",
+    "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.13.1",
     "trafilatura>=2.3.0",

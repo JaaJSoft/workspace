@@ -7,7 +7,7 @@ from celery.schedules import crontab
 
 from .base import DEBUG, TIME_ZONE
 from .cache import _REDIS_CELERY_URL
-from .env import env_non_negative_int
+from .env import available_cpus, env_non_negative_int
 
 # Use dedicated Redis DB as broker if available, otherwise fall back to in-memory
 CELERY_BROKER_URL = _REDIS_CELERY_URL or "memory://"
@@ -26,10 +26,14 @@ CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 minutes
 # early - acks_late would re-run a task whose worker died, which every task
 # would then have to tolerate.
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-# Unset keeps Celery's one child process per CPU. Each child holds its own copy
+# Unset means one child process per CPU this container may use. Celery's own
+# default counts every core of the host, CPU limit or not: a worker limited to
+# 2 CPUs on a 20-core node would fork 20 children. Each child holds its own copy
 # of every model its tasks load (file type detection, face analysis), so memory
 # grows with this number, not with the load.
-CELERY_WORKER_CONCURRENCY = env_non_negative_int("CELERY_WORKER_CONCURRENCY")
+CELERY_WORKER_CONCURRENCY = (
+    env_non_negative_int("CELERY_WORKER_CONCURRENCY") or available_cpus()
+)
 # KiB. A child whose resident memory passed this is replaced once its current
 # task ends: a single huge image or archive otherwise stays paid for until the
 # worker restarts. 0 turns recycling off.

@@ -9,7 +9,7 @@ data:
   CSRF_TRUSTED_ORIGINS: "https://workspace.example.com"
   USE_X_FORWARDED_HOST: ""  # set to "1" if the ingress rewrites the Host header
   USE_X_FORWARDED_PORT: ""  # set to "1" if the ingress rewrites the public port
-  GUNICORN_WORKERS: "3"
+  GUNICORN_WORKERS: "2"
   GUNICORN_LOG_LEVEL: "info"
   DJANGO_LOG_LEVEL: "INFO"
   TRASH_RETENTION_DAYS: "30"

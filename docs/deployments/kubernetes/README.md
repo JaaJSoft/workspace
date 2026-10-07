@@ -120,7 +120,7 @@ kubectl apply -f ingress.yaml
 | `CSRF_TRUSTED_ORIGINS` | `https://workspace.example.com` | Comma-separated list of trusted origins   |
 | `USE_X_FORWARDED_HOST` | *(empty)*                       | Set to `1` when the ingress rewrites `Host` (Cloudflare, cloud LBs) |
 | `USE_X_FORWARDED_PORT` | *(empty)*                       | Set to `1` when the ingress rewrites the public port |
-| `GUNICORN_WORKERS`     | `3`                             | Number of Gunicorn workers                |
+| `GUNICORN_WORKERS`     | `2`                             | Number of Gunicorn workers                |
 | `GUNICORN_LOG_LEVEL`   | `info`                          | Gunicorn log level                        |
 | `CELERY_WORKER_CONCURRENCY` | *(one per CPU of the container limit)* | Celery worker processes. Each holds its own copy of the models its tasks load, so memory grows with this number. `app.yaml` limits the worker to 2 CPUs |
 | `CELERY_WORKER_MAX_MEMORY_PER_CHILD` | `524288`          | KiB. A Celery process that went past this is replaced after its current task; `0` disables |

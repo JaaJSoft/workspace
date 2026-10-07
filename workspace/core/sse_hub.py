@@ -12,6 +12,7 @@ unsubscribing per stream on a connection another thread is reading from: a
 notification is only the name of the provider that has something new.
 """
 
+import itertools
 import logging
 import threading
 import time
@@ -20,6 +21,8 @@ from collections import defaultdict
 import orjson
 
 from workspace.common.logging import scrub
+
+from .sse_registry import sse_registry
 
 logger = logging.getLogger(__name__)
 
@@ -45,9 +48,9 @@ class Subscription:
         self._pending = set()
         self._wakeup = threading.Event()
 
-    def notify(self, slug):
+    def notify(self, *slugs):
         with self._lock:
-            self._pending.add(slug)
+            self._pending.update(slugs)
             self._wakeup.set()
 
     def wait(self, timeout):
@@ -98,15 +101,18 @@ class SSEHub:
         """Dispatch notifications until the subscription ends cleanly.
 
         A lost connection is not an end: the subscription is set up again, and
-        meanwhile the streams still poll their providers on every timeout.
+        the streams catch up once Redis confirms it.
         """
         while True:
             try:
-                pubsub = self._redis_factory().pubsub(ignore_subscribe_messages=True)
+                pubsub = self._redis_factory().pubsub()
                 try:
                     pubsub.psubscribe(f"{CHANNEL_PREFIX}*")
                     for message in pubsub.listen():
-                        self._dispatch(message)
+                        if message["type"] == "psubscribe":
+                            self._resync()
+                        elif message["type"] == "pmessage":
+                            self._dispatch(message)
                 finally:
                     pubsub.close()
                 return
@@ -117,6 +123,22 @@ class SSEHub:
                     exc_info=True,
                 )
                 time.sleep(_RECONNECT_DELAY)
+
+    def _resync(self):
+        """Wake every open stream for every provider.
+
+        Run when Redis confirms the subscription: it drops whatever is published
+        while nobody listens, which happens before the first confirmation and
+        after a lost connection. Each provider then catches up from its own
+        cursor, as on any notification.
+        """
+        slugs = tuple(sse_registry.get_all())
+        with self._lock:
+            subscriptions = tuple(
+                itertools.chain.from_iterable(self._subscriptions.values())
+            )
+        for subscription in subscriptions:
+            subscription.notify(*slugs)
 
     def _dispatch(self, message):
         channel = message.get("channel")

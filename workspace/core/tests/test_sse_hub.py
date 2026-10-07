@@ -10,6 +10,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase
 
 from workspace.core import sse_hub
 from workspace.core.sse_hub import SSEHub
+from workspace.core.sse_registry import sse_registry
 from workspace.core.views import sse
 
 User = get_user_model()
@@ -24,8 +25,18 @@ def _notification(user_id, slug):
     }
 
 
+def _confirmation():
+    """What Redis answers once the pattern subscription is in place."""
+    return {"type": "psubscribe", "pattern": None, "channel": b"sse:user:*", "data": 1}
+
+
+# Providers a resync wakes every stream for, whatever the test run registered.
+_PROVIDERS = dict.fromkeys(("chat", "files"))
+
+
 class FakePubSub:
-    """Hands out queued messages until it is given None.
+    """Hands out queued messages until it is given None, and raises a queued
+    exception the way a dropped connection does.
 
     Also answers the per-channel calls of a stream subscribing on its own, so
     that a regression is caught by what it costs rather than by a missing fake.
@@ -53,6 +64,8 @@ class FakePubSub:
         if self.fail:
             raise ConnectionError("Redis went away")
         while (message := self.messages.get(timeout=10)) is not None:
+            if isinstance(message, Exception):
+                raise message
             yield message
 
     def close(self):
@@ -174,6 +187,43 @@ class ListenerTests(SimpleTestCase):
         self.assertEqual(tab.wait(timeout=5), {"chat"})
         self.assertEqual(redis.opened, 2)
         self.assertTrue(lost.closed)
+
+    def test_streams_opened_before_redis_confirmed_the_subscription_catch_up(self):
+        """Redis drops what is published before it confirms the subscription:
+        the first streams of a process poll every provider once it does."""
+        pubsub = FakePubSub()
+        redis = FakeRedis(pubsub)
+        hub = SSEHub(lambda: redis)
+        _stop(self, hub, pubsub)
+
+        with patch.object(sse_registry, "get_all", return_value=_PROVIDERS):
+            tab = hub.subscribe(1)
+            pubsub.messages.put(_confirmation())
+
+            self.assertEqual(tab.wait(timeout=5), {"chat", "files"})
+
+    def test_streams_catch_up_once_the_subscription_is_back_after_losing_redis(self):
+        """What was published while the hub reconnected is gone: the open
+        streams stay open, so they poll every provider instead."""
+        dropped, working = FakePubSub(), FakePubSub()
+        redis = FakeRedis(dropped, working)
+        hub = SSEHub(lambda: redis)
+        _stop(self, hub, working)
+
+        with (
+            patch.object(sse_hub, "_RECONNECT_DELAY", 0),
+            patch.object(sse_registry, "get_all", return_value=_PROVIDERS),
+            self.assertLogs("workspace.core.sse_hub", "WARNING"),
+        ):
+            tab = hub.subscribe(1)
+            dropped.messages.put(_confirmation())
+            # Consume the startup catch-up, so only the one after the
+            # reconnection can satisfy the assertion below.
+            tab.wait(timeout=5)
+            dropped.messages.put(ConnectionError("Redis went away"))
+            working.messages.put(_confirmation())
+
+            self.assertEqual(tab.wait(timeout=5), {"chat", "files"})
 
 
 class StreamSharingTests(TestCase):

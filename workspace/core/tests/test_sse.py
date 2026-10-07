@@ -6,6 +6,7 @@ can auto-reconnect, and the finally blocks must run (pubsub cleanup,
 Prometheus gauge decrement).
 """
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from django.contrib.auth import get_user_model
@@ -227,6 +228,12 @@ class StreamDatabaseConnectionTests(TestCase):
     def test_polling_stream_releases_the_connection_before_each_wait(self):
         calls = []
         times = iter([0.0, 0.0, 0.0, 0.0, 999.0, 999.0])
+        # The stream's clock alone: patching time.time itself would also feed
+        # this script to prometheus_client, which reads it when it creates a
+        # labelled metric for the first time in the process.
+        clock = SimpleNamespace(
+            time=lambda: next(times), sleep=lambda seconds: calls.append("wait")
+        )
         with (
             patch.object(sse, "_MAX_CONNECTION_SECONDS", 1),
             patch.object(sse, "_init_providers", return_value={}),
@@ -235,13 +242,7 @@ class StreamDatabaseConnectionTests(TestCase):
                 "close_old_connections",
                 side_effect=lambda: calls.append("release"),
             ),
-            patch(
-                "workspace.core.views.sse.time.time", side_effect=lambda: next(times)
-            ),
-            patch(
-                "workspace.core.views.sse.time.sleep",
-                side_effect=lambda seconds: calls.append("wait"),
-            ),
+            patch.object(sse, "time", clock),
         ):
             list(sse._event_stream_polling(self.request))
 

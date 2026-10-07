@@ -48,6 +48,14 @@ if _REDIS_URL:
         {"COMPRESSOR": _REDIS_COMPRESSOR} if _REDIS_COMPRESSOR else {}
     )
 
+    # A request finding the client pool full waits for a connection instead of
+    # failing. Under gevent every open SSE stream of a worker may poll at the
+    # same moment, briefly needing more connections than the pool holds.
+    _REDIS_POOL_OPTIONS = {
+        "CONNECTION_POOL_CLASS": "redis.BlockingConnectionPool",
+        "CONNECTION_POOL_KWARGS": {"max_connections": 100, "timeout": 10},
+    }
+
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
@@ -55,6 +63,7 @@ if _REDIS_URL:
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 **_REDIS_COMPRESSOR_OPTION,
+                **_REDIS_POOL_OPTIONS,
             },
             "TIMEOUT": None,  # Infinite by default; specific features manage their own TTL
         },
@@ -64,6 +73,7 @@ if _REDIS_URL:
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
                 **_REDIS_COMPRESSOR_OPTION,
+                **_REDIS_POOL_OPTIONS,
             },
             "TIMEOUT": None,
         },

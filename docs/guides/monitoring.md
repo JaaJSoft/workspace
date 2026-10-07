@@ -108,7 +108,7 @@ Beyond the standard `django_prometheus` series (HTTP requests by view, method an
 | `sse_events_emitted_total`                    | counter   | `provider`, `event`   | SSE events pushed to clients                     |
 | `sse_provider_poll_duration_seconds`          | histogram | `provider`            | Time spent inside one provider poll              |
 | `sse_forced_reconnects_total`                 | counter   | `transport`           | Streams closed on the connection budget          |
-| `sse_pubsub_messages_total`                   | counter   | —                     | Redis Pub/Sub messages on the per-user channel   |
+| `sse_pubsub_messages_total`                   | counter   | —                     | Provider notifications a stream acted on, several for one provider counting once |
 
 `celery_queue_length` requires Redis as the broker; it reports nothing with the in-memory broker.
 

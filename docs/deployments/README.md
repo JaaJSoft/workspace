@@ -54,7 +54,7 @@ A single-node deployment can do without the `beat` container: `CELERY_WORKER_BEA
 
 | Variable                    | Default        | Effect                                                     |
 |-----------------------------|----------------|------------------------------------------------------------|
-| `GUNICORN_WORKERS`          | `3`            | Worker processes. Each serves many requests at once (gevent) and holds its own copy of the app in memory |
+| `GUNICORN_WORKERS`          | `2`            | Worker processes. Each serves many requests at once (gevent) and holds its own copy of the app in memory, about 170 MB; one is enough for a small instance |
 | `GUNICORN_BIND`             | `0.0.0.0:8000` | Listening address                                          |
 | `GUNICORN_LOG_LEVEL`        | `info`         | Gunicorn log level                                         |
 | `GUNICORN_ACCESS_LOGFORMAT` | Apache-like    | Access log format                                          |

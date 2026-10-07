@@ -26,7 +26,7 @@ web)
     exec gunicorn workspace.wsgi:application -c gunicorn.conf.py \
         --bind "${GUNICORN_BIND:-0.0.0.0:8000}" \
         --worker-class gevent \
-        --workers "${GUNICORN_WORKERS:-3}" \
+        --workers "${GUNICORN_WORKERS:-2}" \
         --log-level "${GUNICORN_LOG_LEVEL:-info}" \
         --error-logfile - \
         --access-logfile - \

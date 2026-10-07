@@ -19,7 +19,6 @@ import re
 from dataclasses import dataclass, field
 from io import StringIO
 
-import phonenumbers
 import vobject
 from vobject.base import (
     ContentLine,
@@ -179,6 +178,10 @@ def _extra_entry(line):
 
 def normalize_phone(raw):
     """E.164 when the number is internationally unambiguous, the input otherwise."""
+    # Imported here: every process loads this module at startup, and most of
+    # them never read a phone number.
+    import phonenumbers
+
     value = raw.strip()
     if value.lower().startswith(_TEL_URI_PREFIX):
         value = value[len(_TEL_URI_PREFIX) :]

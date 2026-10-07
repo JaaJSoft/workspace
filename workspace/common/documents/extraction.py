@@ -16,8 +16,10 @@ rather than sliced afterwards.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from iscc_tika import Extractor, OfficeParserConfig, PdfOcrStrategy, PdfParserConfig
+if TYPE_CHECKING:
+    from iscc_tika import Extractor
 
 PDF = "application/pdf"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -108,6 +110,10 @@ def extract_document(data: bytes, *, max_chars: int) -> ExtractedDocument:
 
 
 def _extractor(max_chars: int) -> Extractor:
+    # Imported here: every process loads this module at startup, and most of
+    # them never read a document.
+    from iscc_tika import Extractor, OfficeParserConfig, PdfOcrStrategy, PdfParserConfig
+
     office = (
         OfficeParserConfig()
         # Off by default, and both hold the words someone searches a document

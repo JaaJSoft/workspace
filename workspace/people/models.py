@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 
+from workspace.common.text import fold_text
 from workspace.common.uuids import uuid_v7_or_v4
 
 EMAIL_TYPES = ("home", "work", "other")
@@ -26,7 +27,11 @@ def _one_scope_constraint(name):
 
 
 def search_text_for(person):
-    """One lowercase string every search runs against, in place of a JSON scan."""
+    """One folded string every search runs against, in place of a JSON scan.
+
+    Folded with ``fold_text``: a search must fold its query the same way, or
+    an accented or capitalized query matches nothing.
+    """
     parts = [
         person.display_name,
         person.given_name,
@@ -35,7 +40,7 @@ def search_text_for(person):
         *(entry.get("value", "") for entry in person.emails or []),
         *(entry.get("value", "") for entry in person.phones or []),
     ]
-    text = " ".join(part.strip().lower() for part in parts if part and part.strip())
+    text = fold_text(" ".join(part.strip() for part in parts if part and part.strip()))
     return text[:SEARCH_TEXT_MAX_LENGTH]
 
 

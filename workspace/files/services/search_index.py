@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 
 from django.db import transaction
 from django.db.models import F, Q
@@ -25,6 +24,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.common.search.documents import drop_document, index_document
 from workspace.common.search.schema import DerivedFulltextIndex, Field
+from workspace.common.text import fold_text
 
 from ..models import File, SearchIndexState
 from .scanning.policy import exclude_blocked
@@ -170,13 +170,8 @@ def match_type_for(name, query):
     there is no snippet to show either: the UI only needs to know whether the
     hit is explained by the name the user is looking at.
     """
-    haystack = _normalize(name)
-    tokens = [_normalize(t) for t in _WORD_RE.findall(query or "")]
+    haystack = fold_text(name)
+    tokens = [fold_text(t) for t in _WORD_RE.findall(query or "")]
     if tokens and all(token in haystack for token in tokens):
         return "name"
     return "content"
-
-
-def _normalize(text):
-    stripped = unicodedata.normalize("NFKD", text or "")
-    return "".join(c for c in stripped if not unicodedata.combining(c)).casefold()

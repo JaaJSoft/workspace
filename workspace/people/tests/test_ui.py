@@ -89,6 +89,14 @@ class PeopleIndexTests(TestCase):
         self.assertNotContains(response, "Bob Martin")
         self.assertNotContains(response, "<html")
 
+    def test_search_ignores_accents(self):
+        create_person(owner=self.user, display_name="Léa Fréchette")
+        response = self.client.get(
+            "/people", {"q": "frechette"}, HTTP_X_ALPINE_REQUEST="true"
+        )
+        self.assertContains(response, "Léa Fréchette")
+        self.assertNotContains(response, "Bob Martin")
+
     def test_scope_and_list_filters(self):
         response = self.client.get("/people", {"scope": f"group:{self.team.id}"})
         self.assertContains(response, "Carol Team")

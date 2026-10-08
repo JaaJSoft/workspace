@@ -1,5 +1,7 @@
 from django.db.models import Q
 
+from workspace.common.text import fold_text
+
 from .models import Person, PersonList
 
 
@@ -46,13 +48,13 @@ def can_edit(user, obj):
 def person_with_email(persons, email):
     """The first person of ``persons`` carrying ``email``, case-insensitively.
 
-    ``search_text`` holds every email lowercased: a cheap prefilter that also
+    ``search_text`` holds every email folded: a cheap prefilter that also
     matches substrings, so the row's own list decides.
     """
     needle = email.strip().lower()
     if not needle:
         return None
-    for person in persons.filter(search_text__contains=needle):
+    for person in persons.filter(search_text__contains=fold_text(needle)):
         if any(e.get("value", "").lower() == needle for e in person.emails or []):
             return person
     return None

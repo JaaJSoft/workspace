@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.utils import dateformat, timezone
 
 from workspace.common.search import apply_fulltext
+from workspace.common.text import fold_text
 from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
 from workspace.photos.models import MediaItem
@@ -38,7 +39,7 @@ def search_photos(query, user, limit, scope=SearchScope.ALL):
 def search_people(query, user, limit):
     """The people named in the user's photos whose name holds *query*, each
     opening their photos. The contacts themselves are People's to find."""
-    needle = (query or "").strip().lower()
+    needle = fold_text((query or "").strip())
     if limit <= 0 or not needle:
         return []
     clusters = (

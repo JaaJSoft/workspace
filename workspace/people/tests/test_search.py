@@ -30,6 +30,11 @@ class SearchPersonsTests(TestCase):
         results = search_persons("ACME", self.alice, 10)
         self.assertEqual(results[0].matched_value, "bob@acme.com")
 
+    def test_ignores_accents(self):
+        accented = create_person(owner=self.alice, display_name="Zoé Lefèvre")
+        results = search_persons("lefevre", self.alice, 10)
+        self.assertEqual([r.uuid for r in results], [str(accented.uuid)])
+
     def test_never_leaks_other_users(self):
         self.assertEqual(search_persons("hidden", self.alice, 10), [])
 

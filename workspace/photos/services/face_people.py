@@ -2,7 +2,8 @@
 
 ``photos`` depends on ``people`` and never the reverse: a ``Person`` knows
 nothing about faces. Several clusters may be one person (the same face over
-the years); for the one-face-per-photo rule they then count as one.
+the years); in a photo they count as one, a face named after someone already
+in it being folded into theirs (see face_corrections.fold_face).
 """
 
 from dataclasses import dataclass
@@ -21,62 +22,38 @@ from ..indexes import FACE_EMBEDDINGS
 from ..models import Face, FaceCluster
 from .face_corrections import (
     CorrectionError,
-    PhotoAlreadyInCluster,
     confirm_face,
     fold_face,
-    reject_face,
     start_cluster,
 )
 from .face_grouping import max_distance, photo_clusters, refresh_clusters
-
-
-class PersonAlreadyInPhoto(CorrectionError):
-    """Naming the cluster would put one person twice in some photo."""
 
 
 class NoCover(CorrectionError):
     """The cluster has no face picture to offer as an avatar."""
 
 
-def naming_conflicts(cluster, person):
-    """(incoming, existing) pairs: a face of *cluster* in a photo where a
-    face of another cluster of *person* already is."""
+def already_named_faces(cluster, person):
+    """The faces of *cluster* in a photo where a face of another cluster of
+    *person* already is."""
     others = FaceCluster.objects.filter(person=person).exclude(pk=cluster.pk)
-    existing = {
-        face.file_id: face
-        for face in Face.objects.filter(cluster__in=others).select_related("file")
-    }
-    return [
-        (face, existing[face.file_id])
-        for face in Face.objects.filter(
-            cluster=cluster, file_id__in=list(existing)
-        ).select_related("file")
-    ]
+    return Face.objects.filter(
+        cluster=cluster,
+        file_id__in=Face.objects.filter(cluster__in=others).values("file_id"),
+    )
 
 
-def link_cluster(cluster, person, *, prefer=None):
+def link_cluster(cluster, person):
     """Name *cluster* after *person*, or clear its name with None.
 
-    A photo where the person already is would hold them twice: refused,
-    naming the faces, unless *prefer* settles it - the faces of *cluster* it
-    lists take their photo over, the others leave *cluster*. Either way the
-    face that loses is taken out of its cluster for good.
-
-    A video where the person already is needs nothing settled: the face of
-    *cluster* there is folded into the one already them.
+    Its faces of a photo where the person already is are folded into the
+    face already them.
     """
-    conflicts = naming_conflicts(cluster, person) if person is not None else []
-    in_videos = [incoming for incoming, _ in conflicts if incoming.in_video()]
-    conflicts = [pair for pair in conflicts if not pair[0].in_video()]
-    if conflicts and prefer is None:
-        raise PersonAlreadyInPhoto(conflicts)
+    seen = list(already_named_faces(cluster, person)) if person is not None else []
     touched = set()
     with transaction.atomic():
-        for face in in_videos:
+        for face in seen:
             fold_face(face, touched=touched)
-        for incoming, existing in conflicts:
-            loser = existing if incoming.pk in prefer else incoming
-            reject_face(loser, touched=touched)
         if person is not None:
             _pin_person_cover(cluster, person)
         cluster.person = person
@@ -127,7 +104,7 @@ def person_faces_in_photo(face, person):
 
 
 @transaction.atomic
-def assign_face_to_person(face, person, *, replace=False, new_look=None, touched=None):
+def assign_face_to_person(face, person, *, new_look=None, touched=None):
     """This is *person*: pin *face* in the person's closest cluster.
 
     The closest by centroid among those the photo does not rule out; a new
@@ -136,49 +113,26 @@ def assign_face_to_person(face, person, *, replace=False, new_look=None, touched
     of the person started earlier in the same batch, takes the face instead
     of yet another new one. Returns the cluster.
 
-    With *replace*, a face of the photo already *person* is not them after
-    all: it leaves its cluster for *face*. In a video already showing
-    *person*, *face* is folded into the face that is, *replace* or not, and
-    the cluster returned is that face's.
+    In a photo already showing *person*, *face* is folded into the face
+    that is, and the cluster returned is that face's.
     """
-    if face.in_video():
-        shown = person_faces_in_photo(face, person).select_related("cluster").first()
-        if shown is not None:
-            fold_face(face, touched=touched)
-            return shown.cluster
-    if replace:
-        for other in person_faces_in_photo(face, person):
-            reject_face(other, touched=touched)
+    shown = person_faces_in_photo(face, person).select_related("cluster").first()
+    if shown is not None:
+        fold_face(face, touched=touched)
+        return shown.cluster
     taken = photo_clusters(face.file_id, exclude_face=face.pk)
     candidates = [
         cluster
         for cluster in FaceCluster.objects.filter(owner_id=face.owner_id, person=person)
         if cluster.pk not in taken
     ]
-    if (
-        not candidates
-        and FaceCluster.objects.filter(
-            owner_id=face.owner_id, person=person, pk__in=taken
-        ).exists()
-    ):
-        raise PersonAlreadyInPhoto(_pairs(face, person))
     closest = _closest(face, candidates)
     if closest is None and new_look is not None and new_look.pk not in taken:
         closest = new_look
     if closest is None:
-        try:
-            return start_cluster(face, person, touched=touched)
-        except PhotoAlreadyInCluster as exc:
-            raise PersonAlreadyInPhoto(_pairs(face, person)) from exc
-    try:
-        confirm_face(face, closest, touched=touched)
-    except PhotoAlreadyInCluster as exc:
-        raise PersonAlreadyInPhoto(_pairs(face, person)) from exc
+        return start_cluster(face, person, touched=touched)
+    confirm_face(face, closest, touched=touched)
     return closest
-
-
-def _pairs(face, person):
-    return [(face, other) for other in person_faces_in_photo(face, person)]
 
 
 def _closest(face, clusters):

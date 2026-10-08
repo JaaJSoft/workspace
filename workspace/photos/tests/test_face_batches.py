@@ -1,5 +1,7 @@
 """Correcting a selection of faces at once, and undoing it."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 
 from workspace.people.models import Person
@@ -88,14 +90,30 @@ class AssignTests(FaceBatchTestCase):
             self.assertEqual(face.cluster_id, self.alice.pk)
             self.assertEqual(face.assignment, Face.Assignment.CONFIRMED)
 
-    def test_a_face_whose_photo_already_holds_the_person_is_skipped(self):
+    def test_a_face_whose_photo_already_holds_the_person_is_folded(self):
         bob_in_pair = self.face("pair.png", self.bob)
 
         response = self.batch(
             "assign", [bob_in_pair, self.carol], cluster=str(self.alice.pk)
         )
 
-        self.assertEqual(response.json()["done"], [str(self.carol.pk)])
+        self.assertCountEqual(
+            response.json()["done"], [str(bob_in_pair.pk), str(self.carol.pk)]
+        )
+        self.assertEqual(response.json()["skipped"], [])
+        bob_in_pair.refresh_from_db()
+        self.assertIsNone(bob_in_pair.cluster_id)
+        self.assertEqual(bob_in_pair.assignment, Face.Assignment.DUPLICATE)
+
+    def test_a_face_whose_photo_got_into_the_cluster_meanwhile_is_skipped(self):
+        bob_in_pair = self.face("pair.png", self.bob)
+
+        with patch(
+            "workspace.photos.services.face_corrections.same_person_faces",
+            return_value=Face.objects.none(),
+        ):
+            response = self.batch("assign", [bob_in_pair], cluster=str(self.alice.pk))
+
         self.assertEqual(
             response.json()["skipped"],
             [{"face": str(bob_in_pair.pk), "reason": "already_in_photo"}],

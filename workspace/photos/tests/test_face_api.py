@@ -305,7 +305,7 @@ class FaceCorrectionTests(FaceApiTestCase):
         self.assertEqual(face.assignment, Face.Assignment.CONFIRMED)
         self.assertEqual(face.cluster_id, self.alice.pk)
 
-    def test_refuses_a_cluster_already_holding_a_face_of_the_photo(self):
+    def test_a_cluster_already_holding_a_face_of_the_photo_folds_it(self):
         face = self.face("pair.png", self.bob)
 
         response = self.client.patch(
@@ -314,9 +314,10 @@ class FaceCorrectionTests(FaceApiTestCase):
             content_type="application/json",
         )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         face.refresh_from_db()
-        self.assertEqual(face.cluster_id, self.bob.pk)
+        self.assertIsNone(face.cluster_id)
+        self.assertEqual(face.assignment, Face.Assignment.DUPLICATE)
 
     def test_faces_of_a_photo(self):
         response = self.client.get(

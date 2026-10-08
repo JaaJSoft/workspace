@@ -52,7 +52,7 @@ class VideoFace:
     # The track's: the quality-weighted mean of its best faces.
     embedding: np.ndarray
     # Seconds into the video of the frame *detection* comes from. Never None:
-    # a face with a timestamp is what a video's face is (Face.in_video()).
+    # a face with a timestamp is what a video's face is.
     timestamp: float
 
 

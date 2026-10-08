@@ -79,24 +79,6 @@ class FaceClusterSerializer(serializers.ModelSerializer):
         trim_whitespace=True,
         help_text="Name the cluster after a new personal contact of this name.",
     )
-    resolve = serializers.BooleanField(
-        write_only=True,
-        required=False,
-        default=False,
-        help_text=(
-            "Naming: settle the photos the person is already in instead of "
-            "answering 409. The faces in prefer take their photo over; in the "
-            "others the face already that person stays."
-        ),
-    )
-    prefer = serializers.ListField(
-        child=serializers.UUIDField(),
-        write_only=True,
-        required=False,
-        default=list,
-        max_length=500,
-        help_text="Naming with resolve: faces of this cluster that are the person.",
-    )
 
     class Meta:
         model = FaceCluster
@@ -110,8 +92,6 @@ class FaceClusterSerializer(serializers.ModelSerializer):
             "person",
             "person_name",
             "new_person",
-            "resolve",
-            "prefer",
             "created_at",
         ]
         read_only_fields = ["uuid", "face_count", "created_at"]
@@ -206,15 +186,6 @@ class FaceSerializer(serializers.ModelSerializer):
         trim_whitespace=True,
         help_text="Say this face is someone new: a contact of this name is created.",
     )
-    replace = serializers.BooleanField(
-        write_only=True,
-        required=False,
-        default=False,
-        help_text=(
-            "With cluster or to_person: the face of the photo already that "
-            "person is not them, and leaves its cluster, instead of a 409."
-        ),
-    )
 
     class Meta:
         model = Face
@@ -229,7 +200,6 @@ class FaceSerializer(serializers.ModelSerializer):
             "timestamp",
             "to_person",
             "new_person",
-            "replace",
         ]
         read_only_fields = ["uuid", "quality", "timestamp"]
         extra_kwargs = {
@@ -288,14 +258,6 @@ class FaceBatchSerializer(serializers.Serializer):
         required=False,
         default=False,
         help_text="assign: these faces are someone new, not named yet.",
-    )
-    replace = serializers.BooleanField(
-        required=False,
-        default=False,
-        help_text=(
-            "assign: a face of the same photo already that person, outside "
-            "the batch, stops being them instead of the face being skipped."
-        ),
     )
 
     def validate(self, data):

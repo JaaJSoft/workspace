@@ -138,10 +138,10 @@ def _suggester(user):
 
     The nearest named cluster by centroid, within the grouping threshold,
     whose person is in none of *files*, the photos of the faces asked about:
-    naming the faces after them would be refused. Their videos are left out
-    of *files*: there a face named after someone already in it is folded
-    into theirs, the tracking having split one person in two. *excluded*
-    persons are never suggested - those the faces were taken out of.
+    two faces of one photo are most often two people. Their videos are left
+    out of *files*: there the tracking splitting one person in two is the
+    usual reason. *excluded* persons are never suggested - those the faces
+    were taken out of.
     """
     clusters = list(
         user_face_clusters(user)

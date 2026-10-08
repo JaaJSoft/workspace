@@ -88,11 +88,12 @@ class NamingTests(FaceApiTestCase):
         self.alice.refresh_from_db()
         self.assertIsNone(self.alice.person)
 
-    def test_one_person_is_never_twice_in_a_photo(self):
-        # pair.png holds an Alice face and a Bob face: naming both clusters
-        # after the same contact would put that contact twice in it.
+    def test_one_person_is_named_once_in_a_photo(self):
+        # pair.png holds an Alice face and a Bob face: once both clusters are
+        # the same contact, the Bob one there is folded into hers.
         self.alice.person = self.alice_contact
         self.alice.save(update_fields=["person"])
+        bob_in_pair = self.face("pair.png", self.bob)
 
         response = _patch(
             self.client,
@@ -100,9 +101,15 @@ class NamingTests(FaceApiTestCase):
             {"person": str(self.alice_contact.pk)},
         )
 
-        self.assertEqual(response.status_code, 409)
-        self.bob.refresh_from_db()
-        self.assertIsNone(self.bob.person)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            Face.objects.filter(
+                file=self.photos["pair.png"], cluster__person=self.alice_contact
+            ).count(),
+            1,
+        )
+        bob_in_pair.refresh_from_db()
+        self.assertEqual(bob_in_pair.assignment, Face.Assignment.DUPLICATE)
 
     def test_deleting_the_contact_leaves_the_cluster_unnamed(self):
         self.alice.person = self.alice_contact
@@ -154,16 +161,17 @@ class FaceToPersonTests(FaceApiTestCase):
         self.assertEqual(face.cluster.person, self.alice_contact)
         self.assertEqual(person_clusters(self.user, self.alice_contact).count(), 2)
 
-    def test_a_person_already_in_the_photo_is_refused(self):
+    def test_a_person_already_in_the_photo_folds_the_face(self):
         face = self.face("pair.png", self.bob)
 
         response = _patch(
             self.client, self.url(face), {"to_person": str(self.alice_contact.pk)}
         )
 
-        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.status_code, 200)
         face.refresh_from_db()
-        self.assertEqual(face.cluster_id, self.bob.pk)
+        self.assertIsNone(face.cluster_id)
+        self.assertEqual(face.assignment, Face.Assignment.DUPLICATE)
 
     def test_a_face_names_someone_new(self):
         face = self.face("bob.png")
@@ -321,7 +329,7 @@ class MergeCoverTests(FaceApiTestCase):
         # card would show its cover once both are Bea.
         response = self.client.patch(
             f"{CLUSTERS}/{self.alice.pk}",
-            {"person": str(self.bea.pk), "resolve": True},
+            {"person": str(self.bea.pk)},
             content_type="application/json",
         )
 

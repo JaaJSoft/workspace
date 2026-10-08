@@ -5,6 +5,13 @@ Every correction is recorded on the faces it touches (``assignment``,
 undoing it. The caller has already checked the cluster or face is the
 user's (see queries.py).
 
+The grouping never puts one person twice in a photo, but a photo may show
+someone twice all the same (a collage, a mirror, a card made of several
+pictures) and a video's tracking may split one person in two. So a
+correction that puts a person in a photo or video already showing them is
+never refused: the newcomer is folded into the face already them (see
+fold_face).
+
 The corrections of one face take a ``touched`` set: given one, they add the
 clusters to refresh to it instead of refreshing them, so a batch refreshes
 each cluster once rather than once per face.
@@ -15,25 +22,16 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
-from .face_grouping import photo_clusters, refresh_clusters
+from .face_grouping import refresh_clusters
 
 
 class CorrectionError(ValueError):
     """A correction that cannot apply. Each kind is its own subclass, so a
-    caller answers with its own wording rather than the exception's text.
-
-    ``conflicts`` holds the (incoming, existing) face pairs that stood in the
-    way, when the refusal is one face per photo per person: what a caller
-    shows the user to settle it.
-    """
-
-    def __init__(self, conflicts=()):
-        super().__init__()
-        self.conflicts = list(conflicts)
+    caller answers with its own wording rather than the exception's text."""
 
 
 class PhotoAlreadyInCluster(CorrectionError):
-    """Another face of the same photo is already in the target cluster."""
+    """Another face of the same photo got into the target cluster meanwhile."""
 
 
 class CoverNotInCluster(CorrectionError):
@@ -49,9 +47,9 @@ class PersonsDiffer(CorrectionError):
         self.person_ids = sorted(person_ids, key=str)
 
 
-def blocking_faces(face, cluster):
-    """The other faces of *face*'s photo that keep it out of *cluster*: one
-    in that cluster, or in another cluster of the same person."""
+def same_person_faces(face, cluster):
+    """The other faces of *face*'s photo already *cluster*'s person: one in
+    that cluster, or in another cluster of the same person."""
     same_person = Q(cluster=cluster)
     if cluster.person_id is not None:
         same_person |= Q(cluster__person_id=cluster.person_id)
@@ -80,9 +78,8 @@ def merge_clusters(target, sources, *, person_id=None):
 
     A photo already in *target*, or in another cluster of the person the
     merged cluster ends up named after, keeps its face there; the source's
-    face of that photo goes back to ungrouped rather than breaking the one
-    face per photo per person rule. So does a face of *target* itself, when
-    the merge gives it a person already in that photo.
+    face of that photo is folded into it (see fold_face). So is a face of
+    *target* itself, when the merge gives it a person already in that photo.
 
     The merged cluster shows the cover of the cluster that carried the kept
     name, so merging a stranger into someone never swaps their face; that
@@ -114,16 +111,15 @@ def merge_clusters(target, sources, *, person_id=None):
         )
         if target.person_id != person_id:
             # The target takes a name it did not have: its faces of a photo
-            # that person is already in go back to ungrouped, as the
-            # sources' do below.
+            # that person is already in are folded, as the sources' are below.
             Face.objects.filter(cluster=target, file_id__in=same_person_files).update(
-                cluster=None, assignment=Face.Assignment.AUTO
+                cluster=None, assignment=Face.Assignment.DUPLICATE
             )
         if keeper is not target and cover_id is not None:
             Face.objects.filter(
                 cluster=target,
                 file_id__in=Face.objects.filter(pk=cover_id).values("file_id"),
-            ).update(cluster=None, assignment=Face.Assignment.AUTO)
+            ).update(cluster=None, assignment=Face.Assignment.DUPLICATE)
         taken = same_person_files | set(
             Face.objects.filter(cluster=target).values_list("file_id", flat=True)
         )
@@ -137,7 +133,7 @@ def merge_clusters(target, sources, *, person_id=None):
         for face in faces:
             if face.file_id in taken:
                 face.cluster = None
-                face.assignment = Face.Assignment.AUTO
+                face.assignment = Face.Assignment.DUPLICATE
             else:
                 face.cluster = target
                 taken.add(face.file_id)
@@ -186,6 +182,17 @@ def reject_face(face, *, touched=None):
     _refresh([previous], touched)
 
 
+def fold_face(face, *, touched=None):
+    """Another face of *face*'s photo or video is already this person: the
+    same person seen twice. *face* leaves its cluster and the faces waiting
+    for a person; the other one stands for them in the photo."""
+    previous = face.cluster_id
+    face.cluster = None
+    face.assignment = Face.Assignment.DUPLICATE
+    face.save(update_fields=["cluster", "assignment"])
+    _refresh([previous], touched)
+
+
 def hide_face(face, *, touched=None):
     """Nobody to name: *face* leaves its cluster and grouping until unhidden.
 
@@ -230,21 +237,13 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
 
 
 @transaction.atomic
-def confirm_face(face, cluster, *, replace=False, touched=None):
-    """This is X: pin *face* in *cluster*, wherever it was.
-
-    With *replace*, the face of the photo already X is not X after all: it
-    is taken out of its cluster for *face* to take its place - or stays in
-    it, when *face* cannot take that place after all.
-    """
+def confirm_face(face, cluster, *, touched=None):
+    """This is X: pin *face* in *cluster*, wherever it was - or, in a photo
+    already showing X, fold it into the face that is."""
     previous = face.cluster_id
-    if replace:
-        for other in blocking_faces(face, cluster):
-            reject_face(other, touched=touched)
-    if cluster.pk in photo_clusters(face.file_id, exclude_face=face.pk):
-        raise PhotoAlreadyInCluster(
-            (face, other) for other in blocking_faces(face, cluster)
-        )
+    if same_person_faces(face, cluster).exists():
+        fold_face(face, touched=touched)
+        return
     face.cluster = cluster
     face.assignment = Face.Assignment.CONFIRMED
     if face.rejected_cluster_id == cluster.pk:

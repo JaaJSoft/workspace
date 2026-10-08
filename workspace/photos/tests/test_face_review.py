@@ -118,6 +118,19 @@ class UnnamedQueueTests(ReviewTestCase):
 
         self.assertIsNone(item.suggestion)
 
+    def test_someone_already_in_one_of_the_videos_is_still_suggested(self):
+        # pair.png stands for a video whose tracking split Alice in two: the
+        # Bob cluster's face there is hers too, and naming it folds it.
+        Face.objects.filter(file=self.photos["pair.png"]).update(timestamp=1.5)
+        _set_vector(
+            Face.objects.filter(cluster=self.bob), _vector(self.face("alice-1.png"))
+        )
+        refresh_clusters([self.bob.pk])
+
+        (item,) = unnamed_queue(self.user)
+
+        self.assertEqual(item.suggestion.person, self.contact)
+
     def test_a_named_centroid_of_another_size_is_left_out(self):
         # What a backend switch leaves until the rebuild: a vector of the
         # other backend's size.
@@ -369,6 +382,17 @@ class UnassignedGroupsTests(ReviewTestCase):
         (group,) = unassigned_groups(self.user)
 
         self.assertIsNone(group.suggestion)
+
+    def test_a_video_face_like_someone_already_in_the_video_suggests_them(self):
+        Face.objects.filter(file=self.photos["pair.png"]).update(timestamp=1.5)
+        split = self.face("pair.png", self.bob)
+        Face.objects.filter(pk=split.pk).update(cluster=None)
+        _set_vector([split], _vector(self.face("alice-1.png")))
+
+        (group,) = unassigned_groups(self.user)
+
+        self.assertEqual(group.face_ids, (split.pk,))
+        self.assertEqual(group.suggestion.person, self.contact)
 
 
 class LikenessGroupsTests(ReviewTestCase):

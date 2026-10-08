@@ -467,6 +467,11 @@ class Face(models.Model):
         # Nobody the user cares about (a stranger, a poster): out of grouping
         # and out of the faces waiting for a person, until unhidden.
         HIDDEN = "hidden", "Hidden"
+        # Someone already named in the same photo or video (a collage, a
+        # person the tracking split in two): that other face stands for them.
+        # Out of grouping and out of the faces waiting for a person, until the
+        # user places it.
+        DUPLICATE = "duplicate", "Duplicate"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="faces")
@@ -509,7 +514,8 @@ class Face(models.Model):
     # Storage path of the square WebP crop shown for the face.
     crop = models.CharField(max_length=255, blank=True, default="")
     # Seconds into a video, as a player counts them, of the frame the box,
-    # the landmarks and the crop come from. Null for a photo.
+    # the landmarks and the crop come from. Null for a photo, and only for a
+    # photo: it is what tells a video's faces apart.
     timestamp = models.FloatField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

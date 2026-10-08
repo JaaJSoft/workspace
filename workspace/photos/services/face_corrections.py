@@ -5,13 +5,18 @@ Every correction is recorded on the faces it touches (``assignment``,
 undoing it. The caller has already checked the cluster or face is the
 user's (see queries.py).
 
+A video is the exception to the one face per photo per person rule: the
+tracking may split one person in two, so a correction that would put them
+twice in a video folds the newcomer into the face already them (see
+fold_face) rather than being refused or displacing it.
+
 The corrections of one face take a ``touched`` set: given one, they add the
 clusters to refresh to it instead of refreshing them, so a batch refreshes
 each cluster once rather than once per face.
 """
 
 from django.db import IntegrityError, transaction
-from django.db.models import F, Q
+from django.db.models import Case, F, Q, Value, When
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
@@ -58,6 +63,16 @@ def blocking_faces(face, cluster):
     return Face.objects.filter(same_person, file_id=face.file_id).exclude(pk=face.pk)
 
 
+def _set_aside():
+    """The assignment of a face a merge takes out of its cluster because its
+    photo already holds that person: back to ungrouped in a photo, folded in
+    a video."""
+    return Case(
+        When(timestamp__isnull=False, then=Value(Face.Assignment.DUPLICATE)),
+        default=Value(Face.Assignment.AUTO),
+    )
+
+
 def _refresh(cluster_ids, touched):
     cluster_ids = set(cluster_ids) - {None}
     if touched is None:
@@ -81,7 +96,8 @@ def merge_clusters(target, sources, *, person_id=None):
     A photo already in *target*, or in another cluster of the person the
     merged cluster ends up named after, keeps its face there; the source's
     face of that photo goes back to ungrouped rather than breaking the one
-    face per photo per person rule. So does a face of *target* itself, when
+    face per photo per person rule - in a video, it is folded into the face
+    kept (see fold_face). So does a face of *target* itself, when
     the merge gives it a person already in that photo.
 
     The merged cluster shows the cover of the cluster that carried the kept
@@ -117,13 +133,13 @@ def merge_clusters(target, sources, *, person_id=None):
             # that person is already in go back to ungrouped, as the
             # sources' do below.
             Face.objects.filter(cluster=target, file_id__in=same_person_files).update(
-                cluster=None, assignment=Face.Assignment.AUTO
+                cluster=None, assignment=_set_aside()
             )
         if keeper is not target and cover_id is not None:
             Face.objects.filter(
                 cluster=target,
                 file_id__in=Face.objects.filter(pk=cover_id).values("file_id"),
-            ).update(cluster=None, assignment=Face.Assignment.AUTO)
+            ).update(cluster=None, assignment=_set_aside())
         taken = same_person_files | set(
             Face.objects.filter(cluster=target).values_list("file_id", flat=True)
         )
@@ -137,7 +153,11 @@ def merge_clusters(target, sources, *, person_id=None):
         for face in faces:
             if face.file_id in taken:
                 face.cluster = None
-                face.assignment = Face.Assignment.AUTO
+                face.assignment = (
+                    Face.Assignment.DUPLICATE
+                    if face.in_video()
+                    else Face.Assignment.AUTO
+                )
             else:
                 face.cluster = target
                 taken.add(face.file_id)
@@ -183,6 +203,17 @@ def reject_face(face, *, touched=None):
     face.assignment = Face.Assignment.REJECTED
     face.rejected_cluster_id = previous
     face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
+    _refresh([previous], touched)
+
+
+def fold_face(face, *, touched=None):
+    """Another face of *face*'s video is already this person: the tracking
+    split one person in two. *face* leaves its cluster and the faces waiting
+    for a person; the other one stands for them in the video."""
+    previous = face.cluster_id
+    face.cluster = None
+    face.assignment = Face.Assignment.DUPLICATE
+    face.save(update_fields=["cluster", "assignment"])
     _refresh([previous], touched)
 
 
@@ -236,8 +267,14 @@ def confirm_face(face, cluster, *, replace=False, touched=None):
     With *replace*, the face of the photo already X is not X after all: it
     is taken out of its cluster for *face* to take its place - or stays in
     it, when *face* cannot take that place after all.
+
+    In a video already showing X, *face* is folded into the face that is,
+    *replace* or not.
     """
     previous = face.cluster_id
+    if face.in_video() and blocking_faces(face, cluster).exists():
+        fold_face(face, touched=touched)
+        return
     if replace:
         for other in blocking_faces(face, cluster):
             reject_face(other, touched=touched)

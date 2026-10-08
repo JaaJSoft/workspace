@@ -594,11 +594,13 @@ window.photosFacesMixin = function photosFacesMixin() {
       if (face.cluster) return 'Hidden person';
       if (face.assignment === 'rejected') return 'Left out of grouping';
       if (face.assignment === 'hidden') return 'Hidden face';
+      if (face.assignment === 'duplicate') return 'Already named in this video';
       return 'Not grouped yet';
     },
 
     // The other face of this photo that already is `person`, or null: picking
-    // the person for `face` takes that one's place.
+    // the person for `face` takes that one's place - in a video, `face` joins
+    // that one instead, the same person seen twice.
     facePersonTaken(face, person) {
       return this.facesDialog.faces.find((f) => {
         const cluster = f.uuid !== face.uuid ? this.clusterOf(f) : null;
@@ -693,13 +695,19 @@ window.photosFacesMixin = function photosFacesMixin() {
       return this._patchFace(face, { cluster: null });
     },
 
+    // The server folds a video's face into the one already that person on
+    // its own: there is nothing to replace.
+    _replaces(taken) {
+      return !!taken && !this.facesDialogIsVideo();
+    },
+
     assignFace(face, cluster) {
-      const replace = !!this.faceClusterTaken(face, cluster);
+      const replace = this._replaces(this.faceClusterTaken(face, cluster));
       return this._patchFace(face, { cluster: cluster.uuid, replace }, 'this person');
     },
 
     assignFaceToPerson(face, person) {
-      const replace = !!this.facePersonTaken(face, person);
+      const replace = this._replaces(this.facePersonTaken(face, person));
       return this._patchFace(face, { to_person: person.uuid, replace }, person.name);
     },
 

@@ -73,6 +73,7 @@ test('a face says who it is', () => {
   assert.equal(faces.faceLabel({ cluster: 'b' }), 'Unnamed, 1 photo');
   assert.equal(faces.faceLabel({ cluster: 'hidden-one' }), 'Hidden person');
   assert.equal(faces.faceLabel({ cluster: null, assignment: 'rejected' }), 'Left out of grouping');
+  assert.equal(faces.faceLabel({ cluster: null, assignment: 'duplicate' }), 'Already named in this video');
   assert.equal(faces.faceLabel({ cluster: null, assignment: 'auto' }), 'Not grouped yet');
 });
 

@@ -23,6 +23,7 @@ from .face_corrections import (
     CorrectionError,
     PhotoAlreadyInCluster,
     confirm_face,
+    fold_face,
     reject_face,
     start_cluster,
 )
@@ -60,12 +61,19 @@ def link_cluster(cluster, person, *, prefer=None):
     naming the faces, unless *prefer* settles it - the faces of *cluster* it
     lists take their photo over, the others leave *cluster*. Either way the
     face that loses is taken out of its cluster for good.
+
+    A video where the person already is needs nothing settled: the face of
+    *cluster* there is folded into the one already them.
     """
     conflicts = naming_conflicts(cluster, person) if person is not None else []
+    in_videos = [incoming for incoming, _ in conflicts if incoming.in_video()]
+    conflicts = [pair for pair in conflicts if not pair[0].in_video()]
     if conflicts and prefer is None:
         raise PersonAlreadyInPhoto(conflicts)
     touched = set()
     with transaction.atomic():
+        for face in in_videos:
+            fold_face(face, touched=touched)
         for incoming, existing in conflicts:
             loser = existing if incoming.pk in prefer else incoming
             reject_face(loser, touched=touched)
@@ -129,8 +137,15 @@ def assign_face_to_person(face, person, *, replace=False, new_look=None, touched
     of yet another new one. Returns the cluster.
 
     With *replace*, a face of the photo already *person* is not them after
-    all: it leaves its cluster for *face*.
+    all: it leaves its cluster for *face*. In a video already showing
+    *person*, *face* is folded into the face that is, *replace* or not, and
+    the cluster returned is that face's.
     """
+    if face.in_video():
+        shown = person_faces_in_photo(face, person).select_related("cluster").first()
+        if shown is not None:
+            fold_face(face, touched=touched)
+            return shown.cluster
     if replace:
         for other in person_faces_in_photo(face, person):
             reject_face(other, touched=touched)

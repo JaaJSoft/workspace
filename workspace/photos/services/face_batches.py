@@ -6,7 +6,9 @@ to it) is skipped with a reason, and the rest go through.
 
 An ``assign`` with ``replace`` settles those first: the faces of the photos
 already the target person stop being them. Never another face of the batch,
-though - two selected faces of one photo are still two people.
+though - two selected faces of one photo are still two people. Nor in a
+video, where the face assigned is folded into the one already that person
+instead (see face_corrections.fold_face).
 
 Before touching anything a batch saves how its faces and their clusters were,
 under a token kept a few minutes in the cache. Undoing puts them back, a
@@ -93,7 +95,8 @@ def apply(user, action, faces, target=None, *, replace=False):
 
 
 def _displaced(faces, target):
-    """The faces outside the batch that its faces would take the place of."""
+    """The faces outside the batch that its faces would take the place of,
+    in photos: in a video the batch's face is the one that gives way."""
     if target.cluster is not None:
         same_person = Q(cluster=target.cluster)
         if target.cluster.person_id is not None:
@@ -103,7 +106,11 @@ def _displaced(faces, target):
     else:
         return []
     return list(
-        Face.objects.filter(same_person, file_id__in={f.file_id for f in faces})
+        Face.objects.filter(
+            same_person,
+            file_id__in={f.file_id for f in faces},
+            timestamp__isnull=True,
+        )
         .exclude(pk__in=[f.pk for f in faces])
         .select_related("cluster")
     )

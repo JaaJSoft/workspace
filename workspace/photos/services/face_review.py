@@ -106,13 +106,14 @@ def unnamed_queue(user, limit=None):
     centroids = {c.pk: _unit(c.centroid) for c in clusters}
     faces = defaultdict(list)
     files = defaultdict(set)
-    for pk, cluster_id, file_id, blob in (
+    for pk, cluster_id, file_id, blob, timestamp in (
         user_faces(user)
         .filter(cluster__in=list(centroids))
-        .values_list("pk", "cluster_id", "file_id", "embedding")
+        .values_list("pk", "cluster_id", "file_id", "embedding", "timestamp")
     ):
         faces[cluster_id].append((_distance(_unit(blob), centroids[cluster_id]), pk))
-        files[cluster_id].add(file_id)
+        if timestamp is None:
+            files[cluster_id].add(file_id)
     suggest = _suggester(user)
     return [
         UnnamedCluster(
@@ -137,8 +138,10 @@ def _suggester(user):
 
     The nearest named cluster by centroid, within the grouping threshold,
     whose person is in none of *files*, the photos of the faces asked about:
-    naming the faces after them would be refused. *excluded* persons are
-    never suggested - those the faces were taken out of.
+    naming the faces after them would be refused. Their videos are left out
+    of *files*: there a face named after someone already in it is folded
+    into theirs, the tracking having split one person in two. *excluded*
+    persons are never suggested - those the faces were taken out of.
     """
     clusters = list(
         user_face_clusters(user)
@@ -242,9 +245,9 @@ def unassigned_groups(user):
     rows = list(
         _unassigned_faces(user)
         .order_by("-quality", "pk")
-        .values_list("pk", "embedding", "file_id", "rejected_cluster__person_id")[
-            :FACES_PER_PAGE
-        ]
+        .values_list(
+            "pk", "embedding", "file_id", "rejected_cluster__person_id", "timestamp"
+        )[:FACES_PER_PAGE]
     )
     if not rows:
         return []
@@ -260,7 +263,7 @@ def unassigned_groups(user):
                 face_ids=tuple(ids),
                 suggestion=suggest(
                     mean / norm if norm else None,
-                    {by_pk[pk][2] for pk in ids},
+                    {by_pk[pk][2] for pk in ids if by_pk[pk][4] is None},
                     {by_pk[pk][3] for pk in ids} - {None},
                 ),
             )

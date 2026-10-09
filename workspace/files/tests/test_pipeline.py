@@ -268,6 +268,53 @@ class RunPipelineTests(PipelineTestCase):
         )
 
 
+@patch("workspace.files.sse_provider.push_file_event")
+class SettledAnnouncementTests(PipelineTestCase):
+    """Open listings take their spinner down on this push, not on a reload."""
+
+    def test_a_settled_file_is_announced(self, push):
+        self._processor("any")
+        f = self._upload()
+
+        run_pipeline(f.uuid)
+
+        push.assert_called_once()
+        file_obj, event_type, _ = push.call_args.args
+        self.assertEqual((file_obj.pk, event_type), (f.pk, "processing_settled"))
+
+    def test_a_run_overtaken_by_a_replacement_announces_nothing(self, push):
+        """The replacement's own pipeline settles the new bytes and announces them."""
+
+        def replace(file_obj):
+            FileService.update_content(
+                file_obj, ContentFile(b"newer", name="a.txt"), name="a.txt"
+            )
+            return True
+
+        register_processor(
+            "replacer",
+            applies_to=lambda f: True,
+            pending=File.objects.none,
+            process=replace,
+        )
+        f = self._upload()
+
+        run_pipeline(f.uuid)
+
+        push.assert_not_called()
+
+    def test_a_failed_announcement_does_not_unsettle_the_file(self, push):
+        push.side_effect = ConnectionError("cache down")
+        self._processor("any")
+        f = self._upload()
+
+        with self.assertLogs("workspace.files.services.processors", "ERROR"):
+            self.assertEqual(run_pipeline(f.uuid), Status.READY)
+
+        f.refresh_from_db()
+        self.assertEqual(f.processing_status, Status.READY)
+
+
 class PipelineDispatchTests(PipelineTestCase):
     def test_subscribed_to_uploads_and_content_replacements(self):
         for action in (FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED):

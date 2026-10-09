@@ -259,7 +259,26 @@ def run_pipeline(file_uuid):
     settled = this_content.filter(processing_status=Status.PROCESSING).update(
         processing_status=Status.READY
     )
-    return Status.READY if settled else None
+    if not settled:
+        return None
+    _announce_settled(file_obj)
+    return Status.READY
+
+
+def _announce_settled(file_obj):
+    """Tell every open listing of the file that its spinner can go.
+
+    Best-effort: the status is already written, and a page that misses the
+    push shows it on its next load.
+    """
+    from ..sse_provider import push_file_event
+
+    try:
+        push_file_event(file_obj, "processing_settled", None)
+    except Exception:
+        logger.exception(
+            "Could not announce the processed file %s", scrub(file_obj.uuid)
+        )
 
 
 def _run_step(processor, file_obj):

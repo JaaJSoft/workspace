@@ -2,6 +2,7 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 
+from workspace.common.text import fold_text
 from workspace.common.uuids import parse_uuid_or_none
 
 from ..queries import user_persons
@@ -33,7 +34,7 @@ class PersonViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         qs = user_persons(self.request.user).select_related("linked_user")
         params = self.request.query_params
-        q = params.get("q", "").strip().lower()
+        q = fold_text(params.get("q", "").strip())
         if q:
             qs = qs.filter(search_text__contains=q)
         scope = params.get("scope")

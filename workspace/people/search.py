@@ -1,3 +1,4 @@
+from workspace.common.text import fold_text
 from workspace.core.module_registry import SearchResult, SearchScope
 
 from .queries import own_persons, user_persons
@@ -6,13 +7,13 @@ from .queries import own_persons, user_persons
 def _matched_value(person, needle):
     for entry in person.emails or []:
         value = entry.get("value", "")
-        if needle in value.lower():
+        if needle in fold_text(value):
             return value
     return person.display_name
 
 
 def search_persons(query, user, limit, scope=SearchScope.ALL):
-    needle = query.strip().lower()
+    needle = fold_text(query.strip())
     if not needle:
         return []
     persons = own_persons(user) if scope == SearchScope.MINE else user_persons(user)

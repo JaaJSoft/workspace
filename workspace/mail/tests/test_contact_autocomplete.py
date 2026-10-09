@@ -458,6 +458,21 @@ class AddressBookTests(AutocompleteTestMixin, APITestCase):
             ],
         )
 
+    def test_person_matches_a_query_typed_without_accents(self):
+        person = self._person("Hélène Dupré", ("helene@acme.com", "work"))
+        data = self.client.get(URL, {"q": "dupre"}).json()
+        self.assertEqual([d.get("uuid") for d in data], [str(person.uuid)])
+
+    def test_person_email_matching_an_accented_query_comes_first(self):
+        self._person(
+            "José Martin", ("alt@example.com", "home"), ("jose@work.com", "work")
+        )
+        data = self.client.get(URL, {"q": "josé"}).json()
+        self.assertEqual(
+            [e["value"] for e in data[0]["emails"]],
+            ["jose@work.com", "alt@example.com"],
+        )
+
     def test_person_without_email_is_skipped(self):
         self._person("Alice Phoneonly")
         self.assertEqual(self.client.get(URL, {"q": "phoneonly"}).json(), [])

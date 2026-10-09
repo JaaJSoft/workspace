@@ -375,6 +375,16 @@ class PersonsEndpointTests(FaceApiTestCase):
         self.assertEqual([r["name"] for r in results], ["Alicia"])
         self.assertEqual(results[0]["photo_count"], 0)
 
+    def test_a_search_ignores_accents_on_either_side(self):
+        create_person(owner=self.user, display_name="Hélène")
+        create_person(owner=self.user, display_name="Jose")
+
+        def names(query):
+            return [r["name"] for r in self.client.get(PERSONS, {"q": query}).json()]
+
+        self.assertEqual(names("helene"), ["Hélène"])
+        self.assertEqual(names("JOSÉ"), ["Jose"])
+
     def test_an_empty_picker_lists_named_people_then_every_other_contact(self):
         contact = create_person(owner=self.user, display_name="Zoé")
         FaceCluster.objects.filter(pk=self.alice.pk).update(person=contact)

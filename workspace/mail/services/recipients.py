@@ -9,6 +9,7 @@ from collections import Counter, defaultdict
 
 from django.db.models import Q
 
+from workspace.common.text import fold_text
 from workspace.people.queries import user_persons
 from workspace.users.queries import search_people
 
@@ -28,7 +29,8 @@ KIND_HISTORY = "history"
 def _person_suggestion(person, needle):
     emails = [e for e in person.emails or [] if e.get("value")]
     # The address the query names comes first: it is the one being typed.
-    emails.sort(key=lambda e: needle not in e["value"].lower())
+    folded = fold_text(needle)
+    emails.sort(key=lambda e: folded not in fold_text(e["value"]))
     return {
         "kind": KIND_PERSON,
         "uuid": str(person.uuid),
@@ -44,7 +46,7 @@ def _person_suggestion(person, needle):
 
 
 def person_suggestions(user, needle):
-    persons = user_persons(user).filter(search_text__contains=needle)
+    persons = user_persons(user).filter(search_text__contains=fold_text(needle))
     suggestions = []
     # A person without an email cannot be a recipient; scan a little past the
     # limit so a few of them do not empty the section.

@@ -21,6 +21,7 @@ from rest_framework.views import APIView
 from workspace.common.booleans import is_truthy
 from workspace.common.mixins import CacheControlMixin
 from workspace.common.pagination import OptInLimitOffsetPagination
+from workspace.common.text import fold_text
 from workspace.common.uuids import (
     BatchTooLarge,
     MalformedUuid,
@@ -421,7 +422,7 @@ class FacePersonsView(APIView):
                 user_face_clusters(request.user).select_related("person")
             )
         }
-        query = (request.query_params.get("q") or "").strip().lower()
+        query = fold_text((request.query_params.get("q") or "").strip())
         if not query:
             named = [_person_json(c.person, c) for c in cards.values()]
             if not is_truthy(request.query_params.get("contacts")):

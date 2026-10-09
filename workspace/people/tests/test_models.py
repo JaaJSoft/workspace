@@ -71,6 +71,12 @@ class SearchTextTests(TestCase):
             "bob martin bob martin acme bob@example.com +33 6 12 34 56 78",
         )
 
+    def test_search_text_is_folded(self):
+        person = Person.objects.create(
+            owner=self.user, display_name="Hélène Dupré", organization="Crédit Agricole"
+        )
+        self.assertEqual(person.search_text, "helene dupre credit agricole")
+
     def test_search_text_updates_with_update_fields(self):
         person = Person.objects.create(owner=self.user, display_name="Bob")
         person.display_name = "Robert"

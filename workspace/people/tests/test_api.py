@@ -174,6 +174,13 @@ class PersonApiTests(APITestCase):
         names = [p["display_name"] for p in response.data["results"]]
         self.assertEqual(names, ["Bob"])
 
+    def test_search_ignores_accents(self):
+        create_person(owner=self.alice, display_name="Éloïse")
+        create_person(owner=self.alice, display_name="Carol")
+        response = self.client.get("/api/v1/people", {"q": "eloise"})
+        names = [p["display_name"] for p in response.data["results"]]
+        self.assertEqual(names, ["Éloïse"])
+
     def test_scope_filter(self):
         create_person(owner=self.alice, display_name="Mine")
         create_person(group=self.team, display_name="Teams")

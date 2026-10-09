@@ -8,6 +8,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.exceptions import ValidationError
 
+from workspace.common.text import fold_text
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.people.actions import actions_for
 from workspace.people.models import ADDRESS_TYPES, EMAIL_TYPES, PHONE_TYPES
@@ -52,7 +53,7 @@ def _filtered_persons(request):
     qs = user_persons(request.user).select_related("linked_user", "group")
     query = request.GET.get("q", "").strip()
     if query:
-        qs = qs.filter(search_text__contains=query.lower())
+        qs = qs.filter(search_text__contains=fold_text(query))
     scope = request.GET.get("scope", "")
     if scope:
         try:

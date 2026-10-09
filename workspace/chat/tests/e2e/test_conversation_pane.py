@@ -1,7 +1,7 @@
 """E2E safety-net for the conversation pane partial extraction.
 
 Asserts that after opening a conversation:
-- the composer textarea is visible,
+- the composer is visible,
 - #messages-container is in the DOM, and
 - a message typed and sent by the user appears in #messages-container.
 
@@ -47,8 +47,8 @@ class ConversationPaneTests(PlaywrightTestCase):
 
         # The conversation pane (inside <template x-if="activeConversation">)
         # renders after Alpine processes the selectConversationById() call.
-        # The desktop composer textarea must become visible.
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        # The desktop composer must become visible.
+        composer = self.page.get_by_role("textbox", name="Type a message...")
         expect(composer).to_be_visible()
 
         # #messages-container is rendered inside the same x-if template.

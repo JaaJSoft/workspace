@@ -467,6 +467,9 @@ window.chatMessagesMixin = function chatMessagesMixin() {
         const ta = this.getMessageInput();
         if (!ta) return;
         ta.focus();
+        // The formatted editor already puts the caret at the end when it
+        // loads the message.
+        if (!ta.setSelectionRange) return;
         // Where the caret lands after a programmatic value change is browser
         // dependent, and ArrowUp's own default action pulls it to the start.
         const end = ta.value.length;

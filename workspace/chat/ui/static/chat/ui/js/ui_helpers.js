@@ -11,10 +11,13 @@ window.chatUiHelpersMixin = function chatUiHelpersMixin() {
       return window.matchMedia('(max-width: 639px)').matches;
     },
 
+    // The element the user types the message in: the mobile textarea below
+    // `sm`, otherwise the formatted editor or the markdown textarea,
+    // whichever mode the composer is in.
     getMessageInput() {
-      return this.isSmallScreen()
-        ? this.$refs.messageInputMobile
-        : this.$refs.messageInput;
+      if (this.isSmallScreen()) return this.$refs.messageInputMobile;
+      if (this.richComposerActive?.()) return this.richComposerElement();
+      return this.$refs.messageInput;
     },
 
     // ── Generic helpers (shared across mixins) ──────────────

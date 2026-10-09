@@ -18,6 +18,7 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
     editCalendar(cal) {
       this.calendarModalMode = 'edit';
       this.calendarForm = { uuid: cal.uuid, name: cal.name, color: cal.color };
+      this._loadCalendarFeed(cal.uuid);
       this.showCalendarModal = true;
       this.$nextTick(() => {
         const input = document.getElementById('calendar-form-name');
@@ -64,6 +65,83 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
       } finally {
         this.savingCalendar = false;
       }
+    },
+
+    // --- ICS feed (read-only subscription link) ---
+    _calendarFeedUrl(uuid) {
+      return `/api/v1/calendars/${uuid}/feed`;
+    },
+
+    async _loadCalendarFeed(uuid) {
+      this.calendarFeed = { loading: true, busy: false, url: null };
+      try {
+        const resp = await fetch(this._calendarFeedUrl(uuid), { credentials: 'same-origin' });
+        const data = resp.ok ? await resp.json() : { url: null };
+        // The modal may have moved on to another calendar meanwhile.
+        if (this.calendarForm.uuid === uuid) this.calendarFeed = { loading: false, busy: false, url: data.url };
+      } catch {
+        if (this.calendarForm.uuid === uuid) this.calendarFeed = { loading: false, busy: false, url: null };
+      }
+    },
+
+    async enableCalendarFeed() {
+      const uuid = this.calendarForm.uuid;
+      if (!uuid || this.calendarFeed.busy) return;
+      if (this.calendarFeed.url) {
+        const ok = await AppDialog.confirm({
+          title: 'Replace the link',
+          message: 'Apps subscribed with the current link will stop receiving updates.',
+          okLabel: 'Replace',
+          icon: 'refresh-cw',
+        });
+        if (!ok) return;
+      }
+      this.calendarFeed.busy = true;
+      try {
+        const resp = await fetch(this._calendarFeedUrl(uuid), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+        });
+        if (resp.ok) this.calendarFeed.url = (await resp.json()).url;
+        else if (window.AppAlert) window.AppAlert.error('Could not create the link');
+      } finally {
+        this.calendarFeed.busy = false;
+      }
+    },
+
+    async disableCalendarFeed() {
+      const uuid = this.calendarForm.uuid;
+      if (!uuid || this.calendarFeed.busy) return;
+      const ok = await AppDialog.confirm({
+        title: 'Turn off the link',
+        message: 'Apps subscribed with this link will stop receiving updates.',
+        okLabel: 'Turn off',
+        okClass: 'btn-error',
+        icon: 'link-2-off',
+        iconClass: 'bg-error/10 text-error',
+      });
+      if (!ok) return;
+      this.calendarFeed.busy = true;
+      try {
+        const resp = await fetch(this._calendarFeedUrl(uuid), {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+        });
+        if (resp.ok) this.calendarFeed.url = null;
+      } finally {
+        this.calendarFeed.busy = false;
+      }
+    },
+
+    copyCalendarFeed() {
+      if (!this.calendarFeed.url) return;
+      navigator.clipboard.writeText(this.calendarFeed.url).then(() => {
+        if (window.AppAlert) window.AppAlert.success('Link copied!', { duration: 2000 });
+      }).catch(() => {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+      });
     },
 
     async deleteCalendar(cal) {

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import calendars, events, external, invitees, polls
+from .views import calendars, events, external, feeds, invitees, polls
 
 urlpatterns = [
     path(
@@ -13,6 +13,12 @@ urlpatterns = [
         calendars.CalendarDetailView.as_view(),
         name="calendar-detail",
     ),
+    path(
+        "api/v1/calendars/<uuid:calendar_id>/feed",
+        feeds.CalendarFeedView.as_view(),
+        name="calendar-feed-settings",
+    ),
+    path("calendar/feeds/<str:token>.ics", feeds.calendar_feed, name="calendar-feed"),
     path("api/v1/events", events.EventListView.as_view(), name="calendar-events"),
     path(
         "api/v1/events/invitees",

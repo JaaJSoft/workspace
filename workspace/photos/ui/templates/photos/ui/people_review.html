@@ -18,13 +18,16 @@
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
         <h1 class="text-lg font-semibold truncate">Review people</h1>
-        {% if review.left %}
-          <span
-            class="ml-auto text-sm text-base-content/60 tabular-nums whitespace-nowrap"
-            x-show="left > 0"
-            x-text="left === 1 ? '1 group left' : left + ' groups left'"
-          >{% if review.left == 1 %}1 group left{% else %}{{ review.left }} groups left{% endif %}</span>
-        {% endif %}
+        <div class="ml-auto flex items-center gap-2">
+          {% if review.left %}
+            <span
+              class="text-sm text-base-content/60 tabular-nums whitespace-nowrap"
+              x-show="left > 0"
+              x-text="left === 1 ? '1 group left' : left + ' groups left'"
+            >{% if review.left == 1 %}1 group left{% else %}{{ review.left }} groups left{% endif %}</span>
+          {% endif %}
+          {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="false" title="Look for new faces to check" %}
+        </div>
       </div>
     </header>
 

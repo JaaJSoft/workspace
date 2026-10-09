@@ -26,12 +26,13 @@ from django.views.debug import SafeExceptionReporterFilter
 REDACTED = "[redacted]"
 
 # password / secret_key / session_key anywhere in the name; wrapped_, encrypted_
-# and sig_ as a prefix only, token and encrypted as a suffix only - so
-# `signature_count`, `designation` and the `prompt_tokens` counters stay
-# legible, while access_token, refresh_token and oauth2_data_encrypted do not.
+# and sig_ as a prefix only; token, encrypted, secret, api_key and signing_key
+# as a suffix only - so `signature_count`, `designation` and the `prompt_tokens`
+# counters stay legible, while access_token, oauth2_data_encrypted, a client_secret
+# and the mail providers' MAILGUN_API_KEY or WEBHOOK_SECRET do not.
 _SENSITIVE_NAME = re.compile(
     r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_"
-    r"|token$|encrypted$)",
+    r"|token$|encrypted$|secret$|api_key$|signing_key$)",
     re.IGNORECASE,
 )
 

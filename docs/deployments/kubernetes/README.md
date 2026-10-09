@@ -34,7 +34,7 @@ The three Workspace containers run the same image and command; `PROCESS_TYPE` pi
 | File             | Description                                                    |
 |------------------|----------------------------------------------------------------|
 | `namespace.yaml` | Namespace `workspace`                                          |
-| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `METRICS_PASSWORD`, `AI_API_KEY` |
+| `secrets.yaml`   | Sensitive config: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `WEBPUSH_VAPID_PRIVATE_KEY`, `EMAIL_HOST_PASSWORD`, `ANYMAIL_WEBHOOK_SECRET`, `METRICS_PASSWORD`, `AI_API_KEY` |
 | `configmap.yaml` | Non-sensitive config: debug, allowed hosts, workers, log level |
 | `app.yaml`       | Deployment (all containers) + PVC + Service                    |
 | `ingress.yaml`   | Ingress (nginx) with TLS                                       |
@@ -80,6 +80,8 @@ kubectl apply -f ingress.yaml
 | `DATABASE_URL`            | Database connection string. Default: `sqlite:////app/data/db.sqlite3` |
 | `REDIS_URL`               | Redis connection. Default: `redis://localhost:6379/0` (sidecar)       |
 | `WEBPUSH_VAPID_PRIVATE_KEY` | VAPID private key. `manage.py generate_vapid_keys` prints raw base64url; PEM and base64url DER are also accepted |
+| `EMAIL_HOST_PASSWORD`     | SMTP relay password for the instance's own mail. See [Sending email](../../guides/email.md) |
+| `ANYMAIL_WEBHOOK_SECRET`  | `user:password` the mail provider sends to the bounce webhooks (`/api/v1/email/<provider>/tracking`); empty keeps them off |
 | `METRICS_PASSWORD`        | HTTP Basic password for `/metrics`, plain text (`stringData` needs no base64). Endpoint returns 401 to everyone until set |
 | `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth2 client secret |
@@ -130,6 +132,11 @@ kubectl apply -f ingress.yaml
 | `METRICS_USER`         | `prometheus`                    | HTTP Basic user for `/metrics` (password in `secrets.yaml`) |
 | `WEBPUSH_VAPID_PUBLIC_KEY` | *(empty)*                  | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |
+| `EMAIL_HOST`           | *(empty)*                       | SMTP relay for the instance's own mail; empty sends none |
+| `EMAIL_PORT`           | `587`                           | Relay port (STARTTLS) |
+| `EMAIL_HOST_USER`      | *(empty)*                       | Relay user (password in `secrets.yaml`) |
+| `DEFAULT_FROM_EMAIL`   | `Workspace <noreply@localhost>` | Sender of the instance's mail |
+| `EMAIL_BASE_URL`       | *(empty)*                       | Public origin, for links in mails |
 | `AI_MODEL`             | `gpt-5`                        | Default LLM model for chat and tasks |
 | `AI_MAX_TOKENS`        | `2048`                          | Maximum tokens per AI response |
 | `AI_CHAT_CONTEXT_SIZE` | `30`                            | Recent messages kept in full; older ones are summarized |

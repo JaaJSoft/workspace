@@ -28,6 +28,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 
 - [Migrating from SQLite to PostgreSQL](guides/sqlite-to-postgres.md)
 - [Monitoring with Prometheus](guides/monitoring.md) - `/metrics` credentials, scrape config, exposed series
+- [Sending email from the instance](guides/email.md) - relay setup, SPF/DKIM/DMARC, bounce handling
 
 ## API reference
 

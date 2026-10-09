@@ -63,6 +63,13 @@ All settings are configurable via environment variables or a `.env` file next to
 | `WEBPUSH_VAPID_MAILTO`      | *(empty)*                   | Contact email for VAPID claims (`mailto:…`) |
 | `METRICS_USER`         | *(empty)*                        | HTTP Basic user for `/metrics`. Endpoint returns 401 to everyone until set |
 | `METRICS_PASSWORD`     | *(empty)*                        | Matching password, in plain text. See [Monitoring](../../guides/monitoring.md) |
+| `EMAIL_HOST`           | *(empty)*                        | SMTP relay for mail the instance sends on its own behalf. Empty: the instance sends none. Set it on the worker too. See [Sending email](../../guides/email.md) |
+| `EMAIL_PORT`           | `587`                            | Relay port (STARTTLS; `EMAIL_USE_SSL=1` switches to implicit TLS on 465) |
+| `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD` | *(empty)*     | Relay credentials |
+| `DEFAULT_FROM_EMAIL`   | `Workspace <noreply@localhost>`  | Sender of the instance's mail - its domain needs SPF, DKIM and DMARC |
+| `EMAIL_REPLY_TO`       | *(empty)*                        | Comma-separated `Reply-To` addresses |
+| `EMAIL_BASE_URL`       | *(empty)*                        | Public origin, for links in mails; notification mail is not sent without it |
+| `ANYMAIL_WEBHOOK_SECRET` | *(empty)*                      | `user:password` the mail provider sends to the bounce webhooks (`/api/v1/email/<provider>/tracking`); empty keeps them off. Any other `ANYMAIL_*` variable is passed to django-anymail too |
 | `OAUTH_GOOGLE_CLIENT_ID` | *(empty)* | Google OAuth2 client ID (enables Gmail login) |
 | `OAUTH_GOOGLE_CLIENT_SECRET` | *(empty)* | Google OAuth2 client secret |
 | `OAUTH_MICROSOFT_CLIENT_ID` | *(empty)* | Microsoft OAuth2 client ID (enables Outlook login) |

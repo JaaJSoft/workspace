@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from workspace.ai.models import AITask, BotProfile
 from workspace.ai.services.conversation_history import ConversationHistory
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import EditImageParams, GenerateImageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.mail.models import MailAccount, MailFolder, MailLabel, MailMessage
@@ -521,25 +522,27 @@ class GenerateImageToolTest(TestCase):
         mock_client.images.generate.assert_called_once()
 
     def test_generate_image_empty_prompt(self):
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt=""),
-            user=None,
-            bot=None,
-            conversation_id=self.conv_id,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt=""),
+                user=None,
+                bot=None,
+                conversation_id=self.conv_id,
+                context=self.context,
+            )
+        self.assertIn("prompt is required", caught.exception.reason)
         self.assertNotIn("images", self.context)
 
     def test_generate_image_no_conversation(self):
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id=None,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id=None,
+                context=self.context,
+            )
+        self.assertIn("no conversation context", caught.exception.reason)
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_generate_image_invalid_size_defaults(self, mock_get_client):
@@ -567,14 +570,16 @@ class GenerateImageToolTest(TestCase):
         mock_client.images.generate.side_effect = Exception("API timeout")
         mock_get_client.return_value = mock_client
 
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id=self.conv_id,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id=self.conv_id,
+                context=self.context,
+            )
+        self.assertIn("API timeout", caught.exception.reason)
+        self.assertTrue(caught.exception.retryable)
         self.assertNotIn("images", self.context)
 
     @patch("workspace.ai.services.image.get_image_client")
@@ -586,15 +591,15 @@ class GenerateImageToolTest(TestCase):
         mock_client.images.generate.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id=self.conv_id,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
-        self.assertNotIn("successfully", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id=self.conv_id,
+                context=self.context,
+            )
+        self.assertIn("returned no image", caught.exception.reason)
         self.assertNotIn("images", self.context)
 
     @patch("workspace.ai.services.image.get_image_client")
@@ -606,15 +611,15 @@ class GenerateImageToolTest(TestCase):
         mock_client.images.generate.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id=self.conv_id,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
-        self.assertNotIn("successfully", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id=self.conv_id,
+                context=self.context,
+            )
+        self.assertIn("returned no image", caught.exception.reason)
         self.assertNotIn("images", self.context)
 
     @patch("workspace.ai.services.image.get_image_client")
@@ -626,15 +631,15 @@ class GenerateImageToolTest(TestCase):
         mock_client.images.generate.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        result = self.provider.generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id=self.conv_id,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
-        self.assertNotIn("successfully", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id=self.conv_id,
+                context=self.context,
+            )
+        self.assertIn("returned no image", caught.exception.reason)
         self.assertNotIn("images", self.context)
 
 
@@ -655,14 +660,18 @@ class ImageFailureGuidanceTests(TestCase):
     def _fail_with(self, error, prompt="a cat"):
         client = MagicMock()
         client.images.generate.side_effect = error
-        with patch("workspace.ai.services.image.get_image_client", return_value=client):
-            return self.provider.generate_image(
+        with (
+            patch("workspace.ai.services.image.get_image_client", return_value=client),
+            self.assertRaises(ToolError) as caught,
+        ):
+            self.provider.generate_image(
                 GenerateImageParams(prompt=prompt),
                 user=None,
                 bot=None,
                 conversation_id="conv-1",
                 context=self.context,
             )
+        return caught.exception
 
     def _rejection(self):
         import httpx2
@@ -674,60 +683,64 @@ class ImageFailureGuidanceTests(TestCase):
         )
 
     def test_a_rejected_prompt_is_sent_back_for_a_rewrite(self):
-        result = self._fail_with(self._rejection())
+        failure = self._fail_with(self._rejection())
 
-        self.assertIn("rejected the request itself", result)
-        self.assertIn("rewritten prompt", result)
-        self.assertIn("generate_image", result)
+        self.assertIn("rejected the request itself", failure.reason)
+        self.assertIn("rewritten prompt", failure.reason)
+        self.assertFalse(failure.retryable)
 
     def test_a_broken_backend_does_not_blame_the_prompt(self):
         # Telling the model to rewrite a prompt the service never read
         # sends it chasing a problem that isn't there.
-        result = self._fail_with(RuntimeError("upstream down"))
+        failure = self._fail_with(RuntimeError("upstream down"))
 
-        self.assertIn("image service failed, not your prompt", result)
-        self.assertNotIn("rejected the request itself", result)
+        self.assertIn("image service failed, not the prompt", failure.reason)
+        self.assertNotIn("rejected the request itself", failure.reason)
+        self.assertTrue(failure.retryable)
 
     def test_resending_the_same_prompt_is_called_out(self):
         self._fail_with(self._rejection())
-        result = self._fail_with(self._rejection())
+        failure = self._fail_with(self._rejection())
 
-        self.assertIn("already sent this exact prompt", result)
-        self.assertIn("substantially different wording", result)
+        self.assertIn("exact prompt already failed", failure.reason)
+        self.assertIn("substantially different wording", failure.reason)
+        self.assertFalse(failure.retryable)
 
     def test_a_varied_prompt_is_not_treated_as_a_repeat(self):
         self._fail_with(self._rejection(), prompt="a cat")
-        result = self._fail_with(self._rejection(), prompt="a small tabby kitten")
+        failure = self._fail_with(self._rejection(), prompt="a small tabby kitten")
 
-        self.assertNotIn("already sent this exact prompt", result)
+        self.assertNotIn("exact prompt already failed", failure.reason)
 
     def test_the_reply_is_told_to_stop_once_the_budget_is_spent(self):
         # Without a cap, a model that keeps rewriting can burn the whole
         # tool-round budget on one image and hang the reply.
         for _ in range(3):
-            result = self._fail_with(RuntimeError("upstream down"))
-            self.assertNotIn("stop calling", result)
+            failure = self._fail_with(RuntimeError("upstream down"))
+            self.assertNotIn("stop calling", failure.reason)
+            self.assertTrue(failure.retryable)
 
-        result = self._fail_with(RuntimeError("upstream down"))
+        failure = self._fail_with(RuntimeError("upstream down"))
 
-        self.assertIn("stop calling generate_image", result)
-        self.assertIn("answer the user now", result)
+        self.assertIn("stop calling generate_image", failure.reason)
+        self.assertFalse(failure.retryable)
 
     def test_the_budget_is_shared_with_edit_image(self):
         from workspace.ai.services.image import ImageGenerationError
-        from workspace.ai.tools import _image_failure_message
+        from workspace.ai.tools import _image_failure
 
         for _ in range(3):
             self._fail_with(RuntimeError("upstream down"))
 
-        result = _image_failure_message(
+        failure = _image_failure(
             "edit_image",
             "make it blue",
             ImageGenerationError("upstream down", attempts=3),
             self.context,
         )
 
-        self.assertIn("stop calling edit_image", result)
+        self.assertIn("stop calling edit_image", failure.reason)
+        self.assertFalse(failure.retryable)
 
 
 @override_settings(AI_IMAGE_RETRY_DELAY=0)
@@ -817,24 +830,26 @@ class EditImageToolTest(TestCase):
         mock_ollama.assert_called_once()
 
     def test_edit_image_empty_prompt(self):
-        result = self.provider.edit_image(
-            EditImageParams(prompt=""),
-            user=None,
-            bot=None,
-            conversation_id=str(self.conv.uuid),
-            context=self.context,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.edit_image(
+                EditImageParams(prompt=""),
+                user=None,
+                bot=None,
+                conversation_id=str(self.conv.uuid),
+                context=self.context,
+            )
+        self.assertIn("prompt is required", caught.exception.reason)
 
     def test_edit_image_no_image_in_conversation(self):
-        result = self.provider.edit_image(
-            EditImageParams(prompt="make it blue"),
-            user=self.user,
-            bot=None,
-            conversation_id=str(self.conv.uuid),
-            context=self.context,
-        )
-        self.assertIn("no image found", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.edit_image(
+                EditImageParams(prompt="make it blue"),
+                user=self.user,
+                bot=None,
+                conversation_id=str(self.conv.uuid),
+                context=self.context,
+            )
+        self.assertIn("no image found", caught.exception.reason)
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_edit_image_both_backends_fail(self, mock_get_client):
@@ -844,11 +859,14 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception("OpenAI failed")
         mock_get_client.return_value = mock_client
 
-        with patch(
-            "workspace.ai.services.image._edit_via_ollama",
-            side_effect=Exception("Ollama failed"),
+        with (
+            patch(
+                "workspace.ai.services.image._edit_via_ollama",
+                side_effect=Exception("Ollama failed"),
+            ),
+            self.assertRaises(ToolError) as caught,
         ):
-            result = self.provider.edit_image(
+            self.provider.edit_image(
                 EditImageParams(prompt="make it blue"),
                 user=self.user,
                 bot=None,
@@ -856,7 +874,7 @@ class EditImageToolTest(TestCase):
                 context=self.context,
             )
 
-        self.assertIn("Error", result)
+        self.assertIn("Ollama failed", caught.exception.reason)
         self.assertNotIn("images", self.context)
 
     @patch("workspace.ai.services.image.get_image_client")
@@ -866,11 +884,14 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.side_effect = Exception("OpenAI failed")
         mock_get_client.return_value = mock_client
 
-        with patch(
-            "workspace.ai.services.image._edit_via_ollama",
-            side_effect=Exception("Ollama failed"),
+        with (
+            patch(
+                "workspace.ai.services.image._edit_via_ollama",
+                side_effect=Exception("Ollama failed"),
+            ),
+            self.assertRaises(ToolError) as caught,
         ):
-            result = self.provider.edit_image(
+            self.provider.edit_image(
                 EditImageParams(prompt="make it blue"),
                 user=self.user,
                 bot=None,
@@ -878,17 +899,19 @@ class EditImageToolTest(TestCase):
                 context=self.context,
             )
 
-        self.assertIn("edit_image again", result)
+        self.assertIn("image service failed", caught.exception.reason)
+        self.assertTrue(caught.exception.retryable)
 
     def test_edit_image_no_conversation(self):
-        result = self.provider.edit_image(
-            EditImageParams(prompt="make it blue"),
-            user=None,
-            bot=None,
-            conversation_id=None,
-            context=self.context,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.edit_image(
+                EditImageParams(prompt="make it blue"),
+                user=None,
+                bot=None,
+                conversation_id=None,
+                context=self.context,
+            )
+        self.assertIn("no conversation context", caught.exception.reason)
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_edit_image_empty_result_reports_error(self, mock_get_client):
@@ -900,11 +923,14 @@ class EditImageToolTest(TestCase):
         mock_client.images.edit.return_value = mock_response
         mock_get_client.return_value = mock_client
 
-        with patch(
-            "workspace.ai.services.image._edit_via_ollama",
-            side_effect=Exception("Ollama failed"),
+        with (
+            patch(
+                "workspace.ai.services.image._edit_via_ollama",
+                side_effect=Exception("Ollama failed"),
+            ),
+            self.assertRaises(ToolError) as caught,
         ):
-            result = self.provider.edit_image(
+            self.provider.edit_image(
                 EditImageParams(prompt="make it blue"),
                 user=self.user,
                 bot=None,
@@ -912,8 +938,6 @@ class EditImageToolTest(TestCase):
                 context=self.context,
             )
 
-        self.assertIn("Error", result)
-        self.assertNotIn("successfully", result)
         self.assertNotIn("images", self.context)
 
 

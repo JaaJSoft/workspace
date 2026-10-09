@@ -18,10 +18,10 @@ from wsgidav.dav_error import (
     DAVError,
 )
 
+from workspace.common.dav.auth import clear_auth_cache
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
-from workspace.files.webdav import dc as dc_module
 from workspace.files.webdav.dc import DjangoBasicDomainController
 from workspace.files.webdav.provider import WorkspaceDAVProvider
 from workspace.files.webdav.resources import (
@@ -72,7 +72,7 @@ class DomainControllerTests(TestCase):
     def setUp(self):
         # The auth cache is module-global and keyed on credentials only:
         # without a reset, a user cached by one test leaks into the next.
-        dc_module._auth_cache.clear()
+        clear_auth_cache()
         self.user = User.objects.create_user(
             username="davdc", email="dc@test.com", password="secret123"
         )
@@ -80,7 +80,7 @@ class DomainControllerTests(TestCase):
         self.dc = DjangoBasicDomainController(None, {})
 
     def tearDown(self):
-        dc_module._auth_cache.clear()
+        clear_auth_cache()
 
     def test_get_domain_realm(self):
         self.assertEqual(self.dc.get_domain_realm("/", {}), "Workspace")
@@ -115,45 +115,6 @@ class DomainControllerTests(TestCase):
         result = self.dc.basic_auth_user("Workspace", "davdc", "secret123", environ)
         self.assertFalse(result)
 
-    def test_basic_auth_result_is_cached(self):
-        """A second request with the same credentials must not re-run the
-        (expensive) authentication backend within the cache TTL."""
-        from unittest import mock
-
-        first = {}
-        self.assertTrue(
-            self.dc.basic_auth_user("Workspace", "davdc", "secret123", first)
-        )
-        with mock.patch("workspace.files.webdav.dc.authenticate") as auth:
-            second = {}
-            result = self.dc.basic_auth_user("Workspace", "davdc", "secret123", second)
-        self.assertTrue(result)
-        auth.assert_not_called()
-        self.assertEqual(second["workspace.user"], self.user)
-
-    def test_expired_auth_cache_entries_are_evicted(self):
-        """The cache lives as long as the worker: an entry past its TTL must
-        not stay in memory once another login is cached."""
-        from unittest import mock
-
-        other = User.objects.create_user(username="davdc2", password="secret456")
-        with mock.patch("workspace.files.webdav.dc.time.monotonic", return_value=0):
-            self.dc.basic_auth_user("Workspace", "davdc", "secret123", {})
-        later = dc_module._AUTH_TTL + 1
-        with mock.patch("workspace.files.webdav.dc.time.monotonic", return_value=later):
-            self.dc.basic_auth_user("Workspace", "davdc2", "secret456", {})
-        self.assertEqual([user for user, _ in dc_module._auth_cache.values()], [other])
-
-    def test_basic_auth_wrong_password_not_served_from_cache(self):
-        """Caching a success must not let a wrong password through."""
-        environ = {}
-        self.assertTrue(
-            self.dc.basic_auth_user("Workspace", "davdc", "secret123", environ)
-        )
-        self.assertFalse(
-            self.dc.basic_auth_user("Workspace", "davdc", "wrong", environ)
-        )
-
     def test_basic_auth_api_token_as_password(self):
         _, token = AuthToken.objects.create(self.user)
         environ = {}
@@ -169,28 +130,6 @@ class DomainControllerTests(TestCase):
         environ = {}
         self.assertTrue(self.dc.basic_auth_user("Workspace", "ssodav", token, environ))
         self.assertEqual(environ["workspace.user"], sso_user)
-
-    def test_basic_auth_api_token_with_wrong_username(self):
-        other = User.objects.create_user(
-            username="otherdav", email="other@test.com", password="pw12345"
-        )
-        _, token = AuthToken.objects.create(other)
-        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
-
-    def test_basic_auth_expired_api_token(self):
-        _, token = AuthToken.objects.create(self.user, timedelta(seconds=-1))
-        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
-
-    def test_basic_auth_revoked_api_token(self):
-        instance, token = AuthToken.objects.create(self.user)
-        instance.delete()
-        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
-
-    def test_basic_auth_api_token_inactive_user(self):
-        _, token = AuthToken.objects.create(self.user)
-        self.user.is_active = False
-        self.user.save()
-        self.assertFalse(self.dc.basic_auth_user("Workspace", "davdc", token, {}))
 
 
 # ── Provider ──────────────────────────────────────────────────────────

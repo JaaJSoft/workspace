@@ -12,6 +12,12 @@ uv run python manage.py runserver 127.0.0.1:$port --noreload   # NEVER :8000 in 
 uv run python manage.py test workspace.<module>           # e.g. workspace.files
 uv run coverage run manage.py test workspace.<module>     # with coverage
 
+# Face bench - detection and grouping on real photo libraries, before and
+# after any change to workspace/photos/services/face_* or detection/
+# (downloads ~370 MB once; see docs/photos/face-bench.md)
+uv run python scripts/face_bench.py --json before.json
+uv run python scripts/face_bench.py --compare before.json
+
 # Async stack
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info

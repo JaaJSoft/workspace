@@ -76,7 +76,9 @@ feature off.
 `scrfd_arcface` is more accurate on hard faces (profiles, small faces in group
 photos), but InsightFace licenses its pretrained weights for non-commercial
 research only: an instance run by or for a company must not enable it. Both
-run on the CPU through onnxruntime.
+run on the CPU through onnxruntime. The [face bench](face-bench.md) measures
+both on real photo libraries; run it to judge any change to detection or
+grouping.
 
 **Switching backend** changes the embedding space, and `scrfd_arcface` changes
 its size too. After changing the setting:

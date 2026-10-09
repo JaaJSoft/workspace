@@ -10,6 +10,61 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Failures
+# ---------------------------------------------------------------------------
+
+
+class ToolError(Exception):
+    """A tool call that did not produce what it was asked for.
+
+    Raised from a handler, or anything it calls, and turned by
+    :meth:`ToolRegistry.execute` into the failure envelope the model reads
+    in place of a result.
+
+    *retryable* says whether the same call may succeed if made again: the
+    service it depends on was down, timed out or rate-limited. A final
+    failure (the default) will fail again with the same arguments - they
+    were wrong, the target does not exist, the user may not touch it -
+    so *reason* is where to say what to change, if anything can be.
+    """
+
+    def __init__(self, reason: str, *, retryable: bool = False):
+        super().__init__(reason)
+        self.reason = reason
+        self.retryable = retryable
+
+
+def tool_failure(reason: str, *, retryable: bool = False) -> str:
+    """The failure envelope, as the string a tool result travels as."""
+    return json.dumps(
+        {"error": {"retryable": retryable, "reason": reason}}, ensure_ascii=False
+    )
+
+
+def parse_tool_failure(result) -> dict | None:
+    """``{"retryable", "reason"}`` when *result* is a failure envelope, else None."""
+    if not isinstance(result, str) or not result.startswith('{"error"'):
+        return None
+    try:
+        parsed = json.loads(result)
+    except json.JSONDecodeError:
+        return None
+    # Exact shape only: read_webpage hands back JSON APIs verbatim, and an
+    # API's own {"error": ...} body is a result, not a failure of the call.
+    if not isinstance(parsed, dict) or parsed.keys() != {"error"}:
+        return None
+    error = parsed["error"]
+    if (
+        not isinstance(error, dict)
+        or error.keys() != {"retryable", "reason"}
+        or not isinstance(error["retryable"], bool)
+        or not isinstance(error["reason"], str)
+    ):
+        return None
+    return error
+
+
+# ---------------------------------------------------------------------------
 # @tool decorator
 # ---------------------------------------------------------------------------
 
@@ -68,6 +123,8 @@ class ToolProvider:
     Subclass this and decorate methods with :func:`tool`.  Each decorated
     method becomes a chat tool whose handler receives
     ``(self, args, user, bot, conversation_id, context)`` and returns a ``str``.
+    A call that fails raises :class:`ToolError` instead of describing the
+    failure in its result.
 
     When a ``params`` model is set, *args* is a validated Pydantic instance.
     When ``params`` is ``None``, *args* is a raw ``dict``.
@@ -179,20 +236,33 @@ class ToolRegistry:
     # -- execution ----------------------------------------------------------
 
     def execute(self, tool_call, user, bot, conversation_id=None, context=None) -> str:
-        """Execute a :class:`~workspace.ai.harness.model.ToolCall`, returning the result string."""
+        """Execute a :class:`~workspace.ai.harness.model.ToolCall`, returning the result string.
+
+        A failure comes back as the envelope :func:`tool_failure` builds,
+        whatever the tool: the model reads one shape for every failure, and
+        :func:`parse_tool_failure` is how anything else recognizes one.
+        Exceptions other than :class:`ToolError` are bugs, not failures, and
+        propagate.
+        """
+        try:
+            return self._execute(tool_call, user, bot, conversation_id, context)
+        except ToolError as exc:
+            return tool_failure(exc.reason, retryable=exc.retryable)
+
+    def _execute(self, tool_call, user, bot, conversation_id, context):
         name = tool_call.name
         try:
             raw_args = json.loads(tool_call.arguments)
         except json.JSONDecodeError:
-            return "Error: invalid JSON arguments"
+            raise ToolError("the arguments are not valid JSON") from None
         info = self._tools.get(name)
         if not info:
-            return f"Unknown tool: {name}"
+            raise ToolError(f"there is no tool named {name}")
         if info.params_class is not None:
             try:
                 args = info.params_class.model_validate(raw_args)
             except ValidationError as e:
-                return f"Error: invalid arguments — {e}"
+                raise ToolError(f"invalid arguments - {e}") from None
         else:
             args = raw_args
         if context is None:

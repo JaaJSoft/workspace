@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 
-from workspace.ai.tool_registry import tool_registry
+from workspace.ai.tool_registry import tool_failure, tool_registry
 from workspace.chat.models import Conversation, Message
 from workspace.chat.ui.templatetags.chat_tags import render_ai_steps
 from workspace.common.tests.migrations import schema_editor_stub
@@ -118,19 +118,19 @@ class RenderAiStepsTagTests(SimpleTestCase):
         ctx = render_ai_steps(FakeMessage([make_round(result_content=text)]))
         self.assertEqual(tool_steps(ctx)[0]["result"], text)
 
-    def test_error_results_are_flagged(self):
-        for content in ("Error: boom", "Unknown tool: nope"):
+    def test_failure_envelope_is_flagged_and_shows_its_reason(self):
+        for retryable in (False, True):
+            content = tool_failure("boom", retryable=retryable)
             ctx = render_ai_steps(FakeMessage([make_round(result_content=content)]))
             call = tool_steps(ctx)[0]
             self.assertTrue(call["is_error"], content)
-            self.assertEqual(call["result"], content)
-        # Legitimate result starting with "Error" without colon should not be flagged
-        ctx = render_ai_steps(
-            FakeMessage([make_round(result_content="Error handling guide")])
-        )
-        call = tool_steps(ctx)[0]
-        self.assertFalse(call["is_error"])
-        self.assertEqual(call["result"], "Error handling guide")
+            self.assertEqual(call["result"], "boom")
+
+    def test_a_result_that_only_reads_like_an_error_is_not_flagged(self):
+        for content in ("Error: boom", '{"error": "an API body, not a failure"}'):
+            ctx = render_ai_steps(FakeMessage([make_round(result_content=content)]))
+            call = tool_steps(ctx)[0]
+            self.assertFalse(call["is_error"], content)
 
     def test_non_string_result_content_is_treated_as_empty(self):
         # Non-string result content (dict) should not crash and should render as empty
@@ -257,7 +257,7 @@ class AiStepsPartialTests(SimpleTestCase):
         self.assertNotIn("<img src=x", html)
 
     def test_error_result_gets_error_styling(self):
-        html = render_partial([make_round(result_content="Error: boom")])
+        html = render_partial([make_round(result_content=tool_failure("boom"))])
         self.assertIn("text-error", html)
 
     def test_finished_timeline_renders_the_past_tense_alone(self):

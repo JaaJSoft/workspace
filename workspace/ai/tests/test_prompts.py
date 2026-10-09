@@ -271,6 +271,10 @@ class MultiStepInstructionsTests(TestCase):
     def test_web_section_offers_the_query_for_a_long_page(self):
         self.assertIn("optional query", self.system)
 
+    def test_failure_section_teaches_the_envelope_once_for_every_tool(self):
+        self.assertIn("## When a tool fails", self.system)
+        self.assertIn('{"error": {"retryable"', self.system)
+
 
 @override_settings(
     AI_TTS_MODEL="test-voice-model",

@@ -26,12 +26,9 @@ from workspace.ai.services.stream_steps import (
     notify_tool_step_done,
     step_recipients,
 )
+from workspace.ai.tool_registry import parse_tool_failure
 
 logger = logging.getLogger(__name__)
-
-# Tool handlers report a failure to the model as a plain string rather than
-# an exception, so these prefixes are the only signal a call went wrong.
-_FAILED_RESULT_PREFIXES = ("error:", "unknown tool:")
 
 
 def notify(observers, hook, *args):
@@ -82,11 +79,6 @@ class StreamStepsObserver(Observer):
             notify_tool_step_done(self._recipients(), self._conversation_id, call)
 
 
-def _result_status(result):
-    text = result if isinstance(result, str) else ""
-    return "error" if text.strip().lower().startswith(_FAILED_RESULT_PREFIXES) else "ok"
-
-
 class MetricsObserver(Observer):
     """Counts calls, rounds and early stops for Prometheus."""
 
@@ -106,7 +98,7 @@ class MetricsObserver(Observer):
         elif outcome.error is not None:
             status = "error"
         else:
-            status = _result_status(outcome.result)
+            status = "error" if parse_tool_failure(outcome.result) else "ok"
         AI_TOOL_CALLS.labels(tool=tool, status=status).inc()
 
     def on_stop(self, run):

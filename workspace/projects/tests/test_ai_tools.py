@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from pydantic import ValidationError
 
+from workspace.ai.tool_registry import ToolError
 from workspace.notifications.models import Notification
 from workspace.projects.ai_tools import (
     CommentOnTaskParams,
@@ -240,38 +241,42 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
         self.assertTrue(self.project.tasks.filter(title="By key").exists())
 
     def test_create_task_rejects_unknown_project_and_priority(self):
-        result = self._call(
-            "create_task",
-            CreateTaskParams(title="X", project="Nope"),
-            self.member,
-        )
-        self.assertIn('no project named "Nope"', result)
-        self.assertIn("Website", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_task",
+                CreateTaskParams(title="X", project="Nope"),
+                self.member,
+            )
+        self.assertIn('no project named "Nope"', caught.exception.reason)
+        self.assertIn("Website", caught.exception.reason)
 
-        result = self._call(
-            "create_task",
-            CreateTaskParams(title="X", project="Website", priority="asap"),
-            self.member,
-        )
-        self.assertIn("invalid priority", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_task",
+                CreateTaskParams(title="X", project="Website", priority="asap"),
+                self.member,
+            )
+        self.assertIn("invalid priority", caught.exception.reason)
         self.assertFalse(self.project.tasks.filter(title="X").exists())
 
     def test_create_task_rejects_non_member_assignee(self):
-        result = self._call(
-            "create_task",
-            CreateTaskParams(title="X", project="Website", assignee="outsider1"),
-            self.member,
-        )
-        self.assertIn("not a member", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_task",
+                CreateTaskParams(title="X", project="Website", assignee="outsider1"),
+                self.member,
+            )
+        self.assertIn("not a member", caught.exception.reason)
         self.assertFalse(self.project.tasks.filter(title="X").exists())
 
     def test_create_task_inaccessible_project_looks_unknown(self):
-        result = self._call(
-            "create_task",
-            CreateTaskParams(title="X", project="Website"),
-            self.outsider,
-        )
-        self.assertIn('no project named "Website"', result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_task",
+                CreateTaskParams(title="X", project="Website"),
+                self.outsider,
+            )
+        self.assertIn('no project named "Website"', caught.exception.reason)
 
     # -- move_task -----------------------------------------------------------
 
@@ -290,35 +295,38 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
 
     def test_move_task_unknown_status_lists_columns(self):
         task = create_task(self.project, self.admin, title="T")
-        result = self._call(
-            "move_task",
-            MoveTaskParams(task_uuid=task.uuid, status="Doing"),
-            self.member,
-        )
-        self.assertIn('no status "Doing"', result)
-        self.assertIn("Backlog, To do, In progress, Done", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "move_task",
+                MoveTaskParams(task_uuid=task.uuid, status="Doing"),
+                self.member,
+            )
+        self.assertIn('no status "Doing"', caught.exception.reason)
+        self.assertIn("Backlog, To do, In progress, Done", caught.exception.reason)
         task.refresh_from_db()
         self.assertEqual(task.status.name, "Backlog")
 
     def test_move_task_hidden_from_outsider(self):
         task = create_task(self.project, self.admin, title="T")
-        result = self._call(
-            "move_task",
-            MoveTaskParams(task_uuid=task.uuid, status="Done"),
-            self.outsider,
-        )
-        self.assertEqual(result, "Error: task not found.")
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "move_task",
+                MoveTaskParams(task_uuid=task.uuid, status="Done"),
+                self.outsider,
+            )
+        self.assertEqual(caught.exception.reason, "task not found.")
 
     def test_move_task_blocked_on_archived_project(self):
         task = create_task(self.project, self.admin, title="T")
         self.project.archived_at = timezone.now()
         self.project.save(update_fields=["archived_at"])
-        result = self._call(
-            "move_task",
-            MoveTaskParams(task_uuid=task.uuid, status="Done"),
-            self.member,
-        )
-        self.assertIn("archived", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "move_task",
+                MoveTaskParams(task_uuid=task.uuid, status="Done"),
+                self.member,
+            )
+        self.assertIn("archived", caught.exception.reason)
         task.refresh_from_db()
         self.assertEqual(task.status.name, "Backlog")
 
@@ -363,19 +371,21 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
 
     def test_update_task_requires_a_change(self):
         task = create_task(self.project, self.admin, title="T")
-        result = self._call(
-            "update_task", UpdateTaskParams(task_uuid=task.uuid), self.member
-        )
-        self.assertIn("nothing to update", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "update_task", UpdateTaskParams(task_uuid=task.uuid), self.member
+            )
+        self.assertIn("nothing to update", caught.exception.reason)
 
     def test_update_task_hidden_from_outsider(self):
         task = create_task(self.project, self.admin, title="T")
-        result = self._call(
-            "update_task",
-            UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
-            self.outsider,
-        )
-        self.assertEqual(result, "Error: task not found.")
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "update_task",
+                UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
+                self.outsider,
+            )
+        self.assertEqual(caught.exception.reason, "task not found.")
 
     def test_update_task_rejects_due_date_before_start_date(self):
         task = create_task(
@@ -384,14 +394,15 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
             title="T",
             start_date=date(2026, 9, 20),
         )
-        result = self._call(
-            "update_task",
-            UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
-            self.member,
-        )
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "update_task",
+                UpdateTaskParams(task_uuid=task.uuid, due_date="2026-09-15"),
+                self.member,
+            )
         self.assertEqual(
-            result,
-            "Error: due date cannot be before the task's start date (2026-09-20).",
+            caught.exception.reason,
+            "due date cannot be before the task's start date (2026-09-20).",
         )
         task.refresh_from_db()
         self.assertIsNone(task.due_date)
@@ -415,18 +426,20 @@ class ProjectsAiToolsTests(ProjectTestMixin, TestCase):
 
     def test_comment_on_task_hidden_from_outsider(self):
         task = create_task(self.project, self.admin, title="T")
-        result = self._call(
-            "comment_on_task",
-            CommentOnTaskParams(task_uuid=task.uuid, body="Hi"),
-            self.outsider,
-        )
-        self.assertEqual(result, "Error: task not found.")
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "comment_on_task",
+                CommentOnTaskParams(task_uuid=task.uuid, body="Hi"),
+                self.outsider,
+            )
+        self.assertEqual(caught.exception.reason, "task not found.")
         self.assertFalse(TaskComment.objects.exists())
 
     def test_unknown_task_uuid_reports_not_found(self):
-        result = self._call(
-            "comment_on_task",
-            CommentOnTaskParams(task_uuid=uuid.uuid4(), body="Hi"),
-            self.member,
-        )
-        self.assertEqual(result, "Error: task not found.")
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "comment_on_task",
+                CommentOnTaskParams(task_uuid=uuid.uuid4(), body="Hi"),
+                self.member,
+            )
+        self.assertEqual(caught.exception.reason, "task not found.")

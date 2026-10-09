@@ -5,7 +5,7 @@ import uuid as uuid_lib
 
 from pydantic import BaseModel, Field
 
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 
 # Hard caps for the transcript tools. A conversation grows without bound; a
 # tool result cannot. The character budget is the one that matters — a cap on
@@ -143,7 +143,7 @@ Call this when the user asks about something said in chat, wants to find a messa
 or references a past discussion."""
         query = args.query.strip()
         if not query:
-            return "Error: query is required"
+            raise ToolError("query is required")
 
         from datetime import timedelta
 
@@ -229,7 +229,7 @@ was decided, or when the user refers to a discussion held elsewhere. Returns at 
         # reading one on their behalf is legitimate.
         membership = get_active_membership(user, args.conversation_id)
         if not membership:
-            return "Error: no such conversation, or you are not a member of it."
+            raise ToolError("no such conversation, or you are not a member of it.")
 
         entries, older_omitted = _read_transcript(
             args.conversation_id,
@@ -265,7 +265,7 @@ The summary covers the older messages only — read_conversation gives you the r
 
         membership = get_active_membership(user, args.conversation_id)
         if not membership:
-            return "Error: no such conversation, or you are not a member of it."
+            raise ToolError("no such conversation, or you are not a member of it.")
 
         conv_id = str(args.conversation_id)
         title = membership.conversation.title or "DM"
@@ -291,7 +291,9 @@ The summary covers the older messages only — read_conversation gives you the r
             )
 
         if result.get("status") == "error":
-            return f"Error: could not summarize this conversation — {result['error']}"
+            raise ToolError(
+                f"could not summarize this conversation — {result['error']}"
+            )
 
         # Nothing was ever summarised because the conversation is short enough
         # to be read in full: hand back the transcript rather than billing a
@@ -330,11 +332,11 @@ own answer."""
             if o and o not in seen:
                 seen.append(o)
         if len(seen) < 2:
-            return "Error: at least 2 distinct, non-empty options are required."
+            raise ToolError("at least 2 distinct, non-empty options are required.")
 
         question_text = args.question.strip()
         if not question_text:
-            return "Error: question cannot be empty or whitespace-only."
+            raise ToolError("question cannot be empty or whitespace-only.")
 
         context.setdefault(
             "question",

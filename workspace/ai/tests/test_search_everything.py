@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import (
     SEARCH_EVERYTHING_MAX_LIMIT,
     SearchEverythingParams,
@@ -65,7 +66,9 @@ class SearchEverythingTests(TestCase):
         )
 
     def test_short_query_is_rejected(self):
-        self.assertEqual(self._call("a"), "Error: query must be at least 2 characters")
+        with self.assertRaises(ToolError) as caught:
+            self._call("a")
+        self.assertEqual(caught.exception.reason, "query must be at least 2 characters")
 
     @patch("workspace.core.services.search.search_modules", return_value=[])
     def test_limit_is_capped_below_the_ui_default(self, mock_search):

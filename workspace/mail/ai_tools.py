@@ -25,7 +25,7 @@ from workspace.ai.services.confirmation import (
     consume_bound_confirmation,
     request_bound_confirmation,
 )
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -346,7 +346,7 @@ Call this when the user asks to find, look up, or locate an email. \
 Use read_email with the returned UUID to get the full content."""
         query = args.query.strip()
         if not query:
-            return "Error: query is required"
+            raise ToolError("query is required")
 
         from workspace.mail.models import MailMessage
         from workspace.mail.queries import canonical_folder, user_account_ids

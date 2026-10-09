@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 from pydantic import ValidationError
 
 from workspace.ai.models import BotProfile, ConversationSummary
+from workspace.ai.tool_registry import ToolError
 from workspace.chat.ai_tools import (
     READ_MAX_BODY_CHARS,
     READ_MAX_CHARS,
@@ -78,17 +79,18 @@ class AskUserQuestionToolTests(TestCase):
         self._run("Second?", ["X", "Y"], context=ctx)
         self.assertEqual(ctx["question"]["question"], "First?")
 
-    def test_fewer_than_two_options_returns_error(self):
+    def test_fewer_than_two_options_is_rejected(self):
         args = AskUserQuestionParams(question="Q", options=["", "   "])
         ctx = {}
-        result = self.provider.ask_user_question(
-            args,
-            user=self.user,
-            bot=self.bot,
-            conversation_id=None,
-            context=ctx,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.ask_user_question(
+                args,
+                user=self.user,
+                bot=self.bot,
+                conversation_id=None,
+                context=ctx,
+            )
+        self.assertIn("at least 2 distinct", caught.exception.reason)
         self.assertNotIn("question", ctx)
         self.assertNotIn("stop_after_round", ctx)
 
@@ -110,14 +112,15 @@ class AskUserQuestionToolTests(TestCase):
     def test_tool_rejects_whitespace_only_question(self):
         args = AskUserQuestionParams(question="   ", options=["A", "B"])
         ctx = {}
-        result = self.provider.ask_user_question(
-            args,
-            user=self.user,
-            bot=self.bot,
-            conversation_id=None,
-            context=ctx,
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.ask_user_question(
+                args,
+                user=self.user,
+                bot=self.bot,
+                conversation_id=None,
+                context=ctx,
+            )
+        self.assertIn("question cannot be empty", caught.exception.reason)
         self.assertNotIn("question", ctx)
         self.assertNotIn("stop_after_round", ctx)
 
@@ -317,10 +320,11 @@ class ReadConversationToolTests(ConversationToolsTestCase):
         ConversationMember.objects.create(conversation=foreign, user=other)
         self._message("classified", 0, author=other, conversation=foreign)
 
-        result = self._read(conversation=foreign)
+        with self.assertRaises(ToolError) as caught:
+            self._read(conversation=foreign)
 
-        self.assertTrue(result.startswith("Error:"))
-        self.assertNotIn("classified", result)
+        self.assertIn("not a member", caught.exception.reason)
+        self.assertNotIn("classified", caught.exception.reason)
 
     def test_conversation_the_user_left_is_refused(self):
         self._message("hello", 0)
@@ -328,7 +332,9 @@ class ReadConversationToolTests(ConversationToolsTestCase):
             conversation=self.conv, user=self.user
         ).update(left_at=BASE_TIME)
 
-        self.assertTrue(self._read().startswith("Error:"))
+        with self.assertRaises(ToolError) as caught:
+            self._read()
+        self.assertIn("not a member", caught.exception.reason)
 
 
 @override_settings(AI_CHAT_CONTEXT_SIZE=2)
@@ -390,10 +396,11 @@ class SummarizeConversationToolTests(ConversationToolsTestCase):
             "workspace.ai.services.chat_summary.call_llm",
             side_effect=RuntimeError("backend down"),
         ):
-            result = self._summarize()
+            with self.assertRaises(ToolError) as caught:
+                self._summarize()
 
-        self.assertTrue(result.startswith("Error:"))
-        self.assertIn("backend down", result)
+        self.assertIn("could not summarize", caught.exception.reason)
+        self.assertIn("backend down", caught.exception.reason)
 
     def test_conversation_the_user_never_joined_is_refused(self):
         other = User.objects.create_user(username="stranger", password="pw")
@@ -403,7 +410,8 @@ class SummarizeConversationToolTests(ConversationToolsTestCase):
         ConversationMember.objects.create(conversation=foreign, user=other)
 
         with patch("workspace.ai.services.chat_summary.call_llm") as llm:
-            result = self._summarize(conversation=foreign)
+            with self.assertRaises(ToolError) as caught:
+                self._summarize(conversation=foreign)
 
         llm.assert_not_called()
-        self.assertTrue(result.startswith("Error:"))
+        self.assertIn("not a member", caught.exception.reason)

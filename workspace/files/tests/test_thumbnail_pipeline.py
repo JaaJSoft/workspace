@@ -7,8 +7,8 @@ from django.test import TestCase
 from PIL import Image
 
 from workspace.files.services import FileService
-from workspace.files.services.thumbnails.generation import get_thumbnail_path
 from workspace.files.services.processors import run_pipeline
+from workspace.files.services.thumbnails.generation import get_thumbnail_path
 
 User = get_user_model()
 

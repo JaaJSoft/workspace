@@ -69,7 +69,9 @@ UNFOLD = {
                     {
                         "title": "Processing failures",
                         "icon": "broken_image",
-                        "link": reverse_lazy("admin:files_processingfailure_changelist"),
+                        "link": reverse_lazy(
+                            "admin:files_processingfailure_changelist"
+                        ),
                         "badge": "workspace.core.services.admin_dashboard.processing_failure_badge",
                     },
                     {

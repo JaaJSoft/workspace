@@ -74,10 +74,15 @@ class SizeBucketTests(SimpleTestCase):
         )
 
 
+def _one_album(*faces):
+    """(identity, group) pairs as faces of a single album."""
+    return [(identity, "album", group) for identity, group in faces]
+
+
 class ScoreGroupingTests(SimpleTestCase):
     def test_everyone_in_their_own_group_is_perfect(self):
         score = bench.score_grouping(
-            [("ann", 1), ("ann", 1), ("ann", 1), ("bob", 2), ("bob", 2)]
+            _one_album(("ann", 1), ("ann", 1), ("ann", 1), ("bob", 2), ("bob", 2))
         )
         rates = score.rates()
 
@@ -88,7 +93,9 @@ class ScoreGroupingTests(SimpleTestCase):
         self.assertEqual((score.merges, score.mixed_groups, score.misplaced), (0, 0, 0))
 
     def test_a_person_split_over_two_groups_needs_a_merge(self):
-        score = bench.score_grouping([("ann", 1), ("ann", 1), ("ann", 2), ("ann", 2)])
+        score = bench.score_grouping(
+            _one_album(("ann", 1), ("ann", 1), ("ann", 2), ("ann", 2))
+        )
         rates = score.rates()
 
         self.assertEqual(score.merges, 1)
@@ -97,7 +104,7 @@ class ScoreGroupingTests(SimpleTestCase):
         self.assertAlmostEqual(rates["pairwise_recall"], 2 / 6)
 
     def test_two_people_in_one_group_count_the_faces_to_take_out(self):
-        score = bench.score_grouping([("ann", 1), ("ann", 1), ("bob", 1)])
+        score = bench.score_grouping(_one_album(("ann", 1), ("ann", 1), ("bob", 1)))
         rates = score.rates()
 
         self.assertEqual((score.mixed_groups, score.misplaced), (1, 1))
@@ -108,7 +115,7 @@ class ScoreGroupingTests(SimpleTestCase):
         self.assertEqual(rates["bcubed_recall"], 1.0)
 
     def test_a_face_in_no_group_is_a_group_of_its_own(self):
-        score = bench.score_grouping([("ann", 1), ("ann", 1), ("ann", None)])
+        score = bench.score_grouping(_one_album(("ann", 1), ("ann", 1), ("ann", None)))
         rates = score.rates()
 
         self.assertAlmostEqual(rates["grouped"], 2 / 3)
@@ -117,14 +124,45 @@ class ScoreGroupingTests(SimpleTestCase):
         self.assertEqual(score.merges, 0)
 
     def test_only_people_seen_twice_count_as_people_to_find(self):
-        score = bench.score_grouping([("ann", 1), ("ann", 1), ("bob", None)])
+        score = bench.score_grouping(_one_album(("ann", 1), ("ann", 1), ("bob", None)))
 
         self.assertEqual((score.people, score.people_found), (1, 1))
 
+    def test_two_ids_of_two_albums_in_one_group_are_not_a_mistake(self):
+        """PIPA often gives the same child a new id in each album: whether
+        two ids of two albums are one person is unknown, not "no"."""
+        score = bench.score_grouping(
+            [("kid-a", "a", 1), ("kid-a", "a", 1), ("kid-b", "b", 1)]
+        )
+        rates = score.rates()
+
+        self.assertEqual(rates["pairwise_precision"], 1.0)
+        self.assertEqual(rates["bcubed_precision"], 1.0)
+        self.assertEqual(
+            (score.wrong_pairs, score.mixed_groups, score.misplaced), (0, 0, 0)
+        )
+
+    def test_one_id_across_two_albums_is_one_person(self):
+        score = bench.score_grouping(
+            [("ann", "a", 1), ("ann", "a", 1), ("ann", "b", 2), ("ann", "b", 2)]
+        )
+
+        self.assertEqual(score.merges, 1)
+        self.assertAlmostEqual(score.rates()["pairwise_recall"], 2 / 6)
+
+    def test_two_ids_of_one_album_in_a_group_are_two_people(self):
+        score = bench.score_grouping(
+            [("ann", "a", 1), ("bob", "a", 1), ("kid", "b", 1)]
+        )
+
+        self.assertEqual(
+            (score.wrong_pairs, score.mixed_groups, score.misplaced), (1, 1, 1)
+        )
+
     def test_scores_add_up_across_libraries(self):
         total = bench.GroupingScore()
-        total.add(bench.score_grouping([("ann", 1), ("ann", 1)]))
-        total.add(bench.score_grouping([("bob", 7), ("bob", 8)]))
+        total.add(bench.score_grouping(_one_album(("ann", 1), ("ann", 1))))
+        total.add(bench.score_grouping(_one_album(("bob", 7), ("bob", 8))))
 
         self.assertEqual(
             (total.faces, total.true_pairs, total.correct_pairs), (4, 2, 1)
@@ -136,8 +174,18 @@ class ReportTests(SimpleTestCase):
     def _report(self, found, merges):
         result = bench.LibraryResult(library="lib", photos=2, heads=4)
         result.found["48-96px"] = found
-        result.grouping = bench.score_grouping([("ann", 1), ("ann", 1 + merges)])
+        result.matched = _one_album(("ann", 1), ("ann", 1 + merges))
+        result.grouping = bench.score_grouping(result.matched)
         return bench.summarize([result], {"backend": "fake", "weights_mb": 1.0})
+
+    def test_an_earlier_report_can_be_scored_again(self):
+        report = json.loads(json.dumps(self._report(3, 1)))
+
+        again = bench.rescore(report)
+
+        self.assertEqual(again["grouping"], report["grouping"])
+        self.assertEqual(again["by_size"], report["by_size"])
+        self.assertEqual(again["backend"], "fake")
 
     def test_compares_a_run_with_an_earlier_one(self):
         text = bench.render(self._report(3, 0), baseline=self._report(2, 1))

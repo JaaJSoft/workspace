@@ -65,6 +65,14 @@ What to keep in mind when reading the numbers:
 - **Not everybody is annotated.** PIPA only labelled some of the people in a
   crowd, so a face matching no head - *Faces not annotated* in the report - is
   a bystander as often as a false detection. It is not a precision.
+- **An id is often valid for one album only.** PIPA gave the same person a new
+  id in each album far more often than not: only 70 of the 1,145 ids span two
+  albums, while the same toddler can be four ids in four albums of one
+  library. So two different ids only mean two people *within one album*.
+  Across albums the bench does not know, and leaves the pair out: grouping a
+  child's faces from two albums is not counted as a mistake, and grouping two
+  strangers from two albums is not caught either. One id, wherever it
+  appears, is one person.
 
 ## The report
 
@@ -73,16 +81,18 @@ What to keep in mind when reading the numbers:
 | Faces found | Annotated people the pipeline stored a face for |
 | detector alone | The same, from everything the detector returned, before the pipeline drops faces under `PHOTOS_FACES_MIN_SIZE` or past `PHOTOS_FACES_MAX_PER_PHOTO` |
 | Grouped | Faces found that ended up in a group |
-| Pairwise precision / recall | Of the pairs of faces put in one group, the share that are one person; of the pairs of faces of one person, the share put in one group |
-| BCubed F1 | The per-face equivalent, a face in no group counting as a group of its own |
-| People found | People seen twice or more who are the majority of at least one group |
+| Pairwise precision / recall | Of the pairs of faces put in one group whose relation is known, the share that are one person; of the pairs of faces of one person, the share put in one group |
+| BCubed F1 | The per-face equivalent, on known relations too, a face in no group counting as a group of its own |
+| People found | People seen twice or more with two of their faces in one group of theirs |
 | Groups to merge | Groups beyond the first one of each person: the merges a user would do |
-| Mixed groups / Faces to take out | Groups holding several people, and the faces a user would remove from them |
+| Mixed groups / Faces to take out | Groups holding two people of one album, and the faces a user would remove from them |
 | CPU ms / photo | Analysis CPU time per photo, models, alignment, crops and database writes included; *of which models* is detection and embedding alone |
 
 Faces found are also broken down by the head's height in the image, which is
 where detectors differ most. `--json` writes everything, per library too, and
-`--compare` prints the new run beside an earlier report.
+`--compare` prints the new run beside an earlier report. A report also keeps
+the faces it was scored from: after a change to the scoring,
+`--rescore old.json` scores it again without running anything.
 
 ## Options
 
@@ -93,6 +103,7 @@ where detectors differ most. `--json` writes everything, per library too, and
 | `--libraries N`, `--library NSID`, `--max-photos N` | Run a subset: the N largest libraries, named ones, the first photos of each |
 | `--keep DIR` | Keep the database and photos, with the password `bench1234` on users `bench01`, `bench02`...; the command to browse them in the app is printed at the end |
 | `--onnx-threads N` | `PHOTOS_ONNX_THREADS` |
+| `--rescore REPORT` | Score an earlier `--json` report again instead of running |
 
 ## Baseline
 

@@ -12,7 +12,8 @@ who is really in each photo:
   faces too small to keep.
 - **Grouping**, on the faces found: pairwise and BCubed precision and recall,
   and what a user would have to fix by hand - groups to merge, faces to take
-  out of a group that is not theirs, faces left in no group.
+  out of a group that is not theirs, faces left in no group. PIPA's ids only
+  tell two people apart within one album (see GroupingScore).
 - **Cost**: CPU time per photo, and the size of the weights.
 
 Every run gets its own throwaway SQLite database and media root, so the
@@ -27,9 +28,9 @@ Usage:
     uv run python scripts/face_bench.py --setting PHOTOS_FACES_MIN_SIZE=16
     uv run python scripts/face_bench.py --libraries 3 --keep /tmp/bench
 
-``--keep`` leaves the database and the photos behind, with a password on each
-library's user, so the result can be browsed in the app (the command to start
-it is printed at the end).
+``--keep`` leaves the database and the photos behind, with the password
+``bench1234`` on each library's user (bench01, bench02...), so the result can
+be browsed in the app (the command to start it is printed at the end).
 """
 
 from __future__ import annotations
@@ -120,24 +121,31 @@ def size_bucket(height):
 class GroupingScore:
     """How one library's faces were grouped, against who they really are.
 
+    PIPA gives a person a new id in each album more often than not, so two
+    ids only say "two people" within one album. Across albums the relation is
+    unknown and left out: grouping the same child from two albums is not
+    counted as a mistake, and grouping two strangers from two albums is not
+    caught either. Same id, wherever it appears, is one person.
+
     Counts, so libraries add up: the rates are computed from the sums.
     """
 
     faces: int = 0
     grouped: int = 0
-    # Pairs of faces in one group, of one person, and both.
-    predicted_pairs: int = 0
-    true_pairs: int = 0
+    # Pairs of faces put in one group that are one person, that are known
+    # to be two, and every pair that is one person.
     correct_pairs: int = 0
+    wrong_pairs: int = 0
+    true_pairs: int = 0
     # Sums over faces of their BCubed precision and recall.
     bcubed_precision: float = 0.0
     bcubed_recall: float = 0.0
-    # People with two faces or more, and those a group was made for.
+    # People with two faces or more, and those with two of them in a group.
     people: int = 0
     people_found: int = 0
     groups: int = 0
     # Groups a user merges into another one of the same person, groups
-    # holding more than one person, and the faces to take out of them.
+    # holding two people of one album, and the faces to take out of them.
     merges: int = 0
     mixed_groups: int = 0
     misplaced: int = 0
@@ -148,7 +156,7 @@ class GroupingScore:
         return self
 
     def rates(self):
-        precision = _ratio(self.correct_pairs, self.predicted_pairs)
+        precision = _ratio(self.correct_pairs, self.correct_pairs + self.wrong_pairs)
         recall = _ratio(self.correct_pairs, self.true_pairs)
         b_precision = _ratio(self.bcubed_precision, self.faces)
         b_recall = _ratio(self.bcubed_recall, self.faces)
@@ -165,41 +173,55 @@ class GroupingScore:
 
 
 def score_grouping(faces):
-    """A GroupingScore for *faces*: [(identity, group id or None)].
+    """A GroupingScore for *faces*: [(identity, album, group id or None)].
 
     A face in no group counts as a group of its own for BCubed, which is what
     the user sees: a face nobody put with anyone.
     """
     score = GroupingScore(faces=len(faces))
-    by_identity = Counter(identity for identity, _group in faces)
+    by_identity = Counter(identity for identity, _album, _group in faces)
+    # group -> identity -> count, and group -> album -> identity -> count.
     members = defaultdict(Counter)
-    for identity, group in faces:
+    slices = defaultdict(lambda: defaultdict(Counter))
+    for identity, album, group in faces:
         if group is not None:
             members[group][identity] += 1
-    score.grouped = sum(1 for _identity, group in faces if group is not None)
+            slices[group][album][identity] += 1
+    score.grouped = sum(1 for *_rest, group in faces if group is not None)
     score.groups = len(members)
     score.true_pairs = sum(_pairs(n) for n in by_identity.values())
-    for counts in members.values():
-        size = sum(counts.values())
-        score.predicted_pairs += _pairs(size)
+    owned = defaultdict(set)
+    for group, counts in members.items():
         score.correct_pairs += sum(_pairs(n) for n in counts.values())
-        for identity, n in counts.items():
-            score.bcubed_precision += n * n / size
-            score.bcubed_recall += n * n / by_identity[identity]
-        if len(counts) > 1:
-            score.mixed_groups += 1
-            score.misplaced += size - max(counts.values())
-    for identity, group in faces:
+        mixed = False
+        for album_counts in slices[group].values():
+            size = sum(album_counts.values())
+            score.wrong_pairs += _pairs(size) - sum(
+                _pairs(n) for n in album_counts.values()
+            )
+            for identity, n in album_counts.items():
+                same = counts[identity]
+                known = same + size - n
+                score.bcubed_precision += n * same / known
+                score.bcubed_recall += n * same / by_identity[identity]
+            majority, most = album_counts.most_common(1)[0]
+            owned[majority].add(group)
+            if len(album_counts) > 1:
+                mixed = True
+                score.misplaced += size - most
+        score.mixed_groups += mixed
+    for identity, _album, group in faces:
         if group is None:
             score.bcubed_precision += 1
             score.bcubed_recall += 1 / by_identity[identity]
-    majority_groups = Counter(
-        counts.most_common(1)[0][0] for counts in members.values()
-    )
-    score.merges = sum(n - 1 for n in majority_groups.values())
+    score.merges = sum(len(groups) - 1 for groups in owned.values())
     people = {identity for identity, n in by_identity.items() if n >= 2}
     score.people = len(people)
-    score.people_found = len(people & set(majority_groups))
+    score.people_found = sum(
+        1
+        for identity in people
+        if any(members[group][identity] >= 2 for group in owned[identity])
+    )
     return score
 
 
@@ -230,6 +252,26 @@ class LibraryResult:
     analysis_wall: float = 0.0
     model_cpu: float = 0.0
     clustering_cpu: float = 0.0
+    # The faces found, as [identity, album, group number or None]: what the
+    # grouping is scored from, kept in the report so --rescore can score an
+    # old run again when the scoring changes.
+    matched: list = field(default_factory=list)
+
+
+# What a report keeps of each library to be scored again, beside `matched`.
+_RAW_FIELDS = (
+    "photos",
+    "heads",
+    "faces",
+    "extra_faces",
+    "found",
+    "detected",
+    "by_size",
+    "analysis_cpu",
+    "analysis_wall",
+    "model_cpu",
+    "clustering_cpu",
+)
 
 
 def score_library(library, photos, stored, raw):
@@ -239,7 +281,7 @@ def score_library(library, photos, stored, raw):
     [(box, group id or None)]; *raw* to every box the detector returned.
     """
     result = LibraryResult(library=library, photos=len(photos))
-    grouped = []
+    numbers = {}
     for photo in photos:
         heads = [face.box for face in photo.faces]
         result.heads += len(heads)
@@ -251,11 +293,43 @@ def score_library(library, photos, stored, raw):
         result.extra_faces += len(kept) - len(pairs)
         for i, j in pairs:
             result.found[size_bucket(heads[j][3])] += 1
-            grouped.append((photo.faces[j].identity, kept[i][1]))
+            group = kept[i][1]
+            if group is not None:
+                group = numbers.setdefault(group, len(numbers))
+            result.matched.append([photo.faces[j].identity, photo.album, group])
         for _i, j in match_faces(raw.get(photo.photo_id, []), heads):
             result.detected[size_bucket(heads[j][3])] += 1
-    result.grouping = score_grouping(grouped)
+    result.grouping = score_grouping(result.matched)
     return result
+
+
+def rescore(report):
+    """*report* scored again from the faces it kept, with today's scoring."""
+    results = []
+    for entry in report["per_library"]:
+        raw = entry["raw"]
+        result = LibraryResult(library=entry["library"], matched=raw["matched"])
+        for name in _RAW_FIELDS:
+            value = raw[name]
+            setattr(result, name, Counter(value) if isinstance(value, dict) else value)
+        result.grouping = score_grouping(raw["matched"])
+        results.append(result)
+    return summarize(
+        results, {name: report[name] for name in _RUN_FIELDS if name in report}
+    )
+
+
+# What describes the run itself, carried over by --rescore.
+_RUN_FIELDS = (
+    "backend",
+    "commit",
+    "date",
+    "settings",
+    "max_distance",
+    "vector_backend",
+    "weights_mb",
+    "seconds",
+)
 
 
 def summarize(results, run):
@@ -316,6 +390,10 @@ def summarize(results, run):
                 },
                 "merges": result.grouping.merges,
                 "misplaced": result.grouping.misplaced,
+                "raw": {
+                    **{name: getattr(result, name) for name in _RAW_FIELDS},
+                    "matched": result.matched,
+                },
             }
             for result in results
         ],
@@ -647,6 +725,14 @@ def _select(libraries, args):
     return chosen
 
 
+def _output(report, baseline, args):
+    print()
+    print(render(report, baseline))
+    if args.json:
+        args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        print(f"\nReport written to {args.json}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Measure face detection and grouping on real photo libraries.",
@@ -676,6 +762,13 @@ def main():
     parser.add_argument("--json", type=Path, help="write the report to this file")
     parser.add_argument("--compare", type=Path, help="an earlier --json report")
     parser.add_argument(
+        "--rescore",
+        type=Path,
+        metavar="REPORT",
+        help="score an earlier --json report again instead of running, after a "
+        "change to the scoring",
+    )
+    parser.add_argument(
         "--cache",
         type=Path,
         default=None,
@@ -693,6 +786,14 @@ def main():
     baseline = (
         json.loads(args.compare.read_text(encoding="utf-8")) if args.compare else None
     )
+
+    if args.rescore:
+        _output(
+            rescore(json.loads(args.rescore.read_text(encoding="utf-8"))),
+            baseline,
+            args,
+        )
+        return
 
     libraries = photo_dataset.by_library(photo_dataset.load_manifest())
     chosen = _select(libraries, args)
@@ -744,9 +845,8 @@ def main():
             grouping = result.grouping
             rates = grouping.rates()
             # A library with no pair to get right or wrong has no rate at all.
-            precision = (
-                rates["pairwise_precision"] if grouping.predicted_pairs else None
-            )
+            judged = grouping.correct_pairs + grouping.wrong_pairs
+            precision = rates["pairwise_precision"] if judged else None
             recall = rates["pairwise_recall"] if grouping.true_pairs else None
             print(
                 f"  [{index}/{len(chosen)}] {library}: {result.photos} photos, "
@@ -763,15 +863,11 @@ def main():
         if not args.keep:
             shutil.rmtree(workdir, ignore_errors=True)
 
-    print()
-    print(render(report, baseline))
-    if args.json:
-        args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-        print(f"\nReport written to {args.json}")
+    _output(report, baseline, args)
     if args.keep:
         print(
-            "\nBrowse the result (users bench01, bench02, ... / "
-            f"{BENCH_PASSWORD}):\n"
+            "\nBrowse the result as bench01, bench02... (the password is in "
+            "this script's docstring):\n"
             f"  DATABASE_URL=sqlite:///{database} MEDIA_ROOT={workdir / 'media'} "
             f"PHOTOS_FACES_ENABLED=1 PHOTOS_FACE_BACKEND={args.backend} "
             "uv run python manage.py runserver 127.0.0.1:<port> --noreload"

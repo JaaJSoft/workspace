@@ -29,6 +29,7 @@ Usage:
     uv run python scripts/seed_demo.py --history-days 365   # spread over a year
     uv run python scripts/seed_demo.py --seed 42            # reproducible run
     uv run python scripts/seed_demo.py --purge --yes        # wipe prior demo data
+    uv run python scripts/seed_demo.py --real-photos 2      # real photo libraries
 
 All seeded users share the ``--email-domain`` (default ``demo.local``) and the
 ``--password`` (default ``demo1234``). A deterministic login is always created
@@ -46,6 +47,13 @@ signatures, so the browser opens them rather than reporting them as tampered.
 Their master password and recovery key are printed at the end and stored
 nowhere: the vault cannot be opened without both, by design. ``--no-vault``
 skips that step.
+
+``--real-photos N`` gives ``demo`` and the next N-1 users a real photo
+library each - one Flickr member's CC BY photos from the public dataset of
+scripts/photo_dataset.py, with their capture dates and a CREDITS.txt - so the
+Photos timeline and its People tab have something real to show. It is the
+one step that needs the network: the photos are downloaded on the first run
+and cached.
 """
 
 import argparse
@@ -1078,6 +1086,86 @@ def create_persons(users, min_persons, max_persons):
     return n_persons, n_lists
 
 
+def _with_capture_date(data, taken):
+    """*data*, a JPEG, with an EXIF DateTimeOriginal of *taken* (ISO).
+
+    The dataset's copies carry no EXIF, and the timeline never stands the
+    upload date in for a capture date. The Exif segment is spliced in after
+    the JFIF one, so the image itself is not re-encoded.
+    """
+    exif = Image.Exif()
+    exif.get_ifd(0x8769)[0x9003] = taken.replace("-", ":").replace("T", " ")
+    payload = exif.tobytes()
+    if not payload.startswith(b"Exif\x00\x00"):
+        payload = b"Exif\x00\x00" + payload
+    segment = b"\xff\xe1" + (len(payload) + 2).to_bytes(2, "big") + payload
+    position = 2
+    if data[2:4] == b"\xff\xe0":
+        position += 2 + int.from_bytes(data[4:6], "big")
+    return data[:position] + segment + data[position:]
+
+
+def import_real_photos(users, count, history_days):
+    """Give the first ``count`` users, ``demo`` first, a real photo library.
+
+    Each gets one Flickr member's photos from scripts/photo_dataset.py, the
+    largest libraries first, in their Photos import folder with the capture
+    dates restored and a CREDITS.txt naming every author (the photos are CC
+    BY: the credit has to travel with them). Face grouping is turned on for
+    them; the analysis runs like any upload's. Returns the number of photos.
+    """
+    import photo_dataset
+
+    from workspace.photos.services.face_preferences import FACES_ENABLED
+    from workspace.photos.services.face_preferences import MODULE as PHOTOS_MODULE
+    from workspace.photos.services.import_folder import ensure_import_folder
+
+    libraries = list(photo_dataset.by_library(photo_dataset.load_manifest()).values())
+    users = sorted(users, key=lambda u: u.username != DEMO_USERNAME)[:count]
+    picked = list(zip(users, libraries, strict=False))
+    photos = [photo for _user, library in picked for photo in library]
+    print(f"  downloading {len(photos)} photos (cached for the next runs) ...")
+    paths = photo_dataset.fetch_images(photos)
+    total = 0
+    for user, library in picked:
+        set_setting(user, PHOTOS_MODULE, FACES_ENABLED, True)
+        folder = ensure_import_folder(user)
+        imported_at = _rand_past(history_days)
+        taken = {folder.name.lower()}
+        for photo in library:
+            name = _free_file_name(
+                f"IMG_{photo.taken[:10].replace('-', '')}", "jpg", taken
+            )
+            taken.add(name.lower())
+            data = _with_capture_date(paths[photo.photo_id].read_bytes(), photo.taken)
+            f = FileService.create_file(
+                owner=user,
+                name=name,
+                parent=folder,
+                content=ContentFile(data, name=name),
+            )
+            _backdate_file(f, imported_at)
+        credits = "\n".join(
+            [
+                "These photos are licensed CC BY 2.0 by their authors:",
+                "https://creativecommons.org/licenses/by/2.0/",
+                "",
+                *(photo.credit for photo in library),
+            ]
+        )
+        f = FileService.create_file(
+            owner=user,
+            name="CREDITS.txt",
+            parent=folder,
+            content=ContentFile(credits.encode(), name="CREDITS.txt"),
+        )
+        _backdate_file(f, imported_at)
+        _backdate_file(folder, imported_at)
+        total += len(library)
+        print(f"  {user.username}: {len(library)} photos", flush=True)
+    return total
+
+
 def purge(domain, assume_yes):
     """Delete all users on ``domain`` and cascade their data."""
     qs = User.objects.filter(email__endswith=f"@{domain}")
@@ -1182,6 +1270,14 @@ def main():
     parser.add_argument(
         "--no-people", action="store_true", help="skip address book generation"
     )
+    parser.add_argument(
+        "--real-photos",
+        type=int,
+        default=0,
+        metavar="N",
+        help="give N users (demo first) a real photo library each, downloaded "
+        "from the public photo dataset (scripts/photo_dataset.py)",
+    )
     parser.add_argument("--min-persons", type=int, default=15)
     parser.add_argument("--max-persons", type=int, default=25)
     parser.add_argument(
@@ -1267,6 +1363,11 @@ def main():
         personal_projects = len(users)
         print(f"  {personal_projects} personal projects", flush=True)
 
+    real_photos = 0
+    if args.real_photos:
+        print("\nImporting real photo libraries ...")
+        real_photos = import_real_photos(users, args.real_photos, args.history_days)
+
     persons = person_lists = 0
     if not args.no_people:
         print("\nGenerating people ...")
@@ -1312,6 +1413,8 @@ def main():
     print(f"  users:         {len(users)}")
     print(f"  avatars:       {user_avatars} user + {group_avatars} group")
     print(f"  files:         {total_files}")
+    if real_photos:
+        print(f"  real photos:   {real_photos}")
     print(f"  calendars:     {calendars}")
     print(f"  events:        {events}")
     print(f"  projects:      {shared_projects} shared + {personal_projects} personal")

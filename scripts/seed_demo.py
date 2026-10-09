@@ -1130,13 +1130,13 @@ def import_real_photos(users, count, history_days):
     for user, library in picked:
         set_setting(user, PHOTOS_MODULE, FACES_ENABLED, True)
         folder = ensure_import_folder(user)
+        if File.objects.filter(parent=folder, name="CREDITS.txt").exists():
+            # Seeding again: the demo user is reused, and so is its library.
+            print(f"  {user.username}: already has its photos")
+            continue
         imported_at = _rand_past(history_days)
-        taken = {folder.name.lower()}
-        for photo in library:
-            name = _free_file_name(
-                f"IMG_{photo.taken[:10].replace('-', '')}", "jpg", taken
-            )
-            taken.add(name.lower())
+        for n, photo in enumerate(library, 1):
+            name = f"IMG_{n:04d}.jpg"
             data = _with_capture_date(paths[photo.photo_id].read_bytes(), photo.taken)
             f = FileService.create_file(
                 owner=user,

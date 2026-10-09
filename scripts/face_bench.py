@@ -612,6 +612,15 @@ def _weights_mb():
     return sum(model_path(model).stat().st_size for model in backend.models) / 2**20
 
 
+def _vector_backend():
+    from django.db import connection
+
+    from workspace.common.vectors import active_backend
+    from workspace.photos.indexes import FACE_EMBEDDINGS
+
+    return type(active_backend(FACE_EMBEDDINGS, connection)).__name__
+
+
 def _git_commit():
     try:
         return subprocess.run(
@@ -681,7 +690,9 @@ def main():
     args = parser.parse_args()
 
     cache_dir = (args.cache or photo_dataset.default_cache_dir()).resolve()
-    baseline = json.loads(args.compare.read_text()) if args.compare else None
+    baseline = (
+        json.loads(args.compare.read_text(encoding="utf-8")) if args.compare else None
+    )
 
     libraries = photo_dataset.by_library(photo_dataset.load_manifest())
     chosen = _select(libraries, args)
@@ -723,18 +734,24 @@ def main():
                 )
             },
             "max_distance": max_distance(),
+            "vector_backend": _vector_backend(),
         }
         results = []
         started = time.perf_counter()
         for index, (library, members) in enumerate(chosen.items(), 1):
             result = run_library(index, library, members, paths, keep=bool(args.keep))
             results.append(result)
-            rates = result.grouping.rates()
+            grouping = result.grouping
+            rates = grouping.rates()
+            # A library with no pair to get right or wrong has no rate at all.
+            precision = (
+                rates["pairwise_precision"] if grouping.predicted_pairs else None
+            )
+            recall = rates["pairwise_recall"] if grouping.true_pairs else None
             print(
                 f"  [{index}/{len(chosen)}] {library}: {result.photos} photos, "
                 f"found {_format(_ratio(sum(result.found.values()), result.heads), 'pct')}, "
-                f"pairwise P/R {_format(rates['pairwise_precision'], 'pct')}"
-                f"/{_format(rates['pairwise_recall'], 'pct')}",
+                f"pairwise P/R {_format(precision, 'pct')}/{_format(recall, 'pct')}",
                 flush=True,
             )
         run["weights_mb"] = _weights_mb()
@@ -749,7 +766,7 @@ def main():
     print()
     print(render(report, baseline))
     if args.json:
-        args.json.write_text(json.dumps(report, indent=2) + "\n")
+        args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(f"\nReport written to {args.json}")
     if args.keep:
         print(

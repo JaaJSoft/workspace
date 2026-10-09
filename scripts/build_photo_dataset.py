@@ -189,7 +189,7 @@ def lookup(photo_ids, cache_dir):
     path = cache_dir / "build" / "yfcc.jsonl"
     rows = {}
     if path.is_file():
-        for line in path.open():
+        for line in path.open(encoding="utf-8"):
             row = json.loads(line)
             rows[row["photoid"]] = row
     todo = sorted(set(photo_ids) - set(rows) - _missing(cache_dir))
@@ -209,8 +209,10 @@ def lookup(photo_ids, cache_dir):
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with (
-        path.open("a") as out,
-        (cache_dir / "build" / "yfcc-missing.txt").open("a") as missing,
+        path.open("a", encoding="utf-8") as out,
+        (cache_dir / "build" / "yfcc-missing.txt").open(
+            "a", encoding="utf-8"
+        ) as missing,
         ThreadPoolExecutor(32) as pool,
     ):
         for done, (photo_id, row) in enumerate(pool.map(one, todo), 1):
@@ -226,7 +228,9 @@ def lookup(photo_ids, cache_dir):
 
 def _missing(cache_dir):
     path = cache_dir / "build" / "yfcc-missing.txt"
-    return {int(line) for line in path.open()} if path.is_file() else set()
+    return (
+        {int(line) for line in path.open(encoding="utf-8")} if path.is_file() else set()
+    )
 
 
 # -- images ------------------------------------------------------------------
@@ -244,7 +248,7 @@ def fetch_images(rows, cache_dir):
     index_path = cache_dir / "build" / "images.jsonl"
     known = {}
     if index_path.is_file():
-        for line in index_path.open():
+        for line in index_path.open(encoding="utf-8"):
             entry = json.loads(line)
             known[entry["photoid"]] = entry
     todo = [pid for pid in rows if pid not in known]
@@ -274,7 +278,10 @@ def fetch_images(rows, cache_dir):
 
     if todo:
         print(f"Fetching {len(todo)} images ...", flush=True)
-        with index_path.open("a") as out, ThreadPoolExecutor(16) as pool:
+        with (
+            index_path.open("a", encoding="utf-8") as out,
+            ThreadPoolExecutor(16) as pool,
+        ):
             for done, entry in enumerate(pool.map(one, todo), 1):
                 known[entry["photoid"]] = entry
                 out.write(json.dumps(entry) + "\n")
@@ -298,7 +305,7 @@ def detect_all(images, cache_dir, backend_key):
     path = cache_dir / "build" / f"detections-{backend_key}.jsonl"
     found = {}
     if path.is_file():
-        for line in path.open():
+        for line in path.open(encoding="utf-8"):
             entry = json.loads(line)
             found[entry["photoid"]] = entry["boxes"]
     todo = [pid for pid in images if pid not in found]
@@ -309,7 +316,7 @@ def detect_all(images, cache_dir, backend_key):
     backend = get_face_backend(backend_key)
     backend.prepare()
     print(f"Detecting faces in {len(todo)} images ...", flush=True)
-    with path.open("a") as out:
+    with path.open("a", encoding="utf-8") as out:
         for done, photo_id in enumerate(todo, 1):
             key = images[photo_id]["key"]
             with Image.open(cache_dir / "images" / key[:3] / f"{key}.jpg") as image:

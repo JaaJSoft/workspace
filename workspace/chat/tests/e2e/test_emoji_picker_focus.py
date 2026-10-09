@@ -1,5 +1,5 @@
 """E2E test: opening the chat emoji picker puts the caret in its search
-field, and closing it hands focus back to the message textarea.
+field, and closing it hands focus back to the message composer.
 
 The behaviour is pure focus management across a shadow-DOM boundary, so a
 real browser is the only place it can be observed: the search field belongs
@@ -38,9 +38,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
 
     def _open_conversation(self):
         self.page.goto(f"{self.live_server_url}/chat/{self.conv.uuid}")
-        expect(
-            self.page.locator('textarea[placeholder="Type a message..."]')
-        ).to_be_visible()
+        expect(self._composer()).to_be_visible()
         # The debug toolbar overlays the page when DEBUG is on and swallows
         # clicks aimed at the composer.
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
@@ -54,10 +52,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         # pins have loaded, by focusing the composer. A picker opened before
         # that last step has its search field's focus stolen by it, so wait
         # for the load to be over before driving the picker.
-        self.page.wait_for_function(
-            "() => document.activeElement?.matches("
-            "'textarea[placeholder=\"Type a message...\"]')",
-        )
+        expect(self._composer()).to_be_focused()
 
     def _wait_for_search_field_focus(self):
         # The focus lands after the click has returned: Alpine reveals the
@@ -74,9 +69,14 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
             }""",
         )
 
-    def _textarea_has_focus(self):
+    def _composer(self):
+        # The formatted editor, which takes over from a stand-in textarea
+        # once loaded: waiting on the stand-in races the swap.
+        return self.page.locator(".chat-rich-input")
+
+    def _composer_has_focus(self):
         return self.page.evaluate(
-            "() => document.activeElement?.matches('textarea[placeholder=\"Type a message...\"]')",
+            "() => document.activeElement?.matches('.chat-rich-input')",
         )
 
     def test_opening_the_picker_focuses_the_search_field(self):
@@ -107,7 +107,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self.page.keyboard.press("Escape")
 
         expect(picker).to_be_hidden()
-        self.assertTrue(self._textarea_has_focus())
+        self.assertTrue(self._composer_has_focus())
 
     def test_clicking_outside_closes_the_picker_and_refocuses_the_composer(self):
         self._open_conversation()
@@ -121,11 +121,11 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         self.page.mouse.click(900, 250)
 
         expect(picker).to_be_hidden()
-        self.assertTrue(self._textarea_has_focus())
+        self.assertTrue(self._composer_has_focus())
 
     def test_closing_a_reaction_picker_leaves_the_composer_alone(self):
         self._open_conversation()
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer = self._composer()
         composer.fill("hi")
         composer.press("Enter")
         # The optimistic bubble is replaced by the server-rendered one, which
@@ -145,7 +145,7 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         expect(picker).to_be_hidden()
         # Reacting never involved the composer, and landing the caret there
         # would raise the virtual keyboard on a phone for nothing.
-        self.assertFalse(self._textarea_has_focus())
+        self.assertFalse(self._composer_has_focus())
 
     def test_clicking_another_control_does_not_steal_its_focus(self):
         self._open_conversation()

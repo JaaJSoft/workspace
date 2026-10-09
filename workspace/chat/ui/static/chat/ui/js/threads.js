@@ -202,6 +202,7 @@ window.chatThreadPanel = function chatThreadPanel(rootUuid) {
     destroy() {
       this._dead = true;
       this.cancelRecording?.();
+      this.destroyRichComposer?.();
     },
   };
 };

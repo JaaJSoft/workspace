@@ -176,7 +176,7 @@ class MessageShellRenderingTests(PlaywrightTestCase):
     def test_sent_message_replaces_the_pending_bubble_with_the_server_shell(self):
         self._open_conversation()
 
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer = self.page.locator(".chat-rich-input")
         composer.fill("round trip through the shell")
         composer.press("Enter")
 

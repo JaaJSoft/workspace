@@ -67,7 +67,7 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         list_root.get_by_text("voice-peer").click()
 
         # The conversation pane becomes active once the composer is visible.
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer = self.page.locator(".chat-rich-input")
         expect(composer).to_be_visible()
 
         # Step 2: Click the phone button. openCallRoom() calls window.open(),
@@ -129,9 +129,9 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         # that these helpers lived only in chatApp's factory body and were absent
         # from chatRoomApp, causing a ReferenceError/TypeError per keystroke and
         # Enter-to-send being dead).
-        # The room uses the same conversation_pane.html partial; the desktop
-        # textarea has x-ref="messageInput" and placeholder "Type a message...".
-        room_composer = room_page.locator('textarea[placeholder="Type a message..."]')
+        # The room uses the same conversation_pane.html partial, so the same
+        # desktop composer.
+        room_composer = room_page.locator(".chat-rich-input")
         try:
             expect(room_composer).to_be_visible(timeout=5_000)
         except Exception:
@@ -187,7 +187,7 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         expect(list_root.get_by_text("voice-peer")).to_be_visible()
         list_root.get_by_text("voice-peer").click()
 
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer = self.page.locator(".chat-rich-input")
         expect(composer).to_be_visible()
 
         # Open the voice room tab.
@@ -278,7 +278,7 @@ class VoiceRoomNavigationTests(PlaywrightTestCase):
         expect(list_root.get_by_text("voice-peer")).to_be_visible()
         list_root.get_by_text("voice-peer").click()
 
-        composer = self.page.locator('textarea[placeholder="Type a message..."]')
+        composer = self.page.locator(".chat-rich-input")
         expect(composer).to_be_visible()
 
         _main_console: list[str] = []

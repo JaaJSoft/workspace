@@ -63,7 +63,7 @@ class SearchKeyboardScrollTests(PlaywrightTestCase):
             )
         self._goto_chat(f"/chat/{conv.uuid}")
         # Opening the conversation ends by focusing the composer.
-        expect(self.page.locator('textarea[x-ref="messageInput"]')).to_be_focused()
+        expect(self.page.locator(".chat-rich-input")).to_be_focused()
 
         self.page.keyboard.press("Control+f")
         # The panel exists twice, one copy per breakpoint.

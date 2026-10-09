@@ -23,6 +23,14 @@ class Calendar(models.Model):
         default=None,
         related_name="invitation_calendars",
     )
+    # Secret of the read-only ICS feed URL; None while the feed is off.
+    # Rotating it is how a leaked URL gets revoked.
+    feed_token = models.CharField(
+        max_length=64, null=True, blank=True, default=None, unique=True
+    )
+    # Bumped by every change to one of its events (services.sync_log): the
+    # CalDAV sync token and ctag of the calendar.
+    sync_revision = models.PositiveBigIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,6 +77,7 @@ class Event(models.Model):
         MANUAL = "manual", "Manual"
         ICS = "ics", "ICS invitation"
         LLM = "llm", "Extracted by AI"
+        CALDAV = "caldav", "Synced from a device"
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     calendar = models.ForeignKey(
@@ -99,6 +108,15 @@ class Event(models.Model):
     recurrence_rule = models.TextField(blank=True, default="")
     is_recurring = models.BooleanField(default=False)
     recurrence_until = models.DateTimeField(null=True, blank=True, default=None)
+
+    # CalDAV resource name of a series master ("<name>.ics" under its
+    # calendar). Blank means the default "<uuid>.ics"; a client that PUTs a
+    # new event picks its own name and expects to find it there again.
+    dav_name = models.CharField(max_length=255, blank=True, default="")
+    # The VEVENT content lines this model has no column for (alarms,
+    # attendees, categories, X- properties...), kept verbatim so a round trip
+    # through a calendar client does not erode the event.
+    ical_extra = models.TextField(blank=True, default="")
 
     # Exception fields (for modified/cancelled occurrences)
     recurrence_parent = models.ForeignKey(
@@ -155,6 +173,11 @@ class Event(models.Model):
                 fields=["calendar", "ical_uid"],
                 condition=models.Q(ical_uid__isnull=False) & ~models.Q(ical_uid=""),
                 name="unique_event_ical_uid_per_calendar",
+            ),
+            models.UniqueConstraint(
+                fields=["calendar", "dav_name"],
+                condition=~models.Q(dav_name=""),
+                name="unique_event_dav_name_per_calendar",
             ),
         ]
 
@@ -229,6 +252,43 @@ class EventMember(models.Model):
     @property
     def is_external(self):
         return self.user_id is None
+
+
+class CalendarObjectChange(models.Model):
+    """The last revision at which one calendar object changed in a calendar.
+
+    A calendar object is a series master with its exceptions, or a single
+    event: what CalDAV serves as one ``.ics`` resource. One row per object
+    and calendar, rewritten on every change, so a sync token (a past
+    ``Calendar.sync_revision``) finds what changed since by revision alone.
+    The object may be gone - deleted or moved to another calendar - which is
+    why ``event_uuid`` is no foreign key and ``name`` keeps the href to report
+    it under.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    calendar = models.ForeignKey(
+        Calendar,
+        on_delete=models.CASCADE,
+        related_name="object_changes",
+    )
+    event_uuid = models.UUIDField()
+    name = models.CharField(max_length=255)
+    revision = models.PositiveBigIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["calendar", "event_uuid"],
+                name="unique_object_change_per_calendar",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["calendar", "revision"], name="objchange_cal_rev"),
+        ]
+
+    def __str__(self):
+        return f"{self.calendar_id}/{self.name}@{self.revision}"
 
 
 def _generate_share_token():

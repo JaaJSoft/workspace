@@ -7,6 +7,7 @@ class CalendarConfig(AppConfig):
     label = "calendar"
 
     def ready(self):
+        import workspace.calendar.services.sync_log  # noqa: F401 - signal receivers
         from workspace.calendar.search import search_events
         from workspace.core.module_registry import (
             CommandInfo,

@@ -88,9 +88,7 @@ class ThreadPanelTests(PlaywrightTestCase):
         self._open_conversation()
         self._open_thread()
 
-        composer = self.page.locator('[data-testid="thread-composer"]').get_by_role(
-            "textbox", name="Type a message..."
-        )
+        composer = self.page.locator('[data-testid="thread-composer"] .chat-rich-input')
         sent = "written from inside the panel"
         composer.fill(sent)
         composer.press("Enter")

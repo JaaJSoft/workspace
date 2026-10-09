@@ -70,13 +70,13 @@ class EmojiPickerFocusTests(PlaywrightTestCase):
         )
 
     def _composer(self):
-        # The formatted editor or the markdown textarea, whichever is shown.
-        return self.page.get_by_role("textbox", name="Type a message...")
+        # The formatted editor, which takes over from a stand-in textarea
+        # once loaded: waiting on the stand-in races the swap.
+        return self.page.locator(".chat-rich-input")
 
     def _composer_has_focus(self):
         return self.page.evaluate(
-            "() => document.activeElement?.matches("
-            "'textarea[placeholder=\"Type a message...\"], .chat-rich-input')",
+            "() => document.activeElement?.matches('.chat-rich-input')",
         )
 
     def test_opening_the_picker_focuses_the_search_field(self):

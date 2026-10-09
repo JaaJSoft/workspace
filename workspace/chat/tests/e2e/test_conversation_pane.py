@@ -47,8 +47,10 @@ class ConversationPaneTests(PlaywrightTestCase):
 
         # The conversation pane (inside <template x-if="activeConversation">)
         # renders after Alpine processes the selectConversationById() call.
-        # The desktop composer must become visible.
-        composer = self.page.get_by_role("textbox", name="Type a message...")
+        # The desktop composer must become visible. It is the formatted
+        # editor, which takes over from a stand-in textarea once loaded:
+        # typing into the stand-in races the swap.
+        composer = self.page.locator(".chat-rich-input")
         expect(composer).to_be_visible()
 
         # #messages-container is rendered inside the same x-if template.

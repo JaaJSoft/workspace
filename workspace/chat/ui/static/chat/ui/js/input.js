@@ -112,7 +112,7 @@ window.chatInputMixin = function chatInputMixin() {
           rich.setMarkdown(this.messageBody);
           const textareaHadFocus = document.activeElement === this.$refs.messageInput;
           this.richReady = true;
-          if (textareaHadFocus) this.$nextTick(() => rich?.focus());
+          if (textareaHadFocus) this._focusInputOnceShown();
         } catch (e) {
           console.error('Formatted composer unavailable, staying on markdown', e);
         } finally {
@@ -122,7 +122,7 @@ window.chatInputMixin = function chatInputMixin() {
       return richLoading;
     },
 
-    toggleComposerMode() {
+    async toggleComposerMode() {
       const mode = this.composerMode === 'rendered' ? 'markdown' : 'rendered';
       if (window.updateChatPref) {
         // Broadcasts to every composer on the page, this one included.
@@ -130,7 +130,18 @@ window.chatInputMixin = function chatInputMixin() {
       } else {
         this._applyComposerMode(mode);
       }
-      this.$nextTick(() => this.getMessageInput()?.focus());
+      // Focus whichever input is shown once the editor has settled: a load
+      // finishing in between would hide the input that was just focused.
+      if (this.composerMode === 'rendered') await this._loadRichComposer();
+      this._focusInputOnceShown();
+    },
+
+    // x-show hides an element at once but reveals it on the next animation
+    // frame, so the input swapped in by a mode change cannot take the focus
+    // before that frame - focus() on it is a no-op until then, and the input
+    // swapped out has already dropped the focus to <body>.
+    _focusInputOnceShown() {
+      this.$nextTick(() => requestAnimationFrame(() => this.getMessageInput()?.focus()));
     },
 
     _applyComposerMode(mode) {

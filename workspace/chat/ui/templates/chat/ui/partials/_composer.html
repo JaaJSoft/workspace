@@ -326,6 +326,7 @@
         :class="composerMode === 'markdown' && 'btn-active'"
         :title="composerMode === 'markdown' ? 'Back to formatted text' : 'Edit as markdown'"
         :aria-pressed="composerMode === 'markdown'"
+        @mousedown.prevent
         @click="toggleComposerMode()"
       >
         <i data-lucide="square-m" class="w-3.5 h-3.5"></i>

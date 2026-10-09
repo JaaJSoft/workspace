@@ -48,7 +48,7 @@
     "heic-to": "1.5.2",
     "jspdf": "4.2.1",
     "lucide": "1.43.0",
-    "luxon": "3.5.0",
+    "luxon": "3.7.2",
     "monaco-editor": "0.45.0"
   },
   "devDependencies": {

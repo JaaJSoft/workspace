@@ -11,7 +11,8 @@ from itertools import batched
 from django.db import migrations
 
 # Frozen copies of common.text.fold_text and people.models.search_text_for as
-# of this migration: a later change to either must not rewrite what it did.
+# of this migration, and of the lowercasing they replaced: a later change to
+# either must not rewrite what it did, nor what undoing it restores.
 SEARCH_TEXT_MAX_LENGTH = 1024
 
 
@@ -20,7 +21,7 @@ def _fold(text):
     return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
 
 
-def _search_text(person):
+def _search_text(person, normalize):
     parts = [
         person.display_name,
         person.given_name,
@@ -29,11 +30,11 @@ def _search_text(person):
         *(entry.get("value", "") for entry in person.emails or []),
         *(entry.get("value", "") for entry in person.phones or []),
     ]
-    text = _fold(" ".join(part.strip() for part in parts if part and part.strip()))
+    text = normalize(" ".join(part.strip() for part in parts if part and part.strip()))
     return text[:SEARCH_TEXT_MAX_LENGTH]
 
 
-def fold_search_text(apps, schema_editor):
+def _rebuild(apps, schema_editor, normalize):
     Person = apps.get_model("people", "Person")
     db = schema_editor.connection.alias
     persons = (
@@ -52,11 +53,19 @@ def fold_search_text(apps, schema_editor):
     for batch in batched(persons, 500, strict=False):
         changed = []
         for person in batch:
-            text = _search_text(person)
+            text = _search_text(person, normalize)
             if text != person.search_text:
                 person.search_text = text
                 changed.append(person)
         Person.objects.using(db).bulk_update(changed, ["search_text"])
+
+
+def fold_search_text(apps, schema_editor):
+    _rebuild(apps, schema_editor, _fold)
+
+
+def lowercase_search_text(apps, schema_editor):
+    _rebuild(apps, schema_editor, str.lower)
 
 
 class Migration(migrations.Migration):
@@ -65,5 +74,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(fold_search_text, migrations.RunPython.noop),
+        migrations.RunPython(fold_search_text, lowercase_search_text),
     ]

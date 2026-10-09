@@ -29,7 +29,8 @@ KIND_HISTORY = "history"
 def _person_suggestion(person, needle):
     emails = [e for e in person.emails or [] if e.get("value")]
     # The address the query names comes first: it is the one being typed.
-    emails.sort(key=lambda e: needle not in e["value"].lower())
+    folded = fold_text(needle)
+    emails.sort(key=lambda e: folded not in fold_text(e["value"]))
     return {
         "kind": KIND_PERSON,
         "uuid": str(person.uuid),

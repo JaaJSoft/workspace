@@ -26,6 +26,14 @@ class FoldSearchTextMigrationTests(TestCase):
         person.refresh_from_db()
         self.assertEqual(person.search_text, "helene dupre")
 
+    def test_rollback_restores_the_lowercased_text(self):
+        person = create_person(owner=self.user, display_name="Hélène Dupré")
+
+        migration.lowercase_search_text(django_apps, schema_editor_stub())
+
+        person.refresh_from_db()
+        self.assertEqual(person.search_text, "hélène dupré")
+
     def test_matches_what_a_save_writes_today(self):
         person = create_person(
             owner=self.user,

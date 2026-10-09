@@ -11,17 +11,17 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from workspace.files.models import File, FileEvent, FileScan, MediaInfo
+from workspace.files.models import File, FileScan, MediaInfo
 from workspace.files.services import FileService
-from workspace.files.services.catch_up import get_catch_up
-from workspace.files.services.event_dispatch import _HANDLERS, run_handlers
+from workspace.files.services.event_dispatch import run_handlers
 from workspace.files.services.media_info import (
+    is_probe_candidate,
     parse_report,
     pending_qs,
     probe_file,
-    probe_file_for_event,
     refresh_media_info,
 )
+from workspace.files.services.processors import get_processor, run_pipeline
 from workspace.files.tasks import catch_up_file
 from workspace.files.templatetags.file_filters import codec_name, media_duration
 from workspace.users.services.settings import set_setting
@@ -175,7 +175,7 @@ class PendingTests(MediaInfoTestCase):
 @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
 class CatchUpTests(MediaInfoTestCase):
     def test_registered_with_the_catch_up(self, _probe):
-        self.assertIs(get_catch_up("media_info").process, refresh_media_info)
+        self.assertIs(get_processor("media_info").process, refresh_media_info)
 
     def test_fills_in_every_pending_file_and_is_idempotent(self, _probe):
         webm = self._upload("clip.webm")
@@ -212,11 +212,12 @@ class CatchUpTests(MediaInfoTestCase):
         probe.assert_called_once()
 
 
-class HandlerTests(MediaInfoTestCase):
-    def test_subscribed_to_uploads_and_content_replacements(self):
-        for action in (FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED):
-            with self.subTest(action=action):
-                self.assertIn(probe_file_for_event, _HANDLERS[str(action)])
+class PipelineTests(MediaInfoTestCase):
+    def test_registered_with_the_upload_pipeline(self):
+        processor = get_processor("media_info")
+
+        self.assertIs(processor.applies_to, is_probe_candidate)
+        self.assertIs(processor.process, refresh_media_info)
 
     @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
     def test_an_upload_is_probed_once_committed(self, _probe):
@@ -236,19 +237,17 @@ class HandlerTests(MediaInfoTestCase):
         File.objects.filter(pk=f.pk).update(type="txt")
         f.refresh_from_db()
 
-        probe_file_for_event(
-            FileEvent(file=f, action=FileEvent.Action.CONTENT_REPLACED)
-        )
+        run_pipeline(f.uuid)
 
         self.assertFalse(MediaInfo.objects.exists())
 
     @patch("workspace.files.services.ffmpeg.probe", return_value=_REPORT)
-    def test_trashed_before_the_handler_ran_is_skipped(self, probe):
+    def test_trashed_before_the_pipeline_ran_is_skipped(self, probe):
         f = self._upload("clip.webm")
         FileService.soft_delete(f, acting_user=self.user)
         f.refresh_from_db()
 
-        probe_file_for_event(FileEvent(file=f, action=FileEvent.Action.CREATED))
+        run_pipeline(f.uuid)
 
         probe.assert_not_called()
 

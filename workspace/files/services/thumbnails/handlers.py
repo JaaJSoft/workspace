@@ -1,34 +1,24 @@
-"""React to file lifecycle events by (re)generating image thumbnails.
+"""Register thumbnail generation as an upload processor.
 
-Registered with the file-event dispatcher; runs off-request via the
-files.run_file_event_handlers task whenever an image file is created or has
-its content replaced. Registered with the hourly catch-up too
-(services/catch_up.py), which generates whatever that path missed.
+Runs in the upload pipeline once an image or a video has been created or had
+its content replaced, after the malware scan, and from the hourly catch-up for
+whatever that path missed (services/processors.py).
 """
 
 from __future__ import annotations
 
-from workspace.files.models import FileEvent
-from workspace.files.services.catch_up import register_catch_up
-from workspace.files.services.event_dispatch import on_file_event
+from workspace.files.services.processors import register_processor
 from workspace.files.services.thumbnails.generation import (
-    can_generate_thumbnail,
+    is_thumbnail_candidate,
     pending_thumbnails_qs,
     refresh_thumbnail,
 )
 
-
-@on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def generate_thumbnail_for_event(event):
-    """Generate or refresh the thumbnail for a created/updated image file."""
-    file = event.file
-    if file.deleted_at is not None:
-        # Trashed before we ran; the backfill regenerates on restore.
-        return
-    if can_generate_thumbnail(file.type):
-        refresh_thumbnail(file)
-
-
-register_catch_up(
-    "thumbnails", pending=pending_thumbnails_qs, process=refresh_thumbnail
+register_processor(
+    "thumbnails",
+    applies_to=is_thumbnail_candidate,
+    pending=pending_thumbnails_qs,
+    process=refresh_thumbnail,
+    # Right behind the scan: the preview is what a user waits for.
+    order=10,
 )

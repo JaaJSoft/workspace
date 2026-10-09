@@ -67,10 +67,10 @@ UNFOLD = {
                         "link": reverse_lazy("admin:files_filecomment_changelist"),
                     },
                     {
-                        "title": "Thumbnail failures",
+                        "title": "Processing failures",
                         "icon": "broken_image",
-                        "link": reverse_lazy("admin:files_thumbnailfailure_changelist"),
-                        "badge": "workspace.core.services.admin_dashboard.thumbnail_failure_badge",
+                        "link": reverse_lazy("admin:files_processingfailure_changelist"),
+                        "badge": "workspace.core.services.admin_dashboard.processing_failure_badge",
                     },
                     {
                         "title": "Malware scans",

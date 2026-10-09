@@ -150,8 +150,8 @@ def purge_trash(self):
 
 
 # Each pass queues one catch_up_file task per pending file of every
-# registered reader (services/catch_up.py), so the work spreads over every
-# worker. The bound, per reader, caps what one pass puts on the broker; a
+# registered processor (services/processors.py), so the work spreads over every
+# worker. The bound, per processor, caps what one pass puts on the broker; a
 # larger backlog drains over the following passes.
 CATCH_UP_LIMIT = 20_000
 
@@ -168,24 +168,35 @@ CATCH_UP_EXPIRY_SHARE = 0.9
     name="files.catch_up", priority=BACKGROUND_PRIORITY, bind=True, max_retries=0
 )
 def catch_up(self, names=None):
-    """Queue the pending files of every reader, or of the readers in *names*.
+    """Queue the pending files of every processor, or of the processors in *names*.
 
-    Returns how many files were queued per reader.
+    A full pass (no *names*) also queues the upload pipeline again for the
+    files it never settled, under the "pipeline" key.
+
+    Returns how many files were queued per processor.
     """
-    from workspace.files.services.catch_up import queue_pending, resolve
+    from workspace.files.services.processors import (
+        queue_pending,
+        queue_stalled,
+        resolve,
+    )
 
-    readers, unknown = resolve(names)
+    processors, unknown = resolve(names)
     if unknown:
-        logger.warning("Catch-up skips unknown reader(s): %s", ", ".join(unknown))
+        logger.warning(
+            "Catch-up skips unknown processor(s): %s", scrub(", ".join(unknown))
+        )
     expires = timezone.now() + timedelta(
         seconds=settings.FILES_CATCH_UP_INTERVAL * CATCH_UP_EXPIRY_SHARE
     )
     stats = {
-        reader.name: queue_pending(
-            reader, limit=CATCH_UP_LIMIT, expires=expires, resume=True
+        processor.name: queue_pending(
+            processor, limit=CATCH_UP_LIMIT, expires=expires, resume=True
         )
-        for reader in readers
+        for processor in processors
     }
+    if not names:
+        stats["pipeline"] = queue_stalled(limit=CATCH_UP_LIMIT, expires=expires)
     logger.info("Catch-up queued %s", stats)
     return stats
 
@@ -198,7 +209,7 @@ def catch_up(self, names=None):
     ignore_result=True,
 )
 def catch_up_file(self, name, file_uuid, reanalyze=False):
-    """Run reader *name* on one file.
+    """Run processor *name* on one file.
 
     Unless *reanalyze*, a file that is no longer pending is skipped without
     reading its blob: its upload event may have processed it while this task
@@ -211,20 +222,20 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
     from django.core.exceptions import ValidationError
 
     from workspace.files.models import File
-    from workspace.files.services.catch_up import get_catch_up
+    from workspace.files.services.processors import get_processor, run_processor
 
-    reader = get_catch_up(name)
-    if reader is None:
+    processor = get_processor(name)
+    if processor is None:
         return {"status": "skipped"}
     try:
         file_obj = (
-            reader.pending_files(reanalyze=reanalyze)
+            processor.pending_files(reanalyze=reanalyze)
             .select_related("owner")
             .get(uuid=file_uuid)
         )
     except File.DoesNotExist, ValidationError, ValueError, TypeError:
         return {"status": "skipped"}
-    return {"status": "ok" if reader.process(file_obj) else "skipped"}
+    return {"status": "ok" if run_processor(processor, file_obj) else "skipped"}
 
 
 @shared_task(
@@ -271,6 +282,24 @@ def run_file_event_handlers(self, event_uuid):
 
 
 @shared_task(
+    name="files.process_file",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
+def process_file(self, file_uuid):
+    """Run the upload pipeline on one file whose content just landed.
+
+    max_retries=0 on purpose: each processor keeps its own failure ledger, and
+    the hourly catch-up comes back for a file the pipeline never settled.
+    """
+    from workspace.files.services.processors import run_pipeline
+
+    status = run_pipeline(file_uuid)
+    return {"status": status or "skipped"}
+
+
+@shared_task(
     name="files.index_search_document",
     priority=NORMAL_PRIORITY,
     bind=True,
@@ -307,7 +336,7 @@ def index_search_document(self, file_uuid, include_descendants=False):
         # duplicated subtree would otherwise never be indexed. Paged by
         # keyset rather than streamed: a read cursor held open across the
         # write transactions below is what makes SQLite raise "database is
-        # locked" (see services/catch_up.py).
+        # locked" (see services/processors.py).
         descendants = File.objects.filter(path__startswith=f"{file_obj.path}/")
         last_uuid = None
         while True:

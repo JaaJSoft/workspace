@@ -629,6 +629,12 @@
                           class="w-4 h-4 flex-shrink-0 text-error"
                           title="Quarantined: the malware scanner flagged this file, so it cannot be opened or downloaded."
                         ></i>
+                      {% elif node.is_processing %}
+                        <i
+                          data-lucide="loader-circle"
+                          class="w-4 h-4 flex-shrink-0 text-base-content/40 animate-spin"
+                          title="Processing: the file is being scanned and its preview prepared."
+                        ></i>
                       {% endif %}
                     </div>
                   </td>
@@ -830,7 +836,7 @@
                   >
                     <div class="flex items-start justify-between gap-1">
                       <div class="flex-1 min-w-0">
-                        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" %}
+                        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined is_processing=node.is_processing name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" %}
                         <p
                           class="text-xs text-base-content/60"
                           :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"

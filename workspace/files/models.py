@@ -110,6 +110,21 @@ class File(models.Model):
 
     has_thumbnail = models.BooleanField(default=False)
 
+    class ProcessingStatus(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        READY = "ready", "Ready"
+
+    # Where the upload pipeline (services/processors.py) stands on the bytes the
+    # row holds now. Written in the same UPDATE as the content, so it costs the
+    # upload path no query. Quarantine is not a value here: it is a policy
+    # decision derived from the scan verdict (see effective_processing_status).
+    processing_status = models.CharField(
+        max_length=16,
+        choices=ProcessingStatus.choices,
+        default=ProcessingStatus.READY,
+    )
+
     # Key the SQLite full-text index is built on (see DerivedFulltextIndex).
     # FTS5 rowids are integers and the index cannot be rebuilt from the
     # database, so it cannot ride on the implicit rowid: Django rebuilds this
@@ -390,6 +405,22 @@ class File(models.Model):
         from workspace.files.services.scanning.policy import is_blocked
 
         return is_blocked(self)
+
+    def effective_processing_status(self):
+        """``processing_status``, or ``"quarantined"`` when the policy blocks the file.
+
+        Reads ``self.scan`` like is_quarantined.
+        """
+        if self.is_quarantined():
+            return "quarantined"
+        return self.processing_status
+
+    def is_processing(self):
+        """True while the upload pipeline has not settled the file's current bytes."""
+        return self.effective_processing_status() in (
+            self.ProcessingStatus.PENDING,
+            self.ProcessingStatus.PROCESSING,
+        )
 
     def is_deleted(self):
         return self.deleted_at is not None
@@ -1068,16 +1099,16 @@ class FileLink(models.Model):
         return f"{self.source_id} -> {self.target_id}"
 
 
-class ThumbnailFailure(models.Model):
-    """An image file whose thumbnail generation failed.
+class ProcessingFailure(models.Model):
+    """A file one upload processor keeps failing on.
 
-    A row exists only while the file is failing: it is dropped as soon as
-    generation succeeds or the file's content is replaced, so ``attempts``
-    counts attempts against the file's current bytes. The exception is a
-    backfill already decoding when the content is replaced, which records
-    against the old bytes after the row was cleared and costs the new content
-    an attempt or two. Parking expires within PARKED_RETRY_AFTER regardless,
-    so the row carries no content revision to guard against that.
+    A row exists only while the file is failing for that processor: it is
+    dropped as soon as the processor succeeds or the file's content is
+    replaced, so ``attempts`` counts attempts against the file's current bytes.
+    The exception is a run already reading when the content is replaced, which
+    records against the old bytes after the row was cleared and costs the new
+    content an attempt or two. Parking expires within PARKED_RETRY_AFTER
+    regardless, so the row carries no content revision to guard against that.
     """
 
     uuid = models.UUIDField(
@@ -1085,20 +1116,35 @@ class ThumbnailFailure(models.Model):
     )
     # Must stay non-nullable: parked_file_ids() feeds a NOT IN subquery, where a
     # single NULL makes the predicate UNKNOWN for every row and silently reduces
-    # the backfill to zero files.
-    file = models.OneToOneField(
+    # the catch-up to zero files.
+    file = models.ForeignKey(
         File,
         on_delete=models.CASCADE,
-        related_name="thumbnail_failure",
+        related_name="processing_failures",
     )
+    # A registered processor name (services/processors.py).
+    processor = models.CharField(max_length=32)
     attempts = models.PositiveSmallIntegerField(default=0)
     # Set explicitly by the service: the counter is bumped through a queryset
     # .update() for atomicity, and auto_now only fires inside Model.save().
     last_attempt_at = models.DateTimeField()
     last_error = models.CharField(max_length=200, blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["file", "processor"],
+                name="files_processingfailure_file_processor",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["processor", "attempts"], name="files_procfail_proc_attempts"
+            )
+        ]
+
     def __str__(self):
-        return f"{self.file}: {self.attempts} failed thumbnail attempt(s)"
+        return f"{self.file}: {self.attempts} failed {self.processor} attempt(s)"
 
 
 class MediaInfo(models.Model):

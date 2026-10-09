@@ -115,6 +115,8 @@ Context:
 
     {% if file.is_quarantined %}
       <inline-alert type="error" title="Quarantined" message="The malware scanner flagged this file. It cannot be opened or downloaded." class="mt-3"></inline-alert>
+    {% elif file.is_processing %}
+      <inline-alert type="info" icon="loader-circle" title="Processing" message="This file is being scanned and its preview and details prepared. They appear once processing finishes." class="mt-3"></inline-alert>
     {% endif %}
 
     {% for section, html in sections %}

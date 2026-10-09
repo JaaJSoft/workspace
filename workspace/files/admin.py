@@ -22,9 +22,10 @@ from .models import (
     FileShare,
     GroupStorageQuota,
     PinnedFolder,
-    ThumbnailFailure,
+    ProcessingFailure,
     UserStorageQuota,
 )
+from .services.processing_failures import retry_failures
 from .services.quota import (
     group_usage,
     group_usage_subquery,
@@ -32,7 +33,6 @@ from .services.quota import (
     personal_usage_subquery,
 )
 from .services.scanning.policy import blocked_statuses, override_applies
-from .services.thumbnails.failures import retry_failures
 
 
 @admin.register(FileComment)
@@ -114,18 +114,18 @@ class PinnedFolderAdmin(ModelAdmin):
     autocomplete_fields = ("owner", "folder")
 
 
-@admin.register(ThumbnailFailure)
-class ThumbnailFailureAdmin(ModelAdmin):
-    """Recorded thumbnail-generation errors; a file is unparked by deleting
-    its row (the retry action does that and queues a generation pass)."""
+@admin.register(ProcessingFailure)
+class ProcessingFailureAdmin(ModelAdmin):
+    """Recorded processor errors; a file is unparked by deleting its row (the
+    retry action does that and queues the processor again)."""
 
-    list_display = ("file", "attempts", "last_attempt_at", "last_error")
-    list_filter = ("last_attempt_at",)
+    list_display = ("file", "processor", "attempts", "last_attempt_at", "last_error")
+    list_filter = ("processor", "last_attempt_at")
     list_select_related = ("file",)
     search_fields = ("file__name", "last_error")
-    actions = ("retry_thumbnails",)
+    actions = ("retry_processing",)
 
-    # Rows are written by the thumbnail worker; there is nothing to author or
+    # Rows are written by the processor runner; there is nothing to author or
     # edit by hand. Deleting a row is the documented way to unpark a file.
     def has_add_permission(self, request):
         return False
@@ -133,12 +133,12 @@ class ThumbnailFailureAdmin(ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
-    @admin.action(description="Retry thumbnail generation", permissions=["delete"])
-    def retry_thumbnails(self, request, queryset):
+    @admin.action(description="Retry the failed processor", permissions=["delete"])
+    def retry_processing(self, request, queryset):
         count = retry_failures(queryset)
         self.message_user(
             request,
-            f"Unparked {count} file(s); thumbnail generation queued.",
+            f"Unparked {count} failure(s); the processors are queued again.",
             messages.SUCCESS,
         )
 
@@ -242,9 +242,9 @@ class FileScanAdmin(ModelAdmin):
         re-scan action, which leaves the row in place until a fresh verdict
         replaces it.
 
-        This differs from ThumbnailFailure, where deleting the row IS the
+        This differs from ProcessingFailure, where deleting the row IS the
         documented way to unpark a file: there the row only withholds a
-        thumbnail, here it withholds the file itself.
+        processor's next attempt, here it withholds the file itself.
         """
         return False
 

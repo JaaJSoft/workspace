@@ -1,21 +1,20 @@
 """Keep MediaItem rows, and the faces found in photos and videos, in step with
 the files.
 
-Registered with the file-event dispatcher, so it runs off-request (the
-files.run_file_event_handlers task) once an upload or a content replacement
-has committed. Registered with the hourly catch-up too (files.catch_up), which
-analyzes whatever that path missed.
+Both are upload processors (files.services.processors): the upload pipeline
+runs them once an upload or a content replacement has committed, and the
+hourly catch-up analyzes whatever that path missed. Moves are followed by a
+file-event handler of their own.
 """
 
 from django.db import transaction
 from django.db.models import F, Q
 
 from workspace.files.models import File, FileEvent
-from workspace.files.services.catch_up import register_catch_up
 from workspace.files.services.event_dispatch import on_file_event
+from workspace.files.services.processors import register_processor
 
 from .analysis import (
-    analyze_media,
     forget_media,
     is_media_candidate,
     pending_media_qs,
@@ -30,19 +29,10 @@ from .face_analysis import (
 )
 
 
-@on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def analyze_media_for_event(event):
-    file_obj = event.file
-    if file_obj.deleted_at is not None:
-        # Trashed before we ran; the catch-up reads it after a restore.
-        return
-    if is_media_candidate(file_obj):
-        analyze_media(file_obj)
-    elif event.action == FileEvent.Action.CONTENT_REPLACED:
-        # A photo overwritten with something else is no longer a photo.
-        forget_media(file_obj)
-        forget_faces(file_obj)
-    _queue_faces(file_obj)
+def _forget_photo(file_obj):
+    # A photo overwritten with something else is no longer a photo.
+    forget_media(file_obj)
+    forget_faces(file_obj)
 
 
 @on_file_event(FileEvent.Action.MOVED)
@@ -72,8 +62,8 @@ def follow_moved_photo(event):
 
 
 def _queue_faces(file_obj):
-    # Its own task: running the models here would hold up every other
-    # handler of the event.
+    # Its own task: running the models here would hold up every processor
+    # behind it.
     if is_face_candidate(file_obj):
         from ..tasks import face_analysis_task
 
@@ -82,9 +72,17 @@ def _queue_faces(file_obj):
         transaction.on_commit(lambda: task.delay(uuid))
 
 
-register_catch_up("photos", pending=pending_media_qs, process=refresh_media_item)
-register_catch_up(
+register_processor(
+    "photos",
+    applies_to=is_media_candidate,
+    forget=_forget_photo,
+    pending=pending_media_qs,
+    process=refresh_media_item,
+)
+register_processor(
     "faces",
+    applies_to=is_face_candidate,
+    enqueue=_queue_faces,
     pending=pending_faces_qs,
     process=refresh_faces,
     enabled=faces_catch_up_enabled,

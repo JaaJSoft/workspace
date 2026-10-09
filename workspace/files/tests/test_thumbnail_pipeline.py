@@ -6,10 +6,9 @@ from django.core.files.storage import default_storage
 from django.test import TestCase
 from PIL import Image
 
-from workspace.files.models import FileEvent
 from workspace.files.services import FileService
 from workspace.files.services.thumbnails.generation import get_thumbnail_path
-from workspace.files.services.thumbnails.handlers import generate_thumbnail_for_event
+from workspace.files.services.processors import run_pipeline
 
 User = get_user_model()
 
@@ -20,13 +19,10 @@ def _png_bytes(size=(800, 600)):
     return buf.getvalue()
 
 
-class ThumbnailEventHandlerTests(TestCase):
+class ThumbnailPipelineTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="th-evt", password="p")
-
-    def _event(self, file, action=FileEvent.Action.CREATED):
-        return FileEvent.objects.create(file=file, actor=self.user, action=action)
 
     def _cleanup(self, uuid):
         path = get_thumbnail_path(uuid)
@@ -51,7 +47,7 @@ class ThumbnailEventHandlerTests(TestCase):
         f.save(update_fields=["has_thumbnail"])
         self.addCleanup(self._cleanup, f.uuid)
 
-        generate_thumbnail_for_event(self._event(f))
+        run_pipeline(f.uuid)
 
         f.refresh_from_db()
         self.assertTrue(f.has_thumbnail)
@@ -70,7 +66,7 @@ class ThumbnailEventHandlerTests(TestCase):
         f.save(update_fields=["has_thumbnail"])
         self.addCleanup(self._cleanup, f.uuid)
 
-        generate_thumbnail_for_event(self._event(f, FileEvent.Action.CONTENT_REPLACED))
+        run_pipeline(f.uuid)
 
         f.refresh_from_db()
         self.assertTrue(f.has_thumbnail)
@@ -87,7 +83,7 @@ class ThumbnailEventHandlerTests(TestCase):
         f.save(update_fields=["type"])
         self.addCleanup(self._cleanup, f.uuid)
 
-        generate_thumbnail_for_event(self._event(f))
+        run_pipeline(f.uuid)
 
         f.refresh_from_db()
         self.assertFalse(f.has_thumbnail)
@@ -106,6 +102,6 @@ class ThumbnailEventHandlerTests(TestCase):
         f.refresh_from_db()
         self.addCleanup(self._cleanup, f.uuid)
 
-        generate_thumbnail_for_event(self._event(f))
+        run_pipeline(f.uuid)
 
         self.assertFalse(default_storage.exists(get_thumbnail_path(f.uuid)))

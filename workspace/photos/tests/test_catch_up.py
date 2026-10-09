@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
-from workspace.files.services.catch_up import get_catch_up
+from workspace.files.services.processors import get_processor
 from workspace.files.tasks import catch_up_file
 from workspace.files.tests.catch_up import run_catch_up
 from workspace.photos.models import MediaItem
@@ -31,7 +31,7 @@ class PhotosCatchUpTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="p")
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("photos").process, refresh_media_item)
+        self.assertIs(get_processor("photos").process, refresh_media_item)
 
     def test_fills_the_library_and_is_idempotent(self):
         dated = upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))

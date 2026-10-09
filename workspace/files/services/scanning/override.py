@@ -32,14 +32,15 @@ def restore_after_unblock(file_obj):
     behind a blank preview, after somebody said it was fine is a poor answer,
     so both are rebuilt now.
     """
+    from ..processors import get_processor, run_processor
     from ..search_index import index_file
-    from ..thumbnails.generation import can_generate_thumbnail, refresh_thumbnail
+    from ..thumbnails.generation import can_generate_thumbnail
 
     index_file(file_obj)
 
     if file_obj.has_thumbnail or not can_generate_thumbnail(file_obj.type):
         return
-    refresh_thumbnail(file_obj)
+    run_processor(get_processor("thumbnails"), file_obj)
 
 
 def mark_safe(scan, *, user, reason=""):

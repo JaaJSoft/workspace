@@ -16,7 +16,6 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.content_hash import (
     find_duplicates,
     hash_storage_file,
@@ -24,6 +23,7 @@ from workspace.files.services.content_hash import (
     pending_hash_qs,
     refresh_content_hash,
 )
+from workspace.files.services.processors import get_processor
 from workspace.files.sync import FileSyncService
 from workspace.files.webdav.resources import FileResource
 
@@ -347,7 +347,7 @@ class ContentHashCatchUpTests(TestCase):
         return f
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("content_hash").process, refresh_content_hash)
+        self.assertIs(get_processor("content_hash").process, refresh_content_hash)
 
     def test_fills_missing_hashes_from_storage(self):
         f = self._legacy_file("old.txt", HELLO)

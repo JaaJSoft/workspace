@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
-from workspace.files.services.catch_up import get_catch_up
+from workspace.files.services.processors import get_processor
 from workspace.files.services.scanning.base import ScanVerdict
 from workspace.files.services.scanning.scan import pending_scan_qs, scan_for_catch_up
 
@@ -49,7 +49,7 @@ class PendingScanTests(TestCase):
         return set(pending_scan_qs(**kwargs).values_list("pk", flat=True))
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("malware_scan").process, scan_for_catch_up)
+        self.assertIs(get_processor("malware_scan").process, scan_for_catch_up)
 
     def test_a_never_scanned_file_is_pending(self):
         f = self._file("new.txt")
@@ -97,7 +97,7 @@ class PendingScanTests(TestCase):
     @override_settings(FILES_MALWARE_SCAN_ENABLED=False)
     def test_nothing_is_pending_when_scanning_is_disabled(self):
         self._file("new.txt")
-        reader = get_catch_up("malware_scan")
+        reader = get_processor("malware_scan")
 
         self.assertFalse(reader.enabled())
         self.assertFalse(reader.pending_files().exists())

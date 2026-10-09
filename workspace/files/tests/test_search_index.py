@@ -15,7 +15,7 @@ from workspace.common.tests.office_fixtures import make_docx
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import File, FileEvent, SearchIndexState
 from workspace.files.services import FileService
-from workspace.files.services.catch_up import get_catch_up
+from workspace.files.services.processors import get_processor
 from workspace.files.services.search_index import (
     EXTRACTOR_VERSION,
     FILES_FTS,
@@ -202,7 +202,7 @@ class PendingSearchTests(TestCase):
         return set(pending_search_qs(**kwargs).values_list("pk", flat=True))
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("search_index").process, index_file)
+        self.assertIs(get_processor("search_index").process, index_file)
 
     def test_a_never_indexed_file_is_pending(self):
         note = self._note()

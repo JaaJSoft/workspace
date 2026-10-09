@@ -17,9 +17,9 @@ from workspace.core.services.admin_dashboard import (
     failed_ai_task_count,
     failed_import_job_count,
     mail_sync_error_count,
-    thumbnail_failure_count,
+    processing_failure_count,
 )
-from workspace.files.models import File, FileScan, ThumbnailFailure
+from workspace.files.models import File, FileScan, ProcessingFailure
 from workspace.imports.models import ImportConnection, ImportJob
 from workspace.mail.models import MailAccount
 
@@ -67,7 +67,7 @@ class HealthCountTests(TestCase):
             admin_dashboard.mail_sync_error_badge,
             admin_dashboard.external_calendar_error_badge,
             admin_dashboard.failed_ai_task_badge,
-            admin_dashboard.thumbnail_failure_badge,
+            admin_dashboard.processing_failure_badge,
             admin_dashboard.failed_import_job_badge,
         ):
             self.assertIsNone(badge(None))
@@ -111,14 +111,15 @@ class HealthCountTests(TestCase):
         )
         self.assertEqual(failed_ai_task_count(None), 1)
 
-    def test_thumbnail_failures_are_counted(self):
+    def test_processing_failures_are_counted(self):
         f = File.objects.create(
             owner=self.user, name="broken.jpg", node_type=File.NodeType.FILE
         )
-        ThumbnailFailure.objects.create(
-            file=f, attempts=3, last_attempt_at=timezone.now()
-        )
-        self.assertEqual(thumbnail_failure_count(None), 1)
+        for processor in ("thumbnails", "media_info"):
+            ProcessingFailure.objects.create(
+                file=f, processor=processor, attempts=3, last_attempt_at=timezone.now()
+            )
+        self.assertEqual(processing_failure_count(None), 2)
 
     def test_failed_import_jobs_window_is_on_the_failure_time(self):
         conn = ImportConnection.objects.create(
@@ -157,8 +158,8 @@ class DashboardCallbackTests(TestCase):
         by_title = {card["title"]: card for card in cards}
         self.assertEqual(by_title["Mail sync errors"]["value"], 1)
         self.assertEqual(by_title["Mail sync errors"]["tone"], "danger")
-        self.assertEqual(by_title["Parked thumbnails"]["value"], 0)
-        self.assertEqual(by_title["Parked thumbnails"]["tone"], "success")
+        self.assertEqual(by_title["Processing failures"]["value"], 0)
+        self.assertEqual(by_title["Processing failures"]["tone"], "success")
         self.assertEqual(by_title["Quarantined files"]["value"], 0)
         self.assertEqual(by_title["Quarantined files"]["tone"], "success")
         self.assertEqual(by_title["Scanner errors"]["value"], 0)

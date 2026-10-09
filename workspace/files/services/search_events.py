@@ -2,13 +2,14 @@
 
 Registered with the file-event dispatcher. The handler only enqueues: reading
 a blob and extracting its text is slow enough that doing it inline would delay
-every other handler for the same event (thumbnails, link previews).
+every other handler for the same event.
 
 Trashing needs no handler - the row and its document both stay, and the access
 querysets already hide a trashed file from search. Hard deletion is handled by
 the pre_delete receiver in models.py, which still has a resolvable row.
-Registered with the hourly catch-up too, which indexes whatever that path
-missed.
+Registered as a processor too, outside the upload pipeline (the handler
+above already follows the write, and renames as well): the hourly catch-up
+indexes whatever that path missed.
 """
 
 from __future__ import annotations
@@ -16,8 +17,8 @@ from __future__ import annotations
 import logging
 
 from workspace.files.models import FileEvent
-from workspace.files.services.catch_up import register_catch_up
 from workspace.files.services.event_dispatch import on_file_event
+from workspace.files.services.processors import register_processor
 from workspace.files.services.search_index import index_file, pending_search_qs
 
 logger = logging.getLogger(__name__)
@@ -39,4 +40,4 @@ def index_search_document_for_event(event):
     index_search_document.delay(str(event.file_id), include_descendants)
 
 
-register_catch_up("search_index", pending=pending_search_qs, process=index_file)
+register_processor("search_index", pending=pending_search_qs, process=index_file)

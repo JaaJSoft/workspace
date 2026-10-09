@@ -718,7 +718,6 @@ class ImageFailureGuidanceTests(TestCase):
         for _ in range(3):
             failure = self._fail_with(RuntimeError("upstream down"))
             self.assertNotIn("stop calling", failure.reason)
-            self.assertTrue(failure.retryable)
 
         failure = self._fail_with(RuntimeError("upstream down"))
 
@@ -938,6 +937,7 @@ class EditImageToolTest(TestCase):
                 context=self.context,
             )
 
+        self.assertTrue(caught.exception.retryable)
         self.assertNotIn("images", self.context)
 
 

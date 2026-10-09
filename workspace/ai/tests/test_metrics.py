@@ -165,6 +165,7 @@ class ImageRequestMetricsTests(TestCase):
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_generate_error_increments_error_counter(self, mock_get_client):
+        from workspace.ai.tool_registry import ToolError
         from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 
         client = MagicMock()
@@ -174,15 +175,15 @@ class ImageRequestMetricsTests(TestCase):
         labels = {"model": "dall-e-3", "op": "generate", "status": "error"}
         before = _sample("ai_image_requests_total", labels)
 
-        result = ImageToolProvider().generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id="conv-1",
-            context={},
-        )
+        with self.assertRaises(ToolError):
+            ImageToolProvider().generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id="conv-1",
+                context={},
+            )
 
-        self.assertTrue(result.startswith("Error"))
         # One sample per attempt: the counter tracks calls to the backend,
         # and the retries are real calls.
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)

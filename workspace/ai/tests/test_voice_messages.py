@@ -11,6 +11,7 @@ from workspace.ai.harness.model import ModelResponse
 from workspace.ai.models import VOICE_REF_MAX_BYTES, AITask, BotProfile
 from workspace.ai.services.responses import post_bot_message, produced_media
 from workspace.ai.services.speech import SpeechSynthesisError, VoiceReference
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import SendVoiceMessageParams, VoiceToolProvider
 from workspace.chat.models import (
     Conversation,
@@ -68,6 +69,11 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
             context=self.context,
         )
 
+    def _fail(self, **kwargs):
+        with self.assertRaises(ToolError) as caught:
+            self._call(**kwargs)
+        return caught.exception
+
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
     def test_speaks_through_the_bots_own_recording(self, mock_speak):
         audio = make_wav()
@@ -89,9 +95,10 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
         # retry, and the message says so rather than inviting one.
         plain_user = User.objects.create_user(username="nobot", password="pw")
 
-        result = self._call(bot=plain_user)
+        failure = self._fail(bot=plain_user)
 
-        self.assertIn("no voice recorded", result)
+        self.assertIn("no voice recorded", failure.reason)
+        self.assertFalse(failure.retryable)
         self.assertNotIn("voices", self.context)
         mock_speak.assert_not_called()
 
@@ -185,22 +192,22 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
 
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
     def test_refuses_a_text_longer_than_the_budget(self, mock_speak):
-        result = self._call(text="a" * 701)
+        failure = self._fail(text="a" * 701)
 
-        self.assertIn("Error", result)
-        self.assertIn("700", result)
+        self.assertIn("too long", failure.reason)
+        self.assertIn("700", failure.reason)
         self.assertNotIn("voices", self.context)
         mock_speak.assert_not_called()
 
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
     def test_refuses_an_empty_text(self, mock_speak):
-        self.assertIn("Error", self._call(text="   "))
+        self.assertIn("text is required", self._fail(text="   ").reason)
         self.assertNotIn("voices", self.context)
         mock_speak.assert_not_called()
 
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
     def test_refuses_without_a_conversation(self, mock_speak):
-        self.assertIn("Error", self._call(conv=None))
+        self.assertIn("no conversation context", self._fail(conv=None).reason)
         self.assertNotIn("voices", self.context)
         mock_speak.assert_not_called()
 
@@ -210,10 +217,11 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
             "unsupported language", attempts=1, rejected=True
         )
 
-        result = self._call()
+        failure = self._fail()
 
-        self.assertIn("Error", result)
-        self.assertIn("Rephrase", result)
+        self.assertIn("refused this text", failure.reason)
+        self.assertIn("rephrasing", failure.reason)
+        self.assertFalse(failure.retryable)
         self.assertNotIn("voices", self.context)
 
     @patch("workspace.ai.services.speech.ai_synthesize_speech")
@@ -222,10 +230,11 @@ class SendVoiceMessageToolTests(_TemporaryMediaRoot, TestCase):
             "server_busy", attempts=3, rejected=False
         )
 
-        result = self._call()
+        failure = self._fail()
 
-        self.assertIn("unavailable", result)
-        self.assertIn("Do not call send_voice_message again", result)
+        self.assertIn("unavailable", failure.reason)
+        self.assertIn("Answer in writing", failure.reason)
+        self.assertFalse(failure.retryable)
         self.assertNotIn("voices", self.context)
 
 

@@ -10,12 +10,6 @@ from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 from .. import ffmpeg
 from ..raster_formats import RASTER_LABELS
 from ..scanning.policy import is_blocked
-
-# Imported as a module, not as bare names: the ledger writes then resolve at
-# call time, so patching them at their definition site actually reaches this
-# call site. Narrowing this to `from .failures import ...` would make the
-# bookkeeping-robustness tests pass without exercising anything.
-from . import failures
 from .poster import poster_frame
 
 logger = logging.getLogger(__name__)
@@ -88,43 +82,12 @@ def _rasterize_svg(svg_data):
     return Image.open(BytesIO(png_data))
 
 
-def _bookkeep_failure(file_obj, exc):
-    """Record a failed attempt without letting the write decide the outcome.
-
-    The ledger is an optimisation, not the product. A file hard-deleted between
-    the backfill's chunk fetch and this write breaks the foreign key, and an
-    escaping IntegrityError would abandon the rest of an hourly pass that runs
-    with max_retries=0.
-    """
-    try:
-        failures.record_failure(file_obj, exc)
-    except Exception:
-        logger.warning(
-            "Could not record the failed thumbnail attempt for %s",
-            file_obj.uuid,
-            exc_info=True,
-        )
-
-
-def _bookkeep_success(file_obj):
-    """Drop any failure row, without letting the write undo a real success."""
-    try:
-        failures.clear_failure(file_obj)
-    except Exception:
-        logger.warning(
-            "Could not clear the thumbnail failure row for %s",
-            file_obj.uuid,
-            exc_info=True,
-        )
-
-
 def generate_thumbnail(file_obj):
     """Generate a WebP thumbnail for the given File instance.
 
-    Also maintains the file's attempt ledger: a failed attempt is recorded, a
-    successful one drops any row the file had accumulated.
-
-    Returns True if the thumbnail was successfully created, False otherwise.
+    Returns True when the thumbnail was created, False when the file is not
+    one to generate a thumbnail for. A file that cannot be decoded raises: the
+    processor runner counts it against the file's budget.
     """
     from PIL import Image, ImageOps
 
@@ -196,13 +159,9 @@ def generate_thumbnail(file_obj):
             default_storage.save(thumb_path, ContentFile(buf.read()))
 
         FILES_THUMBNAIL_RESULT.labels(result="success").inc()
-    except Exception as exc:
-        logger.warning(
-            "Failed to generate thumbnail for %s", file_obj.uuid, exc_info=True
-        )
+    except Exception:
         FILES_THUMBNAIL_RESULT.labels(result="failed").inc()
-        _bookkeep_failure(file_obj, exc)
-        return False
+        raise
     finally:
         # Best-effort cleanup: a close() that fails after the body has been
         # processed (or failed) is not actionable; we drop it at debug level.
@@ -211,10 +170,6 @@ def generate_thumbnail(file_obj):
         except Exception:
             logger.debug("Failed to close content for %s", file_obj.uuid, exc_info=True)
 
-    # Outside the try: the thumbnail is already in storage and the success
-    # counter already incremented, so a bookkeeping error here must not be
-    # reported as a generation failure.
-    _bookkeep_success(file_obj)
     return True
 
 
@@ -231,9 +186,8 @@ def delete_thumbnail(uuid):
 def pending_thumbnails_qs(*, reanalyze=False):
     """Live files a thumbnail can be generated for and that have none yet.
 
-    Files that burned their attempt budget are left out until
-    PARKED_RETRY_AFTER has elapsed (see failures.py). With *reanalyze*, every
-    live file a thumbnail can be generated for, with a thumbnail or not.
+    With *reanalyze*, every live file a thumbnail can be generated for, with a
+    thumbnail or not.
     """
     from workspace.files.models import File
     from workspace.files.services.scanning.policy import exclude_blocked
@@ -250,11 +204,19 @@ def pending_thumbnails_qs(*, reanalyze=False):
     )
     if reanalyze:
         return qs
-    return qs.filter(has_thumbnail=False).exclude(uuid__in=failures.parked_file_ids())
+    return qs.filter(has_thumbnail=False)
+
+
+def is_thumbnail_candidate(file_obj):
+    """True when the upload pipeline should try a thumbnail for *file_obj*."""
+    return bool(file_obj.content) and can_generate_thumbnail(file_obj.type)
 
 
 def refresh_thumbnail(file_obj):
-    """Generate *file_obj*'s thumbnail and flag the row; True on success."""
+    """Generate *file_obj*'s thumbnail and flag the row; True on success.
+
+    Raises when the file cannot be decoded, like generate_thumbnail.
+    """
     if not generate_thumbnail(file_obj):
         return False
     if not file_obj.has_thumbnail:

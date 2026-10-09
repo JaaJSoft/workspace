@@ -1,4 +1,4 @@
-"""Run the file readers' catch-up by hand: backfills, or a forced reanalysis.
+"""Run the file processors' catch-up by hand: backfills, or a forced reanalysis.
 
 Idempotent: a file whose derived data matches its current content is not
 pending, so a second run finds nothing left to do.
@@ -6,10 +6,10 @@ pending, so a second run finds nothing left to do.
 
 from django.core.management.base import BaseCommand, CommandError
 
-from workspace.files.services.catch_up import (
+from workspace.files.services.processors import (
     pending_ids,
     queue_pending,
-    registered_catch_ups,
+    registered_processors,
     resolve,
 )
 
@@ -19,20 +19,20 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "readers",
+            "processors",
             nargs="*",
-            help="Readers to run (default: all of them).",
+            help="Processors to run (default: all of them).",
         )
         parser.add_argument(
             "--reanalyze",
             action="store_true",
-            help="Process every file a reader reads, not only those missing or stale.",
+            help="Process every file a processor reads, not only those missing or stale.",
         )
         parser.add_argument(
             "--limit",
             type=int,
             default=None,
-            help="Stop after this many files per reader.",
+            help="Stop after this many files per processor.",
         )
         parser.add_argument(
             "--sync",
@@ -48,11 +48,11 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from workspace.files.tasks import catch_up_file
 
-        readers, unknown = resolve(options["readers"])
+        readers, unknown = resolve(options["processors"])
         if unknown:
-            known = ", ".join(sorted(r.name for r in registered_catch_ups()))
+            known = ", ".join(sorted(p.name for p in registered_processors()))
             raise CommandError(
-                f"Unknown reader(s): {', '.join(unknown)}. Known: {known}."
+                f"Unknown processor(s): {', '.join(unknown)}. Known: {known}."
             )
         reanalyze = options["reanalyze"]
         limit = options["limit"]

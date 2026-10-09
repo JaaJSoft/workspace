@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from workspace.files.models import File, ThumbnailFailure
+from workspace.files.models import File, ProcessingFailure
 
 User = get_user_model()
 
@@ -19,8 +19,11 @@ class FilesAdminTests(TestCase):
         cls.file = File.objects.create(
             owner=cls.admin, name="broken.jpg", node_type=File.NodeType.FILE
         )
-        cls.failure = ThumbnailFailure.objects.create(
-            file=cls.file, attempts=3, last_attempt_at=timezone.now()
+        cls.failure = ProcessingFailure.objects.create(
+            file=cls.file,
+            processor="thumbnails",
+            attempts=3,
+            last_attempt_at=timezone.now(),
         )
 
     def setUp(self):
@@ -35,20 +38,23 @@ class FilesAdminTests(TestCase):
         other_file = File.objects.create(
             owner=self.admin, name="also-broken.jpg", node_type=File.NodeType.FILE
         )
-        other_failure = ThumbnailFailure.objects.create(
-            file=other_file, attempts=1, last_attempt_at=timezone.now()
+        other_failure = ProcessingFailure.objects.create(
+            file=other_file,
+            processor="thumbnails",
+            attempts=1,
+            last_attempt_at=timezone.now(),
         )
 
         with patch("workspace.files.tasks.catch_up_file.apply_async") as queue:
             response = self.client.post(
-                reverse("admin:files_thumbnailfailure_changelist"),
+                reverse("admin:files_processingfailure_changelist"),
                 {
-                    "action": "retry_thumbnails",
+                    "action": "retry_processing",
                     "_selected_action": [str(self.failure.uuid)],
                 },
             )
         self.assertEqual(response.status_code, 302)
-        self.assertQuerySetEqual(ThumbnailFailure.objects.all(), [other_failure])
+        self.assertQuerySetEqual(ProcessingFailure.objects.all(), [other_failure])
         self.assertEqual(
             [c.kwargs["args"] for c in queue.call_args_list],
             [["thumbnails", str(self.failure.file_id)]],
@@ -56,6 +62,6 @@ class FilesAdminTests(TestCase):
 
     def test_failure_rows_cannot_be_added_by_hand(self):
         self.assertEqual(
-            self.client.get(reverse("admin:files_thumbnailfailure_add")).status_code,
+            self.client.get(reverse("admin:files_processingfailure_add")).status_code,
             403,
         )

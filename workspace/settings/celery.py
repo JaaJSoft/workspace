@@ -54,9 +54,9 @@ if DEBUG:
 # - the trade-off is how long such a change stays invisible in the UI.
 FILES_SYNC_INTERVAL = float(os.getenv("FILES_SYNC_INTERVAL", "1800"))
 
-# Cadence of the files catch-up (files/services/catch_up.py): how long a file
+# Cadence of the files catch-up (files/services/processors.py): how long a file
 # whose event-driven processing was lost waits before the catch-up takes it,
-# and how often a backlog drains another CATCH_UP_LIMIT files per reader.
+# and how often a backlog drains another CATCH_UP_LIMIT files per processor.
 FILES_CATCH_UP_INTERVAL = float(os.getenv("FILES_CATCH_UP_INTERVAL", "3600"))
 
 # How stale an account's last successful sync must be before the dispatcher

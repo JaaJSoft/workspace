@@ -1,41 +1,29 @@
-"""React to file lifecycle events by queueing a malware scan.
+"""Register the malware scan as the first upload processor.
 
-Registered with the file-event dispatcher, so every write path is covered by
-one subscription: REST upload, WebDAV end_write, the office editor's save,
-archive extraction, imports and the "save to files" actions all funnel through
-FileService and record a CREATED or CONTENT_REPLACED event.
-
-The handler only enqueues. run_handlers() runs every handler for an event
-sequentially inside one task, so scanning inline would stall the thumbnail and
-link handlers behind a socket transfer of the whole file. Registered with the
-hourly catch-up too, which scans whatever that path missed.
+Every write path is covered by the one registration: REST upload, WebDAV
+end_write, the office editor's save, archive extraction, imports and the "save
+to files" actions all funnel through FileService and record a CREATED or
+CONTENT_REPLACED event, which queues the upload pipeline. The scan runs first
+there, so the processors after it see the verdict before reading the bytes.
+The hourly catch-up scans whatever that path missed.
 """
 
 from __future__ import annotations
 
-from ...models import File, FileEvent
-from ..catch_up import register_catch_up
-from ..event_dispatch import on_file_event
+from ...models import File
+from ..processors import SCAN_ORDER, register_processor
 from .scan import pending_scan_qs, scan_for_catch_up, scanning_enabled
 
 
-@on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def scan_file_for_event(event):
-    """Queue a malware scan for the event's file."""
-    if not scanning_enabled():
-        return
-    file = event.file
-    if file.node_type != File.NodeType.FILE or file.deleted_at is not None:
-        return
-
-    from workspace.files.tasks import scan_file
-
-    scan_file.delay(str(event.file_id))
+def is_scan_candidate(file_obj):
+    return file_obj.node_type == File.NodeType.FILE and bool(file_obj.content)
 
 
-register_catch_up(
+register_processor(
     "malware_scan",
+    applies_to=is_scan_candidate,
     pending=pending_scan_qs,
     process=scan_for_catch_up,
     enabled=scanning_enabled,
+    order=SCAN_ORDER,
 )

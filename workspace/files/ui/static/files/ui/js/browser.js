@@ -1194,6 +1194,19 @@ window.fileBrowser = function fileBrowser() {
         this.refreshFolderBrowser();
       });
 
+      // A file still being scanned and previewed shows a spinner rendered
+      // server-side; re-render once its pipeline settles so the spinner goes
+      // and the fresh thumbnail appears. Debounced: a batch upload settles
+      // one file after another.
+      window.addEventListener('sse:files.processing_settled', (e) => {
+        const uuid = e.detail && e.detail.file_uuid;
+        if (!uuid) return;
+        if (this.propertiesUuid === uuid) this.reloadPropertiesPanel();
+        if (!document.querySelector(`#folder-browser [data-uuid="${CSS.escape(uuid)}"]`)) return;
+        clearTimeout(this._processingRefreshTimer);
+        this._processingRefreshTimer = setTimeout(() => this.refreshFolderBrowser(), 400);
+      });
+
       // Listen for form submissions from dialogs
       window.addEventListener('create-folder', (e) => this.createFolder(e.detail.name));
       window.addEventListener('create-file', (e) => this.createFile(e.detail.name, e.detail.fileType, e.detail.customExt));

@@ -10,8 +10,9 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from PIL import Image
 
-from workspace.files.models import File, FileScan, ThumbnailFailure
+from workspace.files.models import File, FileScan, ProcessingFailure
 from workspace.files.services import FileService, ffmpeg
+from workspace.files.services.processors import get_processor, run_processor
 from workspace.files.services.thumbnails import poster
 from workspace.files.services.thumbnails.generation import (
     can_generate_thumbnail,
@@ -102,10 +103,10 @@ class GenerationTests(VideoThumbnailTestCase):
         frame.side_effect = ffmpeg.MediaToolError("corrupt")
         f = self._video()
 
-        with self.assertLogs("workspace.files.services.thumbnails.generation"):
-            self.assertFalse(generate_thumbnail(f))
+        with self.assertLogs("workspace.files.services.processors"):
+            self.assertFalse(run_processor(get_processor("thumbnails"), f))
 
-        self.assertEqual(ThumbnailFailure.objects.get(file=f).attempts, 1)
+        self.assertEqual(ProcessingFailure.objects.get(file=f).attempts, 1)
 
     @patch("workspace.files.services.ffmpeg.FFMPEG", None)
     def test_without_ffmpeg_videos_are_left_alone(self):
@@ -115,7 +116,7 @@ class GenerationTests(VideoThumbnailTestCase):
         self.assertTrue(can_generate_thumbnail("jpeg"))
         self.assertFalse(generate_thumbnail(f))
         self.assertEqual(run_catch_up("thumbnails"), 0)
-        self.assertFalse(ThumbnailFailure.objects.exists())
+        self.assertFalse(ProcessingFailure.objects.exists())
 
     @patch("workspace.files.services.thumbnails.generation.poster_frame")
     def test_an_audio_recording_in_a_video_container_is_skipped(self, frame):
@@ -165,6 +166,6 @@ class RealPosterFrameTests(VideoThumbnailTestCase):
         File.objects.filter(pk=f.pk).update(type="mp4")
         f.refresh_from_db()
 
-        with self.assertLogs("workspace.files.services.thumbnails.generation"):
-            self.assertFalse(generate_thumbnail(f))
-        self.assertEqual(ThumbnailFailure.objects.get(file=f).attempts, 1)
+        with self.assertLogs("workspace.files.services.processors"):
+            self.assertFalse(run_processor(get_processor("thumbnails"), f))
+        self.assertEqual(ProcessingFailure.objects.get(file=f).attempts, 1)

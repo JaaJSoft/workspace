@@ -1,9 +1,9 @@
 """Probe audio and video files for their length and codecs (MediaInfo rows).
 
-Runs off-request: from the file-event handler once an upload or a content
-replacement has committed, and from the hourly catch-up (services/catch_up.py)
-for whatever that path missed. Nothing is written on a deployment without
-ffprobe, so the files are probed as soon as it is installed.
+Runs off-request as an upload processor: in the upload pipeline once an upload
+or a content replacement has committed, and from the hourly catch-up
+(services/processors.py) for whatever that path missed. Nothing is written on a
+deployment without ffprobe, so the files are probed as soon as it is installed.
 """
 
 import logging
@@ -13,10 +13,9 @@ from django.utils import timezone
 
 from workspace.common.logging import scrub
 
-from ..models import File, FileEvent, MediaInfo
+from ..models import File, MediaInfo
 from . import ffmpeg
-from .catch_up import register_catch_up
-from .event_dispatch import on_file_event
+from .processors import register_processor
 from .scanning.policy import exclude_blocked, is_blocked
 from .thumbnails.generation import VIDEO_LABELS
 
@@ -139,20 +138,10 @@ def forget(file_obj):
     MediaInfo.objects.filter(file_id=file_obj.pk).delete()
 
 
-@on_file_event(FileEvent.Action.CREATED, FileEvent.Action.CONTENT_REPLACED)
-def probe_file_for_event(event):
-    file_obj = event.file
-    if file_obj.deleted_at is not None:
-        # Trashed before we ran; the catch-up probes it after a restore.
-        return
-    if is_probe_candidate(file_obj):
-        probe_file(file_obj)
-    elif event.action == FileEvent.Action.CONTENT_REPLACED:
-        forget(file_obj)
-
-
-register_catch_up(
+register_processor(
     "media_info",
+    applies_to=is_probe_candidate,
+    forget=forget,
     pending=pending_qs,
     process=refresh_media_info,
     enabled=_ffprobe_installed,

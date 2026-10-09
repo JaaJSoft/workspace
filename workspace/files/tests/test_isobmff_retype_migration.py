@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.common.tests.migrations import schema_editor_stub
-from workspace.files.models import File, MediaInfo, ThumbnailFailure
+from workspace.files.models import File, MediaInfo, ProcessingFailure
 from workspace.files.services import FileService
 from workspace.files.tests.rasters import avif_bytes, heic_bytes
 from workspace.files.tests.videos import clip_bytes
@@ -19,6 +19,16 @@ migration = importlib.import_module(
 )
 
 User = get_user_model()
+
+
+class _AppsAtThisMigration:
+    """The live app registry, answering for ThumbnailFailure under the name a
+    later migration gave it: its historical table no longer exists."""
+
+    def get_model(self, app_label, model_name):
+        if (app_label, model_name) == ("files", "ThumbnailFailure"):
+            model_name = "ProcessingFailure"
+        return apps.get_model(app_label, model_name)
 
 
 class RetypeIsoMediaImagesTests(TestCase):
@@ -36,7 +46,7 @@ class RetypeIsoMediaImagesTests(TestCase):
         return file_obj
 
     def _migrate(self):
-        migration.retype_images(apps, schema_editor_stub())
+        migration.retype_images(_AppsAtThisMigration(), schema_editor_stub())
 
     def test_heic_and_avif_become_images(self):
         heic = self._stored_as_mp4("IMG_0001.HEIC", heic_bytes())
@@ -75,11 +85,14 @@ class RetypeIsoMediaImagesTests(TestCase):
     def test_video_probe_and_thumbnail_failures_are_dropped(self):
         heic = self._stored_as_mp4("IMG_0002.heic", heic_bytes())
         MediaInfo.objects.create(file=heic, duration=0.0, probed_at=timezone.now())
-        ThumbnailFailure.objects.create(
-            file=heic, attempts=3, last_attempt_at=timezone.now()
+        ProcessingFailure.objects.create(
+            file=heic,
+            processor="thumbnails",
+            attempts=3,
+            last_attempt_at=timezone.now(),
         )
 
         self._migrate()
 
         self.assertFalse(MediaInfo.objects.filter(file=heic).exists())
-        self.assertFalse(ThumbnailFailure.objects.filter(file=heic).exists())
+        self.assertFalse(ProcessingFailure.objects.filter(file=heic).exists())

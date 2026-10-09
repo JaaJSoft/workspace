@@ -133,6 +133,13 @@ class FileSerializer(serializers.ModelSerializer):
     is_quarantined = serializers.SerializerMethodField(
         help_text="True when the malware policy currently blocks this file."
     )
+    processing_status = serializers.SerializerMethodField(
+        help_text=(
+            "Where the upload pipeline (malware scan, thumbnail, metadata) stands "
+            "on the file's current content: pending, processing, ready, or "
+            "quarantined when the malware policy blocks it."
+        )
+    )
     type_icon = serializers.SerializerMethodField(
         help_text="Lucide icon for the entry: the folder's own icon, or the one the file type registry resolves."
     )
@@ -188,6 +195,7 @@ class FileSerializer(serializers.ModelSerializer):
             "scan_status",
             "scan_signature",
             "is_quarantined",
+            "processing_status",
             "type_icon",
             "type_color",
             "has_thumbnail",
@@ -209,6 +217,7 @@ class FileSerializer(serializers.ModelSerializer):
             "scan_status",
             "scan_signature",
             "is_quarantined",
+            "processing_status",
         ]
         extra_kwargs = {
             "uuid": {
@@ -311,6 +320,12 @@ class FileSerializer(serializers.ModelSerializer):
         from workspace.files.services.scanning.policy import is_blocked
 
         return is_blocked(obj)
+
+    @extend_schema_field(
+        serializers.ChoiceField(choices=[*File.ProcessingStatus.values, "quarantined"])
+    )
+    def get_processing_status(self, obj):
+        return obj.effective_processing_status()
 
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_pinned(self, obj):

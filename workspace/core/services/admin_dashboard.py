@@ -41,10 +41,10 @@ def failed_ai_task_count(request):
     return failed_task_count(_last_24h())
 
 
-def thumbnail_failure_count(request):
-    from workspace.files.services.thumbnails.failures import parked_count
+def processing_failure_count(request):
+    from workspace.files.services.processing_failures import failure_count
 
-    return parked_count()
+    return failure_count()
 
 
 def quarantined_file_count(request):
@@ -86,8 +86,8 @@ def failed_ai_task_badge(request):
     return failed_ai_task_count(request) or None
 
 
-def thumbnail_failure_badge(request):
-    return thumbnail_failure_count(request) or None
+def processing_failure_badge(request):
+    return processing_failure_count(request) or None
 
 
 def quarantined_file_badge(request):
@@ -199,11 +199,11 @@ def dashboard_callback(request, context):
             "url": reverse("admin:ai_aitask_changelist") + "?status__exact=failed",
         },
         {
-            "title": "Parked thumbnails",
+            "title": "Processing failures",
             "icon": "broken_image",
-            "description": "files whose thumbnail generation failed",
-            "value": thumbnail_failure_count(request),
-            "url": reverse("admin:files_thumbnailfailure_changelist"),
+            "description": "files a processor (thumbnail, scan, metadata...) failed on",
+            "value": processing_failure_count(request),
+            "url": reverse("admin:files_processingfailure_changelist"),
         },
         {
             "title": "Quarantined files",

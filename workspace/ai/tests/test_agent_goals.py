@@ -13,6 +13,7 @@ from rest_framework.test import APITestCase
 from workspace.ai.harness.model import ModelResponse, RunUsage
 from workspace.ai.harness.runner import RunResult, StopReason
 from workspace.ai.models import AgentGoal, AITask, BotProfile
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import (
     CompleteAgentGoalParams,
     CreateAgentGoalParams,
@@ -849,13 +850,14 @@ class AgentGoalToolTests(TestCase):
         self.assertEqual(goal.reporting, "Only for visits worth booking.")
 
     def test_create_goal_invalid_datetime(self):
-        result = self._call(
-            "create_agent_goal",
-            CreateAgentGoalParams(
-                title="Bad", goal="Bad datetime.", first_check_at="not-a-date"
-            ),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_agent_goal",
+                CreateAgentGoalParams(
+                    title="Bad", goal="Bad datetime.", first_check_at="not-a-date"
+                ),
+            )
+        self.assertIn("could not parse datetime", caught.exception.reason)
         self.assertFalse(AgentGoal.objects.exists())
 
     def test_create_goal_clamps_too_soon_check(self):
@@ -876,15 +878,16 @@ class AgentGoalToolTests(TestCase):
     def test_create_goal_respects_active_limit(self):
         for i in range(AgentGoal.MAX_ACTIVE_PER_CONVERSATION):
             self._goal(title=f"Goal {i}")
-        result = self._call(
-            "create_agent_goal",
-            CreateAgentGoalParams(
-                title="One too many",
-                goal="Overflow.",
-                first_check_at=(timezone.now() + timedelta(hours=1)).isoformat(),
-            ),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "create_agent_goal",
+                CreateAgentGoalParams(
+                    title="One too many",
+                    goal="Overflow.",
+                    first_check_at=(timezone.now() + timedelta(hours=1)).isoformat(),
+                ),
+            )
+        self.assertIn("active goals", caught.exception.reason)
         self.assertEqual(
             AgentGoal.objects.count(), AgentGoal.MAX_ACTIVE_PER_CONVERSATION
         )
@@ -1066,11 +1069,12 @@ class AgentGoalToolTests(TestCase):
         self.assertEqual(goal.next_check_at, when)
 
     def test_update_unknown_goal(self):
-        result = self._call(
-            "update_agent_goal",
-            UpdateAgentGoalParams(goal_id=uuid.uuid4(), notes="Nope."),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "update_agent_goal",
+                UpdateAgentGoalParams(goal_id=uuid.uuid4(), notes="Nope."),
+            )
+        self.assertIn("no open goal found", caught.exception.reason)
 
     def test_update_pause(self):
         goal = self._goal()
@@ -1084,20 +1088,20 @@ class AgentGoalToolTests(TestCase):
 
     def test_update_rejects_closed_status(self):
         goal = self._goal()
-        result = self._call(
-            "update_agent_goal",
-            UpdateAgentGoalParams(goal_id=goal.uuid, status="completed"),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "update_agent_goal",
+                UpdateAgentGoalParams(goal_id=goal.uuid, status="completed"),
+            )
+        self.assertIn("status can only be set", caught.exception.reason)
         goal.refresh_from_db()
         self.assertEqual(goal.status, AgentGoal.Status.ACTIVE)
 
     def test_update_nothing_provided(self):
         goal = self._goal()
-        result = self._call(
-            "update_agent_goal", UpdateAgentGoalParams(goal_id=goal.uuid)
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call("update_agent_goal", UpdateAgentGoalParams(goal_id=goal.uuid))
+        self.assertIn("nothing to update", caught.exception.reason)
 
     def test_update_clamps_next_check(self):
         goal = self._goal()
@@ -1140,11 +1144,12 @@ class AgentGoalToolTests(TestCase):
         self.assertIsNotNone(goal.closed_at)
 
     def test_complete_unknown_goal(self):
-        result = self._call(
-            "complete_agent_goal",
-            CompleteAgentGoalParams(goal_id=uuid.uuid4(), outcome="Ghost."),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "complete_agent_goal",
+                CompleteAgentGoalParams(goal_id=uuid.uuid4(), outcome="Ghost."),
+            )
+        self.assertIn("no open goal found", caught.exception.reason)
 
     # -- send_user_message ---------------------------------------------------
 
@@ -1160,17 +1165,19 @@ class AgentGoalToolTests(TestCase):
     def test_send_user_message_rejected_in_normal_chat(self):
         # Outside a check-in the reply IS the message - the tool must refuse
         # so the model does not double-send.
-        result = self._call(
-            "send_user_message",
-            SendUserMessageParams(message="Hello there"),
-        )
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "send_user_message",
+                SendUserMessageParams(message="Hello there"),
+            )
+        self.assertIn("chatting with the user", caught.exception.reason)
         self.assertNotIn("agent_messages", self.context)
 
     def test_send_user_message_requires_content(self):
         self.context["agent_checkin"] = True
-        result = self._call("send_user_message", SendUserMessageParams(message="   "))
-        self.assertIn("Error", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call("send_user_message", SendUserMessageParams(message="   "))
+        self.assertIn("message is required", caught.exception.reason)
         self.assertNotIn("agent_messages", self.context)
 
 

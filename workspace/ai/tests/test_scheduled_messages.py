@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.ai.models import BotProfile, ScheduledMessage
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import CancelScheduleParams, ScheduleMessageParams
 from workspace.chat.models import Conversation, ConversationMember, Message
 
@@ -923,28 +924,28 @@ class ScheduleToolTests(TestCase):
 
     def test_schedule_rejects_past_datetime(self):
         past = (timezone.now() - timedelta(hours=1)).isoformat()
-        result = self._call(
-            "schedule_message",
-            ScheduleMessageParams(
-                prompt="Too late",
-                at=past,
-            ),
-        )
-        self.assertIn("Error", result)
-        self.assertIn("future", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "schedule_message",
+                ScheduleMessageParams(
+                    prompt="Too late",
+                    at=past,
+                ),
+            )
+        self.assertIn("future", caught.exception.reason)
 
     def test_schedule_rejects_both_at_and_every(self):
         future = (timezone.now() + timedelta(hours=2)).isoformat()
-        result = self._call(
-            "schedule_message",
-            ScheduleMessageParams(
-                prompt="Conflicting",
-                at=future,
-                every="hours",
-            ),
-        )
-        self.assertIn("Error", result)
-        self.assertIn("not both", result)
+        with self.assertRaises(ToolError) as caught:
+            self._call(
+                "schedule_message",
+                ScheduleMessageParams(
+                    prompt="Conflicting",
+                    at=future,
+                    every="hours",
+                ),
+            )
+        self.assertIn("not both", caught.exception.reason)
 
     def test_cancel_schedule(self):
         schedule = ScheduledMessage.objects.create(

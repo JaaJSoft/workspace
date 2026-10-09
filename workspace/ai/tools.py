@@ -18,7 +18,7 @@ from workspace.common.logging import scrub
 
 from .models import UserMemory
 from .services.call_order import call_position
-from .tool_registry import ToolProvider, tool
+from .tool_registry import ToolError, ToolProvider, tool
 
 logger = logging.getLogger(__name__)
 
@@ -357,14 +357,14 @@ def _image_tool_payload(image_data, text):
 _image_failures_lock = threading.Lock()
 
 
-def _image_failure_message(tool_name, prompt, exc, context):
-    """Tool result for an image the backend refused to produce.
+def _image_failure(tool_name, prompt, exc, context):
+    """The :class:`ToolError` for an image the backend refused to produce.
 
     The service already retried what a retry alone can fix, so what is left
     is the part only the model can do: come back with different wording.
-    Two things have to be in the text for that to happen — why the call
-    failed (a refused prompt is rewritten, a dead backend is not) and when
-    to stop, since nothing else caps how many times a model can call a tool
+    The reason says which wording to change - a refused prompt is
+    rewritten, a backend that fell over is sent a variant - and when to
+    stop, since nothing else caps how many times a model can call a tool
     within a reply.
     """
     # Read and appended to as one step: images of a round are generated in
@@ -378,37 +378,27 @@ def _image_failure_message(tool_name, prompt, exc, context):
         tried.append(prompt)
         exhausted = len(tried) >= settings.AI_IMAGE_FAILURE_BUDGET
 
-    head = f"Error: image failed after {exc.attempts} attempt(s) — {exc}."
-    tail = (
-        "Never answer as if this image had not been asked for: whatever "
-        "happens, say plainly in your reply which image is missing."
-    )
-
+    head = f"image not produced after {exc.attempts} attempt(s) - {exc}."
     if exhausted:
-        return (
-            f"{head} Too many image failures in this reply — stop calling "
-            f"{tool_name} and answer the user now, naming the images you "
-            f"could not produce. {tail}"
+        return ToolError(
+            f"{head} Too many image failures in this reply: stop calling {tool_name}."
         )
     if repeated:
-        return (
-            f"{head} You already sent this exact prompt in this reply and it "
-            f"failed. Do not send it again: call {tool_name} with a "
-            "substantially different wording — same subject, described "
-            f"another way. {tail}"
+        return ToolError(
+            f"{head} This exact prompt already failed in this reply. Only a "
+            "substantially different wording of the same subject can succeed."
         )
     if exc.rejected:
-        return (
+        return ToolError(
             f"{head} The service rejected the request itself, so the same "
-            f"wording will fail again. Call {tool_name} once more with a "
-            "rewritten prompt: keep the visual intent, describe it in plain "
-            "neutral terms, and drop names of real people, brands or "
-            f"copyrighted characters. {tail}"
+            "wording will fail again. A rewritten prompt may pass: keep the "
+            "visual intent, describe it in plain neutral terms, and drop names "
+            "of real people, brands or copyrighted characters."
         )
-    return (
-        f"{head} The image service failed, not your prompt. Call "
-        f"{tool_name} again for this image, varying the wording a little — "
-        f"a backend that chokes on one phrasing often answers another. {tail}"
+    return ToolError(
+        f"{head} The image service failed, not the prompt. Vary the wording a "
+        "little: a backend that chokes on one phrasing often answers another.",
+        retryable=True,
     )
 
 
@@ -423,7 +413,7 @@ class CoreToolProvider(ToolProvider):
         """Get the profile of the user you are chatting with: username, full name, email, and join date. \
 Call this when you need to address the user by name, check their email, or answer questions about their account."""
         if not user:
-            return "Error: no user context"
+            raise ToolError("no user context")
         from workspace.users.services.settings import get_user_timezone
 
         joined = user.date_joined.astimezone(get_user_timezone(user))
@@ -450,7 +440,7 @@ If the key already exists it will be updated."""
         key = args.key.strip()[:100]
         content = args.content.strip()
         if not key or not content:
-            return "Error: key and content are required"
+            raise ToolError("key and content are required")
         UserMemory.objects.update_or_create(
             user=user,
             bot=bot,
@@ -497,7 +487,7 @@ Call this when the user explicitly asks you to forget something or when a stored
         """Retrieve your own avatar image so you can see or describe it. \
 Call this when the user asks what you look like, wants to see your avatar, or mentions your appearance."""
         if not bot:
-            return "Error: no bot context"
+            raise ToolError("no bot context")
         from django.core.files.storage import default_storage
 
         from workspace.users.services.avatar import get_avatar_path, has_avatar
@@ -517,7 +507,7 @@ Call this when the user asks what you look like, wants to see your avatar, or me
             )
         except Exception:
             logger.warning("Could not read avatar for bot %s", bot.id)
-            return "Error: could not read avatar file."
+            raise ToolError("could not read avatar file.") from None
 
 
 class SearchToolProvider(ToolProvider):
@@ -544,7 +534,7 @@ they alone support filters like unread-only, attachments or date ranges."""
 
         query = args.query.strip()
         if len(query) < MIN_QUERY_LENGTH:
-            return f"Error: query must be at least {MIN_QUERY_LENGTH} characters"
+            raise ToolError(f"query must be at least {MIN_QUERY_LENGTH} characters")
 
         limit = clamp_limit(
             args.limit,
@@ -617,7 +607,7 @@ read_webpage rather than answering from the snippets."""
 
         queries = list(dict.fromkeys(q.strip() for q in args.queries if q.strip()))
         if not queries:
-            return "Error: at least one query is required"
+            raise ToolError("at least one query is required")
 
         results = search_many(
             queries[:WEB_SEARCH_MAX_QUERIES],
@@ -664,19 +654,21 @@ an article needs all of it. \
 A page too long for one result — with or without a query — ends by saying which part \
 of it you just read and which one follows; set part to that number to read on, as many \
 times as the question needs."""
-        from .services.web import fetch_and_extract
+        from .services.web import FetchError, fetch_and_extract
 
         url = args.url.strip()
         if not url:
-            return "Error: url is required"
+            raise ToolError("url is required")
 
         try:
             text = fetch_and_extract(url, query=args.query.strip(), part=args.part)
+        except FetchError as exc:
+            raise ToolError(str(exc), retryable=exc.transient) from None
         except ValueError as exc:
-            return f"Error: {exc}"
+            raise ToolError(str(exc)) from None
 
         if not text:
-            return "Could not extract text content from this page."
+            raise ToolError("no text content could be extracted from this page")
         return text
 
 
@@ -700,7 +692,7 @@ Returns temperature, feels-like, humidity, wind, and a description of the condit
 
         location = args.location.strip()
         if not location:
-            return "Error: location is required"
+            raise ToolError("location is required")
 
         weather = get_current_weather(location)
         if weather is None:
@@ -736,17 +728,17 @@ Do NOT use this to modify an existing image — use edit_image instead."""
 
         prompt = args.prompt.strip()
         if not prompt:
-            return "Error: prompt is required"
+            raise ToolError("prompt is required")
         if not conversation_id:
-            return "Error: no conversation context"
+            raise ToolError("no conversation context")
 
         size = normalize_size(args.size)
         try:
             image_data = ai_generate_image(prompt, size)
         except ValueError as exc:
-            return f"Error: {exc}"
+            raise ToolError(str(exc)) from None
         except ImageGenerationError as exc:
-            return _image_failure_message("generate_image", prompt, exc, context)
+            raise _image_failure("generate_image", prompt, exc, context) from None
 
         context.setdefault("images", []).append(
             {
@@ -786,9 +778,9 @@ Do NOT use this to create an image from scratch — use generate_image instead."
 
         prompt = args.prompt.strip()
         if not prompt:
-            return "Error: prompt is required"
+            raise ToolError("prompt is required")
         if not conversation_id:
-            return "Error: no conversation context"
+            raise ToolError("no conversation context")
 
         # Prefer the image produced earlier in this same turn: it is not an
         # attachment yet (attachments are created after the loop completes),
@@ -808,7 +800,7 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                 .first()
             )
             if not attachment:
-                return "Error: no image found in the conversation to edit"
+                raise ToolError("no image found in the conversation to edit")
 
             try:
                 source_data = attachment.file.read()
@@ -817,16 +809,16 @@ Do NOT use this to create an image from scratch — use generate_image instead."
                     "Could not read attachment %s for editing",
                     scrub(str(attachment.uuid)),
                 )
-                return "Error: could not read the source image"
+                raise ToolError("could not read the source image") from None
 
         size = normalize_size(args.size)
 
         try:
             image_data = ai_edit_image(source_data, prompt, size)
         except ImageGenerationError as exc:
-            return _image_failure_message("edit_image", prompt, exc, context)
+            raise _image_failure("edit_image", prompt, exc, context) from None
         except (ValueError, RuntimeError) as exc:
-            return f"Error: {exc}"
+            raise ToolError(str(exc)) from None
 
         context.setdefault("images", []).append(
             {
@@ -867,12 +859,12 @@ part of that reply to a short line or nothing at all — never repeat out loud w
 
         text = args.text.strip()
         if not text:
-            return "Error: text is required"
+            raise ToolError("text is required")
         if not conversation_id:
-            return "Error: no conversation context"
+            raise ToolError("no conversation context")
         if len(text) > settings.AI_TTS_MAX_CHARS:
-            return (
-                f"Error: too long to say in one voice message "
+            raise ToolError(
+                f"too long to say in one voice message "
                 f"({len(text)} characters, {settings.AI_TTS_MAX_CHARS} maximum). "
                 "Say the essential part instead, or split it across several calls."
             )
@@ -882,28 +874,28 @@ part of that reply to a short line or nothing at all — never repeat out loud w
             profile.voice_reference() if profile else None
         ) or default_voice_reference()
         if reference is None:
-            return (
-                "Error: you have no voice recorded, so you cannot send a voice "
+            raise ToolError(
+                "you have no voice recorded, so you cannot send a voice "
                 "message. Say so plainly and answer in writing instead."
             )
 
         try:
             audio = ai_synthesize_speech(text, reference, args.language)
         except ValueError as exc:
-            return f"Error: {exc}"
+            raise ToolError(str(exc)) from None
         except SpeechSynthesisError as exc:
             if exc.rejected:
-                return (
-                    f"Error: the speech service refused this text after "
-                    f"{exc.attempts} attempt(s) — {exc}. Rephrase it more "
-                    "plainly and call send_voice_message again."
-                )
-            return (
-                f"Error: the speech service is unavailable ({exc}, "
-                f"{exc.attempts} attempt(s)). Do not call send_voice_message "
-                "again in this reply — answer in writing and say the voice "
-                "message could not be recorded."
-            )
+                raise ToolError(
+                    f"the speech service refused this text after "
+                    f"{exc.attempts} attempt(s) - {exc}. A plainer rephrasing "
+                    "may pass."
+                ) from None
+            # Final although the service is at fault: it already spent the
+            # retries, and a voice message is never worth a longer wait.
+            raise ToolError(
+                f"the speech service is unavailable ({exc}, "
+                f"{exc.attempts} attempt(s)). Answer in writing instead."
+            ) from None
 
         context.setdefault("voices", []).append(
             {
@@ -951,9 +943,9 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         title = args.title.strip()[:200]
         goal = args.goal.strip()
         if not title or not goal:
-            return "Error: title and goal are required"
+            raise ToolError("title and goal are required")
         if not conversation_id:
-            return "Error: no conversation context"
+            raise ToolError("no conversation context")
 
         active_count = AgentGoal.objects.filter(
             conversation_id=conversation_id,
@@ -961,8 +953,8 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
             status=AgentGoal.Status.ACTIVE,
         ).count()
         if active_count >= AgentGoal.MAX_ACTIVE_PER_CONVERSATION:
-            return (
-                f"Error: this conversation already has {active_count} active goals "
+            raise ToolError(
+                f"this conversation already has {active_count} active goals "
                 f"(max {AgentGoal.MAX_ACTIVE_PER_CONVERSATION}). Complete or abandon "
                 f"one before creating a new goal."
             )
@@ -970,8 +962,8 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         user_tz = get_user_timezone(user)
         first_check = parse_local_datetime(args.first_check_at.strip(), user_tz)
         if first_check is None:
-            return (
-                f'Error: could not parse datetime "{args.first_check_at}". '
+            raise ToolError(
+                f'could not parse datetime "{args.first_check_at}". '
                 f"Use ISO format like 2026-03-10T09:00"
             )
         first_check = AgentGoal.clamp_next_check(first_check)
@@ -980,8 +972,8 @@ IMPORTANT: Always call list_agent_goals first — update the existing goal inste
         if args.deadline.strip():
             deadline = parse_local_datetime(args.deadline.strip(), user_tz)
             if deadline is None:
-                return (
-                    f'Error: could not parse deadline "{args.deadline}". '
+                raise ToolError(
+                    f'could not parse deadline "{args.deadline}". '
                     f"Use ISO format like 2026-06-01T18:00"
                 )
 
@@ -1115,7 +1107,7 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
 
         goal = self._open_goal(args.goal_id, conversation_id, bot)
         if goal is None:
-            return f"Error: no open goal found with id {args.goal_id}"
+            raise ToolError(f"no open goal found with id {args.goal_id}")
 
         user_tz = get_user_timezone(user)
         update_fields = ["updated_at"]
@@ -1140,8 +1132,8 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
         if args.next_check_at.strip():
             next_check = parse_local_datetime(args.next_check_at.strip(), user_tz)
             if next_check is None:
-                return (
-                    f'Error: could not parse datetime "{args.next_check_at}". '
+                raise ToolError(
+                    f'could not parse datetime "{args.next_check_at}". '
                     f"Use ISO format like 2026-03-10T09:00"
                 )
             goal.next_check_at = AgentGoal.clamp_next_check(next_check)
@@ -1154,8 +1146,8 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
         if args.deadline.strip():
             deadline = parse_local_datetime(args.deadline.strip(), user_tz)
             if deadline is None:
-                return (
-                    f'Error: could not parse deadline "{args.deadline}". '
+                raise ToolError(
+                    f'could not parse deadline "{args.deadline}". '
                     f"Use ISO format like 2026-06-01T18:00"
                 )
             goal.deadline = deadline
@@ -1168,8 +1160,8 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
                 AgentGoal.Status.ACTIVE,
                 AgentGoal.Status.PAUSED,
             ):
-                return (
-                    'Error: status can only be set to "active" or "paused". '
+                raise ToolError(
+                    'status can only be set to "active" or "paused". '
                     "Use complete_agent_goal to close a goal."
                 )
             goal.status = status_value
@@ -1180,7 +1172,9 @@ ALWAYS call this to save your updated notes and choose your next check-in time."
             context["agent_goal_changed"] = True
 
         if not changes:
-            return "Error: nothing to update — provide notes, next_check_at, deadline or status"
+            raise ToolError(
+                "nothing to update — provide notes, next_check_at, deadline or status"
+            )
 
         goal.save(update_fields=update_fields)
         return f'Updated goal "{goal.title}": ' + ", ".join(changes) + "."
@@ -1199,11 +1193,11 @@ Call this when the goal is reached, has become irrelevant, or the user asks you 
 
         goal = self._open_goal(args.goal_id, conversation_id, bot)
         if goal is None:
-            return f"Error: no open goal found with id {args.goal_id}"
+            raise ToolError(f"no open goal found with id {args.goal_id}")
 
         outcome = args.outcome.strip()
         if not outcome:
-            return "Error: outcome is required"
+            raise ToolError("outcome is required")
 
         goal.status = (
             AgentGoal.Status.ABANDONED if args.abandoned else AgentGoal.Status.COMPLETED
@@ -1235,13 +1229,13 @@ Call it only when you have something genuinely worth telling them (a result, an 
 a deadline at risk), never for routine progress reports. \
 Outside a check-in, do not use this tool: you are already talking to the user, just write your reply."""
         if not context.get("agent_checkin"):
-            return (
-                "Error: you are chatting with the user right now — "
+            raise ToolError(
+                "you are chatting with the user right now — "
                 "just write your reply as normal text."
             )
         message = args.message.strip()
         if not message:
-            return "Error: message is required"
+            raise ToolError("message is required")
         context.setdefault("agent_messages", []).append(message)
         return (
             "Message queued — it will be delivered to the user at the end "
@@ -1275,15 +1269,19 @@ schedules with a similar prompt — update or cancel the old one instead of crea
 
         prompt = args.prompt.strip()
         if not prompt:
-            return "Error: prompt is required"
+            raise ToolError("prompt is required")
 
         at = args.at.strip()
         every = args.every.strip()
 
         if at and every:
-            return 'Error: provide either "at" for one-time or "every" for recurring, not both'
+            raise ToolError(
+                'provide either "at" for one-time or "every" for recurring, not both'
+            )
         if not at and not every:
-            return 'Error: provide either "at" (ISO datetime) for one-time or "every" (hours/days/weeks/months) for recurring'
+            raise ToolError(
+                'provide either "at" (ISO datetime) for one-time or "every" (hours/days/weeks/months) for recurring'
+            )
 
         user_tz = get_user_timezone(user)
         now = dj_timezone.now()
@@ -1292,9 +1290,11 @@ schedules with a similar prompt — update or cancel the old one instead of crea
             # One-time schedule
             dt = parse_local_datetime(at, user_tz)
             if dt is None:
-                return f'Error: could not parse datetime "{at}". Use ISO format like 2026-03-10T09:00'
+                raise ToolError(
+                    f'could not parse datetime "{at}". Use ISO format like 2026-03-10T09:00'
+                )
             if dt <= now:
-                return "Error: scheduled time must be in the future"
+                raise ToolError("scheduled time must be in the future")
 
             schedule = ScheduledMessage.objects.create(
                 conversation_id=conversation_id,
@@ -1311,11 +1311,11 @@ schedules with a similar prompt — update or cancel the old one instead of crea
         # Recurring schedule
         valid_units = ["hours", "days", "weeks", "months"]
         if every not in valid_units:
-            return f'Error: "every" must be one of {valid_units}'
+            raise ToolError(f'"every" must be one of {valid_units}')
 
         interval = args.interval
         if interval < 1:
-            return "Error: interval must be a positive integer"
+            raise ToolError("interval must be a positive integer")
 
         at_time_str = args.at_time.strip()
         on_day = args.on_day
@@ -1326,7 +1326,9 @@ schedules with a similar prompt — update or cancel the old one instead of crea
                 parts = at_time_str.split(":")
                 recurrence_time = time(int(parts[0]), int(parts[1]))
             except ValueError, IndexError:
-                return f'Error: could not parse time "{at_time_str}". Use HH:MM format (24h)'
+                raise ToolError(
+                    f'could not parse time "{at_time_str}". Use HH:MM format (24h)'
+                ) from None
 
         recurrence_day = None
         if on_day is not None:
@@ -1428,7 +1430,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
 
         schedule_id = args.schedule_id.strip()
         if not schedule_id:
-            return "Error: schedule_id is required"
+            raise ToolError("schedule_id is required")
 
         try:
             schedule = ScheduledMessage.objects.get(
@@ -1438,7 +1440,7 @@ Call this when the user wants to stop or remove a previously scheduled message."
                 is_active=True,
             )
         except ScheduledMessage.DoesNotExist:
-            return f"Error: no active schedule found with id {schedule_id}"
+            raise ToolError(f"no active schedule found with id {schedule_id}") from None
 
         schedule.is_active = False
         schedule.save(update_fields=["is_active", "updated_at"])

@@ -9,6 +9,8 @@ counts calls only counts the ones that reached it.
 import json
 from collections import Counter
 
+from workspace.ai.tool_registry import tool_failure
+
 from .model import ToolCall
 
 
@@ -42,8 +44,8 @@ class RepeatGuard:
         self._seen[_signature(call)] += 1
         if self._seen[_signature(call)] <= self._limit:
             return None
-        return (
-            f"Not executed: this is the same call to {call.name} with the same "
+        return tool_failure(
+            f"not executed: this is the same call to {call.name} with the same "
             f"arguments, {self._limit} times already in this reply. Repeating it "
             "returns what you already have. Read the earlier result again, try a "
             "different tool or different arguments, or answer with what you know."

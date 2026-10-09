@@ -13,6 +13,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.ai.tool_registry import ToolError
 from workspace.users.ai_tools import (
     CheckUserStatusParams,
     ListOnlineUsersParams,
@@ -127,8 +128,9 @@ class CheckUserStatusTests(TestCase):
 
     def test_blank_username_is_rejected(self):
         # Pydantic allows the blank string, so the method itself guards it.
-        result = self._call("   ")
-        self.assertEqual(result, "Error: username is required")
+        with self.assertRaises(ToolError) as caught:
+            self._call("   ")
+        self.assertEqual(caught.exception.reason, "username is required")
 
     def test_case_insensitive_lookup(self):
         with (
@@ -340,7 +342,9 @@ class SearchUsersTests(TestCase):
         self.assertEqual(usernames, ["marek", "mdupont"])
 
     def test_short_query_is_rejected(self):
-        self.assertEqual(self._call("m"), "Error: query must be at least 2 characters")
+        with self.assertRaises(ToolError) as caught:
+            self._call("m")
+        self.assertEqual(caught.exception.reason, "query must be at least 2 characters")
 
     def test_no_match_reports_plainly(self):
         self.assertEqual(self._call("zzz"), 'No colleague found matching "zzz".')

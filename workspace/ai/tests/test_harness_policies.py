@@ -1,6 +1,7 @@
 from django.test import SimpleTestCase
 
 from workspace.ai.harness.policies import RepeatGuard
+from workspace.ai.tool_registry import parse_tool_failure
 
 from .harness import call
 
@@ -15,9 +16,11 @@ class RepeatGuardTests(SimpleTestCase):
 
         self.assertIsNone(first)
         self.assertIsNone(second)
-        self.assertIn("Not executed", third)
-        self.assertIn("search", third)
-        self.assertIn("2 times", third)
+        failure = parse_tool_failure(third)
+        self.assertFalse(failure["retryable"])
+        self.assertIn("not executed", failure["reason"])
+        self.assertIn("search", failure["reason"])
+        self.assertIn("2 times", failure["reason"])
 
     def test_reordered_arguments_are_the_same_call(self):
         guard = RepeatGuard(1)

@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 from pydantic import ValidationError
 
+from workspace.ai.tool_registry import ToolError
 from workspace.calendar.ai_tools import (
     CalendarToolProvider,
     CancelEventParams,
@@ -231,17 +232,19 @@ class CalendarAiToolsTests(TestCase):
 
     def test_check_availability_rejects_an_unparseable_range(self):
         args = CheckAvailabilityParams(start="next tuesday", end="2026-03-21T10:00")
-        result = self.provider.check_availability(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
-        self.assertIn("could not parse start datetime", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.check_availability(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        self.assertIn("could not parse start datetime", caught.exception.reason)
 
     def test_check_availability_rejects_an_inverted_range(self):
         args = CheckAvailabilityParams(start="2026-03-21T10:00", end="2026-03-21T09:00")
-        result = self.provider.check_availability(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
-        self.assertIn("end must be after start", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.check_availability(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        self.assertIn("end must be after start", caught.exception.reason)
 
     def test_create_event_writes_to_first_owned_calendar(self):
         Calendar.objects.create(name="Perso", owner=self.user)
@@ -269,10 +272,11 @@ class CalendarAiToolsTests(TestCase):
             title="Past",
             start=(timezone.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M"),
         )
-        result = self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
-        self.assertIn("future", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.create_event(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        self.assertIn("future", caught.exception.reason)
         self.assertFalse(Event.objects.filter(title="Past").exists())
 
     def test_create_event_routes_by_calendar_name(self):
@@ -303,10 +307,11 @@ class CalendarAiToolsTests(TestCase):
         args = CreateEventParams(
             title="X", start=self._future_iso(days=1), calendar="Nope"
         )
-        result = self.provider.create_event(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
-        self.assertIn("no calendar named", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.create_event(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        self.assertIn("no calendar named", caught.exception.reason)
         self.assertFalse(Event.objects.filter(title="X").exists())
 
     def test_create_event_params_reject_overlong_title(self):
@@ -422,26 +427,29 @@ class CalendarWriteToolsTests(TestCase):
 
     def test_update_rejects_an_unknown_attendee_without_writing(self):
         event = self._event()
-        result = self._update(
-            event_id=event.uuid, scope="all", title="Retro", attendees=["nobody"]
-        )
+        with self.assertRaises(ToolError) as caught:
+            self._update(
+                event_id=event.uuid, scope="all", title="Retro", attendees=["nobody"]
+            )
         event.refresh_from_db()
-        self.assertIn("no active user named nobody", result)
+        self.assertIn("no active user named nobody", caught.exception.reason)
         self.assertEqual(event.title, "Standup")
 
     def test_update_rejects_an_end_before_the_untouched_start(self):
         event = self._event()
-        result = self._update(
-            event_id=event.uuid,
-            scope="all",
-            end=(event.start - timedelta(hours=1)).isoformat(),
-        )
-        self.assertIn("end must be after start", result)
+        with self.assertRaises(ToolError) as caught:
+            self._update(
+                event_id=event.uuid,
+                scope="all",
+                end=(event.start - timedelta(hours=1)).isoformat(),
+            )
+        self.assertIn("end must be after start", caught.exception.reason)
 
     def test_update_rejects_an_empty_change(self):
         event = self._event()
-        result = self._update(event_id=event.uuid, scope="all")
-        self.assertIn("nothing to change", result)
+        with self.assertRaises(ToolError) as caught:
+            self._update(event_id=event.uuid, scope="all")
+        self.assertIn("nothing to change", caught.exception.reason)
 
     def test_update_refuses_someone_elses_event(self):
         foreign_cal = Calendar.objects.create(name="Bob", owner=self.other)
@@ -453,9 +461,10 @@ class CalendarWriteToolsTests(TestCase):
         )
         EventMember.objects.create(event=event, user=self.user)
 
-        result = self._update(event_id=event.uuid, scope="all", title="Hijacked")
+        with self.assertRaises(ToolError) as caught:
+            self._update(event_id=event.uuid, scope="all", title="Hijacked")
         event.refresh_from_db()
-        self.assertIn("Only the owner", result)
+        self.assertIn("Only the owner", caught.exception.reason)
         self.assertEqual(event.title, "Private")
 
     def test_update_refuses_an_external_calendar(self):
@@ -465,9 +474,10 @@ class CalendarWriteToolsTests(TestCase):
         )
         event = self._event(calendar=ext)
 
-        result = self._update(event_id=event.uuid, scope="all", title="Nope")
+        with self.assertRaises(ToolError) as caught:
+            self._update(event_id=event.uuid, scope="all", title="Nope")
         event.refresh_from_db()
-        self.assertIn("external calendar", result)
+        self.assertIn("external calendar", caught.exception.reason)
         self.assertEqual(event.title, "Standup")
 
     def test_update_refuses_an_invisible_event(self):
@@ -478,8 +488,9 @@ class CalendarWriteToolsTests(TestCase):
             title="Secret",
             start=timezone.now() + timedelta(days=1),
         )
-        result = self._update(event_id=event.uuid, scope="all", title="Nope")
-        self.assertIn("no event with that id", result)
+        with self.assertRaises(ToolError) as caught:
+            self._update(event_id=event.uuid, scope="all", title="Nope")
+        self.assertIn("no event with that id", caught.exception.reason)
 
     def test_update_of_a_series_asks_for_confirmation_first(self):
         master = self._weekly()
@@ -535,15 +546,16 @@ class CalendarWriteToolsTests(TestCase):
         # occurrence finishing two weeks before it begins.
         end_in_week_one = master.start + timedelta(hours=1)
 
-        result = self._update(
-            event_id=master.uuid,
-            scope="this",
-            original_start=third.isoformat(),
-            end=end_in_week_one.isoformat(),
-            confirm=True,
-        )
+        with self.assertRaises(ToolError) as caught:
+            self._update(
+                event_id=master.uuid,
+                scope="this",
+                original_start=third.isoformat(),
+                end=end_in_week_one.isoformat(),
+                confirm=True,
+            )
 
-        self.assertIn("end must be after start", result)
+        self.assertIn("end must be after start", caught.exception.reason)
         self.assertFalse(Event.objects.filter(recurrence_parent=master).exists())
 
     def test_changing_the_guest_list_asks_for_confirmation(self):
@@ -559,23 +571,23 @@ class CalendarWriteToolsTests(TestCase):
 
     def test_scoped_update_requires_an_original_start(self):
         master = self._weekly()
-        result = self._update(
-            event_id=master.uuid, scope="future", title="X", confirm=True
-        )
-        self.assertIn("original_start is required", result)
+        with self.assertRaises(ToolError) as caught:
+            self._update(event_id=master.uuid, scope="future", title="X", confirm=True)
+        self.assertIn("original_start is required", caught.exception.reason)
         self.assertFalse(Event.objects.filter(recurrence_parent=master).exists())
 
     def test_scoped_update_refuses_an_instant_off_the_series_grid(self):
         master = self._weekly()
         off_grid = master.start + timedelta(weeks=1, minutes=17)
-        result = self._update(
-            event_id=master.uuid,
-            scope="this",
-            original_start=off_grid.isoformat(),
-            title="X",
-            confirm=True,
-        )
-        self.assertIn("not an occurrence of this series", result)
+        with self.assertRaises(ToolError) as caught:
+            self._update(
+                event_id=master.uuid,
+                scope="this",
+                original_start=off_grid.isoformat(),
+                title="X",
+                confirm=True,
+            )
+        self.assertIn("not an occurrence of this series", caught.exception.reason)
         self.assertFalse(Event.objects.filter(recurrence_parent=master).exists())
 
     def test_scope_is_a_required_argument(self):
@@ -620,8 +632,9 @@ class CalendarWriteToolsTests(TestCase):
             calendar=ext, url="https://example.com/feed.ics"
         )
         event = self._event(calendar=ext)
-        result = self._cancel(event_id=event.uuid, scope="all", confirm=True)
-        self.assertIn("external calendar", result)
+        with self.assertRaises(ToolError) as caught:
+            self._cancel(event_id=event.uuid, scope="all", confirm=True)
+        self.assertIn("external calendar", caught.exception.reason)
         self.assertTrue(Event.objects.filter(uuid=event.uuid).exists())
 
     # -- respond_to_invitation -------------------------------------------
@@ -694,8 +707,9 @@ class CalendarWriteToolsTests(TestCase):
 
     def test_answering_an_event_you_were_not_invited_to_errors(self):
         event = self._event()
-        result = self._respond(event_id=event.uuid, response="accepted", confirm=True)
-        self.assertIn("not on the guest list", result)
+        with self.assertRaises(ToolError) as caught:
+            self._respond(event_id=event.uuid, response="accepted", confirm=True)
+        self.assertIn("not on the guest list", caught.exception.reason)
 
 
 class CalendarPollToolsTests(TestCase):
@@ -736,19 +750,22 @@ class CalendarPollToolsTests(TestCase):
 
     def test_create_poll_needs_at_least_two_distinct_slots(self):
         repeated = self._slots(1) * 2
-        result = self._create_poll(slots=repeated)
-        self.assertIn("at least 2 distinct", result)
+        with self.assertRaises(ToolError) as caught:
+            self._create_poll(slots=repeated)
+        self.assertIn("at least 2 distinct", caught.exception.reason)
         self.assertFalse(Poll.objects.exists())
 
     def test_create_poll_rejects_slots_in_the_past(self):
         past = [(timezone.now() - timedelta(days=i)).isoformat() for i in range(1, 3)]
-        result = self._create_poll(slots=past)
-        self.assertIn("must be in the future", result)
+        with self.assertRaises(ToolError) as caught:
+            self._create_poll(slots=past)
+        self.assertIn("must be in the future", caught.exception.reason)
         self.assertFalse(Poll.objects.exists())
 
     def test_create_poll_rejects_an_unknown_invitee(self):
-        result = self._create_poll(invitees=["ghost"])
-        self.assertIn("no active user named ghost", result)
+        with self.assertRaises(ToolError) as caught:
+            self._create_poll(invitees=["ghost"])
+        self.assertIn("no active user named ghost", caught.exception.reason)
         self.assertFalse(Poll.objects.exists())
 
     def test_poll_results_report_votes_and_the_leading_slot(self):
@@ -792,7 +809,8 @@ class CalendarPollToolsTests(TestCase):
     def test_poll_results_refuse_a_poll_the_user_has_no_part_in(self):
         poll = Poll.objects.create(title="Private", created_by=self.other)
         args = GetPollResultsParams(poll_id=poll.uuid)
-        result = self.provider.get_poll_results(
-            args, user=self.user, bot=None, conversation_id=None, context={}
-        )
-        self.assertIn("no access", result)
+        with self.assertRaises(ToolError) as caught:
+            self.provider.get_poll_results(
+                args, user=self.user, bot=None, conversation_id=None, context={}
+            )
+        self.assertIn("no access", caught.exception.reason)

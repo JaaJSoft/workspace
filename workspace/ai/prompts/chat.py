@@ -140,8 +140,7 @@ def build_chat_messages(
         '- Skip preambles like "Let me look that up" or "I\'ll generate that" — '
         "just do it and share the result.\n"
         '- Skip narration like "I just saved" or "I generated an image" — '
-        "the user already sees the result.\n"
-        "- If a tool fails, handle it gracefully without exposing internal details."
+        "the user already sees the result."
     )
 
     persistence_instructions = (
@@ -157,6 +156,24 @@ def build_chat_messages(
         "resort. The user sees each tool as it runs and waits seconds for it.\n"
         "- Say plainly what you could not find out. An admitted gap is useful; "
         "a gap filled by a guess is worse than no answer at all."
+    )
+
+    failure_instructions = (
+        "\n\n## When a tool fails\n"
+        "A call that could not do what you asked returns "
+        '{"error": {"retryable": ..., "reason": "..."}} instead of a result. '
+        "Nothing was produced, saved or sent.\n"
+        '- "retryable": true - the service behind the tool failed, not your '
+        "call. Make the call again before giving up on it.\n"
+        '- "retryable": false - the same call fails the same way every time. '
+        "When the reason says what to change (an argument, a lookup to do "
+        "first, a different wording), change it and call again; otherwise "
+        "carry on without it.\n"
+        "- Never present a failure as a result. When something the user asked "
+        "for still could not be done, say plainly which part, without the "
+        "internal details. This matters most when several things were asked "
+        "for at once: never answer with only the ones that worked as if the "
+        "others had never been asked for."
     )
 
     memory_instructions = (
@@ -251,17 +268,7 @@ def build_chat_messages(
         "of who you are, so the only way to get a faithful result is to include the full "
         "description in the prompt every time.\n"
         "If you are unsure of your appearance, use the get_my_avatar tool to view your "
-        "avatar before generating an image of yourself.\n"
-        "When an image tool returns an error, the image was NOT produced. Call the tool "
-        "again for that image before replying, and change the prompt when you do — "
-        "resending the exact same wording gets the exact same failure. Keep the visual "
-        "intent, vary how you describe it: plainer terms, a different angle on the same "
-        "scene, no names of real people or brands, shorter if it was long. The error "
-        "message tells you whether the prompt or the service is at fault, and when to "
-        "stop retrying — follow it. This matters most when several images were "
-        "requested: never answer with only the ones that worked as if the others had "
-        "never been asked for. If an image still fails, say plainly which one could not "
-        "be generated."
+        "avatar before generating an image of yourself."
     )
 
     bot_profile = getattr(bot, "bot_profile", None)
@@ -401,6 +408,7 @@ def build_chat_messages(
         f"{tone_instructions}"
         f"{discretion_instructions}"
         f"{persistence_instructions}"
+        f"{failure_instructions}"
         f"{memory_instructions}"
         f"{scheduling_instructions}"
         f"{agent_goal_instructions}"

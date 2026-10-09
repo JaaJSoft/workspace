@@ -4,7 +4,7 @@ import json
 
 from pydantic import BaseModel, Field
 
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 
 
 class CheckUserStatusParams(BaseModel):
@@ -38,7 +38,7 @@ Also returns their last-seen time if offline. \
 Call this when the user asks if someone is available, reachable, or what their status is."""
         username = args.username.strip()
         if not username:
-            return "Error: username is required"
+            raise ToolError("username is required")
         from django.contrib.auth import get_user_model
 
         from workspace.users.services.presence import get_last_seen, get_status
@@ -81,7 +81,9 @@ task assignment, file sharing."""
 
         query = args.query.strip()
         if len(query) < MIN_SEARCH_QUERY_LENGTH:
-            return f"Error: query must be at least {MIN_SEARCH_QUERY_LENGTH} characters"
+            raise ToolError(
+                f"query must be at least {MIN_SEARCH_QUERY_LENGTH} characters"
+            )
 
         matches = search_people(query, requesting_user=user)
         if not matches:

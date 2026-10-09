@@ -14,7 +14,13 @@ from django.test import TestCase, override_settings
 
 from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import BotProfile, UserMemory
-from workspace.ai.tool_registry import ToolProvider, ToolRegistry, tool, tool_registry
+from workspace.ai.tool_registry import (
+    ToolProvider,
+    ToolRegistry,
+    parse_tool_failure,
+    tool,
+    tool_registry,
+)
 from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.common.search import fts5_available
@@ -219,7 +225,7 @@ class ExecuteToolCallTests(TestCase):
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
-        self.assertIn("Unknown", result)
+        self.assertIn("unknown_tool", parse_tool_failure(result)["reason"])
 
     def test_search_messages(self):
         conv = Conversation.objects.create(created_by=self.user)
@@ -326,7 +332,10 @@ class ExecuteToolCallTests(TestCase):
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
-        self.assertIn("Error", result)
+        self.assertEqual(
+            parse_tool_failure(result),
+            {"retryable": False, "reason": "location is required"},
+        )
 
     def test_get_current_user_info(self):
         self.user.first_name = "Pierre"

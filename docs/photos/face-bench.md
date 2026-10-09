@@ -107,55 +107,86 @@ the faces it was scored from: after a change to the scoring,
 
 ## Baseline
 
-Measured on 2026-10-09 at commit `a1f24f3`, in a 4-CPU cloud container with
-one ONNX thread and sqlite-vec. A full run took 10 minutes with `yunet_sface`
-and 50 with `scrfd_arcface` there. In parentheses: the detector alone.
+Measured on 2026-10-09 in a 4-CPU cloud container, with one ONNX thread and
+sqlite-vec. A full run took about 10 minutes with `yunet_sface` and 50 with
+`scrfd_arcface` there. In parentheses: the detector alone.
 
-| | yunet_sface | yunet_sface, distance 0.5 | yunet_sface, min size 12 | scrfd_arcface |
+### Backends
+
+The pipeline as of `a1f24f3`, and with the look-alike split of `c3dd507`
+(*Separating look-alikes* below).
+
+| | yunet_sface | yunet_sface, split | scrfd_arcface | scrfd_arcface, split |
 |---|---|---|---|---|
-| Faces found | 66.7% (80.9%) | 66.7% (80.9%) | 79.2% (80.9%) | 70.6% (89.0%) |
-| heads under 24 px | 0.0% (30.1%) | 0.0% (30.1%) | 7.7% (30.1%) | 0.0% (58.2%) |
-| heads 24-48 px | 8.9% (67.4%) | 8.9% (67.4%) | 62.9% (67.4%) | 10.5% (82.0%) |
-| heads 48-96 px | 77.4% (83.7%) | 77.4% (83.7%) | 83.7% (83.7%) | 82.4% (90.4%) |
-| heads 96 px and up | 89.3% (89.3%) | 89.3% (89.3%) | 89.3% (89.3%) | 93.8% (93.9%) |
-| Grouped | 81.8% | 76.4% | 72.4% | 79.6% |
-| Pairwise precision | 47.4% | 61.3% | 50.1% | 64.2% |
-| Pairwise recall | 84.1% | 77.9% | 74.4% | 88.2% |
-| BCubed F1 | 77.1% | 80.3% | 75.6% | 85.6% |
-| People found | 60.1% | 64.9% | 50.5% | 63.1% |
-| Groups to merge | 46 | 81 | 48 | 5 |
-| Mixed groups | 87 | 57 | 86 | 53 |
-| Faces to take out | 721 | 392 | 743 | 403 |
-| CPU ms / photo | 137 | 131 | 162 | 895 |
-| of which models | 110 | 106 | 131 | 867 |
-| Grouping CPU, s (whole run) | 160 | 202 | 297 | 233 |
-| Weights, MB | 37 | 37 | 37 | 182 |
-
-What it says:
+| Faces found | 66.7% (80.9%) | 66.7% (80.9%) | 70.6% (89.0%) | 70.6% (89.0%) |
+| heads under 24 px | 0.0% (30.1%) | 0.0% (30.1%) | 0.0% (58.2%) | 0.0% (58.2%) |
+| heads 24-48 px | 8.9% (67.4%) | 8.9% (67.4%) | 10.5% (82.0%) | 10.5% (82.0%) |
+| heads 48-96 px | 77.4% (83.7%) | 77.4% (83.7%) | 82.4% (90.4%) | 82.4% (90.4%) |
+| heads 96 px and up | 89.3% (89.3%) | 89.3% (89.3%) | 93.8% (93.9%) | 93.8% (93.9%) |
+| Grouped | 81.8% | 81.8% | 79.6% | 79.6% |
+| Pairwise precision | 95.4% | 96.0% | 99.2% | 99.4% |
+| Pairwise recall | 84.1% | 84.7% | 88.2% | 88.6% |
+| BCubed F1 | 87.8% | 87.9% | 91.6% | 91.7% |
+| People found | 68.9% | 69.6% | 75.0% | 75.0% |
+| Groups to merge | 95 | 95 | 12 | 12 |
+| Mixed groups | 29 | 26 | 13 | 13 |
+| Faces to take out | 120 | 98 | 42 | 31 |
+| CPU ms / photo | 132 | 126 | 894 | 894 |
+| of which models | 105 | 101 | 866 | 866 |
+| Grouping CPU, s (whole run) | 171 | 180 | 229 | 219 |
+| Weights, MB | 37 | 37 | 182 | 182 |
 
 - **The size filter loses more faces than the detector.** YuNet finds 67% of
   the heads 24 to 48 px tall; the pipeline keeps 9% of them, the rest falling
-  under `PHOTOS_FACES_MIN_SIZE`. Keeping them (`min size 12`) finds 12 points
-  more faces but groups worse - most stay alone, and the people found drop
-  from 60% to 51%: at that size the embedding, not the detector, is the
-  limit. These are 500 px photos; on a real library the same people are three
-  times bigger, so this is the line to check on full-size photos.
-- **Grouping errs on the side of merging.** With SFace, under half the pairs
-  put in one group are one person, while 84% of each person's pairs are
-  together: a user would take 721 faces out of 87 mixed groups, but merge
-  only 46 groups. A threshold of 0.5 instead of 0.58 halves the faces to take
-  out for 35 more merges, and lifts BCubed F1 by 3 points.
-- **ArcFace groups far better**: 5 merges instead of 46, 403 faces to take
-  out instead of 721, BCubed F1 86% instead of 77%, and its detector finds
-  twice as many of the tiniest heads. It costs 6.5 times the CPU and 5 times
-  the weights, and its licence keeps it opt-in.
-- **Young siblings defeat both.** One library, a family with small children,
-  holds 252 of ArcFace's 403 faces to take out - and as many of SFace's: both
-  put brothers and sisters a few years old in one group, and no threshold
-  tried here separates them.
-- **Grouping has a cost of its own**, 160 to 300 CPU seconds over a run, and
+  under `PHOTOS_FACES_MIN_SIZE`. Keeping them (`PHOTOS_FACES_MIN_SIZE=12`)
+  finds 12 points more faces, but nearly four in five of the extra ones stay
+  in no group: at that size the embedding, not the detector, is the limit. These are 500 px photos; on a real library the same
+  people are three times bigger, so this is the line to check on full-size
+  photos.
+- **ArcFace groups far better**: 12 groups to merge instead of 95, a third of
+  the faces in the wrong group, and its detector finds twice as many of the
+  tiniest heads. It costs about 7 times the CPU and 5 times the weights, and
+  its licence keeps it opt-in.
+- **Grouping has a cost of its own**, 170 to 230 CPU seconds over a run, and
   it grows with the faces left in no group: each grouping run offers the
   newest of them to the existing groups again.
+
+### The grouping threshold
+
+`yunet_sface` at several `PHOTOS_FACES_MAX_DISTANCE`, without the split:
+
+| | 0.45 | 0.50 | 0.55 | 0.58 | 0.60 | 0.62 |
+|---|---|---|---|---|---|---|
+| Grouped | 71.5% | 76.4% | 79.4% | 81.8% | 83.4% | 84.7% |
+| Pairwise precision | 98.7% | 98.2% | 95.6% | 95.4% | 94.5% | 95.4% |
+| Pairwise recall | 69.4% | 77.9% | 84.5% | 84.1% | 86.9% | 87.3% |
+| BCubed F1 | 81.0% | 85.2% | 87.1% | 87.8% | 88.3% | 88.3% |
+| People found | 61.0% | 65.3% | 66.9% | 68.9% | 68.9% | 70.0% |
+| Groups to merge | 163 | 118 | 91 | 95 | 87 | 83 |
+| Mixed groups | 14 | 13 | 21 | 29 | 35 | 44 |
+| Faces to take out | 47 | 66 | 111 | 120 | 155 | 176 |
+
+The default, 0.58, sits at the knee. Tighter, the groups to merge and the
+faces in no group climb fast; looser, the faces in the wrong group do, for a
+BCubed F1 that barely moves. With the split the picture is the same: at 0.60
+it leaves 128 faces to take out and 32 mixed groups, at 0.62 181 and 42.
+
+### Separating look-alikes
+
+105 of the 120 faces in the wrong group at the default threshold sat with
+someone they appear beside in at least one photo: brothers and sisters,
+couples, friends - people the embedding barely tells apart, and that a
+photo of the two of them proves are two. `split_look_alikes` uses that proof
+(see docs/photos/README.md, *How grouping works*): 22 of the 120 leave the
+wrong group and mixed groups go from 29 to 26, with as many groups to merge,
+precision and recall both up, for 5% more grouping time. With
+`scrfd_arcface` it takes 11 of the 42 faces out, for no extra time.
+
+Most of the rest are out of its reach: in the photos the two share, the
+other person's face was not found, or had already joined a group of its own.
+An extension that also moved faces into that group took two more faces out,
+for five more groups to merge and four times the extra grouping time; it was
+left out.
 
 ## Real photos in the demo seed
 

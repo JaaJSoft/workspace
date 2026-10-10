@@ -271,7 +271,7 @@ def _principal_properties(request):
             _cal("calendar-user-type"): lambda: element(
                 _cal("calendar-user-type"), "INDIVIDUAL"
             ),
-            _d("supported-report-set"): lambda: _supported_reports(),
+            _d("supported-report-set"): _supported_reports,
         }
     )
 
@@ -282,7 +282,7 @@ def _home_properties(request):
     properties.builders |= {
         _d("owner"): lambda: _hrefs(_d("owner"), _principal_path(username)),
         _d("current-user-privilege-set"): lambda: _privileges(False),
-        _d("supported-report-set"): lambda: _supported_reports(),
+        _d("supported-report-set"): _supported_reports,
     }
     return properties
 

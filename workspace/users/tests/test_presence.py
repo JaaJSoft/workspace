@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -76,7 +77,7 @@ class TouchTests(PresenceTestMixin, TestCase):
         self.assertIsNotNone(raw)
 
     def test_touch_skips_public_cache_for_invisible(self):
-        # Ensure a UserPresence row exists so _sync_db doesn't fail on create
+        # Ensure a UserPresence row exists so sync_to_db doesn't fail on create
         UserPresence.objects.create(user=self.user, last_seen=timezone.now())
         presence_service.set_manual_status(self.user.pk, "invisible")
         cache.delete(f"presence:{self.user.pk}")
@@ -98,6 +99,17 @@ class TouchTests(PresenceTestMixin, TestCase):
     def test_touch_syncs_to_db(self):
         presence_service.touch(self.user.pk)
         self.assertTrue(UserPresence.objects.filter(user=self.user).exists())
+
+    def test_touch_leaves_the_db_write_to_a_task(self):
+        with (
+            patch("workspace.users.tasks.sync_presence.delay") as delay,
+            self.assertNumQueries(1),  # the manual status, read once
+        ):
+            presence_service.touch(self.user.pk)
+        delay.assert_called_once_with(
+            self.user.pk, cache.get(f"presence:activity:{self.user.pk}"), True
+        )
+        self.assertFalse(UserPresence.objects.filter(user=self.user).exists())
 
     def test_touch_throttles_db_sync(self):
         presence_service.touch(self.user.pk)

@@ -1,6 +1,7 @@
 """User presence tracking service.
 
-Uses Django cache as the fast path and syncs to DB periodically.
+Uses Django cache as the fast path and syncs to DB periodically, through
+the ``users.sync_presence`` task.
 Thresholds:
   - online:  last activity < 2 min ago
   - away:    last activity < 10 min ago
@@ -86,13 +87,18 @@ def touch(user_id: int) -> None:
     if update_public:
         cache.set(_cache_key(user_id), iso, CACHE_TTL)
 
-    # Throttled DB sync — at most once per DB_SYNC_TTL seconds
+    # Throttled DB sync — at most once per DB_SYNC_TTL seconds. Written by a
+    # task, never by the request: on SQLite the write waits for the database
+    # lock, and under gevent that wait freezes the whole web worker until
+    # gunicorn kills it, whenever a Celery bulk job keeps the lock busy.
     if cache.get(_dbsync_key(user_id)) is None:
         cache.set(_dbsync_key(user_id), "1", DB_SYNC_TTL)
-        _sync_db(user_id, now, update_public=update_public)
+        from workspace.users.tasks import sync_presence
+
+        sync_presence.delay(user_id, iso, update_public)
 
 
-def _sync_db(user_id: int, now: datetime, *, update_public: bool = True) -> None:
+def sync_to_db(user_id: int, now: datetime, *, update_public: bool = True) -> None:
     from workspace.users.models import UserPresence
 
     defaults = {"last_activity": now}

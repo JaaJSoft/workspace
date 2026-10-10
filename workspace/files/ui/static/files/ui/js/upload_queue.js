@@ -166,6 +166,15 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       this._pump();
     },
 
+    retryFailed() {
+      for (const item of this.items) {
+        if (item.status !== 'failed') continue;
+        item.status = 'queued';
+        item.error = '';
+      }
+      this._pump();
+    },
+
     // The file in flight finishes: an aborted request cannot be resumed, and
     // one aborted after the server stored it would come back as a name
     // collision (or a second copy) on resume. Cancelling it is the way to

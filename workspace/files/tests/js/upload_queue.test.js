@@ -265,3 +265,21 @@ test('every flagged duplicate can be kept at once', async () => {
   assert.deepEqual(discarded, []);
   assert.deepEqual(statuses(queue), ['dup-a.jpg:done', 'dup-b.jpg:done']);
 });
+
+test('every failed upload can be retried at once, leaving cancelled ones alone', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('a.jpg'), folderId: 'f' }, { file: file('b.jpg') }, { file: file('c.jpg') }]);
+  requests[0].reject(new Error('Network error'));
+  await settle();
+  queue.cancel(queue.items[1].id);
+  await settle();
+  requests[2].reject(new Error('Network error'));
+  await settle();
+  assert.equal(queue.failedCount, 2);
+
+  queue.retryFailed();
+
+  assert.equal(queue.failedCount, 0);
+  assert.deepEqual(statuses(queue), ['a.jpg:uploading', 'b.jpg:cancelled', 'c.jpg:queued']);
+  assert.equal(requests[3].folderId, 'f', 'a retried file keeps its folder');
+});

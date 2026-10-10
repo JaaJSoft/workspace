@@ -166,6 +166,15 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       this._pump();
     },
 
+    retryFailed() {
+      for (const item of this.items) {
+        if (item.status !== 'failed') continue;
+        item.status = 'queued';
+        item.error = '';
+      }
+      this._pump();
+    },
+
     // The file in flight finishes: an aborted request cannot be resumed, and
     // one aborted after the server stored it would come back as a name
     // collision (or a second copy) on resume. Cancelling it is the way to
@@ -200,19 +209,42 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       this.paused = false;
     },
 
+    get duplicateCount() {
+      return this._duplicates().length;
+    },
+
     async discard(id) {
       const item = this._find(id);
-      if (!item || item.status !== 'done' || !item.uuid) return;
-      if (await discard(item.uuid, item.savedName || item.name)) {
-        item.status = 'discarded';
-        item.duplicates = [];
-        notify('uploads-changed');
+      if (item && (await this._discard(item))) notify('uploads-changed');
+    },
+
+    async discardAllDuplicates() {
+      let changed = false;
+      for (const item of this._duplicates()) {
+        if (await this._discard(item)) changed = true;
       }
+      if (changed) notify('uploads-changed');
     },
 
     keep(id) {
       const item = this._find(id);
       if (item) item.duplicates = [];
+    },
+
+    keepAllDuplicates() {
+      for (const item of this._duplicates()) item.duplicates = [];
+    },
+
+    _duplicates() {
+      return this.items.filter((item) => item.status === 'done' && item.duplicates.length > 0);
+    },
+
+    async _discard(item) {
+      if (item.status !== 'done' || !item.uuid) return false;
+      if (!(await discard(item.uuid, item.savedName || item.name))) return false;
+      item.status = 'discarded';
+      item.duplicates = [];
+      return true;
     },
 
     _find(id) {

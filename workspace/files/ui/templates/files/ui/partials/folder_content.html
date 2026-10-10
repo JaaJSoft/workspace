@@ -968,7 +968,7 @@
           {% if current_folder %}
             <button
               type="button"
-              class="btn btn-ghost btn-xs btn-square -mr-2"
+              class="btn btn-ghost btn-xs btn-square -my-1 -mr-2"
               title="Folder properties"
               @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid }}', nodeType: 'folder' } }))"
             >

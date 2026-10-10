@@ -230,3 +230,56 @@ test('rows that need the user are listed first', async () => {
     ['b.jpg:failed', 'a.jpg:done', 'c.jpg:uploading'],
   );
 });
+
+async function queueWithDuplicates(names) {
+  const harness = makeQueue();
+  harness.queue.add(names.map((name) => ({ file: file(name) })));
+  for (const [i, name] of names.entries()) {
+    harness.requests[i].resolve({
+      status: 201,
+      body: { uuid: `u-${name}`, name, duplicates: name.startsWith('dup') ? [{ path: `Old/${name}` }] : [] },
+    });
+    await settle();
+  }
+  return harness;
+}
+
+test('every flagged duplicate can be discarded at once', async () => {
+  const { queue, discarded, notified } = await queueWithDuplicates(['dup-a.jpg', 'new.jpg', 'dup-b.jpg']);
+  assert.equal(queue.duplicateCount, 2);
+
+  await queue.discardAllDuplicates();
+
+  assert.deepEqual(discarded, ['u-dup-a.jpg', 'u-dup-b.jpg']);
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:discarded', 'new.jpg:done', 'dup-b.jpg:discarded']);
+  assert.equal(queue.duplicateCount, 0);
+  assert.deepEqual(notified, ['uploads-changed', 'uploads-changed'], 'one refresh for the whole batch');
+});
+
+test('every flagged duplicate can be kept at once', async () => {
+  const { queue, discarded } = await queueWithDuplicates(['dup-a.jpg', 'dup-b.jpg']);
+
+  queue.keepAllDuplicates();
+
+  assert.equal(queue.duplicateCount, 0);
+  assert.deepEqual(discarded, []);
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:done', 'dup-b.jpg:done']);
+});
+
+test('every failed upload can be retried at once, leaving cancelled ones alone', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('a.jpg'), folderId: 'f' }, { file: file('b.jpg') }, { file: file('c.jpg') }]);
+  requests[0].reject(new Error('Network error'));
+  await settle();
+  queue.cancel(queue.items[1].id);
+  await settle();
+  requests[2].reject(new Error('Network error'));
+  await settle();
+  assert.equal(queue.failedCount, 2);
+
+  queue.retryFailed();
+
+  assert.equal(queue.failedCount, 0);
+  assert.deepEqual(statuses(queue), ['a.jpg:uploading', 'b.jpg:cancelled', 'c.jpg:queued']);
+  assert.equal(requests[3].folderId, 'f', 'a retried file keeps its folder');
+});

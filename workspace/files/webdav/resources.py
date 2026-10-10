@@ -3,10 +3,12 @@
 import io
 import logging
 import os
+import shutil
 import time
 import uuid
 from contextlib import contextmanager
 
+from django.conf import settings
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
 from wsgidav.dav_error import (
@@ -221,31 +223,11 @@ class RootCollection(DAVCollection):
         FileService.create_folder(self._user, name, parent=None, acting_user=self._user)
         return True
 
-    def _bucket_bytes(self):
-        """``(used, available)`` for the personal bucket.
-
-        wsgidav asks both questions in ``get_property_names`` and again in
-        ``get_property_value``, so an allprop PROPFIND pays for the pair
-        twice - and the root is the resource every mount touches first and
-        most often. A resource lives for one request, so the cache cannot go
-        stale.
-        """
-        if not hasattr(self, "_bucket_cache"):
-            used = quota.personal_usage(self._user)
-            limit = quota.effective_quota(self._user)
-            self._bucket_cache = (
-                used,
-                # wsgidav omits {DAV:}quota-available-bytes when this is
-                # None, which is what an unlimited bucket should advertise.
-                None if limit is None else max(0, limit - used),
-            )
-        return self._bucket_cache
-
     def get_used_bytes(self):
-        return self._bucket_bytes()[0]
+        return _advertised_space(self.environ, self._user, None)[0]
 
     def get_available_bytes(self):
-        return self._bucket_bytes()[1]
+        return _advertised_space(self.environ, self._user, None)[1]
 
 
 class FolderResource(DAVCollection):
@@ -265,30 +247,11 @@ class FolderResource(DAVCollection):
     def get_last_modified(self):
         return self._file.updated_at.timestamp()
 
-    def _bucket_bytes(self):
-        """``(used, available)`` for this folder, or ``(None, None)``.
-
-        Only a group root is a bucket; a sub-folder is part of a total that is
-        reported one level up. wsgidav asks both questions for every resource
-        of a listing, twice on an allprop PROPFIND, so the pair is computed
-        once per resource - and a resource lives for one request.
-        """
-        if not (self._file.group_id and self._file.parent_id is None):
-            return None, None
-        if not hasattr(self, "_bucket_cache"):
-            used = quota.group_usage(self._file.group_id)
-            limit = quota.effective_group_quota(self._file.group_id)
-            self._bucket_cache = (
-                used,
-                None if limit is None else max(0, limit - used),
-            )
-        return self._bucket_cache
-
     def get_used_bytes(self):
-        return self._bucket_bytes()[0]
+        return _advertised_space(self.environ, self._user, self._file.group_id)[0]
 
     def get_available_bytes(self):
-        return self._bucket_bytes()[1]
+        return _advertised_space(self.environ, self._user, self._file.group_id)[1]
 
     def get_member_names(self):
         self._prefetch_members()
@@ -604,11 +567,36 @@ class FileResource(DAVNonCollection):
     def delete(self):
         if getattr(self, "_moved", False):
             return  # Already moved in copy_move_single; nothing to delete.
-        # A MOVE onto an existing file deletes the destination first, so this
-        # is also where "overwrite by rename" - how Windows and davfs2 save -
-        # meets the lock.
+        # A MOVE that handle_move hands back to wsgidav deletes an existing
+        # destination first, so this is also where that overwrite meets the
+        # lock.
         self._refuse_if_locked("DELETE")
         FileService.soft_delete(self._file, acting_user=self._user)
+
+    def handle_move(self, dest_path):
+        """Save-by-rename: a MOVE over an existing file replaces its content.
+
+        Editors save by writing a temp file and moving it over the document.
+        wsgidav's default trashes the destination first, which charges the
+        bucket a full copy per save and strands the document's shares, tags
+        and comments on the trashed row. Returning ``False`` hands every other
+        MOVE back to wsgidav.
+        """
+        target = self.provider.get_resource_inst(dest_path, self.environ)
+        if not isinstance(target, FileResource) or target._file.pk == self._file.pk:
+            return False
+        # The source is hard-deleted below, so it must be the user's own temp
+        # file - never a row someone shared with them.
+        if not self._file.content or self._file.owner_id != self._user.pk:
+            return False
+        self._refuse_if_locked("MOVE")
+        target._refuse_if_locked("PUT")
+        try:
+            with _as_insufficient_storage():
+                _replace_content(target._file, self._file, self._user)
+        except (LockConflict, StaleContent) as exc:
+            target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
+        return True
 
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
@@ -668,6 +656,113 @@ def _as_insufficient_storage():
         yield
     except quota.QuotaExceeded as exc:
         raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
+
+
+def _disk_free_bytes():
+    try:
+        return shutil.disk_usage(settings.MEDIA_ROOT).free
+    except OSError:
+        return None
+
+
+def _advertised_space(environ, user, group_id):
+    """``(used, available)`` for the bucket a write into a collection lands in.
+
+    Every collection answers, an unlimited bucket included: a client that
+    gets no {DAV:}quota-available-bytes makes up a figure of its own (the
+    Windows redirector reports the local system drive) and refuses copies on
+    it. A new file is charged to its folder's group, else to whoever writes
+    it - a folder someone shared with *user* included - so no other user's
+    usage is ever disclosed. A group's figures stay with its members: someone
+    reaching a group folder through a share only learns the free disk space.
+    ``available`` is capped by the disk: a quota the volume cannot hold is no
+    promise.
+
+    wsgidav asks both questions for every collection of a listing, twice on
+    an allprop PROPFIND, so each bucket is resolved once per request.
+    """
+    cache = environ.setdefault("workspace.advertised_space", {})
+    key = ("group", group_id) if group_id else ("user", user.pk)
+    if key not in cache:
+        if group_id and not user.groups.filter(pk=group_id).exists():
+            cache[key] = (None, _disk_free_bytes())
+            return cache[key]
+        if group_id:
+            used = quota.group_usage(group_id)
+            limit = quota.effective_group_quota(group_id)
+        else:
+            used = quota.personal_usage(user)
+            limit = quota.effective_quota(user)
+        available = _disk_free_bytes()
+        if limit is not None:
+            remaining = max(0, limit - used)
+            available = remaining if available is None else min(remaining, available)
+        cache[key] = (used, available)
+    return cache[key]
+
+
+def _bucket(file_obj):
+    """The quota bucket *file_obj* is charged to (see ``services.quota``)."""
+    if file_obj.group_id:
+        return ("group", file_obj.group_id)
+    return ("user", file_obj.owner_id)
+
+
+def _replace_content(target, source, user):
+    """Give *target* the bytes of *source*, then drop *source* for good."""
+    if _bucket(target) != _bucket(source):
+        # Within one bucket the source bytes are already counted.
+        quota.check_write_allowed(
+            owner=target.owner_id,
+            group=target.group_id,
+            additional_bytes=(source.size or 0) - (target.size or 0),
+        )
+    storage_path = file_upload_path(target, target.name)
+    full_path = target.content.storage.path(storage_path)
+    source_path = source.content.path
+    # A rollback restores rows, not files: whatever sat at full_path is set
+    # aside until the commit, so a failure can put both blobs back.
+    backup_path = f"{full_path}.{uuid.uuid4().hex}.bak"
+    backed_up = moved = False
+    try:
+        with transaction.atomic():
+            FileService.replace_content_storage(
+                target,
+                storage_path=storage_path,
+                size=source.size,
+                content_hash=source.content_hash,
+                acting_user=user,
+            )
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            if os.path.exists(full_path):
+                os.replace(full_path, backup_path)
+                backed_up = True
+            os.replace(source_path, full_path)
+            moved = True
+            # The blob has moved, so the row's storage cleanup finds nothing.
+            FileService.hard_delete(source, acting_user=user)
+    except BaseException:
+        _restore_blobs(source_path, full_path, backup_path, moved, backed_up)
+        raise
+    if backed_up:
+        try:
+            os.unlink(backup_path)
+        except OSError:
+            logger.warning("Could not remove replaced blob %s", scrub(backup_path))
+
+
+def _restore_blobs(source_path, full_path, backup_path, moved, backed_up):
+    """Undo ``_replace_content``'s storage moves after its rows rolled back."""
+    try:
+        if moved:
+            os.makedirs(os.path.dirname(source_path), exist_ok=True)
+            os.replace(full_path, source_path)
+        if backed_up:
+            os.replace(backup_path, full_path)
+    except OSError:
+        logger.exception(
+            "Could not restore blobs after a failed replace of %s", scrub(full_path)
+        )
 
 
 def _move_to(file_obj, user, dest_path):

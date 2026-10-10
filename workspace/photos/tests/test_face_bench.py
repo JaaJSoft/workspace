@@ -392,7 +392,7 @@ class LargeImagesTests(SimpleTestCase):
     def test_a_copy_lost_from_the_cache_must_come_back_identical(self):
         photo = self._photo(1)
         with self._flickr({1: _jpeg(1024, 512)}):
-            (_large,), paths = dataset.fetch_large_images([photo], self.cache)
+            _, paths = dataset.fetch_large_images([photo], self.cache)
         paths[1].unlink()
 
         with (

@@ -150,8 +150,11 @@ a long 4K recording costs far more than a short phone clip. Lower
   the group's good faces very close to it, or three of its faces within the
   threshold (the blurred photo of someone seen often sits among many of
   their faces without being very close to any). How well the model reads a
-  face is the length of its embedding before normalization, which these
-  models make shorter the less sure they are.
+  face is, with `yunet_sface` and `yunet_adaface`, the length of its
+  embedding before normalization, which these models make shorter the less
+  sure they are; with `scrfd_arcface`, whose embedding length says no more
+  than its detector does, the detector's confidence discounted for a small
+  or blurred face.
 - Nightly (and once enough faces wait), the faces still ungrouped are
   clustered. Two faces of one photo are never put in the same group; the
   database refuses it too. Faces read poorly never start a group, and a

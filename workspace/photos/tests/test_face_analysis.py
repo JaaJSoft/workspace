@@ -17,6 +17,7 @@ from workspace.photos.services.detection.base import DetectedFace
 from workspace.photos.services.detection.scrfd_arcface import ScrfdArcFaceBackend
 from workspace.photos.services.detection.yunet_sface import YuNetSFaceBackend
 from workspace.photos.services.face_analysis import (
+    FACE_ANALYSIS_VERSION,
     analyze_faces,
     forget_faces,
     is_face_candidate,
@@ -181,6 +182,18 @@ class CandidateTests(FacesTestMixin, TestCase):
         analyze_faces(photo)
 
         FaceAnalysis.objects.filter(file=photo).update(backend="yunet_sface")
+
+        self.assertIn(photo, pending_faces_qs())
+
+    def test_an_older_pipeline_makes_a_photo_pending_again(self):
+        opt_in(self.user)
+        photo = upload(self.user, "alice.png", faces_png((ALICE, (40, 50, 100))))
+        analyze_faces(photo)
+        self.assertNotIn(photo, pending_faces_qs())
+
+        FaceAnalysis.objects.filter(file=photo).update(
+            version=FACE_ANALYSIS_VERSION - 1
+        )
 
         self.assertIn(photo, pending_faces_qs())
 

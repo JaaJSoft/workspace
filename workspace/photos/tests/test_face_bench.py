@@ -15,6 +15,7 @@ import json
 import re
 import sys
 import tempfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,7 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase, TestCase
 from PIL import ExifTags, Image
 
+from workspace.files.models import File
 from workspace.photos.services.detection.fake import FakeFaceBackend
 
 from .faces import FacesTestMixin, faces_on
@@ -290,6 +292,86 @@ class ManifestTests(SimpleTestCase):
             self.assertRegex(photo.taken, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$")
             self.assertIn(photo.annotated_at, (1024, max(photo.width, photo.height)))
             self.assertTrue(photo.author)
+
+
+class SeedRealPhotosTests(FacesTestMixin, TestCase):
+    """seed_demo.py --real-photos, on a two-photo library and no network."""
+
+    def setUp(self):
+        self.seeder = _load("seed_demo")
+        self.user = User.objects.create_user(username="demo", password="p")
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.photos, paths = [], {}
+        for n in (1, 2):
+            path = Path(directory.name) / f"{n}.jpg"
+            Image.new("RGB", (40, 30), (n * 60, 10, 10)).save(path, format="JPEG")
+            paths[n] = path
+            self.photos.append(
+                dataset.Photo(
+                    photo_id=n,
+                    library="12@N00",
+                    author="Jo",
+                    taken=f"2010-01-0{n}T10:00:00",
+                    title="",
+                    tags=(),
+                    license_url="",
+                    key="",
+                    sha256="",
+                    width=40,
+                    height=30,
+                    annotated_at=40,
+                )
+            )
+        for name, value in (
+            ("load_manifest", lambda: self.photos),
+            ("fetch_images", lambda photos: paths),
+        ):
+            patcher = patch.object(dataset, name, side_effect=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _names(self):
+        return sorted(
+            File.objects.filter(owner=self.user, parent__name="Pictures").values_list(
+                "name", flat=True
+            )
+        )
+
+    def test_an_import_that_stops_halfway_leaves_nothing_to_collide_with(self):
+        """The library is only marked imported by CREDITS.txt, written last:
+        photos left behind by a failed run made the next one fail on their
+        names."""
+        create_file = self.seeder.FileService.create_file
+        calls = []
+
+        def failing_second_time(*args, **kwargs):
+            calls.append(kwargs["name"])
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return create_file(*args, **kwargs)
+
+        with (
+            patch.object(
+                self.seeder.FileService, "create_file", side_effect=failing_second_time
+            ),
+            self.assertRaises(OSError),
+            redirect_stdout(io.StringIO()),
+        ):
+            self.seeder.import_real_photos([self.user], 1, history_days=30)
+        self.assertEqual(self._names(), [])
+
+        with redirect_stdout(io.StringIO()):
+            self.seeder.import_real_photos([self.user], 1, history_days=30)
+
+        self.assertEqual(self._names(), ["CREDITS.txt", "IMG_0001.jpg", "IMG_0002.jpg"])
+
+    def test_says_when_fewer_libraries_than_asked_can_be_given(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            self.seeder.import_real_photos([self.user], 3, history_days=30)
+
+        self.assertIn("1 libraries for the 3 asked", out.getvalue())
 
 
 class SeedCaptureDateTests(SimpleTestCase):

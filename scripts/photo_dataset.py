@@ -159,8 +159,9 @@ def read_annotations(path):
 def with_faces(photos, annotations):
     """*photos* with their annotated faces, in the downloaded image's pixels.
 
-    Identities are prefixed with nothing: PIPA ids are global, and a person
-    who appears in two members' libraries keeps one id in both.
+    Identities are kept as PIPA gives them. One id is one person wherever it
+    appears, but PIPA often gives the same person a new id in each album:
+    two ids only say "two people" within one album (face_bench.GroupingScore).
     """
     annotated = []
     for photo in photos:

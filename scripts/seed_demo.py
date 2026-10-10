@@ -1123,6 +1123,11 @@ def import_real_photos(users, count, history_days):
     libraries = list(photo_dataset.by_library(photo_dataset.load_manifest()).values())
     users = sorted(users, key=lambda u: u.username != DEMO_USERNAME)[:count]
     picked = list(zip(users, libraries, strict=False))
+    if len(picked) < count:
+        print(
+            f"  {len(picked)} libraries for the {count} asked: {len(users)} "
+            f"users, {len(libraries)} libraries in the dataset"
+        )
     photos = [photo for _user, library in picked for photo in library]
     print(f"  downloading {len(photos)} photos (cached for the next runs) ...")
     paths = photo_dataset.fetch_images(photos)
@@ -1135,32 +1140,38 @@ def import_real_photos(users, count, history_days):
             print(f"  {user.username}: already has its photos")
             continue
         imported_at = _rand_past(history_days)
-        for n, photo in enumerate(library, 1):
-            name = f"IMG_{n:04d}.jpg"
-            data = _with_capture_date(paths[photo.photo_id].read_bytes(), photo.taken)
+        # All or nothing: CREDITS.txt, written last, is what marks a library
+        # as imported, so a run that stops halfway must leave no photo behind
+        # for the next one to collide with.
+        with transaction.atomic():
+            for n, photo in enumerate(library, 1):
+                name = f"IMG_{n:04d}.jpg"
+                data = _with_capture_date(
+                    paths[photo.photo_id].read_bytes(), photo.taken
+                )
+                f = FileService.create_file(
+                    owner=user,
+                    name=name,
+                    parent=folder,
+                    content=ContentFile(data, name=name),
+                )
+                _backdate_file(f, imported_at)
+            credits = "\n".join(
+                [
+                    "These photos are licensed CC BY 2.0 by their authors:",
+                    "https://creativecommons.org/licenses/by/2.0/",
+                    "",
+                    *(photo.credit for photo in library),
+                ]
+            )
             f = FileService.create_file(
                 owner=user,
-                name=name,
+                name="CREDITS.txt",
                 parent=folder,
-                content=ContentFile(data, name=name),
+                content=ContentFile(credits.encode(), name="CREDITS.txt"),
             )
             _backdate_file(f, imported_at)
-        credits = "\n".join(
-            [
-                "These photos are licensed CC BY 2.0 by their authors:",
-                "https://creativecommons.org/licenses/by/2.0/",
-                "",
-                *(photo.credit for photo in library),
-            ]
-        )
-        f = FileService.create_file(
-            owner=user,
-            name="CREDITS.txt",
-            parent=folder,
-            content=ContentFile(credits.encode(), name="CREDITS.txt"),
-        )
-        _backdate_file(f, imported_at)
-        _backdate_file(folder, imported_at)
+            _backdate_file(folder, imported_at)
         total += len(library)
         print(f"  {user.username}: {len(library)} photos", flush=True)
     return total

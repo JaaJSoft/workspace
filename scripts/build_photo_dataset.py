@@ -223,7 +223,7 @@ def lookup(photo_ids, cache_dir):
                 out.write(json.dumps(row) + "\n")
             if done % 2000 == 0:
                 print(f"  {done}/{len(todo)}", flush=True)
-    return rows
+    return {pid: row for pid, row in rows.items() if row.get("downloadurl")}
 
 
 def _missing(cache_dir):

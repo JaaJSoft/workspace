@@ -72,6 +72,66 @@ class ThumbnailSizesGenerationTests(IsolatedMediaRootMixin, APITestCase):
         self.assertEqual(_stored_size(get_thumbnail_path(f.uuid, 256)), (256, 192))
         self.assertEqual(_stored_size(get_thumbnail_path(f.uuid)), (512, 384))
 
+    def test_a_writer_landing_mid_replace_leaves_ours_and_no_stray_file(self):
+        f = self._photo()
+        variant = get_thumbnail_path(f.uuid, 256)
+        real_save = default_storage.save
+        raced = []
+
+        # Another writer stores the variant between this one's delete and save.
+        def save(name, content, *args, **kwargs):
+            if name == variant and not raced:
+                raced.append(name)
+                real_save(variant, ContentFile(b"other writer"))
+            return real_save(name, content, *args, **kwargs)
+
+        with mock.patch.object(default_storage, "save", side_effect=save):
+            self.assertTrue(generate_thumbnail(f))
+
+        self.assertEqual(_stored_size(variant), (256, 192))
+        _, names = default_storage.listdir("thumbnails")
+        self.assertEqual(
+            sorted(names),
+            sorted([f"{f.uuid}.webp", f"{f.uuid}_128.webp", f"{f.uuid}_256.webp"]),
+        )
+
+    def test_generation_fails_when_the_thumbnail_never_lands_at_its_path(self):
+        f = self._photo()
+        real_save = default_storage.save
+
+        def save(name, content, *args, **kwargs):
+            real_save(name, ContentFile(b"other writer"))
+            return real_save(name, content, *args, **kwargs)
+
+        with mock.patch.object(default_storage, "save", side_effect=save):
+            with self.assertRaises(OSError):
+                generate_thumbnail(f)
+
+        _, names = default_storage.listdir("thumbnails")
+        self.assertEqual(names, [f"{f.uuid}.webp"])
+
+    def test_delete_keeps_going_when_one_size_fails(self):
+        f = self._photo()
+        generate_thumbnail(f)
+        first = get_thumbnail_path(f.uuid, THUMBNAIL_SIZES[0])
+        real_delete = default_storage.delete
+
+        def delete(name):
+            if name == first:
+                raise OSError("busy")
+            return real_delete(name)
+
+        with (
+            mock.patch.object(default_storage, "delete", side_effect=delete),
+            self.assertLogs(
+                "workspace.files.services.thumbnails.generation", "WARNING"
+            ),
+        ):
+            delete_thumbnail(f.uuid)
+
+        for size in THUMBNAIL_SIZES[1:]:
+            self.assertFalse(default_storage.exists(get_thumbnail_path(f.uuid, size)))
+
     def test_delete_removes_every_size(self):
         f = self._photo()
         generate_thumbnail(f)

@@ -64,10 +64,26 @@ def _variant(img, size):
     return small
 
 
+_STORE_ATTEMPTS = 3
+
+
 def _store(path, data):
-    if default_storage.exists(path):
-        default_storage.delete(path)
-    default_storage.save(path, ContentFile(data))
+    """Put *data* at *path*, replacing whatever is there.
+
+    The storage never overwrites: a writer landing between the delete and the
+    save (another generation, or a request deriving a missing size) makes it
+    hand back an alternative name instead. That copy is removed and the
+    replacement retried, so no stray file is left and the bytes at *path* are
+    this call's.
+    """
+    for _ in range(_STORE_ATTEMPTS):
+        if default_storage.exists(path):
+            default_storage.delete(path)
+        saved = default_storage.save(path, ContentFile(data))
+        if saved == path:
+            return
+        default_storage.delete(saved)
+    raise OSError(f"Could not store thumbnail {path}")
 
 
 def parse_thumbnail_size(value):
@@ -244,13 +260,13 @@ def generate_thumbnail(file_obj):
 
 def delete_thumbnail(uuid):
     """Delete the thumbnail files for the given UUID, every size."""
-    try:
-        for size in THUMBNAIL_SIZES:
-            thumb_path = get_thumbnail_path(uuid, size)
+    for size in THUMBNAIL_SIZES:
+        thumb_path = get_thumbnail_path(uuid, size)
+        try:
             if default_storage.exists(thumb_path):
                 default_storage.delete(thumb_path)
-    except Exception:
-        logger.warning("Failed to delete thumbnail for %s", uuid, exc_info=True)
+        except Exception:
+            logger.warning("Failed to delete thumbnail %s", thumb_path, exc_info=True)
 
 
 def pending_thumbnails_qs(*, reanalyze=False):

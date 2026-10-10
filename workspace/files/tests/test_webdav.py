@@ -19,7 +19,13 @@ from wsgidav.dav_error import (
 )
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
-from workspace.files.models import File, FileFavorite, FileScan, GroupStorageQuota
+from workspace.files.models import (
+    File,
+    FileFavorite,
+    FileScan,
+    FileShare,
+    GroupStorageQuota,
+)
 from workspace.files.services import FileService, quota
 from workspace.files.webdav import dc as dc_module
 from workspace.files.webdav.dc import DjangoBasicDomainController
@@ -2185,3 +2191,39 @@ class WebDAVIntegrationTests(TestCase):
         self.assertEqual(body, b"tiny")
         code, _, body = self._request("GET", "/logo.svg")
         self.assertEqual(body, b"far too big for the group")
+
+    def _shared_with_me(self, name, body):
+        """A root file another user owns and shared read-only with this one."""
+        owner = User.objects.create_user(
+            username="davsharer", email="sharer@test.com", password="p"
+        )
+        file_obj = FileService.create_file(
+            owner, name, content=ContentFile(body, name=name), mime_type="text/plain"
+        )
+        FileShare.objects.create(
+            file=file_obj,
+            shared_by=owner,
+            shared_with=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+        )
+        return file_obj
+
+    def test_deleting_someone_elses_scratch_named_file_keeps_it_in_the_trash(self):
+        shared = self._shared_with_me("~$budget.xlsx", b"theirs")
+
+        self._request("DELETE", "/~$budget.xlsx")
+
+        shared.refresh_from_db()
+        self.assertIsNotNone(shared.deleted_at)
+
+    def test_moving_someone_elses_file_over_mine_never_destroys_it(self):
+        shared = self._shared_with_me("theirs.txt", b"theirs")
+        self._request("PUT", "/mine.txt", body=b"mine")
+
+        self._request(
+            "MOVE",
+            "/theirs.txt",
+            headers={"Destination": "http://testserver/dav/mine.txt"},
+        )
+
+        self.assertTrue(File.objects.filter(pk=shared.pk).exists())

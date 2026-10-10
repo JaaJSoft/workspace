@@ -607,8 +607,12 @@ class FileResource(DAVNonCollection):
             return  # Already moved in copy_move_single; nothing to delete.
         self._refuse_if_locked("DELETE")
         # Trashed bytes count against the quota for the whole retention
-        # period, and an office suite drops one of these on every save.
-        if _OFFICE_SCRATCH_NAME.match(self._file.name):
+        # period, and an office suite drops one of these on every save. Only
+        # the owner's own scratch skips the trash: WebDAV checks no share
+        # permission, so the trash is what makes a recipient's DELETE undoable.
+        if self._file.owner_id == self._user.pk and _OFFICE_SCRATCH_NAME.match(
+            self._file.name
+        ):
             FileService.hard_delete(self._file, acting_user=self._user)
         else:
             FileService.soft_delete(self._file, acting_user=self._user)
@@ -625,7 +629,9 @@ class FileResource(DAVNonCollection):
         target = self.provider.get_resource_inst(dest_path, self.environ)
         if not isinstance(target, FileResource) or target._file.pk == self._file.pk:
             return False
-        if not self._file.content:
+        # The source is hard-deleted below, so it must be the user's own temp
+        # file - never a row someone shared with them.
+        if not self._file.content or self._file.owner_id != self._user.pk:
             return False
         self._refuse_if_locked("MOVE")
         target._refuse_if_locked("PUT")

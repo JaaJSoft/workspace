@@ -673,8 +673,10 @@ def _advertised_space(environ, user, group_id):
     Windows redirector reports the local system drive) and refuses copies on
     it. A new file is charged to its folder's group, else to whoever writes
     it - a folder someone shared with *user* included - so no other user's
-    usage is ever disclosed. ``available`` is capped by the disk: a quota the
-    volume cannot hold is no promise.
+    usage is ever disclosed. A group's figures stay with its members: someone
+    reaching a group folder through a share only learns the free disk space.
+    ``available`` is capped by the disk: a quota the volume cannot hold is no
+    promise.
 
     wsgidav asks both questions for every collection of a listing, twice on
     an allprop PROPFIND, so each bucket is resolved once per request.
@@ -682,6 +684,9 @@ def _advertised_space(environ, user, group_id):
     cache = environ.setdefault("workspace.advertised_space", {})
     key = ("group", group_id) if group_id else ("user", user.pk)
     if key not in cache:
+        if group_id and not user.groups.filter(pk=group_id).exists():
+            cache[key] = (None, _disk_free_bytes())
+            return cache[key]
         if group_id:
             used = quota.group_usage(group_id)
             limit = quota.effective_group_quota(group_id)

@@ -594,6 +594,20 @@ class WebDavQuotaAdvertisingTests(TestCase):
         res = FolderResource("/Theirs", self._environ(), theirs)
         self.assertEqual(self._space(res), (KB, 9 * KB))
 
+    def test_a_group_folder_shared_outside_the_group_discloses_only_the_disk(self):
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
+        sub = FileService.create_folder(self.user, "sub", parent=self.group_root)
+        outsider = User.objects.create_user(username="davoutsider", password="pw")
+        FileShare.objects.create(
+            file=sub,
+            shared_by=self.user,
+            shared_with=outsider,
+            permission=FileShare.Permission.READ_WRITE,
+        )
+        environ = {"workspace.user": outsider, "wsgidav.provider": None}
+        res = FolderResource("/sub", environ, sub)
+        self.assertEqual(self._space(res), (None, 100 * KB))
+
     def test_a_listing_resolves_each_bucket_once(self):
         """wsgidav asks both questions for every collection of a listing,
         twice on an allprop PROPFIND."""
@@ -613,8 +627,9 @@ class WebDavQuotaAdvertisingTests(TestCase):
             )
             for i in range(3)
         ]
-        # One quota lookup and one aggregate per bucket.
-        with self.assertNumQueries(4):
+        # A quota lookup and an aggregate per bucket, plus the membership
+        # check for the group.
+        with self.assertNumQueries(5):
             for res in [RootCollection("/", environ), *personal, *team] * 2:
                 self._space(res)
 

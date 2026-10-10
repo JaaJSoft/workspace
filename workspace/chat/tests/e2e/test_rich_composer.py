@@ -168,5 +168,9 @@ class RichComposerTests(PlaywrightTestCase):
         textarea.type("a `snippet`")
 
         self.page.get_by_title("Back to formatted text").click()
-        expect(self._editor().locator("code")).to_have_text("snippet")
+        editor = self._editor()
+        expect(editor.locator("code")).to_have_text("snippet")
+        # The editor takes the focus a frame after it shows; an Enter pressed
+        # in between lands on the page and sends nothing.
+        expect(editor).to_be_focused()
         self.assertEqual(self._send_and_get_body(), "a `snippet`")

@@ -2080,22 +2080,6 @@ class WebDAVIntegrationTests(TestCase):
             headers={"Destination": f"http://testserver/dav/{name}", "Overwrite": "T"},
         )
 
-    def _save_like_word(self, name, body, n):
-        """Word on the Windows redirector: write ~WRL, rename the original
-        away to ~WRD, rename ~WRL into place, delete ~WRD."""
-        self._request("PUT", f"/~WRL{n:04}.tmp", body=body)
-        self._request(
-            "MOVE",
-            f"/{name}",
-            headers={"Destination": f"http://testserver/dav/~WRD{n:04}.tmp"},
-        )
-        self._request(
-            "MOVE",
-            f"/~WRL{n:04}.tmp",
-            headers={"Destination": f"http://testserver/dav/{name}"},
-        )
-        return self._request("DELETE", f"/~WRD{n:04}.tmp")
-
     def _advertised_used_bytes(self):
         _, _, body = self._request(
             "PROPFIND",
@@ -2138,25 +2122,6 @@ class WebDAVIntegrationTests(TestCase):
 
         self.assertEqual(quota.personal_usage(self.user), len(body))
         self.assertEqual(self._advertised_used_bytes(), len(body))
-
-    def test_word_saves_do_not_grow_the_quota(self):
-        body = b"x" * 1000
-        self._request("PUT", "/report.docx", body=body)
-        for n in range(5):
-            code, _, _ = self._save_like_word("report.docx", body, n)
-            self.assertEqual(code, 204)
-
-        self.assertEqual(quota.personal_usage(self.user), len(body))
-        live = File.objects.get(owner=self.user, name="report.docx")
-        with live.content.open("rb") as f:
-            self.assertEqual(f.read(), body)
-
-    def test_deleting_an_office_scratch_file_skips_the_trash(self):
-        for name in ("~$report.docx", "~WRL0001.tmp", ".~lock.report.odt#"):
-            self._request("PUT", f"/{name}", body=b"scratch")
-            code, _, _ = self._request("DELETE", f"/{name}")
-            self.assertEqual(code, 204)
-            self.assertFalse(File.objects.filter(owner=self.user, name=name).exists())
 
     def test_move_over_a_file_locked_by_someone_else_is_refused(self):
         dest = self._locked_by_someone_else(name="held.odt")
@@ -2207,14 +2172,6 @@ class WebDAVIntegrationTests(TestCase):
             permission=FileShare.Permission.READ_ONLY,
         )
         return file_obj
-
-    def test_deleting_someone_elses_scratch_named_file_keeps_it_in_the_trash(self):
-        shared = self._shared_with_me("~$budget.xlsx", b"theirs")
-
-        self._request("DELETE", "/~$budget.xlsx")
-
-        shared.refresh_from_db()
-        self.assertIsNotNone(shared.deleted_at)
 
     def test_moving_someone_elses_file_over_mine_never_destroys_it(self):
         shared = self._shared_with_me("theirs.txt", b"theirs")

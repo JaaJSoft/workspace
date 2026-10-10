@@ -3,7 +3,6 @@
 import io
 import logging
 import os
-import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -605,17 +604,11 @@ class FileResource(DAVNonCollection):
     def delete(self):
         if getattr(self, "_moved", False):
             return  # Already moved in copy_move_single; nothing to delete.
+        # A MOVE that handle_move hands back to wsgidav deletes an existing
+        # destination first, so this is also where that overwrite meets the
+        # lock.
         self._refuse_if_locked("DELETE")
-        # Trashed bytes count against the quota for the whole retention
-        # period, and an office suite drops one of these on every save. Only
-        # the owner's own scratch skips the trash: WebDAV checks no share
-        # permission, so the trash is what makes a recipient's DELETE undoable.
-        if self._file.owner_id == self._user.pk and _OFFICE_SCRATCH_NAME.match(
-            self._file.name
-        ):
-            FileService.hard_delete(self._file, acting_user=self._user)
-        else:
-            FileService.soft_delete(self._file, acting_user=self._user)
+        FileService.soft_delete(self._file, acting_user=self._user)
 
     def handle_move(self, dest_path):
         """Save-by-rename: a MOVE over an existing file replaces its content.
@@ -732,13 +725,6 @@ def _replace_content(target, source, user):
     os.replace(source.content.path, full_path)
     # The blob has moved, so the row's storage cleanup finds nothing to remove.
     FileService.hard_delete(source, acting_user=user)
-
-
-# ~$owner files (Office), ~WRL/~WRD temps (Word), .~lock.<name># (LibreOffice),
-# 8-hex-digit temps (Excel).
-_OFFICE_SCRATCH_NAME = re.compile(
-    r"^(~\$.+|~.+\.tmp|\.~lock\..+#|[0-9A-F]{8}(\.tmp)?)$"
-)
 
 
 def _move_to(file_obj, user, dest_path):

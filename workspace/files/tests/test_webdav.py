@@ -4,6 +4,7 @@ import base64
 import io
 import os
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -2114,6 +2115,8 @@ class WebDAVIntegrationTests(TestCase):
         self.assertTrue(FileFavorite.objects.filter(file=dest).exists())
         # The temp file is gone for good, not parked in the trash.
         self.assertEqual(File.objects.filter(owner=self.user).count(), 1)
+        folder = os.path.dirname(dest.content.path)
+        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])
 
     def test_saves_by_rename_do_not_grow_the_quota(self):
         body = b"x" * 1000
@@ -2201,3 +2204,25 @@ class WebDAVIntegrationTests(TestCase):
                 headers={"Depth": "0", "Content-Type": "application/xml"},
             )
             self.assertRegex(body, rb"quota-available-bytes>\d+<", path)
+
+    def test_a_failed_save_by_rename_leaves_both_files_as_they_were(self):
+        self._request("PUT", "/report.odt", body=b"old")
+        self._request("PUT", "/.report.odt.tmp", body=b"new version")
+        dest = File.objects.get(owner=self.user, name="report.odt")
+        temp = File.objects.get(owner=self.user, name=".report.odt.tmp")
+
+        with patch.object(FileService, "hard_delete", side_effect=OSError("disk")):
+            code, _, _ = self._request(
+                "MOVE",
+                "/.report.odt.tmp",
+                headers={"Destination": "http://testserver/dav/report.odt"},
+            )
+
+        self.assertGreaterEqual(code, 400)
+        for row, body in ((dest, b"old"), (temp, b"new version")):
+            row.refresh_from_db()
+            self.assertEqual(row.size, len(body))
+            with row.content.open("rb") as f:
+                self.assertEqual(f.read(), body)
+        folder = os.path.dirname(dest.content.path)
+        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])

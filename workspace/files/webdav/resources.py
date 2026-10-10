@@ -592,7 +592,7 @@ class FileResource(DAVNonCollection):
         self._refuse_if_locked("MOVE")
         target._refuse_if_locked("PUT")
         try:
-            with transaction.atomic(), _as_insufficient_storage():
+            with _as_insufficient_storage():
                 _replace_content(target._file, self._file, self._user)
         except (LockConflict, StaleContent) as exc:
             target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
@@ -717,20 +717,52 @@ def _replace_content(target, source, user):
             group=target.group_id,
             additional_bytes=(source.size or 0) - (target.size or 0),
         )
-    storage = target.content.storage
     storage_path = file_upload_path(target, target.name)
-    FileService.replace_content_storage(
-        target,
-        storage_path=storage_path,
-        size=source.size,
-        content_hash=source.content_hash,
-        acting_user=user,
-    )
-    full_path = storage.path(storage_path)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    os.replace(source.content.path, full_path)
-    # The blob has moved, so the row's storage cleanup finds nothing to remove.
-    FileService.hard_delete(source, acting_user=user)
+    full_path = target.content.storage.path(storage_path)
+    source_path = source.content.path
+    # A rollback restores rows, not files: whatever sat at full_path is set
+    # aside until the commit, so a failure can put both blobs back.
+    backup_path = f"{full_path}.{uuid.uuid4().hex}.bak"
+    backed_up = moved = False
+    try:
+        with transaction.atomic():
+            FileService.replace_content_storage(
+                target,
+                storage_path=storage_path,
+                size=source.size,
+                content_hash=source.content_hash,
+                acting_user=user,
+            )
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            if os.path.exists(full_path):
+                os.replace(full_path, backup_path)
+                backed_up = True
+            os.replace(source_path, full_path)
+            moved = True
+            # The blob has moved, so the row's storage cleanup finds nothing.
+            FileService.hard_delete(source, acting_user=user)
+    except BaseException:
+        _restore_blobs(source_path, full_path, backup_path, moved, backed_up)
+        raise
+    if backed_up:
+        try:
+            os.unlink(backup_path)
+        except OSError:
+            logger.warning("Could not remove replaced blob %s", scrub(backup_path))
+
+
+def _restore_blobs(source_path, full_path, backup_path, moved, backed_up):
+    """Undo ``_replace_content``'s storage moves after its rows rolled back."""
+    try:
+        if moved:
+            os.makedirs(os.path.dirname(source_path), exist_ok=True)
+            os.replace(full_path, source_path)
+        if backed_up:
+            os.replace(backup_path, full_path)
+    except OSError:
+        logger.exception(
+            "Could not restore blobs after a failed replace of %s", scrub(full_path)
+        )
 
 
 def _move_to(file_obj, user, dest_path):

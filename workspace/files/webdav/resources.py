@@ -25,6 +25,7 @@ from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
+from workspace.files.services.files import FilePermission
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -32,6 +33,20 @@ from workspace.files.services.locking import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _require_permission(user, file_obj, level, verb):
+    """Raise 403 unless *user* holds *level* on *file_obj*.
+
+    The levels are the REST API's: replacing a file's content needs WRITE (a
+    read-write share), creating, renaming, moving or deleting needs EDIT.
+    ``None`` stands for the user's own root.
+    """
+    if file_obj is None:
+        return
+    permission = FileService.get_permission(user, file_obj)
+    if permission is None or permission < level:
+        raise DAVError(HTTP_FORBIDDEN, f"{verb} is not allowed here")
 
 
 class _StreamingWriteBuffer:
@@ -297,6 +312,7 @@ class FolderResource(DAVCollection):
             deleted_at__isnull=True,
         ).first()
         if file_obj is None:
+            _require_permission(self._user, self._file, FilePermission.EDIT, "PUT")
             file_obj = FileService.create_file(
                 self._user,
                 name,
@@ -307,6 +323,7 @@ class FolderResource(DAVCollection):
         return FileResource(child_path, self.environ, file_obj)
 
     def create_collection(self, name):
+        _require_permission(self._user, self._file, FilePermission.EDIT, "MKCOL")
         FileService.create_folder(
             self._user,
             name,
@@ -316,6 +333,7 @@ class FolderResource(DAVCollection):
         return True
 
     def delete(self):
+        _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
         FileService.soft_delete(self._file, acting_user=self._user)
 
     def copy_move_single(self, dest_path, *, is_move):
@@ -325,6 +343,9 @@ class FolderResource(DAVCollection):
         dest_parts = _dest_parts(dest_path)
         new_name = dest_parts[-1]
         dest_parent = _resolve_parent(self._user, dest_parts[:-1])
+        _require_permission(
+            self._user, dest_parent, FilePermission.EDIT, "MOVE" if is_move else "COPY"
+        )
         FileService.create_folder(
             self._user,
             new_name,
@@ -405,6 +426,7 @@ class FileResource(DAVNonCollection):
         raise DAVError(HTTP_LOCKED, f"File is locked by {holder.username}")
 
     def begin_write(self, content_type=None):
+        _require_permission(self._user, self._file, FilePermission.WRITE, "PUT")
         self._refuse_if_locked("PUT")
 
         # An overwrite frees the bytes it replaces, so credit them back before
@@ -570,6 +592,7 @@ class FileResource(DAVNonCollection):
         # A MOVE that handle_move hands back to wsgidav deletes an existing
         # destination first, so this is also where that overwrite meets the
         # lock.
+        _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
         self._refuse_if_locked("DELETE")
         FileService.soft_delete(self._file, acting_user=self._user)
 
@@ -589,6 +612,7 @@ class FileResource(DAVNonCollection):
         # file - never a row someone shared with them.
         if not self._file.content or self._file.owner_id != self._user.pk:
             return False
+        _require_permission(self._user, target._file, FilePermission.WRITE, "MOVE")
         self._refuse_if_locked("MOVE")
         target._refuse_if_locked("PUT")
         try:
@@ -608,6 +632,7 @@ class FileResource(DAVNonCollection):
             dest_parts = _dest_parts(dest_path)
             new_name = dest_parts[-1]
             dest_parent = _resolve_parent(self._user, dest_parts[:-1])
+            _require_permission(self._user, dest_parent, FilePermission.EDIT, "COPY")
             with _as_insufficient_storage():
                 _copy_as(self._file, dest_parent, self._user, new_name)
 
@@ -622,8 +647,12 @@ class FileResource(DAVNonCollection):
 
         wsgidav answers 403 rather than the 423 a lock conflict deserves, but
         refusing is what matters: a client that took the DAV lock here would
-        believe it owns a file the browser editor is holding.
+        believe it owns a file the browser editor is holding. A user who may
+        not write the file has no business locking others out of it either.
         """
+        permission = FileService.get_permission(self._user, self._file)
+        if permission is None or permission < FilePermission.WRITE:
+            return True
         return conflicting_lock(self._file, self._user) is not None
 
     def support_etag(self):
@@ -783,7 +812,9 @@ def _move_to(file_obj, user, dest_path):
     needs_rename = new_name != file_obj.name
     needs_move = dest_parent != file_obj.parent
 
+    _require_permission(user, file_obj, FilePermission.EDIT, "MOVE")
     if needs_move:
+        _require_permission(user, dest_parent, FilePermission.EDIT, "MOVE")
         # FileService.rename below moves the blob with a non-transactional
         # os.rename, so a refusal from move() would leave it stranded. Refuse here,
         # before anything is written.

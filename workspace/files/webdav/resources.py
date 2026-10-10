@@ -3,6 +3,7 @@
 import io
 import logging
 import os
+import re
 import time
 import uuid
 from contextlib import contextmanager
@@ -604,11 +605,36 @@ class FileResource(DAVNonCollection):
     def delete(self):
         if getattr(self, "_moved", False):
             return  # Already moved in copy_move_single; nothing to delete.
-        # A MOVE onto an existing file deletes the destination first, so this
-        # is also where "overwrite by rename" - how Windows and davfs2 save -
-        # meets the lock.
         self._refuse_if_locked("DELETE")
-        FileService.soft_delete(self._file, acting_user=self._user)
+        # Trashed bytes count against the quota for the whole retention
+        # period, and an office suite drops one of these on every save.
+        if _OFFICE_SCRATCH_NAME.match(self._file.name):
+            FileService.hard_delete(self._file, acting_user=self._user)
+        else:
+            FileService.soft_delete(self._file, acting_user=self._user)
+
+    def handle_move(self, dest_path):
+        """Save-by-rename: a MOVE over an existing file replaces its content.
+
+        Editors save by writing a temp file and moving it over the document.
+        wsgidav's default trashes the destination first, which charges the
+        bucket a full copy per save and strands the document's shares, tags
+        and comments on the trashed row. Returning ``False`` hands every other
+        MOVE back to wsgidav.
+        """
+        target = self.provider.get_resource_inst(dest_path, self.environ)
+        if not isinstance(target, FileResource) or target._file.pk == self._file.pk:
+            return False
+        if not self._file.content:
+            return False
+        self._refuse_if_locked("MOVE")
+        target._refuse_if_locked("PUT")
+        try:
+            with transaction.atomic(), _as_insufficient_storage():
+                _replace_content(target._file, self._file, self._user)
+        except (LockConflict, StaleContent) as exc:
+            target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
+        return True
 
     def copy_move_single(self, dest_path, *, is_move):
         if is_move:
@@ -668,6 +694,45 @@ def _as_insufficient_storage():
         yield
     except quota.QuotaExceeded as exc:
         raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
+
+
+def _bucket(file_obj):
+    """The quota bucket *file_obj* is charged to (see ``services.quota``)."""
+    if file_obj.group_id:
+        return ("group", file_obj.group_id)
+    return ("user", file_obj.owner_id)
+
+
+def _replace_content(target, source, user):
+    """Give *target* the bytes of *source*, then drop *source* for good."""
+    if _bucket(target) != _bucket(source):
+        # Within one bucket the source bytes are already counted.
+        quota.check_write_allowed(
+            owner=target.owner_id,
+            group=target.group_id,
+            additional_bytes=(source.size or 0) - (target.size or 0),
+        )
+    storage = target.content.storage
+    storage_path = file_upload_path(target, target.name)
+    FileService.replace_content_storage(
+        target,
+        storage_path=storage_path,
+        size=source.size,
+        content_hash=source.content_hash,
+        acting_user=user,
+    )
+    full_path = storage.path(storage_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    os.replace(source.content.path, full_path)
+    # The blob has moved, so the row's storage cleanup finds nothing to remove.
+    FileService.hard_delete(source, acting_user=user)
+
+
+# ~$owner files (Office), ~WRL/~WRD temps (Word), .~lock.<name># (LibreOffice),
+# 8-hex-digit temps (Excel).
+_OFFICE_SCRATCH_NAME = re.compile(
+    r"^(~\$.+|~.+\.tmp|\.~lock\..+#|[0-9A-F]{8}(\.tmp)?)$"
+)
 
 
 def _move_to(file_obj, user, dest_path):

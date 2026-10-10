@@ -5,7 +5,10 @@
 # committed CSS file can never ship to prod. The JS bundles from the same
 # project are committed as-is; only the purged stylesheet depends on the
 # templates.
-FROM --platform=$BUILDPLATFORM node:26-bookworm-slim AS css-builder
+#
+# Docker Hub images are pulled through mirror.gcr.io: anonymous Docker Hub pulls
+# from shared CI runners hit its rate limit and fail the build.
+FROM --platform=$BUILDPLATFORM mirror.gcr.io/library/node:26-bookworm-slim AS css-builder
 
 WORKDIR /build
 
@@ -43,7 +46,7 @@ COPY workspace/ ./workspace/
 RUN mkdir -p /models     && for backend in $FACE_MODELS; do         SECRET_KEY=build-secret DEBUG=0 PHOTOS_MODEL_DIR=/models         .venv/bin/python manage.py download_face_models --backend "$backend" || exit 1;     done
 
 # Stage 4: Runtime
-FROM python:3.14-slim
+FROM mirror.gcr.io/library/python:3.14-slim
 
 # OCI metadata — static labels
 LABEL org.opencontainers.image.title="workspace" \

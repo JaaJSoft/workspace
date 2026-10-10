@@ -356,6 +356,15 @@ class FolderResource(DAVCollection):
     def support_recursive_move(self, dest_path):
         return True
 
+    def prevent_locking(self):
+        """Refuse a DAV LOCK to a user who may not write into the folder.
+
+        A collection lock covers its members, so it would lock the people who
+        can edit the folder out of it.
+        """
+        permission = FileService.get_permission(self._user, self._file)
+        return permission is None or permission < FilePermission.EDIT
+
     @transaction.atomic
     def move_recursive(self, dest_path):
         with _as_insufficient_storage():

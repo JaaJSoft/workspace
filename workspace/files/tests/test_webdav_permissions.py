@@ -221,6 +221,47 @@ class WebDAVSharePermissionTests(TestCase):
         folder.refresh_from_db()
         self.assertIsNone(folder.deleted_at)
 
+    def test_lock_of_a_read_only_folder_is_refused(self):
+        self._read_only_folder()
+
+        code, _, _ = self._request(
+            "LOCK",
+            "/Shared",
+            body=(
+                b'<?xml version="1.0" encoding="utf-8"?><lockinfo xmlns="DAV:">'
+                b"<lockscope><exclusive/></lockscope><locktype><write/></locktype>"
+                b"</lockinfo>"
+            ),
+            headers={"Content-Type": "application/xml", "Depth": "infinity"},
+        )
+
+        self.assertEqual(code, 403)
+
+    # ── a destination folder that does not resolve ──
+
+    def test_copy_into_an_unknown_folder_is_refused(self):
+        self._request("PUT", "/mine.txt", body=b"mine")
+
+        code, _, _ = self._request(
+            "COPY", "/mine.txt", headers={"Destination": f"{DAV}/Nowhere/mine.txt"}
+        )
+
+        self.assertEqual(code, 409)
+        self.assertEqual(
+            File.objects.filter(owner=self.user, name="mine.txt").count(), 1
+        )
+
+    def test_move_into_an_unknown_folder_is_refused(self):
+        self._request("PUT", "/mine.txt", body=b"mine")
+
+        code, _, _ = self._request(
+            "MOVE", "/mine.txt", headers={"Destination": f"{DAV}/Nowhere/mine.txt"}
+        )
+
+        self.assertEqual(code, 409)
+        mine = File.objects.get(owner=self.user, name="mine.txt")
+        self.assertIsNone(mine.parent_id)
+
     # ── the user's own files are unaffected ──
 
     def test_own_files_can_be_written_renamed_and_deleted(self):

@@ -72,7 +72,7 @@ test('applyCards hides the cards that do not match', () => {
     makeCard({ name: 'notes.txt', nodeType: 'file', tags: 'tag-b ' }),
     makeCard({ name: 'Archive', nodeType: 'folder', tags: ' ' }),
   ];
-  table.$el = { querySelectorAll: () => cards };
+  table.originalRows = cards;
 
   table.tagFilter = ['tag-b'];
   table.applyCards();
@@ -88,6 +88,29 @@ test('applyCards hides the cards that do not match', () => {
     cards.map((c) => c.style.display),
     ['none', 'none', '']
   );
+});
+
+test('applyCards orders the mosaic grid by the picked sort', () => {
+  /* Regression: the sort only reordered the list view's <tbody>, so the
+     mosaic stayed in server order whatever the sort menu said. */
+  const table = makeTable();
+  const grid = { order: [], append(...nodes) { this.order = nodes.map((n) => n.dataset.name); } };
+  const card = (name, size) => ({ ...makeCard({ name, nodeType: 'file', size: String(size) }), parentElement: grid });
+  table.originalRows = [card('b.txt', 30), card('c.txt', 10), card('a.txt', 20)];
+
+  table.sortField = 'name';
+  table.sortDir = 'asc';
+  table.applyCards();
+  assert.deepStrictEqual(grid.order, ['a.txt', 'b.txt', 'c.txt']);
+
+  table.sortField = 'size';
+  table.sortDir = 'desc';
+  table.applyCards();
+  assert.deepStrictEqual(grid.order, ['b.txt', 'a.txt', 'c.txt']);
+
+  table.sortField = 'default';
+  table.applyCards();
+  assert.deepStrictEqual(grid.order, ['b.txt', 'c.txt', 'a.txt']);
 });
 
 test('the filter badge counts the type and each tag, not the name query', () => {

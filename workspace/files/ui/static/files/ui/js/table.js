@@ -1066,12 +1066,7 @@ window.fileTableControls = function fileTableControls() {
       if (this.tbody) {
         const query = (this.searchQuery || '').trim().toLowerCase();
         const filtered = this.originalRows.filter((row) => this.matchesFilter(row, query));
-        let ordered = filtered;
-
-        if (this.sortField !== 'default') {
-          const dir = this.sortDir === 'asc' ? 1 : -1;
-          ordered = filtered.slice().sort((a, b) => this.compareRows(a, b, dir));
-        }
+        const ordered = this.sortItems(filtered);
 
         const fragment = document.createDocumentFragment();
         ordered.forEach((row) => fragment.appendChild(row));
@@ -1083,13 +1078,24 @@ window.fileTableControls = function fileTableControls() {
       this.saveState();
     },
 
+    // Rows and cards both start in server order (originalRows), which is
+    // what the default sort restores.
+    sortItems(items) {
+      if (this.sortField === 'default') return items;
+      const dir = this.sortDir === 'asc' ? 1 : -1;
+      return items.slice().sort((a, b) => this.compareRows(a, b, dir));
+    },
+
     // Mosaic cards are filtered from here rather than through an `x-show`
     // binding: the binding evaluated once at mount and never re-ran, so
     // every filter silently applied to the list view only.
     applyCards() {
-      this.cards().forEach((card) => {
+      if (this.tbody) return;
+      const cards = this.sortItems(this.originalRows);
+      cards.forEach((card) => {
         card.style.display = this.shouldShowCard(card) ? '' : 'none';
       });
+      cards[0]?.parentElement?.append(...cards);
     },
 
     // Cards and rows obey the same rules and carry the same data-*

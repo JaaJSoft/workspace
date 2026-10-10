@@ -169,6 +169,30 @@ class ListingToolbarTests(PlaywrightTestCase):
         sheet.get_by_role("button", name="Close").click()
         expect(sheet).to_be_hidden()
 
+    def test_the_sort_reorders_the_mosaic(self):
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        self.page.set_viewport_size({"width": 1280, "height": 900})
+        self.page.goto(f"{self.live_server_url}/files")
+        self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
+        cards = self.page.locator("#folder-browser div.grid > div[data-uuid]")
+        expect(cards).to_have_count(4)
+
+        browser = self.page.locator("#folder-browser")
+        browser.get_by_title("Sort").click()
+        sheet = browser.get_by_role("dialog", name="Sort")
+        sheet.get_by_role("radio", name="Name").click()
+        sheet.get_by_role("radio", name="Name").click()
+        names = cards.evaluate_all("cards => cards.map(c => c.dataset.displayName)")
+        self.assertEqual(
+            names,
+            [
+                "Quarterly budget 2026 - final version.xlsx",
+                "notes.md",
+                "Contract draft.pdf",
+                "Archive",
+            ],
+        )
+
     def _focus_inside(self, sheet):
         return sheet.evaluate("el => el.contains(document.activeElement)")
 

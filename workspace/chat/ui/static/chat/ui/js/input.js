@@ -1,7 +1,22 @@
 // Composer input behavior: keyboard shortcuts, emoji picker, mention
 // autocomplete, file attachments (upload + paste + drag-drop), typing
 // indicator, save-attachment-to-files action.
+//
+// The desktop composer has two modes, kept in the `composerMode` chat
+// preference: 'rendered' edits the message with its formatting applied (the
+// rich editor bundle, loaded on demand), 'markdown' edits the raw text in a
+// textarea. Both read and write `messageBody`, always markdown, so sending,
+// editing and drafts never need to know which one is on screen.
 window.chatInputMixin = function chatInputMixin() {
+  const FORMAT_MARKERS = { bold: '**', italic: '*', strike: '~~', code: '`' };
+
+  // The editor handle stays out of the component object: Alpine would wrap it
+  // in a reactive proxy, and ProseMirror's state does not survive that.
+  let rich = null;
+  let richLoading = null;
+  let richRoot = null;
+  let onPrefsChanged = null;
+
   return {
     // ── Pending file uploads (shared dual-source input) ──────
     ...window.attachmentInputMixin({
@@ -28,6 +43,121 @@ window.chatInputMixin = function chatInputMixin() {
     mentionHighlight: -1,
     mentionStartPos: -1,
 
+    // ── Rendered / markdown mode ─────────────────────────────
+    composerMode: (window._chatPrefsCache || {}).composerMode === 'markdown' ? 'markdown' : 'rendered',
+    richReady: false,
+    // Bumped on every editor update so the toolbar re-reads the marks at
+    // the caret.
+    richTick: 0,
+
+    // Until the editor bundle has loaded (or when it failed to), the
+    // textarea stands in, so the composer is never unusable.
+    richComposerActive() {
+      return this.composerMode === 'rendered' && this.richReady;
+    },
+
+    richComposerElement() {
+      return rich ? rich.view.dom : null;
+    },
+
+    formatActive(name) {
+      void this.richTick;
+      return this.richComposerActive() && rich.isMarkActive(name);
+    },
+
+    mountRichComposer(root) {
+      richRoot = root;
+      onPrefsChanged = (e) => this._applyComposerMode(e.detail?.composerMode);
+      window.addEventListener('chat:preferences-changed', onPrefsChanged);
+      if (this.composerMode === 'rendered') this._loadRichComposer();
+    },
+
+    destroyRichComposer() {
+      if (onPrefsChanged) window.removeEventListener('chat:preferences-changed', onPrefsChanged);
+      onPrefsChanged = null;
+      rich?.destroy();
+      rich = null;
+      richRoot = null;
+      this.richReady = false;
+    },
+
+    _loadRichComposer() {
+      if (rich || !richRoot) return Promise.resolve();
+      if (richLoading) return richLoading;
+      const root = richRoot;
+      richLoading = (async () => {
+        try {
+          const { createRichComposer } = await import(root.dataset.bundleUrl);
+          // The surface may have closed (a thread panel) while it loaded.
+          if (root !== richRoot || !root.isConnected) return;
+          rich = await createRichComposer(root, {
+            markdown: this.messageBody,
+            placeholder: root.dataset.placeholder,
+            onChange: (markdown) => {
+              this.messageBody = markdown;
+              this.handleMentionInput();
+              this.sendTypingSignal();
+            },
+            onSelectionChange: () => { this.richTick++; },
+            onKeydown: (e) => this.handleInputKeydown(e),
+            onPaste: (e) => this.handlePaste(e),
+          });
+          // The page also rewrites the message itself: conversation switch,
+          // draft restore, edit, send. The editor ignores the echo of its
+          // own changes.
+          this.$watch('messageBody', (value) => {
+            if (this.composerMode === 'rendered') rich?.setMarkdown(value);
+          });
+          // ...including while the editor was being created.
+          rich.setMarkdown(this.messageBody);
+          const textareaHadFocus = document.activeElement === this.$refs.messageInput;
+          this.richReady = true;
+          if (textareaHadFocus) this._focusInputOnceShown();
+        } catch (e) {
+          console.error('Formatted composer unavailable, staying on markdown', e);
+        } finally {
+          richLoading = null;
+        }
+      })();
+      return richLoading;
+    },
+
+    async toggleComposerMode() {
+      const mode = this.composerMode === 'rendered' ? 'markdown' : 'rendered';
+      if (window.updateChatPref) {
+        // Broadcasts to every composer on the page, this one included.
+        window.updateChatPref('composerMode', mode);
+      } else {
+        this._applyComposerMode(mode);
+      }
+      // Focus whichever input is shown once the editor has settled: a load
+      // finishing in between would hide the input that was just focused.
+      if (this.composerMode === 'rendered') await this._loadRichComposer();
+      this._focusInputOnceShown();
+    },
+
+    // x-show hides an element at once but reveals it on the next animation
+    // frame, so the input swapped in by a mode change cannot take the focus
+    // before that frame - focus() on it is a no-op until then, and the input
+    // swapped out has already dropped the focus to <body>.
+    _focusInputOnceShown() {
+      this.$nextTick(() => requestAnimationFrame(() => this.getMessageInput()?.focus()));
+    },
+
+    _applyComposerMode(mode) {
+      const next = mode === 'markdown' ? 'markdown' : 'rendered';
+      if (next === this.composerMode) return;
+      this.composerMode = next;
+      if (next === 'rendered') {
+        if (rich) rich.setMarkdown(this.messageBody);
+        else this._loadRichComposer();
+      } else {
+        this.$nextTick(() => {
+          if (this.$refs.messageInput) this.autoResize(this.$refs.messageInput);
+        });
+      }
+    },
+
     // Anything the composer could send right now. A method, not a getter:
     // this object is spread into chatApp(), and spread copies a getter's
     // one-time value instead of the accessor.
@@ -39,6 +169,10 @@ window.chatInputMixin = function chatInputMixin() {
 
     // ── Autoresize + emoji insert ────────────────────────────
     insertEmoji(emoji) {
+      if (this._richInput()) {
+        rich.insertText(emoji);
+        return;
+      }
       const ta = this.getMessageInput();
       if (!ta) {
         this.messageBody += emoji;
@@ -206,30 +340,47 @@ window.chatInputMixin = function chatInputMixin() {
       // Ctrl/Cmd+B → bold
       if (isMod && e.key === 'b') {
         e.preventDefault();
-        this.wrapSelection('**');
+        this.applyFormat('bold');
         return;
       }
 
       // Ctrl/Cmd+I → italic
       if (isMod && e.key === 'i') {
         e.preventDefault();
-        this.wrapSelection('*');
+        this.applyFormat('italic');
         return;
       }
 
       // Ctrl/Cmd+E → inline code
       if (isMod && e.key === 'e') {
         e.preventDefault();
-        this.wrapSelection('`');
+        this.applyFormat('code');
         return;
       }
 
       // Ctrl/Cmd+Shift+X → strikethrough
       if (isMod && e.shiftKey && e.key === 'X') {
         e.preventDefault();
-        this.wrapSelection('~~');
+        this.applyFormat('strike');
         return;
       }
+    },
+
+    // The rich editor, when it is the input the user is typing in. Below
+    // `sm` the composer is the plain mobile textarea whatever the mode.
+    _richInput() {
+      return this.richComposerActive() && !this.isSmallScreen() ? rich : null;
+    },
+
+    // Toolbar buttons and shortcuts: toggle the style in the formatted
+    // mode, wrap the selection in its markdown markers otherwise.
+    applyFormat(name) {
+      const editor = this._richInput();
+      if (editor) {
+        editor.toggleMark(name);
+        return;
+      }
+      this.wrapSelection(FORMAT_MARKERS[name]);
     },
 
     wrapSelection(marker) {
@@ -262,6 +413,7 @@ window.chatInputMixin = function chatInputMixin() {
     },
 
     insertLink() {
+      if (this._richInput()) return this._insertRichLink();
       const ta = this.getMessageInput();
       if (!ta) return;
       ta.focus();
@@ -294,12 +446,34 @@ window.chatInputMixin = function chatInputMixin() {
       }
     },
 
+    async _insertRichLink() {
+      const editor = rich;
+      const selected = editor.selectedText();
+      const href = await AppDialog.prompt({
+        title: 'Insert link',
+        message: selected ? `Link "${selected}" to:` : '',
+        placeholder: 'https://',
+        okLabel: 'Insert',
+        icon: 'link',
+      });
+      if (editor !== rich) return;
+      if (href === null || !href.trim()) {
+        editor.focus();
+        return;
+      }
+      editor.setLink(href.trim());
+    },
+
     // ── Mention autocomplete ─────────────────────────────────
     handleMentionInput() {
-      const ta = this.getMessageInput();
-      if (!ta) return;
-      const pos = ta.selectionStart;
-      const text = ta.value.substring(0, pos);
+      let text;
+      if (this._richInput()) {
+        text = rich.textBeforeCursor();
+      } else {
+        const ta = this.getMessageInput();
+        if (!ta) return;
+        text = ta.value.substring(0, ta.selectionStart);
+      }
 
       // Find the last '@' that starts a mention (preceded by start-of-string or
       // whitespace), spanning Django's username charset so a dotted name keeps filtering.
@@ -307,7 +481,7 @@ window.chatInputMixin = function chatInputMixin() {
       if (match) {
         this.mentionActive = true;
         this.mentionQuery = match[1].toLowerCase();
-        this.mentionStartPos = pos - match[1].length - 1; // position of '@'
+        this.mentionStartPos = text.length - match[1].length - 1; // position of '@'
         this.filterMentionResults();
       } else {
         this.closeMentionDropdown();
@@ -344,11 +518,16 @@ window.chatInputMixin = function chatInputMixin() {
     },
 
     insertMention(user) {
+      const mention = `@${user.username} `;
+      if (this._richInput()) {
+        rich.replaceBeforeCursor(this.mentionQuery.length + 1, mention);
+        this.closeMentionDropdown();
+        return;
+      }
       const ta = this.getMessageInput();
       if (!ta) return;
       const before = ta.value.substring(0, this.mentionStartPos);
       const after = ta.value.substring(ta.selectionStart);
-      const mention = `@${user.username} `;
       this.messageBody = before + mention + after;
       this.closeMentionDropdown();
       this.$nextTick(() => {

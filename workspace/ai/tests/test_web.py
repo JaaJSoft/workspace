@@ -10,6 +10,7 @@ from workspace.ai.services.web import (
     MAX_RESPONSE_BYTES,
     SEARCH_CATEGORIES,
     SEARCH_TIME_RANGES,
+    FetchError,
     _absolutize_links,
     _is_url_safe,
     _site_domain,
@@ -17,6 +18,7 @@ from workspace.ai.services.web import (
     search,
     search_many,
 )
+from workspace.ai.tool_registry import ToolError
 from workspace.ai.tools import (
     WEB_SEARCH_MAX_RESULTS,
     ReadWebpageParams,
@@ -417,6 +419,45 @@ class FetchAndExtractTests(TestCase):
             fetch_and_extract("https://example.com/huge")
         self.assertIn("too large", str(ctx.exception))
 
+    def _fetch_failing_with(self, error):
+        client = _client_returning(_fake_response())
+        client.get.side_effect = error
+        with (
+            patch("workspace.ai.services.web.httpx2.Client", return_value=client),
+            self.assertRaises(FetchError) as ctx,
+        ):
+            fetch_and_extract("https://example.com/page")
+        return ctx.exception
+
+    def _status_error(self, status_code):
+        import httpx2
+
+        request = httpx2.Request("GET", "https://example.com/page")
+        return httpx2.HTTPStatusError(
+            f"{status_code}",
+            request=request,
+            response=httpx2.Response(status_code, request=request),
+        )
+
+    def test_a_server_error_may_succeed_on_a_later_fetch(self):
+        failure = self._fetch_failing_with(self._status_error(503))
+
+        self.assertIn("Failed to fetch URL", str(failure))
+        self.assertTrue(failure.transient)
+
+    def test_a_timeout_may_succeed_on_a_later_fetch(self):
+        import httpx2
+
+        failure = self._fetch_failing_with(httpx2.ReadTimeout("timed out"))
+
+        self.assertTrue(failure.transient)
+
+    def test_a_missing_page_is_the_servers_final_answer(self):
+        failure = self._fetch_failing_with(self._status_error(404))
+
+        self.assertIn("Failed to fetch URL", str(failure))
+        self.assertFalse(failure.transient)
+
 
 class WebSearchToolTests(TestCase):
     """The tool layer: argument normalisation and the empty-result message."""
@@ -435,8 +476,9 @@ class WebSearchToolTests(TestCase):
         self.assertEqual(mock_search.call_args.args[0], ["a", "b", "c", "d"])
 
     def test_blank_queries_are_refused(self):
-        result = self._run(queries=["   ", ""])
-        self.assertTrue(result.startswith("Error:"))
+        with self.assertRaises(ToolError) as caught:
+            self._run(queries=["   ", ""])
+        self.assertIn("at least one query is required", caught.exception.reason)
 
     def test_filters_reach_the_service(self):
         with patch(
@@ -1107,13 +1149,46 @@ class ReadWebpageToolTests(TestCase):
         self.assertEqual(mock_fetch.call_args.kwargs["part"], 3)
 
     def test_a_part_the_page_does_not_have_comes_back_as_an_error(self):
-        with patch(
-            "workspace.ai.services.web.fetch_and_extract",
-            side_effect=ValueError("This page has 2 parts — there is no part 5."),
+        with (
+            patch(
+                "workspace.ai.services.web.fetch_and_extract",
+                side_effect=ValueError("This page has 2 parts — there is no part 5."),
+            ),
+            self.assertRaises(ToolError) as caught,
         ):
-            result = self._run(url="https://example.com/manual", part=5)
+            self._run(url="https://example.com/manual", part=5)
 
-        self.assertEqual(result, "Error: This page has 2 parts — there is no part 5.")
+        self.assertEqual(
+            caught.exception.reason, "This page has 2 parts — there is no part 5."
+        )
+        self.assertFalse(caught.exception.retryable)
+
+    def test_a_fetch_failure_is_retryable_only_when_transient(self):
+        for transient in (True, False):
+            with (
+                self.subTest(transient=transient),
+                patch(
+                    "workspace.ai.services.web.fetch_and_extract",
+                    side_effect=FetchError("Failed to fetch URL", transient=transient),
+                ),
+                self.assertRaises(ToolError) as caught,
+            ):
+                self._run(url="https://example.com/manual")
+
+            self.assertEqual(caught.exception.reason, "Failed to fetch URL")
+            self.assertEqual(caught.exception.retryable, transient)
+
+    def test_a_page_with_no_text_is_a_failure(self):
+        with (
+            patch("workspace.ai.services.web.fetch_and_extract", return_value=""),
+            self.assertRaises(ToolError) as caught,
+        ):
+            self._run(url="https://example.com/blank")
+
+        self.assertIn("no text content", caught.exception.reason)
+        self.assertFalse(caught.exception.retryable)
 
     def test_a_blank_url_is_refused(self):
-        self.assertTrue(self._run(url="   ").startswith("Error:"))
+        with self.assertRaises(ToolError) as caught:
+            self._run(url="   ")
+        self.assertIn("url is required", caught.exception.reason)

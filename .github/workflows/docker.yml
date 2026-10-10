@@ -68,7 +68,9 @@ jobs:
       # but services on a job spin up unconditionally - that is fine here
       # because the smoke step always runs (it gates the push).
       postgres:
-        image: postgres:17-alpine
+        # Pulled through mirror.gcr.io: anonymous Docker Hub pulls from shared
+        # runners hit its rate limit and fail the job before it starts.
+        image: mirror.gcr.io/library/postgres:17-alpine
         env:
           POSTGRES_USER: workspace
           POSTGRES_PASSWORD: workspace

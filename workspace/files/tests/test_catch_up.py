@@ -1,4 +1,4 @@
-"""The hourly catch-up: one task per pending file of every registered reader."""
+"""The hourly catch-up: one task per pending file of every registered processor."""
 
 from datetime import timedelta
 from io import StringIO
@@ -14,12 +14,12 @@ from django.utils import timezone
 
 from workspace.files.models import File
 from workspace.files.services import FileService
-from workspace.files.services import catch_up as registry
-from workspace.files.services.catch_up import (
+from workspace.files.services import processors as registry
+from workspace.files.services.processors import (
     pending_ids,
     queue_files,
     queue_pending,
-    register_catch_up,
+    register_processor,
     resolve,
 )
 from workspace.files.tasks import CATCH_UP_EXPIRY_SHARE, catch_up, catch_up_file
@@ -56,9 +56,14 @@ class FakeReader:
 
 
 def run_catch_up():
-    """Run the hourly pass, then every task it queued; return stats and calls."""
+    """Run the hourly pass, then every task it queued; return stats and calls.
+
+    The stats leave out the requeue of stalled pipelines, which test_pipeline
+    covers.
+    """
     with patch.object(catch_up_file, "apply_async") as queue:
         stats = catch_up.apply().get()
+    stats.pop("pipeline")
     for call in queue.call_args_list:
         catch_up_file.apply(args=call.kwargs["args"], kwargs=call.kwargs.get("kwargs"))
     return stats, queue.call_args_list
@@ -67,11 +72,11 @@ def run_catch_up():
 class CatchUpTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
-        registered = patch.dict(registry._CATCH_UPS, clear=True)
+        registered = patch.dict(registry._PROCESSORS, clear=True)
         registered.start()
         self.addCleanup(registered.stop)
         self.reader = FakeReader()
-        register_catch_up(
+        register_processor(
             "fake", pending=self.reader.pending, process=self.reader.process
         )
         # The rotation cursor lives in the cache, which LocMemCache keeps
@@ -112,7 +117,7 @@ class CatchUpTaskTests(CatchUpTestCase):
 
     def test_every_registered_reader_runs(self):
         other = FakeReader("other")
-        register_catch_up("other", pending=other.pending, process=other.process)
+        register_processor("other", pending=other.pending, process=other.process)
         f = self._upload("a.txt")
 
         self.assertEqual(run_catch_up()[0], {"fake": 1, "other": 1})
@@ -121,7 +126,7 @@ class CatchUpTaskTests(CatchUpTestCase):
 
     def test_names_limit_the_pass_to_those_readers(self):
         other = FakeReader("other")
-        register_catch_up("other", pending=other.pending, process=other.process)
+        register_processor("other", pending=other.pending, process=other.process)
         self._upload("a.txt")
 
         with patch.object(catch_up_file, "apply_async") as queue:
@@ -158,7 +163,7 @@ class CatchUpTaskTests(CatchUpTestCase):
 
     def test_a_resumed_pass_wraps_around_to_the_start(self):
         uploaded = [self._upload(f"{i}.txt").pk for i in range(4)]
-        reader = registry.get_catch_up("fake")
+        reader = registry.get_processor("fake")
 
         ids = list(pending_ids(reader, start_after=uploaded[1]))
 
@@ -168,13 +173,13 @@ class CatchUpTaskTests(CatchUpTestCase):
         uploaded = {self._upload(f"{i}.txt").pk for i in range(5)}
 
         with patch.object(registry, "_PAGE_SIZE", 2):
-            self.assertEqual(set(pending_ids(registry.get_catch_up("fake"))), uploaded)
+            self.assertEqual(set(pending_ids(registry.get_processor("fake"))), uploaded)
 
 
 class RegistryTests(CatchUpTestCase):
     def test_resolve_takes_every_reader_by_default(self):
         other = FakeReader("other")
-        register_catch_up("other", pending=other.pending, process=other.process)
+        register_processor("other", pending=other.pending, process=other.process)
 
         readers, unknown = resolve(None)
 
@@ -183,7 +188,7 @@ class RegistryTests(CatchUpTestCase):
 
     def test_resolve_keeps_the_order_asked_and_reports_unknown_names(self):
         other = FakeReader("other")
-        register_catch_up("other", pending=other.pending, process=other.process)
+        register_processor("other", pending=other.pending, process=other.process)
 
         readers, unknown = resolve(["other", "gone", "fake", "other"])
 
@@ -195,7 +200,7 @@ class RegistryTests(CatchUpTestCase):
 
         with patch.object(catch_up_file, "apply_async") as queue:
             queued = queue_pending(
-                registry.get_catch_up("fake"), reanalyze=True, expires=60
+                registry.get_processor("fake"), reanalyze=True, expires=60
             )
 
         self.assertEqual(queued, 1)
@@ -210,7 +215,7 @@ class RegistryTests(CatchUpTestCase):
         self.reader.processed.append(a.pk)
 
         with patch.object(catch_up_file, "apply_async") as queue:
-            queued = queue_files(registry.get_catch_up("fake"), [a.pk])
+            queued = queue_files(registry.get_processor("fake"), [a.pk])
 
         self.assertEqual(queued, 1)
         queue.assert_called_once_with(
@@ -220,7 +225,7 @@ class RegistryTests(CatchUpTestCase):
         )
 
     def test_a_disabled_reader_has_nothing_pending(self):
-        register_catch_up(
+        register_processor(
             "off",
             pending=self.reader.pending,
             process=self.reader.process,
@@ -266,7 +271,7 @@ class CatchUpFileTaskTests(CatchUpTestCase):
         self.assertEqual(self.reader.processed, [f.pk, f.pk])
 
     def test_nothing_written_is_skipped(self):
-        register_catch_up("noop", pending=self.reader.pending, process=lambda f: False)
+        register_processor("noop", pending=self.reader.pending, process=lambda f: False)
         f = self._upload("a.txt")
 
         status = catch_up_file.apply(args=["noop", str(f.pk)]).get()
@@ -337,7 +342,7 @@ class CatchUpCommandTests(CatchUpTestCase):
 
     def test_runs_only_the_named_readers(self):
         other = FakeReader("other")
-        register_catch_up("other", pending=other.pending, process=other.process)
+        register_processor("other", pending=other.pending, process=other.process)
 
         output = self._run("other", "--sync")
 
@@ -346,11 +351,11 @@ class CatchUpCommandTests(CatchUpTestCase):
         self.assertEqual(self.reader.processed, [])
 
     def test_unknown_reader(self):
-        with self.assertRaisesMessage(CommandError, "Unknown reader(s): gone"):
+        with self.assertRaisesMessage(CommandError, "Unknown processor(s): gone"):
             self._run("gone")
 
     def test_a_disabled_reader_is_reported_and_skipped(self):
-        register_catch_up(
+        register_processor(
             "off",
             pending=self.reader.pending,
             process=self.reader.process,

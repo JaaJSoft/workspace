@@ -6,6 +6,7 @@ from workspace.ai.harness.dispatch import Dispatcher
 from workspace.ai.harness.observers import Observer
 from workspace.ai.harness.policies import RepeatGuard
 from workspace.ai.services.call_order import call_position
+from workspace.ai.tool_registry import parse_tool_failure
 
 from .harness import StubToolset, call
 
@@ -213,7 +214,7 @@ class ConcurrentToolCallTests(TestCase):
         )
         refused = outcome.outcomes[3]
         self.assertTrue(refused.refused)
-        self.assertIn("Not executed", refused.refusal)
+        self.assertIn("not executed", parse_tool_failure(refused.refusal)["reason"])
         self.assertEqual(outcome.executed, 4)
 
     def test_a_round_of_nothing_but_refusals_executed_nothing(self):

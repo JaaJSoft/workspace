@@ -199,7 +199,7 @@ def render_ai_steps(message):
     'thinking' (model reasoning), 'text' (intermediate assistant text emitted
     between tool rounds), 'tool' (one executed call).
     """
-    from workspace.ai.tool_registry import tool_registry
+    from workspace.ai.tool_registry import parse_tool_failure, tool_registry
 
     tool_data = getattr(message, "tool_data", None)
     if not isinstance(tool_data, list):
@@ -250,6 +250,7 @@ def render_ai_steps(message):
                 else ""
             )
             result = results_by_id.get(tc.get("id"), "")
+            failure = parse_tool_failure(result)
             steps.append(
                 {
                     "type": "tool",
@@ -258,8 +259,8 @@ def render_ai_steps(message):
                     "detail": detail,
                     "args": display_args(parsed),
                     "args_raw": raw_args if parsed is None else "",
-                    "result": _pretty_result(result),
-                    "is_error": result.startswith(("Error:", "Unknown tool:")),
+                    "result": failure["reason"] if failure else _pretty_result(result),
+                    "is_error": failure is not None,
                 }
             )
 

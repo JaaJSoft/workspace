@@ -6,7 +6,7 @@ import uuid as uuid_mod
 
 from pydantic import BaseModel, Field
 
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 from workspace.files.models import File
 
 
@@ -86,7 +86,7 @@ call search_everything, which searches file contents too. \
 Use read_file with the returned UUID to get the content."""
         query = args.query.strip()
         if not query:
-            return "Error: query is required"
+            raise ToolError("query is required")
 
         from workspace.files.search import in_browsable_tree, reachable_parent_ids
         from workspace.files.services import FileService

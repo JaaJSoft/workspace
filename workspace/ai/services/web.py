@@ -500,6 +500,26 @@ def _render_html(
     return _compose(header, _one_part(text, query, budget, part), links, max_chars)
 
 
+class FetchError(ValueError):
+    """A URL that could not be fetched.
+
+    *transient* when the same fetch may succeed later: the server timed out,
+    was unreachable, rate-limited the request or failed on its side. Any
+    other status is the server's final answer for that URL.
+    """
+
+    def __init__(self, message, *, transient):
+        super().__init__(message)
+        self.transient = transient
+
+
+def _is_transient(exc: httpx2.HTTPError) -> bool:
+    if isinstance(exc, httpx2.HTTPStatusError):
+        status = exc.response.status_code
+        return status == 429 or status >= 500
+    return isinstance(exc, httpx2.TransportError)
+
+
 def fetch_and_extract(
     url: str, *, max_chars: int = 12000, query: str = "", part: int = 1
 ) -> str:
@@ -523,7 +543,8 @@ def fetch_and_extract(
     is out of reach.
 
     Raises ``ValueError`` for unsafe URLs, fetch failures, and a *part* the
-    document does not have.
+    document does not have; a fetch failure is a :class:`FetchError`, which
+    says whether fetching again may succeed.
     """
     if not _is_url_safe(url):
         raise ValueError("URL points to a private or internal address")
@@ -538,7 +559,9 @@ def fetch_and_extract(
             resp = client.get(url)
             resp.raise_for_status()
     except httpx2.HTTPError as exc:
-        raise ValueError(f"Failed to fetch URL: {exc}") from exc
+        raise FetchError(
+            f"Failed to fetch URL: {exc}", transient=_is_transient(exc)
+        ) from exc
 
     content = resp.content
     final_url = str(resp.url)

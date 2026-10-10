@@ -8,7 +8,7 @@ alone.
 Writes happen off-request, from the files.index_search_document task, so a
 rename or an edit shows up in search a moment later rather than instantly.
 Every document records what it was built from (SearchIndexState), and the
-hourly catch-up (services/catch_up.py) indexes again whatever no longer
+hourly catch-up (services/processors.py) indexes again whatever no longer
 matches: a file never indexed, a lost rename or edit, an extractor change.
 """
 

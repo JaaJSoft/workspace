@@ -112,8 +112,8 @@ class ThumbnailMetricsTests(TestCase):
         f.type = "jpeg"
         f.save(update_fields=["type"])
         before = _sample("files_thumbnail_generation_total", {"result": "failed"})
-        result = generate_thumbnail(f)
-        self.assertFalse(result)
+        with self.assertRaises(Exception):
+            generate_thumbnail(f)
         self.assertEqual(
             _sample("files_thumbnail_generation_total", {"result": "failed"}) - before,
             1,

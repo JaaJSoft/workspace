@@ -7,7 +7,7 @@ from datetime import date, timedelta
 
 from pydantic import BaseModel, Field
 
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ class CommentOnTaskParams(BaseModel):
 def _resolve_project(user, name):
     """Accessible, non-archived project matching *name* by key or name.
 
-    Returns ``(project, error)`` with exactly one side set.
+    Raises :class:`ToolError` naming the user's projects when none matches.
     """
     from .models import Project
     from .queries import user_project_ids
@@ -126,8 +126,8 @@ def _resolve_project(user, name):
     )
     if project is None:
         names = ", ".join(p.name for p in accessible) or "(none)"
-        return None, f'Error: no project named "{wanted}". Your projects: {names}'
-    return project, None
+        raise ToolError(f'no project named "{wanted}". Your projects: {names}')
+    return project
 
 
 def _get_task(user, task_uuid):
@@ -143,7 +143,7 @@ def _get_task(user, task_uuid):
 
 
 def _resolve_member(project, username):
-    """Project member matching *username*, or ``(None, error)``."""
+    """Project member matching *username*; raises :class:`ToolError` otherwise."""
     from .queries import project_users
 
     wanted = username.strip()
@@ -152,20 +152,20 @@ def _resolve_member(project, username):
         None,
     )
     if member is None:
-        return None, (
-            f'Error: "{wanted}" is not a member of project "{project.name}". '
+        raise ToolError(
+            f'"{wanted}" is not a member of project "{project.name}". '
             "Use search_users to find the exact username."
         )
-    return member, None
+    return member
 
 
 def _parse_date(value, field):
     try:
-        return date.fromisoformat(value.strip()), None
+        return date.fromisoformat(value.strip())
     except ValueError:
-        return None, (
-            f'Error: could not parse {field} "{value}". Use YYYY-MM-DD format.'
-        )
+        raise ToolError(
+            f'could not parse {field} "{value}". Use YYYY-MM-DD format.'
+        ) from None
 
 
 def _task_entry(task):
@@ -233,9 +233,7 @@ by project or due window. For tasks assigned to other people use search_tasks.""
 
         qs = assigned_open_tasks(user)
         if args.project.strip():
-            project, error = _resolve_project(user, args.project)
-            if error:
-                return error
+            project = _resolve_project(user, args.project)
             qs = qs.filter(project=project)
         if args.due_within_days > 0:
             from django.utils import timezone
@@ -274,22 +272,18 @@ or wants an overview like the overdue tasks of a project."""
 
         query = args.query.strip()
         if not query:
-            return "Error: query is required"
+            raise ToolError("query is required")
 
         extra = Q()
         if args.project.strip():
-            project, error = _resolve_project(user, args.project)
-            if error:
-                return error
+            project = _resolve_project(user, args.project)
             extra &= Q(project=project)
         if args.assignee.strip():
             extra &= Q(assignees__username__iexact=args.assignee.strip())
         if args.status.strip():
             extra &= Q(status__name__iexact=args.status.strip())
         if args.due_before.strip():
-            due_before, error = _parse_date(args.due_before, "due_before")
-            if error:
-                return error
+            due_before = _parse_date(args.due_before, "due_before")
             extra &= Q(due_date__lte=due_before)
 
         tasks, _ = combined_task_search(user, query, limit=20, extra_filter=extra)
@@ -318,31 +312,27 @@ project's backlog column."""
 
         title = args.title.strip()
         if not title:
-            return "Error: title is required"
+            raise ToolError("title is required")
 
         if args.project.strip():
-            project, error = _resolve_project(user, args.project)
-            if error:
-                return error
+            project = _resolve_project(user, args.project)
         else:
             project = get_or_create_personal_project(user)
 
         priority = args.priority.strip().lower() or Task.Priority.MEDIUM
         if priority not in Task.Priority.values:
             choices = ", ".join(Task.Priority.values)
-            return f'Error: invalid priority "{args.priority}". Use one of: {choices}'
+            raise ToolError(
+                f'invalid priority "{args.priority}". Use one of: {choices}'
+            )
 
         due_date = None
         if args.due_date.strip():
-            due_date, error = _parse_date(args.due_date, "due_date")
-            if error:
-                return error
+            due_date = _parse_date(args.due_date, "due_date")
 
         assignees = ()
         if args.assignee.strip():
-            member, error = _resolve_member(project, args.assignee)
-            if error:
-                return error
+            member = _resolve_member(project, args.assignee)
             assignees = (member,)
 
         task = task_service.create_task(
@@ -382,9 +372,9 @@ list_my_tasks or search_tasks first."""
 
         task = _get_task(user, args.task_uuid)
         if task is None:
-            return "Error: task not found."
+            raise ToolError("task not found.")
         if task.project.is_archived:
-            return f'Error: project "{task.project.name}" is archived.'
+            raise ToolError(f'project "{task.project.name}" is archived.')
 
         wanted = args.status.strip()
         target = next(
@@ -399,8 +389,8 @@ list_my_tasks or search_tasks first."""
             names = ", ".join(
                 s.name for s in task.project.statuses.order_by("position", "created_at")
             )
-            return (
-                f'Error: project "{task.project.name}" has no status "{wanted}". '
+            raise ToolError(
+                f'project "{task.project.name}" has no status "{wanted}". '
                 f"Its statuses: {names}"
             )
         if target.pk == task.status_id:
@@ -438,30 +428,28 @@ first."""
 
         task = _get_task(user, args.task_uuid)
         if task is None:
-            return "Error: task not found."
+            raise ToolError("task not found.")
         if task.project.is_archived:
-            return f'Error: project "{task.project.name}" is archived.'
+            raise ToolError(f'project "{task.project.name}" is archived.')
 
         assignee = args.assignee.strip()
         raw_due = args.due_date.strip()
         if not assignee and not raw_due:
-            return "Error: nothing to update - pass an assignee and/or a due_date."
+            raise ToolError("nothing to update - pass an assignee and/or a due_date.")
 
         changes = []
         if raw_due:
             if raw_due.lower() == "none":
                 due_date = None
             else:
-                due_date, error = _parse_date(raw_due, "due_date")
-                if error:
-                    return error
+                due_date = _parse_date(raw_due, "due_date")
             if (
                 due_date is not None
                 and task.start_date is not None
                 and due_date < task.start_date
             ):
-                return (
-                    "Error: due date cannot be before the task's start date "
+                raise ToolError(
+                    "due date cannot be before the task's start date "
                     f"({task.start_date.isoformat()})."
                 )
             if task.due_date != due_date:
@@ -475,9 +463,7 @@ first."""
             )
 
         if assignee:
-            member, error = _resolve_member(task.project, assignee)
-            if error:
-                return error
+            member = _resolve_member(task.project, assignee)
             if task.assignees.filter(pk=member.pk).exists():
                 changes.append(f"{member.username} was already assigned")
             else:
@@ -507,13 +493,13 @@ search_tasks first."""
 
         task = _get_task(user, args.task_uuid)
         if task is None:
-            return "Error: task not found."
+            raise ToolError("task not found.")
         if task.project.is_archived:
-            return f'Error: project "{task.project.name}" is archived.'
+            raise ToolError(f'project "{task.project.name}" is archived.')
 
         body = args.body.strip()
         if not body:
-            return "Error: body is required"
+            raise ToolError("body is required")
 
         add_comment(task, user, body)
         logger.info(

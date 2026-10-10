@@ -6,7 +6,7 @@ import logging
 from workspace.common.logging import scrub
 
 from ..models import File
-from .catch_up import register_catch_up
+from .processors import register_processor
 
 logger = logging.getLogger(__name__)
 
@@ -101,4 +101,8 @@ def refresh_content_hash(file_obj):
     return bool(written)
 
 
-register_catch_up("content_hash", pending=pending_hash_qs, process=refresh_content_hash)
+# Outside the upload pipeline: every content write hashes inline, so only rows
+# registered before hashes existed, or whose blob was unreadable, need it.
+register_processor(
+    "content_hash", pending=pending_hash_qs, process=refresh_content_hash
+)

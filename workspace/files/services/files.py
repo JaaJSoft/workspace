@@ -22,9 +22,9 @@ from . import _names as _name_helpers
 from . import _storage_ops as _storage
 from .events import record_event
 from .hard_delete import hard_delete_tree
+from .processing_failures import clear_failures
 from .quota import check_write_allowed, subtree_bytes
 from .scanning.policy import exclude_blocked
-from .thumbnails.failures import clear_failure
 
 
 class FilePermission(enum.IntEnum):
@@ -266,6 +266,11 @@ class FileService:
             size=size,
             content_hash=content_hash,
             group=group,
+            processing_status=(
+                File.ProcessingStatus.PENDING
+                if content is not None
+                else File.ProcessingStatus.READY
+            ),
         )
         if content is not None:
             # The blob path derives from content.name, not from the row's
@@ -334,6 +339,7 @@ class FileService:
             type=detection.label,
             category=detection.group or "unknown",
             size=size,
+            processing_status=File.ProcessingStatus.PENDING,
         )
         file_obj.content.name = content_path
         try:
@@ -560,6 +566,7 @@ class FileService:
                 file_type, mime_type or getattr(content, "content_type", None)
             ),
             "has_thumbnail": False,
+            "processing_status": File.ProcessingStatus.PENDING,
             "updated_at": timezone.now(),
         }
         with transaction.atomic():
@@ -574,11 +581,11 @@ class FileService:
             setattr(file_obj, field, value)
         # Ordering is load-bearing: after the write (nothing here is atomic, so a
         # fresh budget must not outlive a failed write) and before record_event,
-        # whose dispatch re-runs generation and spends that budget on commit.
-        # Unguarded on purpose, unlike the generator's ledger writes: on a request
-        # path a failed delete must surface rather than leave repaired bytes
-        # silently parked.
-        clear_failure(file_obj)
+        # whose pipeline re-runs the processors and spends that budget on
+        # commit. Unguarded on purpose, unlike the processor runner's ledger
+        # writes: on a request path a failed delete must surface rather than
+        # leave repaired bytes silently parked.
+        clear_failures(file_obj)
         if file_obj.size:
             FILES_UPLOAD_BYTES.inc(file_obj.size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)
@@ -645,6 +652,7 @@ class FileService:
             "content_hash": "",
             "size": None,
             "has_thumbnail": False,
+            "processing_status": File.ProcessingStatus.READY,
             "updated_at": timezone.now(),
         }
         FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
@@ -705,6 +713,7 @@ class FileService:
             "type": detection.label,
             "category": detection.group or "unknown",
             "has_thumbnail": False,
+            "processing_status": File.ProcessingStatus.PENDING,
             "updated_at": timezone.now(),
         }
         FileService._write_content_row(file_obj, acting_user, expected_hash, fields)
@@ -712,7 +721,7 @@ class FileService:
             setattr(file_obj, field, value)
         # Same ordering constraint, and the same deliberate lack of a guard, as
         # update_content.
-        clear_failure(file_obj)
+        clear_failures(file_obj)
         if size:
             FILES_UPLOAD_BYTES.inc(size)
         record_event(file_obj, acting_user, FileEvent.Action.CONTENT_REPLACED)

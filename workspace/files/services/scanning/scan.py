@@ -1,8 +1,9 @@
 """Scan a file's content for malware and record the verdict (FileScan rows).
 
-Runs off-request: from the files.scan_file task, which the file-event handler
-queues once an upload or a content replacement has committed, and from the
-hourly catch-up (services/catch_up.py) for whatever that path missed.
+Runs off-request: first in the upload pipeline once an upload or a content
+replacement has committed, from the hourly catch-up (services/processors.py)
+for whatever that path missed, and from the files.scan_file task when an
+administrator asks for a rescan.
 """
 
 import logging
@@ -51,7 +52,10 @@ def pending_scan_qs(*, reanalyze=False):
 
 
 def scan_for_catch_up(file_obj):
-    """Scan *file_obj* with the configured scanner; True when a verdict was written."""
+    """Scan *file_obj* with the configured scanner; True when a verdict was written.
+
+    The processor entry point, for the upload pipeline and the catch-up.
+    """
     from .registry import get_scanner
 
     scanner = get_scanner()

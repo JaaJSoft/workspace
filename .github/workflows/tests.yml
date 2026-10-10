@@ -423,7 +423,9 @@ jobs:
     if: needs.changes.outputs.nextcloud == 'true'
     services:
       nextcloud:
-        image: nextcloud:34-apache
+        # Pulled through mirror.gcr.io: anonymous Docker Hub pulls from shared
+        # runners hit its rate limit and fail the job before it starts.
+        image: mirror.gcr.io/library/nextcloud:34-apache
         ports:
           - 8080:80
         env:
@@ -483,7 +485,8 @@ jobs:
     if: needs.changes.outputs.vectors == 'true'
     services:
       postgres:
-        image: pgvector/pgvector:0.8.1-pg17
+        # Pulled through mirror.gcr.io, see the nextcloud service above.
+        image: mirror.gcr.io/pgvector/pgvector:0.8.1-pg17
         env:
           POSTGRES_USER: workspace
           POSTGRES_PASSWORD: workspace

@@ -15,6 +15,7 @@ from prometheus_client import REGISTRY
 
 from workspace.ai.harness.observers import MetricsObserver
 from workspace.ai.harness.runner import StopReason
+from workspace.ai.tool_registry import tool_failure
 
 from .harness import ScriptedModel, StubToolset, build_runner, call, reply, tool_reply
 
@@ -164,6 +165,7 @@ class ImageRequestMetricsTests(TestCase):
 
     @patch("workspace.ai.services.image.get_image_client")
     def test_generate_error_increments_error_counter(self, mock_get_client):
+        from workspace.ai.tool_registry import ToolError
         from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 
         client = MagicMock()
@@ -173,15 +175,15 @@ class ImageRequestMetricsTests(TestCase):
         labels = {"model": "dall-e-3", "op": "generate", "status": "error"}
         before = _sample("ai_image_requests_total", labels)
 
-        result = ImageToolProvider().generate_image(
-            GenerateImageParams(prompt="a cat"),
-            user=None,
-            bot=None,
-            conversation_id="conv-1",
-            context={},
-        )
+        with self.assertRaises(ToolError):
+            ImageToolProvider().generate_image(
+                GenerateImageParams(prompt="a cat"),
+                user=None,
+                bot=None,
+                conversation_id="conv-1",
+                context={},
+            )
 
-        self.assertTrue(result.startswith("Error"))
         # One sample per attempt: the counter tracks calls to the backend,
         # and the retries are real calls.
         self.assertEqual(_sample("ai_image_requests_total", labels) - before, 3)
@@ -255,15 +257,26 @@ class ToolLoopMetricsTests(TestCase):
 
         self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
 
-    def test_error_result_string_counts_as_error(self):
-        # Tools report failure to the model as an "Error: ..." string, never
-        # as an exception, so that prefix is what the counter reads.
+    def test_failure_envelope_counts_as_error(self):
         labels = {"tool": "search", "status": "error"}
         before = _sample("ai_tool_calls_total", labels)
 
         self._run(
             [tool_reply(call("c1")), reply("done")],
-            handler=lambda tc, ctx: "Error: query is required",
+            handler=lambda tc, ctx: tool_failure("query is required"),
+        )
+
+        self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
+
+    def test_a_result_that_only_reads_like_an_error_counts_as_ok(self):
+        # A page about error handling is a result: only the envelope says a
+        # call failed.
+        labels = {"tool": "search", "status": "ok"}
+        before = _sample("ai_tool_calls_total", labels)
+
+        self._run(
+            [tool_reply(call("c1")), reply("done")],
+            handler=lambda tc, ctx: "Error: 404 is what this server answers",
         )
 
         self.assertEqual(_sample("ai_tool_calls_total", labels) - before, 1)
@@ -287,7 +300,9 @@ class ToolLoopMetricsTests(TestCase):
 
         self._run(
             [tool_reply(call("c1", name="teleport_user")), reply("done")],
-            handler=lambda tc, ctx: "Unknown tool: teleport_user",
+            handler=lambda tc, ctx: tool_failure(
+                "there is no tool named teleport_user"
+            ),
         )
 
         self.assertEqual(_sample("ai_tool_calls_total", folded) - before, 1)

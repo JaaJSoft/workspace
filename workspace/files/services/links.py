@@ -5,7 +5,7 @@ markdown editor, which inserts ``[Title](/notes?file=UUID)`` into a note's
 content. ``extract_link_targets`` parses those references and
 ``reconcile_file_links`` syncs them into FileLink rows for a source file, and
 records what it read in FileLinkState so the hourly catch-up
-(services/catch_up.py) can tell which notes still need it.
+(services/processors.py) can tell which notes still need it.
 """
 
 from __future__ import annotations

@@ -4,6 +4,7 @@ from django.test import TestCase
 
 from workspace.ai.harness.observers import Observer
 from workspace.ai.harness.runner import StopReason
+from workspace.ai.tool_registry import parse_tool_failure
 
 from .harness import (
     ScriptedModel,
@@ -262,8 +263,9 @@ class RepeatedToolCallTests(TestCase):
         run, messages = _run(model)
 
         refused = run.rounds[3]["tool_executions"][0]["result"]
-        self.assertIn("Not executed", refused)
-        self.assertIn("search", refused)
+        failure = parse_tool_failure(refused)
+        self.assertIn("not executed", failure["reason"])
+        self.assertIn("search", failure["reason"])
         self.assertEqual(tool_messages(messages)[-1][1], refused)
 
     def test_repeat_loop_ends_on_a_tool_less_answer(self):

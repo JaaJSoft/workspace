@@ -8,7 +8,6 @@ from django.test import TestCase
 
 from workspace.files.models import File, FileLink, FileLinkState
 from workspace.files.services import FileService
-from workspace.files.services.catch_up import get_catch_up
 from workspace.files.services.links import (
     EXTRACTOR_VERSION,
     extract_link_targets,
@@ -16,6 +15,7 @@ from workspace.files.services.links import (
     reconcile_file_links,
     refresh_file_links,
 )
+from workspace.files.services.processors import get_processor
 
 from .catch_up import run_catch_up
 
@@ -188,7 +188,7 @@ class FileLinksCatchUpTests(TestCase):
         return set(pending_links_qs(**kwargs).values_list("pk", flat=True))
 
     def test_registered_with_the_catch_up(self):
-        self.assertIs(get_catch_up("file_links").process, refresh_file_links)
+        self.assertIs(get_processor("file_links").process, refresh_file_links)
 
     def test_populates_existing_links_and_is_idempotent(self):
         b = _make_markdown(self.user, "B.md", "# B")

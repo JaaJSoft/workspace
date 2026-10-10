@@ -14,7 +14,13 @@ from django.test import TestCase, override_settings
 
 from workspace.ai.harness.model import ToolCall
 from workspace.ai.models import BotProfile, UserMemory
-from workspace.ai.tool_registry import ToolProvider, ToolRegistry, tool, tool_registry
+from workspace.ai.tool_registry import (
+    ToolProvider,
+    ToolRegistry,
+    parse_tool_failure,
+    tool,
+    tool_registry,
+)
 from workspace.ai.tools import GenerateImageParams, ImageToolProvider
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.common.search import fts5_available
@@ -219,7 +225,7 @@ class ExecuteToolCallTests(TestCase):
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
-        self.assertIn("Unknown", result)
+        self.assertIn("unknown_tool", parse_tool_failure(result)["reason"])
 
     def test_search_messages(self):
         conv = Conversation.objects.create(created_by=self.user)
@@ -326,7 +332,10 @@ class ExecuteToolCallTests(TestCase):
 
         result = tool_registry.execute(tool_call, user=self.user, bot=self.bot_user)
 
-        self.assertIn("Error", result)
+        self.assertEqual(
+            parse_tool_failure(result),
+            {"retryable": False, "reason": "location is required"},
+        )
 
     def test_get_current_user_info(self):
         self.user.first_name = "Pierre"
@@ -586,7 +595,7 @@ class ImageParallelismTests(TestCase):
         tells the bot to stop, and a backend that is down keeps being asked.
         """
         from workspace.ai.services.image import ImageGenerationError
-        from workspace.ai.tools import _image_failure_message
+        from workspace.ai.tools import _image_failure
 
         context = {}
         exc = ImageGenerationError("upstream down", attempts=3)
@@ -595,27 +604,30 @@ class ImageParallelismTests(TestCase):
 
         def fail(prompt):
             start.wait()
-            return _image_failure_message("generate_image", prompt, exc, context)
+            return _image_failure("generate_image", prompt, exc, context)
 
         with ThreadPoolExecutor(max_workers=len(prompts)) as pool:
-            messages = list(pool.map(fail, prompts))
+            failures = list(pool.map(fail, prompts))
 
         self.assertEqual(sorted(context["failed_image_prompts"]), sorted(prompts))
-        exhausted = [m for m in messages if "Too many image failures" in m]
+        exhausted = [f for f in failures if "Too many image failures" in f.reason]
         self.assertEqual(len(exhausted), 1)
+        self.assertFalse(exhausted[0].retryable)
 
     @override_settings(AI_IMAGE_FAILURE_BUDGET=3)
     def test_the_budget_still_ends_a_bot_that_keeps_failing(self):
         from workspace.ai.services.image import ImageGenerationError
-        from workspace.ai.tools import _image_failure_message
+        from workspace.ai.tools import _image_failure
 
         context = {}
         exc = ImageGenerationError("upstream down", attempts=3)
 
-        messages = [
-            _image_failure_message("generate_image", f"prompt {i}", exc, context)
+        failures = [
+            _image_failure("generate_image", f"prompt {i}", exc, context)
             for i in range(3)
         ]
 
-        self.assertNotIn("Too many image failures", messages[0])
-        self.assertIn("Too many image failures", messages[-1])
+        self.assertNotIn("Too many image failures", failures[0].reason)
+        self.assertTrue(failures[0].retryable)
+        self.assertIn("Too many image failures", failures[-1].reason)
+        self.assertFalse(failures[-1].retryable)

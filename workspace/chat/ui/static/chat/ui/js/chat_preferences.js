@@ -6,6 +6,8 @@ window._chatPrefsDefaults = {
     // slide | pop | fade | bounce | none - the CSS in chat.css keys the
     // entrance keyframes on this value.
     messageAnimation: 'slide',
+    // rendered | markdown - how the desktop composer edits the message.
+    composerMode: 'rendered',
 };
 // Initial prefs are embedded server-side via |json_script (index.html and
 // room.html). Reading them synchronously means the first Alpine paint

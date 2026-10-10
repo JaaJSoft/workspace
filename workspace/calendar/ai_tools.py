@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from workspace.ai.tool_registry import ToolProvider, tool
+from workspace.ai.tool_registry import ToolError, ToolProvider, tool
 from workspace.common.datetimes import parse_local_datetime
 from workspace.common.logging import scrub
 
@@ -163,9 +163,9 @@ class GetPollResultsParams(BaseModel):
 
 
 def _writable_event(user, event_id):
-    """Return ``(event, error)`` for an event *user* is allowed to write.
+    """Return the event *user* is allowed to write, or raise :class:`ToolError`.
 
-    Exactly one side is set. Reads go through ``visible_events_q`` so an
+    Reads go through ``visible_events_q`` so an
     event the user cannot see is indistinguishable from one that does not
     exist, and the write check refuses events on external calendars — an
     edit there is reverted by the next feed sync, after the tool has already
@@ -181,18 +181,18 @@ def _writable_event(user, event_id):
         .first()
     )
     if event is None:
-        return None, "Error: no event with that id, or you cannot see it."
+        raise ToolError("no event with that id, or you cannot see it.")
     try:
         assert_writable(event, user)
     except EventScopeError as exc:
-        return None, f"Error: {exc.detail}"
-    return event, None
+        raise ToolError(str(exc.detail)) from None
+    return event
 
 
 def _resolve_occurrence(event, scope, raw, user_tz):
-    """Return ``(original_start, error)`` for a scoped edit of *event*.
+    """Return the ``original_start`` of a scoped edit of *event*.
 
-    ``None`` with no error means the scope does not need one (a whole-series
+    ``None`` means the scope does not need one (a whole-series
     edit, or a non-recurring event where scope is moot).
     """
     from datetime import timedelta
@@ -200,16 +200,16 @@ def _resolve_occurrence(event, scope, raw, user_tz):
     from workspace.calendar.recurrence import occurrences_in_range
 
     if scope == "all" or not event.is_recurring:
-        return None, None
+        return None
     if not raw.strip():
-        return None, (
-            f"Error: original_start is required for scope={scope}. Take it from "
+        raise ToolError(
+            f"original_start is required for scope={scope}. Take it from "
             "the occurrence's original_start in list_upcoming_events."
         )
     occurrence = parse_local_datetime(raw.strip(), user_tz)
     if occurrence is None:
-        return None, (
-            f'Error: could not parse original_start "{raw}". '
+        raise ToolError(
+            f'could not parse original_start "{raw}". '
             "Use ISO format like 2026-07-05T14:00"
         )
     # An instant that is not on the series grid would materialize an
@@ -219,15 +219,15 @@ def _resolve_occurrence(event, scope, raw, user_tz):
     if not any(
         occ == occurrence for occ in occurrences_in_range(event, occurrence, window_end)
     ):
-        return None, (
-            f"Error: {occurrence.isoformat()} is not an occurrence of this series. "
+        raise ToolError(
+            f"{occurrence.isoformat()} is not an occurrence of this series. "
             "Take original_start from list_upcoming_events rather than computing it."
         )
-    return occurrence, None
+    return occurrence
 
 
 def _resolve_usernames(names):
-    """Return ``(user_ids, error)`` for a list of exact usernames.
+    """Return the user ids of a list of exact usernames.
 
     An unknown name is reported rather than dropped: silently inviting four
     people out of five is worse than inviting nobody.
@@ -237,7 +237,7 @@ def _resolve_usernames(names):
 
     wanted = [n.strip() for n in names if n.strip()]
     if not wanted:
-        return [], None
+        return []
 
     User = get_user_model()
     lookup = Q()
@@ -248,11 +248,11 @@ def _resolve_usernames(names):
     }
     unknown = sorted({n for n in wanted if n.lower() not in found})
     if unknown:
-        return None, (
-            f"Error: no active user named {', '.join(unknown)}. "
+        raise ToolError(
+            f"no active user named {', '.join(unknown)}. "
             "Use search_users to find the exact username."
         )
-    return sorted({found[n.lower()] for n in wanted}), None
+    return sorted({found[n.lower()] for n in wanted})
 
 
 def _describe_scope(event, scope):
@@ -288,7 +288,7 @@ and location. Call this when the user asks about upcoming events, meetings, or \
 scheduling polls."""
         query = args.query.strip()
         if not query:
-            return "Error: query is required"
+            raise ToolError("query is required")
 
         from workspace.calendar.models import Poll
         from workspace.calendar.services.event_search import search_events_qs
@@ -353,13 +353,17 @@ Call this when the user asks if they are free, available, or have any events dur
 
         start = parse_local_datetime(args.start.strip(), user_tz)
         if start is None:
-            return f'Error: could not parse start datetime "{args.start}". Use ISO format like 2026-03-21T09:00'
+            raise ToolError(
+                f'could not parse start datetime "{args.start}". Use ISO format like 2026-03-21T09:00'
+            )
         end = parse_local_datetime(args.end.strip(), user_tz)
         if end is None:
-            return f'Error: could not parse end datetime "{args.end}". Use ISO format like 2026-03-21T10:00'
+            raise ToolError(
+                f'could not parse end datetime "{args.end}". Use ISO format like 2026-03-21T10:00'
+            )
 
         if end <= start:
-            return "Error: end must be after start"
+            raise ToolError("end must be after start")
 
         # All calendars visible to the user (owned + subscribed)
         cal_ids = visible_calendar_ids(user)
@@ -582,14 +586,14 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
 
         title = args.title.strip()
         if not title:
-            return "Error: title is required"
+            raise ToolError("title is required")
 
         user_tz = get_user_timezone(user)
 
         start = parse_local_datetime(args.start.strip(), user_tz)
         if start is None:
-            return (
-                f'Error: could not parse start datetime "{args.start}". '
+            raise ToolError(
+                f'could not parse start datetime "{args.start}". '
                 "Use ISO format like 2026-07-05T14:00"
             )
 
@@ -597,15 +601,15 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
         if args.end.strip():
             end = parse_local_datetime(args.end.strip(), user_tz)
             if end is None:
-                return (
-                    f'Error: could not parse end datetime "{args.end}". '
+                raise ToolError(
+                    f'could not parse end datetime "{args.end}". '
                     "Use ISO format like 2026-07-05T15:00"
                 )
             if end <= start:
-                return "Error: end must be after start"
+                raise ToolError("end must be after start")
 
         if not args.all_day and start <= dj_tz.now():
-            return "Error: start must be in the future"
+            raise ToolError("start must be in the future")
 
         owned, _ = visible_calendars(user)
         owned_list = list(owned)
@@ -617,8 +621,8 @@ names a calendar, pass it in `calendar`; call list_calendars first if unsure."""
             )
             if calendar is None:
                 names = ", ".join(c.name for c in owned_list) or "(none)"
-                return (
-                    f'Error: no calendar named "{requested}". Your calendars: {names}'
+                raise ToolError(
+                    f'no calendar named "{requested}". Your calendars: {names}'
                 )
         elif owned_list:
             calendar = owned_list[0]
@@ -667,16 +671,12 @@ whole series before choosing. Only the owner can edit, and events from an extern
         from workspace.calendar.services import event_scope
         from workspace.users.services.settings import get_user_timezone
 
-        event, err = _writable_event(user, args.event_id)
-        if err:
-            return err
+        event = _writable_event(user, args.event_id)
 
         user_tz = get_user_timezone(user)
-        original_start, err = _resolve_occurrence(
+        original_start = _resolve_occurrence(
             event, args.scope, args.original_start, user_tz
         )
-        if err:
-            return err
 
         data = {}
         if args.title.strip():
@@ -684,8 +684,8 @@ whole series before choosing. Only the owner can edit, and events from an extern
         if args.start.strip():
             start = parse_local_datetime(args.start.strip(), user_tz)
             if start is None:
-                return (
-                    f'Error: could not parse start datetime "{args.start}". '
+                raise ToolError(
+                    f'could not parse start datetime "{args.start}". '
                     "Use ISO format like 2026-07-05T14:00"
                 )
             data["start"] = start
@@ -695,8 +695,8 @@ whole series before choosing. Only the owner can edit, and events from an extern
             else:
                 end = parse_local_datetime(args.end.strip(), user_tz)
                 if end is None:
-                    return (
-                        f'Error: could not parse end datetime "{args.end}". '
+                    raise ToolError(
+                        f'could not parse end datetime "{args.end}". '
                         "Use ISO format like 2026-07-05T15:00"
                     )
                 data["end"] = end
@@ -715,13 +715,11 @@ whole series before choosing. Only the owner can edit, and events from an extern
                 data["member_ids"] = []
                 data["guests"] = []
             else:
-                member_ids, err = _resolve_usernames(args.attendees)
-                if err:
-                    return err
+                member_ids = _resolve_usernames(args.attendees)
                 data["member_ids"] = member_ids
 
         if not data:
-            return "Error: nothing to change — pass at least one field to update."
+            raise ToolError("nothing to change — pass at least one field to update.")
 
         # The new end must beat the new start, and either side may be the one
         # already stored. A scoped edit writes a row anchored on
@@ -736,7 +734,7 @@ whole series before choosing. Only the owner can edit, and events from an extern
         else:
             new_end = None
         if new_end and new_start and new_end <= new_start:
-            return "Error: end must be after start"
+            raise ToolError("end must be after start")
 
         # A guest-list change is externally visible whether or not the event
         # recurs: sync_members notifies everyone added and everyone removed,
@@ -753,7 +751,7 @@ whole series before choosing. Only the owner can edit, and events from an extern
                 event, data, user, scope=args.scope, original_start=original_start
             )
         except event_scope.EventScopeError as exc:
-            return f"Error: {exc.detail}"
+            raise ToolError(str(exc.detail)) from None
 
         logger.info(
             "AI updated event %s for %s (scope=%s)",
@@ -785,15 +783,11 @@ be cancelled at all."""
         from workspace.calendar.services import event_scope
         from workspace.users.services.settings import get_user_timezone
 
-        event, err = _writable_event(user, args.event_id)
-        if err:
-            return err
+        event = _writable_event(user, args.event_id)
 
-        original_start, err = _resolve_occurrence(
+        original_start = _resolve_occurrence(
             event, args.scope, args.original_start, get_user_timezone(user)
         )
-        if err:
-            return err
 
         if not args.confirm:
             return request_confirmation(
@@ -807,7 +801,7 @@ be cancelled at all."""
                 event, user, scope=args.scope, original_start=original_start
             )
         except event_scope.EventScopeError as exc:
-            return f"Error: {exc.detail}"
+            raise ToolError(str(exc.detail)) from None
 
         logger.info(
             "AI cancelled event %s for %s (scope=%s)",
@@ -840,7 +834,7 @@ confirmation first."""
 
         event = Event.objects.filter(visible_events_q(user), uuid=args.event_id).first()
         if event is None:
-            return "Error: no event with that id, or you cannot see it."
+            raise ToolError("no event with that id, or you cannot see it.")
 
         verb = "Accept" if args.response == "accepted" else "Decline"
         if not args.confirm:
@@ -853,7 +847,9 @@ confirmation first."""
         try:
             invitations.respond_to_invitation(event.uuid, user, args.response)
         except invitations.NotInvitedError:
-            return f'Error: you are not on the guest list of "{event.title}".'
+            raise ToolError(
+                f'you are not on the guest list of "{event.title}".'
+            ) from None
 
         logger.info(
             "AI answered invitation %s as %s for %s",
@@ -889,7 +885,7 @@ into an event."""
 
         title = args.title.strip()
         if not title:
-            return "Error: title is required"
+            raise ToolError("title is required")
 
         user_tz = get_user_timezone(user)
         duration = max(1, min(args.duration_minutes, 24 * 60))
@@ -898,23 +894,21 @@ into an event."""
         for raw in args.slots:
             parsed = parse_local_datetime(raw.strip(), user_tz)
             if parsed is None:
-                return (
-                    f'Error: could not parse slot "{raw}". '
+                raise ToolError(
+                    f'could not parse slot "{raw}". '
                     "Use ISO format like 2026-07-05T14:00"
                 )
             starts.append(parsed)
 
         starts = sorted(set(starts))
         if len(starts) < 2:
-            return "Error: a poll needs at least 2 distinct candidate slots."
+            raise ToolError("a poll needs at least 2 distinct candidate slots.")
         if len(starts) > 20:
-            return "Error: a poll takes at most 20 candidate slots."
+            raise ToolError("a poll takes at most 20 candidate slots.")
         if starts[0] <= dj_tz.now():
-            return "Error: candidate slots must be in the future"
+            raise ToolError("candidate slots must be in the future")
 
-        invitee_ids, err = _resolve_usernames(args.invitees)
-        if err:
-            return err
+        invitee_ids = _resolve_usernames(args.invitees)
         invitees = [uid for uid in invitee_ids if uid != user.id]
 
         with transaction.atomic():
@@ -986,14 +980,14 @@ user asks how a poll is going, who has answered, or which slot works best."""
             Poll.objects.filter(uuid=args.poll_id).select_related("created_by").first()
         )
         if poll is None:
-            return "Error: no poll with that id."
+            raise ToolError("no poll with that id.")
         is_participant = (
             poll.created_by_id == user.id
             or PollInvitee.objects.filter(poll=poll, user=user).exists()
             or PollVote.objects.filter(slot__poll=poll, user=user).exists()
         )
         if not is_participant:
-            return "Error: no poll with that id, or you have no access to it."
+            raise ToolError("no poll with that id, or you have no access to it.")
 
         user_tz = get_user_timezone(user)
         slots = (

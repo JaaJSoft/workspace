@@ -366,13 +366,15 @@ window.fileBrowser = function fileBrowser() {
       const taken = await this._siblingFileNames(
         targetFolderId === undefined ? this.currentFolder || null : targetFolderId
       );
-      for (const file of files) {
-        if (!taken.has(file.name.toLowerCase())) continue;
-        if (mode === 'skip') {
-          decisions.set(file, 'skip');
+      const colliding = files.filter(file => taken.has(file.name.toLowerCase()));
+      let chosenForRest = mode === 'skip' ? 'skip' : null;
+      for (const [index, file] of colliding.entries()) {
+        if (chosenForRest) {
+          decisions.set(file, chosenForRest);
           continue;
         }
-        const choice = await AppDialog.select({
+        const remaining = colliding.length - index - 1;
+        const answer = await AppDialog.select({
           title: 'File already exists',
           message: `A file named "${file.name}" already exists in this folder. What should happen to the new one?`,
           options: [
@@ -384,9 +386,13 @@ window.fileBrowser = function fileBrowser() {
           okLabel: 'Continue',
           icon: 'files',
           iconClass: 'bg-module/15 text-module',
+          checkbox: remaining ? `Do the same for the ${remaining} other conflict${remaining > 1 ? 's' : ''}` : '',
         });
+        const { value, checked } = remaining ? answer : { value: answer, checked: false };
         // Closing the dialog is the safe choice: the existing file stays.
-        decisions.set(file, choice || 'skip');
+        const choice = value || 'skip';
+        decisions.set(file, choice);
+        if (checked) chosenForRest = choice;
       }
       return decisions;
     },

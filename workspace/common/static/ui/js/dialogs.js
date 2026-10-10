@@ -178,7 +178,8 @@ const AppDialog = {
       titleEl.textContent = title;
       messageEl.textContent = message;
       messageEl.style.display = message ? '' : 'none';
-      checkboxRow.style.display = checkbox ? '' : 'none';
+      checkboxRow.classList.toggle('hidden', !checkbox);
+      checkboxRow.classList.toggle('flex', !!checkbox);
       checkboxLabel.textContent = checkbox;
       checkboxInput.checked = false;
 

@@ -15,6 +15,7 @@ import json
 import re
 import sys
 import tempfile
+import urllib.error
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -199,31 +200,41 @@ class ReportTests(SimpleTestCase):
     def test_the_report_is_json(self):
         json.dumps(self._report(3, 0))
 
+    def test_runs_on_other_photos_are_flagged_as_not_comparable(self):
+        full_size = {**self._report(3, 0), "rendition": 1024}
+
+        text = bench.render(full_size, baseline=self._report(3, 0))
+
+        self.assertIn("2 photos at 1024 px", text)
+        self.assertIn("The earlier run saw 2 photos at 500 px", text)
+        self.assertNotIn("not compare", bench.render(full_size, baseline=full_size))
+
+
+def _photo(**fields):
+    return dataset.Photo(
+        **{
+            "photo_id": 1,
+            "library": "12@N00",
+            "author": "Jo",
+            "taken": "2010-03-06T18:57:24",
+            "title": "Molly",
+            "tags": (),
+            "license_url": "http://creativecommons.org/licenses/by/2.0/",
+            "key": "0" * 32,
+            "sha256": "0" * 64,
+            "width": 500,
+            "height": 250,
+            "annotated_at": 1024,
+            **fields,
+        }
+    )
+
 
 class DatasetTests(SimpleTestCase):
-    def _photo(self, **fields):
-        return dataset.Photo(
-            **{
-                "photo_id": 1,
-                "library": "12@N00",
-                "author": "Jo",
-                "taken": "2010-03-06T18:57:24",
-                "title": "Molly",
-                "tags": (),
-                "license_url": "http://creativecommons.org/licenses/by/2.0/",
-                "key": "0" * 32,
-                "sha256": "0" * 64,
-                "width": 500,
-                "height": 250,
-                "annotated_at": 1024,
-                **fields,
-            }
-        )
-
     def test_scales_pipa_boxes_to_the_downloaded_copy(self):
         annotations = {1: [("album9", 512.0, 100.0, 64.0, 128.0, "57")]}
 
-        (photo,) = dataset.with_faces([self._photo()], annotations)
+        (photo,) = dataset.with_faces([_photo()], annotations)
 
         scale = 500 / 1024
         self.assertEqual(photo.album, "album9")
@@ -235,15 +246,15 @@ class DatasetTests(SimpleTestCase):
     def test_a_photo_annotated_at_its_own_size_keeps_its_boxes(self):
         annotations = {1: [("a", 10.0, 20.0, 30.0, 40.0, "57")]}
 
-        (photo,) = dataset.with_faces([self._photo(annotated_at=500)], annotations)
+        (photo,) = dataset.with_faces([_photo(annotated_at=500)], annotations)
 
         self.assertEqual(photo.faces[0].box, (10.0, 20.0, 30.0, 40.0))
 
     def test_libraries_come_largest_first_and_oldest_photo_first(self):
         photos = [
-            self._photo(photo_id=1, library="a", taken="2011-01-01T00:00:00"),
-            self._photo(photo_id=2, library="b", taken="2012-01-01T00:00:00"),
-            self._photo(photo_id=3, library="b", taken="2010-01-01T00:00:00"),
+            _photo(photo_id=1, library="a", taken="2011-01-01T00:00:00"),
+            _photo(photo_id=2, library="b", taken="2012-01-01T00:00:00"),
+            _photo(photo_id=3, library="b", taken="2010-01-01T00:00:00"),
         ]
 
         libraries = dataset.by_library(photos)
@@ -253,7 +264,7 @@ class DatasetTests(SimpleTestCase):
 
     def test_credits_the_author_as_cc_by_asks(self):
         self.assertEqual(
-            self._photo().credit,
+            _photo().credit,
             '"Molly" by Jo (https://www.flickr.com/photos/12@N00/1/), CC BY 2.0',
         )
 
@@ -271,6 +282,141 @@ class DatasetTests(SimpleTestCase):
 
             dataset._ensure(target, source.as_uri(), good)
             self.assertEqual(target.read_bytes(), b"photo bytes")
+
+
+def _jpeg(width, height):
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), (90, 60, 30)).save(out, format="JPEG")
+    return out.getvalue()
+
+
+class _Response:
+    def __init__(self, data, url):
+        self.data, self.url = data, url
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def geturl(self):
+        return self.url
+
+    def read(self, size=-1):
+        data, self.data = self.data, b""
+        return data
+
+
+class LargeImagesTests(SimpleTestCase):
+    """fetch_large_images, with Flickr faked."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.cache = Path(directory.name)
+        self.requests = []
+
+    def _photo(self, n, width=500, height=250):
+        return _photo(
+            photo_id=n,
+            key=f"{n:032x}",
+            width=width,
+            height=height,
+            server="7",
+            secret="ab12",
+        )
+
+    def _flickr(self, answers):
+        """Serve *answers* by photo id: bytes, a redirect URL, or an exception."""
+
+        def urlopen(url, timeout):
+            self.requests.append(url)
+            photo_id = int(url.rsplit("/", 1)[1].split("_")[0])
+            answer = answers[photo_id]
+            if isinstance(answer, Exception):
+                raise answer
+            if isinstance(answer, str):
+                return _Response(b"<png>", answer)
+            return _Response(answer, url)
+
+        return patch.object(dataset.urllib.request, "urlopen", side_effect=urlopen)
+
+    def test_keeps_the_copies_flickr_has_sized_as_they_are(self):
+        photo = self._photo(1)
+        with self._flickr({1: _jpeg(1024, 512)}):
+            (large,), paths = dataset.fetch_large_images([photo], self.cache)
+
+        self.assertEqual(
+            self.requests, ["https://live.staticflickr.com/7/1_ab12_b.jpg"]
+        )
+        self.assertEqual((large.width, large.height), (1024, 512))
+        self.assertEqual(Image.open(paths[1]).size, (1024, 512))
+        # PIPA's boxes, drawn on this very rendition, are kept as they are.
+        (annotated,) = dataset.with_faces([large], {1: [("a", 10, 20, 30, 40, "57")]})
+        self.assertEqual(annotated.faces[0].box, (10, 20, 30, 40))
+
+    def test_leaves_out_what_flickr_no_longer_has(self):
+        photos = [self._photo(n) for n in (1, 2, 3, 4, 5)]
+        gone = urllib.error.HTTPError("u", 404, "Not Found", {}, None)
+        with self._flickr(
+            {
+                1: _jpeg(1024, 512),
+                2: gone,
+                3: "https://s.yimg.com/pw/images/en-us/photo_unavailable_l.png",
+                4: _jpeg(640, 320),  # not the 1024 px rendition
+                5: _jpeg(1024, 1024),  # another picture
+            }
+        ):
+            large, paths = dataset.fetch_large_images(photos, self.cache)
+
+        self.assertEqual([photo.photo_id for photo in large], [1])
+        self.assertEqual(list(paths), [1])
+
+    def test_a_later_run_sees_the_same_photos_and_bytes(self):
+        photos = [self._photo(1), self._photo(2)]
+        first = _jpeg(1024, 512)
+        gone = urllib.error.HTTPError("u", 404, "Not Found", {}, None)
+        with self._flickr({1: first, 2: gone}):
+            dataset.fetch_large_images(photos, self.cache)
+        self.requests.clear()
+
+        # Flickr has since lost the first and found the second: neither counts.
+        with self._flickr({1: gone, 2: _jpeg(1024, 512)}):
+            large, paths = dataset.fetch_large_images(photos, self.cache)
+
+        self.assertEqual(self.requests, [])
+        self.assertEqual([photo.photo_id for photo in large], [1])
+        self.assertEqual(paths[1].read_bytes(), first)
+
+    def test_a_copy_lost_from_the_cache_must_come_back_identical(self):
+        photo = self._photo(1)
+        with self._flickr({1: _jpeg(1024, 512)}):
+            _, paths = dataset.fetch_large_images([photo], self.cache)
+        paths[1].unlink()
+
+        with (
+            self._flickr({1: _jpeg(1024, 500)}),
+            self.assertRaises(dataset.DatasetError),
+        ):
+            dataset.fetch_large_images([photo], self.cache)
+
+    def test_a_network_error_records_nothing(self):
+        photo = self._photo(1)
+        with (
+            self._flickr({1: urllib.error.URLError("proxy says no")}),
+            self.assertRaises(dataset.DatasetError),
+        ):
+            dataset.fetch_large_images([photo], self.cache)
+        with (
+            self._flickr({1: urllib.error.HTTPError("u", 403, "Forbidden", {}, None)}),
+            self.assertRaises(dataset.DatasetError),
+        ):
+            dataset.fetch_large_images([photo], self.cache)
+
+        with self._flickr({1: _jpeg(1024, 512)}):
+            large, _paths = dataset.fetch_large_images([photo], self.cache)
+        self.assertEqual(len(large), 1)
 
 
 class ManifestTests(SimpleTestCase):
@@ -292,6 +438,10 @@ class ManifestTests(SimpleTestCase):
             self.assertRegex(photo.taken, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$")
             self.assertIn(photo.annotated_at, (1024, max(photo.width, photo.height)))
             self.assertTrue(photo.author)
+            self.assertRegex(
+                photo.large_url,
+                r"^https://live\.staticflickr\.com/\d+/\d+_[0-9a-f]+_b\.jpg$",
+            )
 
 
 class SeedRealPhotosTests(FacesTestMixin, TestCase):

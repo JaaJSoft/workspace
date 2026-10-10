@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .geometry import ALIGNED_SIZE
 from .weights import ensure_all
 
 # The five landmarks every backend returns, in this order, in the pixel
@@ -54,6 +55,10 @@ class FaceBackend(abc.ABC):
     default_max_distance: float = 0.5
     # The weights files it runs (weights.ModelFile).
     models: tuple = ()
+    # For a model whose raw embedding grows longer the more recognizable the
+    # face: that length at quality 0 and at quality 1, fitted on the face
+    # bench. None for another: see quality().
+    norm_quality: tuple[float, float] | None = None
 
     def prepare(self):
         """Download and verify the weights; a no-op once done in this process.
@@ -80,6 +85,24 @@ class FaceBackend(abc.ABC):
     @abc.abstractmethod
     def health(self):
         """A BackendHealth: whether the weights are there and load."""
+
+    def quality(self, face, aligned, embedding):
+        """How far *face* (a DetectedFace) can be trusted to say who it is,
+        0 to 1. Grouping leans on it: a low-quality face never starts a group,
+        and weighs little in one.
+
+        With norm_quality, the length of the raw *embedding*: a blurred, tiny
+        or turned-away face comes out shorter, the model being less sure who
+        it shows. Without, the detector's confidence, discounted for a small
+        or blurred face.
+        """
+        if self.norm_quality is not None:
+            low, high = self.norm_quality
+            length = float(np.linalg.norm(embedding))
+            return min(1.0, max(0.0, (length - low) / (high - low)))
+        _x, _y, w, h = face.box
+        size_score = min(1.0, min(w, h) / ALIGNED_SIZE)
+        return face.score * (0.5 * size_score + 0.5 * self.sharpness(aligned))
 
     def sharpness(self, aligned):
         """How sharp *aligned* is, 0 (a blur) to 1.

@@ -71,17 +71,23 @@ feature off.
 | `PHOTOS_FACE_BACKEND` | Models | Embedding | Weights licence |
 |---|---|---|---|
 | `yunet_sface` (default) | YuNet + SFace (OpenCV Zoo) | 128-d | MIT / Apache-2.0 |
+| `yunet_adaface` | YuNet + AdaFace IR-50 | 512-d | MIT, **trained on a non-commercial dataset** |
 | `scrfd_arcface` | SCRFD + ArcFace (InsightFace `buffalo_l`) | 512-d | **Non-commercial research only** |
 
-`scrfd_arcface` is more accurate on hard faces (profiles, small faces in group
-photos), but InsightFace licenses its pretrained weights for non-commercial
-research only: an instance run by or for a company must not enable it. Both
-run on the CPU through onnxruntime. The [face bench](face-bench.md) measures
-both on real photo libraries; run it to judge any change to detection or
-grouping.
+`yunet_adaface` keeps the default's detector and groups faces about as well as
+`scrfd_arcface`, for a quarter of its CPU: about twice the default's. Its
+weights are published under MIT, but they were trained on WebFace4M, which is
+licensed for non-commercial research only, and whether that reaches the model
+is not settled: an instance run by or for a company should not enable it
+without checking. `scrfd_arcface` is the most accurate on hard faces
+(profiles, small faces in group photos), but InsightFace licenses its
+pretrained weights for non-commercial research only: an instance run by or for
+a company must not enable it. All three run on the CPU through onnxruntime.
+The [face bench](face-bench.md) measures them on real photo libraries; run it
+to judge any change to detection or grouping.
 
-**Switching backend** changes the embedding space, and `scrfd_arcface` changes
-its size too. After changing the setting:
+**Switching backend** changes the embedding space, and both 512-d backends
+change its size too. After changing the setting:
 
 1. `python manage.py rebuild_vector_index` recreates the face vector index at
    the new size.
@@ -104,7 +110,7 @@ one inherits its group and its confirmation.
 | `PHOTOS_FACES_MAX_FILE_BYTES` | 64 MB | Larger originals are not read for faces. |
 | `PHOTOS_FACES_MIN_SIZE` | `24` | Faces smaller than this (px, at the decode size) are dropped. |
 | `PHOTOS_FACES_MAX_PER_PHOTO` | `40` | The most confident faces kept per photo. |
-| `PHOTOS_FACES_MAX_DISTANCE` | backend's own | Cosine distance under which two faces count as one person (0.58 for SFace, 0.6 for ArcFace). |
+| `PHOTOS_FACES_MAX_DISTANCE` | backend's own | Cosine distance under which two faces count as one person (0.58 for SFace, 0.6 for AdaFace and ArcFace). |
 | `PHOTOS_FACES_CLUSTER_PENDING` | `50` | Ungrouped faces that trigger a grouping run before the nightly one. |
 | `PHOTOS_FACES_VIDEO_DECODE_SIZE` | `1280` | Longest side, in px, of the video frames detection runs on. |
 | `PHOTOS_FACES_VIDEO_INTERVAL` | `2` | Seconds between two sampled frames at least (more in a long video, so the frames cover all of it). |
@@ -139,10 +145,19 @@ a long 4K recording costs far more than a short phone clip. Lower
 ### How grouping works
 
 - Right after a photo is analyzed, each new face joins the group its nearest
-  neighbours vote for, if they are close enough.
+  neighbours vote for, if they are close enough. A face the model reads
+  poorly - blurred, tiny, turned away - joins only on firm evidence: one of
+  the group's good faces very close to it, or three of its faces within the
+  threshold (the blurred photo of someone seen often sits among many of
+  their faces without being very close to any). How well the model reads a
+  face is, with `yunet_sface` and `yunet_adaface`, the length of its
+  embedding before normalization, which these models make shorter the less
+  sure they are; with `scrfd_arcface`, whose embedding length says no more
+  than its detector does, the detector's confidence discounted for a small
+  or blurred face.
 - Nightly (and once enough faces wait), the faces still ungrouped are
   clustered. Two faces of one photo are never put in the same group; the
-  database refuses it too. Blurred or tiny faces never start a group, and a
+  database refuses it too. Faces read poorly never start a group, and a
   single clear face of someone is a group of its own.
 - That rule also tells look-alikes apart. When a group keeps turning away
   faces as close to it as its own - two brothers photographed together, the

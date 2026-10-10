@@ -6,12 +6,14 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
 from workspace.common.vectors.encoding import normalize, to_bytes
+from workspace.common.vectors.indexing import index_vector
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.services import face_grouping
 from workspace.photos.services.face_analysis import analyze_faces
 from workspace.photos.services.face_grouping import (
     LOW_QUALITY,
+    assign_faces,
     cluster_owner,
     dbscan,
     link_apart,
@@ -282,6 +284,62 @@ class LinkApartTests(TestCase):
 
 
 @faces_on
+@faces_on
+class WitnessTests(FacesTestMixin, TestCase):
+    """A hard-to-read face sits among a cluster's faces, close to none.
+
+    Each face of the cluster is at a cosine distance of 0.45 from it: within
+    the fake backend's threshold (0.5), never confidently (0.4).
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        opt_in(self.user)
+        self.cluster = FaceCluster.objects.create(owner=self.user)
+
+    def _face(self, name, vector, quality, cluster=None):
+        face = Face.objects.create(
+            file=upload(self.user, f"{name}.png", faces_png()),
+            owner=self.user,
+            box_x=0.1,
+            box_y=0.1,
+            box_width=0.2,
+            box_height=0.2,
+            detector_score=0.99,
+            quality=quality,
+            cluster=cluster,
+        )
+        index_vector(FACE_EMBEDDINGS, face.pk, vector)
+        face.refresh_from_db()
+        return face
+
+    def _cluster_faces(self, count):
+        for k in range(count):
+            vector = np.zeros(FACE_EMBEDDINGS.dims)
+            vector[0], vector[k + 1] = 0.55, np.sqrt(1 - 0.55**2)
+            self._face(f"seen-{k}", vector, 0.9, self.cluster)
+        refresh_clusters([self.cluster.pk])
+        vector = np.zeros(FACE_EMBEDDINGS.dims)
+        vector[0] = 1
+        return self._face("hard", vector, LOW_QUALITY - 0.1)
+
+    def test_a_low_quality_face_joins_where_enough_neighbours_are(self):
+        face = self._cluster_faces(3)
+
+        assign_faces(self.user.pk, [face.pk])
+
+        face.refresh_from_db()
+        self.assertEqual(face.cluster_id, self.cluster.pk)
+
+    def test_two_neighbours_are_not_enough(self):
+        face = self._cluster_faces(2)
+
+        assign_faces(self.user.pk, [face.pk])
+
+        face.refresh_from_db()
+        self.assertIsNone(face.cluster_id)
+
+
 class SplitLookAlikesTests(FacesTestMixin, TestCase):
     """Ann and Bob look alike; two photos show them together.
 

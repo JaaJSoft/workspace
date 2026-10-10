@@ -14,17 +14,13 @@ from django.conf import settings
 from PIL import Image
 
 from .detection.base import FaceBackend
-from .detection.geometry import ALIGNED_SIZE, align
+from .detection.geometry import align
 
 # Side of the square WebP shown for a face, in px.
 CROP_SIZE = 160
 _CROP_QUALITY = 80
 # The crop takes in this much of the face's surroundings: hair, chin, ears.
 _CROP_MARGIN = 1.6
-
-# A face at least this tall (px, at the decode size) scores full marks for
-# size: the embedding models see 112 px.
-_FULL_SIZE = ALIGNED_SIZE
 
 
 @dataclass
@@ -34,7 +30,7 @@ class Detection:
     box: tuple[float, float, float, float]
     landmarks: np.ndarray
     score: float
-    # 0 to 1, from the detector score, the face's size and its sharpness.
+    # 0 to 1: FaceBackend.quality.
     quality: float
     # As the backend returned it, not normalized.
     embedding: np.ndarray
@@ -62,18 +58,14 @@ def detect_faces(image, backend: FaceBackend):
     found = []
     for detection in detected[: settings.PHOTOS_FACES_MAX_PER_PHOTO]:
         aligned = align(image, detection.landmarks)
-        _x, _y, w, h = detection.box
-        size_score = min(1.0, min(w, h) / _FULL_SIZE)
-        quality = detection.score * (
-            0.5 * size_score + 0.5 * backend.sharpness(aligned)
-        )
+        embedding = backend.embed(aligned)
         found.append(
             Detection(
                 box=detection.box,
                 landmarks=detection.landmarks,
                 score=detection.score,
-                quality=quality,
-                embedding=backend.embed(aligned),
+                quality=backend.quality(detection, aligned, embedding),
+                embedding=embedding,
                 crop=_crop(image, detection.box),
                 width=width,
                 height=height,

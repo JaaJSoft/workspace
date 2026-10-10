@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 # Raise when the pipeline starts writing something new: every file analyzed
 # by an older version counts as pending again.
-FACE_ANALYSIS_VERSION = 1
+FACE_ANALYSIS_VERSION = 2
 
 # A face kept from an old analysis passes its grouping on to the new face at
 # the same place: a reanalysis must not undo what the user corrected.

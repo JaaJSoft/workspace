@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import itertools
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 from django.conf import settings
@@ -36,12 +36,16 @@ from .detection.registry import get_face_backend
 logger = logging.getLogger(__name__)
 
 # Under this quality a face never seeds a cluster; it joins one only through
-# a confident neighbour.
+# a confident neighbour, or several witnesses.
 LOW_QUALITY = 0.5
 # Neighbours asked for when assigning a face.
 _NEIGHBOURS = 16
 # A neighbour this much closer than the threshold counts as confident.
 _CONFIDENT = 0.8
+# A cluster holding this many of a face's neighbours within the threshold
+# counts as confident too: the hard-to-read face of someone seen often sits
+# among many of their faces without being very close to any.
+_WITNESSES = 3
 # A low-quality face weighs this little in a centroid, never nothing.
 _MIN_WEIGHT = 0.1
 # DBSCAN: a core face has at least this many faces (itself included) within
@@ -137,14 +141,17 @@ def _vote(face, threshold):
     if face.rejected_cluster_id:
         excluded.add(face.rejected_cluster_id)
     scores = defaultdict(float)
+    witnesses = Counter()
     confident = set()
     for pk, cluster_id, quality in neighbours:
         if cluster_id in excluded:
             continue
         distance = distances[pk]
         scores[cluster_id] += (1 - distance / threshold + 1e-6) * face_weight(quality)
+        witnesses[cluster_id] += 1
         if quality >= LOW_QUALITY and distance <= threshold * _CONFIDENT:
             confident.add(cluster_id)
+    confident.update(cid for cid, count in witnesses.items() if count >= _WITNESSES)
     if face.quality < LOW_QUALITY:
         scores = {cid: score for cid, score in scores.items() if cid in confident}
     if not scores:

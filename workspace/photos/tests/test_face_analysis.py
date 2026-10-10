@@ -13,7 +13,11 @@ from workspace.files.models import File
 from workspace.files.services import FileService
 from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceAnalysis, FaceCluster
+from workspace.photos.services.detection.base import DetectedFace
+from workspace.photos.services.detection.scrfd_arcface import ScrfdArcFaceBackend
+from workspace.photos.services.detection.yunet_sface import YuNetSFaceBackend
 from workspace.photos.services.face_analysis import (
+    FACE_ANALYSIS_VERSION,
     analyze_faces,
     forget_faces,
     is_face_candidate,
@@ -181,6 +185,18 @@ class CandidateTests(FacesTestMixin, TestCase):
 
         self.assertIn(photo, pending_faces_qs())
 
+    def test_an_older_pipeline_makes_a_photo_pending_again(self):
+        opt_in(self.user)
+        photo = upload(self.user, "alice.png", faces_png((ALICE, (40, 50, 100))))
+        analyze_faces(photo)
+        self.assertNotIn(photo, pending_faces_qs())
+
+        FaceAnalysis.objects.filter(file=photo).update(
+            version=FACE_ANALYSIS_VERSION - 1
+        )
+
+        self.assertIn(photo, pending_faces_qs())
+
     def test_forgetting_a_photo_drops_its_faces_and_crops(self):
         opt_in(self.user)
         photo = upload(self.user, "alice.png", faces_png((ALICE, (40, 50, 100))))
@@ -299,14 +315,34 @@ class AnalysisFailureTests(FacesTestMixin, TestCase):
         self.assertIn(self.photo, pending_faces_qs())
 
 
-class SharpnessTests(TestCase):
-    def test_a_blurred_face_scores_lower_than_a_sharp_one(self):
-        from workspace.photos.services.detection.yunet_sface import YuNetSFaceBackend
+class QualityTests(TestCase):
+    def test_a_calibrated_backend_scores_the_length_of_the_embedding(self):
+        backend = YuNetSFaceBackend()
+        backend.norm_quality = (2.0, 12.0)
+        # A detector this unsure does not lower it: the length says it all.
+        face = DetectedFace(box=(0, 0, 8, 8), landmarks=np.zeros((5, 2)), score=0.1)
+        aligned = np.zeros((112, 112, 3), np.uint8)
 
+        def quality(*vector):
+            return backend.quality(face, aligned, np.array(vector))
+
+        self.assertAlmostEqual(quality(3.0, 4.0), 0.3)  # length 5
+        self.assertEqual(quality(1.0, 0.0), 0.0)
+        self.assertEqual(quality(20.0, 0.0), 1.0)
+
+    def test_otherwise_a_small_or_blurred_face_scores_lower(self):
+        backend = ScrfdArcFaceBackend()
         rng = np.random.default_rng(0)
         sharp = rng.integers(0, 255, (112, 112, 3), dtype=np.uint8)
         flat = np.full((112, 112, 3), 128, dtype=np.uint8)
-        backend = YuNetSFaceBackend()
+        large = DetectedFace(
+            box=(0, 0, 112, 112), landmarks=np.zeros((5, 2)), score=1.0
+        )
+        small = DetectedFace(box=(0, 0, 56, 56), landmarks=np.zeros((5, 2)), score=1.0)
+        embedding = np.ones(512)
 
         self.assertEqual(backend.sharpness(sharp), 1.0)
         self.assertEqual(backend.sharpness(flat), 0.0)
+        self.assertEqual(backend.quality(large, sharp, embedding), 1.0)
+        self.assertEqual(backend.quality(small, sharp, embedding), 0.75)
+        self.assertEqual(backend.quality(large, flat, embedding), 0.5)

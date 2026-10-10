@@ -52,62 +52,11 @@ class YuNetSFaceBackend(FaceBackend):
     # looser far more faces in the wrong group (docs/photos/face-bench.md).
     default_max_distance = 0.58
     models = (YUNET, SFACE)
+    # 30% of the face bench's faces under quality 0.5, 71% under 0.7.
+    norm_quality = (3.9, 15.0)
 
     def detect(self, image):
-        square, scale = letterbox(image, _INPUT_SIZE)
-        # YuNet takes BGR, 0-255, NCHW.
-        blob = square[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32)
-        names = _output_names()
-        outputs = runtime.session(YUNET).run(names, {"input": blob})
-        named = dict(zip(names, outputs, strict=True))
-
-        boxes, landmarks, scores = [], [], []
-        for stride in _STRIDES:
-            cols = _INPUT_SIZE // stride
-            cls = np.clip(named[f"cls_{stride}"].reshape(-1), 0, 1)
-            obj = np.clip(named[f"obj_{stride}"].reshape(-1), 0, 1)
-            score = np.sqrt(cls * obj)
-            keep = score >= _SCORE_THRESHOLD
-            if not keep.any():
-                continue
-            index = np.nonzero(keep)[0]
-            col = (index % cols).astype(np.float32)
-            row = (index // cols).astype(np.float32)
-            bbox = named[f"bbox_{stride}"].reshape(-1, 4)[index]
-            kps = named[f"kps_{stride}"].reshape(-1, 10)[index]
-            cx = (col + bbox[:, 0]) * stride
-            cy = (row + bbox[:, 1]) * stride
-            w = np.exp(bbox[:, 2]) * stride
-            h = np.exp(bbox[:, 3]) * stride
-            boxes.append(np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], 1))
-            points = kps.reshape(-1, 5, 2)
-            points = np.stack(
-                [
-                    (points[:, :, 0] + col[:, None]) * stride,
-                    (points[:, :, 1] + row[:, None]) * stride,
-                ],
-                axis=2,
-            )
-            landmarks.append(points)
-            scores.append(score[index])
-        if not boxes:
-            return []
-        boxes = np.concatenate(boxes) / scale
-        landmarks = np.concatenate(landmarks) / scale
-        scores = np.concatenate(scores)
-        return [
-            DetectedFace(
-                box=(
-                    float(boxes[i, 0]),
-                    float(boxes[i, 1]),
-                    float(boxes[i, 2] - boxes[i, 0]),
-                    float(boxes[i, 3] - boxes[i, 1]),
-                ),
-                landmarks=landmarks[i],
-                score=float(scores[i]),
-            )
-            for i in nms(boxes, scores, _NMS_THRESHOLD)
-        ]
+        return yunet_faces(image)
 
     def embed(self, aligned):
         # SFace takes RGB, 0-255, NCHW (OpenCV swaps its BGR crop to RGB).
@@ -117,6 +66,64 @@ class YuNetSFaceBackend(FaceBackend):
 
     def health(self):
         return weights_health("YuNet + SFace", self.models)
+
+
+def yunet_faces(image):
+    """The faces YuNet finds in *image*, as DetectedFace."""
+    square, scale = letterbox(image, _INPUT_SIZE)
+    # YuNet takes BGR, 0-255, NCHW.
+    blob = square[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32)
+    names = _output_names()
+    outputs = runtime.session(YUNET).run(names, {"input": blob})
+    named = dict(zip(names, outputs, strict=True))
+
+    boxes, landmarks, scores = [], [], []
+    for stride in _STRIDES:
+        cols = _INPUT_SIZE // stride
+        cls = np.clip(named[f"cls_{stride}"].reshape(-1), 0, 1)
+        obj = np.clip(named[f"obj_{stride}"].reshape(-1), 0, 1)
+        score = np.sqrt(cls * obj)
+        keep = score >= _SCORE_THRESHOLD
+        if not keep.any():
+            continue
+        index = np.nonzero(keep)[0]
+        col = (index % cols).astype(np.float32)
+        row = (index // cols).astype(np.float32)
+        bbox = named[f"bbox_{stride}"].reshape(-1, 4)[index]
+        kps = named[f"kps_{stride}"].reshape(-1, 10)[index]
+        cx = (col + bbox[:, 0]) * stride
+        cy = (row + bbox[:, 1]) * stride
+        w = np.exp(bbox[:, 2]) * stride
+        h = np.exp(bbox[:, 3]) * stride
+        boxes.append(np.stack([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2], 1))
+        points = kps.reshape(-1, 5, 2)
+        points = np.stack(
+            [
+                (points[:, :, 0] + col[:, None]) * stride,
+                (points[:, :, 1] + row[:, None]) * stride,
+            ],
+            axis=2,
+        )
+        landmarks.append(points)
+        scores.append(score[index])
+    if not boxes:
+        return []
+    boxes = np.concatenate(boxes) / scale
+    landmarks = np.concatenate(landmarks) / scale
+    scores = np.concatenate(scores)
+    return [
+        DetectedFace(
+            box=(
+                float(boxes[i, 0]),
+                float(boxes[i, 1]),
+                float(boxes[i, 2] - boxes[i, 0]),
+                float(boxes[i, 3] - boxes[i, 1]),
+            ),
+            landmarks=landmarks[i],
+            score=float(scores[i]),
+        )
+        for i in nms(boxes, scores, _NMS_THRESHOLD)
+    ]
 
 
 def _output_names():

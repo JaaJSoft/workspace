@@ -13,7 +13,8 @@ from .storage import MEDIA_ROOT
 PHOTOS_FACES_ENABLED = env_bool("PHOTOS_FACES_ENABLED", False)
 
 # Which detection backend runs (photos/services/detection/registry.py):
-# "yunet_sface" (default, permissive licences, 128-d) or "scrfd_arcface"
+# "yunet_sface" (default, permissive licences, 128-d), "yunet_adaface" (512-d,
+# MIT weights trained on a non-commercial dataset) or "scrfd_arcface"
 # (InsightFace buffalo_l, 512-d, weights licensed for non-commercial research
 # only). Switching changes the embedding space: see docs/photos/README.md.
 PHOTOS_FACE_BACKEND = os.getenv("PHOTOS_FACE_BACKEND", "yunet_sface")

@@ -27,6 +27,7 @@ Usage:
     uv run python scripts/face_bench.py --compare arcface.json
     uv run python scripts/face_bench.py --setting PHOTOS_FACES_MIN_SIZE=16
     uv run python scripts/face_bench.py --libraries 3 --keep /tmp/bench
+    uv run python scripts/face_bench.py --full-size --json full-size.json
 
 ``--keep`` leaves the database and the photos behind, with the password
 ``bench1234`` on each library's user (bench01, bench02...), so the result can
@@ -322,6 +323,7 @@ def rescore(report):
 # What describes the run itself, carried over by --rescore.
 _RUN_FIELDS = (
     "backend",
+    "rendition",
     "commit",
     "date",
     "settings",
@@ -426,10 +428,20 @@ _LINES = (
 
 def render(report, baseline=None):
     lines = [
-        f"Backend {report['backend']} - {report['photos']} photos, "
-        f"{report['libraries']} libraries, {report['heads']} annotated people",
+        f"Backend {report['backend']} - {report['photos']} photos at "
+        f"{_rendition(report)} px, {report['libraries']} libraries, "
+        f"{report['heads']} annotated people",
         "",
     ]
+    if baseline is not None and (
+        _rendition(baseline) != _rendition(report)
+        or baseline["photos"] != report["photos"]
+    ):
+        lines[-1:] = [
+            f"The earlier run saw {baseline['photos']} photos at "
+            f"{_rendition(baseline)} px: the two do not compare.",
+            "",
+        ]
     for label, path, kind, higher_is_better in _LINES:
         value = _lookup(report, path)
         text = f"{label:<22}{_format(value, kind):>10}"
@@ -446,6 +458,11 @@ def render(report, baseline=None):
             f"{_format(row['detector_found'], 'pct'):>10}"
         )
     return "\n".join(lines)
+
+
+def _rendition(report):
+    # Reports from before the 1024 px option were all at 500 px.
+    return report.get("rendition", 500)
 
 
 def _lookup(report, path):
@@ -752,6 +769,12 @@ def main():
         "--max-photos", type=int, default=0, help="at most N photos per library"
     )
     parser.add_argument(
+        "--full-size",
+        action="store_true",
+        help="run on Flickr's 1024 px copies instead of the 500 px ones, leaving "
+        "out the photos Flickr no longer has",
+    )
+    parser.add_argument(
         "--setting",
         action="append",
         default=[],
@@ -802,10 +825,22 @@ def main():
     annotations = photo_dataset.read_annotations(
         photo_dataset.fetch_annotations(cache_dir)
     )
-    paths = photo_dataset.fetch_images(photos, cache_dir)
+    if args.full_size:
+        large, paths = photo_dataset.fetch_large_images(photos, cache_dir)
+        print(f"Flickr no longer has {len(photos) - len(large)} of them.", flush=True)
+        sized = {photo.photo_id: photo for photo in large}
+        chosen = {
+            name: [
+                sized[photo.photo_id] for photo in members if photo.photo_id in sized
+            ]
+            for name, members in chosen.items()
+        }
+    else:
+        paths = photo_dataset.fetch_images(photos, cache_dir)
     chosen = {
         name: photo_dataset.with_faces(members, annotations)
         for name, members in chosen.items()
+        if members
     }
 
     if args.keep:
@@ -823,6 +858,7 @@ def main():
 
         run = {
             "backend": args.backend,
+            "rendition": photo_dataset.LARGE_SIZE if args.full_size else 500,
             "commit": _git_commit(),
             "date": datetime.now().isoformat(timespec="seconds"),
             "settings": {

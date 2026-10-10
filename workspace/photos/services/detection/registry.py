@@ -17,6 +17,12 @@ def _yunet_sface():
     return YuNetSFaceBackend()
 
 
+def _yunet_adaface():
+    from .yunet_adaface import YuNetAdaFaceBackend
+
+    return YuNetAdaFaceBackend()
+
+
 def _scrfd_arcface():
     from .scrfd_arcface import ScrfdArcFaceBackend
 
@@ -31,6 +37,7 @@ def _fake():
 
 _BACKENDS = {
     "yunet_sface": _yunet_sface,
+    "yunet_adaface": _yunet_adaface,
     "scrfd_arcface": _scrfd_arcface,
     "fake": _fake,
 }

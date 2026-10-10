@@ -14,26 +14,39 @@ library is made of. Two public sources, joined:
   downloaded from a pinned commit at run time and checked against its sha256.
 
 The manifest (``data/photo-dataset.jsonl.gz``) lists the photos picked, the
-S3 key and sha256 of each image, and the size PIPA drew its boxes at.
-``scripts/build_photo_dataset.py`` regenerates it. Nothing here needs Django.
+S3 key and sha256 of each image, the size PIPA drew its boxes at, and what
+Flickr's URL of the photo is built from. ``scripts/build_photo_dataset.py``
+regenerates it. Nothing here needs Django.
+
+Flickr still serves most of the photos at 1024 px, the size of a library's
+faces at ``PHOTOS_FACES_DECODE_SIZE`` once halved: ``fetch_large_images``
+takes them from there, for a bench closer to a real library than the frozen
+500 px copies.
 """
 
 from __future__ import annotations
 
 import gzip
 import hashlib
+import io
 import json
 import os
 import tempfile
+import urllib.error
 import urllib.request
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
+from PIL import Image
+
 MANIFEST = Path(__file__).resolve().parent / "data" / "photo-dataset.jsonl.gz"
 
 IMAGE_URL = "https://multimedia-commons.s3.amazonaws.com/data/images/{}/{}/{}.jpg"
+# Flickr's "large" rendition: server, photo id, secret.
+LARGE_URL = "https://live.staticflickr.com/{}/{}_{}_b.jpg"
+LARGE_SIZE = 1024
 PIPA_URL = (
     "https://raw.githubusercontent.com/coallaoh/PIPA_dataset/"
     "261ccd8794b737d0bbf80bab24c3f502701be1a1/all_data.txt"
@@ -80,12 +93,19 @@ class Photo:
     height: int
     # The long side, in px, of the copy PIPA drew its boxes on.
     annotated_at: int
+    # What Flickr's URL of the photo is built from.
+    server: str = ""
+    secret: str = ""
     album: str = ""
     faces: tuple[Face, ...] = field(default=())
 
     @property
     def url(self):
         return IMAGE_URL.format(self.key[:3], self.key[3:6], self.key)
+
+    @property
+    def large_url(self):
+        return LARGE_URL.format(self.server, self.photo_id, self.secret)
 
     @property
     def page_url(self):
@@ -117,6 +137,8 @@ def _photo(row):
         width=row["width"],
         height=row["height"],
         annotated_at=row["annotated_at"],
+        server=row["server"],
+        secret=row["secret"],
     )
 
 
@@ -204,6 +226,109 @@ def fetch_images(photos, cache_dir=None, *, workers=8, progress=None):
             if progress:
                 progress(done, len(photos))
     return paths
+
+
+def fetch_large_images(photos, cache_dir=None, *, workers=8, progress=None):
+    """(photos, paths): those of *photos* Flickr still serves at 1024 px,
+    sized as that copy, and {photo id: local path} of each copy.
+
+    Flickr is no frozen archive: a photo deleted or made private since 2014
+    is gone, and its copies are pinned nowhere. So the first answer for each
+    photo is kept in the cache - the copy and its sha256, or that it was
+    gone - and every later run uses exactly that: the same photos and the
+    same bytes on one machine, whatever Flickr serves by then. A network
+    error is no answer: it raises DatasetError and records nothing.
+    """
+    large = Path(cache_dir or default_cache_dir()) / "large"
+    index_path = large / "index.json"
+    index = (
+        json.loads(index_path.read_text(encoding="utf-8"))
+        if index_path.is_file()
+        else {}
+    )
+
+    def fetch(photo):
+        path = large / photo.key[:3] / f"{photo.key}.jpg"
+        known = index.get(str(photo.photo_id))
+        if known is None:
+            return photo, path, _fetch_large(photo, path)
+        if known.get("gone"):
+            return photo, path, known
+        if not path.is_file() or _sha256(path) != known["sha256"]:
+            _ensure(path, photo.large_url, known["sha256"])
+        return photo, path, known
+
+    kept, paths = [], {}
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for done, (photo, path, entry) in enumerate(pool.map(fetch, photos), 1):
+                index[str(photo.photo_id)] = entry
+                if not entry.get("gone"):
+                    kept.append(
+                        replace(photo, width=entry["width"], height=entry["height"])
+                    )
+                    paths[photo.photo_id] = path
+                if progress:
+                    progress(done, len(photos))
+    finally:
+        large.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w", dir=large, delete=False, encoding="utf-8"
+        ) as tmp:
+            json.dump(index, tmp, sort_keys=True)
+        os.replace(tmp.name, index_path)
+    return kept, paths
+
+
+def _fetch_large(photo, path):
+    """The index entry of *photo*'s 1024 px copy, saved at *path* if Flickr
+    still has it."""
+    try:
+        with urllib.request.urlopen(photo.large_url, timeout=_TIMEOUT) as response:
+            # A photo gone from Flickr redirects to a "no longer available"
+            # picture rather than failing.
+            gone = "photo_unavailable" in response.geturl()
+            data = b"" if gone else response.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code not in (404, 410):
+            raise DatasetError(f"cannot download {photo.large_url}: {exc}") from exc
+        data = b""
+    except OSError as exc:
+        raise DatasetError(f"cannot download {photo.large_url}: {exc}") from exc
+    size = _jpeg_size(data)
+    if size is None or not _is_large_copy(size, photo):
+        return {"gone": True}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
+        tmp.write(data)
+    os.replace(tmp.name, path)
+    return {
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "width": size[0],
+        "height": size[1],
+    }
+
+
+def _jpeg_size(data):
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            return image.size if image.format == "JPEG" else None
+    except OSError:
+        return None
+
+
+def _is_large_copy(size, photo):
+    """Whether *size* is that of *photo*'s 1024 px rendition.
+
+    The scale of the boxes assumes that long side, and a copy of another
+    shape is another picture.
+    """
+    width, height = size
+    return (
+        max(size) == LARGE_SIZE
+        and abs(width * photo.height - height * photo.width)
+        <= 0.02 * width * photo.height
+    )
 
 
 def _ensure(path, url, sha256):

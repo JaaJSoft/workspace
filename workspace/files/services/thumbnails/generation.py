@@ -36,11 +36,98 @@ def _label_family(content_label):
 THUMBNAIL_MAX_SIZE = (512, 512)
 THUMBNAIL_QUALITY = 80
 THUMBNAIL_FORMAT = "WEBP"
+# Smaller renditions of the same thumbnail, for grids whose tiles are far
+# smaller than THUMBNAIL_MAX_SIZE: decoding and scaling a 512px image per tile
+# is what makes a large grid stutter while it scrolls.
+THUMBNAIL_VARIANT_SIZES = (128, 256)
+THUMBNAIL_SIZES = (*THUMBNAIL_VARIANT_SIZES, THUMBNAIL_MAX_SIZE[0])
 
 
-def get_thumbnail_path(uuid):
-    """Return the storage-relative path for a file's thumbnail."""
-    return f"thumbnails/{uuid}.webp"
+def get_thumbnail_path(uuid, size=THUMBNAIL_MAX_SIZE[0]):
+    """Return the storage-relative path for a file's thumbnail at *size*."""
+    if size == THUMBNAIL_MAX_SIZE[0]:
+        return f"thumbnails/{uuid}.webp"
+    return f"thumbnails/{uuid}_{size}.webp"
+
+
+def _encode(img):
+    buf = BytesIO()
+    img.save(buf, format=THUMBNAIL_FORMAT, quality=THUMBNAIL_QUALITY)
+    return buf.getvalue()
+
+
+def _variant(img, size):
+    from PIL import Image
+
+    small = img.copy()
+    small.thumbnail((size, size), Image.LANCZOS)
+    return small
+
+
+_STORE_ATTEMPTS = 3
+
+
+def _store(path, data):
+    """Put *data* at *path*, replacing whatever is there.
+
+    The storage never overwrites: a writer landing between the delete and the
+    save (another generation, or a request deriving a missing size) makes it
+    hand back an alternative name instead. That copy is removed and the
+    replacement retried, so no stray file is left and the bytes at *path* are
+    this call's.
+    """
+    for _ in range(_STORE_ATTEMPTS):
+        if default_storage.exists(path):
+            default_storage.delete(path)
+        saved = default_storage.save(path, ContentFile(data))
+        if saved == path:
+            return
+        default_storage.delete(saved)
+    raise OSError(f"Could not store thumbnail {path}")
+
+
+def parse_thumbnail_size(value):
+    """A ``?size=`` query value as one of THUMBNAIL_SIZES, or None when invalid.
+
+    No value asks for the full-size thumbnail.
+    """
+    if not value:
+        return THUMBNAIL_MAX_SIZE[0]
+    try:
+        size = int(value)
+    except ValueError:
+        return None
+    return size if size in THUMBNAIL_SIZES else None
+
+
+def thumbnail_variant_path(uuid, size):
+    """The storage path of *uuid*'s thumbnail at *size*, or None without one.
+
+    A variant missing next to an existing full-size thumbnail (one generated
+    before the variants existed) is derived from it on the spot and stored.
+    """
+    path = get_thumbnail_path(uuid, size)
+    if default_storage.exists(path):
+        return path
+    base_path = get_thumbnail_path(uuid)
+    if size == THUMBNAIL_MAX_SIZE[0] or not default_storage.exists(base_path):
+        return None
+
+    from PIL import Image
+
+    try:
+        with default_storage.open(base_path, "rb") as base:
+            img = Image.open(base)
+            img.load()
+    except OSError:
+        logger.warning("Unreadable thumbnail for %s", uuid, exc_info=True)
+        return None
+    saved = default_storage.save(path, ContentFile(_encode(_variant(img, size))))
+    # Two requests deriving the same variant at once: the storage hands the
+    # loser an alternative name, which nothing would ever read.
+    if saved != path:
+        default_storage.delete(saved)
+    return path
 
 
 def generatable_labels():
@@ -149,14 +236,12 @@ def generate_thumbnail(file_obj):
 
             img.thumbnail(THUMBNAIL_MAX_SIZE, Image.LANCZOS)
 
-            buf = BytesIO()
-            img.save(buf, format=THUMBNAIL_FORMAT, quality=THUMBNAIL_QUALITY)
-            buf.seek(0)
-
-            thumb_path = get_thumbnail_path(file_obj.uuid)
-            if default_storage.exists(thumb_path):
-                default_storage.delete(thumb_path)
-            default_storage.save(thumb_path, ContentFile(buf.read()))
+            _store(get_thumbnail_path(file_obj.uuid), _encode(img))
+            for size in THUMBNAIL_VARIANT_SIZES:
+                _store(
+                    get_thumbnail_path(file_obj.uuid, size),
+                    _encode(_variant(img, size)),
+                )
 
         FILES_THUMBNAIL_RESULT.labels(result="success").inc()
     except Exception:
@@ -174,13 +259,14 @@ def generate_thumbnail(file_obj):
 
 
 def delete_thumbnail(uuid):
-    """Delete the thumbnail file for the given UUID, if it exists."""
-    try:
-        thumb_path = get_thumbnail_path(uuid)
-        if default_storage.exists(thumb_path):
-            default_storage.delete(thumb_path)
-    except Exception:
-        logger.warning("Failed to delete thumbnail for %s", uuid, exc_info=True)
+    """Delete the thumbnail files for the given UUID, every size."""
+    for size in THUMBNAIL_SIZES:
+        thumb_path = get_thumbnail_path(uuid, size)
+        try:
+            if default_storage.exists(thumb_path):
+                default_storage.delete(thumb_path)
+        except Exception:
+            logger.warning("Failed to delete thumbnail %s", thumb_path, exc_info=True)
 
 
 def pending_thumbnails_qs(*, reanalyze=False):

@@ -138,8 +138,12 @@ window.fileTableControls = function fileTableControls() {
       });
       this.hasClipboardItems = window.fileClipboard.hasItems();
 
-      // Compute bulk actions from actionsMap when selection changes
-      this.$watch('selectedUuids', () => this._computeBulkActions());
+      this._itemsByUuid = new Map(this.originalRows.map((el) => [el.dataset.uuid, el]));
+      this._paintedSelection = new Set();
+      this.$watch('selectedUuids', () => {
+        this._paintSelection();
+        this._computeBulkActions();
+      });
 
       // Fetch actions for all visible rows
       this.fetchActions();
@@ -271,8 +275,27 @@ window.fileTableControls = function fileTableControls() {
     },
 
     // Selection methods
-    isSelected(uuid) {
-      return this.selectedUuids.has(uuid);
+    // Items show their selection through a data-selected attribute set here,
+    // not through a binding per item: every binding reading selectedUuids
+    // re-ran on each click, for every item of the listing.
+    _paintSelection() {
+      const selected = this.selectedUuids;
+      const painted = this._paintedSelection;
+      for (const uuid of painted) {
+        if (!selected.has(uuid)) this._paintItemSelection(uuid, false);
+      }
+      for (const uuid of selected) {
+        if (!painted.has(uuid)) this._paintItemSelection(uuid, true);
+      }
+      this._paintedSelection = new Set(selected);
+    },
+
+    _paintItemSelection(uuid, selected) {
+      const item = this._itemsByUuid.get(uuid);
+      if (!item) return;
+      item.toggleAttribute('data-selected', selected);
+      const checkbox = item.querySelector('input[data-select-item]');
+      if (checkbox) checkbox.checked = selected;
     },
 
     toggleRowSelection(uuid, shiftKey = false) {
@@ -482,10 +505,9 @@ window.fileTableControls = function fileTableControls() {
         await Promise.allSettled(slices.map(async (slice) => {
           const part = await window.fileActions.fetchActions(slice);
           if (!part) return;
-          // Read the current map only after the await: a spread evaluated
-          // before it would merge into a snapshot another slice has since
-          // replaced.
-          this.actionsMap = { ...this.actionsMap, ...part };
+          // Merged key by key into the same object: replacing the map would
+          // re-run every item's binding on it once per slice.
+          Object.assign(this.actionsMap, part);
           this._computeBulkActions();
           if (window.fileDragMove) window.fileDragMove.rememberActions(part);
         }));
@@ -1276,6 +1298,11 @@ window.viewToggle = function viewToggle() {
     },
     tileIconSize() {
       return { 1: 28, 2: 36, 3: 48, 4: 64, 5: 80 }[this.mosaicTileSize] || 48;
+    },
+    // A column stretches past its minimum width until the next one fits;
+    // the fallback after `auto` is a typical width, not the widest.
+    tileImageSizes() {
+      return `auto, ${Math.round(this.tileMinWidth() * 1.25)}px`;
     },
 
     // The listing is rendered in the saved view mode, so switching is a

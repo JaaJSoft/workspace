@@ -4,7 +4,7 @@ from itertools import batched
 
 from django.db.models import Q
 from django.http import Http404
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -177,8 +177,17 @@ class ContentMixin:
     @extend_schema(
         summary="Get file thumbnail",
         description="Serve a pre-generated WebP thumbnail for image files.",
+        parameters=[
+            OpenApiParameter(
+                "size",
+                int,
+                enum=[128, 256, 512],
+                description="Longest side in pixels; defaults to 512.",
+            )
+        ],
         responses={
             200: OpenApiResponse(description="WebP thumbnail image."),
+            400: OpenApiResponse(description="Unsupported size."),
             404: OpenApiResponse(description="No thumbnail available."),
         },
     )
@@ -188,7 +197,16 @@ class ContentMixin:
         from django.core.files.storage import default_storage
         from django.http import FileResponse
 
-        from workspace.files.services.thumbnails.generation import get_thumbnail_path
+        from workspace.files.services.thumbnails.generation import (
+            parse_thumbnail_size,
+            thumbnail_variant_path,
+        )
+
+        size = parse_thumbnail_size(request.query_params.get("size"))
+        if size is None:
+            return Response(
+                {"detail": "Invalid size."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             file_obj, perm = self._resolve_file_with_access(uuid)
@@ -204,8 +222,8 @@ class ContentMixin:
         if blocked is not None:
             return blocked
 
-        thumb_path = get_thumbnail_path(file_obj.uuid)
-        if not default_storage.exists(thumb_path):
+        thumb_path = thumbnail_variant_path(file_obj.uuid, size)
+        if thumb_path is None:
             return Response(
                 {"detail": "No thumbnail."}, status=status.HTTP_404_NOT_FOUND
             )

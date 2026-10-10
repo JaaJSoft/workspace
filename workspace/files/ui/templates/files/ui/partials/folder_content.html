@@ -540,14 +540,13 @@
             <tbody>
               {% for node in nodes %}
                 {% comment %}
-              In the :class below, the quarantine tint is the last branch on
-              purpose: selection has to stay readable on a flagged row, so
-              bg-module/15 wins when both would apply rather than the two
-              backgrounds racing on stylesheet order.
+              data-selected is set by the table's _paintSelection. Selection has
+              to stay readable on a flagged row: the data-[selected] variant
+              outranks the quarantine tint by specificity, not stylesheet order.
                 {% endcomment %}
                 <tr
-                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity"
-                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'bg-module/15' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
+                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15"
+                  :class="{ 'opacity-50 pointer-events-none': isActionLoading('{{ node.uuid }}') }"
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
                   data-uuid="{{ node.uuid }}"
@@ -576,7 +575,7 @@
                     <input
                       type="checkbox"
                       class="checkbox checkbox-sm checkbox-module align-middle"
-                      :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
+                      data-select-item
                       @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
                     />
                   </td>
@@ -751,9 +750,10 @@
               :style="'grid-template-columns: repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr)); gap: ' + tileGap() + 'px'"
             >
               {% for node in nodes %}
+                {# data-selected is set by the table's _paintSelection #}
                 <div
-                  class="bg-base-100 border {% if node.is_quarantined %}border-error/40{% else %}border-base-300{% endif %} rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
-                  :class="isActionLoading('{{ node.uuid }}') ? 'opacity-50 pointer-events-none' : (typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'ring-2 ring-module border-module' : '{% if node.is_quarantined %}bg-error/10{% endif %}')"
+                  class="{% if node.is_quarantined %}bg-error/10 data-[selected]:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-[selected]:ring-2 data-[selected]:ring-module data-[selected]:border-module"
+                  :class="{ 'opacity-50 pointer-events-none': isActionLoading('{{ node.uuid }}') }"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -782,9 +782,8 @@
                   <div class="absolute top-2 left-2 z-10" @click.stop>
                     <input
                       type="checkbox"
-                      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm"
-                      :class="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}') ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                      :checked="typeof isSelected !== 'undefined' && isSelected('{{ node.uuid }}')"
+                      class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[selected]:opacity-100"
+                      data-select-item
                       @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
                     />
                   </div>
@@ -824,9 +823,9 @@
 
                   <!-- Preview/Icon area (square) -->
                   {% if node.node_type == "folder" %}
-                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" %}
                   {% else %}
-                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" duration=node.media_info.duration %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" duration=node.media_info.duration %}
                   {% endif %}
 
                   <!-- File info -->

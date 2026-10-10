@@ -35,11 +35,11 @@ from django.db.models import (
     Min,
     OuterRef,
     Q,
-    TextField,
     Value,
     Window,
 )
-from django.db.models.functions import Concat, Lower, RowNumber, StrIndex
+from django.db.models.functions import Lower, RowNumber, StrIndex
+from django.db.models.lookups import Exact
 
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
@@ -84,31 +84,28 @@ def _hidden_q(user):
 
     Folder paths only name a node within one tree, so a folder hides what
     shares its path prefix *and* its tree: the owner's personal files for a
-    personal folder, the group's for a group one. The path test runs in SQL
-    (no LIKE, so a ``%`` or ``_`` in a folder name is matched literally),
-    which keeps every library queryset lazy.
+    personal folder, the group's for a group one. The path test is no LIKE:
+    a ``%`` or ``_`` in a folder name is matched literally, and SQLite's LIKE
+    ignores case.
+
+    The hidden folders are read here, once. A correlated subquery over them
+    let SQLite's planner walk every folder of the tree for each file it
+    tested: seconds per query on a large library, with nothing hidden.
     """
     hidden = HiddenFile.objects.filter(owner=user)
+    condition = Q(Exists(hidden.filter(file_id=OuterRef("pk"))))
     folders = (
         hidden.filter(file__node_type=File.NodeType.FOLDER)
         .exclude(file__path="")
-        .annotate(
-            at=StrIndex(
-                OuterRef("path"),
-                Concat("file__path", Value("/"), output_field=TextField()),
-            )
-        )
-        .filter(at=1)
+        .values_list("file__path", "file__owner_id", "file__group_id")
     )
-    personal_folders = folders.filter(
-        file__group__isnull=True, file__owner_id=OuterRef("owner_id")
-    )
-    group_folders = folders.filter(file__group_id=OuterRef("group_id"))
-    return (
-        Exists(hidden.filter(file_id=OuterRef("pk")))
-        | (Q(group__isnull=True) & Exists(personal_folders))
-        | Exists(group_folders)
-    )
+    for path, owner_id, group_id in folders:
+        if group_id is None:
+            tree = Q(group__isnull=True, owner_id=owner_id)
+        else:
+            tree = Q(group_id=group_id)
+        condition |= tree & Q(Exact(StrIndex("path", Value(f"{path}/")), 1))
+    return condition
 
 
 def _visibility(user, files, hidden):

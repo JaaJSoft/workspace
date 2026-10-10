@@ -1,17 +1,20 @@
 import json
 import re
 from datetime import UTC, datetime
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
+from django.db import connection
 from django.test import TestCase
+from django.utils import timezone
 
-from workspace.files.models import FileShare, FileTag, Tag
+from workspace.files.models import File, FileShare, FileTag, Tag
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
-from workspace.photos.models import HiddenFile
+from workspace.photos.models import HiddenFile, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -226,6 +229,67 @@ class HiddenFoldersTests(TestCase):
         FileService.soft_delete(trashed, acting_user=self.user)
 
         self.assertEqual(list(hidden_folders(self.user)), [self.trips, self.rome])
+
+
+@skipUnless(connection.vendor == "sqlite", "counts SQLite VM steps")
+class HiddenFilterCostTests(TestCase):
+    """The hidden filter costs the same whatever the number of folders.
+
+    The work SQLite does is counted in VM steps: a timing would be flaky.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        hide_files(self.user, [FileService.create_folder(owner=self.user, name="X")])
+        photos = File.objects.bulk_create(
+            File(
+                owner=self.user,
+                name=f"{i}.jpg",
+                node_type=File.NodeType.FILE,
+                path=f"{i}.jpg",
+                type="jpeg",
+                content=f"{i}.jpg",
+            )
+            for i in range(50)
+        )
+        MediaItem.objects.bulk_create(
+            MediaItem(
+                file=photo,
+                media_type=MediaItem.MediaType.PHOTO,
+                analyzed_at=timezone.now(),
+            )
+            for photo in photos
+        )
+
+    def _steps(self):
+        steps = 0
+
+        def tick():
+            nonlocal steps
+            steps += 1
+            return 0
+
+        connection.ensure_connection()
+        connection.connection.set_progress_handler(tick, 100)
+        try:
+            self.assertEqual(library_files(self.user).count(), 50)
+        finally:
+            connection.connection.set_progress_handler(None, 0)
+        return steps
+
+    def test_more_folders_cost_the_library_nothing(self):
+        few = self._steps()
+        File.objects.bulk_create(
+            File(
+                owner=self.user,
+                name=f"d{i}",
+                node_type=File.NodeType.FOLDER,
+                path=f"d{i}",
+            )
+            for i in range(500)
+        )
+
+        self.assertLess(self._steps(), few * 2)
 
 
 class HiddenApiTests(TestCase):

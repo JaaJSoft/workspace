@@ -10,7 +10,7 @@ import icalendar
 from workspace.calendar.services.timezones import event_timezone
 
 
-def _add_event_times(vevent, event):
+def add_event_times(vevent, event):
     """Emit DTSTART/DTEND per RFC 5545 semantics.
 
     All-day events are VALUE=DATE day labels; zoned events are emitted as
@@ -54,7 +54,7 @@ def build_reply(event, user, status):
 
     vevent = icalendar.Event()
     vevent.add("UID", event.ical_uid)
-    _add_event_times(vevent, event)
+    add_event_times(vevent, event)
     vevent.add("SUMMARY", event.title)
     vevent.add("SEQUENCE", event.ical_sequence)
 

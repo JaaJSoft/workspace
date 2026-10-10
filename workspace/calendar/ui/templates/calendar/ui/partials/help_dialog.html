@@ -69,6 +69,23 @@
     <li><strong>Subscribed calendars</strong> &mdash; Calendars shared with you appear under "Other calendars".</li>
   </ul>
   ---
+  smartphone | Sync with Your Devices
+  <p>Your calendars sync both ways with the calendar app of your phone or computer (CalDAV). The server address is:</p>
+  <code
+    class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
+  >{{ request.scheme }}://{{ request.get_host }}/caldav/</code>
+  <p class="mb-3">
+    Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+  </p>
+  <ul>
+    <li><strong>iPhone, iPad, Mac</strong> &mdash; Add a CalDAV account and enter the server address.</li>
+    <li><strong>Android</strong> &mdash; Use <strong>DAVx&sup5;</strong> with the server address.</li>
+    <li><strong>Thunderbird</strong> &mdash; New calendar &gt; On the network, then the server address.</li>
+  </ul>
+  <p class="mt-3">
+    To let an app without an account follow a calendar read-only, open the calendar's <strong>Edit</strong> dialog and create a subscription link.
+  </p>
+  ---
   calendar-plus | Events
   <ul>
     <li>

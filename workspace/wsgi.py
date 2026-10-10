@@ -7,6 +7,7 @@ For more information on this file, see
 https://docs.djangoproject.com/en/6.0/howto/deployment/wsgi/
 """
 
+import io
 import os
 import threading
 
@@ -35,6 +36,31 @@ def _get_webdav_app():
 
 _WEBDAV_METHODS = {"PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"}
 
+CALDAV_ROOT = "/caldav/"
+
+# A discovery PROPFIND is a few hundred bytes; anything past this is not one.
+_DISCOVERY_BODY_LIMIT = 64 * 1024
+
+
+def _is_caldav_discovery(environ):
+    """True for a PROPFIND on "/" from a calendar client looking for its account.
+
+    Clients given only the server address ask "/" who the user is
+    (``current-user-principal``) before trying ``/.well-known/caldav``, and
+    some take whatever answers as the principal. The file WebDAV app owns
+    "/", and knows nothing about calendars. The body is put back for
+    whichever app ends up reading it.
+    """
+    try:
+        length = int(environ.get("CONTENT_LENGTH") or 0)
+    except ValueError:
+        return False
+    if not 0 < length <= _DISCOVERY_BODY_LIMIT:
+        return False
+    body = environ["wsgi.input"].read(length)
+    environ["wsgi.input"] = io.BytesIO(body)
+    return b"current-user-principal" in body or b"calendar-home-set" in body
+
 
 def application(environ, start_response):
     path = environ.get("PATH_INFO", "")
@@ -45,6 +71,10 @@ def application(environ, start_response):
         environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + DAV_PREFIX
         environ["PATH_INFO"] = path[len(DAV_PREFIX) :] or "/"
         return _get_webdav_app()(environ, start_response)
+
+    if path == "/" and method == "PROPFIND" and _is_caldav_discovery(environ):
+        environ["PATH_INFO"] = CALDAV_ROOT
+        return _django_app(environ, start_response)
 
     # Windows WebDAV MiniRedir sends PROPFIND to "/" to check quota before
     # uploading to /dav.  Route WebDAV methods on the root to the DAV app

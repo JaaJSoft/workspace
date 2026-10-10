@@ -68,6 +68,75 @@
         </div>
       </div>
 
+      <div
+        x-show="calendarModalMode === 'edit'"
+        class="border-t border-base-300 pt-4"
+      >
+        <div class="flex items-center gap-2 text-sm font-medium">
+          <i data-lucide="rss" class="w-4 h-4 text-module"></i>
+          Subscription link
+        </div>
+        <p class="text-xs text-base-content/60 mt-1">
+          Anyone with the link can see this calendar from another calendar app, read-only.
+        </p>
+        <div x-show="calendarFeed.loading" class="mt-3">
+          <span class="loading loading-spinner loading-xs"></span>
+        </div>
+        <template x-if="!calendarFeed.loading && !calendarFeed.url">
+          <button
+            type="button"
+            class="btn btn-sm btn-outline mt-3"
+            :disabled="calendarFeed.busy"
+            @click="enableCalendarFeed()"
+          >
+            <i data-lucide="link" class="w-4 h-4"></i>
+            Create link
+          </button>
+        </template>
+        <template x-if="!calendarFeed.loading && calendarFeed.url">
+          <div class="mt-3 space-y-2">
+            <div class="join w-full">
+              <input
+                type="text"
+                class="input input-bordered input-sm join-item w-full font-mono text-xs"
+                :value="calendarFeed.url"
+                readonly
+                @focus="$event.target.select()"
+                aria-label="Subscription link"
+              />
+              <button
+                type="button"
+                class="btn btn-sm join-item"
+                title="Copy link"
+                @click="copyCalendarFeed()"
+              >
+                <i data-lucide="copy" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost"
+                :disabled="calendarFeed.busy"
+                @click="enableCalendarFeed()"
+              >
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                New link
+              </button>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost text-error"
+                :disabled="calendarFeed.busy"
+                @click="disableCalendarFeed()"
+              >
+                <i data-lucide="link-2-off" class="w-3 h-3"></i>
+                Turn off
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+
       <div class="modal-action">
         <button
           type="button"

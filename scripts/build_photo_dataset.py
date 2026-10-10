@@ -240,6 +240,16 @@ def image_key(download_url):
     return hashlib.md5(download_url.encode()).hexdigest()
 
 
+def flickr_source(download_url):
+    """(server, secret) of a photo, from its YFCC100M download URL.
+
+    "http://farm1.staticflickr.com/11/14882799_f31b29bc92.jpg" is server 11,
+    secret f31b29bc92: what Flickr's URL of any other rendition is built from.
+    """
+    server, name = download_url.rsplit("/", 2)[1:]
+    return server, name.removesuffix(".jpg").split("_")[1]
+
+
 def fetch_images(rows, cache_dir):
     """{photo id: (path, sha256, width, height)} for the images the bucket has."""
     import httpx
@@ -391,6 +401,7 @@ def manifest_rows(rows, images, sizes, min_photos, max_photos):
     out = []
     for photo_id in picked:
         row, entry = rows[photo_id], images[photo_id]
+        server, secret = flickr_source(row["downloadurl"])
         out.append(
             {
                 "id": photo_id,
@@ -409,6 +420,8 @@ def manifest_rows(rows, images, sizes, min_photos, max_photos):
                 "width": entry["width"],
                 "height": entry["height"],
                 "annotated_at": sizes[photo_id],
+                "server": server,
+                "secret": secret,
             }
         )
     out.sort(key=lambda r: (r["library"], r["taken"], r["id"]))

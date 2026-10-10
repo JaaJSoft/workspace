@@ -25,6 +25,7 @@ from workspace.files.models import (
     FileScan,
     FileShare,
     GroupStorageQuota,
+    UserStorageQuota,
 )
 from workspace.files.services import FileService, quota
 from workspace.files.webdav import dc as dc_module
@@ -2184,3 +2185,19 @@ class WebDAVIntegrationTests(TestCase):
         )
 
         self.assertTrue(File.objects.filter(pk=shared.pk).exists())
+
+    def test_an_unlimited_user_gets_a_free_space_figure_in_every_folder(self):
+        """Without one the Windows redirector reports the local system drive."""
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
+        self._request("MKCOL", "/Docs/")
+        for path in ("/", "/Docs/"):
+            _, _, body = self._request(
+                "PROPFIND",
+                path,
+                body=(
+                    b'<?xml version="1.0"?><propfind xmlns="DAV:"><prop>'
+                    b"<quota-available-bytes/></prop></propfind>"
+                ),
+                headers={"Depth": "0", "Content-Type": "application/xml"},
+            )
+            self.assertRegex(body, rb"quota-available-bytes>\d+<", path)

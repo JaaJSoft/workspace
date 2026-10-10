@@ -1,5 +1,7 @@
 """Enforcement: every write path refuses what does not fit, and writes nothing."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.base import ContentFile
@@ -9,8 +11,14 @@ from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
-from workspace.files.models import File, GroupStorageQuota, UserStorageQuota
+from workspace.files.models import (
+    File,
+    FileShare,
+    GroupStorageQuota,
+    UserStorageQuota,
+)
 from workspace.files.services import FileService, quota
+from workspace.files.webdav.resources import FolderResource, RootCollection
 
 User = get_user_model()
 
@@ -497,6 +505,12 @@ class WebDavShrinkOverQuotaTests(TestCase):
 
 @override_settings(STORAGE_QUOTA_BYTES=10 * KB)
 class WebDavQuotaAdvertisingTests(TestCase):
+    """Every collection advertises the space a write into it can use.
+
+    A client that gets no {DAV:}quota-available-bytes makes up a figure of its
+    own - the Windows redirector reports the local system drive - and refuses
+    copies on it."""
+
     def setUp(self):
         self.user = User.objects.create_user(username="davuser", password="pw")
         self.group = Group.objects.create(name="Design")
@@ -507,6 +521,13 @@ class WebDavQuotaAdvertisingTests(TestCase):
         FileService.create_file(
             self.user, "a.bin", content=ContentFile(b"x" * KB, name="a.bin")
         )
+        self.disk_free = 100 * KB
+        patcher = patch(
+            "workspace.files.webdav.resources._disk_free_bytes",
+            side_effect=lambda: self.disk_free,
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def _environ(self):
         # wsgidav._DAVResource.__init__ indexes environ["wsgidav.provider"]
@@ -514,39 +535,29 @@ class WebDavQuotaAdvertisingTests(TestCase):
         # provider dispatch) still needs the key present.
         return {"workspace.user": self.user, "wsgidav.provider": None}
 
+    def _space(self, res):
+        return res.get_used_bytes(), res.get_available_bytes()
+
     def test_the_personal_root_reports_the_effective_quota(self):
-        from workspace.files.webdav.resources import RootCollection
-
         root = RootCollection("/", self._environ())
-        self.assertEqual(root.get_used_bytes(), KB)
-        self.assertEqual(root.get_available_bytes(), 9 * KB)
+        self.assertEqual(self._space(root), (KB, 9 * KB))
 
-    def test_an_unlimited_bucket_advertises_nothing(self):
+    def test_an_unlimited_bucket_advertises_the_free_disk_space(self):
         UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
-        from workspace.files.webdav.resources import RootCollection
-
-        self.assertIsNone(RootCollection("/", self._environ()).get_available_bytes())
-
-    def test_the_personal_root_aggregates_once_per_resource(self):
-        """The root is the first resource every mount touches, and wsgidav
-        asks both questions twice on an allprop PROPFIND."""
-        from workspace.files.webdav.resources import RootCollection
-
         root = RootCollection("/", self._environ())
-        with self.assertNumQueries(2):
-            for _ in range(2):
-                root.get_used_bytes()
-                root.get_available_bytes()
+        self.assertEqual(self._space(root), (KB, 100 * KB))
 
-    def test_an_unlimited_root_still_reports_what_it_holds(self):
-        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
-        from workspace.files.webdav.resources import RootCollection
+    def test_the_disk_caps_a_quota_it_cannot_hold(self):
+        self.disk_free = 2 * KB
+        root = RootCollection("/", self._environ())
+        self.assertEqual(self._space(root), (KB, 2 * KB))
 
-        self.assertEqual(RootCollection("/", self._environ()).get_used_bytes(), KB)
+    def test_a_personal_sub_folder_reports_the_personal_bucket(self):
+        sub = FileService.create_folder(self.user, "sub")
+        res = FolderResource("/sub", self._environ(), sub)
+        self.assertEqual(self._space(res), (KB, 9 * KB))
 
-    def test_a_group_root_reports_the_group_bucket(self):
-        from workspace.files.webdav.resources import FolderResource
-
+    def test_a_group_folder_reports_the_group_bucket_at_any_depth(self):
         GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
         FileService.create_file(
             self.user,
@@ -554,30 +565,58 @@ class WebDavQuotaAdvertisingTests(TestCase):
             parent=self.group_root,
             content=ContentFile(b"x" * KB, name="team.bin"),
         )
-        res = FolderResource("/Design", self._environ(), self.group_root)
-        self.assertEqual(res.get_used_bytes(), KB)
-        self.assertEqual(res.get_available_bytes(), 3 * KB)
-
-    def test_a_group_root_aggregates_once_per_resource(self):
-        """wsgidav asks both questions twice per resource on an allprop
-        PROPFIND, and a listing holds one resource per group folder."""
-        from workspace.files.webdav.resources import FolderResource
-
-        GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
-        res = FolderResource("/Design", self._environ(), self.group_root)
-        with self.assertNumQueries(2):
-            for _ in range(2):
-                res.get_used_bytes()
-                res.get_available_bytes()
-
-    def test_a_sub_folder_reports_no_bucket(self):
-        from workspace.files.webdav.resources import FolderResource
-
         sub = FileService.create_folder(self.user, "sub", parent=self.group_root)
-        res = FolderResource("/Design/sub", self._environ(), sub)
-        with self.assertNumQueries(0):
-            self.assertIsNone(res.get_used_bytes())
-            self.assertIsNone(res.get_available_bytes())
+        for path, folder in (("/Design", self.group_root), ("/Design/sub", sub)):
+            res = FolderResource(path, self._environ(), folder)
+            self.assertEqual(self._space(res), (KB, 3 * KB))
+
+    def test_an_unlimited_group_folder_advertises_the_free_disk_space(self):
+        res = FolderResource("/Design", self._environ(), self.group_root)
+        self.assertEqual(self._space(res), (0, 100 * KB))
+
+    def test_a_folder_shared_by_someone_else_reports_the_writers_bucket(self):
+        """A file written there is charged to the writer, and the owner's
+        usage is none of the writer's business."""
+        owner = User.objects.create_user(username="davowner", password="pw")
+        theirs = FileService.create_folder(owner, "Theirs")
+        FileService.create_file(
+            owner,
+            "big.bin",
+            parent=theirs,
+            content=ContentFile(b"x" * 5 * KB, name="big.bin"),
+        )
+        FileShare.objects.create(
+            file=theirs,
+            shared_by=owner,
+            shared_with=self.user,
+            permission=FileShare.Permission.READ_WRITE,
+        )
+        res = FolderResource("/Theirs", self._environ(), theirs)
+        self.assertEqual(self._space(res), (KB, 9 * KB))
+
+    def test_a_listing_resolves_each_bucket_once(self):
+        """wsgidav asks both questions for every collection of a listing,
+        twice on an allprop PROPFIND."""
+        GroupStorageQuota.objects.create(group=self.group, quota_bytes=4 * KB)
+        environ = self._environ()
+        personal = [
+            FolderResource(
+                f"/p{i}", environ, FileService.create_folder(self.user, f"p{i}")
+            )
+            for i in range(3)
+        ]
+        team = [
+            FolderResource(
+                f"/Design/t{i}",
+                environ,
+                FileService.create_folder(self.user, f"t{i}", parent=self.group_root),
+            )
+            for i in range(3)
+        ]
+        # One quota lookup and one aggregate per bucket.
+        with self.assertNumQueries(4):
+            for res in [RootCollection("/", environ), *personal, *team] * 2:
+                self._space(res)
 
 
 class WebDavMoveCopyQuotaTests(TestCase):

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - rush</title>
+</head>
+<body>
+  <template id="rush">
+    <div id="rush-root" data-composition-id="rush" data-width="1920" data-height="1080">
+      <style>
+        #rush-root { position: absolute; inset: 0; }
+        .rush .panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 36px; background: var(--mc); opacity: 0; }
+        .rush .panel-icon { width: 210px; height: 210px; color: #fff; }
+        .rush .panel-icon svg { width: 100%; height: 100%; stroke-width: 1.6; }
+        .rush .panel .slam { font-size: 170px; }
+        @media (orientation: portrait) {
+          .rush .panel .slam { font-size: 110px; }
+          .rush .panel-icon { width: 180px; height: 180px; }
+        }
+      </style>
+      <div class="scene rush on-colour">
+        <div class="panel" style="--mc: #047857"><div class="panel-icon"><i data-lucide="notebook-pen"></i></div><div class="slam">your notes,</div></div>
+        <div class="panel" style="--mc: #65a30d"><div class="panel-icon"><i data-lucide="images"></i></div><div class="slam">your photos,</div></div>
+        <div class="panel" style="--mc: #0f766e"><div class="panel-icon"><i data-lucide="calendar"></i></div><div class="slam">your calendar,</div></div>
+        <div class="panel" style="--mc: #be123c"><div class="panel-icon"><i data-lucide="contact"></i></div><div class="slam">your contacts,</div></div>
+        <div class="panel" style="--mc: #7e22ce"><div class="panel-icon"><i data-lucide="key-round"></i></div><div class="slam">your passwords,</div></div>
+        <div class="panel" style="--mc: #be185d"><div class="panel-icon"><i data-lucide="sparkles"></i></div><div class="slam">your AI,</div></div>
+        <div class="panel" style="--mc: #6d28d9"><div class="panel-icon"><i data-lucide="database"></i></div><div class="slam">your data.</div></div>
+      </div>
+      <script>
+        (() => {
+          // The hook speeds up into the drop: one panel per hit (the claps of
+          // the build land on the same hits), the last one held.
+          const { $$, at, hits } = window.promo.scene("rush");
+          const { slam } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          const panels = $$(".panel");
+          hits.forEach((hit, i) => {
+            const panel = panels[i];
+            tl.set(panel, { opacity: 1 }, at(hit));
+            if (i) tl.set(panels[i - 1], { opacity: 0 }, at(hit));
+            const parts = [panel.querySelector(".slam"), panel.querySelector(".panel-icon")];
+            if (i === hits.length - 1) {
+              slam(tl, parts[0], at(hit), "scale");
+            } else {
+              // An eighth is shorter than a slam: cut in whole, with a punch.
+              tl.fromTo(parts, { scale: 1.18 }, { scale: 1, duration: 0.18, ease: "power3.out" }, at(hit));
+            }
+          });
+          window.__timelines["rush"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

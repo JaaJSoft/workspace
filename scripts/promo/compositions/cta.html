@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - cta</title>
+</head>
+<body>
+  <template id="cta">
+    <div id="cta-root" data-composition-id="cta" data-width="1920" data-height="1080">
+      <style>
+        #cta-root { position: absolute; inset: 0; }
+        .cta .field { background: var(--mc); }
+        .cta .cta-logo { position: absolute; left: 50%; top: 26%; width: 220px; height: 220px; margin: -110px 0 0 -110px; }
+        .cta .your { position: absolute; left: 0; right: 0; top: 37.5%; text-align: center; font-size: 110px; }
+        .cta .title { position: absolute; left: 0; right: 0; top: 52%; text-align: center; font-size: 190px; }
+        .cta .tag { position: absolute; left: 0; right: 0; top: 74%; text-align: center; font-size: 64px; }
+        .cta .url { position: absolute; left: 0; right: 0; top: 87%; text-align: center; }
+        @media (orientation: portrait) {
+          .cta .cta-logo { top: 31%; }
+          .cta .your { top: 38%; font-size: 90px; }
+          .cta .title { top: 45%; font-size: 150px; }
+          .cta .tag { top: 56%; font-size: 60px; padding: 0 60px; }
+          .cta .url { top: 69%; }
+        }
+      </style>
+      <div class="scene cta on-colour" style="--mc: #6d28d9">
+        <div class="field layer"></div>
+        <div class="logo cta-logo"><i data-lucide="users"></i></div>
+        <div class="slam your">your</div>
+        <div class="slam title">Workspace.</div>
+        <div class="slam tag">One app for <em>all of it.</em></div>
+        <div class="url"><span class="label">github.com/JaaJSoft/workspace</span></div>
+      </div>
+      <script>
+        (() => {
+          // The answer to the opening, on the drop right after the roll: the
+          // mark slams in on the flash and "your Workspace." builds on the
+          // next beats while the last chord rings.
+          const { $, at } = window.promo.scene("cta");
+          const { slam } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          slam(tl, $(".cta-logo"), at(0), "scale");
+          slam(tl, $(".your"), at(1), "drop");
+          slam(tl, $(".title"), at(1.5), "scale");
+          slam(tl, $(".tag"), at(3), "rise");
+          slam(tl, $(".url"), at(5), "drop");
+          window.__timelines["cta"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

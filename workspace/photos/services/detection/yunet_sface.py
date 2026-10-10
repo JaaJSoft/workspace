@@ -47,7 +47,9 @@ class YuNetSFaceBackend(FaceBackend):
     dims = 128
     # OpenCV's recommended same-identity threshold for SFace is a cosine
     # similarity of 0.363; grouping a library wants fewer false merges than a
-    # one-off verification, so the distance is a little tighter.
+    # one-off verification, so the distance is a little tighter. The face
+    # bench puts it at the knee: tighter leaves far more groups to merge,
+    # looser far more faces in the wrong group (docs/photos/face-bench.md).
     default_max_distance = 0.58
     models = (YUNET, SFACE)
 

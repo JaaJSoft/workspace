@@ -5,8 +5,9 @@ Two passes, both confined to one owner's faces:
 - **Assignment**, right after a photo is analyzed: each new face asks the
   vector index for its nearest neighbours and joins the cluster they vote
   for, if they are close enough.
-- **Clustering**, nightly or once enough faces wait: DBSCAN over the faces
-  still ungrouped, creating new clusters.
+- **Clustering**, nightly or once enough faces wait: look-alikes a cluster
+  holds are separated, then DBSCAN runs over the faces still ungrouped,
+  creating new clusters.
 
 What the user decided is never undone: a confirmed face stays where it was
 put, a rejected one is never grouped again, and no face is proposed for a
@@ -56,6 +57,9 @@ _BLOCK = 512
 _MAX_LINKS = 64
 # The most ungrouped faces one clustering run reads, the best first.
 _MAX_CLUSTERED = 20000
+# Clusters larger than this are not split: regrouping one costs its size
+# cubed, and a cluster that large is one person's many photos.
+_MAX_SPLIT = 1000
 # The most ungrouped faces a clustering run offers to the existing clusters
 # again, the newest first, and how many per vote pass. Blurred faces never
 # leave the ungrouped set, so without a bound every run would re-vote a pile
@@ -214,9 +218,10 @@ def maybe_queue_clustering(owner_id):
 def cluster_owner(owner_id):
     """Group *owner_id*'s ungrouped faces; return the number of new clusters.
 
-    First the newest ungrouped faces get another chance to join an existing
-    cluster, then DBSCAN runs over what is left. One run per owner at a time:
-    two would create the same clusters twice.
+    First the clusters that look like two people are split
+    (split_look_alikes), then the newest ungrouped faces get another chance
+    to join an existing cluster, then DBSCAN runs over what is left. One run
+    per owner at a time: two would create the same clusters twice.
     """
     cache.delete(_QUEUED_KEY.format(owner_id))
     running = _RUNNING_KEY.format(owner_id)
@@ -229,6 +234,7 @@ def cluster_owner(owner_id):
             assignment=Face.Assignment.AUTO,
             embedding__isnull=False,
         )
+        created = split_look_alikes(owner_id)
         newest = list(
             ungrouped.order_by("-created_at").values_list("pk", flat=True)[
                 :_MAX_REVOTED
@@ -236,7 +242,7 @@ def cluster_owner(owner_id):
         )
         for batch in itertools.batched(newest, _REVOTE_BATCH, strict=False):
             assign_faces(owner_id, batch)
-        created = _cluster_remaining(owner_id, ungrouped)
+        created += _cluster_remaining(owner_id, ungrouped)
         refresh_clusters(
             FaceCluster.objects.filter(owner_id=owner_id).values_list("pk", flat=True)
         )
@@ -351,6 +357,172 @@ def split_by_photo(members, files, vectors, qualities, threshold):
         best["files"].add(files[i])
         best["sum"] = best["sum"] + vectors[i] * face_weight(qualities[i])
     return [group["members"] for group in groups]
+
+
+# -- look-alikes -------------------------------------------------------------
+
+
+def split_look_alikes(owner_id):
+    """Split the clusters that hold two look-alike people; return the number
+    of clusters created.
+
+    Two faces of one photo are two people, so a cluster turns away the face
+    of a photo it already holds a face of. When good faces it turned away sit
+    as close to it as its own, the cluster is likely two people the embedding
+    tells apart only barely - brothers and sisters, often photographed
+    together - and the faces turned away are the other one. Its faces and
+    those are grouped again (link_apart): a group made of turned-away faces
+    and some of the cluster's own becomes a new cluster, those faces with it.
+
+    Only automatic faces move. The group holding the cluster's confirmed
+    faces keeps the cluster, its name and its cover; without any, the group
+    holding most of its faces does.
+    """
+    threshold = max_distance()
+    created = 0
+    for cluster_id, outsiders in _turned_away(owner_id, threshold).items():
+        created += _split_cluster(owner_id, cluster_id, outsiders, threshold)
+    return created
+
+
+def _turned_away(owner_id, threshold):
+    """{cluster id: [(pk, file id, vector)]}: good ungrouped automatic faces
+    within *threshold* of a cluster that holds another face of their photo."""
+    candidates = Face.objects.filter(
+        owner_id=owner_id,
+        cluster__isnull=True,
+        assignment=Face.Assignment.AUTO,
+        embedding__isnull=False,
+        quality__gte=LOW_QUALITY,
+    )
+    outsiders = []
+    for pk, file_id, blob in candidates.values_list("pk", "file_id", "embedding"):
+        vector = from_bytes(blob, FACE_EMBEDDINGS.dims)
+        if vector is not None:
+            outsiders.append((pk, file_id, vector))
+    if not outsiders:
+        return {}
+    in_photo = defaultdict(set)
+    for file_id, cluster_id in Face.objects.filter(
+        owner_id=owner_id,
+        cluster__isnull=False,
+        file_id__in=candidates.values("file_id"),
+    ).values_list("file_id", "cluster_id"):
+        in_photo[file_id].add(cluster_id)
+    centroids = {}
+    for pk, blob in FaceCluster.objects.filter(owner_id=owner_id).values_list(
+        "pk", "centroid"
+    ):
+        centroid = from_bytes(blob, FACE_EMBEDDINGS.dims) if blob else None
+        if centroid is not None:
+            centroids[pk] = centroid
+    evidence = defaultdict(list)
+    for outsider in outsiders:
+        for cluster_id in in_photo.get(outsider[1], ()):
+            centroid = centroids.get(cluster_id)
+            if centroid is not None and 1 - float(outsider[2] @ centroid) <= threshold:
+                evidence[cluster_id].append(outsider)
+    return evidence
+
+
+def _split_cluster(owner_id, cluster_id, outsiders, threshold):
+    """Move the faces of *cluster_id* that group with faces it turned away
+    into new clusters; return how many were created."""
+    members = []
+    for pk, file_id, blob, assignment in Face.objects.filter(
+        cluster_id=cluster_id, embedding__isnull=False
+    ).values_list("pk", "file_id", "embedding", "assignment"):
+        vector = from_bytes(blob, FACE_EMBEDDINGS.dims)
+        if vector is not None:
+            members.append((pk, file_id, vector, assignment))
+    if not members or len(members) > _MAX_SPLIT:
+        return 0
+    points = [(pk, file_id, vector) for pk, file_id, vector, _ in members]
+    points += outsiders
+    confirmed = [
+        i for i, member in enumerate(members) if member[3] == Face.Assignment.CONFIRMED
+    ]
+    groups = link_apart(
+        np.stack([vector for _pk, _file, vector in points]).astype(np.float32),
+        [file_id for _pk, file_id, _vector in points],
+        threshold,
+        joined=confirmed,
+    )
+    own = len(members)
+    keep = max(
+        groups,
+        key=lambda group: (
+            any(i in confirmed for i in group),
+            sum(i < own for i in group),
+        ),
+    )
+    created = []
+    for group in groups:
+        moving = [points[i][0] for i in group if i < own]
+        joining = [points[i][0] for i in group if i >= own]
+        if group is keep or not moving or not joining:
+            continue
+        with transaction.atomic():
+            cluster = FaceCluster.objects.create(owner_id=owner_id)
+            # Conditional: a face the user placed or took out meanwhile stays.
+            Face.objects.filter(
+                pk__in=moving, cluster_id=cluster_id, assignment=Face.Assignment.AUTO
+            ).update(cluster=cluster)
+            Face.objects.filter(
+                pk__in=joining, cluster__isnull=True, assignment=Face.Assignment.AUTO
+            ).update(cluster=cluster)
+        created.append(cluster.pk)
+    if created:
+        refresh_clusters([cluster_id, *created])
+    return len(created)
+
+
+def link_apart(vectors, files, threshold, *, joined=()):
+    """Groups of the indices of unit *vectors*, never two of one file.
+
+    Average linkage by cosine distance: the two closest groups merge first,
+    as long as they are within *threshold* of each other and show no file
+    twice. *joined* start out as one group.
+    """
+    joined = list(joined)
+    starts = ([joined] if joined else []) + [
+        [i] for i in range(len(vectors)) if i not in set(joined)
+    ]
+    size = len(starts)
+    membership = np.zeros((size, len(vectors)), dtype=np.float32)
+    for g, members in enumerate(starts):
+        membership[g, members] = 1
+    sizes = membership.sum(axis=1)
+    distances = membership @ (1 - vectors @ vectors.T) @ membership.T
+    distances /= np.outer(sizes, sizes)
+    codes = {file_id: code for code, file_id in enumerate(dict.fromkeys(files))}
+    shows = np.zeros((size, len(codes)), dtype=np.int32)
+    for g, members in enumerate(starts):
+        for i in members:
+            shows[g, codes[files[i]]] = 1
+    # Groups that may never merge: they show one photo twice, or are one.
+    apart = (shows @ shows.T) > 0
+    np.fill_diagonal(apart, True)
+    groups = [list(members) for members in starts]
+    alive = np.ones(size, dtype=bool)
+    while True:
+        blocked = apart | ~alive[:, None] | ~alive[None, :]
+        candidates = np.where(blocked, np.inf, distances)
+        i, j = divmod(int(np.argmin(candidates)), size)
+        if candidates[i, j] > threshold:
+            break
+        # Lance-Williams update: the average distance to the merged group.
+        merged = (sizes[i] * distances[i] + sizes[j] * distances[j]) / (
+            sizes[i] + sizes[j]
+        )
+        distances[i, :] = merged
+        distances[:, i] = merged
+        apart[i, :] |= apart[j, :]
+        apart[:, i] = apart[i, :]
+        sizes[i] += sizes[j]
+        groups[i] += groups[j]
+        alive[j] = False
+    return [groups[g] for g in range(size) if alive[g]]
 
 
 def _create_cluster(owner_id, face_ids):

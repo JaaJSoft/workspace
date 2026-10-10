@@ -76,7 +76,9 @@ feature off.
 `scrfd_arcface` is more accurate on hard faces (profiles, small faces in group
 photos), but InsightFace licenses its pretrained weights for non-commercial
 research only: an instance run by or for a company must not enable it. Both
-run on the CPU through onnxruntime.
+run on the CPU through onnxruntime. The [face bench](face-bench.md) measures
+both on real photo libraries; run it to judge any change to detection or
+grouping.
 
 **Switching backend** changes the embedding space, and `scrfd_arcface` changes
 its size too. After changing the setting:
@@ -142,6 +144,11 @@ a long 4K recording costs far more than a short phone clip. Lower
   clustered. Two faces of one photo are never put in the same group; the
   database refuses it too. Blurred or tiny faces never start a group, and a
   single clear face of someone is a group of its own.
+- That rule also tells look-alikes apart. When a group keeps turning away
+  faces as close to it as its own - two brothers photographed together, the
+  group holding one of them each time - it is regrouped without ever putting
+  two faces of one photo together, and the faces that side with the ones it
+  turned away leave with them, in a new group.
 - Corrections always win: a face the user placed is never moved, and a face
   the user took out ("Not this person", "Ungroup") is never grouped again
   automatically. A face the user hid (a stranger, a poster) is out of the

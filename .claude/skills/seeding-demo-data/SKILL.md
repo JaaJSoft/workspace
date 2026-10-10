@@ -91,6 +91,25 @@ Env vars do not persist across shell tool calls: chain migrate/seed/runserver in
 | `--keep-intro-modals` | Leave the onboarding tour + changelog popup pending (they are pre-dismissed by default) |
 | `--history-days N` | Spread activity over the last N days (default 180) |
 | `--password X` | Change the shared password (default `demo1234`) |
+| `--real-photos N` | Give `demo` and the next N-1 users a real photo library each (see below) |
+
+## Real photos
+
+`--real-photos N` fills the Photos timeline with real pictures instead of
+nothing: one Flickr member's CC BY library per user (`demo` gets the largest,
+695 photos), from the dataset the face bench uses (`scripts/photo_dataset.py`,
+`docs/photos/face-bench.md`). Capture dates are restored, a `CREDITS.txt` lands
+next to the photos, and face grouping is turned on for those users.
+
+- It is the one step that needs the network: the photos are downloaded on the
+  first run (about 55 MB for `demo`'s) and cached in
+  `~/.cache/workspace/photo-dataset`.
+- Faces are only analyzed with `PHOTOS_FACES_ENABLED=1` (and the weights,
+  downloaded on the first analysis). With `DEBUG` on, the analysis runs during
+  the seed itself, one photo at a time; otherwise the hourly catch-up picks
+  the photos up.
+- Photos is a preview module: start the server with `PREVIEW_VISIBILITY=all`
+  to see it as `demo`, as for the vault below.
 
 ## The vault
 

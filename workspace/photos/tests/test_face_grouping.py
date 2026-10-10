@@ -5,6 +5,8 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 
+from workspace.common.vectors.encoding import normalize, to_bytes
+from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.services import face_grouping
 from workspace.photos.services.face_analysis import analyze_faces
@@ -12,8 +14,11 @@ from workspace.photos.services.face_grouping import (
     LOW_QUALITY,
     cluster_owner,
     dbscan,
+    link_apart,
     maybe_queue_clustering,
+    refresh_clusters,
     split_by_photo,
+    split_look_alikes,
 )
 
 from .faces import FacesTestMixin, faces_on, opt_in
@@ -232,3 +237,137 @@ class DbscanTests(TestCase):
             photos = [["p1", "p1", "p2"][i] for i in group]
             self.assertEqual(len(photos), len(set(photos)))
         self.assertEqual(sorted(i for group in groups for i in group), [0, 1, 2])
+
+
+def _unit(*rows):
+    vectors = np.array(rows, dtype=np.float32)
+    return vectors / np.linalg.norm(vectors, axis=1, keepdims=True)
+
+
+class LinkApartTests(TestCase):
+    def test_close_faces_group_and_far_ones_stay_apart(self):
+        vectors = _unit([1, 0, 0], [1, 0.01, 0], [0, 1, 0])
+
+        groups = link_apart(vectors, ["p1", "p2", "p3"], threshold=0.1)
+
+        self.assertEqual(sorted(sorted(g) for g in groups), [[0, 1], [2]])
+
+    def test_two_faces_of_one_photo_never_share_a_group(self):
+        vectors = _unit([1, 0, 0], [1, 0, 0])
+
+        groups = link_apart(vectors, ["p1", "p1"], threshold=0.5)
+
+        self.assertEqual(len(groups), 2)
+
+    def test_look_alikes_seen_together_end_up_in_two_groups(self):
+        """Ann and Bob are within the threshold of each other, but photo
+        "both" shows them side by side: each one's faces group together,
+        and the two groups can never merge."""
+        ann, bob = [1, 0.2, 0], [1, -0.2, 0]
+        vectors = _unit(
+            ann, [1, 0.21, 0], [1, 0.19, 0], bob, [1, -0.21, 0], [1, -0.19, 0]
+        )
+        files = ["a1", "a2", "both", "b1", "b2", "both"]
+
+        groups = link_apart(vectors, files, threshold=0.5)
+
+        self.assertEqual(sorted(sorted(g) for g in groups), [[0, 1, 2], [3, 4, 5]])
+
+    def test_joined_faces_start_as_one_group(self):
+        vectors = _unit([1, 0, 0], [0, 1, 0], [0, 1, 0.01])
+
+        groups = link_apart(vectors, ["p1", "p2", "p3"], threshold=0.1, joined=[0, 1])
+
+        self.assertIn([0, 1], [sorted(g) for g in groups])
+
+
+@faces_on
+class SplitLookAlikesTests(FacesTestMixin, TestCase):
+    """Ann and Bob look alike; two photos show them together.
+
+    The cluster took all of Ann's faces and Bob's solo ones, and turned Bob
+    away from the two photos where Ann already stood for the pair.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        opt_in(self.user)
+        self.cluster = FaceCluster.objects.create(owner=self.user)
+        self.ann, self.bob, self.carol = [], [], []
+        photos = {
+            name: upload(self.user, f"{name}.png", faces_png())
+            for name in ("ann-1", "ann-2", "bob-1", "bob-2", "both-1", "both-2")
+        }
+        for name in ("ann-1", "ann-2", "both-1", "both-2"):
+            self.ann.append(self._face(photos[name], 0.2, self.cluster))
+        for name in ("bob-1", "bob-2"):
+            self.bob.append(self._face(photos[name], -0.2, self.cluster))
+        for name in ("both-1", "both-2"):
+            self.bob.append(self._face(photos[name], -0.2, None))
+        refresh_clusters([self.cluster.pk])
+
+    def _face(self, photo, lean, cluster, **fields):
+        noise = np.random.default_rng(len(self.ann + self.bob)).normal(0, 0.005, 3)
+        vector = np.zeros(FACE_EMBEDDINGS.dims)
+        vector[:3] = np.array([1, lean, 0]) + noise
+        return Face.objects.create(
+            file=photo,
+            owner=self.user,
+            box_x=0.1,
+            box_y=0.1,
+            box_width=0.2,
+            box_height=0.2,
+            detector_score=0.99,
+            quality=0.9,
+            embedding=to_bytes(normalize(vector, FACE_EMBEDDINGS.dims)),
+            cluster=cluster,
+            **fields,
+        )
+
+    def _cluster_of(self, faces):
+        return {Face.objects.get(pk=face.pk).cluster_id for face in faces}
+
+    def test_moves_the_turned_away_person_to_a_cluster_of_their_own(self):
+        created = split_look_alikes(self.user.pk)
+
+        self.assertEqual(created, 1)
+        self.assertEqual(self._cluster_of(self.ann), {self.cluster.pk})
+        (bobs,) = self._cluster_of(self.bob)
+        self.assertNotIn(bobs, (None, self.cluster.pk))
+        self.assertEqual(FaceCluster.objects.get(pk=bobs).face_count, 4)
+        self.assertEqual(FaceCluster.objects.get(pk=self.cluster.pk).face_count, 4)
+
+    def test_a_stranger_turned_away_splits_nothing(self):
+        """The person next to Ann in a photo is not evidence on their own."""
+        Face.objects.filter(pk__in=[f.pk for f in self.bob[:2]]).delete()
+        Face.objects.filter(pk=self.bob[3].pk).delete()
+        refresh_clusters([self.cluster.pk])
+
+        self.assertEqual(split_look_alikes(self.user.pk), 0)
+        self.assertEqual(self._cluster_of(self.ann), {self.cluster.pk})
+        self.assertEqual(self._cluster_of(self.bob[2:3]), {None})
+
+    def test_faces_the_user_took_out_are_not_evidence(self):
+        Face.objects.filter(cluster__isnull=True).update(
+            assignment=Face.Assignment.REJECTED
+        )
+
+        self.assertEqual(split_look_alikes(self.user.pk), 0)
+        self.assertEqual(self._cluster_of(self.bob[:2]), {self.cluster.pk})
+
+    def test_a_confirmed_face_never_moves(self):
+        """Confirming Bob's face says the cluster is Bob: his group keeps it,
+        and Ann's faces, with no face of hers turned away, stay too."""
+        Face.objects.filter(pk=self.bob[0].pk).update(
+            assignment=Face.Assignment.CONFIRMED
+        )
+
+        self.assertEqual(split_look_alikes(self.user.pk), 0)
+        self.assertEqual(self._cluster_of(self.bob[:2]), {self.cluster.pk})
+
+    def test_a_clustering_run_splits_look_alikes_first(self):
+        cluster_owner(self.user.pk)
+
+        self.assertEqual(self._cluster_of(self.ann), {self.cluster.pk})
+        self.assertEqual(len(self._cluster_of(self.bob)), 1)
+        self.assertNotEqual(self._cluster_of(self.bob), {self.cluster.pk})

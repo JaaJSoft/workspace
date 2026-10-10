@@ -52,6 +52,8 @@ class YuNetSFaceBackend(FaceBackend):
     # looser far more faces in the wrong group (docs/photos/face-bench.md).
     default_max_distance = 0.58
     models = (YUNET, SFACE)
+    # 30% of the face bench's faces under quality 0.5, 71% under 0.7.
+    norm_quality = (3.9, 15.0)
 
     def detect(self, image):
         return yunet_faces(image)

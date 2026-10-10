@@ -488,7 +488,7 @@ class Face(models.Model):
     # Eyes, nose tip, mouth corners: [[x, y], ...] as fractions, like the box.
     landmarks = models.JSONField(default=list)
     detector_score = models.FloatField()
-    # 0 to 1, from the detector score, the face's size and its sharpness.
+    # 0 to 1: how recognizable the face is (FaceBackend.quality).
     # A low-quality face never seeds a cluster and weighs less in a centroid.
     quality = models.FloatField()
     # The source of the photos.indexes.FACE_EMBEDDINGS vector index.

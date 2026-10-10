@@ -74,7 +74,7 @@ feature off.
 | `yunet_adaface` | YuNet + AdaFace IR-50 | 512-d | MIT, **trained on a non-commercial dataset** |
 | `scrfd_arcface` | SCRFD + ArcFace (InsightFace `buffalo_l`) | 512-d | **Non-commercial research only** |
 
-`yunet_adaface` keeps the default's detector and groups faces nearly as well as
+`yunet_adaface` keeps the default's detector and groups faces about as well as
 `scrfd_arcface`, for a quarter of its CPU: about twice the default's. Its
 weights are published under MIT, but they were trained on WebFace4M, which is
 licensed for non-commercial research only, and whether that reaches the model
@@ -145,10 +145,16 @@ a long 4K recording costs far more than a short phone clip. Lower
 ### How grouping works
 
 - Right after a photo is analyzed, each new face joins the group its nearest
-  neighbours vote for, if they are close enough.
+  neighbours vote for, if they are close enough. A face the model reads
+  poorly - blurred, tiny, turned away - joins only on firm evidence: one of
+  the group's good faces very close to it, or three of its faces within the
+  threshold (the blurred photo of someone seen often sits among many of
+  their faces without being very close to any). How well the model reads a
+  face is the length of its embedding before normalization, which these
+  models make shorter the less sure they are.
 - Nightly (and once enough faces wait), the faces still ungrouped are
   clustered. Two faces of one photo are never put in the same group; the
-  database refuses it too. Blurred or tiny faces never start a group, and a
+  database refuses it too. Faces read poorly never start a group, and a
   single clear face of someone is a group of its own.
 - That rule also tells look-alikes apart. When a group keeps turning away
   faces as close to it as its own - two brothers photographed together, the

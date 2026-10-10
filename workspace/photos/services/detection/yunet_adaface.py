@@ -45,6 +45,8 @@ class YuNetAdaFaceBackend(FaceBackend):
     # in the wrong group (docs/photos/face-bench.md).
     default_max_distance = 0.6
     models = (YUNET, ADAFACE)
+    # 30% of the face bench's faces under quality 0.5, 71% under 0.7.
+    norm_quality = (10.0, 27.7)
 
     def detect(self, image):
         return yunet_faces(image)

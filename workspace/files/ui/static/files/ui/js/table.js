@@ -1277,6 +1277,11 @@ window.viewToggle = function viewToggle() {
     tileIconSize() {
       return { 1: 28, 2: 36, 3: 48, 4: 64, 5: 80 }[this.mosaicTileSize] || 48;
     },
+    // A column stretches past its minimum width until the next one fits;
+    // the fallback after `auto` is a typical width, not the widest.
+    tileImageSizes() {
+      return `auto, ${Math.round(this.tileMinWidth() * 1.25)}px`;
+    },
 
     // The listing is rendered in the saved view mode, so switching is a
     // save followed by a re-render; the folder veil covers the round trip.

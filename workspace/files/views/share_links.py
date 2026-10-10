@@ -25,7 +25,10 @@ from workspace.files.services.public_links import (
     schedule_upload_notification,
 )
 from workspace.files.services.scanning.policy import blocked_reason
-from workspace.files.services.thumbnails.generation import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import (
+    parse_thumbnail_size,
+    thumbnail_variant_path,
+)
 from workspace.files.sse_provider import push_file_event
 from workspace.files.ui.viewers import ViewerRegistry
 
@@ -358,6 +361,9 @@ class SharedFileThumbnailView(APIView):
     authentication_classes = []
 
     def get(self, request, token):
+        size = parse_thumbnail_size(request.query_params.get("size"))
+        if size is None:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
         link, err = _resolve_link(token)
         if err:
             return err
@@ -380,8 +386,8 @@ class SharedFileThumbnailView(APIView):
 
         _record_access(link)
 
-        thumb_path = get_thumbnail_path(node.uuid)
-        if not default_storage.exists(thumb_path):
+        thumb_path = thumbnail_variant_path(node.uuid, size)
+        if thumb_path is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         response = FileResponse(

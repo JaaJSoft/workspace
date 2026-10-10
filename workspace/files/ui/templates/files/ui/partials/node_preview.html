@@ -12,16 +12,25 @@
 
   Optional context:
     - thumbnail_url: str - thumbnail URL; falsy falls back to the icon
+    - thumbnail_sizes: str - the img `sizes` attribute, which picks the
+      thumbnail size to fetch. Leading with `auto` lets browsers that
+      support it use the laid-out width; the rest is the fallback.
+    - thumbnail_sizes_expr: str - raw Alpine `:sizes` expression, for a
+      tile whose width changes at runtime.
     - icon_size_style_expr: str - raw Alpine `:style` expression for the
       icon's wrapper div (e.g. the mosaic tile's dynamic tileIconSize()
       binding). Omit for a fixed-size icon (w-12 h-12).
     - duration: float - an audio or video length in seconds, shown as a
       play badge over the preview.
 {% endcomment %}
+{% load file_filters %}
 <div class="relative w-full" style="padding-bottom: 100%">
   {% if thumbnail_url %}
     <img
       src="{{ thumbnail_url }}"
+      srcset="{{ thumbnail_url|thumbnail_srcset }}"
+      sizes="{{ thumbnail_sizes|default:'auto, 512px' }}"
+      {% if thumbnail_sizes_expr %}:sizes="{{ thumbnail_sizes_expr }}"{% endif %}
       alt=""
       class="absolute inset-0 w-full h-full object-cover bg-base-200"
       loading="lazy"

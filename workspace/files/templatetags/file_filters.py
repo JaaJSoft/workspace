@@ -5,6 +5,11 @@ from django import template
 from django.utils.html import conditional_escape, format_html_join
 from django.utils.safestring import mark_safe
 
+from workspace.files.services.thumbnails.generation import (
+    THUMBNAIL_MAX_SIZE,
+    THUMBNAIL_SIZES,
+)
+
 register = template.Library()
 
 
@@ -56,6 +61,18 @@ def thumbnail_url(file_obj):
     if not getattr(file_obj, "has_thumbnail", False):
         return ""
     return f"/api/v1/files/{file_obj.uuid}/thumbnail"
+
+
+@register.filter
+def thumbnail_srcset(url):
+    """A srcset offering the thumbnail at *url* in every size it comes in."""
+    separator = "&" if "?" in url else "?"
+    return ", ".join(
+        f"{url} {size}w"
+        if size == THUMBNAIL_MAX_SIZE[0]
+        else f"{url}{separator}size={size} {size}w"
+        for size in THUMBNAIL_SIZES
+    )
 
 
 @register.filter

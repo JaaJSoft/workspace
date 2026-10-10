@@ -28,7 +28,7 @@
           x-target.push="shared-content"
           class="bg-base-100 border rounded-lg hover:border-module hover:shadow-lg transition-all flex flex-col overflow-hidden {% if entry.is_quarantined %}border-error/40 bg-error/10{% else %}border-base-300{% endif %}"
         >
-          {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color %}
+          {% include "files/ui/partials/node_preview.html" with thumbnail_url=entry.thumbnail_url icon=entry.icon icon_color=entry.icon_color thumbnail_sizes="auto, (min-width: 1024px) 20vw, (min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw" %}
           <div class="p-3 min-w-0 border-t border-base-300 flex-1">
             {% include "files/ui/partials/node_name.html" with name=entry.name is_quarantined=entry.is_quarantined %}
             <p class="text-xs text-base-content/60 mt-0.5">

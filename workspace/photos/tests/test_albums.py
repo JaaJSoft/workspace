@@ -371,10 +371,10 @@ class AlbumSummariesTests(TestCase):
         self.album.save(update_fields=["cover"])
         albums = list(Album.objects.filter(owner=self.user))
 
-        # The project reach of the file access helper, the counts, the chosen
-        # covers, the fallback covers, the viewer's groups (for the roles) and
-        # the cover files.
-        with self.assertNumQueries(6):
+        # The project reach of the file access helper, the viewer's hidden
+        # folders, the counts, the chosen covers, the fallback covers, the
+        # viewer's groups (for the roles) and the cover files.
+        with self.assertNumQueries(7):
             cards = album_cards(self.user, albums)
 
         self.assertEqual(len(cards), 4)

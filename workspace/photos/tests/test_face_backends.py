@@ -32,6 +32,10 @@ from workspace.photos.services.detection.health import weights_health
 from workspace.photos.services.detection.registry import backend_keys, get_face_backend
 from workspace.photos.services.detection.scrfd_arcface import ScrfdArcFaceBackend
 from workspace.photos.services.detection.weights import ModelFile
+from workspace.photos.services.detection.yunet_adaface import (
+    _FEATURES,
+    YuNetAdaFaceBackend,
+)
 from workspace.photos.services.detection.yunet_sface import YuNetSFaceBackend
 
 
@@ -57,24 +61,25 @@ def _session(fake):
     return patch.object(runtime, "session", return_value=fake)
 
 
-class YuNetDecodingTests(SimpleTestCase):
-    def _outputs(self):
-        outputs = {}
-        for stride in (8, 16, 32):
-            cells = (640 // stride) ** 2
-            outputs[f"cls_{stride}"] = np.zeros((1, cells, 1), np.float32)
-            outputs[f"obj_{stride}"] = np.zeros((1, cells, 1), np.float32)
-            outputs[f"bbox_{stride}"] = np.zeros((1, cells, 4), np.float32)
-            outputs[f"kps_{stride}"] = np.zeros((1, cells, 10), np.float32)
-        # One face, on the stride-32 grid at column 5, row 4.
-        index = 4 * 20 + 5
-        outputs["cls_32"][0, index] = outputs["obj_32"][0, index] = 1.0
-        outputs["bbox_32"][0, index] = [0.5, 0.5, math.log(2), math.log(3)]
-        outputs["kps_32"][0, index] = [0, 0, 1, 0, 0.5, 0.5, 0, 1, 1, 1]
-        return outputs
+def _yunet_outputs():
+    outputs = {}
+    for stride in (8, 16, 32):
+        cells = (640 // stride) ** 2
+        outputs[f"cls_{stride}"] = np.zeros((1, cells, 1), np.float32)
+        outputs[f"obj_{stride}"] = np.zeros((1, cells, 1), np.float32)
+        outputs[f"bbox_{stride}"] = np.zeros((1, cells, 4), np.float32)
+        outputs[f"kps_{stride}"] = np.zeros((1, cells, 10), np.float32)
+    # One face, on the stride-32 grid at column 5, row 4.
+    index = 4 * 20 + 5
+    outputs["cls_32"][0, index] = outputs["obj_32"][0, index] = 1.0
+    outputs["bbox_32"][0, index] = [0.5, 0.5, math.log(2), math.log(3)]
+    outputs["kps_32"][0, index] = [0, 0, 1, 0, 0.5, 0.5, 0, 1, 1, 1]
+    return outputs
 
+
+class YuNetDecodingTests(SimpleTestCase):
     def test_decodes_the_box_and_landmarks_back_to_the_original_image(self):
-        fake = FakeSession(self._outputs())
+        fake = FakeSession(_yunet_outputs())
         # 1280 x 640: letterboxed into 640 x 640 at half scale.
         image = np.zeros((640, 1280, 3), np.uint8)
 
@@ -90,7 +95,7 @@ class YuNetDecodingTests(SimpleTestCase):
         self.assertEqual(feed["input"].shape, (1, 3, 640, 640))
 
     def test_a_low_score_is_no_face(self):
-        outputs = self._outputs()
+        outputs = _yunet_outputs()
         outputs["obj_32"][:] = 0.5  # sqrt(1 * 0.5) = 0.71, under 0.8
         with _session(FakeSession(outputs)):
             self.assertEqual(
@@ -135,6 +140,32 @@ class ScrfdDecodingTests(SimpleTestCase):
 
         self.assertEqual(vector.shape, (512,))
         self.assertAlmostEqual(float(fake.feeds[0]["input.1"].max()), 1.0)
+
+
+class AdaFaceTests(SimpleTestCase):
+    def test_detects_with_yunet(self):
+        fake = FakeSession(_yunet_outputs())
+        with _session(fake):
+            (face,) = YuNetAdaFaceBackend().detect(np.zeros((640, 640, 3), np.uint8))
+
+        self.assertEqual(face.box, (144.0, 96.0, 64.0, 96.0))
+
+    def test_embeds_the_features_before_the_export_normalizes_them(self):
+        features = np.full((1, 512), 3.0, np.float32)
+        fake = FakeSession({"output": features / np.linalg.norm(features)})
+        fake.outputs[_FEATURES] = features
+        aligned = np.zeros((112, 112, 3), np.uint8)
+        aligned[..., 0] = 255  # pure red
+
+        with _session(fake) as session:
+            vector = YuNetAdaFaceBackend().embed(aligned)
+
+        self.assertEqual(vector.tolist(), features[0].tolist())
+        self.assertEqual(session.call_args.kwargs["expose"], (_FEATURES,))
+        # BGR, -1 to 1: red is the last channel.
+        blob = fake.feeds[0]["input"]
+        self.assertEqual(blob.shape, (1, 3, 112, 112))
+        self.assertEqual(blob[0, :, 0, 0].tolist(), [-1.0, -1.0, 1.0])
 
 
 class GeometryTests(SimpleTestCase):
@@ -189,6 +220,53 @@ class RuntimeTests(SimpleTestCase):
         fake_ort.InferenceSession.assert_called_once()
         options = fake_ort.InferenceSession.call_args.args[1]
         self.assertEqual(options.intra_op_num_threads, 2)
+
+
+class ExposedOutputTests(SimpleTestCase):
+    """A value inside the graph returned as an output, on a real runtime."""
+
+    def tearDown(self):
+        runtime._sessions.clear()
+
+    def _model(self):
+        """x -> Neg -> hidden -> Neg -> y: y is x, hidden its opposite."""
+        field, varint = runtime._field, runtime._varint
+
+        def value(name):
+            dim = field(1, varint(1 << 3) + varint(3))
+            tensor = varint(1 << 3) + varint(1) + field(2, dim)
+            return field(1, name.encode()) + field(2, field(1, tensor))
+
+        def neg(source, target):
+            return (
+                field(1, source.encode()) + field(2, target.encode()) + field(4, b"Neg")
+            )
+
+        graph = (
+            field(1, neg("x", "hidden"))
+            + field(1, neg("hidden", "y"))
+            + field(2, b"g")
+            + field(11, value("x"))
+            + field(12, value("y"))
+        )
+        ir_version = varint(1 << 3) + varint(8)
+        opset = field(8, varint(2 << 3) + varint(13))
+        return ir_version + opset + field(7, graph)
+
+    def test_returns_the_value_after_the_model_outputs(self):
+        model = ModelFile(name="neg.onnx", sha256="x", url="u")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "neg.onnx"
+            path.write_bytes(self._model())
+            with patch.object(weights, "ensure", return_value=path):
+                plain = runtime.session(model)
+                exposed = runtime.session(model, expose=("hidden",))
+
+        x = np.array([1, -2, 3], np.float32)
+        self.assertEqual([o.name for o in plain.get_outputs()], ["y"])
+        y, hidden = exposed.run(None, {"x": x})
+        self.assertEqual(y.tolist(), [1, -2, 3])
+        self.assertEqual(hidden.tolist(), [-1, 2, -3])
 
 
 class DownloadTests(SimpleTestCase):

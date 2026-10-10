@@ -4,6 +4,7 @@ import base64
 import io
 import os
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -19,8 +20,15 @@ from wsgidav.dav_error import (
 )
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
-from workspace.files.models import File, FileScan
-from workspace.files.services import FileService
+from workspace.files.models import (
+    File,
+    FileFavorite,
+    FileScan,
+    FileShare,
+    GroupStorageQuota,
+    UserStorageQuota,
+)
+from workspace.files.services import FileService, quota
 from workspace.files.webdav import dc as dc_module
 from workspace.files.webdav.dc import DjangoBasicDomainController
 from workspace.files.webdav.provider import WorkspaceDAVProvider
@@ -2060,3 +2068,161 @@ class WebDAVIntegrationTests(TestCase):
         self.assertIsNone(file_obj.locked_by_id)
         self.assertEqual(file_obj.lock_token, "")
         self.assertFalse(file_obj.is_locked())
+
+    # ── saving through a rename ──
+
+    def _save_by_rename(self, name, body, temp_name=None):
+        """Save *name* the way davfs2, gedit and LibreOffice do: write a temp
+        file next to it, then MOVE it over the original."""
+        temp_name = temp_name or f".{name}.tmp"
+        self._request("PUT", f"/{temp_name}", body=body)
+        return self._request(
+            "MOVE",
+            f"/{temp_name}",
+            headers={"Destination": f"http://testserver/dav/{name}", "Overwrite": "T"},
+        )
+
+    def _advertised_used_bytes(self):
+        _, _, body = self._request(
+            "PROPFIND",
+            "/",
+            body=(
+                b'<?xml version="1.0"?><propfind xmlns="DAV:"><prop>'
+                b"<quota-used-bytes/></prop></propfind>"
+            ),
+            headers={"Depth": "0", "Content-Type": "application/xml"},
+        )
+        return int(body.split(b"quota-used-bytes>")[1].split(b"<")[0])
+
+    def test_move_over_a_file_replaces_its_content_in_place(self):
+        dest = FileService.create_file(
+            self.user,
+            "report.odt",
+            content=ContentFile(b"old", name="report.odt"),
+            mime_type="application/vnd.oasis.opendocument.text",
+        )
+        FileFavorite.objects.create(owner=self.user, file=dest)
+
+        code, _, _ = self._save_by_rename("report.odt", b"new version")
+
+        self.assertEqual(code, 204)
+        dest.refresh_from_db()
+        self.assertIsNone(dest.deleted_at)
+        self.assertEqual(dest.size, len(b"new version"))
+        with dest.content.open("rb") as f:
+            self.assertEqual(f.read(), b"new version")
+        # Same row: what hangs off the document survives the save.
+        self.assertTrue(FileFavorite.objects.filter(file=dest).exists())
+        # The temp file is gone for good, not parked in the trash.
+        self.assertEqual(File.objects.filter(owner=self.user).count(), 1)
+        folder = os.path.dirname(dest.content.path)
+        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])
+
+    def test_saves_by_rename_do_not_grow_the_quota(self):
+        body = b"x" * 1000
+        self._request("PUT", "/report.odt", body=body)
+        for _ in range(5):
+            self._save_by_rename("report.odt", body)
+
+        self.assertEqual(quota.personal_usage(self.user), len(body))
+        self.assertEqual(self._advertised_used_bytes(), len(body))
+
+    def test_move_over_a_file_locked_by_someone_else_is_refused(self):
+        dest = self._locked_by_someone_else(name="held.odt")
+
+        code, _, _ = self._save_by_rename("held.odt", b"clobbered")
+
+        self.assertEqual(code, 423)
+        dest.refresh_from_db()
+        self.assertIsNone(dest.deleted_at)
+        with dest.content.open("rb") as f:
+            self.assertEqual(f.read(), b"editor buffer")
+        self.assertTrue(
+            File.objects.filter(name=".held.odt.tmp", deleted_at__isnull=True).exists()
+        )
+
+    def test_move_over_a_file_in_a_full_bucket_answers_507(self):
+        group = Group.objects.create(name="Design")
+        self.user.groups.add(group)
+        FileService.create_folder(self.user, "Design", group=group)
+        self._request("PUT", "/Design/logo.svg", body=b"tiny")
+        GroupStorageQuota.objects.create(group=group, quota_bytes=10)
+        self._request("PUT", "/logo.svg", body=b"far too big for the group")
+
+        code, _, _ = self._request(
+            "MOVE",
+            "/logo.svg",
+            headers={"Destination": "http://testserver/dav/Design/logo.svg"},
+        )
+
+        self.assertEqual(code, 507)
+        code, _, body = self._request("GET", "/Design/logo.svg")
+        self.assertEqual(body, b"tiny")
+        code, _, body = self._request("GET", "/logo.svg")
+        self.assertEqual(body, b"far too big for the group")
+
+    def _shared_with_me(self, name, body):
+        """A root file another user owns and shared read-only with this one."""
+        owner = User.objects.create_user(
+            username="davsharer", email="sharer@test.com", password="p"
+        )
+        file_obj = FileService.create_file(
+            owner, name, content=ContentFile(body, name=name), mime_type="text/plain"
+        )
+        FileShare.objects.create(
+            file=file_obj,
+            shared_by=owner,
+            shared_with=self.user,
+            permission=FileShare.Permission.READ_ONLY,
+        )
+        return file_obj
+
+    def test_moving_someone_elses_file_over_mine_never_destroys_it(self):
+        shared = self._shared_with_me("theirs.txt", b"theirs")
+        self._request("PUT", "/mine.txt", body=b"mine")
+
+        self._request(
+            "MOVE",
+            "/theirs.txt",
+            headers={"Destination": "http://testserver/dav/mine.txt"},
+        )
+
+        self.assertTrue(File.objects.filter(pk=shared.pk).exists())
+
+    def test_an_unlimited_user_gets_a_free_space_figure_in_every_folder(self):
+        """Without one the Windows redirector reports the local system drive."""
+        UserStorageQuota.objects.create(user=self.user, quota_bytes=None)
+        self._request("MKCOL", "/Docs/")
+        for path in ("/", "/Docs/"):
+            _, _, body = self._request(
+                "PROPFIND",
+                path,
+                body=(
+                    b'<?xml version="1.0"?><propfind xmlns="DAV:"><prop>'
+                    b"<quota-available-bytes/></prop></propfind>"
+                ),
+                headers={"Depth": "0", "Content-Type": "application/xml"},
+            )
+            self.assertRegex(body, rb"quota-available-bytes>\d+<", path)
+
+    def test_a_failed_save_by_rename_leaves_both_files_as_they_were(self):
+        self._request("PUT", "/report.odt", body=b"old")
+        self._request("PUT", "/.report.odt.tmp", body=b"new version")
+        dest = File.objects.get(owner=self.user, name="report.odt")
+        temp = File.objects.get(owner=self.user, name=".report.odt.tmp")
+
+        with patch.object(FileService, "hard_delete", side_effect=OSError("disk")):
+            code, _, _ = self._request(
+                "MOVE",
+                "/.report.odt.tmp",
+                headers={"Destination": "http://testserver/dav/report.odt"},
+            )
+
+        self.assertGreaterEqual(code, 400)
+        for row, body in ((dest, b"old"), (temp, b"new version")):
+            row.refresh_from_db()
+            self.assertEqual(row.size, len(body))
+            with row.content.open("rb") as f:
+                self.assertEqual(f.read(), body)
+        folder = os.path.dirname(dest.content.path)
+        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])

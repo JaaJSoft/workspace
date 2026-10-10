@@ -230,3 +230,38 @@ test('rows that need the user are listed first', async () => {
     ['b.jpg:failed', 'a.jpg:done', 'c.jpg:uploading'],
   );
 });
+
+async function queueWithDuplicates(names) {
+  const harness = makeQueue();
+  harness.queue.add(names.map((name) => ({ file: file(name) })));
+  for (const [i, name] of names.entries()) {
+    harness.requests[i].resolve({
+      status: 201,
+      body: { uuid: `u-${name}`, name, duplicates: name.startsWith('dup') ? [{ path: `Old/${name}` }] : [] },
+    });
+    await settle();
+  }
+  return harness;
+}
+
+test('every flagged duplicate can be discarded at once', async () => {
+  const { queue, discarded, notified } = await queueWithDuplicates(['dup-a.jpg', 'new.jpg', 'dup-b.jpg']);
+  assert.equal(queue.duplicateCount, 2);
+
+  await queue.discardAllDuplicates();
+
+  assert.deepEqual(discarded, ['u-dup-a.jpg', 'u-dup-b.jpg']);
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:discarded', 'new.jpg:done', 'dup-b.jpg:discarded']);
+  assert.equal(queue.duplicateCount, 0);
+  assert.deepEqual(notified, ['uploads-changed', 'uploads-changed'], 'one refresh for the whole batch');
+});
+
+test('every flagged duplicate can be kept at once', async () => {
+  const { queue, discarded } = await queueWithDuplicates(['dup-a.jpg', 'dup-b.jpg']);
+
+  queue.keepAllDuplicates();
+
+  assert.equal(queue.duplicateCount, 0);
+  assert.deepEqual(discarded, []);
+  assert.deepEqual(statuses(queue), ['dup-a.jpg:done', 'dup-b.jpg:done']);
+});

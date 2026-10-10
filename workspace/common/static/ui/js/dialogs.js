@@ -160,13 +160,17 @@ const AppDialog = {
     return this.message({ title, message, okLabel, icon: 'circle-alert', iconClass: 'bg-error/10 text-error' });
   },
 
-  select({ title = 'Select', message = '', options = [], value = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '' } = {}) {
+  // With a `checkbox` label, resolves { value, checked } instead of the bare value.
+  select({ title = 'Select', message = '', options = [], value = '', okLabel = 'OK', cancelLabel = 'Cancel', okClass = 'btn-primary', icon = '', iconClass = '', checkbox = '' } = {}) {
     return new Promise((resolve) => {
       const dialog = document.getElementById('app-dialog-select');
       const iconEl = document.getElementById('app-dialog-select-icon');
       const titleEl = document.getElementById('app-dialog-select-title');
       const messageEl = document.getElementById('app-dialog-select-message');
       const select = document.getElementById('app-dialog-select-input');
+      const checkboxRow = document.getElementById('app-dialog-select-checkbox-row');
+      const checkboxInput = document.getElementById('app-dialog-select-checkbox');
+      const checkboxLabel = document.getElementById('app-dialog-select-checkbox-label');
       const okBtn = document.getElementById('app-dialog-select-ok');
       const cancelBtn = document.getElementById('app-dialog-select-cancel');
 
@@ -174,6 +178,9 @@ const AppDialog = {
       titleEl.textContent = title;
       messageEl.textContent = message;
       messageEl.style.display = message ? '' : 'none';
+      checkboxRow.style.display = checkbox ? '' : 'none';
+      checkboxLabel.textContent = checkbox;
+      checkboxInput.checked = false;
 
       while (select.firstChild) select.removeChild(select.firstChild);
       for (const opt of options) {
@@ -197,12 +204,12 @@ const AppDialog = {
         cleanup();
         const val = select.value;
         dialog.close();
-        resolve(val);
+        resolve(checkbox ? { value: val, checked: checkboxInput.checked } : val);
       };
 
       const onClose = () => {
         cleanup();
-        resolve(null);
+        resolve(checkbox ? { value: null, checked: false } : null);
       };
 
       okBtn.addEventListener('click', onOk);

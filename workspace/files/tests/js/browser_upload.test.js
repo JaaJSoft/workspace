@@ -13,7 +13,8 @@ class FakeFormData {
   append(key, value) { this.fields[key] = value; }
 }
 
-function makePage({ folder = 'folder-a' } = {}) {
+function makePage({ folder = 'folder-a', nameCollision = 'keep_both', existing = [], answers = [] } = {}) {
+  const dialogs = [];
   const sent = [];
   const state = { folder };
   const alpineInit = [];
@@ -57,7 +58,12 @@ function makePage({ folder = 'folder-a' } = {}) {
       },
       location: { pathname: '/files', search: '' },
       getCSRFToken: () => 'token',
-      getFilePrefs: () => ({ nameCollision: 'keep_both' }),
+      getFilePrefs: () => ({ nameCollision }),
+      URLSearchParams,
+      fetch: async () => ({ ok: true, json: async () => existing.map((name) => ({ name })) }),
+      AppDialog: {
+        select: async (options) => { dialogs.push(options); return answers.shift(); },
+      },
       addEventListener: () => {},
       dispatchEvent: () => true,
       CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init && init.detail; } },
@@ -67,7 +73,7 @@ function makePage({ folder = 'folder-a' } = {}) {
   );
   alpineInit.forEach((fn) => fn());
   const browser = ctx.fileBrowser();
-  return { browser, sent, state };
+  return { browser, sent, state, dialogs };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -92,4 +98,38 @@ test('files dropped in a folder still land there after the user navigates away',
     sent.map((xhr) => xhr.form.parent),
     ['folder-a', 'folder-a'],
   );
+});
+
+test('a conflict answer can be applied to the remaining conflicts of the batch', async () => {
+  const { browser, sent, dialogs } = makePage({
+    nameCollision: 'ask',
+    existing: ['a.jpg', 'b.jpg', 'c.jpg'],
+    answers: [{ value: 'replace', checked: true }],
+  });
+
+  await browser.uploadFiles([fakeFile('a.jpg'), fakeFile('new.jpg'), fakeFile('b.jpg'), fakeFile('c.jpg')]);
+
+  assert.equal(dialogs.length, 1, 'asked once for the whole batch');
+  assert.equal(dialogs[0].checkbox, 'Do the same for the 2 other conflicts');
+  for (const name of ['a.jpg', 'new.jpg', 'b.jpg']) {
+    sent.at(-1).respond(201, { uuid: name, name });
+    await settle();
+  }
+  assert.deepEqual(
+    sent.map((xhr) => `${xhr.form.name}:${xhr.form.on_conflict || ''}`),
+    ['a.jpg:replace', 'new.jpg:', 'b.jpg:replace', 'c.jpg:replace'],
+  );
+});
+
+test('without the checkbox each conflict is asked on its own, the last without the option', async () => {
+  const { browser, dialogs } = makePage({
+    nameCollision: 'ask',
+    existing: ['a.jpg', 'b.jpg'],
+    answers: [{ value: 'skip', checked: false }, 'rename'],
+  });
+
+  await browser.uploadFiles([fakeFile('a.jpg'), fakeFile('b.jpg')]);
+
+  assert.equal(dialogs.length, 2);
+  assert.equal(dialogs[1].checkbox, '');
 });

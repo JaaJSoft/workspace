@@ -83,6 +83,31 @@
       :style="{ width: $store.uploads.progress.percent + '%' }"
     ></div>
   </div>
+  <div
+    x-show="$store.uploads.expanded && $store.uploads.duplicateCount > 1"
+    class="flex items-center gap-2 border-b border-base-200 bg-warning/10 px-4 py-2"
+    data-testid="upload-panel-duplicates"
+  >
+    <i data-lucide="copy" class="w-4 h-4 shrink-0 text-warning"></i>
+    <p
+      class="flex-1 min-w-0 truncate text-xs"
+      x-text="$store.uploads.duplicateCount + ' uploads match existing files'"
+    ></p>
+    <button
+      type="button"
+      class="btn btn-warning btn-xs"
+      @click="$store.uploads.discardAllDuplicates()"
+    >
+      Discard all
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs"
+      @click="$store.uploads.keepAllDuplicates()"
+    >
+      Keep all
+    </button>
+  </div>
   <ul
     id="upload-panel-list"
     x-effect="$store.uploads.pendingCount || ($el.scrollTop = 0)"

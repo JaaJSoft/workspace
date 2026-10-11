@@ -1,13 +1,18 @@
 /**
  * Lucide Icons Utilities
  *
- * Helper functions to initialize and refresh Lucide icons in various contexts.
- * These utilities handle common patterns like Alpine.js nextTick and Alpine.js $nextTick.
+ * Draws the icons present at page load (`initLucideIcons`), then keeps
+ * drawing the ones added later (`observeLucideIcons`), each render scoped to
+ * the container that changed. Content Alpine inserts into the document needs
+ * no call of its own: the observer sees it. `renderLucideIcons(container)` is
+ * for the rest - icons the observer cannot see, such as a detached subtree.
+ * Never draw the whole document after load: `lucide.createIcons()` with no
+ * root redraws every icon of the page, already drawn svgs included.
  */
 
 /**
- * Initialize Lucide icons immediately.
- * Use this when you need to initialize icons synchronously.
+ * Draw every icon of the document. For the first draw of a page only: past
+ * that point it redraws icons that are already drawn.
  */
 function initLucideIcons() {
   if (typeof lucide !== 'undefined' && lucide.icons) {
@@ -114,60 +119,6 @@ function renderLucideIcons(container) {
   bound.forEach((svg) => alpine.initTree(svg));
 }
 
-/**
- * Initialize Lucide icons after a delay (using setTimeout).
- * Useful for content that loads asynchronously or after DOM updates.
- *
- * @param {number} delay - Delay in milliseconds (default: 100ms)
- */
-function initLucideIconsDelayed(delay = 100) {
-  setTimeout(() => {
-    initLucideIcons();
-  }, delay);
-}
-
-/**
- * Initialize Lucide icons on the next tick using requestAnimationFrame.
- * Use this when you need to wait for the browser to finish rendering.
- */
-function initLucideIconsNextFrame() {
-  requestAnimationFrame(() => {
-    initLucideIcons();
-  });
-}
-
-/**
- * Initialize Lucide icons with Alpine.js $nextTick.
- * Use this inside Alpine.js components where you have access to `this.$nextTick`.
- *
- * @param {object} alpineContext - The Alpine.js component context (this)
- */
-function initLucideIconsAlpineNextTick(alpineContext) {
-  if (alpineContext && alpineContext.$nextTick) {
-    alpineContext.$nextTick(() => {
-      initLucideIcons();
-    });
-  } else {
-    // Fallback to immediate initialization
-    initLucideIcons();
-  }
-}
-
-/**
- * Initialize Lucide icons after Alpine.js global initialization.
- * Use this for icons that need to be initialized after Alpine has fully processed the DOM.
- */
-function initLucideIconsAfterAlpine() {
-  if (typeof Alpine !== 'undefined') {
-    queueMicrotask(() => {
-      initLucideIcons();
-    });
-  } else {
-    // Fallback if Alpine is not available
-    initLucideIconsNextFrame();
-  }
-}
-
 function hasAncestorIn(el, elements) {
   for (let parent = el.parentElement; parent; parent = parent.parentElement) {
     if (elements.has(parent)) return true;
@@ -262,10 +213,6 @@ function observeLucideIcons(root = document.body) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     initLucideIcons,
-    initLucideIconsDelayed,
-    initLucideIconsNextFrame,
-    initLucideIconsAlpineNextTick,
-    initLucideIconsAfterAlpine,
     observeLucideIcons,
     renderLucideIcons,
     drawLucideIcons
@@ -273,10 +220,6 @@ if (typeof module !== 'undefined' && module.exports) {
 } else {
   window.LucideUtils = {
     init: initLucideIcons,
-    delayed: initLucideIconsDelayed,
-    nextFrame: initLucideIconsNextFrame,
-    alpineNextTick: initLucideIconsAlpineNextTick,
-    afterAlpine: initLucideIconsAfterAlpine,
     observe: observeLucideIcons,
     render: renderLucideIcons,
     draw: drawLucideIcons

@@ -188,9 +188,6 @@ window.peopleApp = function peopleApp(config) {
         .then((answer) => {
           if (generation !== this._menuGeneration) return;
           this.ctxMenu.actions = answer[data.uuid] || [];
-          this.$nextTick(() => {
-            if (window.lucide) window.lucide.createIcons();
-          });
         });
     },
 

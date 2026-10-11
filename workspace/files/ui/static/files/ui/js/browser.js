@@ -25,15 +25,20 @@ window.fileBrowser = function fileBrowser() {
     // would stack their dialogs.
     _uploadIntake: Promise.resolve(),
 
+    // An item an action runs on is dimmed behind a spinner until the action
+    // settles: data-busy, styled in folder_content.html.
     _startLoading(...uuids) {
-      if (window._actionLoadingState) {
-        for (const uuid of uuids) window._actionLoadingState[uuid] = true;
-      }
+      this._paintBusy(uuids, true);
     },
 
     _stopLoading(...uuids) {
-      if (window._actionLoadingState) {
-        for (const uuid of uuids) delete window._actionLoadingState[uuid];
+      this._paintBusy(uuids, false);
+    },
+
+    _paintBusy(uuids, busy) {
+      const wanted = new Set(uuids);
+      for (const item of document.querySelectorAll('#folder-browser [data-uuid]')) {
+        if (wanted.has(item.dataset.uuid)) item.toggleAttribute('data-busy', busy);
       }
     },
 
@@ -154,38 +159,6 @@ window.fileBrowser = function fileBrowser() {
             break;
         }
       });
-    },
-
-    openFolderFromRow(event) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
-        return;
-      }
-      const row = event.currentTarget;
-      const link = row?.querySelector('[data-folder-link]');
-      if (link) {
-        link.click();
-      }
-    },
-
-    openFileFromRow(event, uuid, name, fileType) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
-        return;
-      }
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, type: fileType }
-      }));
-    },
-
-    openContextMenu(event, nodeData) {
-      event.preventDefault();
-      // Dispatch event for context menu to listen
-      window.dispatchEvent(new CustomEvent('open-context-menu', {
-        detail: { event, nodeData }
-      }));
     },
 
     showCreateFolderDialog() {
@@ -1182,13 +1155,6 @@ window.fileBrowser = function fileBrowser() {
 
 
     init() {
-      // Create reactive backing for the global isActionLoading() function.
-      // Must happen here (not at top-level) because Alpine.reactive is only
-      // available once Alpine has started.
-      if (!window._actionLoadingState) {
-        window._actionLoadingState = Alpine.reactive({});
-      }
-
       this._initFileActions();
       this.loadTags();
 

@@ -26,6 +26,7 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
       getElementById: (id) =>
         id === 'folder-browser' ? { dataset: { folder: currentFolder } } : null,
       querySelector: () => null,
+      querySelectorAll: () => [],
     },
     location: { pathname: '/files', search: '' },
     getCSRFToken: () => 'token',

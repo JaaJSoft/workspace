@@ -159,44 +159,115 @@ window.fileTableControls = function fileTableControls() {
       window.addEventListener('keydown', window._fileShortcutHandler);
     },
 
-    openFolderFromRow(event) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+    // --- Item events, delegated -------------------------------------------
+    // Rows and cards carry no listener of their own: the listing container
+    // (folder_content.html) forwards its events here, and the item is the
+    // closest [data-uuid]. Binding a dozen listeners per item cost a large
+    // folder seconds before it could be used.
+
+    _eventElement(event) {
+      const target = event.target;
+      return target instanceof Element ? target : target?.parentElement || null;
+    },
+
+    _eventItem(event) {
+      return this._eventElement(event)?.closest('[data-uuid]') || null;
+    },
+
+    _itemData(item) {
+      const uuid = item.dataset.uuid;
+      return {
+        uuid,
+        name: item.dataset.displayName || item.dataset.name || '',
+        nodeType: item.dataset.nodeType || 'file',
+        fileType: item.dataset.fileType || '',
+        actions: this.actionsMap[uuid] || [],
+      };
+    },
+
+    onListingClick(event, inTrash) {
+      const target = this._eventElement(event);
+      const item = target?.closest('[data-uuid]');
+      if (!item) return;
+      const uuid = item.dataset.uuid;
+
+      if (target.closest('input[data-select-item]')) {
+        this.toggleRowSelection(uuid, event.shiftKey);
         return;
       }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        const row = event.currentTarget;
-        const uuid = row?.dataset?.uuid;
-        if (uuid) {
-          this.toggleRowSelection(uuid, event.shiftKey);
+      const control = target.closest('[data-item-control]');
+      if (control) {
+        if (control.dataset.itemControl === 'favorite') {
+          this.toggleFavorite(uuid, item.dataset.favorite === '1');
+        } else if (control.dataset.itemControl === 'menu') {
+          this.openContextMenu(event, this._itemData(item));
         }
         return;
       }
-      // Normal behavior: open folder
-      const row = event.currentTarget;
-      const link = row?.querySelector('[data-folder-link]');
-      if (link) {
-        link.click();
-      }
-    },
 
-    openFileFromRow(event, uuid, name, fileType) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+      if (inTrash || target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
         return;
       }
-      // If items are selected, clicking should toggle selection instead of opening
+      const isFolder = item.dataset.nodeType === 'folder';
+      if (!isFolder && item.dataset.viewable !== '1') return;
+      // With a selection under way, a click extends it instead of opening.
       if (this.selectedUuids.size > 0) {
         this.toggleRowSelection(uuid, event.shiftKey);
         return;
       }
-      // Normal behavior: open file viewer
+      if (isFolder) {
+        window.folderNav.navigateTo(`/files/${uuid}`);
+        return;
+      }
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, type: fileType }
+        detail: { uuid, name: item.dataset.displayName || '', type: item.dataset.fileType || '' }
       }));
+    },
+
+    onListingContextMenu(event, inTrash) {
+      const item = this._eventItem(event);
+      if (item) {
+        this.openContextMenu(event, this._itemData(item));
+      } else if (!inTrash) {
+        this.openBackgroundContextMenu(event);
+      }
+    },
+
+    // The hovered item is the keyboard shortcuts' target when nothing is
+    // selected.
+    onListingPointerOver(event) {
+      const item = this._eventItem(event);
+      if (item && this.hoveredUuid !== item.dataset.uuid) {
+        this.hoveredUuid = item.dataset.uuid;
+      }
+    },
+
+    onListingPointerOut(event) {
+      const item = this._eventItem(event);
+      if (!item || item.contains(event.relatedTarget)) return;
+      // A dialog the item opened (rename, delete) still acts on it.
+      if (document.querySelector('dialog[open]')) return;
+      if (this.hoveredUuid === item.dataset.uuid) this.hoveredUuid = null;
+    },
+
+    onListingDragStart(event) {
+      const item = this._eventItem(event);
+      if (!item) return;
+      this.onNodeDragStart(event, item.dataset.uuid, item.dataset.displayName || '', item.dataset.nodeType || 'file');
+    },
+
+    // A file is offered for a drag once the registry allows it a cut. A
+    // folder is draggable from the server: pinning it needs no cut.
+    _paintDraggable(actionsByUuid) {
+      for (const [uuid, actions] of Object.entries(actionsByUuid)) {
+        const item = this._itemsByUuid?.get(uuid);
+        if (!item || item.dataset.nodeType !== 'file') continue;
+        if (actions.some((a) => a.id === 'cut')) {
+          item.setAttribute('draggable', 'true');
+        } else {
+          item.removeAttribute('draggable');
+        }
+      }
     },
 
     openContextMenu(event, nodeData) {
@@ -508,9 +579,10 @@ window.fileTableControls = function fileTableControls() {
         await Promise.allSettled(slices.map(async (slice) => {
           const part = await window.fileActions.fetchActions(slice);
           if (!part) return;
-          // Merged key by key into the same object: replacing the map would
-          // re-run every item's binding on it once per slice.
+          // Merged as each slice lands: an item only needs its own entry, so
+          // the first ones are usable while the rest are still answered.
           Object.assign(this.actionsMap, part);
+          this._paintDraggable(part);
           this._computeBulkActions();
           if (window.fileDragMove) window.fileDragMove.rememberActions(part);
         }));
@@ -631,14 +703,7 @@ window.fileTableControls = function fileTableControls() {
     _getRowDataByUuid(uuid) {
       if (!uuid) return null;
       const row = this._root.querySelector(`[data-uuid="${uuid}"]`);
-      if (!row) return null;
-      return {
-        uuid,
-        name: row.dataset.displayName || row.dataset.name || '',
-        nodeType: row.dataset.nodeType || 'file',
-        fileType: row.dataset.fileType || '',
-        actions: this.actionsMap[uuid] || [],
-      };
+      return row ? this._itemData(row) : null;
     },
 
     _nodeHasAction(data, actionId) {
@@ -1341,42 +1406,5 @@ window.viewToggle = function viewToggle() {
         credentials: 'same-origin',
       }).then((resp) => resp.ok, () => false);
     },
-
-    navigateToFolder(event, url) {
-      // Only navigate if not clicking checkbox or action button
-      if (event.target.closest('input[type="checkbox"]') ||
-          event.target.closest('button') ||
-          event.target.closest('[data-stop-row-click]')) {
-        return;
-      }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        const card = event.currentTarget;
-        const uuid = card?.dataset?.uuid;
-        if (uuid) {
-          this.toggleRowSelection(uuid, event.shiftKey);
-        }
-        return;
-      }
-      window.folderNav.navigateTo(url);
-    },
-
-    openFileFromCard(event, uuid, name, fileType) {
-      // Only open if not clicking checkbox or action button
-      if (event.target.closest('input[type="checkbox"]') ||
-          event.target.closest('button') ||
-          event.target.closest('[data-stop-row-click]')) {
-        return;
-      }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        this.toggleRowSelection(uuid, event.shiftKey);
-        return;
-      }
-      // Normal behavior: open file viewer
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, type: fileType }
-      }));
-    }
   };
 };

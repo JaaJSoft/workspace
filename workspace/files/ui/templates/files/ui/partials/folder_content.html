@@ -499,10 +499,19 @@
       </div>
     {% endif %}
 
-    <!-- Table container with overflow -->
+    {% comment %}
+      Table container with overflow. The rows and cards carry no listener of
+      their own: every click, right-click, hover and drag on an item is
+      handled here and finds its item through data-uuid. A large folder
+      otherwise costs a dozen bindings per item to initialise.
+    {% endcomment %}
     <div
       class="overflow-auto flex-1 min-h-0"
-      {% if not is_trash_view %} @contextmenu="openBackgroundContextMenu($event)"{% endif %}
+      @click="onListingClick($event, {{ is_trash_view|yesno:'true,false' }})"
+      @contextmenu="onListingContextMenu($event, {{ is_trash_view|yesno:'true,false' }})"
+      @mouseover="onListingPointerOver($event)"
+      @mouseout="onListingPointerOut($event)"
+      {% if not is_trash_view %}@dragstart="onListingDragStart($event)"{% endif %}
     >
       {% if nodes %}
         {% if view_mode != "mosaic" %}
@@ -540,15 +549,13 @@
             <tbody>
               {% for node in nodes %}
                 {% comment %}
-              data-selected is set by the table's _paintSelection. Selection has
-              to stay readable on a flagged row: the data-[selected] variant
+              data-selected is set by the table's _paintSelection, data-busy by
+              the browser while an action runs on the row. Selection has to
+              stay readable on a flagged row: the data-[selected] variant
               outranks the quarantine tint by specificity, not stylesheet order.
                 {% endcomment %}
                 <tr
-                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15"
-                  :class="{ 'opacity-50 pointer-events-none': isActionLoading('{{ node.uuid }}') }"
-                  @mouseenter="hoveredUuid = '{{ node.uuid }}'"
-                  @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
+                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15 data-[busy]:opacity-50 data-[busy]:pointer-events-none"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -561,22 +568,13 @@
                   data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
                   data-created="{{ node.created_at|date:'U' }}"
                   data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-                  {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
-                  @contextmenu="openContextMenu($event, {
-              uuid: '{{ node.uuid }}',
-              name: '{{ node.name|escapejs }}',
-              nodeType: '{{ node.node_type }}',
-              fileType: '{{ node.type }}',
-              actions: actionsMap['{{ node.uuid }}'] || []
-            })"
+                  {% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
                 >
-                  <td data-col="select" data-stop-row-click @click.stop>
+                  <td data-col="select" data-stop-row-click>
                     <input
                       type="checkbox"
                       class="checkbox checkbox-sm checkbox-module align-middle"
                       data-select-item
-                      @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
                     />
                   </td>
                   <td class="text-base-content/60" data-col="icon">
@@ -644,26 +642,23 @@
                       data-col="favorite"
                     >
                       <span
-                        x-show="isActionLoading('{{ node.uuid }}')"
-                        class="loading loading-spinner loading-xs"
+                        class="loading loading-spinner loading-xs hidden group-data-[busy]:inline-block"
                       ></span>
                       {% if node.is_favorite %}
                         <button
-                          x-show="!isActionLoading('{{ node.uuid }}')"
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square"
+                          class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
                           aria-label="Remove from favorites"
-                          @click="toggleFavorite('{{ node.uuid }}', true)"
+                          data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
                         </button>
                       {% else %}
                         <button
-                          x-show="!isActionLoading('{{ node.uuid }}')"
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square"
+                          class="btn btn-ghost btn-xs btn-square group-data-[busy]:hidden"
                           aria-label="Add to favorites"
-                          @click="toggleFavorite('{{ node.uuid }}', false)"
+                          data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
                         </button>
@@ -717,20 +712,13 @@
                   {% if show_actions != False %}
                     <td data-stop-row-click data-col="actions">
                       <span
-                        x-show="isActionLoading('{{ node.uuid }}')"
-                        class="loading loading-spinner loading-xs"
+                        class="loading loading-spinner loading-xs hidden group-data-[busy]:inline-block"
                       ></span>
                       <button
-                        x-show="!isActionLoading('{{ node.uuid }}')"
                         type="button"
-                        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                        @click="openContextMenu($event, {
-                  uuid: '{{ node.uuid }}',
-                  name: '{{ node.name|escapejs }}',
-                  nodeType: '{{ node.node_type }}',
-                  fileType: '{{ node.type }}',
-                  actions: actionsMap['{{ node.uuid }}'] || []
-                })"
+                        class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity group-data-[busy]:hidden"
+                        aria-label="More actions"
+                        data-item-control="menu"
                       >
                         <i data-lucide="more-vertical" class="w-4 h-4"></i>
                       </button>
@@ -750,10 +738,9 @@
               :style="'grid-template-columns: repeat(auto-fill, minmax(' + tileMinWidth() + 'px, 1fr)); gap: ' + tileGap() + 'px'"
             >
               {% for node in nodes %}
-                {# data-selected is set by the table's _paintSelection #}
+                {# data-selected is set by the table's _paintSelection, data-busy by the browser #}
                 <div
-                  class="{% if node.is_quarantined %}bg-error/10 data-[selected]:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-[selected]:ring-2 data-[selected]:ring-module data-[selected]:border-module"
-                  :class="{ 'opacity-50 pointer-events-none': isActionLoading('{{ node.uuid }}') }"
+                  class="{% if node.is_quarantined %}bg-error/10 data-[selected]:bg-base-100 border-error/40{% else %}bg-base-100 border-base-300{% endif %} border rounded-lg hover:border-module hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col data-[selected]:ring-2 data-[selected]:ring-module data-[selected]:border-module data-[busy]:opacity-50 data-[busy]:pointer-events-none"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -766,54 +753,40 @@
                   data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
                   data-created="{{ node.created_at|date:'U' }}"
                   data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
-                  @mouseenter="hoveredUuid = '{{ node.uuid }}'"
-                  @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
-                  {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
-                  @contextmenu.prevent="openContextMenu($event, {
-              uuid: '{{ node.uuid }}',
-              name: '{{ node.name|escapejs }}',
-              nodeType: '{{ node.node_type }}',
-              fileType: '{{ node.type }}',
-              actions: actionsMap['{{ node.uuid }}'] || []
-            })"
+                  {% if node.node_type == 'folder' and not is_trash_view %}draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}"{% endif %}
                 >
                   <!-- Checkbox overlay (top-left) -->
-                  <div class="absolute top-2 left-2 z-10" @click.stop>
+                  <div class="absolute top-2 left-2 z-10" data-stop-row-click>
                     <input
                       type="checkbox"
                       class="checkbox checkbox-sm checkbox-module bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[selected]:opacity-100"
                       data-select-item
-                      @click="toggleRowSelection('{{ node.uuid }}', $event.shiftKey)"
                     />
                   </div>
 
                   <!-- Favorite button (top-right) -->
                   {% if not is_trash_view %}
-                    <div class="absolute top-2 right-2 z-10" @click.stop>
+                    <div class="absolute top-2 right-2 z-10" data-stop-row-click>
                       <span
-                        x-show="isActionLoading('{{ node.uuid }}')"
-                        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none"
+                        class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm pointer-events-none hidden group-data-[busy]:inline-flex"
                       >
                         <span class="loading loading-spinner loading-xs"></span>
                       </span>
                       {% if node.is_favorite %}
                         <button
-                          x-show="!isActionLoading('{{ node.uuid }}')"
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm"
+                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm group-data-[busy]:hidden"
                           aria-label="Remove from favorites"
-                          @click="toggleFavorite('{{ node.uuid }}', true)"
+                          data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 text-warning fill-current"></i>
                         </button>
                       {% else %}
                         <button
-                          x-show="!isActionLoading('{{ node.uuid }}')"
                           type="button"
-                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100"
+                          class="btn btn-ghost btn-xs btn-square bg-base-100/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 group-data-[busy]:hidden"
                           aria-label="Add to favorites"
-                          @click="toggleFavorite('{{ node.uuid }}', false)"
+                          data-item-control="favorite"
                         >
                           <i data-lucide="star" class="w-4 h-4 opacity-40"></i>
                         </button>
@@ -874,13 +847,8 @@
                         <button
                           type="button"
                           class="btn btn-ghost btn-xs btn-square flex-shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
-                          @click.stop="openContextMenu($event, {
-                    uuid: '{{ node.uuid }}',
-                    name: '{{ node.name|escapejs }}',
-                    nodeType: '{{ node.node_type }}',
-                    fileType: '{{ node.type }}',
-                    actions: actionsMap['{{ node.uuid }}'] || []
-                  })"
+                          aria-label="More actions"
+                          data-item-control="menu"
                         >
                           <i data-lucide="more-vertical" class="w-4 h-4"></i>
                         </button>

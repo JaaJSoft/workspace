@@ -300,7 +300,16 @@ class VaultBrowserTests(VaultBrowserCase):
         self.page.wait_for_selector("input[autocomplete='current-password']")
         # A secret on the clipboard outlives the keys that opened it, so the
         # lock takes it back rather than leaving it for the next person here.
-        self.assertEqual(self.page.evaluate("() => navigator.clipboard.readText()"), "")
+        # The lock does not wait for the clipboard: the unlock screen can be
+        # up before the read-back and the clearing write have both settled.
+        # (wait_for_function would not do: it does not await an async
+        # predicate, and the pending promise it gets back is truthy.)
+        for _ in range(50):
+            clipboard = self.page.evaluate("() => navigator.clipboard.readText()")
+            if clipboard == "":
+                break
+            self.page.wait_for_timeout(100)
+        self.assertEqual(clipboard, "")
         self.assertNotIn("octocat", self.page.locator("body").inner_text())
 
     def test_a_forged_signature_removes_the_row_and_raises_the_banner(self):

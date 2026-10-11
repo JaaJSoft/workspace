@@ -29,6 +29,11 @@ from .photo_embeddings import embed_query
 # The most photos one similarity or description search returns. A ranking,
 # not a listing: past the first screens the matches are no longer close.
 RESULT_LIMIT = 120
+# The most merely similar photos shown after the near-duplicates, about a
+# screen. A library of events shot in bursts has a hundred look-alikes under
+# the threshold for nearly every photo; past the first screen they share the
+# setting, not the subject.
+SIMILAR_LIMIT = 30
 
 
 @dataclass(frozen=True)
@@ -100,8 +105,9 @@ def photo_vector(file_obj):
 
 
 def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
-    """The photos of *scope* that look like *source*, nearest first, the
-    near-duplicates flagged. None when *source* has no embedding yet.
+    """The photos of *scope* that look like *source*, nearest first: every
+    near-duplicate, flagged, then up to SIMILAR_LIMIT similar photos. None
+    when *source* has no embedding yet.
 
     *source* is a file the caller checked the user can open.
     """
@@ -109,7 +115,7 @@ def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
     if vector is None:
         return None
     duplicate = duplicate_max_distance()
-    return [
+    matches = [
         Match(
             file_id=match.file_id,
             distance=match.distance,
@@ -124,6 +130,9 @@ def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
             exclude=(source.pk,),
         )
     ]
+    # Nearest first, so the near-duplicates are the head of the list.
+    near_duplicates = sum(match.near_duplicate for match in matches)
+    return matches[: near_duplicates + SIMILAR_LIMIT]
 
 
 def search_by_description(user, text, scope=MINE, *, limit=RESULT_LIMIT):

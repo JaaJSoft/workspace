@@ -38,7 +38,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import resource
 import subprocess
 import sys
 import tempfile
@@ -269,9 +268,54 @@ def score(vectors, photos, queries):
 
 
 def _maxrss_mb():
+    if sys.platform == "win32":
+        return _peak_working_set() / (1024 * 1024)
+    import resource
+
     # Kilobytes on Linux, bytes on macOS.
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
+
+
+def _peak_working_set():
+    """Windows' ru_maxrss, in bytes: the module resource does not exist there."""
+    import ctypes
+    from ctypes import wintypes
+
+    class Counters(ctypes.Structure):
+        # PROCESS_MEMORY_COUNTERS: the call refuses a shorter buffer.
+        _fields_ = [
+            ("cb", wintypes.DWORD),
+            ("PageFaultCount", wintypes.DWORD),
+            *(
+                (name, ctypes.c_size_t)
+                for name in (
+                    "PeakWorkingSetSize",
+                    "WorkingSetSize",
+                    "QuotaPeakPagedPoolUsage",
+                    "QuotaPagedPoolUsage",
+                    "QuotaPeakNonPagedPoolUsage",
+                    "QuotaNonPagedPoolUsage",
+                    "PagefileUsage",
+                    "PeakPagefileUsage",
+                )
+            ),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32")
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi = ctypes.WinDLL("psapi")
+    psapi.GetProcessMemoryInfo.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(Counters),
+        wintypes.DWORD,
+    )
+    counters = Counters(cb=ctypes.sizeof(Counters))
+    if not psapi.GetProcessMemoryInfo(
+        kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
+    ):
+        raise ctypes.WinError()
+    return counters.PeakWorkingSetSize
 
 
 def _weights_mb(backend):

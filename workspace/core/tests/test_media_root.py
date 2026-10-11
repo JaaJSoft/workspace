@@ -31,6 +31,12 @@ class MediaRootIsolationTests(SimpleTestCase):
             f"MEDIA_ROOT points into the checkout ({settings.MEDIA_ROOT})",
         )
 
+    def test_upload_spool_is_outside_the_repository(self):
+        self.assertFalse(
+            _is_inside(settings.FILE_UPLOAD_TEMP_DIR, settings.BASE_DIR),
+            f"FILE_UPLOAD_TEMP_DIR points into the checkout ({settings.FILE_UPLOAD_TEMP_DIR})",
+        )
+
     def test_saved_content_lands_outside_the_repository(self):
         name = default_storage.save("media-root-check.txt", ContentFile(b"x"))
         self.addCleanup(default_storage.delete, name)

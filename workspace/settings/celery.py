@@ -97,6 +97,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
     },
+    "purge-stale-uploads": {
+        "task": "core.purge_stale_uploads",
+        "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
+    },
     "db-maintenance": {
         "task": "core.db_maintenance",
         # Mon-Sat at 3:00 AM: cheap pass only (optimize + WAL checkpoint).

@@ -533,3 +533,34 @@ class Face(models.Model):
 
     def __str__(self):
         return f"Face: {self.uuid}"
+
+
+class PhotoEmbedding(models.Model):
+    """One photo's place in the image embedding space: what it shows, as a
+    vector that a similar photo, or a sentence describing it, lands near.
+
+    Written off-request (services/photo_embeddings.py). A photo that could
+    not be decoded gets a row too, with no vector, so the catch-up does not
+    read it again every hour. Any mismatch with the file (new bytes, another
+    owner, another model) makes it pending again. Never a way to tell people
+    apart: identity is the face pipeline's.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="photo_embedding"
+    )
+    # The vector index partition: the file's owner when it was read.
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    # The backend's model key (EmbeddingBackend.model_key): vectors of two
+    # models are of two spaces, never compared.
+    model = models.CharField(max_length=128)
+    # The source of the photos.indexes.PHOTO_EMBEDDINGS vector index.
+    embedding = models.BinaryField(null=True, blank=True)
+    analyzed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"PhotoEmbedding: {self.file_id}"

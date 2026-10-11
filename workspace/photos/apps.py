@@ -28,7 +28,7 @@ class PhotosConfig(AppConfig):
         # answering "no actions" forever.
         from workspace.photos.actions import album as album_actions  # noqa: F401
         from workspace.photos.actions import face as face_actions  # noqa: F401
-        from workspace.photos.indexes import FACE_EMBEDDINGS
+        from workspace.photos.indexes import FACE_EMBEDDINGS, PHOTO_EMBEDDINGS
         from workspace.photos.queries import has_photos_of_person
         from workspace.photos.search import search_photos
 
@@ -42,6 +42,7 @@ class PhotosConfig(AppConfig):
         )
 
         register_vector_index(FACE_EMBEDDINGS)
+        register_vector_index(PHOTO_EMBEDDINGS)
 
         from workspace.core.activity_registry import (
             ActivityProviderInfo,

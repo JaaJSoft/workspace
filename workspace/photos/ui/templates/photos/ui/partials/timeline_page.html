@@ -48,6 +48,11 @@
           {% endfor %}
         </div>
       </section>
+    {% elif entry.kind == "heading" %}
+      <div class="basis-full px-1 pt-5 first:pt-0 pb-2" data-ranking-heading>
+        <h2 class="text-xl font-bold">{{ entry.title }}</h2>
+        {% if entry.note %}<p class="text-sm text-base-content/60">{{ entry.note }}</p>{% endif %}
+      </div>
     {% elif entry.kind == "undated" %}
       <div class="basis-full px-1 pt-5 first:pt-0 pb-2" data-undated>
         <h2 class="text-xl font-bold">Undated</h2>

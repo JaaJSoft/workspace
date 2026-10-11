@@ -1,7 +1,7 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from .models import FaceAnalysis
+from .models import FaceAnalysis, PhotoEmbedding
 
 
 @admin.register(FaceAnalysis)
@@ -16,6 +16,28 @@ class FaceAnalysisAdmin(ModelAdmin):
     list_filter = ["backend", "version"]
     search_fields = ["file__name", "owner__username"]
     list_select_related = ["file", "owner"]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PhotoEmbedding)
+class PhotoEmbeddingAdmin(ModelAdmin):
+    """Which photos were embedded for similarity and search, and by which
+    model. Read-only; the vectors themselves are not shown."""
+
+    list_display = ["file", "owner", "model", "has_vector", "analyzed_at"]
+    list_filter = ["model"]
+    search_fields = ["file__name", "owner__username"]
+    list_select_related = ["file", "owner"]
+    exclude = ["embedding"]
+
+    @admin.display(boolean=True, description="Vector")
+    def has_vector(self, obj):
+        return obj.embedding is not None
 
     def has_add_permission(self, request):
         return False

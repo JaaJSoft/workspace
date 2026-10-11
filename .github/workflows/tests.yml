@@ -288,6 +288,7 @@ jobs:
         module:
           - calendar
           - chat
+          - common
           - core
           - dashboard
           - files

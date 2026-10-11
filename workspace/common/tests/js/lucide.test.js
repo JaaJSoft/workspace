@@ -33,19 +33,21 @@ class FakeIconPlaceholder {
   querySelector() { return null; }
 }
 
-function makeContainer() {
-  return { nodeType: 1, isConnected: true };
+function makeContainer(parentElement = null) {
+  return { nodeType: 1, isConnected: true, parentElement };
 }
 
-function setup(extraGlobals = {}) {
-  const createIconsCalls = [];
+// The render passes are recorded at drawLucideIcons, whose output is checked
+// against Lucide's own in a browser (common/tests/e2e/test_lucide_icons.py).
+function setup(extraGlobals = {}, draw = () => []) {
+  const drawCalls = [];
   const frames = [];
   let observerCallback = null;
   let observeArgs = null;
   let disconnected = false;
 
   const ctx = loadScript('workspace/common/static/ui/js/lucide.js', {
-    lucide: { createIcons: (opts) => createIconsCalls.push(opts ?? {}) },
+    lucide: { icons: {}, createElement: () => null },
     ...extraGlobals,
     SVGElement: FakeSVGElement,
     MutationObserver: class {
@@ -55,11 +57,15 @@ function setup(extraGlobals = {}) {
     },
     requestAnimationFrame: (fn) => frames.push(fn),
   });
+  ctx.drawLucideIcons = (root) => {
+    drawCalls.push({ root });
+    return draw(root);
+  };
 
   const root = { nodeType: 1 };
   const stop = ctx.observeLucideIcons(root);
   return {
-    createIconsCalls,
+    drawCalls,
     observeArgs,
     stop,
     isDisconnected: () => disconnected,
@@ -80,7 +86,7 @@ test('observes data-lucide attribute changes with old values, plus childList', (
 });
 
 test('re-renders the container when a data-lucide value changes in place on a hydrated svg', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = makeContainer();
   const svg = new FakeSVGElement(
     { 'data-lucide': 'chevron-right', class: 'lucide lucide-chevron-down' },
@@ -88,131 +94,140 @@ test('re-renders the container when a data-lucide value changes in place on a hy
   );
   emit([{ type: 'attributes', target: svg, oldValue: 'chevron-down' }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 1);
-  assert.equal(createIconsCalls[0].root, container);
+  assert.equal(drawCalls.length, 1);
+  assert.equal(drawCalls[0].root, container);
   // The replacement svg merges the stale svg's classes - the old icon-name
   // class must be dropped or it piles up across re-renders.
   assert.deepEqual(svg.removedClasses, ['lucide-chevron-down']);
 });
 
 test('ignores same-value attribute writes (re-hydration loop guard)', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const svg = new FakeSVGElement({ 'data-lucide': 'bell' }, makeContainer());
   emit([{ type: 'attributes', target: svg, oldValue: 'bell' }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 0);
+  assert.equal(drawCalls.length, 0);
   assert.deepEqual(svg.removedClasses, []);
 });
 
 test('ignores a removed data-lucide attribute', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const svg = new FakeSVGElement({}, makeContainer());
   emit([{ type: 'attributes', target: svg, oldValue: 'bell' }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 0);
+  assert.equal(drawCalls.length, 0);
 });
 
 test('renders a data-lucide set where none existed (binding evaluated after insertion)', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = makeContainer();
   const placeholder = new FakeIconPlaceholder({ 'data-lucide': 'bell-ring' }, container);
   emit([{ type: 'attributes', target: placeholder, oldValue: null }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 1);
-  assert.equal(createIconsCalls[0].root, container);
+  assert.equal(drawCalls.length, 1);
+  assert.equal(drawCalls[0].root, container);
 });
 
 test('still renders newly added icon placeholders, scoped to their parent', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = makeContainer();
   const placeholder = new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container);
   emit([{ type: 'childList', addedNodes: [placeholder] }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 1);
-  assert.equal(createIconsCalls[0].root, container);
+  assert.equal(drawCalls.length, 1);
+  assert.equal(drawCalls[0].root, container);
 });
 
 test('skips added svg nodes and unrelated childList churn', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const svg = new FakeSVGElement({ 'data-lucide': 'inbox' }, makeContainer());
   const plain = new FakeIconPlaceholder({}, makeContainer());
   emit([{ type: 'childList', addedNodes: [svg, plain, { nodeType: 3 }] }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 0);
+  assert.equal(drawCalls.length, 0);
 });
 
 test('batches mutations sharing a container into one render pass', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = makeContainer();
   const svg = new FakeSVGElement({ 'data-lucide': 'mail-open' }, container);
   const placeholder = new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container);
   emit([{ type: 'attributes', target: svg, oldValue: 'mail' }]);
   emit([{ type: 'childList', addedNodes: [placeholder] }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 1);
-  assert.equal(createIconsCalls[0].root, container);
+  assert.equal(drawCalls.length, 1);
+  assert.equal(drawCalls[0].root, container);
 });
 
 test('skips containers detached before the render pass runs', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = { nodeType: 1, isConnected: false };
   const svg = new FakeSVGElement({ 'data-lucide': 'check' }, container);
   emit([{ type: 'attributes', target: svg, oldValue: 'circle' }]);
   flushFrames();
-  assert.equal(createIconsCalls.length, 0);
+  assert.equal(drawCalls.length, 0);
 });
 
-test('swaps icons behind Alpine\'s back and re-binds only the svgs it created', () => {
+test('swaps icons behind Alpine\'s back and re-binds only the svgs carrying directives', () => {
   // Alpine's MutationObserver compares every removed initialised node with
   // every added one, which is quadratic on a listing-sized render pass. The
   // swap must run under mutateDom, with the observer's two duties - release
-  // the outgoing nodes, bind the incoming svgs - done by hand around it.
+  // the outgoing nodes, bind the incoming svgs that need it - done by hand.
   const log = [];
   const container = makeContainer();
   const placeholder = new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container);
   const staleSvg = new FakeSVGElement({ 'data-lucide': 'bell' }, container);
-  const freshSvgs = [new FakeSVGElement({ 'data-lucide': 'inbox' }), new FakeSVGElement({ 'data-lucide': 'bell' })];
-  let swapped = false;
-  container.querySelectorAll = (selector) => {
-    if (selector === 'svg[data-lucide]') return swapped ? freshSvgs : [];
-    return [placeholder, staleSvg];
-  };
-  const { emit, flushFrames } = setup({
-    lucide: {
-      createIcons: (opts) => {
-        log.push(['createIcons', opts.root]);
-        swapped = true;
+  const boundSvg = new FakeSVGElement({ 'data-lucide': 'bell', 'x-show': 'open' });
+  container.querySelectorAll = () => [placeholder, staleSvg];
+  const { emit, flushFrames } = setup(
+    {
+      Alpine: {
+        mutateDom: (fn) => {
+          log.push('mutateDom:start');
+          fn();
+          log.push('mutateDom:end');
+        },
+        destroyTree: (el) => log.push(['destroyTree', el]),
+        initTree: (el) => log.push(['initTree', el]),
       },
     },
-    Alpine: {
-      mutateDom: (fn) => {
-        log.push('mutateDom:start');
-        fn();
-        log.push('mutateDom:end');
-      },
-      destroyTree: (el) => log.push(['destroyTree', el]),
-      initTree: (el) => log.push(['initTree', el]),
+    (root) => {
+      log.push(['draw', root]);
+      return [boundSvg];
     },
-  });
+  );
   emit([{ type: 'childList', addedNodes: [placeholder] }]);
   flushFrames();
   assert.deepEqual(log, [
     ['destroyTree', placeholder],
     ['destroyTree', staleSvg],
     'mutateDom:start',
-    ['createIcons', container],
+    ['draw', container],
     'mutateDom:end',
-    ['initTree', freshSvgs[0]],
-    ['initTree', freshSvgs[1]],
+    ['initTree', boundSvg],
   ]);
 });
 
 test('renders plainly when Alpine is not on the page', () => {
-  const { createIconsCalls, emit, flushFrames } = setup();
+  const { drawCalls, emit, flushFrames } = setup();
   const container = makeContainer();
   emit([{ type: 'childList', addedNodes: [new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, container)] }]);
   flushFrames();
-  assert.deepEqual(createIconsCalls.map((c) => ({ ...c })), [{ root: container }]);
+  assert.deepEqual(drawCalls.map((c) => ({ ...c })), [{ root: container }]);
+});
+
+test('draws a container once when another one of the batch holds it', () => {
+  const { drawCalls, emit, flushFrames } = setup();
+  const listing = makeContainer();
+  const tbody = makeContainer(makeContainer(listing));
+  const sibling = makeContainer();
+  emit([
+    { type: 'childList', addedNodes: [new FakeIconPlaceholder({ 'data-lucide': 'inbox' }, listing)] },
+    { type: 'childList', addedNodes: [new FakeIconPlaceholder({ 'data-lucide': 'star' }, tbody)] },
+    { type: 'childList', addedNodes: [new FakeIconPlaceholder({ 'data-lucide': 'bell' }, sibling)] },
+  ]);
+  flushFrames();
+  assert.deepEqual(drawCalls.map((c) => c.root), [listing, sibling]);
 });
 
 test('returns a disconnect function', () => {

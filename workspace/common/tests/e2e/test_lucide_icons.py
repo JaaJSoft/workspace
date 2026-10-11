@@ -108,6 +108,19 @@ class LucideDrawTests(PlaywrightTestCase):
         self.assertEqual(result["distinctPaths"], 2)
         self.assertEqual(result["bound"], ["bell", "star"])
 
+    def test_draws_a_root_that_is_itself_an_icon(self):
+        theirs, _ = self.draw_both('<i data-lucide="star" class="w-4"></i>')
+        ours = self.page.evaluate(
+            """() => {
+              const host = document.createElement('div');
+              host.innerHTML = '<i data-lucide="star" class="w-4"></i>';
+              document.body.appendChild(host);
+              drawLucideIcons(host.firstElementChild);
+              return host.innerHTML;
+            }"""
+        )
+        self.assertEqual(ours, theirs)
+
 
 class ElementIconScopeTests(PlaywrightTestCase):
     """An element hydrating its own icons leaves the rest of the page alone.
@@ -158,4 +171,75 @@ class ElementIconScopeTests(PlaywrightTestCase):
                 '<inline-alert type="info" message="Heads up"></inline-alert>'
             ),
             {"drawn": 1, "bystanderKept": True},
+        )
+
+
+class ObserverScopeTests(PlaywrightTestCase):
+    """The observer draws what changed, not the container around it.
+
+    Each case changes one icon or adds one subtree, then checks every svg
+    drawn before it is still the same node: a redraw of the parent would
+    have replaced the siblings too - every row of a listing for one added
+    row, every icon of the page for one element added under the body.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.page.set_content(
+            "<!doctype html><html><body>"
+            '<ul id="list"><li><i data-lucide="star"></i> A</li><li><i data-lucide="star"></i> B</li></ul>'
+            '<span><i data-lucide="chevron-down" id="toggle"></i><i data-lucide="x"></i></span>'
+            "</body></html>"
+        )
+        self.page.add_script_tag(path=str(STATIC / "vendor" / "lucide" / "lucide.js"))
+        self.page.add_script_tag(path=str(STATIC / "lucide.js"))
+        self.page.evaluate(
+            """() => {
+              initLucideIcons();
+              observeLucideIcons();
+              window.__drawn = Array.from(document.querySelectorAll('svg[data-lucide]'));
+            }"""
+        )
+
+    def change(self, script, drawn):
+        self.page.evaluate(script)
+        self.page.wait_for_selector(drawn, state="attached")
+        return self.page.evaluate(
+            "() => window.__drawn.filter((svg) => !document.contains(svg)).length"
+        )
+
+    def test_a_row_added_to_a_list_leaves_the_other_rows_alone(self):
+        replaced = self.change(
+            """() => {
+              const row = document.createElement('li');
+              row.innerHTML = '<i data-lucide="bell"></i> C';
+              document.getElementById('list').appendChild(row);
+            }""",
+            '#list svg[data-lucide="bell"]',
+        )
+        self.assertEqual(replaced, 0)
+
+    def test_an_icon_added_under_the_body_leaves_the_page_alone(self):
+        replaced = self.change(
+            """() => {
+              const icon = document.createElement('i');
+              icon.setAttribute('data-lucide', 'inbox');
+              document.body.appendChild(icon);
+            }""",
+            'body > svg[data-lucide="inbox"]',
+        )
+        self.assertEqual(replaced, 0)
+
+    def test_an_icon_renamed_in_place_leaves_its_neighbours_alone(self):
+        replaced = self.change(
+            "() => document.getElementById('toggle').setAttribute('data-lucide', 'chevron-right')",
+            'svg[data-lucide="chevron-right"]',
+        )
+        # The renamed svg itself is the one node that had to go.
+        self.assertEqual(replaced, 1)
+        self.assertEqual(
+            self.page.evaluate(
+                "() => document.getElementById('toggle').getAttribute('class')"
+            ),
+            "lucide lucide-chevron-right",
         )

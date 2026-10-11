@@ -380,7 +380,6 @@ window.importsApp = function importsApp() {
     async showErrors(job) {
       this.errorsDialog = { job, items: [], count: 0, loading: true, error: '' };
       this.$refs.errorsDialog.showModal();
-      this.$nextTick(() => initLucideIcons());
       const res = await api(`/jobs/${job.uuid}/items?status=failed&limit=200`);
       this.errorsDialog.loading = false;
       if (res.ok) {
@@ -406,7 +405,6 @@ window.importsApp = function importsApp() {
         this.connForm = emptyConnectionForm(first ? first.slug : '');
       }
       this.$refs.connectionDialog.showModal();
-      this.$nextTick(() => initLucideIcons());
     },
 
     closeConnectionDialog() {
@@ -488,7 +486,6 @@ window.importsApp = function importsApp() {
       this.browse = { path: '/', entries: [], loading: false, error: '' };
       this.addressBooks = { loading: false, error: '', loadedFor: '' };
       this.$refs.wizardDialog.showModal();
-      this.$nextTick(() => initLucideIcons());
     },
 
     closeWizard() {
@@ -539,7 +536,6 @@ window.importsApp = function importsApp() {
         if (this.wizard.kinds.includes('files')) this.loadBrowse('/');
         if (this.wizard.kinds.includes('contacts')) this.loadAddressBooks();
       }
-      this.$nextTick(() => initLucideIcons());
     },
 
     // Listed once per connection: going back and forth keeps the choices.
@@ -584,7 +580,6 @@ window.importsApp = function importsApp() {
     prevStep() {
       this.wizard.error = '';
       this.wizard.step = Math.max(1, this.wizard.step - 1);
-      this.$nextTick(() => initLucideIcons());
     },
 
     async loadBrowse(path) {
@@ -600,7 +595,6 @@ window.importsApp = function importsApp() {
       }
       this.browse.path = res.data.path;
       this.browse.entries = res.data.entries;
-      this.$nextTick(() => initLucideIcons());
     },
 
     browseInto(entry) {

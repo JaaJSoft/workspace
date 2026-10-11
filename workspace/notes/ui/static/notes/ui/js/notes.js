@@ -249,20 +249,10 @@ window.notesApp = function notesApp(config) {
                 if (oldSort !== this.notePrefs.sortBy && this.activeView && this.activeView !== 'journal') {
                     this.setView(this.activeView, this.activeId, this.viewTitle, true);
                 }
-                // Unhiding folders re-creates their sidebar rows (flat x-for),
-                // so the icons must be re-rendered.
-                this.$nextTick(function() {
-                    if (window.lucide) window.lucide.createIcons();
-                });
             }.bind(this));
 
             // Load tags for the editor dropdown
             await this.loadTags();
-
-            // Refresh icons after Alpine renders x-for folders
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
 
             // Restore expanded folders from URL
             await this._restoreExpandedFolders();
@@ -465,10 +455,6 @@ window.notesApp = function notesApp(config) {
             const childDepth = (folder.depth || 0) + 1;
             children.forEach(function(c) { c.depth = childDepth; });
             folder.children = children;
-
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         // ── Sidebar navigation ──────────────────────────────
@@ -916,10 +902,6 @@ window.notesApp = function notesApp(config) {
             } catch (e) {
                 this.ctxMenu.actions = [];
             }
-            // Refresh icons in the context menu
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         async _fetchNoteActions(uuid) {
@@ -934,9 +916,6 @@ window.notesApp = function notesApp(config) {
             } catch (e) {
                 this.ctxMenu.actions = [];
             }
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         ctxNoteAction(action) {
@@ -1094,10 +1073,6 @@ window.notesApp = function notesApp(config) {
                 this.expandedFolders = this.expandedFolders.concat([parentFolder.uuid]);
                 this._writeExpandedToUrl();
             }
-
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         ctxAction(action) {
@@ -1147,9 +1122,6 @@ window.notesApp = function notesApp(config) {
                     await this._loadChildren(folder);
                 }
             }
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         async toggleFolderExpand(uuid) {
@@ -1170,11 +1142,6 @@ window.notesApp = function notesApp(config) {
                 });
             }
             this._writeExpandedToUrl();
-            // Collapsed rows leave the DOM (flat x-for), so re-expanding
-            // re-creates their elements and the icons must be re-rendered.
-            this.$nextTick(function() {
-                if (window.lucide) window.lucide.createIcons();
-            });
         },
 
         _getDescendantUuids(uuid) {

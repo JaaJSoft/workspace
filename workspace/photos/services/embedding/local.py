@@ -126,11 +126,13 @@ class ClipVitB32Backend(LocalBackend):
         image=False,
     )
     # Calibrated by the embedding bench (docs/photos/embedding-bench.md):
-    # `duplicate` is the loosest at 99% precision, `description` the best F1.
-    # `similar` stays tighter than its best F1 (70 photos at 46% precision):
-    # a "more like this" row is judged on what it shows, not on what it misses.
+    # `description` is the best F1, `duplicate` the tightest that still finds
+    # 95% of the copies: looser, a library shot in bursts gets photos taken
+    # days apart as near-duplicates. `similar` stays tighter than its best F1
+    # (70 photos at 46% precision): a "more like this" row is judged on what
+    # it shows, not on what it misses.
     similar_max_distance = 0.25
-    duplicate_max_distance = 0.1
+    duplicate_max_distance = 0.075
     description_max_distance = 0.765
 
 
@@ -159,7 +161,7 @@ class Siglip2BaseBackend(LocalBackend):
     # a much lower cosine similarity than with CLIP, around 0.1. Calibrated
     # like CLIP's.
     similar_max_distance = 0.3
-    duplicate_max_distance = 0.105
+    duplicate_max_distance = 0.07
     description_max_distance = 0.92
 
 
@@ -184,5 +186,5 @@ class JinaClipV1Backend(LocalBackend):
     )
     # Calibrated like CLIP's.
     similar_max_distance = 0.3
-    duplicate_max_distance = 0.095
+    duplicate_max_distance = 0.085
     description_max_distance = 0.89

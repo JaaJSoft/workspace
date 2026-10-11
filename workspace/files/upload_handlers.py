@@ -18,12 +18,16 @@ class HashingTemporaryFileUploadHandler(TemporaryFileUploadHandler):
     def new_file(self, *args, **kwargs):
         super().new_file(*args, **kwargs)
         self._hasher = new_hasher()
-        self._pending = bytearray()
+        self._pending = []
+        self._pending_size = 0
 
     def receive_data_chunk(self, raw_data, start):
         self._hasher.update(raw_data)
-        self._pending += raw_data
-        if len(self._pending) >= DjangoFile.DEFAULT_CHUNK_SIZE:
+        # Joined once per block: growing a bytearray chunk by chunk copies
+        # each byte several times over, at a cost on par with the hashing.
+        self._pending.append(raw_data)
+        self._pending_size += len(raw_data)
+        if self._pending_size >= DjangoFile.DEFAULT_CHUNK_SIZE:
             self._write_pending()
 
     def file_complete(self, file_size):
@@ -33,5 +37,6 @@ class HashingTemporaryFileUploadHandler(TemporaryFileUploadHandler):
         return upload
 
     def _write_pending(self):
-        self.file.write(self._pending)
-        self._pending = bytearray()
+        self.file.write(b"".join(self._pending))
+        self._pending = []
+        self._pending_size = 0

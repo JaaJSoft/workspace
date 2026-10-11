@@ -1,0 +1,188 @@
+"""The local backends: image and text encoders run on the CPU by fastembed.
+
+fastembed (Qdrant) carries the whole pipeline of each model: the ONNX exports
+of its two encoders, its own preprocessing and tokenizer, and the
+onnxruntime sessions. The weights download from the Hugging Face Hub on first
+use, into PHOTOS_MODEL_DIR/fastembed (``manage.py download_embedding_models``
+fetches them ahead of time).
+
+Which one to run is a trade between quality, CPU and memory: the embedding
+bench (scripts/embedding_bench.py, docs/photos/embedding-bench.md) measures
+all three on the same photos, and calibrates each model's thresholds.
+"""
+
+from __future__ import annotations
+
+import threading
+from dataclasses import dataclass
+from importlib.util import find_spec
+from pathlib import Path
+
+from django.conf import settings
+
+from ..detection.base import BackendHealth
+from .base import EmbeddingBackend
+
+_models = {}
+_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class Encoder:
+    """One encoder of a model: the name fastembed knows it by, and where the
+    Hub keeps its ONNX file (read by health(), without importing fastembed)."""
+
+    name: str
+    repo: str
+    file: str
+    image: bool
+
+
+def cache_dir():
+    return str(Path(settings.PHOTOS_MODEL_DIR) / "fastembed")
+
+
+def _build(encoder, **kwargs):
+    # Imported here: the web process never runs a model, and fastembed pulls
+    # onnxruntime and the Hub client in.
+    from fastembed import ImageEmbedding, TextEmbedding
+
+    model_class = ImageEmbedding if encoder.image else TextEmbedding
+    return model_class(
+        encoder.name,
+        cache_dir=cache_dir(),
+        threads=settings.PHOTOS_ONNX_THREADS,
+        providers=["CPUExecutionProvider"],
+        **kwargs,
+    )
+
+
+def model(encoder):
+    """The fastembed model of *encoder*, downloading it if needed, built once
+    per process: a session costs its weights in memory and seconds to build."""
+    with _lock:
+        cached = _models.get(encoder)
+        if cached is None:
+            cached = _models[encoder] = _build(encoder)
+        return cached
+
+
+def is_cached(encoder):
+    """Whether *encoder*'s ONNX file is in the cache fastembed downloads to,
+    read off the Hub cache layout: models--<org>--<repo>/snapshots/<rev>/."""
+    repo = Path(cache_dir()) / f"models--{encoder.repo.replace('/', '--')}"
+    return any(repo.glob(f"snapshots/*/{encoder.file}"))
+
+
+class LocalBackend(EmbeddingBackend):
+    """A model fastembed runs: its two encoders and how to name it."""
+
+    label = ""
+    image_encoder: Encoder
+    text_encoder: Encoder
+
+    def prepare(self):
+        model(self.image_encoder)
+        model(self.text_encoder)
+
+    def embed_image(self, image):
+        (vector,) = model(self.image_encoder).embed([image])
+        return vector
+
+    def embed_text(self, text):
+        (vector,) = model(self.text_encoder).embed([text])
+        return vector
+
+    def health(self):
+        """Answered from the files on disk, importing neither fastembed nor
+        the Hub client: the dashboard renders in the web process, which never
+        runs a model."""
+        if find_spec("fastembed") is None or find_spec("onnxruntime") is None:
+            return BackendHealth(ok=False, detail="fastembed is not installed")
+        if not all(map(is_cached, (self.image_encoder, self.text_encoder))):
+            return BackendHealth(
+                ok=True, detail=f"{self.label}, weights download on first use"
+            )
+        return BackendHealth(ok=True, detail=f"{self.label}, ready")
+
+
+class ClipVitB32Backend(LocalBackend):
+    """OpenAI CLIP ViT-B/32 (2021, MIT): the cheapest of the CLIP family,
+    about 4.4 GFLOPs a photo, 340 MB + 250 MB of weights. English only."""
+
+    key = "clip_vit_b32"
+    label = "CLIP ViT-B/32"
+    dims = 512
+    image_encoder = Encoder(
+        "Qdrant/clip-ViT-B-32-vision",
+        "Qdrant/clip-ViT-B-32-vision",
+        "model.onnx",
+        image=True,
+    )
+    text_encoder = Encoder(
+        "Qdrant/clip-ViT-B-32-text",
+        "Qdrant/clip-ViT-B-32-text",
+        "model.onnx",
+        image=False,
+    )
+    # Shots of one burst sit above a cosine similarity of 0.94; photos of the
+    # same scene or subject above 0.75. A query text and a photo it describes
+    # reach 0.2 to 0.35, far below any two photos: the two thresholds are of
+    # different spaces in practice.
+    similar_max_distance = 0.25
+    duplicate_max_distance = 0.06
+    description_max_distance = 0.8
+
+
+class Siglip2BaseBackend(LocalBackend):
+    """Google SigLIP 2 base, patch 16, 224 px (2025, Apache-2.0): better
+    retrieval than CLIP and multilingual, a query typed in French included.
+    About four times CLIP ViT-B/32's CPU per photo; its text encoder carries
+    a 256k-token vocabulary, 1.1 GB of weights."""
+
+    key = "siglip2_base"
+    label = "SigLIP 2 base"
+    dims = 768
+    image_encoder = Encoder(
+        "google/siglip2-base-patch16-224",
+        "onnx-community/siglip2-base-patch16-224-ONNX",
+        "onnx/vision_model.onnx",
+        image=True,
+    )
+    text_encoder = Encoder(
+        "google/siglip2-base-patch16-224",
+        "onnx-community/siglip2-base-patch16-224-ONNX",
+        "onnx/text_model.onnx",
+        image=False,
+    )
+    # Trained with a sigmoid loss: a text and the photo it describes meet at
+    # a much lower cosine similarity than with CLIP, around 0.1. Calibrate
+    # with the embedding bench.
+    similar_max_distance = 0.3
+    duplicate_max_distance = 0.06
+    description_max_distance = 0.92
+
+
+class JinaClipV1Backend(LocalBackend):
+    """Jina CLIP v1 (2024, Apache-2.0): a CLIP-style model whose text encoder
+    reads long descriptions as well as short queries. English only."""
+
+    key = "jina_clip_v1"
+    label = "Jina CLIP v1"
+    dims = 768
+    image_encoder = Encoder(
+        "jinaai/jina-clip-v1",
+        "jinaai/jina-clip-v1",
+        "onnx/vision_model.onnx",
+        image=True,
+    )
+    text_encoder = Encoder(
+        "jinaai/jina-clip-v1",
+        "jinaai/jina-clip-v1",
+        "onnx/text_model.onnx",
+        image=False,
+    )
+    # Calibrate with the embedding bench.
+    similar_max_distance = 0.3
+    duplicate_max_distance = 0.06
+    description_max_distance = 0.8

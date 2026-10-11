@@ -14,9 +14,21 @@ from .base import EmbeddingBackend
 
 
 def _clip_vit_b32():
-    from .clip import ClipVitB32Backend
+    from .local import ClipVitB32Backend
 
     return ClipVitB32Backend()
+
+
+def _siglip2_base():
+    from .local import Siglip2BaseBackend
+
+    return Siglip2BaseBackend()
+
+
+def _jina_clip_v1():
+    from .local import JinaClipV1Backend
+
+    return JinaClipV1Backend()
 
 
 def _remote():
@@ -33,6 +45,8 @@ def _fake():
 
 _BACKENDS = {
     "clip_vit_b32": _clip_vit_b32,
+    "siglip2_base": _siglip2_base,
+    "jina_clip_v1": _jina_clip_v1,
     "remote": _remote,
     "fake": _fake,
 }

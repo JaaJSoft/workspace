@@ -84,9 +84,12 @@ PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS = int(
 PHOTOS_EMBEDDINGS_ENABLED = env_bool("PHOTOS_EMBEDDINGS_ENABLED", False)
 
 # Which embedding backend runs (photos/services/embedding/registry.py):
-# "clip_vit_b32" (default, OpenAI CLIP ViT-B/32 on the CPU, MIT weights, 512-d)
-# or "remote" (an OpenAI-compatible /embeddings endpoint serving a multimodal
-# model). Switching changes the embedding space: see docs/photos/README.md.
+# "clip_vit_b32" (default, OpenAI CLIP ViT-B/32 on the CPU, MIT weights, 512-d),
+# "siglip2_base" (Google SigLIP 2, multilingual, Apache-2.0, 768-d),
+# "jina_clip_v1" (Apache-2.0, 768-d) or "remote" (an OpenAI-compatible
+# /embeddings endpoint serving a multimodal model). scripts/embedding_bench.py
+# compares them. Switching changes the embedding space: see
+# docs/photos/README.md.
 PHOTOS_EMBEDDING_BACKEND = os.getenv("PHOTOS_EMBEDDING_BACKEND", "clip_vit_b32")
 
 # The remote backend: the endpoint, the model it serves, and the size of the

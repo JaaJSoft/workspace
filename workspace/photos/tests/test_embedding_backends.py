@@ -9,7 +9,7 @@ import numpy as np
 from django.test import SimpleTestCase, override_settings
 from PIL import Image
 
-from workspace.photos.services.embedding import clip, registry
+from workspace.photos.services.embedding import local, registry
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
 from workspace.photos.services.embedding.remote import (
     RemoteEmbeddingBackend,
@@ -22,72 +22,103 @@ def _cosine(a, b):
     return float(a @ b / np.linalg.norm(a) / np.linalg.norm(b))
 
 
-class ClipBackendTests(SimpleTestCase):
+LOCAL_BACKENDS = (
+    local.ClipVitB32Backend,
+    local.Siglip2BaseBackend,
+    local.JinaClipV1Backend,
+)
+
+
+class LocalBackendTests(SimpleTestCase):
     def setUp(self):
-        clip._models.clear()
-        self.addCleanup(clip._models.clear)
+        local._models.clear()
+        self.addCleanup(local._models.clear)
 
     def _fastembed(self, vector):
         built = MagicMock()
         built.embed.return_value = iter([np.asarray(vector, dtype=np.float32)])
         return built
 
-    def test_embed_image_runs_the_image_model_on_the_picture(self):
+    def test_embed_image_runs_the_image_encoder_on_the_picture(self):
         image = Image.new("RGB", (300, 200))
-        built = self._fastembed(np.ones(512))
-        with patch.object(clip, "_build", return_value=built) as build:
-            vector = clip.ClipVitB32Backend().embed_image(image)
+        built = self._fastembed(np.ones(768))
+        backend = local.Siglip2BaseBackend()
+        with patch.object(local, "_build", return_value=built) as build:
+            vector = backend.embed_image(image)
 
-        build.assert_called_once_with(clip.IMAGE_MODEL)
+        build.assert_called_once_with(backend.image_encoder)
         built.embed.assert_called_once_with([image])
-        self.assertEqual(vector.shape, (512,))
+        self.assertEqual(vector.shape, (768,))
 
-    def test_embed_text_runs_the_text_model(self):
+    def test_embed_text_runs_the_text_encoder(self):
         built = self._fastembed(np.ones(512))
-        with patch.object(clip, "_build", return_value=built) as build:
-            clip.ClipVitB32Backend().embed_text("dog on the beach")
+        backend = local.ClipVitB32Backend()
+        with patch.object(local, "_build", return_value=built) as build:
+            backend.embed_text("dog on the beach")
 
-        build.assert_called_once_with(clip.TEXT_MODEL)
+        build.assert_called_once_with(backend.text_encoder)
         built.embed.assert_called_once_with(["dog on the beach"])
 
-    def test_a_model_is_built_once_per_process(self):
-        with patch.object(clip, "_build", return_value=MagicMock()) as build:
-            clip.model(clip.TEXT_MODEL)
-            clip.model(clip.TEXT_MODEL)
+    def test_each_encoder_is_built_once_per_process(self):
+        backend = local.Siglip2BaseBackend()
+        with patch.object(local, "_build", return_value=MagicMock()) as build:
+            for _ in range(2):
+                local.model(backend.image_encoder)
+                local.model(backend.text_encoder)
 
-        build.assert_called_once()
+        # One model name, two encoders: never mistaken for one another.
+        self.assertEqual(build.call_count, 2)
 
     @override_settings(PHOTOS_MODEL_DIR="/srv/models", PHOTOS_ONNX_THREADS=2)
     def test_builds_on_the_cpu_into_the_model_directory(self):
+        encoder = local.ClipVitB32Backend.text_encoder
         with patch("fastembed.TextEmbedding") as text_embedding:
-            clip._build(clip.TEXT_MODEL)
+            local._build(encoder)
 
         args, kwargs = text_embedding.call_args
-        self.assertEqual(args, (clip.TEXT_MODEL,))
+        self.assertEqual(args, (encoder.name,))
         self.assertEqual(kwargs["cache_dir"], "/srv/models/fastembed")
         self.assertEqual(kwargs["threads"], 2)
         self.assertEqual(kwargs["providers"], ["CPUExecutionProvider"])
 
+    def test_every_encoder_is_one_fastembed_ships_where_health_looks(self):
+        from fastembed import ImageEmbedding, TextEmbedding
+
+        catalogs = {
+            True: {m["model"]: m for m in ImageEmbedding.list_supported_models()},
+            False: {m["model"]: m for m in TextEmbedding.list_supported_models()},
+        }
+        for backend in LOCAL_BACKENDS:
+            for encoder in (backend.image_encoder, backend.text_encoder):
+                with self.subTest(backend=backend.key, image=encoder.image):
+                    described = catalogs[encoder.image][encoder.name]
+                    self.assertEqual(described["sources"]["hf"], encoder.repo)
+                    self.assertEqual(described["model_file"], encoder.file)
+                    self.assertEqual(described["dim"], backend.dims)
+
     def test_health_says_the_weights_come_on_first_use_until_they_are_here(self):
+        backend = local.Siglip2BaseBackend()
         with tempfile.TemporaryDirectory() as models, self._unloaded() as loaded:
             with override_settings(PHOTOS_MODEL_DIR=models):
-                health = clip.ClipVitB32Backend().health()
+                health = backend.health()
 
                 self.assertTrue(health.ok)
                 self.assertIn("download on first use", health.detail)
 
-                for name in (clip.IMAGE_MODEL, clip.TEXT_MODEL):
-                    repo = Path(clip.cache_dir()) / f"models--{name.replace('/', '--')}"
-                    snapshot = repo / "snapshots" / "abc123"
-                    snapshot.mkdir(parents=True)
-                    (snapshot / "model.onnx").write_bytes(b"onnx")
-                health = clip.ClipVitB32Backend().health()
+                for encoder in (backend.image_encoder, backend.text_encoder):
+                    repo = Path(local.cache_dir()) / (
+                        f"models--{encoder.repo.replace('/', '--')}"
+                    )
+                    onnx = repo / "snapshots" / "abc123" / encoder.file
+                    onnx.parent.mkdir(parents=True, exist_ok=True)
+                    onnx.write_bytes(b"onnx")
+                health = backend.health()
 
             # The dashboard renders in the web process, which never runs a
             # model: answering must not import the model stack.
             self.assertEqual(loaded(), [])
 
-        self.assertEqual(health.detail, "CLIP ViT-B/32, ready")
+        self.assertEqual(health.detail, "SigLIP 2 base, ready")
 
     @staticmethod
     @contextlib.contextmanager
@@ -201,7 +232,7 @@ class FakeBackendTests(SimpleTestCase):
 class RegistryTests(SimpleTestCase):
     @override_settings(PHOTOS_EMBEDDING_BACKEND="clip_vit_b32")
     def test_builds_the_configured_backend(self):
-        self.assertIsInstance(registry.get_embedding_backend(), clip.ClipVitB32Backend)
+        self.assertIsInstance(registry.get_embedding_backend(), local.ClipVitB32Backend)
         self.assertEqual(registry.configured_dims(), 512)
 
     @override_settings(PHOTOS_EMBEDDING_BACKEND="clip-vit")
@@ -215,7 +246,10 @@ class RegistryTests(SimpleTestCase):
             backend.embed_text("snow")
 
     def test_the_fake_is_not_offered_as_a_setting(self):
-        self.assertEqual(registry.backend_keys(), ["clip_vit_b32", "remote"])
+        self.assertEqual(
+            registry.backend_keys(),
+            ["clip_vit_b32", "jina_clip_v1", "remote", "siglip2_base"],
+        )
 
     @override_settings(
         PHOTOS_EMBEDDING_BACKEND="fake",

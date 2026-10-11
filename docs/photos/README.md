@@ -66,14 +66,20 @@ known and ready. Embedded photos are listed, read-only, in the admin under
 | `PHOTOS_EMBEDDING_BACKEND` | Model | Embedding | Weights licence |
 |---|---|---|---|
 | `clip_vit_b32` (default) | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
+| `siglip2_base` | Google SigLIP 2 base, on the CPU, multilingual | 768-d | Apache-2.0 |
+| `jina_clip_v1` | Jina CLIP v1, on the CPU | 768-d | Apache-2.0 |
 | `remote` | Any multimodal model behind an OpenAI-compatible `/embeddings` endpoint | `PHOTOS_EMBEDDING_DIMS` | The model's |
 
-**`clip_vit_b32`** runs locally on the CPU through
-[fastembed](https://github.com/qdrant/fastembed), which ships CLIP's
-preprocessing, tokenizer and ONNX runtime. Its weights (the image and text
-encoders, 340 MB and 250 MB) download from the Hugging Face Hub on first use
-into `PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without
-internet access:
+**The local backends** run on the CPU through
+[fastembed](https://github.com/qdrant/fastembed), which ships each model's
+preprocessing, tokenizer and ONNX runtime. CLIP ViT-B/32 is the cheapest
+(340 MB + 250 MB of weights); SigLIP 2 searches better and understands a
+query typed in French, for about four times the CPU per photo and a text
+encoder of 1.1 GB; Jina CLIP v1 sits between them. The
+[embedding bench](embedding-bench.md) measures all three on the same photos.
+The weights download from the Hugging Face Hub on first use into
+`PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without internet
+access:
 
 ```bash
 python manage.py download_embedding_models

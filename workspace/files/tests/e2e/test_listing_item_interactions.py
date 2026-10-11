@@ -140,6 +140,20 @@ class _ListingItemInteractions:
         self.assertEqual(self.opened(), [])
         expect(self.page.locator("#folder-browser h1")).to_have_text("My Files")
 
+    def test_a_click_extends_a_selection_under_way_whatever_the_item(self):
+        # Opening is off while a selection is being made, so a file that has
+        # no viewer is as selectable by a click as any other item.
+        self.open_listing()
+        self.item(self.note).locator("input[data-select-item]").click()
+
+        self.plain_spot(self.blob).click()
+        self.plain_spot(self.folder).click()
+
+        for file_obj in (self.folder, self.blob, self.note):
+            expect(self.item(file_obj)).to_have_attribute("data-selected", "")
+        self.assertEqual(self.opened(), [])
+        expect(self.page.locator("#folder-browser h1")).to_have_text("My Files")
+
     def test_the_star_button_adds_the_item_to_favorites(self):
         self.open_listing()
         with self.page.expect_response(

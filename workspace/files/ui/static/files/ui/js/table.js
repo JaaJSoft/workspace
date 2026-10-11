@@ -208,13 +208,14 @@ window.fileTableControls = function fileTableControls() {
       if (inTrash || target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
         return;
       }
-      const isFolder = item.dataset.nodeType === 'folder';
-      if (!isFolder && item.dataset.viewable !== '1') return;
-      // With a selection under way, a click extends it instead of opening.
+      // With a selection under way, a click extends it instead of opening,
+      // whether or not the item could be opened.
       if (this.selectedUuids.size > 0) {
         this.toggleRowSelection(uuid, event.shiftKey);
         return;
       }
+      const isFolder = item.dataset.nodeType === 'folder';
+      if (!isFolder && item.dataset.viewable !== '1') return;
       if (isFolder) {
         window.folderNav.navigateTo(`/files/${uuid}`);
         return;

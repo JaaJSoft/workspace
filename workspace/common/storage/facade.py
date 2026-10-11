@@ -194,8 +194,14 @@ class BlobStorage(Storage):
         that no longer exists. Through a staged writer the name only ever
         holds one complete version or the other.
 
+        An upload Django spooled to disk is moved into place when the backend
+        can take it as it is, which on the local backend is a rename.
+
         Returns the name the content was stored under.
         """
+        spooled = getattr(content, "temporary_file_path", None)
+        if spooled is not None and self.backend.move_in(name, spooled()):
+            return name
         if not hasattr(content, "chunks"):
             content = File(content, name)
         writer = self.backend.staged_writer(name)

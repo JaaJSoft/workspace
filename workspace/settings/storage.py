@@ -38,8 +38,9 @@ FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
 # Where an upload over FILE_UPLOAD_MAX_MEMORY_SIZE is spooled while it arrives.
-# On the volume MEDIA_ROOT lives on, storing it is a rename; from a container's
-# /tmp it is a second full copy, made in 64 KB writes.
+# On the volume MEDIA_ROOT lives on, the local backend stores it with a rename;
+# from a container's /tmp it is a second full copy, made in 64 KB writes. With
+# STORAGE_BACKEND=s3 it is uploaded to the bucket from here either way.
 FILE_UPLOAD_TEMP_DIR = os.getenv("FILE_UPLOAD_TEMP_DIR") or str(
     Path(MEDIA_ROOT) / "tmp" / "uploads"
 )

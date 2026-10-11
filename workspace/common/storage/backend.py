@@ -260,6 +260,16 @@ class Backend(abc.ABC):
         here can read.
         """
 
+    def move_in(self, name, path):
+        """Move the local file at *path* to *name*, replacing what is there.
+
+        For an upload Django already spooled to disk, which a rename puts in
+        place without a second copy of its bytes. False means the backend
+        cannot take the file as it is: the caller copies it instead. True means
+        it is gone from *path*.
+        """
+        return False
+
     def signed_url(self, name, *, filename, attachment, content_type):
         """A short-lived URL a client can fetch the blob from directly, or None.
 

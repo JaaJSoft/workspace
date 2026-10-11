@@ -11,6 +11,7 @@ the opening or dragging.
 
 from __future__ import annotations
 
+from django.core.cache import cache
 from django.utils import timezone
 from playwright.sync_api import expect
 
@@ -43,6 +44,10 @@ class _ListingItemInteractions:
             node_type=File.NodeType.FILE,
             mime_type="text/plain",
         )
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
 
     # --- helpers -----------------------------------------------------------
 

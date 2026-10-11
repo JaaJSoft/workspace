@@ -1,7 +1,7 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -13,7 +13,7 @@ class RestoreAction(BaseFileAction):
     node_types = ("file", "folder")
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is None:
             return False
         return permission is not None and permission >= FilePermission.EDIT
@@ -29,7 +29,7 @@ class PurgeAction(BaseFileAction):
     css_class = "text-error"
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is None:
             return False
         return permission is not None and permission >= FilePermission.EDIT

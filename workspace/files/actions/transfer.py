@@ -1,5 +1,5 @@
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -11,7 +11,7 @@ class DownloadAction(BaseFileAction):
     node_types = ("file", "folder")
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         from workspace.files.services.scanning.policy import is_blocked
 
         if file_obj.deleted_at is not None:
@@ -34,7 +34,7 @@ class CopyLinkAction(BaseFileAction):
     category = ActionCategory.TRANSFER
     node_types = ("file",)
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None

@@ -36,9 +36,9 @@ window.fileBrowser = function fileBrowser() {
     },
 
     _paintBusy(uuids, busy) {
-      const wanted = new Set(uuids);
-      for (const item of document.querySelectorAll('#folder-browser [data-uuid]')) {
-        if (wanted.has(item.dataset.uuid)) item.toggleAttribute('data-busy', busy);
+      for (const uuid of uuids) {
+        document.querySelector(`#folder-browser [data-uuid="${CSS.escape(uuid)}"]`)
+          ?.toggleAttribute('data-busy', busy);
       }
     },
 

@@ -334,12 +334,10 @@ window.fileTableControls = function fileTableControls() {
       });
     },
 
+    // Only reached off any item (onListingContextMenu); a control keeps the
+    // browser's own menu.
     openBackgroundContextMenu(event) {
-      // Check if click is on a row/card or interactive element
-      const target = event.target;
-      if (target.closest('tr[data-uuid], div[data-uuid].group, button, a, input, select, textarea')) {
-        return; // Let the row/card handle its own context menu
-      }
+      if (event.target.closest('button, a, input, select, textarea')) return;
 
       event.preventDefault();
       // Dispatch event for background context menu

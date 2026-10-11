@@ -282,9 +282,6 @@
             this.newName = '';
             this.newExpiry = '';
             this.$refs.tokenCreatedDialog.showModal();
-            this.$nextTick(() => lucide.createIcons({
-              nodes: [this.$refs.tokenCreatedDialog]
-            }));
             await this.fetchTokens();
           } else {
             const msgs = data.errors || ['Failed to create token.'];

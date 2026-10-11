@@ -77,7 +77,7 @@ class LocalBackendTests(SimpleTestCase):
 
         args, kwargs = text_embedding.call_args
         self.assertEqual(args, (encoder.name,))
-        self.assertEqual(kwargs["cache_dir"], "/srv/models/fastembed")
+        self.assertEqual(Path(kwargs["cache_dir"]), Path("/srv/models/fastembed"))
         self.assertEqual(kwargs["threads"], 2)
         self.assertEqual(kwargs["providers"], ["CPUExecutionProvider"])
 

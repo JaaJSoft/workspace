@@ -149,6 +149,18 @@ def _extension_hints(label: str, name: str) -> tuple[str, str, bool]:
     return ext_label, ext_group, file_has_extension
 
 
+def _display(label: str) -> tuple[str, str, str, str]:
+    """Resolved label's ``(icon, color, group, mime_type)``: no viewer involved."""
+    label = _resolve_label(label)
+    group = _normalize_group(label)
+    mime_type = _KB.get(label, {}).get("mime_type", "application/octet-stream")
+    defaults = _GROUP_DEFAULTS.get(group, {})
+    overrides = _LABEL_OVERRIDES.get(label, {})
+    icon = overrides.get("icon", defaults.get("icon", _DEFAULT_ICON))
+    color = overrides.get("color", defaults.get("color", _DEFAULT_COLOR))
+    return icon, color, group, mime_type
+
+
 def get_info(label: str, name: str = "") -> FileTypeInfo:
     """Resolve display properties and viewer for a content label.
 
@@ -160,19 +172,8 @@ def get_info(label: str, name: str = "") -> FileTypeInfo:
     if not label and not name:
         return FileTypeInfo(icon=_DEFAULT_ICON, color=_DEFAULT_COLOR, group="unknown")
 
+    icon, color, group, mime_type = _display(label)
     label = _resolve_label(label)
-    group = _normalize_group(label)
-    kb_entry = _KB.get(label, {})
-    mime_type = kb_entry.get("mime_type", "application/octet-stream")
-
-    defaults = _GROUP_DEFAULTS.get(group, {})
-    icon = defaults.get("icon", _DEFAULT_ICON)
-    color = defaults.get("color", _DEFAULT_COLOR)
-
-    overrides = _LABEL_OVERRIDES.get(label, {})
-    icon = overrides.get("icon", icon)
-    color = overrides.get("color", color)
-
     ext_label, ext_group, file_has_extension = _extension_hints(label, name)
 
     viewers = _resolve_viewers(label, group, ext_label, ext_group, file_has_extension)
@@ -183,16 +184,18 @@ def get_info(label: str, name: str = "") -> FileTypeInfo:
     )
 
 
+# Display lookups skip get_info: ranking the viewers is the expensive part of
+# it, and a listing asks for an icon and a colour on every row.
 def get_icon(label: str) -> str:
-    return get_info(label).icon
+    return _display(label)[0]
 
 
 def get_color(label: str) -> str:
-    return get_info(label).color
+    return _display(label)[1]
 
 
 def get_group(label: str) -> str:
-    return get_info(label).group
+    return _display(label)[2]
 
 
 def get_viewer(label: str, name: str = ""):

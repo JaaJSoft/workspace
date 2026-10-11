@@ -283,6 +283,9 @@ def _build_context(request, folder=None, is_trash_view=False):
     # those, so it never lists tags that would match nothing here.
     listing_tags = {}
     for node in nodes:
+        # Read up to four times per row by the listing, and each call ranks
+        # every viewer: resolved once here instead.
+        node.viewable = node.is_viewable()
         if node.node_type == File.NodeType.FILE:
             folder_stats["file_count"] += 1
             folder_stats["total_size"] += node.size or 0
@@ -418,6 +421,9 @@ def _build_context(request, folder=None, is_trash_view=False):
     viewer_prefs = files_settings.get("viewer") or {}
     if not isinstance(viewer_prefs, dict):
         viewer_prefs = {}
+    table_controls = files_settings.get("table_controls")
+    if not isinstance(table_controls, dict):
+        table_controls = None
 
     return {
         "nodes": nodes,
@@ -449,6 +455,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         "view_mode": view_mode,
         "file_prefs": file_prefs,
         "viewer_prefs": viewer_prefs,
+        "table_controls": table_controls,
         "group_folders": group_folders,
         "available_groups": available_groups,
     }

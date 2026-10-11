@@ -846,36 +846,35 @@ window.fileTableControls = function fileTableControls() {
       }
     },
 
+    // The saved controls are embedded in the page (#table-controls-data),
+    // read on the first listing and kept across folder swaps, where a save
+    // replaces them. null when the user never saved any.
+    _serverState() {
+      if (window._tableControlsCache === undefined) {
+        let saved = null;
+        const el = document.getElementById('table-controls-data');
+        if (el) {
+          try { saved = JSON.parse(el.textContent); } catch (e) { saved = null; }
+        }
+        window._tableControlsCache = saved;
+      }
+      return window._tableControlsCache;
+    },
+
     loadState() {
-      // 1. Apply localStorage immediately (synchronous, avoids flicker)
       try {
         const raw = localStorage.getItem(this.storageKey);
         if (raw) this._applyStateData(JSON.parse(raw));
       } catch (e) { /* ignore */ }
 
-      // 2. Apply cached server state if available (already fetched this session)
-      if (window._tableControlsCache) {
-        this._applyStateData(window._tableControlsCache);
-        this.pruneMissingColumns();
-        this.applyAll();
-        this._saveToLocalStorage();
-        this._lastSyncedState = JSON.stringify(this._getStatePayload());
-        return;
-      }
-
-      // 3. First load: fetch from server, cache for subsequent navigations
-      fetch('/api/v1/settings/files/table_controls')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!data || !data.value) return;
-          window._tableControlsCache = data.value;
-          this._applyStateData(data.value);
-          this.pruneMissingColumns();
-          this.applyAll();
-          this._saveToLocalStorage();
-          this._lastSyncedState = JSON.stringify(this._getStatePayload());
-        })
-        .catch(() => {});
+      // The server copy wins over this browser's: it follows the user
+      // across devices.
+      const saved = this._serverState();
+      if (!saved) return;
+      this._applyStateData(saved);
+      this.pruneMissingColumns();
+      this._saveToLocalStorage();
+      this._lastSyncedState = JSON.stringify(this._getStatePayload());
     },
 
     _getStatePayload() {

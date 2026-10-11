@@ -58,6 +58,7 @@ class ActionsMixin:
     def files_actions(self, request):
         """Return available actions per file/folder for a set of UUIDs."""
         from workspace.files.actions import ActionRegistry
+        from workspace.notes.services.journal import is_journal_note, journal_folder_id
 
         uuids = request.data.get("uuids", [])
         if not isinstance(uuids, list) or len(uuids) == 0:
@@ -103,6 +104,11 @@ class ActionsMixin:
             )
 
         permissions = FileService.get_permissions_bulk(request.user, file_objects)
+        journal_folder = journal_folder_id(request.user)
+        for file_obj in file_objects:
+            file_obj.is_journal_note = is_journal_note(
+                request.user, file_obj, journal_folder
+            )
 
         # The same dozen actions repeat for every file, so the response is a
         # catalogue of distinct serialized actions plus, per file, the keys

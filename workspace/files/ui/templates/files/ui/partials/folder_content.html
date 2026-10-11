@@ -545,7 +545,7 @@
               outranks the quarantine tint by specificity, not stylesheet order.
                 {% endcomment %}
                 <tr
-                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.is_viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15"
+                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15"
                   :class="{ 'opacity-50 pointer-events-none': isActionLoading('{{ node.uuid }}') }"
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
@@ -555,14 +555,14 @@
                   data-node-type="{{ node.node_type }}"
                   data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
                   data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
-                  data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
+                  data-viewable="{{ node.viewable|yesno:'1,0' }}"
                   data-file-type="{{ node.type }}"
                   data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
                   data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
                   data-created="{{ node.created_at|date:'U' }}"
                   data-updated="{% if is_trash_view %}{{ node.deleted_at|date:'U' }}{% else %}{{ node.updated_at|date:'U' }}{% endif %}"
                   {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
+                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="openFolderFromRow($event)" {% elif node.node_type == 'file' and not is_trash_view and node.viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromRow($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
                   @contextmenu="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',
@@ -614,7 +614,7 @@
                           draggable="false"
                           title="{{ node.name }}"
                         >{{ node.name }}</a>
-                      {% elif node.node_type == "file" and not is_trash_view and node.is_viewable %}
+                      {% elif node.node_type == "file" and not is_trash_view and node.viewable %}
                         <span
                           class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline"
                           title="{{ node.name }}"
@@ -760,7 +760,7 @@
                   data-node-type="{{ node.node_type }}"
                   data-favorite="{{ node.is_favorite|yesno:'1,0' }}"
                   data-pinned="{% if node.node_type == 'folder' %}{{ node.is_pinned|yesno:'1,0' }}{% else %}0{% endif %}"
-                  data-viewable="{{ node.is_viewable|yesno:'1,0' }}"
+                  data-viewable="{{ node.viewable|yesno:'1,0' }}"
                   data-file-type="{{ node.type }}"
                   data-tags="{% for ft in node.file_tags.all %}{{ ft.tag.uuid }} {% endfor %}"
                   data-size="{% if node.node_type == 'file' and node.size %}{{ node.size }}{% else %}0{% endif %}"
@@ -769,7 +769,7 @@
                   @mouseenter="hoveredUuid = '{{ node.uuid }}'"
                   @mouseleave="if (!document.querySelector('dialog[open]')) { hoveredUuid = hoveredUuid === '{{ node.uuid }}' ? null : hoveredUuid }"
                   {% if not is_trash_view %} @dragstart="onNodeDragStart($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.node_type }}')"{% endif %}
-                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.is_viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
+                  {% if node.node_type == 'folder' and not is_trash_view %} draggable="true" data-drop-folder="{{ node.uuid }}" data-drop-folder-name="{{ node.name }}" @click="navigateToFolder($event, '/files/{{ node.uuid }}')" {% elif node.node_type == 'file' and not is_trash_view and node.viewable %} :draggable="hasAction('{{ node.uuid }}', 'cut')" @click="openFileFromCard($event, '{{ node.uuid }}', '{{ node.name|escapejs }}', '{{ node.type }}')" {% elif node.node_type == 'file' and not is_trash_view %} :draggable="hasAction('{{ node.uuid }}', 'cut')" {% endif %}
                   @contextmenu.prevent="openContextMenu($event, {
               uuid: '{{ node.uuid }}',
               name: '{{ node.name|escapejs }}',

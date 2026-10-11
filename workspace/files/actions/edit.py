@@ -20,10 +20,14 @@ class RenameAction(BaseFileAction):
         if file_obj.group_id and file_obj.parent_id is None:
             return False
         # Journal notes are auto-named by date; renaming would break the
-        # "today's note" auto-selection logic in the notes UI.
-        from workspace.notes.services.journal import is_journal_note
+        # "today's note" auto-selection logic in the notes UI. A bulk caller
+        # resolves it for every file up front (``is_journal_note``).
+        in_journal = getattr(file_obj, "is_journal_note", None)
+        if in_journal is None:
+            from workspace.notes.services.journal import is_journal_note
 
-        if is_journal_note(user, file_obj):
+            in_journal = is_journal_note(user, file_obj)
+        if in_journal:
             return False
         return permission is not None and permission >= FilePermission.EDIT
 

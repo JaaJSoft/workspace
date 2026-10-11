@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from rest_framework import status
@@ -5,6 +7,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File
 from workspace.files.tests.test_actions import actions_of
+from workspace.notes.services import journal
 from workspace.users.services.settings import set_setting
 
 User = get_user_model()
@@ -131,3 +134,20 @@ class JournalRenameGateTests(APITestCase):
         data = resp.json()
         action_ids = {a["id"] for a in actions_of(data, str(self.normal_note.uuid))}
         self.assertIn("rename", action_ids)
+
+    def test_actions_endpoint_reads_the_journal_folder_once(self):
+        # The gate runs for every file of a listing, which asks for up to 200
+        # at a time: the setting behind it is read per request, not per file.
+        with patch.object(journal, "get_setting", wraps=journal.get_setting) as read:
+            resp = self.client.post(
+                "/api/v1/files/actions",
+                {"uuids": [str(self.journal_note.uuid), str(self.normal_note.uuid)]},
+                format="json",
+            )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = resp.json()
+        journal_ids = {a["id"] for a in actions_of(data, str(self.journal_note.uuid))}
+        normal_ids = {a["id"] for a in actions_of(data, str(self.normal_note.uuid))}
+        self.assertNotIn("rename", journal_ids)
+        self.assertIn("rename", normal_ids)
+        self.assertEqual(read.call_count, 1)

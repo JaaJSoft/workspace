@@ -23,6 +23,17 @@ folder it sits in. There are three ways to add more:
   Tokens**, when the account signs in through single sign-on). New photos then
   reach the timeline on their own, once their capture date has been read.
 
+## Capture dates
+
+A photo is placed on the timeline by its EXIF capture date, a video by its
+container's recording date. When the file carries none - a screenshot, a
+picture sent through a messaging app, a scan - the date written in its name
+stands in: `IMG_20230415_143022.jpg`, `WhatsApp Image 2023-04-15 at 14.30.22.jpeg`,
+`Screenshot 2023-04-15 at 14.30.22.png`, `1998-07-12 Wedding.jpg`... The year
+must come first; a name giving only the day reads as noon on that day.
+Renaming such a file moves it on the timeline, so an undated scan can be filed
+by renaming it. A date read from the file itself always wins over the name.
+
 ## Similar photos and search by description
 
 One image embedding per photo - a vector saying what the photo shows, in a

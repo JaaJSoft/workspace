@@ -137,13 +137,14 @@ ones. After changing the setting:
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
 | `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.25 for CLIP). |
-| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.06 for CLIP). |
-| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.8 for CLIP). |
+| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.1 for CLIP). |
+| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.765 for CLIP). |
 
-The defaults for CLIP come from its published behaviour (a burst sits above a
-cosine similarity of 0.94, a text and the photo it describes around 0.2 to
-0.35); tune them on a real library if near-duplicates are missed or searches
-return too much.
+Each local model's defaults are calibrated by the
+[embedding bench](embedding-bench.md), on its own embedding space: the same
+distance means a different thing to CLIP and to SigLIP 2. A remote model starts
+from generic defaults (0.25, 0.06, 0.8); measure it with the bench
+(`--backend remote`) before relying on them.
 
 ## Face detection and grouping
 

@@ -125,13 +125,13 @@ class ClipVitB32Backend(LocalBackend):
         "model.onnx",
         image=False,
     )
-    # Shots of one burst sit above a cosine similarity of 0.94; photos of the
-    # same scene or subject above 0.75. A query text and a photo it describes
-    # reach 0.2 to 0.35, far below any two photos: the two thresholds are of
-    # different spaces in practice.
+    # Calibrated by the embedding bench (docs/photos/embedding-bench.md):
+    # `duplicate` is the loosest at 99% precision, `description` the best F1.
+    # `similar` stays tighter than its best F1 (70 photos at 46% precision):
+    # a "more like this" row is judged on what it shows, not on what it misses.
     similar_max_distance = 0.25
-    duplicate_max_distance = 0.06
-    description_max_distance = 0.8
+    duplicate_max_distance = 0.1
+    description_max_distance = 0.765
 
 
 class Siglip2BaseBackend(LocalBackend):
@@ -156,10 +156,10 @@ class Siglip2BaseBackend(LocalBackend):
         image=False,
     )
     # Trained with a sigmoid loss: a text and the photo it describes meet at
-    # a much lower cosine similarity than with CLIP, around 0.1. Calibrate
-    # with the embedding bench.
+    # a much lower cosine similarity than with CLIP, around 0.1. Calibrated
+    # like CLIP's.
     similar_max_distance = 0.3
-    duplicate_max_distance = 0.06
+    duplicate_max_distance = 0.105
     description_max_distance = 0.92
 
 
@@ -182,7 +182,7 @@ class JinaClipV1Backend(LocalBackend):
         "onnx/text_model.onnx",
         image=False,
     )
-    # Calibrate with the embedding bench.
+    # Calibrated like CLIP's.
     similar_max_distance = 0.3
-    duplicate_max_distance = 0.06
-    description_max_distance = 0.8
+    duplicate_max_distance = 0.095
+    description_max_distance = 0.89

@@ -385,8 +385,11 @@ def embed(key, photos, paths, queries, duplicates):
         },
         "cost": {
             "load_s": load_s,
-            "image_ms": float(np.median(image_ms)),
-            "text_ms": float(np.median(text_ms)),
+            # The mean, not the median: Windows advances process_time by
+            # 15.6 ms ticks, so each sample is 0 or a tick, and only their
+            # mean converges on the real cost.
+            "image_ms": float(np.mean(image_ms)),
+            "text_ms": float(np.mean(text_ms)),
             "weights_mb": _weights_mb(backend),
             "memory_mb": _maxrss_mb() - baseline,
         },

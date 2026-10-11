@@ -323,11 +323,13 @@ def _weights_mb(backend):
 
     if not isinstance(backend, local.LocalBackend):
         return 0.0
-    total = 0
+    files = set()
     for encoder in {backend.image_encoder.repo, backend.text_encoder.repo}:
         repo = Path(local.cache_dir()) / f"models--{encoder.replace('/', '--')}"
-        total += sum(f.stat().st_size for f in repo.rglob("*") if f.is_file())
-    return total / 1e6
+        # Resolved: the Hub's snapshots/ are links into blobs/, the same file
+        # twice.
+        files |= {f.resolve() for f in repo.rglob("*") if f.is_file()}
+    return sum(f.stat().st_size for f in files) / 1e6
 
 
 def _load_image(path, size):

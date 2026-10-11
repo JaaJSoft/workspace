@@ -146,6 +146,31 @@ class VariantTests(SimpleTestCase):
         self.assertEqual(copies[1].size, (100, 50))
 
 
+class WeightsTests(SimpleTestCase):
+    def test_a_snapshot_linked_to_its_blob_counts_once(self):
+        from workspace.photos.services.embedding import local
+
+        backend = local.Siglip2BaseBackend()
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(
+                tmp,
+                "fastembed",
+                "models--onnx-community--siglip2-base-patch16-224-ONNX",
+            )
+            blob = repo / "blobs" / "0123abcd"
+            blob.parent.mkdir(parents=True)
+            blob.write_bytes(b"\0" * 1_000_000)
+            snapshot = repo / "snapshots" / "rev" / "onnx" / "vision_model.onnx"
+            snapshot.parent.mkdir(parents=True)
+            try:
+                snapshot.symlink_to(blob)
+            except OSError:
+                self.skipTest("symbolic links are not allowed here")
+
+            with override_settings(PHOTOS_MODEL_DIR=tmp):
+                self.assertEqual(bench._weights_mb(backend), 1.0)
+
+
 class DatasetTests(SimpleTestCase):
     CLASSES = "LabelName,DisplayName\n/m/dog,Dog\n/m/snow,Snow\n/m/car,Car\n"
     LABELS = (

@@ -9,7 +9,8 @@ from unittest import mock, skipUnless
 from botocore.exceptions import ClientError
 from django.core.exceptions import ImproperlyConfigured, SuspiciousFileOperation
 from django.core.files.base import ContentFile
-from django.test import SimpleTestCase
+from django.core.files.uploadedfile import TemporaryUploadedFile
+from django.test import SimpleTestCase, override_settings
 
 from workspace.common.storage.backend import BlobTooLarge, checked_name, temporary_copy
 from workspace.common.storage.facade import BlobStorage
@@ -20,6 +21,15 @@ from workspace.common.tests.s3 import LIVE, S3TestMixin
 def _read(storage, name):
     with storage.open(name, "rb") as handle:
         return handle.read()
+
+
+def _spooled_upload(data):
+    """An upload as Django hands one over when it is too large for memory."""
+    upload = TemporaryUploadedFile("doc.txt", "text/plain", len(data), None)
+    upload.write(data)
+    upload.flush()
+    upload.seek(0)
+    return upload
 
 
 class BlobStorageContract:
@@ -326,6 +336,15 @@ class BlobStorageContract:
             [e.name for e in self.storage.scan("files/users/alice")], ["doc.txt"]
         )
 
+    def test_replace_takes_an_upload_spooled_to_disk(self):
+        self.save("files/users/alice/doc.txt", b"old")
+        upload = _spooled_upload(b"new")
+        self.addCleanup(upload.close)
+
+        name = self.storage.replace("files/users/alice/doc.txt", upload)
+
+        self.assertEqual(_read(self.storage, name), b"new")
+
     def test_free_bytes_is_a_count_or_none(self):
         free = self.storage.free_bytes()
 
@@ -373,6 +392,23 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
             self.storage.path(name),
             os.path.join(self.root, "files", "users", "alice", "doc.txt"),
         )
+
+    def test_replace_renames_a_spooled_upload_into_place(self):
+        """No second copy of the bytes: the spool file becomes the blob."""
+        spool = os.path.join(self.root, "spool")
+        os.makedirs(spool)
+        self.save("files/users/alice/doc.txt", b"old")
+        with override_settings(FILE_UPLOAD_TEMP_DIR=spool):
+            upload = _spooled_upload(b"new")
+        self.addCleanup(upload.close)
+        spooled = upload.temporary_file_path()
+        inode = os.stat(spooled).st_ino
+
+        name = self.storage.replace("files/users/alice/doc.txt", upload)
+
+        self.assertFalse(os.path.exists(spooled))
+        self.assertEqual(os.stat(self.storage.path(name)).st_ino, inode)
+        self.assertEqual(_read(self.storage, name), b"new")
 
     def test_free_bytes_is_the_free_space_of_its_disk(self):
         self.assertGreater(self.storage.free_bytes(), 0)

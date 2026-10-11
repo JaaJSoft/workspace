@@ -183,6 +183,21 @@ class LocalBackend(Backend):
         except OSError:
             return None
 
+    def move_in(self, name, path):
+        full_path = self._path(name)
+        try:
+            # Before the rename: once the blob is in place, a failure here
+            # would refuse a write whose bytes already replaced the old ones.
+            if self._fs.file_permissions_mode is not None:
+                os.chmod(path, self._fs.file_permissions_mode)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            os.replace(path, full_path)
+        except OSError:
+            # Another filesystem, or a file Windows will not rename while it is
+            # open: the caller copies it, as Django's own file_move_safe does.
+            return False
+        return True
+
     @contextmanager
     def local_path(self, name, *, max_bytes):
         # The blob itself: nothing is copied, so max_bytes has nothing to bound.

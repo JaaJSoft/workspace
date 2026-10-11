@@ -100,7 +100,10 @@ window.fileTableControls = function fileTableControls() {
       // list, cards in a grid for the mosaic. Both carry the same data-*
       // attributes, so filters, counts and selection read either; only
       // sorting and column layout are table work.
-      this.table = this.$el.querySelector('table');
+      // Captured here: a method run from an item's own expression sees that
+      // item as its `$el`, not this root.
+      this._root = this.$el;
+      this.table = this._root.querySelector('table');
       this.tbody = this.table ? this.table.querySelector('tbody') : null;
       this.originalRows = this.tbody
         ? Array.from(this.tbody.querySelectorAll('tr'))
@@ -336,7 +339,7 @@ window.fileTableControls = function fileTableControls() {
     },
 
     cards() {
-      return Array.from(this.$el.querySelectorAll('div.grid > div[data-uuid]'));
+      return Array.from(this._root.querySelectorAll('div.grid > div[data-uuid]'));
     },
 
     // UUIDs of the items on screen: the rows the table currently holds, or
@@ -627,7 +630,7 @@ window.fileTableControls = function fileTableControls() {
 
     _getRowDataByUuid(uuid) {
       if (!uuid) return null;
-      const row = this.$el.querySelector(`[data-uuid="${uuid}"]`);
+      const row = this._root.querySelector(`[data-uuid="${uuid}"]`);
       if (!row) return null;
       return {
         uuid,

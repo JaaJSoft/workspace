@@ -309,6 +309,8 @@ class VaultBrowserTests(VaultBrowserCase):
             if clipboard == "":
                 break
             self.page.wait_for_timeout(100)
+        else:
+            clipboard = self.page.evaluate("() => navigator.clipboard.readText()")
         self.assertEqual(clipboard, "")
         self.assertNotIn("octocat", self.page.locator("body").inner_text())
 

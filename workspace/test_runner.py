@@ -73,8 +73,13 @@ class MediaRootTestRunner(DiscoverRunner):
         )
 
         self._media_root = tempfile.mkdtemp(prefix="workspace-test-media-")
+        # Derived from MEDIA_ROOT when the settings load, so it does not
+        # follow the override on its own.
+        upload_temp_dir = os.path.join(self._media_root, "tmp", "uploads")
+        os.makedirs(upload_temp_dir)
         self._restore_settings = [
             _override_from_env("MEDIA_ROOT", self._media_root),
+            _override_from_env("FILE_UPLOAD_TEMP_DIR", upload_temp_dir),
             _override_from_env("PREVIEW_VISIBILITY", "all"),
             _override_from_env("VAULT_TEST_SUITES", "1"),
         ]

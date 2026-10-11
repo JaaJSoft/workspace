@@ -34,6 +34,24 @@ MEDIA_URL = "/media/"
 FILE_UPLOAD_PERMISSIONS = 0o600
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o700
 
+# Where an upload over FILE_UPLOAD_MAX_MEMORY_SIZE is spooled while it arrives.
+# On the volume MEDIA_ROOT lives on, storing it is a rename; from a container's
+# /tmp it is a second full copy, made in 64 KB writes.
+FILE_UPLOAD_TEMP_DIR = os.getenv("FILE_UPLOAD_TEMP_DIR") or str(
+    Path(MEDIA_ROOT) / "tmp" / "uploads"
+)
+# A fresh deployment mounts the data volume empty, and Django's system checks
+# (run by migrate) refuse a temp dir that does not exist.
+try:
+    os.makedirs(FILE_UPLOAD_TEMP_DIR, mode=0o700, exist_ok=True)
+except OSError:
+    # Best effort, as for the SQLite directory: check files.E001 names the path.
+    pass
+FILE_UPLOAD_HANDLERS = [
+    "django.core.files.uploadhandler.MemoryFileUploadHandler",
+    "workspace.files.upload_handlers.HashingTemporaryFileUploadHandler",
+]
+
 # Storage backends (Django 5 style)
 STORAGES = {
     "default": {

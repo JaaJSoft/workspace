@@ -38,6 +38,11 @@ def hash_stream(stream) -> str:
     return hasher.hexdigest()
 
 
+def upload_hash(content) -> str:
+    """Hex digest of *content*, read off the upload when it was hashed on arrival."""
+    return getattr(content, "content_hash", None) or hash_stream(content)
+
+
 def hash_storage_file(storage, name) -> str:
     """Hex digest of the blob stored at *name*."""
     with storage.open(name, "rb") as f:

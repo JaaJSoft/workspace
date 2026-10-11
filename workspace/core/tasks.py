@@ -1,13 +1,14 @@
-"""Celery tasks for database maintenance."""
+"""Celery tasks for database and storage maintenance."""
 
 import logging
 import os
 import time
 
 from celery import shared_task
+from django.conf import settings
 from django.db import connection
 
-from workspace.common.task_priority import LOW_PRIORITY
+from workspace.common.task_priority import BACKGROUND_PRIORITY, LOW_PRIORITY
 
 logger = logging.getLogger(__name__)
 
@@ -143,3 +144,41 @@ def db_maintenance(self, skip_vacuum=False, skip_integrity_check=False):
     result["total_ms"] = round((time.monotonic() - t0) * 1000, 1)
     logger.info("SQLite maintenance finished in %s ms", result["total_ms"])
     return result
+
+
+# Every write refreshes an upload's mtime, so a spool file untouched for this
+# long belongs to no request any more.
+STALE_UPLOAD_SECONDS = 24 * 3600
+
+
+@shared_task(name="core.purge_stale_uploads", priority=BACKGROUND_PRIORITY)
+def purge_stale_uploads():
+    """Delete the upload spool files a killed web worker left behind.
+
+    A request removes its spool file when it ends, but a worker killed
+    mid-upload (a deploy, the OOM killer) never gets there, and
+    ``FILE_UPLOAD_TEMP_DIR`` sits on the persistent volume, which no restart
+    empties. Only Django's own ``tmp*.upload*`` names are touched, in case the
+    directory is shared with something else.
+    """
+    cutoff = time.time() - STALE_UPLOAD_SECONDS
+    try:
+        entries = list(os.scandir(settings.FILE_UPLOAD_TEMP_DIR))
+    except FileNotFoundError:
+        return 0
+    removed = 0
+    for entry in entries:
+        if not (entry.name.startswith("tmp") and ".upload" in entry.name):
+            continue
+        try:
+            if not entry.is_file(follow_symlinks=False):
+                continue
+            if entry.stat(follow_symlinks=False).st_mtime >= cutoff:
+                continue
+            os.remove(entry.path)
+        except FileNotFoundError:
+            continue  # its request finished in the meantime
+        removed += 1
+    if removed:
+        logger.info("Removed %d stale upload spool files", removed)
+    return removed

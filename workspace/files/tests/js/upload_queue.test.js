@@ -72,6 +72,20 @@ test('the queue drains in order and announces the change once', async () => {
   assert.equal(queue.title, '2 uploaded');
 });
 
+test('a file whose bytes are all sent reads as finishing until the server answers', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('big.mov', 2048) }]);
+  requests[0].onProgress(1024);
+  assert.equal(queue.statusText(queue.items[0]), '1.0 KB of 2.0 KB');
+
+  requests[0].onProgress(2048);
+  assert.equal(queue.statusText(queue.items[0]), 'Finishing up');
+
+  requests[0].resolve({ status: 201, body: { uuid: 'u1', name: 'big.mov' } });
+  await settle();
+  assert.equal(queue.statusText(queue.items[0]), '2.0 KB');
+});
+
 test('cancelling the file in flight aborts it and moves on', async () => {
   const { queue, requests } = makeQueue();
   queue.add([{ file: file('big.mov') }, { file: file('next.jpg') }]);

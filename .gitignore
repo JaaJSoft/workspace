@@ -126,6 +126,7 @@ test_db.sqlite3*
 .claude/*
 !.claude/skills/
 /thumbnails/
+/tmp/
 /faces/
 /models/
 /avatars/

@@ -107,7 +107,10 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       const size = window.formatFileSize;
       switch (item.status) {
         case 'queued': return this.paused ? 'Paused' : 'Waiting';
-        case 'uploading': return `${size(item.loaded)} of ${size(item.size)}`;
+        case 'uploading':
+          // Every byte is sent: the server is still storing the file.
+          if (item.size && item.loaded >= item.size) return 'Finishing up';
+          return `${size(item.loaded)} of ${size(item.size)}`;
         case 'done':
           if (item.duplicates.length) {
             const [first, ...rest] = item.duplicates;

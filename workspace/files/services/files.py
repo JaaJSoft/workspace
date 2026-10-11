@@ -209,7 +209,7 @@ class FileService:
         would otherwise re-aggregate the bucket once per entry. Every other
         caller leaves it on: this is where a write is refused.
         """
-        from workspace.files.services.content_hash import hash_stream
+        from workspace.files.services.content_hash import upload_hash
         from workspace.files.services.detection import (
             detect_from_name,
             detect_from_stream,
@@ -230,7 +230,7 @@ class FileService:
 
         if content is not None:
             detection = detect_from_stream(content)
-            content_hash = hash_stream(content)
+            content_hash = upload_hash(content)
         else:
             detection = detect_from_name(name)
             content_hash = ""
@@ -530,7 +530,7 @@ class FileService:
         Callers that pass no ``expected_hash`` keep last-write-wins against
         other writers. The lock is not theirs to opt out of.
         """
-        from workspace.files.services.content_hash import hash_stream
+        from workspace.files.services.content_hash import upload_hash
         from workspace.files.services.detection import (
             detect_from_stream,
             refine_with_name,
@@ -557,7 +557,7 @@ class FileService:
         )
         fields = {
             "content": storage_path,
-            "content_hash": hash_stream(content),
+            "content_hash": upload_hash(content),
             "size": content.size,
             "mime_type": mime_type or detection.mime_type,
             "type": file_type,

@@ -180,6 +180,9 @@ class BlobStorage(Storage):
     def purge_staged(self, before):
         return self.backend.purge_staged(before)
 
+    def free_bytes(self):
+        return self.backend.free_bytes()
+
     def replace(self, name, content):
         """Put *content* at *name*, swapping the previous blob in one step.
 

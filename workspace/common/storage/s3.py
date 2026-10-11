@@ -531,6 +531,9 @@ class S3Backend(Backend):
             purged += 1
         return purged
 
+    def free_bytes(self):
+        return None
+
 
 def _generation(meta):
     """Which write an object holds, from its HEAD or its listing entry.

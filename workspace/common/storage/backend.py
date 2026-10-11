@@ -251,6 +251,15 @@ class Backend(abc.ABC):
         backend records it, by its start otherwise. Returns how many went.
         """
 
+    @abc.abstractmethod
+    def free_bytes(self):
+        """How many more bytes the store can take, or None when it sets no limit.
+
+        A disk answers with its free space. An object store has no capacity of
+        its own: what caps a bucket is the account behind it, which no request
+        here can read.
+        """
+
     def signed_url(self, name, *, filename, attachment, content_type):
         """A short-lived URL a client can fetch the blob from directly, or None.
 

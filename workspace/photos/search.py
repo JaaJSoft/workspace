@@ -37,13 +37,15 @@ def search_photos(query, user, limit, scope=SearchScope.ALL):
     albums = search_albums(query, user, limit - len(people), mine=mine)
     media = _search_media(query, user, limit - len(people) - len(albums), mine=mine)
     found = people + albums + media
-    return found + search_by_description_entry(query, user, limit - len(found))
+    return found + search_by_description_entry(
+        query, user, limit - len(found), scope=scope
+    )
 
 
-def search_by_description_entry(query, user, limit):
+def search_by_description_entry(query, user, limit, scope=SearchScope.ALL):
     """One result opening the photos *query* describes, ranked by what they
-    show (``/photos?q=``), where the instance embeds photos and the user has
-    some embedded.
+    show (``/photos?q=``) in the library *scope* stands for, where the
+    instance embeds photos and that library holds some embedded.
 
     Nothing is embedded here: the global search runs on every keystroke, and
     the ranking only runs once the user opens it.
@@ -51,13 +53,18 @@ def search_by_description_entry(query, user, limit):
     text = " ".join((query or "").split())[:MAX_QUERY_LENGTH]
     if limit <= 0 or not text or not embeddings_available():
         return []
-    if not PhotoEmbedding.objects.filter(owner=user, embedding__isnull=False).exists():
+    library = MINE if scope == SearchScope.MINE else ALL
+    # By file, not by owner: an embedding belongs to the file's owner, who for
+    # a group photo is whoever added it.
+    if not PhotoEmbedding.objects.filter(
+        file__in=library_files(user, library), embedding__isnull=False
+    ).exists():
         return []
     return [
         SearchResult(
             uuid=f"photos-description:{text}",
             name=f"Photos showing “{text}”",
-            url=f"{reverse('photos_ui:index')}?{urlencode({'q': text})}",
+            url=f"{reverse('photos_ui:index')}?{urlencode({'q': text, 'scope': library})}",
             matched_value=text,
             match_type="content",
             type_icon="scan-search",

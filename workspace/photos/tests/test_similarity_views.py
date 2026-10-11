@@ -9,6 +9,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
+from workspace.core.module_registry import SearchScope
 from workspace.files.services import FileService
 from workspace.photos.models import HiddenFile
 from workspace.photos.search import search_by_description_entry, search_photos
@@ -158,7 +159,7 @@ class GlobalSearchEntryTests(TestCase):
 
         (result,) = search_by_description_entry("dog on  the beach", self.user, 5)
 
-        self.assertEqual(result.url, "/photos?q=dog+on+the+beach")
+        self.assertEqual(result.url, "/photos?q=dog+on+the+beach&scope=all")
         self.assertEqual(result.module_slug, "photos")
         self.assertIn(result, search_photos("dog on the beach", self.user, 10))
 
@@ -176,3 +177,33 @@ class GlobalSearchEntryTests(TestCase):
 
         self.assertEqual(search_by_description_entry("dog", self.user, 0), [])
         self.assertEqual(search_by_description_entry("   ", self.user, 5), [])
+
+    def _team_photo(self):
+        """A photo another member added to a group folder the user is in:
+        embedded under that member, its owner."""
+        bob = User.objects.create_user(username="bob", password="p")
+        team = Group.objects.create(name="Team")
+        for member in (self.user, bob):
+            member.groups.add(team)
+        folder = FileService.create_folder(owner=bob, name="Team", group=team)
+        return library_photo(bob, "team.jpg", RED, parent=folder)
+
+    def _entries(self, scope):
+        results = search_photos("dog", self.user, 10, scope=scope)
+        return [r for r in results if r.uuid.startswith("photos-description:")]
+
+    def test_a_group_photo_someone_else_added_is_described_too(self):
+        self._team_photo()
+
+        (result,) = self._entries(SearchScope.ALL)
+
+        self.assertEqual(result.url, "/photos?q=dog&scope=all")
+
+    def test_my_photos_only_leave_the_group_photos_out(self):
+        self._team_photo()
+
+        self.assertEqual(self._entries(SearchScope.MINE), [])
+
+        library_photo(self.user, "mine.jpg", RED)
+        (result,) = self._entries(SearchScope.MINE)
+        self.assertEqual(result.url, "/photos?q=dog&scope=mine")

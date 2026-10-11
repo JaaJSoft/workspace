@@ -83,20 +83,20 @@ class ClipVitB32Backend(EmbeddingBackend):
         return vector
 
     def health(self):
-        """Answered from the files on disk: the dashboard renders in the web
-        process, which should not pay for loading a model."""
+        """Answered from the files on disk, importing neither fastembed nor
+        the Hub client: the dashboard renders in the web process, which never
+        runs a model."""
         if find_spec("fastembed") is None or find_spec("onnxruntime") is None:
             return BackendHealth(ok=False, detail="fastembed is not installed")
-        from huggingface_hub import try_to_load_from_cache
-
-        cached = all(
-            isinstance(
-                try_to_load_from_cache(name, "model.onnx", cache_dir=cache_dir()), str
-            )
-            for name in (IMAGE_MODEL, TEXT_MODEL)
-        )
-        if not cached:
+        if not all(_cached(name) for name in (IMAGE_MODEL, TEXT_MODEL)):
             return BackendHealth(
                 ok=True, detail="CLIP ViT-B/32, weights download on first use"
             )
         return BackendHealth(ok=True, detail="CLIP ViT-B/32, ready")
+
+
+def _cached(name):
+    """Whether *name*'s ONNX file is in the cache fastembed downloads to, read
+    off the Hub cache layout: models--<org>--<repo>/snapshots/<rev>/."""
+    repo = Path(cache_dir()) / f"models--{name.replace('/', '--')}"
+    return any(repo.glob("snapshots/*/model.onnx"))

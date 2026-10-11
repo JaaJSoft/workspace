@@ -1,3 +1,5 @@
+import contextlib
+import sys
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,7 +69,7 @@ class ClipBackendTests(SimpleTestCase):
         self.assertEqual(kwargs["providers"], ["CPUExecutionProvider"])
 
     def test_health_says_the_weights_come_on_first_use_until_they_are_here(self):
-        with tempfile.TemporaryDirectory() as models:
+        with tempfile.TemporaryDirectory() as models, self._unloaded() as loaded:
             with override_settings(PHOTOS_MODEL_DIR=models):
                 health = clip.ClipVitB32Backend().health()
 
@@ -79,11 +81,28 @@ class ClipBackendTests(SimpleTestCase):
                     snapshot = repo / "snapshots" / "abc123"
                     snapshot.mkdir(parents=True)
                     (snapshot / "model.onnx").write_bytes(b"onnx")
-                    (repo / "refs").mkdir()
-                    (repo / "refs" / "main").write_text("abc123")
                 health = clip.ClipVitB32Backend().health()
 
+            # The dashboard renders in the web process, which never runs a
+            # model: answering must not import the model stack.
+            self.assertEqual(loaded(), [])
+
         self.assertEqual(health.detail, "CLIP ViT-B/32, ready")
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _unloaded():
+        """fastembed and the Hub client taken out of sys.modules, and a
+        callable listing which of them got imported again."""
+        heavy = ("fastembed", "huggingface_hub", "onnxruntime")
+
+        def loaded():
+            return [name for name in sys.modules if name.split(".")[0] in heavy]
+
+        with patch.dict(sys.modules):
+            for name in loaded():
+                del sys.modules[name]
+            yield loaded
 
 
 @override_settings(

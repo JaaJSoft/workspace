@@ -2076,8 +2076,8 @@ class WebDAVIntegrationTests(TestCase):
         self.assertTrue(FileFavorite.objects.filter(file=dest).exists())
         # The temp file is gone for good, not parked in the trash.
         self.assertEqual(File.objects.filter(owner=self.user).count(), 1)
-        folder = os.path.dirname(dest.content.path)
-        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])
+        _, names = dest.content.storage.listdir(posixpath.dirname(dest.content.name))
+        self.assertFalse([n for n in names if n.endswith(".bak")])
 
     def test_saves_by_rename_do_not_grow_the_quota(self):
         body = b"x" * 1000
@@ -2185,5 +2185,5 @@ class WebDAVIntegrationTests(TestCase):
             self.assertEqual(row.size, len(body))
             with row.content.open("rb") as f:
                 self.assertEqual(f.read(), body)
-        folder = os.path.dirname(dest.content.path)
-        self.assertFalse([n for n in os.listdir(folder) if n.endswith(".bak")])
+        _, names = dest.content.storage.listdir(posixpath.dirname(dest.content.name))
+        self.assertFalse([n for n in names if n.endswith(".bak")])

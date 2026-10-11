@@ -4,12 +4,11 @@ import errno
 import functools
 import io
 import logging
-import os
-import shutil
+import posixpath
 import time
+import uuid
 from contextlib import contextmanager
 
-from django.conf import settings
 from django.core.files.base import File as DjangoFile
 from django.db import transaction
 from wsgidav.dav_error import (
@@ -24,7 +23,13 @@ from wsgidav.dav_error import (
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection
 
 from workspace.common.logging import scrub
-from workspace.files.models import File, canonical_name, file_upload_path, name_forms
+from workspace.files.models import (
+    File,
+    canonical_name,
+    file_upload_path,
+    files_storage,
+    name_forms,
+)
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
 from workspace.files.services.files import FilePermission, GroupRootFolder
@@ -644,7 +649,7 @@ class FileResource(DAVNonCollection):
         try:
             with _as_insufficient_storage():
                 _replace_content(target._file, self._file, self._user)
-        except (LockConflict, StaleContent) as exc:
+        except (LockConflict, StaleContent, Relocated) as exc:
             target._refusal_error(exc, scrub(getattr(self._user, "username", "?")))
         return True
 
@@ -714,11 +719,14 @@ def _as_insufficient_storage():
         raise DAVError(HTTP_INSUFFICIENT_STORAGE, str(exc)) from exc
 
 
+# What a store with no limit of its own advertises (object storage): every
+# client takes a figure at face value, and one that gets none makes up its own.
+_NO_LIMIT_FREE_BYTES = 2**50
+
+
 def _disk_free_bytes():
-    try:
-        return shutil.disk_usage(settings.MEDIA_ROOT).free
-    except OSError:
-        return None
+    free = files_storage().free_bytes()
+    return _NO_LIMIT_FREE_BYTES if free is None else free
 
 
 def _advertised_space(environ, user, group_id):
@@ -765,7 +773,13 @@ def _bucket(file_obj):
 
 
 def _replace_content(target, source, user):
-    """Give *target* the bytes of *source*, then drop *source* for good."""
+    """Give *target* the bytes of *source*, then drop *source* for good.
+
+    Not journaled as a relocation: settling picks a side by the path a row
+    names, and here both versions sit at the path the target's row names.
+    After a crash the set-aside blob stays where the sync will list it,
+    rather than being dropped on a guess.
+    """
     if _bucket(target) != _bucket(source):
         # Within one bucket the source bytes are already counted.
         quota.check_write_allowed(
@@ -773,12 +787,16 @@ def _replace_content(target, source, user):
             group=target.group_id,
             additional_bytes=(source.size or 0) - (target.size or 0),
         )
+    storage = target.content.storage
     storage_path = file_upload_path(target, target.name)
-    full_path = target.content.storage.path(storage_path)
-    source_path = source.content.path
-    # A rollback restores rows, not files: whatever sat at full_path is set
-    # aside until the commit, so a failure can put both blobs back.
-    backup_path = f"{full_path}.{uuid.uuid4().hex}.bak"
+    source_path = source.content.name
+    # A rollback restores rows, not blobs: whatever sat at storage_path is set
+    # aside until the commit, so a failure can put both blobs back. A short
+    # name of its own: the target's name plus a suffix can pass the limit a
+    # name segment has.
+    backup_path = posixpath.join(
+        posixpath.dirname(storage_path), f".{uuid.uuid4().hex}.bak"
+    )
     backed_up = moved = False
     try:
         with transaction.atomic():
@@ -789,35 +807,35 @@ def _replace_content(target, source, user):
                 content_hash=source.content_hash,
                 acting_user=user,
             )
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            if os.path.exists(full_path):
-                os.replace(full_path, backup_path)
+            if storage.exists(storage_path):
+                storage.move(storage_path, backup_path)
                 backed_up = True
-            os.replace(source_path, full_path)
+            storage.move(source_path, storage_path)
             moved = True
             # The blob has moved, so the row's storage cleanup finds nothing.
             FileService.hard_delete(source, acting_user=user)
     except BaseException:
-        _restore_blobs(source_path, full_path, backup_path, moved, backed_up)
+        _restore_blobs(
+            storage, source_path, storage_path, backup_path, moved, backed_up
+        )
         raise
     if backed_up:
         try:
-            os.unlink(backup_path)
+            storage.delete(backup_path)
         except OSError:
             logger.warning("Could not remove replaced blob %s", scrub(backup_path))
 
 
-def _restore_blobs(source_path, full_path, backup_path, moved, backed_up):
+def _restore_blobs(storage, source_path, storage_path, backup_path, moved, backed_up):
     """Undo ``_replace_content``'s storage moves after its rows rolled back."""
     try:
         if moved:
-            os.makedirs(os.path.dirname(source_path), exist_ok=True)
-            os.replace(full_path, source_path)
+            storage.move(storage_path, source_path)
         if backed_up:
-            os.replace(backup_path, full_path)
+            storage.move(backup_path, storage_path)
     except OSError:
         logger.exception(
-            "Could not restore blobs after a failed replace of %s", scrub(full_path)
+            "Could not restore blobs after a failed replace of %s", scrub(storage_path)
         )
 
 

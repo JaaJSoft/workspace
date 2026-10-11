@@ -177,6 +177,12 @@ class LocalBackend(Backend):
                 continue  # committed or aborted since it was listed
         return purged
 
+    def free_bytes(self):
+        try:
+            return shutil.disk_usage(self._fs.location).free
+        except OSError:
+            return None
+
     @contextmanager
     def local_path(self, name, *, max_bytes):
         # The blob itself: nothing is copied, so max_bytes has nothing to bound.

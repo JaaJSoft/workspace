@@ -71,7 +71,7 @@ class FilesActivityProviderTests(TestCase):
 
     def test_daily_counts_own_profile(self):
         """Alice viewing her own profile sees her 2 events."""
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(
             self.alice.id,
             today,
@@ -98,7 +98,7 @@ class FilesActivityProviderTests(TestCase):
 
     def test_daily_counts_viewer_sees_only_shared(self):
         """Bob looking at Alice's activity only sees the 1 shared event."""
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(
             self.alice.id,
             today,
@@ -112,7 +112,7 @@ class FilesActivityProviderTests(TestCase):
         record_event(self.alice_file1, self.alice, FileEvent.Action.RENAMED)
         record_event(self.alice_file1, self.alice, FileEvent.Action.CONTENT_REPLACED)
 
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(
             self.alice.id,
             today,
@@ -318,7 +318,7 @@ class FilesActivityProviderTests(TestCase):
         )
         record_event(deleted, self.alice, FileEvent.Action.CREATED)
 
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(
             self.alice.id,
             today,
@@ -364,7 +364,7 @@ class FilesActivityProviderTests(TestCase):
         )
         record_event(note, self.alice, FileEvent.Action.CONTENT_REPLACED)
 
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(self.alice.id, today, today)
 
         # Only the 2 CREATED events from setUp - the note event is excluded.

@@ -423,7 +423,7 @@ class ManifestTests(SimpleTestCase):
     """The committed manifest, whatever rebuilt it, is one the bench can use."""
 
     def test_every_photo_is_cc_by_and_pinned(self):
-        with gzip.open(dataset.MANIFEST, "rt") as handle:
+        with gzip.open(dataset.MANIFEST, "rt", encoding="utf-8") as handle:
             rows = [json.loads(line) for line in handle]
         photos = dataset.load_manifest()
 

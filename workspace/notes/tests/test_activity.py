@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -74,7 +74,7 @@ class NotesActivityProviderTests(TestCase):
 
     def test_daily_counts_own_profile(self):
         """Alice viewing her own profile sees her 2 note events."""
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(self.alice.id, today, today)
         self.assertEqual(counts.get(today, 0), 2)
 
@@ -82,20 +82,20 @@ class NotesActivityProviderTests(TestCase):
         """Multiple events on the same note each count (event-level feed)."""
         record_event(self.alice_note1, self.alice, FileEvent.Action.RENAMED)
 
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(self.alice.id, today, today)
         # 2 from setUp + 1 new = 3.
         self.assertEqual(counts.get(today, 0), 3)
 
     def test_daily_counts_excludes_non_markdown(self):
         """The png event never inflates the notes grid."""
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(self.alice.id, today, today)
         self.assertEqual(counts.get(today, 0), 2)
 
     def test_daily_counts_viewer_sees_only_shared(self):
         """Bob looking at Alice's activity sees only the 1 shared note's event."""
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(
             self.alice.id,
             today,
@@ -256,7 +256,7 @@ class NotesActivityProviderTests(TestCase):
         )
         record_event(deleted, self.alice, FileEvent.Action.DELETED)
 
-        today = date.today()
+        today = timezone.localdate()
         counts = self.provider.get_daily_counts(self.alice.id, today, today)
         self.assertEqual(counts.get(today, 0), 3)
 

@@ -326,6 +326,11 @@ class BlobStorageContract:
             [e.name for e in self.storage.scan("files/users/alice")], ["doc.txt"]
         )
 
+    def test_free_bytes_is_a_count_or_none(self):
+        free = self.storage.free_bytes()
+
+        self.assertTrue(free is None or free >= 0, free)
+
     def test_a_seek_before_the_start_is_refused_as_a_file_refuses_it(self):
         """zipfile probes a short archive by seeking back from its end, and
         takes OSError for "not a zip" - anything else escapes as a crash."""
@@ -368,6 +373,9 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
             self.storage.path(name),
             os.path.join(self.root, "files", "users", "alice", "doc.txt"),
         )
+
+    def test_free_bytes_is_the_free_space_of_its_disk(self):
+        self.assertGreater(self.storage.free_bytes(), 0)
 
     def test_local_path_is_the_blob_itself(self):
         name = self.save("files/users/alice/clip.webm", b"x" * 2048)
@@ -525,6 +533,9 @@ class S3BlobStorageTests(S3TestMixin, BlobStorageContract, SimpleTestCase):
     @skipUnless(LIVE, "moto dates every multipart upload in 2010")
     def test_purging_keeps_a_staged_write_begun_after_the_cutoff(self):
         super().test_purging_keeps_a_staged_write_begun_after_the_cutoff()
+
+    def test_an_object_store_sets_no_limit(self):
+        self.assertIsNone(self.storage.free_bytes())
 
 
 class S3BackendTests(S3TestMixin, SimpleTestCase):

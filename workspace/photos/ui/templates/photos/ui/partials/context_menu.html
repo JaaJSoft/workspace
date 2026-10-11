@@ -7,7 +7,8 @@ that make sense on a photo (see PHOTO_ACTIONS in photos.js), so a row is only
 ever offered when the registry says the user may do it. Download is a link
 rather than a button, to carry the download attribute. "Open in Files" is
 not a file action: it is written out here, as in the notes menu, and so are
-the album rows, which the album action registry gates instead, the face
+the album rows, which the album action registry gates instead, Similar
+photos, a navigation offered where the instance embeds its photos, the face
 rows, offered while the user has face grouping on, and Hide, which never
 touches the file: it only takes it out of the viewer's own library. On the
 Hidden view the photo is out of albums and faces, so those rows give way to
@@ -68,6 +69,11 @@ the album allows (through the album), and the album rows.
   </template>
   <template x-if="ctxMenu.actions !== null && hiddenView">
     {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="eye" label="Unhide" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], false)" only %}
+  </template>
+  <template
+    x-if="ctxMenu.actions !== null && !hiddenView && embeddingsEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType !== 'video'"
+  >
+    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="images" label="Similar photos" click="showSimilar(ctxMenu.photo.uuid); closeCtxMenu()" only %}
   </template>
   {# Face rows: only the owner's photos have faces, so a photo of someone else's opens an empty dialog at worst. #}
   <template

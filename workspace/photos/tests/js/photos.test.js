@@ -220,7 +220,7 @@ test('the "..." button anchors the menu under itself, inside the viewport', () =
   app.openCtxMenu({ clientX: 0, clientY: 0 }, tile(), button);
 
   assert.equal(app.ctxMenu.x, 1270 - 224);
-  assert.equal(app.ctxMenu.y, 900 - 340 - 4);
+  assert.equal(app.ctxMenu.y, 900 - 460 - 4);
 });
 
 test('properties opens the Files panel and loads the tags once', () => {
@@ -1814,4 +1814,42 @@ test('a hover preview of an album-scoped video reads through the album', () => {
   timers[0]();
 
   assert.equal(video.src, '/api/v1/photos/albums/al1/files/u1/content');
+});
+
+test('similar photos are offered as the page says the instance embeds photos', () => {
+  const flag = { textContent: 'true' };
+  const { ctx } = load({
+    document: { getElementById: (id) => (id === 'photos-embeddings-enabled' ? flag : null), querySelector: () => null },
+  });
+  const app = ctx.photosApp();
+  assert.equal(app.embeddingsEnabled(), true);
+  flag.textContent = 'false';
+  assert.equal(app.embeddingsEnabled(), false);
+  flag.textContent = '';
+  assert.equal(app.embeddingsEnabled(), false);
+});
+
+test('similar photos opens the ranking in the library on screen, in history', async () => {
+  const { ctx } = load({ URLSearchParams, location: { search: '?scope=all&date=2024', href: '' } });
+  const app = ctx.photosApp();
+  const calls = [];
+  app.$ajax = async (url, options) => { calls.push([url, { ...options }]); };
+
+  await app.showSimilar('3f2a');
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], '/photos?similar=3f2a&scope=all');
+  assert.equal(calls[0][1].history, 'push');
+  assert.deepEqual(Array.from(calls[0][1].targets), ['photos-nav', 'photos-content']);
+});
+
+test('a similar photos navigation that never answered drops the loading veil', async () => {
+  const { ctx } = load({ URLSearchParams, location: { search: '', href: '' } });
+  const app = ctx.photosApp();
+  app.contentLoading = true;
+  app.$ajax = async () => { throw new Error('offline'); };
+
+  await app.showSimilar('3f2a');
+
+  assert.equal(app.contentLoading, false);
 });

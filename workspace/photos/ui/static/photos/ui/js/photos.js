@@ -33,9 +33,11 @@ const ALBUM_MENU_ACTIONS = [
   'rename', 'edit_description', 'change_sort', 'share', 'download', 'leave', 'delete',
 ];
 
-// Room the context menu needs, to keep it inside the viewport.
+// Room the context menu needs, to keep it inside the viewport: its height
+// with every row a photo of one's own can show (file actions, albums,
+// similar photos, faces).
 const PHOTOS_MENU_WIDTH = 224;
-const PHOTOS_MENU_HEIGHT = 340;
+const PHOTOS_MENU_HEIGHT = 460;
 
 // How long the pointer rests on a video tile before its preview plays, in ms.
 const PHOTOS_HOVER_PREVIEW_DELAY = 400;
@@ -389,6 +391,31 @@ window.photosApp = function photosApp() {
           type: tile.dataset.fileType,
         },
       }));
+    },
+
+    // Read from the page each time, as facesEnabled(): a navigation swaps the
+    // content it is embedded in.
+    embeddingsEnabled() {
+      const el = document.getElementById('photos-embeddings-enabled');
+      try {
+        return !!el && JSON.parse(el.textContent) === true;
+      } catch (_) {
+        return false;
+      }
+    },
+
+    // The photos that look like this one, in the library on screen.
+    showSimilar(uuid) {
+      const params = new URLSearchParams({ similar: uuid });
+      const scope = new URLSearchParams(window.location.search).get('scope');
+      if (scope) params.set('scope', scope);
+      return this.$ajax(`/photos?${params}`, {
+        targets: ['photos-nav', 'photos-content'],
+        history: 'push',
+        focus: false,
+      }).catch(() => {
+        this.contentLoading = false;
+      });
     },
 
     _tile(uuid) {

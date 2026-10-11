@@ -1,4 +1,5 @@
-"""Keep face data in step with the rows and settings it derives from.
+"""Keep face data and photo embeddings in step with the rows and settings they
+derive from.
 
 Connected in PhotosConfig.ready().
 """
@@ -14,8 +15,8 @@ from workspace.common.logging import scrub
 from workspace.common.vectors.indexing import drop_vector
 from workspace.users.models import UserSetting
 
-from .indexes import FACE_EMBEDDINGS
-from .models import Face, MediaItem
+from .indexes import FACE_EMBEDDINGS, PHOTO_EMBEDDINGS
+from .models import Face, MediaItem, PhotoEmbedding
 from .services.face_preferences import FACES_ENABLED, MODULE
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,13 @@ def drop_face_derivatives(sender, instance, using, **kwargs):
     if instance.crop:
         name = instance.crop
         transaction.on_commit(lambda: _delete_crop(name), using=using)
+
+
+@receiver(post_delete, sender=PhotoEmbedding)
+def drop_photo_vector(sender, instance, using, **kwargs):
+    """A deleted embedding takes its vector with it, a File purged from the
+    trash (a cascade) included."""
+    drop_vector(PHOTO_EMBEDDINGS, instance.pk, using=using)
 
 
 def _delete_crop(name):

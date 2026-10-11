@@ -1,4 +1,5 @@
-"""Celery tasks of the photos module: faces, and filing imports by date."""
+"""Celery tasks of the photos module: faces, image embeddings, and filing
+imports by date."""
 
 import logging
 
@@ -7,6 +8,7 @@ from django.db.models import F, Q
 
 from workspace.common.task_priority import (
     BACKGROUND_PRIORITY,
+    INTERACTIVE_PRIORITY,
     LOW_PRIORITY,
     NORMAL_PRIORITY,
 )
@@ -67,6 +69,44 @@ def face_analysis_task(file_type):
     from workspace.files.services.thumbnails.generation import VIDEO_LABELS
 
     return analyze_video_faces if file_type in VIDEO_LABELS else analyze_photo_faces
+
+
+@shared_task(
+    name="photos.embed_photo",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def embed_photo(self, file_uuid):
+    """Embed one photo, unless its embedding is already up to date.
+
+    max_retries=0: a photo that failed is still pending, and the hourly
+    catch-up (or ``manage.py catch_up embeddings``) comes back for it.
+    """
+    from workspace.common.uuids import parse_uuid_or_none
+
+    from .services.photo_embeddings import embed_photo as embed
+    from .services.photo_embeddings import pending_embeddings_qs
+
+    file_obj = (
+        pending_embeddings_qs().filter(uuid=parse_uuid_or_none(file_uuid)).first()
+    )
+    if file_obj is not None:
+        embed(file_obj)
+
+
+@shared_task(
+    name="photos.embed_query_text",
+    priority=INTERACTIVE_PRIORITY,
+    max_retries=0,
+)
+def embed_query_text(text):
+    """The vector of a photo search's text: run here, where the model is
+    loaded, rather than in the web process."""
+    from .services.photo_embeddings import embed_query_text as embed
+
+    return embed(text)
 
 
 @shared_task(name="photos.queue_owner_faces", priority=LOW_PRIORITY, ignore_result=True)

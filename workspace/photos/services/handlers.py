@@ -1,7 +1,7 @@
-"""Keep MediaItem rows, and the faces found in photos and videos, in step with
-the files.
+"""Keep MediaItem rows, the faces found in photos and videos, and the photos'
+embeddings in step with the files.
 
-Both are upload processors (files.services.processors): the upload pipeline
+All are upload processors (files.services.processors): the upload pipeline
 runs them once an upload or a content replacement has committed, and the
 hourly catch-up analyzes whatever that path missed. Moves are followed by a
 file-event handler of their own.
@@ -26,6 +26,13 @@ from .face_analysis import (
     is_face_candidate,
     pending_faces_qs,
     refresh_faces,
+)
+from .photo_embeddings import (
+    embeddings_catch_up_enabled,
+    forget_embedding,
+    is_embedding_candidate,
+    pending_embeddings_qs,
+    refresh_embedding,
 )
 
 
@@ -59,6 +66,10 @@ def follow_moved_photo(event):
     ):
         forget_faces(moved)
     _queue_faces(moved)
+    # Given to another owner: the vector moves to their partition.
+    embedding = getattr(moved, "photo_embedding", None)
+    if embedding is not None and embedding.owner_id != moved.owner_id:
+        _queue_embedding(moved)
 
 
 def _queue_faces(file_obj):
@@ -70,6 +81,15 @@ def _queue_faces(file_obj):
         task = face_analysis_task(file_obj.type)
         uuid = str(file_obj.pk)
         transaction.on_commit(lambda: task.delay(uuid))
+
+
+def _queue_embedding(file_obj):
+    # Its own task, as for faces: a model run must not hold up the pipeline.
+    if is_embedding_candidate(file_obj):
+        from ..tasks import embed_photo
+
+        uuid = str(file_obj.pk)
+        transaction.on_commit(lambda: embed_photo.delay(uuid))
 
 
 register_processor(
@@ -86,4 +106,13 @@ register_processor(
     pending=pending_faces_qs,
     process=refresh_faces,
     enabled=faces_catch_up_enabled,
+)
+register_processor(
+    "embeddings",
+    applies_to=is_embedding_candidate,
+    forget=forget_embedding,
+    enqueue=_queue_embedding,
+    pending=pending_embeddings_qs,
+    process=refresh_embedding,
+    enabled=embeddings_catch_up_enabled,
 )

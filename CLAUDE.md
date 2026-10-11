@@ -18,6 +18,12 @@ uv run coverage run manage.py test workspace.<module>     # with coverage
 uv run python scripts/face_bench.py --json before.json
 uv run python scripts/face_bench.py --compare before.json
 
+# Embedding bench - search, near-duplicate and similar-photo quality and cost
+# of every photo embedding model, on Open Images photos, before and after any
+# change to workspace/photos/services/embedding/ (see docs/photos/embedding-bench.md)
+uv run python scripts/embedding_bench.py --json before.json
+uv run python scripts/embedding_bench.py --compare before.json
+
 # Async stack
 uv run celery -A workspace worker -l info
 uv run celery -A workspace beat -l info

@@ -47,6 +47,31 @@
           <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
       {% endif %}
+      {% if embeddings_available and not album and not cluster and not is_hidden_view %}
+        {# Search by description: ranks the library on screen (the scope carries over) by what the photos show. #}
+        <form
+          action="{% url 'photos_ui:index' %}"
+          method="get"
+          x-target.push="photos-nav photos-content"
+          role="search"
+          class="self-center shrink-0"
+        >
+          {% if search_scope %}<input type="hidden" name="scope" value="{{ search_scope }}" />{% endif %}
+          <label class="input input-sm flex items-center gap-2 w-32 sm:w-56">
+            <i data-lucide="search" class="w-4 h-4 shrink-0 opacity-60"></i>
+            <input
+              type="search"
+              name="q"
+              value="{{ search_query }}"
+              maxlength="{{ search_max_length }}"
+              placeholder="Describe a photo…"
+              class="grow min-w-0"
+              aria-label="Search photos by description"
+              data-testid="photos-search"
+            />
+          </label>
+        </form>
+      {% endif %}
       {% if pending %}
         <span
           class="badge badge-ghost gap-1.5 max-sm:hidden"
@@ -164,6 +189,11 @@
     {% endif %}
   </header>
 
+  {% if ranking.error %}
+    <div class="px-4 pt-4">
+      <inline-alert type="warning" message="{{ ranking.error }}"></inline-alert>
+    </div>
+  {% endif %}
   {% if entries %}
     <div class="p-2 sm:p-4">{% include "photos/ui/partials/timeline_page.html" %}</div>
   {% else %}
@@ -172,11 +202,21 @@
     >
       <div class="rounded-full bg-module/10 p-5">
         <i
-          data-lucide="{% if album %}book-image{% elif is_hidden_view %}eye-off{% else %}images{% endif %}"
+          data-lucide="{% if album %}book-image{% elif is_hidden_view %}eye-off{% elif ranking %}{{ title_icon }}{% else %}images{% endif %}"
           class="w-10 h-10 text-module"
         ></i>
       </div>
-      {% if album %}
+      {% if ranking %}
+        {% if not ranking.error %}
+          <h2 class="text-lg font-semibold">{{ ranking.empty_title }}</h2>
+          <p class="text-sm text-base-content/60 max-w-sm">{{ ranking.empty_text }}</p>
+        {% endif %}
+        <a
+          href="{{ timeline_url }}"
+          x-target.push="photos-nav photos-content"
+          class="btn btn-ghost btn-sm"
+        >Back to the timeline</a>
+      {% elif album %}
         <h2 class="text-lg font-semibold">This album is empty</h2>
         <p class="text-sm text-base-content/60 max-w-sm">
           An album gathers photos from anywhere in your library without moving them in Files.

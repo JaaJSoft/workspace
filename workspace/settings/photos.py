@@ -1,4 +1,4 @@
-"""Photos module: face detection and grouping."""
+"""Photos module: face detection and grouping, image embeddings."""
 
 import os
 from pathlib import Path
@@ -75,4 +75,61 @@ PHOTOS_FACES_VIDEO_MAX_FILE_BYTES = int(
 # members are told, in one notification per contributor.
 PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS = int(
     os.getenv("PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS", "60")
+)
+
+# Similar photos and search by description: one image embedding per photo, in
+# a space the query text is embedded into too. Off by default: the default
+# model costs 1.5 GB of weights and up to 2.2 GB of memory per worker process,
+# and a remote backend sends every photo to another service.
+PHOTOS_EMBEDDINGS_ENABLED = env_bool("PHOTOS_EMBEDDINGS_ENABLED", False)
+
+# Which embedding backend runs (photos/services/embedding/registry.py):
+# "siglip2_base" (default, Google SigLIP 2 on the CPU, multilingual,
+# Apache-2.0, 768-d), "clip_vit_b32" (OpenAI CLIP ViT-B/32, MIT, 512-d: a
+# quarter of the CPU and a third of the memory, for a small host, but poor in
+# French), "jina_clip_v1" (Apache-2.0, 768-d) or "remote" (an
+# OpenAI-compatible /embeddings endpoint serving a multimodal model).
+# scripts/embedding_bench.py compares them. Switching changes the embedding
+# space: see docs/photos/README.md.
+PHOTOS_EMBEDDING_BACKEND = os.getenv("PHOTOS_EMBEDDING_BACKEND", "siglip2_base")
+
+# The remote backend: the endpoint, the model it serves, and the size of the
+# vectors that model returns (the vector index is built at that size). The key
+# falls back to AI_API_KEY; none is sent when both are empty.
+PHOTOS_EMBEDDING_BASE_URL = os.getenv("PHOTOS_EMBEDDING_BASE_URL", "")
+PHOTOS_EMBEDDING_MODEL = os.getenv("PHOTOS_EMBEDDING_MODEL", "")
+PHOTOS_EMBEDDING_API_KEY = os.getenv("PHOTOS_EMBEDDING_API_KEY", "")
+PHOTOS_EMBEDDING_DIMS = int(os.getenv("PHOTOS_EMBEDDING_DIMS", "512"))
+# Longest side, in px, of the JPEG copy sent to the remote backend: never the
+# original.
+PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE = int(
+    os.getenv("PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE", "512")
+)
+PHOTOS_EMBEDDING_TIMEOUT = float(os.getenv("PHOTOS_EMBEDDING_TIMEOUT", "30"))
+# Originals larger than this are not embedded.
+PHOTOS_EMBEDDING_MAX_FILE_BYTES = int(
+    os.getenv("PHOTOS_EMBEDDING_MAX_FILE_BYTES", str(64 * 1024 * 1024))
+)
+# Seconds a search waits for the worker to embed its text before giving up.
+PHOTOS_EMBEDDING_QUERY_TIMEOUT = float(
+    os.getenv("PHOTOS_EMBEDDING_QUERY_TIMEOUT", "15")
+)
+# Cosine distances, empty meaning the backend's own default (calibrated to its
+# embedding space): under SIMILAR a photo is "similar", under DUPLICATE a
+# near-duplicate, and a photo further than DESCRIPTION from a query text does
+# not match it.
+PHOTOS_SIMILAR_MAX_DISTANCE = (
+    float(os.environ["PHOTOS_SIMILAR_MAX_DISTANCE"])
+    if os.getenv("PHOTOS_SIMILAR_MAX_DISTANCE")
+    else None
+)
+PHOTOS_DUPLICATE_MAX_DISTANCE = (
+    float(os.environ["PHOTOS_DUPLICATE_MAX_DISTANCE"])
+    if os.getenv("PHOTOS_DUPLICATE_MAX_DISTANCE")
+    else None
+)
+PHOTOS_DESCRIPTION_MAX_DISTANCE = (
+    float(os.environ["PHOTOS_DESCRIPTION_MAX_DISTANCE"])
+    if os.getenv("PHOTOS_DESCRIPTION_MAX_DISTANCE")
+    else None
 )

@@ -91,6 +91,7 @@ dependencies = [
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.30.0",
+    "fastembed>=0.9.0",
 ]
 
 [build-system]

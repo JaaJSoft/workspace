@@ -47,6 +47,7 @@ from workspace.photos.services.album_cards import (
     shared_album_cards,
 )
 from workspace.photos.services.album_links import find_link, has_access, record_view
+from workspace.photos.services.embedding.registry import embeddings_available
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
 from workspace.photos.services.face_review import (
@@ -62,6 +63,10 @@ from workspace.photos.services.face_review import (
 )
 from workspace.photos.services.hidden import hidden_folder_data
 from workspace.photos.services.import_folder import import_folder, import_folder_data
+from workspace.photos.services.photo_embeddings import (
+    MAX_QUERY_LENGTH,
+    QueryEmbeddingUnavailable,
+)
 from workspace.photos.services.preferences import (
     ALL_TYPES,
     GROUP_SCOPE_PREFIX,
@@ -69,6 +74,10 @@ from workspace.photos.services.preferences import (
     default_scope_token,
     display_preferences,
     show_hidden,
+)
+from workspace.photos.services.similarity import (
+    search_by_description,
+    similar_photos,
 )
 from workspace.photos.services.timeline import (
     START,
@@ -456,6 +465,16 @@ def _hidden_nav_context(user, active=False):
     }
 
 
+def _search_context(query=""):
+    """The header's search by description, offered where the instance
+    embeds its photos."""
+    return {
+        "embeddings_available": embeddings_available(),
+        "search_query": query,
+        "search_max_length": MAX_QUERY_LENGTH,
+    }
+
+
 def _faces_context(user):
     """What the shell needs to offer face grouping: the People entry, and
     whether the photo menus show their face rows."""
@@ -546,6 +565,8 @@ def _render_page(request, template, context):
     without revalidating it, and this one must never come back as a page.
     """
     swap = bool(request.headers.get("X-Alpine-Request"))
+    # Every page's photo menus offer Similar photos where it can work.
+    context.setdefault("embeddings_available", embeddings_available())
     if swap:
         context["photos_shell"] = "photos/ui/swap.html"
     else:
@@ -562,6 +583,158 @@ def _render_page(request, template, context):
     return response
 
 
+@dataclass(frozen=True)
+class _Ranking:
+    """A listing ranked by likeness rather than by date."""
+
+    title: str
+    icon: str
+    params: dict
+    # Match rows, nearest first; None when the photo to compare with has no
+    # embedding yet.
+    matches: list | None
+    empty_title: str
+    empty_text: str
+    error: str = ""
+
+
+def _similar_ranking(request, scope, raw_uuid):
+    source_uuid = parse_uuid_or_none(raw_uuid)
+    source = (
+        library_files(request.user, ALL).filter(pk=source_uuid).first()
+        if source_uuid is not None
+        else None
+    )
+    if source is None:
+        raise Http404
+    matches = similar_photos(request.user, source, scope)
+    if matches is None:
+        empty_title = "Not analyzed yet"
+        empty_text = (
+            "This photo has not been analyzed yet. Similar photos show up "
+            "once it has been, usually within the hour."
+        )
+    else:
+        empty_title = "No similar photo"
+        empty_text = "Nothing in this library looks like this photo."
+    return _Ranking(
+        title=f"Similar to {source.name}",
+        icon="images",
+        params={"similar": str(source.pk)},
+        matches=matches,
+        empty_title=empty_title,
+        empty_text=empty_text,
+    )
+
+
+def _description_ranking(request, scope, query):
+    error = ""
+    try:
+        matches = search_by_description(request.user, query, scope)
+    except QueryEmbeddingUnavailable:
+        matches = []
+        error = "The search could not run right now. Try again in a moment."
+    return _Ranking(
+        title=f"“{query}”",
+        icon="search",
+        params={"q": query},
+        matches=matches,
+        empty_title="No match",
+        empty_text=(
+            "No photo in this library matches this description. Describe what "
+            "the photo shows: a place, an object, a scene."
+        ),
+        error=error,
+    )
+
+
+def _ranked_entries(similar, photos, matches):
+    """The tiles of a ranking. A similarity ranking opens with the
+    near-duplicates, under a heading of their own, so the shots of one
+    moment show together."""
+    if not similar:
+        return [{"kind": "photo", "file": photo} for photo in photos]
+    duplicates = {m.file_id for m in matches if m.near_duplicate}
+    groups = (
+        ("Near-duplicates", "Almost the same shot.", True),
+        ("Similar", "", False),
+    )
+    entries = []
+    for title, note, near in groups:
+        tiles = [p for p in photos if (p.pk in duplicates) == near]
+        if tiles:
+            entries.append({"kind": "heading", "title": title, "note": note})
+            entries += [{"kind": "photo", "file": photo} for photo in tiles]
+    return entries
+
+
+def _ranked(request, query, similar):
+    """The library ranked by likeness: ``?similar=`` the photos that look
+    like one photo, near-duplicates first, ``?q=`` the photos a text
+    describes. One page, no dates: past the first screens a match is no
+    longer close.
+
+    404 where the instance does not embed its photos, and on a photo the
+    user cannot open.
+    """
+    if not embeddings_available():
+        raise Http404
+    defaults = _defaults(request.user)
+    scope = _scope(request, defaults)
+    if similar:
+        ranking = _similar_ranking(request, scope, similar)
+    else:
+        ranking = _description_ranking(request, scope, query)
+    matches = ranking.matches or []
+    by_pk = {
+        photo.pk: photo
+        for photo in with_timeline_fields(
+            library_files(request.user, scope).filter(
+                pk__in=[m.file_id for m in matches]
+            ),
+            request.user,
+        )
+    }
+    photos = [by_pk[m.file_id] for m in matches if m.file_id in by_pk]
+    mark_favorite_toggles(photos, request.user)
+    scope_params = _scope_params(scope, defaults)
+    count = len(photos)
+    context = {
+        "person_views": None,
+        "active_view": "search",
+        "ranking": ranking,
+        "title": ranking.title,
+        "title_icon": ranking.icon,
+        "cluster": None,
+        "count_label": f"{count} photo{'s' if count != 1 else ''}",
+        "view_empty": not photos,
+        "pending": 0,
+        "date_param": "",
+        "scope_tabs": _scope_tabs(request.user, scope, ranking.params, defaults),
+        "type_tabs": [],
+        "years": [],
+        "tags": [
+            {
+                "tag": t,
+                "url": _url_with(scope_params | {"tag": str(t.uuid)}),
+                "active": False,
+            }
+            for t in library_tags(request.user, scope)
+        ],
+        "timeline_url": _url_with(scope_params),
+        "favorites_url": _url_with(scope_params | {"favorites": "1"}),
+        "search_scope": "" if not scope_params else scope_params["scope"],
+        **_sidebar_albums(request.user),
+        **_hidden_nav_context(request.user),
+        **_faces_context(request.user),
+        **_search_context(ranking.params.get("q", "")),
+        **_display_context(request.user),
+        "entries": _ranked_entries(bool(similar), photos, matches),
+        "next_url": None,
+    }
+    return _render_page(request, "photos/ui/index.html", context)
+
+
 @login_required
 @ensure_csrf_cookie
 def index(request):
@@ -570,8 +743,13 @@ def index(request):
     ``?person=`` narrows it to the photos of one person, ``?cluster=`` to
     those of one unnamed face cluster: a person's page is their timeline.
     ``?hidden=1`` shows what the user hid from the library instead, and
-    nothing else does.
+    nothing else does. ``?q=`` and ``?similar=`` rank the library by
+    likeness instead (``_ranked``).
     """
+    query = " ".join(request.GET.get("q", "").split())[:MAX_QUERY_LENGTH]
+    similar = request.GET.get("similar", "")
+    if query or similar:
+        return _ranked(request, query, similar)
     who = _who(request)
     defaults = _defaults(request.user)
     hidden = who is None and is_truthy(request.GET.get("hidden"))
@@ -657,9 +835,11 @@ def index(request):
         ],
         "timeline_url": _url_with(scope_params | type_params),
         "favorites_url": _url_with(scope_params | {"favorites": "1"} | type_params),
+        "search_scope": scope_params.get("scope", ""),
         **_sidebar_albums(request.user),
         **_hidden_nav_context(request.user, active=hidden),
         **_faces_context(request.user),
+        **_search_context(),
         **_display_context(request.user),
         **_timeline_page_context(request, files, position, tz, view_params),
     }

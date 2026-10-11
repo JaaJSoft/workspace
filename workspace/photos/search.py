@@ -8,7 +8,7 @@ from workspace.common.search import apply_fulltext
 from workspace.common.text import fold_text
 from workspace.core.module_registry import SearchResult, SearchScope, SearchTag
 from workspace.files.services.search_index import FILES_FTS, match_type_for
-from workspace.photos.models import MediaItem
+from workspace.photos.models import MediaItem, PhotoEmbedding
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -16,14 +16,17 @@ from workspace.photos.queries import (
     user_albums,
     user_face_clusters,
 )
+from workspace.photos.services.embedding.registry import embeddings_available
 from workspace.photos.services.face_people import person_cards
+from workspace.photos.services.photo_embeddings import MAX_QUERY_LENGTH
 from workspace.photos.services.timeline import UNDATED
 from workspace.users.services.settings import get_user_timezone
 
 
 def search_photos(query, user, limit, scope=SearchScope.ALL):
     """People named in the photos, albums whose title matches, then photos
-    and videos whose name does.
+    and videos whose name does, then the way to the photos the query
+    describes.
 
     People and albums come first: a name or a title is something the user
     wrote to find the photos again, and there are few of them. People are
@@ -33,7 +36,41 @@ def search_photos(query, user, limit, scope=SearchScope.ALL):
     people = search_people(query, user, limit)
     albums = search_albums(query, user, limit - len(people), mine=mine)
     media = _search_media(query, user, limit - len(people) - len(albums), mine=mine)
-    return people + albums + media
+    found = people + albums + media
+    return found + search_by_description_entry(
+        query, user, limit - len(found), scope=scope
+    )
+
+
+def search_by_description_entry(query, user, limit, scope=SearchScope.ALL):
+    """One result opening the photos *query* describes, ranked by what they
+    show (``/photos?q=``) in the library *scope* stands for, where the
+    instance embeds photos and that library holds some embedded.
+
+    Nothing is embedded here: the global search runs on every keystroke, and
+    the ranking only runs once the user opens it.
+    """
+    text = " ".join((query or "").split())[:MAX_QUERY_LENGTH]
+    if limit <= 0 or not text or not embeddings_available():
+        return []
+    library = MINE if scope == SearchScope.MINE else ALL
+    # By file, not by owner: an embedding belongs to the file's owner, who for
+    # a group photo is whoever added it.
+    if not PhotoEmbedding.objects.filter(
+        file__in=library_files(user, library), embedding__isnull=False
+    ).exists():
+        return []
+    return [
+        SearchResult(
+            uuid=f"photos-description:{text}",
+            name=f"Photos showing “{text}”",
+            url=f"{reverse('photos_ui:index')}?{urlencode({'q': text, 'scope': library})}",
+            matched_value=text,
+            match_type="content",
+            type_icon="scan-search",
+            module_slug="photos",
+        )
+    ]
 
 
 def search_people(query, user, limit):

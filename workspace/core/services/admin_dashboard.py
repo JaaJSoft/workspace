@@ -171,6 +171,38 @@ def face_backend_health_card(request):
     }
 
 
+_EMBEDDING_BACKEND_HEALTH_CACHE_KEY = "photos:embeddings:backend:health"
+
+
+def embedding_backend_health_card(request):
+    """A health card for photo embeddings, or None when the instance has
+    them off."""
+    from django.core.cache import cache
+
+    from workspace.photos.services.embedding.registry import (
+        embeddings_available,
+        get_embedding_backend,
+    )
+
+    if not embeddings_available():
+        return None
+
+    cached = cache.get(_EMBEDDING_BACKEND_HEALTH_CACHE_KEY)
+    if cached is None:
+        health = get_embedding_backend().health()
+        cached = {"ok": health.ok, "label": health.detail or "unavailable"}
+        cache.set(_EMBEDDING_BACKEND_HEALTH_CACHE_KEY, cached, _FACE_BACKEND_HEALTH_TTL)
+
+    return {
+        "title": "Photo search",
+        "icon": "image_search",
+        "description": "photos embedding backend, for similar photos and search",
+        "value": cached["label"],
+        "url": reverse("admin:photos_photoembedding_changelist"),
+        "tone": "success" if cached["ok"] else "danger",
+    }
+
+
 def dashboard_callback(request, context):
     from workspace.files.services.scanning.policy import blocked_statuses
 
@@ -240,5 +272,8 @@ def dashboard_callback(request, context):
     face_health = face_backend_health_card(request)
     if face_health is not None:
         cards.append(face_health)
+    embedding_health = embedding_backend_health_card(request)
+    if embedding_health is not None:
+        cards.append(embedding_health)
     context["health_cards"] = cards
     return context

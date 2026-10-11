@@ -23,6 +23,133 @@ folder it sits in. There are three ways to add more:
   Tokens**, when the account signs in through single sign-on). New photos then
   reach the timeline on their own, once their capture date has been read.
 
+## Similar photos and search by description
+
+One image embedding per photo - a vector saying what the photo shows, in a
+space a sentence can be embedded into too - gives three features:
+
+- **Similar photos**, from a photo's menu: the photos of the library on screen
+  that look like it, the **near-duplicates** first (the shots of one burst, a
+  re-export), then the merely similar ones.
+- **Search by description**, from the search field in the Photos header:
+  "dog on the beach", "snow", "birthday cake" ranked against the library,
+  with no tag and no name to match. The global search offers it too, as
+  *Photos showing "..."*.
+- Both follow the library tab on screen (Mine, All, Shared with me, a group),
+  and never show a photo the user cannot open: trashed, quarantined, hidden
+  and unshared photos stay out.
+
+This is not a way to recognize people: a whole-photo vector describes the
+scene, not who is in it. Identity stays with face grouping above.
+
+### Enabling it
+
+```bash
+PHOTOS_EMBEDDINGS_ENABLED=1
+```
+
+It is an instance-level setting, with no per-user opt-in: every photo of the
+instance is embedded, group folders' included. Videos are not, for now. The
+embedding runs in the Celery worker, at low priority after an upload and at
+background priority for the hourly catch-up (`python manage.py catch_up
+embeddings`). A search embeds its text in the worker too, at interactive
+priority: the web process never loads a model. A search waits
+`PHOTOS_EMBEDDING_QUERY_TIMEOUT` seconds for the answer, then says it could
+not run.
+
+The admin dashboard shows a **Photo search** card: whether the backend is
+known and ready. Embedded photos are listed, read-only, in the admin under
+*Photo embeddings*.
+
+### Backends
+
+| `PHOTOS_EMBEDDING_BACKEND` | Model | Embedding | Weights licence |
+|---|---|---|---|
+| `siglip2_base` (default) | Google SigLIP 2 base, on the CPU, multilingual | 768-d | Apache-2.0 |
+| `clip_vit_b32` | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
+| `jina_clip_v1` | Jina CLIP v1, on the CPU | 768-d | Apache-2.0 |
+| `remote` | Any multimodal model behind an OpenAI-compatible `/embeddings` endpoint | `PHOTOS_EMBEDDING_DIMS` | The model's |
+
+**The local backends** run on the CPU through
+[fastembed](https://github.com/qdrant/fastembed), which ships each model's
+preprocessing, tokenizer and ONNX runtime. The
+[embedding bench](embedding-bench.md) measures all three on the same photos:
+SigLIP 2, the default, finds the best photos for a description, and the
+only ones worth showing for a query typed in French (78% mAP, against 51% for
+CLIP). CLIP ViT-B/32 costs a quarter of its CPU per photo (88 ms against
+315 ms on one desktop core) and a third of its memory, for a host that cannot
+spare them. Jina CLIP v1 costs as much CPU as SigLIP 2 for less. The weights
+download from the Hugging Face Hub on first use into
+`PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without internet
+access:
+
+```bash
+python manage.py download_embedding_models
+```
+
+CLIP's 4.4 GFLOPs a photo get a Raspberry Pi 4 through a library of twenty
+thousand photos in a night; SigLIP 2 takes about 3.6 times as long. Each
+worker process holds the image encoder in memory (and the text encoder once it
+has served a search, 1.1 GB for SigLIP 2's multilingual vocabulary): raise
+`CELERY_WORKER_MAX_MEMORY_PER_CHILD` to at least 2.5 GB (2621440) for SigLIP 2,
+1.5 GB (1572864) for CLIP, or the default 512 MB recycles the worker after
+every photo.
+
+**`remote`** sends each photo, as a JPEG downscaled to
+`PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to another
+service: **every photo of the instance leaves the server.** Only enable it
+for an endpoint the instance's users can trust with their photos. There is no
+standard for image input on `/embeddings`; the contract is the most common
+one:
+
+```json
+{"model": "<PHOTOS_EMBEDDING_MODEL>", "input": ["data:image/jpeg;base64,..."], "encoding_format": "float"}
+```
+
+for a photo, and the plain text in `input` for a search. The model must embed
+both into one space (a CLIP, SigLIP or Jina CLIP model), and answer with
+vectors of `PHOTOS_EMBEDDING_DIMS` components.
+
+```bash
+PHOTOS_EMBEDDING_BACKEND=remote
+PHOTOS_EMBEDDING_BASE_URL=http://litellm:4000/v1
+PHOTOS_EMBEDDING_MODEL=jina-clip-v2
+PHOTOS_EMBEDDING_DIMS=1024
+PHOTOS_EMBEDDING_API_KEY=...   # falls back to AI_API_KEY
+```
+
+**Switching backend or model** changes the embedding space, and often its
+size. Every embedding records the model that wrote it, so every photo counts
+as pending again; vectors of the old model are never compared with the new
+ones. After changing the setting:
+
+1. `python manage.py rebuild_vector_index` recreates the vector index at the
+   new size (only needed when the size changes).
+2. The hourly catch-up embeds the library again, or at once:
+   `python manage.py catch_up embeddings --reanalyze`.
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `PHOTOS_EMBEDDINGS_ENABLED` | off | Embed the photos of this instance. |
+| `PHOTOS_EMBEDDING_BACKEND` | `siglip2_base` | The embedding model, see above. |
+| `PHOTOS_EMBEDDING_BASE_URL`, `PHOTOS_EMBEDDING_MODEL`, `PHOTOS_EMBEDDING_API_KEY` | empty | The remote endpoint, its model, its key. |
+| `PHOTOS_EMBEDDING_DIMS` | `512` | Size of the remote model's vectors. |
+| `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
+| `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
+| `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
+| `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
+| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP). |
+| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.105 for SigLIP 2, 0.1 for CLIP). |
+| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.92 for SigLIP 2, 0.765 for CLIP). |
+
+Each local model's defaults are calibrated by the
+[embedding bench](embedding-bench.md), on its own embedding space: the same
+distance means a different thing to CLIP and to SigLIP 2. A remote model starts
+from generic defaults (0.25, 0.06, 0.8); measure it with the bench
+(`--backend remote`) before relying on them.
+
 ## Face detection and grouping
 
 The **People** tab finds the faces in a user's photos and videos and groups the

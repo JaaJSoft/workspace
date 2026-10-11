@@ -1,7 +1,7 @@
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -13,7 +13,7 @@ class ViewAction(BaseFileAction):
     node_types = ("file",)
     keyboard_shortcut = "Enter / Space"
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         from workspace.files.services.scanning.policy import is_blocked
 
         if file_obj.deleted_at is not None:
@@ -34,7 +34,7 @@ class OpenFolderAction(BaseFileAction):
     node_types = ("folder",)
     keyboard_shortcut = "Enter"
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None and permission >= FilePermission.EDIT
@@ -48,7 +48,7 @@ class OpenNewTabAction(BaseFileAction):
     category = ActionCategory.OPEN
     node_types = ("file",)
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         from workspace.files.services.scanning.policy import is_blocked
 
         if file_obj.deleted_at is not None:

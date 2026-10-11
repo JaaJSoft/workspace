@@ -162,7 +162,7 @@ window.tagChipColor = function tagChipColor(value) {
         this.setAttribute('aria-label', name);
         this.replaceChildren(iconEl);
         if (typeof lucide !== 'undefined' && lucide.createIcons) {
-          lucide.createIcons({ nodes: [this] });
+          lucide.createIcons({ root: this });
         }
         return;
       }
@@ -180,7 +180,7 @@ window.tagChipColor = function tagChipColor(value) {
       this.replaceChildren(...children);
 
       if (icon && typeof lucide !== 'undefined' && lucide.createIcons) {
-        lucide.createIcons({ nodes: [this] });
+        lucide.createIcons({ root: this });
       }
     }
 

@@ -1,5 +1,5 @@
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -10,7 +10,7 @@ class AnalyzeStorageAction(BaseFileAction):
     category = ActionCategory.INFO
     node_types = ("folder",)
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None
@@ -25,7 +25,7 @@ class PropertiesAction(BaseFileAction):
     node_types = ("file", "folder")
     keyboard_shortcut = "Ctrl+I"
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None

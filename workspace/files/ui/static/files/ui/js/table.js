@@ -100,7 +100,10 @@ window.fileTableControls = function fileTableControls() {
       // list, cards in a grid for the mosaic. Both carry the same data-*
       // attributes, so filters, counts and selection read either; only
       // sorting and column layout are table work.
-      this.table = this.$el.querySelector('table');
+      // Captured here: a method run from an item's own expression sees that
+      // item as its `$el`, not this root.
+      this._root = this.$el;
+      this.table = this._root.querySelector('table');
       this.tbody = this.table ? this.table.querySelector('tbody') : null;
       this.originalRows = this.tbody
         ? Array.from(this.tbody.querySelectorAll('tr'))
@@ -156,44 +159,116 @@ window.fileTableControls = function fileTableControls() {
       window.addEventListener('keydown', window._fileShortcutHandler);
     },
 
-    openFolderFromRow(event) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+    // --- Item events, delegated -------------------------------------------
+    // Rows and cards carry no listener of their own: the listing container
+    // (folder_content.html) forwards its events here, and the item is the
+    // closest [data-uuid]. Binding a dozen listeners per item cost a large
+    // folder seconds before it could be used.
+
+    _eventElement(event) {
+      const target = event.target;
+      return target instanceof Element ? target : target?.parentElement || null;
+    },
+
+    _eventItem(event) {
+      return this._eventElement(event)?.closest('[data-uuid]') || null;
+    },
+
+    _itemData(item) {
+      const uuid = item.dataset.uuid;
+      return {
+        uuid,
+        name: item.dataset.displayName || item.dataset.name || '',
+        nodeType: item.dataset.nodeType || 'file',
+        fileType: item.dataset.fileType || '',
+        actions: this.actionsMap[uuid] || [],
+      };
+    },
+
+    onListingClick(event, inTrash) {
+      const target = this._eventElement(event);
+      const item = target?.closest('[data-uuid]');
+      if (!item) return;
+      const uuid = item.dataset.uuid;
+
+      if (target.closest('input[data-select-item]')) {
+        this.toggleRowSelection(uuid, event.shiftKey);
         return;
       }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        const row = event.currentTarget;
-        const uuid = row?.dataset?.uuid;
-        if (uuid) {
-          this.toggleRowSelection(uuid, event.shiftKey);
+      const control = target.closest('[data-item-control]');
+      if (control) {
+        if (control.dataset.itemControl === 'favorite') {
+          this.toggleFavorite(uuid, item.dataset.favorite === '1');
+        } else if (control.dataset.itemControl === 'menu') {
+          this.openContextMenu(event, this._itemData(item));
         }
         return;
       }
-      // Normal behavior: open folder
-      const row = event.currentTarget;
-      const link = row?.querySelector('[data-folder-link]');
-      if (link) {
-        link.click();
-      }
-    },
 
-    openFileFromRow(event, uuid, name, fileType) {
-      if (!event) return;
-      const target = event.target instanceof Element ? event.target : event.target?.parentElement;
-      if (target && target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+      if (inTrash || target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
         return;
       }
-      // If items are selected, clicking should toggle selection instead of opening
+      // With a selection under way, a click extends it instead of opening,
+      // whether or not the item could be opened.
       if (this.selectedUuids.size > 0) {
         this.toggleRowSelection(uuid, event.shiftKey);
         return;
       }
-      // Normal behavior: open file viewer
+      const isFolder = item.dataset.nodeType === 'folder';
+      if (!isFolder && item.dataset.viewable !== '1') return;
+      if (isFolder) {
+        window.folderNav.navigateTo(`/files/${uuid}`);
+        return;
+      }
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, type: fileType }
+        detail: { uuid, name: item.dataset.displayName || '', type: item.dataset.fileType || '' }
       }));
+    },
+
+    onListingContextMenu(event, inTrash) {
+      const item = this._eventItem(event);
+      if (item) {
+        this.openContextMenu(event, this._itemData(item));
+      } else if (!inTrash) {
+        this.openBackgroundContextMenu(event);
+      }
+    },
+
+    // The hovered item is the keyboard shortcuts' target when nothing is
+    // selected.
+    onListingPointerOver(event) {
+      const item = this._eventItem(event);
+      if (item && this.hoveredUuid !== item.dataset.uuid) {
+        this.hoveredUuid = item.dataset.uuid;
+      }
+    },
+
+    onListingPointerOut(event) {
+      const item = this._eventItem(event);
+      if (!item || item.contains(event.relatedTarget)) return;
+      // A dialog the item opened (rename, delete) still acts on it.
+      if (document.querySelector('dialog[open]')) return;
+      if (this.hoveredUuid === item.dataset.uuid) this.hoveredUuid = null;
+    },
+
+    onListingDragStart(event) {
+      const item = this._eventItem(event);
+      if (!item) return;
+      this.onNodeDragStart(event, item.dataset.uuid, item.dataset.displayName || '', item.dataset.nodeType || 'file');
+    },
+
+    // A file is offered for a drag once the registry allows it a cut. A
+    // folder is draggable from the server: pinning it needs no cut.
+    _paintDraggable(actionsByUuid) {
+      for (const [uuid, actions] of Object.entries(actionsByUuid)) {
+        const item = this._itemsByUuid?.get(uuid);
+        if (!item || item.dataset.nodeType !== 'file') continue;
+        if (actions.some((a) => a.id === 'cut')) {
+          item.setAttribute('draggable', 'true');
+        } else {
+          item.removeAttribute('draggable');
+        }
+      }
     },
 
     openContextMenu(event, nodeData) {
@@ -260,12 +335,10 @@ window.fileTableControls = function fileTableControls() {
       });
     },
 
+    // Only reached off any item (onListingContextMenu); a control keeps the
+    // browser's own menu.
     openBackgroundContextMenu(event) {
-      // Check if click is on a row/card or interactive element
-      const target = event.target;
-      if (target.closest('tr[data-uuid], div[data-uuid].group, button, a, input, select, textarea')) {
-        return; // Let the row/card handle its own context menu
-      }
+      if (event.target.closest('button, a, input, select, textarea')) return;
 
       event.preventDefault();
       // Dispatch event for background context menu
@@ -336,7 +409,7 @@ window.fileTableControls = function fileTableControls() {
     },
 
     cards() {
-      return Array.from(this.$el.querySelectorAll('div.grid > div[data-uuid]'));
+      return Array.from(this._root.querySelectorAll('div.grid > div[data-uuid]'));
     },
 
     // UUIDs of the items on screen: the rows the table currently holds, or
@@ -505,9 +578,10 @@ window.fileTableControls = function fileTableControls() {
         await Promise.allSettled(slices.map(async (slice) => {
           const part = await window.fileActions.fetchActions(slice);
           if (!part) return;
-          // Merged key by key into the same object: replacing the map would
-          // re-run every item's binding on it once per slice.
+          // Merged as each slice lands: an item only needs its own entry, so
+          // the first ones are usable while the rest are still answered.
           Object.assign(this.actionsMap, part);
+          this._paintDraggable(part);
           this._computeBulkActions();
           if (window.fileDragMove) window.fileDragMove.rememberActions(part);
         }));
@@ -627,15 +701,8 @@ window.fileTableControls = function fileTableControls() {
 
     _getRowDataByUuid(uuid) {
       if (!uuid) return null;
-      const row = this.$el.querySelector(`[data-uuid="${uuid}"]`);
-      if (!row) return null;
-      return {
-        uuid,
-        name: row.dataset.displayName || row.dataset.name || '',
-        nodeType: row.dataset.nodeType || 'file',
-        fileType: row.dataset.fileType || '',
-        actions: this.actionsMap[uuid] || [],
-      };
+      const row = this._root.querySelector(`[data-uuid="${uuid}"]`);
+      return row ? this._itemData(row) : null;
     },
 
     _nodeHasAction(data, actionId) {
@@ -846,36 +913,35 @@ window.fileTableControls = function fileTableControls() {
       }
     },
 
+    // The saved controls are embedded in the page (#table-controls-data),
+    // read on the first listing and kept across folder swaps, where a save
+    // replaces them. null when the user never saved any.
+    _serverState() {
+      if (window._tableControlsCache === undefined) {
+        let saved = null;
+        const el = document.getElementById('table-controls-data');
+        if (el) {
+          try { saved = JSON.parse(el.textContent); } catch (e) { saved = null; }
+        }
+        window._tableControlsCache = saved;
+      }
+      return window._tableControlsCache;
+    },
+
     loadState() {
-      // 1. Apply localStorage immediately (synchronous, avoids flicker)
       try {
         const raw = localStorage.getItem(this.storageKey);
         if (raw) this._applyStateData(JSON.parse(raw));
       } catch (e) { /* ignore */ }
 
-      // 2. Apply cached server state if available (already fetched this session)
-      if (window._tableControlsCache) {
-        this._applyStateData(window._tableControlsCache);
-        this.pruneMissingColumns();
-        this.applyAll();
-        this._saveToLocalStorage();
-        this._lastSyncedState = JSON.stringify(this._getStatePayload());
-        return;
-      }
-
-      // 3. First load: fetch from server, cache for subsequent navigations
-      fetch('/api/v1/settings/files/table_controls')
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (!data || !data.value) return;
-          window._tableControlsCache = data.value;
-          this._applyStateData(data.value);
-          this.pruneMissingColumns();
-          this.applyAll();
-          this._saveToLocalStorage();
-          this._lastSyncedState = JSON.stringify(this._getStatePayload());
-        })
-        .catch(() => {});
+      // The server copy wins over this browser's: it follows the user
+      // across devices.
+      const saved = this._serverState();
+      if (!saved) return;
+      this._applyStateData(saved);
+      this.pruneMissingColumns();
+      this._saveToLocalStorage();
+      this._lastSyncedState = JSON.stringify(this._getStatePayload());
     },
 
     _getStatePayload() {
@@ -1339,42 +1405,5 @@ window.viewToggle = function viewToggle() {
         credentials: 'same-origin',
       }).then((resp) => resp.ok, () => false);
     },
-
-    navigateToFolder(event, url) {
-      // Only navigate if not clicking checkbox or action button
-      if (event.target.closest('input[type="checkbox"]') ||
-          event.target.closest('button') ||
-          event.target.closest('[data-stop-row-click]')) {
-        return;
-      }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        const card = event.currentTarget;
-        const uuid = card?.dataset?.uuid;
-        if (uuid) {
-          this.toggleRowSelection(uuid, event.shiftKey);
-        }
-        return;
-      }
-      window.folderNav.navigateTo(url);
-    },
-
-    openFileFromCard(event, uuid, name, fileType) {
-      // Only open if not clicking checkbox or action button
-      if (event.target.closest('input[type="checkbox"]') ||
-          event.target.closest('button') ||
-          event.target.closest('[data-stop-row-click]')) {
-        return;
-      }
-      // If items are selected, clicking should toggle selection instead of opening
-      if (this.selectedUuids.size > 0) {
-        this.toggleRowSelection(uuid, event.shiftKey);
-        return;
-      }
-      // Normal behavior: open file viewer
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid, name, type: fileType }
-      }));
-    }
   };
 };

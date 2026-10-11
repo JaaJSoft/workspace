@@ -10,9 +10,74 @@
  * Use this when you need to initialize icons synchronously.
  */
 function initLucideIcons() {
-  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+  if (typeof lucide !== 'undefined' && lucide.icons) {
     renderLucideIcons(document);
   }
+}
+
+// One drawn svg per icon name, built on first use and cloned for every
+// occurrence after it. undefined: not looked up yet; null: no such icon.
+const lucideTemplates = new Map();
+
+function lucideTemplate(name) {
+  let template = lucideTemplates.get(name);
+  if (template === undefined) {
+    // Lucide's own name mapping: "-", "_" and whitespace start a new word.
+    let camel = '';
+    let upperNext = false;
+    for (const ch of name) {
+      if (ch === '-' || ch === '_' || ch <= ' ') {
+        upperNext = camel.length > 0;
+        continue;
+      }
+      camel += camel.length === 0 ? ch.toLowerCase() : (upperNext ? ch.toUpperCase() : ch);
+      upperNext = false;
+    }
+    const iconNode = lucide.icons[camel.charAt(0).toUpperCase() + camel.slice(1)];
+    template = iconNode ? lucide.createElement(iconNode) : null;
+    lucideTemplates.set(name, template);
+  }
+  return template;
+}
+
+/**
+ * Replace every `[data-lucide]` element under `root` (placeholder or
+ * already drawn svg) with the svg lucide.createIcons would draw: same
+ * attributes, in the same order, same classes. The svg is cloned from a
+ * per-icon template instead of rebuilt node by node, which is what a
+ * listing repeating the same few icons a thousand times pays for.
+ *
+ * @param {Document|Element} root - where to look for icons
+ * @returns {SVGElement[]} the drawn svgs carrying Alpine directives
+ */
+function drawLucideIcons(root) {
+  const bound = [];
+  for (const el of root.querySelectorAll('[data-lucide]')) {
+    const name = el.getAttribute('data-lucide');
+    const template = lucideTemplate(name);
+    if (!template) {
+      console.warn(`${el.outerHTML} icon name was not found in the provided icons object.`);
+      continue;
+    }
+    const svg = template.cloneNode(true);
+    svg.setAttribute('data-lucide', name);
+    const attrs = Array.from(el.attributes);
+    const a11y = attrs.some((a) => a.name.startsWith('aria-') || a.name === 'role' || a.name === 'title');
+    if (!a11y) svg.setAttribute('aria-hidden', 'true');
+    const classes = ['lucide', `lucide-${name}`, ...(el.getAttribute('class') || '').split(' ')]
+      .filter((c, i, all) => c && c.trim() !== '' && all.indexOf(c) === i)
+      .join(' ')
+      .trim();
+    let directives = false;
+    for (const attr of attrs) {
+      svg.setAttribute(attr.name, attr.name === 'class' ? classes : attr.value);
+      if (/^(x-|:|@)/.test(attr.name)) directives = true;
+    }
+    if (!el.hasAttribute('class')) svg.setAttribute('class', classes);
+    el.parentNode?.replaceChild(svg, el);
+    if (directives) bound.push(svg);
+  }
+  return bound;
 }
 
 /**
@@ -29,20 +94,24 @@ function initLucideIcons() {
  * The swap therefore runs inside `Alpine.mutateDom`, which hides it from
  * the observer, and the two things the observer would have done are done
  * by hand: release the outgoing nodes' directives (an icon can carry
- * `x-show`), and bind the new svgs, which inherit the placeholder's
- * attributes. Without Alpine on the page there is nothing to hide from.
+ * `x-show`), and bind the new svgs that inherited one from their
+ * placeholder - binding the plain ones too cost as much as drawing them.
+ * Without Alpine on the page there is nothing to hide from.
  *
  * @param {Document|Element} container - where to look for icons
  */
 function renderLucideIcons(container) {
   const alpine = typeof Alpine !== 'undefined' && Alpine.mutateDom ? Alpine : null;
   if (!alpine) {
-    lucide.createIcons({ root: container });
+    drawLucideIcons(container);
     return;
   }
   container.querySelectorAll('[data-lucide]').forEach((el) => alpine.destroyTree(el));
-  alpine.mutateDom(() => lucide.createIcons({ root: container }));
-  container.querySelectorAll('svg[data-lucide]').forEach((svg) => alpine.initTree(svg));
+  let bound = [];
+  alpine.mutateDom(() => {
+    bound = drawLucideIcons(container);
+  });
+  bound.forEach((svg) => alpine.initTree(svg));
 }
 
 /**
@@ -99,6 +168,13 @@ function initLucideIconsAfterAlpine() {
   }
 }
 
+function hasAncestorIn(el, elements) {
+  for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+    if (elements.has(parent)) return true;
+  }
+  return false;
+}
+
 /**
  * Observer-based Lucide initialization.
  * Watches for DOM changes and automatically renders Lucide icons: newly
@@ -109,16 +185,16 @@ function initLucideIconsAfterAlpine() {
  *
  * Renders are scoped: each changed element queues its parent container and
  * a debounced render pass (see `renderLucideIcons`) re-renders every
- * `[data-lucide]` element inside - including already-hydrated svgs, which
- * Lucide rebuilds from the current attribute value. (Lucide has no
- * per-node API: an unknown option like `nodes` is ignored and would fall
- * back to a full-document scan.)
+ * `[data-lucide]` element inside - including already-hydrated svgs, redrawn
+ * from the current attribute value. (Lucide's own createIcons has no
+ * per-node API: an unknown option like `nodes` is ignored and falls back to
+ * a full-document scan.)
  *
  * @param {HTMLElement} root - The root element to observe (default: document.body)
  * @returns {Function} A function to disconnect the observer
  */
 function observeLucideIcons(root = document.body) {
-  if (typeof lucide === 'undefined' || !lucide.createIcons) {
+  if (typeof lucide === 'undefined' || !lucide.icons) {
     return () => {};
   }
 
@@ -162,7 +238,13 @@ function observeLucideIcons(root = document.body) {
       stale = new Set();
       pending = null;
       for (const container of containers) {
-        if (container.isConnected) renderLucideIcons(container);
+        // A container inside another one of the batch is drawn with it.
+        // Drawing it again redraws every icon it holds: a swapped listing
+        // whose rows the table then re-sorts queues both the listing and
+        // its tbody.
+        if (container.isConnected && !hasAncestorIn(container, containers)) {
+          renderLucideIcons(container);
+        }
       }
     });
   });
@@ -185,7 +267,8 @@ if (typeof module !== 'undefined' && module.exports) {
     initLucideIconsAlpineNextTick,
     initLucideIconsAfterAlpine,
     observeLucideIcons,
-    renderLucideIcons
+    renderLucideIcons,
+    drawLucideIcons
   };
 } else {
   window.LucideUtils = {
@@ -195,6 +278,7 @@ if (typeof module !== 'undefined' && module.exports) {
     alpineNextTick: initLucideIconsAlpineNextTick,
     afterAlpine: initLucideIconsAfterAlpine,
     observe: observeLucideIcons,
-    render: renderLucideIcons
+    render: renderLucideIcons,
+    draw: drawLucideIcons
   };
 }

@@ -41,6 +41,31 @@ test('init loads the tags and reloads them on every tags-changed', async () => {
     addEventListener: (type, fn) => { listeners[type] = fn; },
   });
   sidebar.init();
+  // tags-changed comes from a later task than the page load.
+  await null;
   await listeners['tags-changed']();
   assert.equal(fetches, 2);
+});
+
+test('the browser and the sidebar loading together share one request', async () => {
+  let fetches = 0;
+  const ctx = loadScripts(
+    ['workspace/files/ui/static/files/ui/js/tags.js', 'workspace/files/ui/static/files/ui/js/tag_sidebar.js'],
+    {
+      document: { getElementById: () => null },
+      addEventListener: () => {},
+      fetch: async () => {
+        fetches += 1;
+        return { ok: true, json: async () => [{ uuid: 'a', name: 'A' }] };
+      },
+    },
+  );
+  const browser = ctx.tagsMixin();
+  const sidebar = ctx.tagSidebar();
+
+  await Promise.all([browser.loadTags(), sidebar.loadTags()]);
+
+  assert.equal(fetches, 1);
+  assert.equal(browser.allTags.length, 1);
+  assert.notStrictEqual(browser.allTags, sidebar.allTags);
 });

@@ -1,12 +1,3 @@
-// --- Action loading state ---
-// Global function + Alpine.reactive backing so it works regardless of
-// nested x-data proxy resolution (Chrome V8 bug with Proxy + with()).
-// Alpine.reactive() is initialised in fileBrowser().init().
-window._actionLoadingState = null;
-window.isActionLoading = function (uuid) {
-  return !!window._actionLoadingState?.[uuid];
-};
-
 // Global clipboard for cut/copy/paste operations
 window.fileClipboard = {
   items: [],  // Array of {uuid, name, nodeType}

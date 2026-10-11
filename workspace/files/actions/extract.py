@@ -2,7 +2,7 @@ from workspace.files.services import FilePermission
 from workspace.files.services.extract import ZIP_LABELS
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -13,7 +13,7 @@ class ExtractAction(BaseFileAction):
     category = ActionCategory.EDIT
     node_types = ("file",)
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         if file_obj.type not in ZIP_LABELS:

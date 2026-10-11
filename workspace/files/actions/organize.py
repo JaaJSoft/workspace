@@ -2,7 +2,7 @@ from workspace.files.models import File
 from workspace.files.services import FilePermission
 
 from . import ActionRegistry
-from .base import ActionCategory, BaseFileAction
+from .base import UNRESOLVED, ActionCategory, BaseFileAction
 
 
 @ActionRegistry.register
@@ -15,7 +15,7 @@ class ToggleFavoriteAction(BaseFileAction):
     keyboard_shortcut = "F"
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None
@@ -44,7 +44,7 @@ class TogglePinAction(BaseFileAction):
     keyboard_shortcut = "P"
     supports_bulk = True
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         # Group root folders are already shown in the sidebar Groups section
@@ -74,7 +74,7 @@ class ManageTagsAction(BaseFileAction):
     category = ActionCategory.ORGANIZE
     node_types = ("file", "folder")
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         # Tags are personal: FileTagView only writes through user_files_qs,
@@ -92,7 +92,7 @@ class ShareAction(BaseFileAction):
     category = ActionCategory.ORGANIZE
     node_types = ("file", "folder")
 
-    def is_available(self, user, file_obj, *, permission):
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
         if permission is None or permission < FilePermission.EDIT:

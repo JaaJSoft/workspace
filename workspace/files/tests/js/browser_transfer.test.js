@@ -27,6 +27,7 @@ function makeBrowser({ currentFolder = '', clipboard = {}, respond } = {}) {
         id === 'folder-browser' ? { dataset: { folder: currentFolder } } : null,
       querySelector: () => null,
     },
+    CSS: { escape: String },
     location: { pathname: '/files', search: '' },
     getCSRFToken: () => 'token',
     // Collisions are resolved without asking, so no sibling listing is fetched.

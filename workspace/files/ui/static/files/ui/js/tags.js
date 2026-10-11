@@ -39,9 +39,10 @@ window.tagsMixin = function tagsMixin() {
         },
 
         async loadTags() {
-            const resp = await fetch('/api/v1/tags');
-            if (resp.ok) {
-                this.allTags = await resp.json();
+            const tags = await window.tagsMixin.requestTags();
+            // A copy each: a list is edited in place (a created tag is pushed).
+            if (tags) {
+                this.allTags = tags.slice();
             }
         },
 
@@ -308,3 +309,18 @@ window.tagsMixin = function tagsMixin() {
         },
     };
 };
+
+// The Files page keeps two tag lists (the browser and the sidebar, which
+// sit in separate components) and reloads both on the same occasions: calls
+// made in one synchronous run share a request. Only that run - a later call
+// must not reuse an answer that may predate the change it reloads for.
+window.tagsMixin.requestTags = (function () {
+    let shared = null;
+    return function requestTags() {
+        if (!shared) {
+            shared = fetch('/api/v1/tags').then((resp) => (resp.ok ? resp.json() : null));
+            Promise.resolve().then(() => { shared = null; });
+        }
+        return shared;
+    };
+})();

@@ -279,14 +279,13 @@ def _maxrss_mb():
 
 def _peak_working_set():
     """Windows' ru_maxrss, in bytes: the module resource does not exist there."""
-    import ctypes
-    from ctypes import wintypes
+    import ctypes.wintypes
 
     class Counters(ctypes.Structure):
         # PROCESS_MEMORY_COUNTERS: the call refuses a shorter buffer.
         _fields_ = [
-            ("cb", wintypes.DWORD),
-            ("PageFaultCount", wintypes.DWORD),
+            ("cb", ctypes.wintypes.DWORD),
+            ("PageFaultCount", ctypes.wintypes.DWORD),
             *(
                 (name, ctypes.c_size_t)
                 for name in (
@@ -303,12 +302,12 @@ def _peak_working_set():
         ]
 
     kernel32 = ctypes.WinDLL("kernel32")
-    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.restype = ctypes.wintypes.HANDLE
     psapi = ctypes.WinDLL("psapi")
     psapi.GetProcessMemoryInfo.argtypes = (
-        wintypes.HANDLE,
+        ctypes.wintypes.HANDLE,
         ctypes.POINTER(Counters),
-        wintypes.DWORD,
+        ctypes.wintypes.DWORD,
     )
     counters = Counters(cb=ctypes.sizeof(Counters))
     if not psapi.GetProcessMemoryInfo(

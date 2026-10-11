@@ -23,7 +23,6 @@ import os
 import sys
 import tempfile
 import urllib.request
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -140,13 +139,13 @@ def read_labels(path, classes):
     Only confirmed labels count (Confidence 1): a label verified absent, or
     never asked about, is not on the photo.
     """
-    labels = defaultdict(set)
+    labels = {}
     with open(path, encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            # Touched for every image: one with no confirmed label is a distractor.
-            labels[row["ImageID"]]
+            # Kept for every image: one with no confirmed label is a distractor.
+            names = labels.setdefault(row["ImageID"], set())
             if row["Confidence"] in ("1", "1.0"):
-                labels[row["ImageID"]].add(classes.get(row["LabelName"], ""))
+                names.add(classes.get(row["LabelName"], ""))
     return {image_id: frozenset(names) for image_id, names in labels.items()}
 
 

@@ -108,7 +108,7 @@ def is_misconfigured():
     return settings.PHOTOS_EMBEDDING_BACKEND not in _BACKENDS
 
 
-def configured_dims(default=512):
+def configured_dims(default=768):
     """The embedding size of the configured backend, *default* when unknown."""
     if is_misconfigured():
         return default

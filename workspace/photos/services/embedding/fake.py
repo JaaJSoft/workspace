@@ -35,7 +35,8 @@ def colour_vector(rgb, dims):
 
 class FakeEmbeddingBackend(EmbeddingBackend):
     key = "fake"
-    dims = 512
+    # The default backend's size: the vector index the migrations create.
+    dims = 768
     similar_max_distance = 0.3
     duplicate_max_distance = 0.02
     description_max_distance = 0.5

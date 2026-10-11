@@ -277,13 +277,13 @@ class EmbedQueryTests(TestCase):
             FakeEmbeddingBackend,
             "embed_text",
             autospec=True,
-            side_effect=lambda self, text: [1.0] + [0.0] * 511,
+            side_effect=lambda self, text: [1.0] + [0.0] * 767,
         ) as embed_text:
             first = embed_query("  red   car ")
             second = embed_query("red car")
 
         self.assertEqual(first, second)
-        self.assertEqual(len(first), 512)
+        self.assertEqual(len(first), 768)
         embed_text.assert_called_once()
         self.assertEqual(embed_text.call_args.args[1], "red car")
 

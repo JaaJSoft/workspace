@@ -65,19 +65,21 @@ known and ready. Embedded photos are listed, read-only, in the admin under
 
 | `PHOTOS_EMBEDDING_BACKEND` | Model | Embedding | Weights licence |
 |---|---|---|---|
-| `clip_vit_b32` (default) | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
-| `siglip2_base` | Google SigLIP 2 base, on the CPU, multilingual | 768-d | Apache-2.0 |
+| `siglip2_base` (default) | Google SigLIP 2 base, on the CPU, multilingual | 768-d | Apache-2.0 |
+| `clip_vit_b32` | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
 | `jina_clip_v1` | Jina CLIP v1, on the CPU | 768-d | Apache-2.0 |
 | `remote` | Any multimodal model behind an OpenAI-compatible `/embeddings` endpoint | `PHOTOS_EMBEDDING_DIMS` | The model's |
 
 **The local backends** run on the CPU through
 [fastembed](https://github.com/qdrant/fastembed), which ships each model's
-preprocessing, tokenizer and ONNX runtime. CLIP ViT-B/32 is the cheapest
-(340 MB + 250 MB of weights); SigLIP 2 searches better and understands a
-query typed in French, for about four times the CPU per photo and a text
-encoder of 1.1 GB; Jina CLIP v1 sits between them. The
-[embedding bench](embedding-bench.md) measures all three on the same photos.
-The weights download from the Hugging Face Hub on first use into
+preprocessing, tokenizer and ONNX runtime. The
+[embedding bench](embedding-bench.md) measures all three on the same photos:
+SigLIP 2, the default, finds the best photos for a description, and the
+only ones worth showing for a query typed in French (78% mAP, against 51% for
+CLIP). CLIP ViT-B/32 costs a quarter of its CPU per photo (88 ms against
+315 ms on one desktop core) and a third of its memory, for a host that cannot
+spare them. Jina CLIP v1 costs as much CPU as SigLIP 2 for less. The weights
+download from the Hugging Face Hub on first use into
 `PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without internet
 access:
 
@@ -85,11 +87,13 @@ access:
 python manage.py download_embedding_models
 ```
 
-It costs about 4.4 GFLOPs a photo: a Raspberry Pi 4 gets through a library of
-twenty thousand photos in a night. Each worker process holds the image
-encoder in memory (and the text encoder once it has served a search): raise
-`CELERY_WORKER_MAX_MEMORY_PER_CHILD` to at least 1.5 GB (1572864), or the
-default 512 MB recycles the worker after every photo.
+CLIP's 4.4 GFLOPs a photo get a Raspberry Pi 4 through a library of twenty
+thousand photos in a night; SigLIP 2 takes about 3.6 times as long. Each
+worker process holds the image encoder in memory (and the text encoder once it
+has served a search, 1.1 GB for SigLIP 2's multilingual vocabulary): raise
+`CELERY_WORKER_MAX_MEMORY_PER_CHILD` to at least 2.5 GB (2621440) for SigLIP 2,
+1.5 GB (1572864) for CLIP, or the default 512 MB recycles the worker after
+every photo.
 
 **`remote`** sends each photo, as a JPEG downscaled to
 `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to another
@@ -129,16 +133,16 @@ ones. After changing the setting:
 | Setting | Default | Effect |
 |---|---|---|
 | `PHOTOS_EMBEDDINGS_ENABLED` | off | Embed the photos of this instance. |
-| `PHOTOS_EMBEDDING_BACKEND` | `clip_vit_b32` | The embedding model, see above. |
+| `PHOTOS_EMBEDDING_BACKEND` | `siglip2_base` | The embedding model, see above. |
 | `PHOTOS_EMBEDDING_BASE_URL`, `PHOTOS_EMBEDDING_MODEL`, `PHOTOS_EMBEDDING_API_KEY` | empty | The remote endpoint, its model, its key. |
 | `PHOTOS_EMBEDDING_DIMS` | `512` | Size of the remote model's vectors. |
 | `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
-| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.25 for CLIP). |
-| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.1 for CLIP). |
-| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.765 for CLIP). |
+| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP). |
+| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.105 for SigLIP 2, 0.1 for CLIP). |
+| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.92 for SigLIP 2, 0.765 for CLIP). |
 
 Each local model's defaults are calibrated by the
 [embedding bench](embedding-bench.md), on its own embedding space: the same

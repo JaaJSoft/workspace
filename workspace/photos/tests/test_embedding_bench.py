@@ -258,8 +258,8 @@ class EndToEndTests(SimpleTestCase):
 
         self.assertEqual(report["search"]["map"], 1.0)
         self.assertEqual(report["duplicates"]["at_threshold"]["recall"], 1.0)
-        self.assertEqual(run["copies"].shape, (2, len(bench.VARIANTS), 512))
+        self.assertEqual(run["copies"].shape, (2, len(bench.VARIANTS), 768))
         table = bench.render([report])
-        self.assertIn("fake (512-d)", table)
+        self.assertIn("fake (768-d)", table)
         self.assertIn("mAP (English)  ", table)
         self.assertIn("100.0%", table)

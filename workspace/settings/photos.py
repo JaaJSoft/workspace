@@ -78,19 +78,20 @@ PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS = int(
 )
 
 # Similar photos and search by description: one image embedding per photo, in
-# a space the query text is embedded into too. Off by default: the local model
-# costs ~600 MB of weights and a few hundred MB of memory per worker process,
+# a space the query text is embedded into too. Off by default: the default
+# model costs 1.5 GB of weights and up to 2.2 GB of memory per worker process,
 # and a remote backend sends every photo to another service.
 PHOTOS_EMBEDDINGS_ENABLED = env_bool("PHOTOS_EMBEDDINGS_ENABLED", False)
 
 # Which embedding backend runs (photos/services/embedding/registry.py):
-# "clip_vit_b32" (default, OpenAI CLIP ViT-B/32 on the CPU, MIT weights, 512-d),
-# "siglip2_base" (Google SigLIP 2, multilingual, Apache-2.0, 768-d),
-# "jina_clip_v1" (Apache-2.0, 768-d) or "remote" (an OpenAI-compatible
-# /embeddings endpoint serving a multimodal model). scripts/embedding_bench.py
-# compares them. Switching changes the embedding space: see
-# docs/photos/README.md.
-PHOTOS_EMBEDDING_BACKEND = os.getenv("PHOTOS_EMBEDDING_BACKEND", "clip_vit_b32")
+# "siglip2_base" (default, Google SigLIP 2 on the CPU, multilingual,
+# Apache-2.0, 768-d), "clip_vit_b32" (OpenAI CLIP ViT-B/32, MIT, 512-d: a
+# quarter of the CPU and a third of the memory, for a small host, but poor in
+# French), "jina_clip_v1" (Apache-2.0, 768-d) or "remote" (an
+# OpenAI-compatible /embeddings endpoint serving a multimodal model).
+# scripts/embedding_bench.py compares them. Switching changes the embedding
+# space: see docs/photos/README.md.
+PHOTOS_EMBEDDING_BACKEND = os.getenv("PHOTOS_EMBEDDING_BACKEND", "siglip2_base")
 
 # The remote backend: the endpoint, the model it serves, and the size of the
 # vectors that model returns (the vector index is built at that size). The key

@@ -20,11 +20,11 @@ BEGIN
     SELECT 1 FROM pg_attribute
     WHERE attrelid = to_regclass('photos_photoembedding') AND attname = 'embedding_vec'
       AND NOT attisdropped
-      AND (atttypid <> 'vector'::regtype OR atttypmod <> 512)
+      AND (atttypid <> 'vector'::regtype OR atttypmod <> 768)
   ) THEN
     ALTER TABLE photos_photoembedding DROP COLUMN embedding_vec;
   END IF;
-  ALTER TABLE photos_photoembedding ADD COLUMN IF NOT EXISTS embedding_vec vector(512);
+  ALTER TABLE photos_photoembedding ADD COLUMN IF NOT EXISTS embedding_vec vector(768);
 EXCEPTION WHEN insufficient_privilege THEN
   RAISE NOTICE 'pgvector is installed but may not be enabled by this role; photos_photoembedding.embedding is searched without an index';
 END
@@ -54,7 +54,7 @@ PG_BACKFILL = {
     "pk_column": "uuid",
     "source_column": "embedding",
     "column": "embedding_vec",
-    "dims": 512,
+    "dims": 768,
 }
 
 PG_REVERSE = """\
@@ -68,13 +68,13 @@ DROP TABLE IF EXISTS photos_photoembedding_embedding_vec;
 CREATE VIRTUAL TABLE photos_photoembedding_embedding_vec USING vec0(
   uuid text primary key,
   owner_id integer partition key,
-  embedding float[512] distance_metric=cosine,
+  embedding float[768] distance_metric=cosine,
   chunk_size=64
 );
 
 INSERT INTO photos_photoembedding_embedding_vec(uuid, owner_id, embedding)
   SELECT uuid, owner_id, embedding FROM photos_photoembedding
-  WHERE length(embedding) = 2048 AND owner_id IS NOT NULL;
+  WHERE length(embedding) = 3072 AND owner_id IS NOT NULL;
 """
 
 SQLITE_REVERSE = """\

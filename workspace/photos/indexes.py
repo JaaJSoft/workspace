@@ -2,7 +2,7 @@
 embeddings, and whole-photo image embeddings. Two spaces, never compared.
 
 Each ``dims`` follows its configured backend, but the migrations froze the
-size the default backend produces (128 for faces, 512 for photos). Switching
+size the default backend produces (128 for faces, 768 for photos). Switching
 to a backend of another size is a rebuild plus a re-analysis - see
 docs/photos/README.md.
 """

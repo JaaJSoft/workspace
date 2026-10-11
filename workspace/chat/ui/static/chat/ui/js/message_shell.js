@@ -95,9 +95,8 @@
       this.render();
       // Belt and braces with observeLucideIcons(): hydrate built icons
       // directly so they don't depend on the observer having seen them.
-      if (typeof lucide !== 'undefined' && lucide.createIcons) {
-        const icons = this.querySelectorAll('[data-lucide]:not(svg)');
-        if (icons.length) lucide.createIcons({ nodes: icons });
+      if (typeof lucide !== 'undefined' && lucide.createIcons && this.querySelector('[data-lucide]')) {
+        lucide.createIcons({ root: this });
       }
     }
 

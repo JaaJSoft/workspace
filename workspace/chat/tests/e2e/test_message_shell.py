@@ -204,3 +204,26 @@ class MessageShellRenderingTests(PlaywrightTestCase):
                   .classList.contains('px-2.5')"""
         )
         self.assertNotIn("px-3", self._classes(bubble))
+
+    def test_a_connecting_group_draws_only_its_own_icons(self):
+        # createIcons ignores a `nodes` option and falls back to the whole
+        # document: the shell redrew every icon on the page each time a group
+        # connected.
+        self._open_conversation()
+        result = self.page.evaluate(
+            """() => {
+              const bystander = document.querySelector('svg[data-lucide]');
+              const group = document.createElement('chat-message-group');
+              group.setAttribute('own', '');
+              group.setAttribute('pending', '');
+              group.body = 'with a file';
+              group.pendingFiles = [new File(['x'], 'notes.txt', { type: 'text/plain' })];
+              document.querySelector('chat-message-group').parentElement.appendChild(group);
+              return {
+                drawn: group.querySelectorAll('svg[data-lucide]').length,
+                bystanderKept: document.contains(bystander),
+              };
+            }"""
+        )
+        self.assertGreater(result["drawn"], 0)
+        self.assertTrue(result["bystanderKept"])

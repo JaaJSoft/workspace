@@ -146,7 +146,7 @@ window.INLINE_ALERT_TYPES = {
       // render icons directly so alerts inside Alpine template clones
       // (x-if / x-for) don't depend on the observer having seen them.
       if (typeof lucide !== 'undefined' && lucide.createIcons) {
-        lucide.createIcons({ nodes: [this] });
+        lucide.createIcons({ root: this });
       }
     }
 

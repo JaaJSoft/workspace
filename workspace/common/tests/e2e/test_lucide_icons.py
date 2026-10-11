@@ -107,3 +107,55 @@ class LucideDrawTests(PlaywrightTestCase):
         self.assertEqual(result["svgs"], 102)
         self.assertEqual(result["distinctPaths"], 2)
         self.assertEqual(result["bound"], ["bell", "star"])
+
+
+class ElementIconScopeTests(PlaywrightTestCase):
+    """An element hydrating its own icons leaves the rest of the page alone.
+
+    ``createIcons`` ignores a ``nodes`` option and falls back to the whole
+    document, so an element passing one redrew every icon on the page each
+    time it connected: once per tag chip of a tagged listing.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.page.set_content(
+            '<!doctype html><html><body><i data-lucide="bell" id="bystander"></i></body></html>'
+        )
+        for script in ("vendor/lucide/lucide.js", "tag_chip.js", "inline_alert.js"):
+            self.page.add_script_tag(path=str(STATIC / script))
+        self.page.evaluate(
+            "() => { lucide.createIcons(); window.__bystander = document.getElementById('bystander'); }"
+        )
+
+    def connect(self, markup):
+        return self.page.evaluate(
+            """(markup) => {
+              const host = document.createElement('div');
+              host.innerHTML = markup;
+              document.body.appendChild(host);
+              return {
+                drawn: host.querySelectorAll('svg[data-lucide]').length,
+                bystanderKept: document.getElementById('bystander') === window.__bystander,
+              };
+            }""",
+            markup,
+        )
+
+    def test_a_tag_chip_draws_only_its_own_icon(self):
+        for markup in (
+            '<tag-chip name="Urgent" icon="flame"></tag-chip>',
+            '<tag-chip name="Urgent" icon="flame" compact></tag-chip>',
+        ):
+            with self.subTest(markup=markup):
+                self.assertEqual(
+                    self.connect(markup), {"drawn": 1, "bystanderKept": True}
+                )
+
+    def test_an_inline_alert_draws_only_its_own_icon(self):
+        self.assertEqual(
+            self.connect(
+                '<inline-alert type="info" message="Heads up"></inline-alert>'
+            ),
+            {"drawn": 1, "bystanderKept": True},
+        )

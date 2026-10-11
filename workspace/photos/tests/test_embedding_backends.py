@@ -1,4 +1,3 @@
-import gzip
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,10 +13,6 @@ from workspace.photos.services.embedding.remote import (
     RemoteEmbeddingBackend,
     RemoteEmbeddingError,
 )
-from workspace.photos.services.embedding.tokenizer import (
-    CONTEXT_LENGTH,
-    ClipTokenizer,
-)
 
 
 def _cosine(a, b):
@@ -25,113 +20,70 @@ def _cosine(a, b):
     return float(a @ b / np.linalg.norm(a) / np.linalg.norm(b))
 
 
-class ClipTokenizerTests(SimpleTestCase):
-    """A merges file of a few lines: the vocabulary is the 512 byte symbols,
-    then one token per merge, then the two markers."""
-
-    MERGES = ["c a", "ca t</w>", "d o", "do g</w>"]
-
-    def setUp(self):
-        self.tokenizer = ClipTokenizer(self.MERGES)
-        self.start = self.tokenizer.encoder["<|startoftext|>"]
-        self.end = self.tokenizer.encoder["<|endoftext|>"]
-
-    def test_words_merge_down_to_their_token(self):
-        self.assertEqual(
-            self.tokenizer.encode("cat dog"),
-            [self.tokenizer.encoder["cat</w>"], self.tokenizer.encoder["dog</w>"]],
-        )
-        self.assertEqual(self.tokenizer.encoder["cat</w>"], 513)
-        self.assertEqual((self.start, self.end), (516, 517))
-
-    def test_text_is_lowercased_and_its_spaces_collapsed(self):
-        self.assertEqual(
-            self.tokenizer.encode("  CAT \n\t Dog "), self.tokenizer.encode("cat dog")
-        )
-
-    def test_an_unmerged_word_falls_back_to_its_byte_symbols(self):
-        symbols = self.tokenizer.encode("ox")
-        self.assertEqual(
-            symbols, [self.tokenizer.encoder["o"], self.tokenizer.encoder["x</w>"]]
-        )
-
-    def test_non_ascii_text_is_tokenized_byte_by_byte(self):
-        self.assertEqual(len(self.tokenizer.encode("é")), 2)
-
-    def test_encoder_input_is_padded_with_markers_and_a_mask(self):
-        ids, mask = self.tokenizer("cat")
-
-        self.assertEqual(len(ids), CONTEXT_LENGTH)
-        self.assertEqual(ids[:3], [self.start, 513, self.end])
-        self.assertEqual(ids[3:], [0] * (CONTEXT_LENGTH - 3))
-        self.assertEqual(mask, [1, 1, 1] + [0] * (CONTEXT_LENGTH - 3))
-
-    def test_a_long_text_is_cut_and_still_ends_with_the_end_marker(self):
-        ids, mask = self.tokenizer("cat " * 200)
-
-        self.assertEqual(len(ids), CONTEXT_LENGTH)
-        self.assertEqual(ids[-1], self.end)
-        self.assertEqual(sum(mask), CONTEXT_LENGTH)
-
-    def test_reads_a_gzipped_merges_file_after_its_version_line(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "merges.txt.gz"
-            with gzip.open(path, "wt", encoding="utf-8") as handle:
-                handle.write("#version: 0.2\n" + "\n".join(self.MERGES) + "\n")
-            tokenizer = ClipTokenizer.from_file(path)
-
-        self.assertEqual(tokenizer.encode("cat"), [513])
-
-
 class ClipBackendTests(SimpleTestCase):
-    def test_pixel_values_scale_the_short_side_and_cut_the_centre(self):
-        image = Image.new("RGB", (448, 300), (255, 255, 255))
-        # A black band at the left edge, cut out by the centre crop.
-        image.paste((0, 0, 0), (0, 0, 40, 300))
+    def setUp(self):
+        clip._models.clear()
+        self.addCleanup(clip._models.clear)
 
-        pixels = clip.pixel_values(image)
+    def _fastembed(self, vector):
+        built = MagicMock()
+        built.embed.return_value = iter([np.asarray(vector, dtype=np.float32)])
+        return built
 
-        self.assertEqual(pixels.shape, (1, 3, 224, 224))
-        self.assertEqual(pixels.dtype, np.float32)
-        white = (1.0 - clip._MEAN) / clip._STD
-        np.testing.assert_allclose(pixels[0, :, 112, 0], white, rtol=1e-5)
+    def test_embed_image_runs_the_image_model_on_the_picture(self):
+        image = Image.new("RGB", (300, 200))
+        built = self._fastembed(np.ones(512))
+        with patch.object(clip, "_build", return_value=built) as build:
+            vector = clip.ClipVitB32Backend().embed_image(image)
 
-    def test_embed_image_runs_the_visual_model(self):
-        session = MagicMock()
-        session.run.return_value = [np.ones((1, 512), dtype=np.float32)]
-        with patch.object(clip.runtime, "session", return_value=session) as get:
-            vector = clip.ClipVitB32Backend().embed_image(Image.new("RGB", (300, 200)))
-
-        get.assert_called_once_with(clip.VISUAL)
-        (inputs,) = session.run.call_args.args[1:]
-        self.assertEqual(inputs["pixel_values"].shape, (1, 3, 224, 224))
+        build.assert_called_once_with(clip.IMAGE_MODEL)
+        built.embed.assert_called_once_with([image])
         self.assertEqual(vector.shape, (512,))
 
-    def test_embed_text_runs_the_text_model_on_token_ids(self):
-        session = MagicMock()
-        session.run.return_value = [np.ones((1, 512), dtype=np.float32)]
-        tokenizer = ClipTokenizer(ClipTokenizerTests.MERGES)
-        with (
-            patch.object(clip, "_get_tokenizer", return_value=tokenizer),
-            patch.object(clip.runtime, "session", return_value=session) as get,
-        ):
-            vector = clip.ClipVitB32Backend().embed_text("cat")
+    def test_embed_text_runs_the_text_model(self):
+        built = self._fastembed(np.ones(512))
+        with patch.object(clip, "_build", return_value=built) as build:
+            clip.ClipVitB32Backend().embed_text("dog on the beach")
 
-        get.assert_called_once_with(clip.TEXTUAL)
-        (inputs,) = session.run.call_args.args[1:]
-        self.assertEqual(inputs["input_ids"].shape, (1, CONTEXT_LENGTH))
-        self.assertEqual(inputs["input_ids"].dtype, np.int32)
-        self.assertEqual(inputs["input_ids"][0, 1], 513)
-        self.assertEqual(inputs["attention_mask"][0].sum(), 3)
-        self.assertEqual(vector.shape, (512,))
+        build.assert_called_once_with(clip.TEXT_MODEL)
+        built.embed.assert_called_once_with(["dog on the beach"])
 
-    def test_pins_every_file_it_downloads(self):
-        backend = clip.ClipVitB32Backend()
+    def test_a_model_is_built_once_per_process(self):
+        with patch.object(clip, "_build", return_value=MagicMock()) as build:
+            clip.model(clip.TEXT_MODEL)
+            clip.model(clip.TEXT_MODEL)
 
-        self.assertEqual(backend.dims, 512)
-        for model in backend.models:
-            self.assertRegex(model.sha256, r"^[0-9a-f]{64}$")
-            self.assertTrue(model.url.startswith("https://"))
+        build.assert_called_once()
+
+    @override_settings(PHOTOS_MODEL_DIR="/srv/models", PHOTOS_ONNX_THREADS=2)
+    def test_builds_on_the_cpu_into_the_model_directory(self):
+        with patch("fastembed.TextEmbedding") as text_embedding:
+            clip._build(clip.TEXT_MODEL)
+
+        args, kwargs = text_embedding.call_args
+        self.assertEqual(args, (clip.TEXT_MODEL,))
+        self.assertEqual(kwargs["cache_dir"], "/srv/models/fastembed")
+        self.assertEqual(kwargs["threads"], 2)
+        self.assertEqual(kwargs["providers"], ["CPUExecutionProvider"])
+
+    def test_health_says_the_weights_come_on_first_use_until_they_are_here(self):
+        with tempfile.TemporaryDirectory() as models:
+            with override_settings(PHOTOS_MODEL_DIR=models):
+                health = clip.ClipVitB32Backend().health()
+
+                self.assertTrue(health.ok)
+                self.assertIn("download on first use", health.detail)
+
+                for name in (clip.IMAGE_MODEL, clip.TEXT_MODEL):
+                    repo = Path(clip.cache_dir()) / f"models--{name.replace('/', '--')}"
+                    snapshot = repo / "snapshots" / "abc123"
+                    snapshot.mkdir(parents=True)
+                    (snapshot / "model.onnx").write_bytes(b"onnx")
+                    (repo / "refs").mkdir()
+                    (repo / "refs" / "main").write_text("abc123")
+                health = clip.ClipVitB32Backend().health()
+
+        self.assertEqual(health.detail, "CLIP ViT-B/32, ready")
 
 
 @override_settings(

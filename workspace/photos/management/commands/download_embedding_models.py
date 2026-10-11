@@ -41,3 +41,4 @@ class Command(BaseCommand):
                 raise CommandError(f"{backend.key}: {exc}") from exc
             for model in backend.models:
                 self.stdout.write(f"{backend.key}: {model_path(model)}")
+            self.stdout.write(f"{backend.key}: ready")

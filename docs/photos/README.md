@@ -68,10 +68,12 @@ known and ready. Embedded photos are listed, read-only, in the admin under
 | `clip_vit_b32` (default) | OpenAI CLIP ViT-B/32, on the CPU | 512-d | MIT |
 | `remote` | Any multimodal model behind an OpenAI-compatible `/embeddings` endpoint | `PHOTOS_EMBEDDING_DIMS` | The model's |
 
-**`clip_vit_b32`** runs locally through onnxruntime. Its weights (the image
-and text encoders exported to ONNX by Jina AI's clip-as-service, 351 MB and
-254 MB) and OpenAI's tokenizer download on first use into `PHOTOS_MODEL_DIR`,
-checked against pinned SHA-256 hashes, or ahead of time:
+**`clip_vit_b32`** runs locally on the CPU through
+[fastembed](https://github.com/qdrant/fastembed), which ships CLIP's
+preprocessing, tokenizer and ONNX runtime. Its weights (the image and text
+encoders, 340 MB and 250 MB) download from the Hugging Face Hub on first use
+into `PHOTOS_MODEL_DIR/fastembed`, or ahead of time, for a worker without
+internet access:
 
 ```bash
 python manage.py download_embedding_models

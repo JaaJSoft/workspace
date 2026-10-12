@@ -337,7 +337,9 @@ def index_search_document(self, file_uuid, include_descendants=False):
         # keyset rather than streamed: a read cursor held open across the
         # write transactions below is what makes SQLite raise "database is
         # locked" (see services/processors.py).
-        descendants = File.objects.filter(path__startswith=f"{file_obj.path}/")
+        descendants = File.objects.filter(
+            file_obj._descendant_filter(include_self=False)
+        )
         last_uuid = None
         while True:
             page_qs = descendants.order_by("uuid")

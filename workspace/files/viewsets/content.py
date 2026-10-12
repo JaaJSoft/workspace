@@ -2,7 +2,6 @@
 
 from itertools import batched
 
-from django.db.models import Q
 from django.http import Http404
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -309,20 +308,14 @@ class ContentMixin:
         # Folder download as ZIP - streamed so RAM usage stays bounded
         # (the previous BytesIO-then-getvalue() held the full archive in
         # memory before the first byte hit the socket).
-        folder_path = file_obj.path or file_obj.get_path()
-        prefix = f"{folder_path}/"
-        # Use the folder owner (not request.user) so a folder shared from
-        # another user still expands its descendants. Group folders use the
-        # group_id branch.
-        desc_filter = Q(owner_id=file_obj.owner_id)
-        if file_obj.group_id:
-            desc_filter = Q(group_id=file_obj.group_id)
+        prefix = f"{file_obj.path or file_obj.get_path()}/"
+        # The folder's own tree, not request.user's: a folder shared from
+        # another user still expands its descendants.
         descendants = exclude_blocked(
             File.objects.filter(
-                desc_filter,
+                file_obj._descendant_filter(include_self=False),
                 node_type=File.NodeType.FILE,
                 deleted_at__isnull=True,
-                path__startswith=prefix,
             )
             .exclude(content="")
             .exclude(content__isnull=True)
@@ -403,6 +396,7 @@ class ContentMixin:
                     "content",
                     "node_type",
                     "owner_id",
+                    "group_id",
                 )
                 .distinct()
             )
@@ -424,10 +418,9 @@ class ContentMixin:
                     prefix = f"{folder_path}/"
                     descendants = exclude_blocked(
                         File.objects.filter(
-                            owner=request.user,
+                            obj._descendant_filter(include_self=False),
                             node_type=File.NodeType.FILE,
                             deleted_at__isnull=True,
-                            path__startswith=prefix,
                         )
                         .only(
                             "uuid",

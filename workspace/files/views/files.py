@@ -316,13 +316,11 @@ class FileViewSet(
         """Exclude a folder's entire subtree (the folder itself and all its
         descendants) from a list response.
 
-        Driven by ``?exclude_descendants_of=<uuid>``: resolves the folder's
-        denormalized ``path`` within the caller's accessible files and drops the
-        folder plus everything beneath it via a path prefix, reusing the
-        mechanism descendants mode uses. The trailing slash keeps a sibling
-        whose name merely prefixes the target (e.g. ``JournalArchive`` vs
-        ``Journal``) from being dropped. A malformed UUID is a client error
-        (400); an absent or unresolved value is a no-op.
+        Driven by ``?exclude_descendants_of=<uuid>``: resolves the folder
+        within the caller's accessible files and drops the folder plus
+        everything beneath it in its own tree, the subtree descendants mode
+        lists. A malformed UUID is a client error (400); an absent or
+        unresolved value is a no-op.
         """
         raw = self.request.query_params.get("exclude_descendants_of")
         if not raw:
@@ -330,18 +328,18 @@ class FileViewSet(
         excluded_uuid = parse_uuid_or_none(raw)
         if excluded_uuid is None:
             raise ValidationError({"exclude_descendants_of": "Must be a valid UUID."})
-        path = (
+        excluded = (
             File.objects.filter(
                 FileService.accessible_files_q(self.request.user),
                 uuid=excluded_uuid,
                 deleted_at__isnull=True,
             )
-            .values_list("path", flat=True)
+            .only("uuid", "path", "node_type", "owner_id", "group_id")
             .first()
         )
-        if not path:
+        if excluded is None:
             return queryset
-        return queryset.exclude(Q(path=path) | Q(path__startswith=path + "/"))
+        return queryset.exclude(excluded._descendant_filter())
 
     def _is_favorites_query(self):
         value = self.request.query_params.get("favorites")
@@ -456,7 +454,7 @@ class FileViewSet(
         # Resolve parent context: detect group from parent, resolve descendants
         parent_uuid = self.request.query_params.get("parent")
         group_id = self.request.query_params.get("group")
-        ancestor_path = None
+        ancestor = None
 
         if self.action == "list" and parent_uuid:
             parent_obj = (
@@ -464,16 +462,16 @@ class FileViewSet(
                     uuid=parent_uuid,
                     deleted_at__isnull=True,
                 )
-                .values_list("group_id", "path")
+                .only("uuid", "path", "node_type", "owner_id", "group_id")
                 .first()
             )
             if parent_obj:
                 # Auto-detect group from parent
-                if not group_id and parent_obj[0]:
-                    group_id = parent_obj[0]
-                # Descendants mode: use path prefix instead of parent=exact
-                if self._is_descendants_query() and parent_obj[1]:
-                    ancestor_path = parent_obj[1]
+                if not group_id and parent_obj.group_id:
+                    group_id = parent_obj.group_id
+                # Descendants mode: the whole subtree instead of parent=exact
+                if self._is_descendants_query() and parent_obj.path:
+                    ancestor = parent_obj
         if self.action == "list" and group_id:
             if not self.request.user.groups.filter(id=group_id).exists():
                 return File.objects.none()
@@ -481,8 +479,8 @@ class FileViewSet(
                 group_id=group_id,
                 deleted_at__isnull=True,
             )
-            if ancestor_path:
-                qs = qs.filter(path__startswith=ancestor_path + "/")
+            if ancestor:
+                qs = qs.filter(ancestor._descendant_filter(include_self=False))
             return FileService.annotate_for_serializer(qs, self.request.user)
 
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
@@ -495,8 +493,8 @@ class FileViewSet(
         if self.action == "list":
             if self._is_trash_query():
                 return queryset
-            if ancestor_path:
-                return queryset.filter(path__startswith=ancestor_path + "/")
+            if ancestor:
+                return queryset.filter(ancestor._descendant_filter(include_self=False))
             if (
                 not self._is_recent_query()
                 and "parent" not in self.request.query_params

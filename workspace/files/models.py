@@ -375,7 +375,7 @@ class File(models.Model):
         if self.pk:
             old_data = (
                 File.objects.filter(pk=self.pk)
-                .values("name", "parent_id", "path")
+                .values("name", "parent_id", "path", "owner_id", "group_id")
                 .first()
             )
 
@@ -393,18 +393,35 @@ class File(models.Model):
             if old_path and old_path != new_path:
                 with transaction.atomic():
                     super().save(*args, **kwargs)
-                    self._update_descendant_paths(old_path, new_path)
+                    # The descendants still carry the namespace this node
+                    # had before the save; a move switches it afterwards.
+                    self._update_descendant_paths(
+                        old_path,
+                        new_path,
+                        self._namespace_q(old_data["owner_id"], old_data["group_id"]),
+                    )
                 return
 
         super().save(*args, **kwargs)
 
     @classmethod
-    def _update_descendant_paths(cls, old_path, new_path):
+    def _update_descendant_paths(cls, old_path, new_path, namespace):
         prefix = f"{old_path}/"
         start_pos = len(old_path) + 2
-        cls.objects.filter(path__startswith=prefix).update(
+        cls.objects.filter(namespace, path__startswith=prefix).update(
             path=Concat(Value(f"{new_path}/"), Substr("path", start_pos))
         )
+
+    @staticmethod
+    def _namespace_q(owner_id, group_id):
+        """Rows of one tree: a group's, or a user's personal one.
+
+        ``path`` is only unique within a tree, so every path-prefix query
+        needs this next to it or it reaches into other trees.
+        """
+        if group_id:
+            return models.Q(group_id=group_id)
+        return models.Q(owner_id=owner_id, group__isnull=True)
 
     @classmethod
     def _build_path_for(cls, name, parent_id):
@@ -481,14 +498,16 @@ class File(models.Model):
             return self.locked_by.username
         return None
 
-    def _descendant_filter(self):
-        if self.node_type != self.NodeType.FOLDER:
-            return models.Q(pk=self.pk)
+    def _descendant_filter(self, *, include_self=True):
+        """This node's subtree, within its own tree only."""
+        own = models.Q(pk=self.pk)
         path = self.path or self.get_path()
-        if not path:
-            return models.Q(pk=self.pk)
-        prefix = f"{path}/"
-        return models.Q(pk=self.pk) | models.Q(path__startswith=prefix)
+        if self.node_type != self.NodeType.FOLDER or not path:
+            return own if include_self else models.Q(pk__in=())
+        below = self._namespace_q(self.owner_id, self.group_id) & models.Q(
+            path__startswith=f"{path}/"
+        )
+        return own | below if include_self else below
 
     @transaction.atomic
     def soft_delete(self, deleted_at=None):

@@ -12,15 +12,15 @@ from ..models import File, FileLink
 from . import FileService
 
 
-def _folder_path(user, folder_uuid):
-    """Return the denormalized path of a folder within the user's accessible files."""
+def _folder(user, folder_uuid):
+    """Return a folder among the user's accessible files, or None."""
     return (
         File.objects.filter(
             FileService.accessible_files_q(user),
             uuid=folder_uuid,
             deleted_at__isnull=True,
         )
-        .values_list("path", flat=True)
+        .only("uuid", "path", "node_type", "owner_id", "group_id")
         .first()
     )
 
@@ -74,16 +74,16 @@ def build_file_graph(
     if file_type:
         base = base.filter(type=file_type)
     if under is not None:
-        folder_path = _folder_path(user, under)
+        folder = _folder(user, under)
         base = (
-            base.filter(path__startswith=folder_path + "/")
-            if folder_path
+            base.filter(folder._descendant_filter(include_self=False))
+            if folder
             else base.none()
         )
     if exclude_descendants_of is not None:
-        excl_path = _folder_path(user, exclude_descendants_of)
-        if excl_path:
-            base = base.exclude(path__startswith=excl_path + "/")
+        excluded = _folder(user, exclude_descendants_of)
+        if excluded:
+            base = base.exclude(excluded._descendant_filter(include_self=False))
     if favorites is True:
         base = base.filter(favorites__owner=user)
     elif favorites is False:

@@ -138,9 +138,10 @@ def reconcile_trashed_children(node, trashed_at):
     """
     if node.node_type != File.NodeType.FOLDER:
         return
-    path = node.path or node.get_path()
     still_trashed = (
-        File.objects.filter(path__startswith=f"{path}/", deleted_at=trashed_at)
+        File.objects.filter(
+            node._descendant_filter(include_self=False), deleted_at=trashed_at
+        )
         .select_related("owner", "parent")
         .order_by("path")
     )
@@ -331,10 +332,9 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
     with an ancestor segment such as the username) are not rewritten in the
     wrong place.
     """
-    folder_path = folder.path or folder.get_path()
     descendants = (
         File.objects.filter(
-            path__startswith=f"{folder_path}/",
+            folder._descendant_filter(include_self=False),
             node_type=File.NodeType.FILE,
         )
         .exclude(content="")

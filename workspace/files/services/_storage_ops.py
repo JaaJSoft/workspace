@@ -293,8 +293,9 @@ def _relocate_on_storage(source, destination, *, expect_dir):
     if expect_dir:
         os.rename(source_full, destination_full)
     else:
-        # The destination's name is held by the row being moved, so a blob
-        # already there is an orphan; os.rename would refuse it on Windows.
+        # move_node_storage refused a path another row keeps its bytes at,
+        # so a blob still there is an orphan; os.rename would refuse it on
+        # Windows.
         try:
             os.replace(source_full, destination_full)
         except PermissionError:
@@ -356,6 +357,19 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
         File.objects.bulk_update(updated, ["content"], batch_size=500)
 
 
+def blob_held_elsewhere(storage, path, node):
+    """Whether a row other than *node* keeps its bytes at *path*.
+
+    The storage makes a leaf name safe (``a b.txt`` is stored as
+    ``a_b.txt``), so two names the uniqueness constraint tells apart can
+    resolve to one path, and the storage overwrites in place. Case-blind for
+    the disks that are. The disk is asked first: the column is not indexed.
+    """
+    if not storage.exists(path):
+        return False
+    return File.objects.filter(content__iexact=path).exclude(pk=node.pk).exists()
+
+
 def move_node_storage(node, source, destination):
     """Move *node* from *source* to *destination* on storage.
 
@@ -373,6 +387,10 @@ def move_node_storage(node, source, destination):
     else:
         if not node.content or not node.content.name:
             return
+        if blob_held_elsewhere(default_storage, destination, node):
+            from ._names import NameTaken
+
+            raise NameTaken()
         node.content.name = destination
         File.objects.filter(pk=node.pk).update(content=destination)
 

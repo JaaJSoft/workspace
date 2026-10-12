@@ -6,6 +6,7 @@ the years); in a photo they count as one, a face named after someone already
 in it being folded into theirs (see face_corrections.fold_face).
 """
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +28,8 @@ from .face_corrections import (
     start_cluster,
 )
 from .face_grouping import max_distance, photo_clusters, refresh_clusters
+
+logger = logging.getLogger(__name__)
 
 
 class NoCover(CorrectionError):
@@ -85,7 +88,7 @@ def link_new_person(cluster, user, name):
     with transaction.atomic():
         person = create_person(owner=user, display_name=name)
         link_cluster(cluster, person)
-    save_face_as_avatar(person, cluster.cover_id)
+    give_default_avatar(person, cluster.cover_id)
     return person
 
 
@@ -188,6 +191,18 @@ def save_face_as_avatar(person, face_id):
         handle.seek(0)
         save_avatar(person, handle, 0, 0, width, height)
     return True
+
+
+def give_default_avatar(person, face_id):
+    """A new contact's first photo: best effort, a failure never costs the
+    contact its creation (a savepoint keeps the caller's transaction usable)."""
+    try:
+        with transaction.atomic():
+            save_face_as_avatar(person, face_id)
+    except Exception:
+        logger.exception(
+            "Could not give contact %s face %s as photo", person.pk, face_id
+        )
 
 
 @dataclass(frozen=True)

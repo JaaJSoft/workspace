@@ -170,7 +170,7 @@ def _assign(user, faces, target, result, touched):
             new_look = cluster
     if target.new_person and result.done:
         # The first face assigned is never folded: the person had none yet.
-        face_people.save_face_as_avatar(person, result.done[0])
+        face_people.give_default_avatar(person, result.done[0])
 
 
 # -- undo --------------------------------------------------------------------

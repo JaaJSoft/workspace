@@ -1,5 +1,7 @@
 """Naming face clusters after contacts from the People module."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files.storage import default_storage
@@ -439,6 +441,38 @@ class AvatarTests(FaceApiTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Person.objects.get(display_name="Bob").has_avatar)
+
+    @patch(
+        "workspace.photos.services.face_people.save_avatar",
+        side_effect=OSError("broken crop"),
+    )
+    def test_a_failing_photo_still_creates_the_contact(self, _save):
+        face = self.face("bob.png")
+
+        with self.assertLogs("workspace.photos.services.face_people", "ERROR"):
+            from_cluster = _patch(
+                self.client, f"{CLUSTERS}/{self.bob.pk}", {"new_person": "Bob"}
+            )
+        with self.assertLogs("workspace.photos.services.face_people", "ERROR"):
+            from_face = _patch(
+                self.client, f"/api/v1/photos/faces/{face.pk}", {"new_person": "Rob"}
+            )
+
+        self.assertEqual(from_cluster.status_code, 200)
+        self.assertEqual(from_face.status_code, 200)
+        self.assertFalse(Person.objects.get(display_name="Bob").has_avatar)
+        self.assertFalse(Person.objects.get(display_name="Rob").has_avatar)
+
+    @patch(
+        "workspace.photos.services.face_people.save_avatar",
+        side_effect=OSError("broken crop"),
+    )
+    def test_the_explicit_action_does_not_swallow_a_failing_photo(self, _save):
+        contact = create_person(owner=self.user, display_name="Alice")
+        FaceCluster.objects.filter(pk=self.alice.pk).update(person=contact)
+
+        with self.assertRaises(OSError):
+            self.client.post(f"{CLUSTERS}/{self.alice.pk}/avatar")
 
     def test_naming_after_an_existing_contact_leaves_their_photo_alone(self):
         contact = create_person(owner=self.user, display_name="Alice")

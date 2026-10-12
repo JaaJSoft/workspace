@@ -153,7 +153,7 @@ class MemberViewTests(SharedAlbumTestCase):
         tile.get_by_role("button", name="More actions").click()
 
         menu = self.page.locator("#photos-context-menu")
-        expect(menu.get_by_text("View")).to_be_visible()
+        expect(menu.get_by_text("Open", exact=True)).to_be_visible()
         expect(menu.get_by_text("Download")).to_be_visible()
         expect(menu.get_by_text("Open in Files")).to_have_count(0)
         expect(menu.get_by_text("Add to album")).to_have_count(0)

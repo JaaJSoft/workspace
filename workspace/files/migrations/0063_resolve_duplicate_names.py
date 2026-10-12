@@ -197,7 +197,7 @@ def _makedirs(storage, dir_path):
     try:
         os.makedirs(storage.path(dir_path), exist_ok=True)
     except NotImplementedError:
-        pass
+        pass  # a storage without local paths has no directories to create
 
 
 def _prune_empty_dirs(storage, dir_path):

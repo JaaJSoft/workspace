@@ -11,15 +11,24 @@ from ._storage_ops import unique_copy_name
 _CLAIM_ATTEMPTS = 20
 
 
+FILE_NAME_TAKEN = "A file with the same name already exists in this folder."
+FOLDER_NAME_TAKEN = "A folder with the same name already exists in this folder."
+
+
 class NameTaken(ValueError):
     """A live node of that folder already holds the name."""
 
+    def __init__(self, held_by_folder=False):
+        self.held_by_folder = held_by_folder
+        super().__init__(FOLDER_NAME_TAKEN if held_by_folder else FILE_NAME_TAKEN)
 
-def _taken_message(owner, parent, name):
+
+def _taken(owner, parent, name):
     conflict = find_node_conflict(owner, parent, name)
-    if conflict is not None and conflict.node_type == File.NodeType.FOLDER:
-        return "A folder with the same name already exists in this folder."
-    return "A file with the same name already exists in this folder."
+    return NameTaken(
+        held_by_folder=conflict is not None
+        and conflict.node_type == File.NodeType.FOLDER
+    )
 
 
 @contextmanager
@@ -35,7 +44,7 @@ def name_claim(owner, parent, name):
     except IntegrityError as error:
         if not any(c in str(error) for c in File.LIVE_NAME_CONSTRAINTS):
             raise
-        raise NameTaken(_taken_message(owner, parent, name)) from error
+        raise _taken(owner, parent, name) from error
 
 
 def insert_node(node, content=None):
@@ -83,7 +92,7 @@ def insert_node_keeping_both(node, content=None):
             return insert_node(node, content)
         except NameTaken:
             continue
-    raise NameTaken(_taken_message(node.owner, node.parent, node.name))
+    raise _taken(node.owner, node.parent, node.name)
 
 
 def sibling_nodes(owner, parent):
@@ -140,9 +149,7 @@ def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
     conflict = find_node_conflict(owner, parent, name, exclude_pk=exclude_pk)
     if conflict is None:
         return
-    if conflict.node_type == File.NodeType.FOLDER:
-        raise NameTaken("A folder with the same name already exists in this folder.")
-    raise NameTaken("A file with the same name already exists in this folder.")
+    raise NameTaken(held_by_folder=conflict.node_type == File.NodeType.FOLDER)
 
 
 def available_node_name(owner, parent, name, node_type, *, avoiding=()):

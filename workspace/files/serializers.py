@@ -8,7 +8,11 @@ from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FilePermission, FileService
-from workspace.files.services._names import NameTaken
+from workspace.files.services._names import (
+    FILE_NAME_TAKEN,
+    FOLDER_NAME_TAKEN,
+    NameTaken,
+)
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -52,13 +56,19 @@ def ensure_unlocked(user, target):
         raise FileLocked(locked_payload(holder))
 
 
+def name_taken_error(error):
+    """The 400 a taken name owes the client, built from constants only."""
+    message = FOLDER_NAME_TAKEN if error.held_by_folder else FILE_NAME_TAKEN
+    return serializers.ValidationError({"name": [message]})
+
+
 @contextmanager
 def name_refusals():
     """A name taken after validation passed answers like one taken before."""
     try:
         yield
     except NameTaken as error:
-        raise serializers.ValidationError({"name": [str(error)]}) from error
+        raise name_taken_error(error) from error
 
 
 @contextmanager
@@ -510,7 +520,7 @@ class FileSerializer(serializers.ModelSerializer):
                         owner, validated_data.get("parent"), validated_data["name"]
                     )
                 if winner is None:
-                    raise serializers.ValidationError({"name": [str(error)]}) from error
+                    raise name_taken_error(error) from error
                 return self._replace_existing(winner, validated_data)
 
         # A freshly-created node cannot have favorites, pins, shares, or

@@ -191,3 +191,39 @@ class ConcurrentUploadApiTests(APITestCase):
         self.assertEqual(response.data["uuid"], str(self.winner.uuid))
         self.assertEqual(File.objects.filter(name="a.txt").count(), 1)
         self.assertEqual(read(self.winner), b"loser")
+
+
+class NameTakenAnswerTests(APITestCase):
+    """The 400 names what holds the name, whichever node type was posted."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass")
+        self.client.force_authenticate(user=self.user)
+
+    def test_a_file_posted_over_a_folder_names_the_folder(self):
+        FileService.create_folder(self.user, "Docs")
+        response = self.client.post(
+            "/api/v1/files",
+            {
+                "name": "docs",
+                "node_type": "file",
+                "content": SimpleUploadedFile("docs", b"x"),
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(
+            response.data["name"],
+            ["A folder with the same name already exists in this folder."],
+        )
+
+    def test_a_folder_posted_over_a_file_names_the_file(self):
+        FileService.create_file(self.user, "Notes", content=ContentFile(b"x"))
+        response = self.client.post(
+            "/api/v1/files", {"name": "notes", "node_type": "folder"}, format="json"
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(
+            response.data["name"],
+            ["A file with the same name already exists in this folder."],
+        )

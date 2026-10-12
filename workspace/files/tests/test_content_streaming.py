@@ -24,6 +24,9 @@ class InlineTextContentStreamingTests(APITestCase):
         self.client.force_authenticate(user=self.user)
 
     def _text_file(self, name, payload, category="text"):
+        # The blob under a neutral name: the disk may refuse the row's (a
+        # Windows one refuses a newline or a colon), and only the row's is
+        # served.
         return File.objects.create(
             owner=self.user,
             name=name,
@@ -31,7 +34,7 @@ class InlineTextContentStreamingTests(APITestCase):
             mime_type="text/plain",
             category=category,
             size=len(payload),
-            content=ContentFile(payload, name=name),
+            content=ContentFile(payload, name="blob.txt"),
         )
 
     def assert_streamed(self, resp, payload):

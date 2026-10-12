@@ -1,4 +1,5 @@
 import io
+import os
 from datetime import UTC, datetime
 from unittest.mock import patch
 
@@ -319,7 +320,9 @@ class AgainstOurOwnServerTests(TestCase):
         # No non-ASCII name here: httpx2's WSGI transport hands PATH_INFO over
         # as UTF-8 where WSGI expects latin-1, which trips WsgiDAV before our
         # code runs - a test-transport artifact, not a server behaviour.
-        names = ["Spider-Man%3A Across.md", "what?.txt", "c#.md", "a & b+c.txt"]
+        names = ["Spider-Man%3A Across.md", "c#.md", "a & b+c.txt"]
+        if os.name != "nt":
+            names.append("what?.txt")  # a Windows disk refuses the name
         for name in names:
             FileService.create_file(
                 self.remote_user, name, awkward, content=ContentFile(name.encode())

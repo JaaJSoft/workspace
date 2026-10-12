@@ -18,6 +18,7 @@ from django.template.defaultfilters import filesizeformat
 from rest_framework import serializers
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 from workspace.files.models import File
 from workspace.files.services import FileService, quota
 from workspace.files.services._names import available_file_name, find_name_conflict
@@ -399,15 +400,17 @@ class FilesImporter(Importer):
     def _ensure_folder(self, ctx, parent, name):
         """Reuse a same-name folder rather than creating a second one.
 
-        Matched case-insensitively, like the uniqueness rule it has to
-        satisfy: a remote sharing 'Docs' and 'docs' side by side maps to one
-        local folder, because on a case-insensitive filesystem the two would
-        be one directory anyway.
+        Matched caselessly, like the uniqueness rule it has to satisfy: a
+        remote sharing 'Docs' and 'docs' side by side maps to one local
+        folder, because on a case-insensitive filesystem the two would be one
+        directory anyway.
         """
         name = safe_local_name(name)
         existing = (
             FileService.user_files_qs(ctx.owner)
-            .filter(parent=parent, node_type=File.NodeType.FOLDER, name__iexact=name)
+            .filter(
+                parent=parent, node_type=File.NodeType.FOLDER, name_key=caseless(name)
+            )
             .first()
         )
         if existing is not None:

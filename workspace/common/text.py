@@ -1,4 +1,4 @@
-"""Text normalization shared by every substring search."""
+"""Text normalization: substring search, caseless name matching."""
 
 import unicodedata
 
@@ -15,3 +15,16 @@ def fold_text(text):
     """
     decomposed = unicodedata.normalize("NFKD", text or "")
     return "".join(c for c in decomposed if not unicodedata.combining(c)).casefold()
+
+
+def caseless(text):
+    """*text* folded for Unicode canonical caseless matching.
+
+    Two strings fold alike when they differ only in case or in how their
+    accents are encoded (``"É"`` as one code point or as ``"E"`` plus a
+    combining accent), which is what a case-insensitive file system that
+    ignores normalization takes for one name. Accents still count, unlike
+    :func:`fold_text`. The result can be longer than the input.
+    """
+    decomposed = unicodedata.normalize("NFD", text or "")
+    return unicodedata.normalize("NFC", decomposed.casefold())

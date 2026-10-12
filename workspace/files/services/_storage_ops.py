@@ -16,6 +16,7 @@ from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 
 from ..models import File
 from . import _trash
@@ -357,19 +358,6 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
         File.objects.bulk_update(updated, ["content"], batch_size=500)
 
 
-def blob_held_elsewhere(storage, path, node):
-    """Whether a row other than *node* keeps its bytes at *path*.
-
-    The storage makes a leaf name safe (``a b.txt`` is stored as
-    ``a_b.txt``), so two names the uniqueness constraint tells apart can
-    resolve to one path, and the storage overwrites in place. Case-blind for
-    the disks that are. The disk is asked first: the column is not indexed.
-    """
-    if not storage.exists(path):
-        return False
-    return File.objects.filter(content__iexact=path).exclude(pk=node.pk).exists()
-
-
 def move_node_storage(node, source, destination):
     """Move *node* from *source* to *destination* on storage.
 
@@ -387,10 +375,6 @@ def move_node_storage(node, source, destination):
     else:
         if not node.content or not node.content.name:
             return
-        if blob_held_elsewhere(default_storage, destination, node):
-            from ._names import NameTaken
-
-            raise NameTaken()
         node.content.name = destination
         File.objects.filter(pk=node.pk).update(content=destination)
 
@@ -401,10 +385,10 @@ def move_node_storage(node, source, destination):
 def unique_copy_name(base_name, node_type, existing_names):
     """Pick a unique name given a set of *existing_names*.
 
-    Case-insensitive, like the name uniqueness rule it exists to satisfy.
+    Caseless, like the name uniqueness rule it exists to satisfy.
     """
-    taken = {name.casefold() for name in existing_names}
-    if base_name.casefold() not in taken:
+    taken = {caseless(name) for name in existing_names}
+    if caseless(base_name) not in taken:
         return base_name
 
     counter = 1
@@ -416,7 +400,7 @@ def unique_copy_name(base_name, node_type, existing_names):
         else:
             candidate = f"{base_name} ({suffix})"
 
-        if candidate.casefold() not in taken:
+        if caseless(candidate) not in taken:
             return candidate
         counter += 1
 

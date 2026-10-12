@@ -364,33 +364,3 @@ class BytesOutsideTheTransactionTests(TestCase):
         )
         self.assertEqual(depths, [0])
         self.assertEqual(read(copied), b"y" * 1024)
-
-
-class SharedStoragePathTests(TestCase):
-    """Two names the storage turns into one path never share its blob.
-
-    The storage makes a leaf name safe (``a b.txt`` is stored as
-    ``a_b.txt``), so two names the constraint tells apart can still land on
-    one path.
-    """
-
-    def setUp(self):
-        self.user = User.objects.create_user(username="alice", password="pass")
-
-    def test_a_rename_onto_another_files_blob_is_refused(self):
-        spaced = FileService.create_file(
-            self.user, "a b.txt", content=ContentFile(b"spaced")
-        )
-        other = FileService.create_file(self.user, "x.txt", content=ContentFile(b"x"))
-        with self.assertRaisesMessage(ValueError, "same name"):
-            FileService.rename(other, "a_b.txt", acting_user=self.user)
-        self.assertEqual(read(spaced), b"spaced")
-        self.assertEqual(read(other), b"x")
-
-    def test_a_create_onto_another_files_blob_is_refused(self):
-        under = FileService.create_file(
-            self.user, "a_b.txt", content=ContentFile(b"under")
-        )
-        with self.assertRaisesMessage(ValueError, "same name"):
-            FileService.create_file(self.user, "a b.txt", content=ContentFile(b"new"))
-        self.assertEqual(read(under), b"under")

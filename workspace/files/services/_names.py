@@ -10,9 +10,10 @@ from contextlib import contextmanager
 from django.db import IntegrityError, transaction
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 
 from ..models import File
-from ._storage_ops import blob_held_elsewhere, unique_copy_name
+from ._storage_ops import unique_copy_name
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,8 @@ def name_claim(owner, parent, name):
         with transaction.atomic():
             yield
     except IntegrityError as error:
-        if not any(c in str(error) for c in File.LIVE_NAME_CONSTRAINTS):
+        markers = File.LIVE_NAME_CONSTRAINTS + File.LIVE_NAME_CLASH_MARKERS
+        if not any(marker in str(error) for marker in markers):
             raise
         raise _taken(owner, parent, name) from error
 
@@ -97,11 +99,8 @@ def _staged(content):
 
 
 def _place(storage, staged, node):
-    destination = node.content.name
-    if blob_held_elsewhere(storage, destination, node):
-        raise NameTaken()
     source_full = storage.path(staged.name)
-    destination_full = storage.path(destination)
+    destination_full = storage.path(node.content.name)
     os.makedirs(os.path.dirname(destination_full), exist_ok=True)
     try:
         os.replace(source_full, destination_full)
@@ -134,8 +133,6 @@ def _insert(node, content):
         if isinstance(content, _Staged):
             _place(field.storage, content, node)
         elif content is not None:
-            if blob_held_elsewhere(field.storage, node.content.name, node):
-                raise NameTaken()
             stored = field.storage.save(node.content.name, content)
             if stored != node.content.name:
                 # A storage that renames around a collision moved the blob.
@@ -199,7 +196,7 @@ def sibling_files(owner, parent):
 
 def find_name_conflict(owner, parent, name, *, exclude_pk=None):
     """Return the live *file* already using *name* in that folder, or None."""
-    qs = sibling_files(owner, parent).filter(name__iexact=name)
+    qs = sibling_files(owner, parent).filter(name_key=caseless(name))
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.first()
@@ -207,7 +204,7 @@ def find_name_conflict(owner, parent, name, *, exclude_pk=None):
 
 def find_node_conflict(owner, parent, name, *, exclude_pk=None):
     """Return the live file *or folder* already using *name*, or None."""
-    qs = sibling_nodes(owner, parent).filter(name__iexact=name)
+    qs = sibling_nodes(owner, parent).filter(name_key=caseless(name))
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
     return qs.first()
@@ -216,8 +213,8 @@ def find_node_conflict(owner, parent, name, *, exclude_pk=None):
 def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
     """Raise ``ValueError`` if the name is taken in that folder.
 
-    Case-insensitive, across both node types, ignoring soft-deleted records
-    (a trashed node's bytes are moved out of the tree, so its name is free).
+    Caseless, across both node types, ignoring soft-deleted records (a
+    trashed node's bytes are moved out of the tree, so its name is free).
     For group folders, uniqueness is scoped to the group rather than the
     owner.
     """

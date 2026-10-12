@@ -13,7 +13,7 @@ from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
 from ..models import File
-from ._storage_ops import unique_copy_name
+from ._storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +99,11 @@ def _staged(content):
 
 
 def _place(storage, staged, node):
+    destination = node.content.name
+    if blob_held_elsewhere(storage, destination, node):
+        raise NameTaken()
     source_full = storage.path(staged.name)
-    destination_full = storage.path(node.content.name)
+    destination_full = storage.path(destination)
     os.makedirs(os.path.dirname(destination_full), exist_ok=True)
     try:
         os.replace(source_full, destination_full)
@@ -133,6 +136,8 @@ def _insert(node, content):
         if isinstance(content, _Staged):
             _place(field.storage, content, node)
         elif content is not None:
+            if blob_held_elsewhere(field.storage, node.content.name, node):
+                raise NameTaken()
             stored = field.storage.save(node.content.name, content)
             if stored != node.content.name:
                 # A storage that renames around a collision moved the blob.

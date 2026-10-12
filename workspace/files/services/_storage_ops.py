@@ -358,6 +358,21 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
         File.objects.bulk_update(updated, ["content"], batch_size=500)
 
 
+def blob_held_elsewhere(storage, path, node):
+    """Whether a row other than *node* keeps its bytes at *path*.
+
+    A backstop, not the lock: the live name constraints keep two files of one
+    folder off one path. What they cannot see is a path reached another way -
+    two user or group directories that differ only in case on a
+    case-insensitive disk, a blob a migration had to leave under an older
+    name, a legacy name holding a backslash. The disk is asked first: the
+    column is not indexed.
+    """
+    if not storage.exists(path):
+        return False
+    return File.objects.filter(content__iexact=path).exclude(pk=node.pk).exists()
+
+
 def move_node_storage(node, source, destination):
     """Move *node* from *source* to *destination* on storage.
 
@@ -375,6 +390,10 @@ def move_node_storage(node, source, destination):
     else:
         if not node.content or not node.content.name:
             return
+        if blob_held_elsewhere(default_storage, destination, node):
+            from ._names import NameTaken
+
+            raise NameTaken()
         node.content.name = destination
         File.objects.filter(pk=node.pk).update(content=destination)
 

@@ -381,6 +381,10 @@ class FileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "File and folder names must not contain '/'."
             )
+        if "\\" in value:
+            raise serializers.ValidationError(
+                "File and folder names must not contain a backslash."
+            )
         return value
 
     def validate(self, attrs):

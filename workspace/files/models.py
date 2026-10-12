@@ -421,6 +421,11 @@ class File(models.Model):
                 .values("name", "parent_id", "path")
                 .first()
             )
+        # The storage reads a backslash as a separator, which would put the
+        # blob in a sibling folder, over another file's. Only checked when the
+        # name is set: rows from before the rule keep theirs.
+        if "\\" in self.name and (old_data is None or old_data["name"] != self.name):
+            raise ValueError("File and folder names must not contain a backslash.")
 
         new_path = self._build_path_for(self.name, self.parent_id)
         self.path = new_path

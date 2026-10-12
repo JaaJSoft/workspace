@@ -6,9 +6,11 @@ import os
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework.test import APITestCase
 
 from workspace.common.tests.media import IsolatedMediaRootMixin
 from workspace.common.tests.migrations import schema_editor_stub
@@ -67,6 +69,24 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
 
         self.assertEqual(read(spaced), b"spaced")
         self.assertEqual(read(other), b"x")
+
+    def test_a_backslash_cannot_reach_into_a_sibling_folder(self):
+        sub = FileService.create_folder(self.user, "a", parent=self.folder)
+        victim = FileService.create_file(
+            self.user, "b.txt", parent=sub, content=ContentFile(b"victim")
+        )
+
+        with self.assertRaisesMessage(ValueError, "backslash"):
+            self._create("a\\b.txt", b"evil")
+
+        self.assertEqual(read(victim), b"victim")
+
+    def test_a_row_named_before_the_backslash_rule_still_saves(self):
+        legacy = self._create("legacy.txt", b"x")
+        File.objects.filter(pk=legacy.pk).update(name="a\\b.txt")
+        legacy.refresh_from_db()
+
+        legacy.save(update_fields=["deleted_at"])
 
     def test_the_disk_sync_recognises_a_file_whose_name_has_a_space(self):
         created = self._create("my doc.txt", b"x")
@@ -240,3 +260,23 @@ class NameBlobsAfterTheirRowsMigrationTests(IsolatedMediaRootMixin, TestCase):
         row.refresh_from_db()
         self.assertEqual(row.content.name, path)
         self.assertEqual(os.path.getmtime(self.storage.path(path)), before)
+
+
+class BackslashNameApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pass")
+        self.client.force_authenticate(user=self.user)
+
+    def test_an_upload_named_with_a_backslash_is_a_400(self):
+        response = self.client.post(
+            "/api/v1/files",
+            {
+                "name": "a" + chr(92) + "b.txt",
+                "node_type": "file",
+                "content": SimpleUploadedFile("b.txt", b"x"),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(File.objects.filter(node_type="file").exists())

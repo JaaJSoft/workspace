@@ -16,6 +16,7 @@ from django.core.files.base import File as DjangoFile
 from django.core.files.storage import default_storage
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 
 from ..models import File
 from . import _trash
@@ -360,10 +361,12 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
 def blob_held_elsewhere(storage, path, node):
     """Whether a row other than *node* keeps its bytes at *path*.
 
-    The storage makes a leaf name safe (``a b.txt`` is stored as
-    ``a_b.txt``), so two names the uniqueness constraint tells apart can
-    resolve to one path, and the storage overwrites in place. Case-blind for
-    the disks that are. The disk is asked first: the column is not indexed.
+    A backstop, not the lock: the live name constraints keep two files of one
+    folder off one path. What they cannot see is a path reached another way -
+    two user or group directories that differ only in case on a
+    case-insensitive disk, a blob a migration had to leave under an older
+    name, a legacy name holding a backslash. The disk is asked first: the
+    column is not indexed.
     """
     if not storage.exists(path):
         return False
@@ -401,10 +404,10 @@ def move_node_storage(node, source, destination):
 def unique_copy_name(base_name, node_type, existing_names):
     """Pick a unique name given a set of *existing_names*.
 
-    Case-insensitive, like the name uniqueness rule it exists to satisfy.
+    Caseless, like the name uniqueness rule it exists to satisfy.
     """
-    taken = {name.casefold() for name in existing_names}
-    if base_name.casefold() not in taken:
+    taken = {caseless(name) for name in existing_names}
+    if caseless(base_name) not in taken:
         return base_name
 
     counter = 1
@@ -416,7 +419,7 @@ def unique_copy_name(base_name, node_type, existing_names):
         else:
             candidate = f"{base_name} ({suffix})"
 
-        if candidate.casefold() not in taken:
+        if caseless(candidate) not in taken:
             return candidate
         counter += 1
 

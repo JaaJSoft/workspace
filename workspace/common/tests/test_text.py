@@ -1,6 +1,6 @@
 from django.test import SimpleTestCase
 
-from workspace.common.text import fold_text
+from workspace.common.text import caseless, fold_text
 
 
 class FoldTextTests(SimpleTestCase):
@@ -18,3 +18,17 @@ class FoldTextTests(SimpleTestCase):
 
     def test_none_is_empty(self):
         self.assertEqual(fold_text(None), "")
+
+
+class CaselessTests(SimpleTestCase):
+    def test_case_variants_fold_alike(self):
+        self.assertEqual(caseless("Été.TXT"), caseless("été.txt"))
+
+    def test_composed_and_decomposed_accents_fold_alike(self):
+        self.assertEqual(caseless("é.txt"), caseless("é.txt"))
+
+    def test_accents_still_count(self):
+        self.assertNotEqual(caseless("é.txt"), caseless("e.txt"))
+
+    def test_folds_beyond_ascii(self):
+        self.assertEqual(caseless("ΣΟΦΙΑ Straße"), caseless("σοφια strasse"))

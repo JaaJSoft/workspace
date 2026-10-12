@@ -11,6 +11,7 @@ from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
 
+from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
@@ -33,6 +34,44 @@ def file_upload_path(instance, filename):
         parent_parts = instance.path.split("/")[:-1]
         return posixpath.join(root, *parent_parts, filename)
     return posixpath.join(root, filename)
+
+
+class TreeStorage(FileSystemStorage):
+    """Stores a file under its name exactly, as rename, move and the trash do.
+
+    The tree on disk mirrors the names in the database, and the disk sync
+    matches the two by name. Django's default would rewrite ``a b.txt`` as
+    ``a_b.txt``, which another name may also give, and which the sync no
+    longer recognises as that file. ``File.save`` rejects the names that
+    would escape their folder.
+    """
+
+    def get_valid_name(self, name):
+        return name
+
+
+class CaselessKeyField(models.CharField):
+    """``caseless()`` of the *source* field, recomputed by every write of it.
+
+    In ``pre_save``, so ``bulk_create`` fills it too. A ``save()`` naming its
+    ``update_fields`` has to list this field next to its source.
+    """
+
+    def __init__(self, *args, source, **kwargs):
+        self.source = source
+        kwargs["editable"] = False
+        super().__init__(*args, **kwargs)
+
+    def deconstruct(self):
+        name, path, args, kwargs = super().deconstruct()
+        kwargs["source"] = self.source
+        del kwargs["editable"]
+        return name, path, args, kwargs
+
+    def pre_save(self, model_instance, add):
+        value = caseless(getattr(model_instance, self.source))
+        setattr(model_instance, self.attname, value)
+        return value
 
 
 # The files and notes activity feeds split the file event stream on these two
@@ -79,6 +118,10 @@ class File(models.Model):
         primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
     )
     name = models.CharField(max_length=255)
+    # What the live name constraints compare: the database's own lower()
+    # folds ASCII only on SQLite, and never sees two encodings of one accent
+    # as one name.
+    name_key = CaselessKeyField(max_length=1024, source="name")
     node_type = models.CharField(max_length=10, choices=NodeType.choices)
     parent = models.ForeignKey(
         "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
@@ -87,7 +130,7 @@ class File(models.Model):
     # File-specific fields
     content = models.FileField(
         upload_to=file_upload_path,
-        storage=FileSystemStorage(allow_overwrite=True),
+        storage=TreeStorage(allow_overwrite=True),
         null=True,
         blank=True,
         max_length=1024,
@@ -313,15 +356,15 @@ class File(models.Model):
                 ),
                 name="unique_group_root_folder",
             ),
-            # One live node per name and folder, case-insensitively, scoped
-            # like services._names.sibling_nodes. The INSERT is the lock that
-            # a check-then-save cannot be: two creates racing for the same
-            # free name both pass the check. Roots need their own constraint
-            # because a NULL parent never collides in a unique index.
+            # One live node per name and folder, caselessly, scoped like
+            # services._names.sibling_nodes. A file's blob path derives from
+            # its name, so this is also what keeps two live files off one
+            # blob. The INSERT is the lock that a check-then-save cannot be:
+            # two creates racing for the same free name both pass the check.
+            # Roots need their own constraint because a NULL parent never
+            # collides in a unique index.
             models.UniqueConstraint(
-                F("parent"),
-                F("group"),
-                Lower("name"),
+                fields=["parent", "group", "name_key"],
                 condition=Q(
                     parent__isnull=False,
                     group__isnull=False,
@@ -330,9 +373,7 @@ class File(models.Model):
                 name="file_unique_live_group_name",
             ),
             models.UniqueConstraint(
-                F("parent"),
-                F("owner"),
-                Lower("name"),
+                fields=["parent", "owner", "name_key"],
                 condition=Q(
                     parent__isnull=False,
                     group__isnull=True,
@@ -341,8 +382,7 @@ class File(models.Model):
                 name="file_unique_live_personal_name",
             ),
             models.UniqueConstraint(
-                F("owner"),
-                Lower("name"),
+                fields=["owner", "name_key"],
                 condition=Q(
                     parent__isnull=True,
                     group__isnull=True,
@@ -358,6 +398,9 @@ class File(models.Model):
         "file_unique_live_personal_name",
         "file_unique_live_root_name",
     )
+    # How SQLite reports them: by their columns rather than by name, and
+    # name_key is in no other index.
+    LIVE_NAME_CLASH_MARKERS = ("files_file.name_key",)
 
     def __str__(self):
         return f"{self.get_node_type_display()}: {self.name}"
@@ -378,13 +421,21 @@ class File(models.Model):
                 .values("name", "parent_id", "path", "owner_id", "group_id")
                 .first()
             )
+        # The storage reads a backslash as a separator, which would put the
+        # blob in a sibling folder, over another file's. Only checked when the
+        # name is set: rows from before the rule keep theirs.
+        if "\\" in self.name and (old_data is None or old_data["name"] != self.name):
+            raise ValueError("File and folder names must not contain a backslash.")
 
         new_path = self._build_path_for(self.name, self.parent_id)
         self.path = new_path
 
         update_fields = kwargs.get("update_fields")
         if update_fields is not None:
-            kwargs["update_fields"] = set(update_fields) | {"path"}
+            update_fields = set(update_fields) | {"path"}
+            if "name" in update_fields:
+                update_fields.add("name_key")
+            kwargs["update_fields"] = update_fields
 
         if old_data:
             old_path = old_data.get("path")

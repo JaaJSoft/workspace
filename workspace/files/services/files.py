@@ -548,11 +548,11 @@ class FileService:
         # ".md" reads as txt) so an edited note keeps type=markdown.
         file_type = refine_with_name(detection.label, name or file_obj.name)
         content_field = File._meta.get_field("content")
-        # What ``FileField.pre_save`` would resolve on the way to storage,
-        # resolved early because the row write has to name the path in the same
-        # statement that claims the row.
+        # Where the file's own name puts its blob, whatever the upload was
+        # called. Resolved early because the row write has to name the path in
+        # the same statement that claims the row.
         storage_path = content_field.storage.get_available_name(
-            content_field.generate_filename(file_obj, content.name),
+            content_field.generate_filename(file_obj, file_obj.name),
             max_length=content_field.max_length,
         )
         fields = {

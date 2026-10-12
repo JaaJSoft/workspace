@@ -1,7 +1,89 @@
 """Internal naming and validation helpers for the file service."""
 
+from contextlib import contextmanager
+
+from django.db import IntegrityError, transaction
+
 from ..models import File
 from ._storage_ops import unique_copy_name
+
+# Enough for every upload of a batch to lose the same name once.
+_CLAIM_ATTEMPTS = 20
+
+
+class NameTaken(ValueError):
+    """A live node of that folder already holds the name."""
+
+
+def _taken_message(owner, parent, name):
+    conflict = find_node_conflict(owner, parent, name)
+    if conflict is not None and conflict.node_type == File.NodeType.FOLDER:
+        return "A folder with the same name already exists in this folder."
+    return "A file with the same name already exists in this folder."
+
+
+@contextmanager
+def name_claim(owner, parent, name):
+    """Run a row write that takes *name*, raising ``NameTaken`` if it is held.
+
+    The block runs in its own savepoint, so a refused write leaves an
+    enclosing transaction usable.
+    """
+    try:
+        with transaction.atomic():
+            yield
+    except IntegrityError as error:
+        if not any(c in str(error) for c in File.LIVE_NAME_CONSTRAINTS):
+            raise
+        raise NameTaken(_taken_message(owner, parent, name)) from error
+
+
+def insert_node(node, content=None):
+    """INSERT *node*, then put *content* at the path its name derives from.
+
+    The row goes first because it is what reserves the name: the blob path
+    derives from the name and the storage overwrites in place, so bytes
+    written before a refused INSERT would land on the sibling that holds the
+    name. Both commit together, so a failed write takes the row with it.
+
+    Unlike a content replacement, the bytes go straight to their path: a new
+    row has no previous version for a staged write to protect.
+    """
+    with transaction.atomic():
+        if content is not None:
+            field = File._meta.get_field("content")
+            node.path = File._build_path_for(node.name, node.parent_id)
+            node.content = field.storage.get_available_name(
+                field.generate_filename(node, node.name),
+                max_length=field.max_length,
+            )
+        with name_claim(node.owner, node.parent, node.name):
+            node.save()
+        if content is not None:
+            stored = field.storage.save(node.content.name, content)
+            if stored != node.content.name:
+                # A storage that renames around a collision moved the blob.
+                File.objects.filter(pk=node.pk).update(content=stored)
+                node.content = stored
+    return node
+
+
+def insert_node_keeping_both(node, content=None):
+    """:func:`insert_node` under *node*'s name, or the first free copy name.
+
+    A name free when it was picked can be taken before the INSERT lands; the
+    loser picks again from what the folder holds then.
+    """
+    requested = node.name
+    for _ in range(_CLAIM_ATTEMPTS):
+        node.name = available_node_name(
+            node.owner, node.parent, requested, node.node_type
+        )
+        try:
+            return insert_node(node, content)
+        except NameTaken:
+            continue
+    raise NameTaken(_taken_message(node.owner, node.parent, node.name))
 
 
 def sibling_nodes(owner, parent):
@@ -59,8 +141,8 @@ def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
     if conflict is None:
         return
     if conflict.node_type == File.NodeType.FOLDER:
-        raise ValueError("A folder with the same name already exists in this folder.")
-    raise ValueError("A file with the same name already exists in this folder.")
+        raise NameTaken("A folder with the same name already exists in this folder.")
+    raise NameTaken("A file with the same name already exists in this folder.")
 
 
 def available_node_name(owner, parent, name, node_type, *, avoiding=()):

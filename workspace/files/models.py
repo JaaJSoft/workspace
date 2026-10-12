@@ -313,7 +313,51 @@ class File(models.Model):
                 ),
                 name="unique_group_root_folder",
             ),
+            # One live node per name and folder, case-insensitively, scoped
+            # like services._names.sibling_nodes. The INSERT is the lock that
+            # a check-then-save cannot be: two creates racing for the same
+            # free name both pass the check. Roots need their own constraint
+            # because a NULL parent never collides in a unique index.
+            models.UniqueConstraint(
+                F("parent"),
+                F("group"),
+                Lower("name"),
+                condition=Q(
+                    parent__isnull=False,
+                    group__isnull=False,
+                    deleted_at__isnull=True,
+                ),
+                name="file_unique_live_group_name",
+            ),
+            models.UniqueConstraint(
+                F("parent"),
+                F("owner"),
+                Lower("name"),
+                condition=Q(
+                    parent__isnull=False,
+                    group__isnull=True,
+                    deleted_at__isnull=True,
+                ),
+                name="file_unique_live_personal_name",
+            ),
+            models.UniqueConstraint(
+                F("owner"),
+                Lower("name"),
+                condition=Q(
+                    parent__isnull=True,
+                    group__isnull=True,
+                    deleted_at__isnull=True,
+                ),
+                name="file_unique_live_root_name",
+            ),
         ]
+
+    # The constraints above, which services._names turns into a name clash.
+    LIVE_NAME_CONSTRAINTS = (
+        "file_unique_live_group_name",
+        "file_unique_live_personal_name",
+        "file_unique_live_root_name",
+    )
 
     def __str__(self):
         return f"{self.get_node_type_display()}: {self.name}"
@@ -526,9 +570,13 @@ class File(models.Model):
             root.save(update_fields=["name"])
 
         if self.node_type == self.NodeType.FOLDER:
-            updated = File.objects.filter(self._descendant_filter()).update(
-                deleted_at=None
-            )
+            subtree = File.objects.filter(self._descendant_filter())
+            if self.deleted_at is not None:
+                # What was trashed with the folder. A child deleted on its own
+                # before it stays in the trash - its name may well be taken
+                # by the file created to replace it.
+                subtree = subtree.filter(deleted_at=self.deleted_at)
+            updated = subtree.update(deleted_at=None)
         else:
             self.deleted_at = None
             self.save(update_fields=["deleted_at"])

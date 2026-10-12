@@ -196,6 +196,7 @@ class FileService:
         viewer=None,
         acting_user=None,
         check_quota=True,
+        keep_both=False,
     ):
         """Create a new file record, optionally with uploaded content.
 
@@ -208,6 +209,9 @@ class FileService:
         exact bytes to the bucket itself - the archive extraction loop, which
         would otherwise re-aggregate the bucket once per entry. Every other
         caller leaves it on: this is where a write is refused.
+
+        A taken name raises ``NameTaken``, unless ``keep_both`` asks for the
+        first free ``name (Copy N)`` instead - the returned row says which.
         """
         from workspace.files.services.content_hash import upload_hash
         from workspace.files.services.detection import (
@@ -220,7 +224,11 @@ class FileService:
         if group is None and parent and parent.group_id:
             group = parent.group
 
-        # Before the detection and hashing passes read the stream.
+        # Before the detection and hashing passes read the stream. Not the
+        # guarantee - the INSERT is - but it spares the loser of a known
+        # collision both passes.
+        if not keep_both:
+            _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
         if check_quota:
             check_write_allowed(
                 owner=owner,
@@ -252,8 +260,6 @@ class FileService:
 
         size = content.size if content is not None else None
 
-        _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
-
         file_obj = File(
             owner=owner,
             name=name,
@@ -272,14 +278,10 @@ class FileService:
                 else File.ProcessingStatus.READY
             ),
         )
-        if content is not None:
-            # The blob path derives from content.name, not from the row's
-            # name. Storage allows overwrite, so an upload stored under a
-            # different row name would otherwise land on - and clobber - a
-            # sibling's blob.
-            content.name = name
-            file_obj.content = content
-        file_obj.save()
+        if keep_both:
+            _name_helpers.insert_node_keeping_both(file_obj, content)
+        else:
+            _name_helpers.insert_node(file_obj, content)
         if size:
             FILES_UPLOAD_BYTES.inc(size)
         record_event(file_obj, acting_user or owner, FileEvent.Action.CREATED)
@@ -304,7 +306,7 @@ class FileService:
             color=color,
             group=group,
         )
-        folder.save()
+        _name_helpers.insert_node(folder)
         FileService._ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
@@ -352,7 +354,7 @@ class FileService:
             logger.warning(
                 "Cannot hash disk file %s: %s", scrub(content_path), scrub(e)
             )
-        file_obj.save()
+        _name_helpers.insert_node(file_obj)
         record_event(file_obj, acting_user, FileEvent.Action.CREATED)
         return file_obj
 
@@ -426,7 +428,10 @@ class FileService:
         # an instance loaded before the move began, so a content write or a
         # lock that landed in between would be reverted by a request that never
         # meant to touch either.
-        file_obj.save(update_fields=["parent", "content"])
+        with _name_helpers.name_claim(
+            new_owner or file_obj.owner, new_parent, file_obj.name
+        ):
+            file_obj.save(update_fields=["parent", "content"])
 
         # Propagate group change
         if (old_group and old_group != new_group) or (not old_group and new_group):
@@ -482,7 +487,8 @@ class FileService:
         file_obj.name = new_name
         # The name and the blob's new path, and nothing else - see the same
         # constraint in ``move``.
-        file_obj.save(update_fields=["name", "content"])
+        with _name_helpers.name_claim(file_obj.owner, file_obj.parent, new_name):
+            file_obj.save(update_fields=["name", "content"])
         record_event(
             file_obj,
             acting_user,

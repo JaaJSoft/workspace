@@ -567,27 +567,18 @@ def unique_copy_name(base_name, node_type, existing_names):
 
 
 def copy_node(node, parent, owner, _sibling_names=None):
-    """Recursively copy a single node."""
-    if _sibling_names is None:
-        # Folders count as well as files: a copied folder that reuses an
-        # existing folder's name merges the two trees. Imported here because
-        # _names imports unique_copy_name from this module.
-        from ._names import sibling_nodes
+    """Recursively copy a single node.
 
-        _sibling_names = set(
-            sibling_nodes(owner, parent).values_list("name", flat=True)
-        )
-
-    new_name = unique_copy_name(
-        node.name,
-        node.node_type,
-        _sibling_names,
-    )
-    _sibling_names.add(new_name)
+    The top-level copy competes for its name with every other writer of
+    *parent*; the nodes below it land in a folder that did not exist a moment
+    ago, so a name set kept along the way is enough for them.
+    """
+    # Imported here because _names imports from this module.
+    from ._names import insert_node, insert_node_keeping_both
 
     copied = File(
         owner=owner,
-        name=new_name,
+        name=node.name,
         node_type=node.node_type,
         parent=parent,
         # file_upload_path reads instance.group_id, so the group must be set
@@ -601,19 +592,27 @@ def copy_node(node, parent, owner, _sibling_names=None):
         color=node.color,
     )
 
+    def insert(content=None):
+        if _sibling_names is None:
+            # Folders count as well as files: a copied folder that reuses an
+            # existing folder's name would merge the two trees.
+            insert_node_keeping_both(copied, content)
+        else:
+            copied.name = unique_copy_name(node.name, node.node_type, _sibling_names)
+            _sibling_names.add(copied.name)
+            insert_node(copied, content)
+
     if node.node_type == File.NodeType.FILE and node.content:
-        # Stream the source blob into a fresh storage path. Wrapping the
-        # opened FieldFile in django.core.files.File flips _committed=False
-        # so the destination FileField triggers storage.save(), which copies
-        # via content.chunks() (default 64KB) instead of buffering everything
-        # in memory. A FieldFile passed directly would be _committed=True and
-        # the two rows would silently share the same blob.
+        # Stream the source blob into a fresh storage path. A django File
+        # wrapping the opened source is copied via content.chunks() (64KB)
+        # instead of being buffered, and never ends up shared: the FieldFile
+        # itself would leave both rows pointing at the same blob.
         #
         # The try/except is intentionally narrow: only the source-open step
         # is what we attribute to "source blob missing". A destination-side
-        # OSError raised later from copied.save() (disk full, permission on
-        # the destination path, remote storage flake) must propagate
-        # without that misleading log line.
+        # OSError raised later (disk full, permission on the destination
+        # path, remote storage flake) must propagate without that misleading
+        # log line.
         try:
             src = node.content.open("rb")
         except FileNotFoundError, OSError:
@@ -624,14 +623,13 @@ def copy_node(node, parent, owner, _sibling_names=None):
             raise
 
         with src:
-            copied.content = DjangoFile(src, name=new_name)
             copied.size = node.size
             # Same bytes, same digest; only legacy rows without one need
             # the extra read.
             copied.content_hash = node.content_hash or hash_stream(src)
-            copied.save()
+            insert(DjangoFile(src, name=node.name))
     else:
-        copied.save()
+        insert()
 
     if node.node_type == File.NodeType.FOLDER:
         # The folder was just created - no children yet, so start empty.

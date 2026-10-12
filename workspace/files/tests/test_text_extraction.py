@@ -85,15 +85,18 @@ class ExtractTextTests(TestCase):
     def test_adjacent_html_blocks_stay_separate_words(self):
         # Real markup has no whitespace between block tags; without a boundary
         # the two words would be indexed as one token nobody can search for.
-        for markup in (
-            b"<p>alpha</p><p>beta</p>",
-            b"<h1>alpha</h1><p>beta</p>",
-            b"<ul><li>alpha</li><li>beta</li></ul>",
-            b"<table><tr><td>alpha</td><td>beta</td></tr></table>",
+        for i, markup in enumerate(
+            (
+                b"<p>alpha</p><p>beta</p>",
+                b"<h1>alpha</h1><p>beta</p>",
+                b"<ul><li>alpha</li><li>beta</li></ul>",
+                b"<table><tr><td>alpha</td><td>beta</td></tr></table>",
+            )
         ):
             with self.subTest(markup=markup):
                 payload = b"<!DOCTYPE html><html><body>" + markup + b"</body></html>"
-                words = extract_text(self._file("a.html", "text/html", payload)).split()
+                html = self._file(f"{i}.html", "text/html", payload)
+                words = extract_text(html).split()
                 self.assertIn("alpha", words)
                 self.assertIn("beta", words)
 
@@ -151,7 +154,7 @@ class ExtractTextTests(TestCase):
         ):
             with self.subTest(label=label):
                 self.assertIsNone(
-                    extract_text(self._file("a.txt", "text/plain", payload))
+                    extract_text(self._file(f"{label}.txt", "text/plain", payload))
                 )
 
     def test_folder_yields_nothing(self):

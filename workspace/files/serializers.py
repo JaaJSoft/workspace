@@ -8,6 +8,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 
 from workspace.common.services.mentions import render_comment_body
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services._names import NameTaken
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -49,6 +50,15 @@ def ensure_unlocked(user, target):
     holder = conflicting_lock(target, user)
     if holder is not None:
         raise FileLocked(locked_payload(holder))
+
+
+@contextmanager
+def name_refusals():
+    """A name taken after validation passed answers like one taken before."""
+    try:
+        yield
+    except NameTaken as error:
+        raise serializers.ValidationError({"name": [str(error)]}) from error
 
 
 @contextmanager
@@ -370,6 +380,7 @@ class FileSerializer(serializers.ModelSerializer):
         on_conflict = attrs.pop("on_conflict", "error")
         if self.instance is not None and "parent" not in attrs:
             on_conflict = "error"
+        self._on_conflict = on_conflict
         if self.instance is not None:
             errors = {}
             initial_data = self.initial_data or {}
@@ -465,25 +476,42 @@ class FileSerializer(serializers.ModelSerializer):
             return self._replace_existing(replace_target, validated_data)
 
         if node_type == File.NodeType.FOLDER:
-            instance = FileService.create_folder(
-                owner=owner,
-                name=validated_data["name"],
-                parent=validated_data.get("parent"),
-                icon=validated_data.get("icon"),
-                color=validated_data.get("color"),
-                group=group,
-                acting_user=owner,
-            )
+            with name_refusals():
+                instance = FileService.create_folder(
+                    owner=owner,
+                    name=validated_data["name"],
+                    parent=validated_data.get("parent"),
+                    icon=validated_data.get("icon"),
+                    color=validated_data.get("color"),
+                    group=group,
+                    acting_user=owner,
+                )
         else:
-            instance = FileService.create_file(
-                owner=owner,
-                name=validated_data["name"],
-                parent=validated_data.get("parent"),
-                content=validated_data.get("content"),
-                mime_type=validated_data.get("mime_type"),
-                group=group,
-                acting_user=owner,
-            )
+            try:
+                instance = FileService.create_file(
+                    owner=owner,
+                    name=validated_data["name"],
+                    parent=validated_data.get("parent"),
+                    content=validated_data.get("content"),
+                    mime_type=validated_data.get("mime_type"),
+                    group=group,
+                    acting_user=owner,
+                    keep_both=self._on_conflict == "rename",
+                )
+            except NameTaken as error:
+                # Free when validated, taken since by an upload that won the
+                # race: replacing it is what this one asked for.
+                winner = None
+                if (
+                    self._on_conflict == "replace"
+                    and validated_data.get("content") is not None
+                ):
+                    winner = FileService.find_name_conflict(
+                        owner, validated_data.get("parent"), validated_data["name"]
+                    )
+                if winner is None:
+                    raise serializers.ValidationError({"name": [str(error)]}) from error
+                return self._replace_existing(winner, validated_data)
 
         # A freshly-created node cannot have favorites, pins, shares, or
         # children yet — attach the annotations the serializer now requires
@@ -557,7 +585,8 @@ class FileSerializer(serializers.ModelSerializer):
         if "name" in validated_data:
             new_name = validated_data["name"]
             if instance.name != new_name:
-                FileService.rename(instance, new_name, acting_user=acting_user)
+                with name_refusals():
+                    FileService.rename(instance, new_name, acting_user=acting_user)
 
         # Handle move via FileService (storage moves). Pop so super().update()
         # below doesn't re-assign parent + re-save — FileService.move() already
@@ -567,7 +596,8 @@ class FileSerializer(serializers.ModelSerializer):
             replace_target = getattr(self, "_replace_target", None)
             if replace_target is not None:
                 return self._replace_on_move(instance, replace_target)
-            FileService.move(instance, new_parent, acting_user=acting_user)
+            with name_refusals():
+                FileService.move(instance, new_parent, acting_user=acting_user)
 
         # DRF's update() ends in a bare save(), which writes every column back
         # from an instance loaded when the request began. A PATCH that only

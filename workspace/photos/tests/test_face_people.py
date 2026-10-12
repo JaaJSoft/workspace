@@ -416,6 +416,38 @@ class AvatarTests(FaceApiTestCase):
         self.assertTrue(contact.has_avatar)
         self.assertTrue(default_storage.exists(avatar_path(contact)))
 
+    def test_a_contact_created_from_a_cluster_gets_its_cover_as_photo(self):
+        _patch(self.client, f"{CLUSTERS}/{self.bob.pk}", {"new_person": "Bob"})
+
+        bob = Person.objects.get(display_name="Bob")
+        self.assertTrue(bob.has_avatar)
+        self.assertTrue(default_storage.exists(avatar_path(bob)))
+
+    def test_a_contact_created_from_a_face_gets_that_face_as_photo(self):
+        face = self.face("bob.png")
+
+        _patch(self.client, f"/api/v1/photos/faces/{face.pk}", {"new_person": "Rob"})
+
+        self.assertTrue(Person.objects.get(display_name="Rob").has_avatar)
+
+    def test_a_face_without_a_crop_still_creates_the_contact(self):
+        Face.objects.filter(cluster=self.bob).update(crop="")
+
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.bob.pk}", {"new_person": "Bob"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Person.objects.get(display_name="Bob").has_avatar)
+
+    def test_naming_after_an_existing_contact_leaves_their_photo_alone(self):
+        contact = create_person(owner=self.user, display_name="Alice")
+
+        _patch(self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(contact.pk)})
+
+        contact.refresh_from_db()
+        self.assertFalse(contact.has_avatar)
+
     def test_an_unnamed_cluster_has_no_contact_to_give_it_to(self):
         response = self.client.post(f"{CLUSTERS}/{self.bob.pk}/avatar")
 

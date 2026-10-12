@@ -134,6 +134,11 @@ class AssignTests(FaceBatchTestCase):
         self.assertEqual(clusters.get().face_count, 2)
         self.assertEqual(len(response.json()["done"]), 2)
 
+    def test_a_new_contact_gets_a_face_of_the_selection_as_photo(self):
+        self.batch("assign", [self.face("bob.png")], new_person="Dana")
+
+        self.assertTrue(Person.objects.get(display_name="Dana").has_avatar)
+
     def test_faces_join_the_closest_cluster_of_a_contact(self):
         contact = create_person(owner=self.user, display_name="Alice")
         self.alice.person = contact

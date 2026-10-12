@@ -54,7 +54,29 @@ test('files added while others upload join the same queue and count', async () =
   assert.equal(queue.pendingCount, 14);
   assert.equal(queue.title, 'Uploading 14 files');
   assert.deepEqual({ ...queue.progress }, { loaded: 150, total: 1500, percent: 10 });
-  assert.equal(requests.length, 2, 'the second batch waits its turn');
+  assert.equal(requests.length, 4, 'the second batch waits its turn');
+});
+
+test('three files go up at once, and a slot that frees up is refilled', async () => {
+  const { queue, requests, notified } = makeQueue();
+  queue.add(Array.from({ length: 5 }, (_, i) => ({ file: file(`f-${i}.txt`) })));
+
+  assert.deepEqual(Array.from(requests, (r) => r.file.name), ['f-0.txt', 'f-1.txt', 'f-2.txt']);
+  assert.deepEqual(statuses(queue).slice(3), ['f-3.txt:queued', 'f-4.txt:queued']);
+
+  requests[1].resolve({ status: 201, body: { uuid: 'u1', name: 'f-1.txt' } });
+  await settle();
+  assert.equal(requests.length, 4);
+  assert.equal(requests[3].file.name, 'f-3.txt');
+
+  for (const i of [0, 2, 3]) requests[i].resolve({ status: 201, body: { uuid: `u${i}` } });
+  await settle();
+  assert.equal(requests.length, 5);
+  assert.deepEqual(notified, [], 'nothing is announced while a file is in flight');
+
+  requests[4].resolve({ status: 201, body: { uuid: 'u4' } });
+  await settle();
+  assert.deepEqual(notified, ['uploads-changed']);
 });
 
 test('the queue drains in order and announces the change once', async () => {
@@ -110,24 +132,28 @@ test('a cancelled file uploads again on retry', async () => {
   assert.deepEqual(statuses(queue), ['big.mov:uploading']);
 });
 
-test('pausing lets the file in flight finish and holds the rest', async () => {
+test('pausing lets the files in flight finish and holds the rest', async () => {
   const { queue, requests } = makeQueue();
-  queue.add([{ file: file('a.jpg') }, { file: file('b.jpg') }]);
+  queue.add(['a.jpg', 'b.jpg', 'c.jpg', 'd.jpg'].map((name) => ({ file: file(name) })));
   queue.pause();
 
-  assert.equal(requests[0].aborted, false);
-  assert.equal(queue.title, 'Pausing after the current file');
+  assert.ok(requests.every((request) => !request.aborted));
+  assert.equal(queue.title, 'Pausing after the 3 files in flight');
   requests[0].resolve({ status: 201, body: { uuid: 'u1', name: 'a.jpg' } });
+  requests[1].resolve({ status: 201, body: { uuid: 'u2', name: 'b.jpg' } });
+  await settle();
+  assert.equal(queue.title, 'Pausing after the current file');
+  requests[2].resolve({ status: 201, body: { uuid: 'u3', name: 'c.jpg' } });
   await settle();
 
-  assert.deepEqual(statuses(queue), ['a.jpg:done', 'b.jpg:queued']);
+  assert.deepEqual(statuses(queue), ['a.jpg:done', 'b.jpg:done', 'c.jpg:done', 'd.jpg:queued']);
   assert.equal(queue.title, 'Paused - 1 file left');
-  assert.equal(queue.statusText(queue.items[1]), 'Paused');
-  assert.equal(requests.length, 1, 'nothing starts while paused');
+  assert.equal(queue.statusText(queue.items[3]), 'Paused');
+  assert.equal(requests.length, 3, 'nothing starts while paused');
 
   queue.resume();
-  assert.equal(requests.length, 2);
-  assert.equal(requests[1].file.name, 'b.jpg');
+  assert.equal(requests.length, 4);
+  assert.equal(requests[3].file.name, 'd.jpg');
 });
 
 test('a late answer to a cancelled request is ignored', async () => {
@@ -294,6 +320,6 @@ test('every failed upload can be retried at once, leaving cancelled ones alone',
   queue.retryFailed();
 
   assert.equal(queue.failedCount, 0);
-  assert.deepEqual(statuses(queue), ['a.jpg:uploading', 'b.jpg:cancelled', 'c.jpg:queued']);
+  assert.deepEqual(statuses(queue), ['a.jpg:uploading', 'b.jpg:cancelled', 'c.jpg:uploading']);
   assert.equal(requests[3].folderId, 'f', 'a retried file keeps its folder');
 });

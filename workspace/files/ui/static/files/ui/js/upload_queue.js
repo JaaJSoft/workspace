@@ -8,13 +8,18 @@
  * queue drains never redirects the rest of it. Adding files while others go
  * up appends to the same queue.
  *
- * Files go up one at a time: the server resolves a name collision against
- * what the folder already holds, so two uploads racing for the same free
- * name could both take it.
+ * Up to MAX_IN_FLIGHT files go up at once, which hides the round trip and
+ * the server's fixed cost per file behind the other transfers. Two of them
+ * racing for one free name is safe: the server reserves the name in the
+ * database before the bytes move, and the loser picks the next one.
  *
  * `uploads-changed` is dispatched on window once the queue drains with new
  * files on the server, and after a discarded duplicate.
  */
+// Three, not six: an HTTP/1.1 deployment gets six connections per host, and
+// the server-sent events stream already holds one.
+const MAX_IN_FLIGHT = 3;
+
 window.createUploadQueue = function createUploadQueue({ send, discard, notify, confirm }) {
   // Kept out of the reactive store: Alpine would proxy them, and an XHR
   // method called through a proxy throws "Illegal invocation".
@@ -61,9 +66,10 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       const pending = this.pendingCount;
       const plural = (n) => `${n} file${n > 1 ? 's' : ''}`;
       if (pending && this.paused) {
-        return this.items.some((item) => item.status === 'uploading')
-          ? 'Pausing after the current file'
-          : `Paused - ${plural(pending)} left`;
+        const uploading = this.items.filter((item) => item.status === 'uploading').length;
+        if (uploading > 1) return `Pausing after the ${uploading} files in flight`;
+        if (uploading) return 'Pausing after the current file';
+        return `Paused - ${plural(pending)} left`;
       }
       if (pending) return `Uploading ${plural(pending)}`;
       const count = (status) => this.items.filter((item) => item.status === status).length;
@@ -178,10 +184,10 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       this._pump();
     },
 
-    // The file in flight finishes: an aborted request cannot be resumed, and
+    // The files in flight finish: an aborted request cannot be resumed, and
     // one aborted after the server stored it would come back as a name
-    // collision (or a second copy) on resume. Cancelling it is the way to
-    // stop it now.
+    // collision (or a second copy) on resume. Cancelling them is the way to
+    // stop them now.
     pause() {
       this.paused = true;
     },
@@ -262,15 +268,18 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
     },
 
     _pump() {
-      if (this.paused || inFlight.size) return;
-      const item = this.items.find((candidate) => candidate.status === 'queued');
-      if (!item) {
-        if (changedSinceIdle && !this.pendingCount) {
-          changedSinceIdle = false;
-          notify('uploads-changed');
-        }
-        return;
+      while (!this.paused && inFlight.size < MAX_IN_FLIGHT) {
+        const item = this.items.find((candidate) => candidate.status === 'queued');
+        if (!item) break;
+        this._send(item);
       }
+      if (changedSinceIdle && !this.pendingCount) {
+        changedSinceIdle = false;
+        notify('uploads-changed');
+      }
+    },
+
+    _send(item) {
       item.status = 'uploading';
       item.loaded = 0;
       const request = send(files.get(item.id), item, (loaded) => {

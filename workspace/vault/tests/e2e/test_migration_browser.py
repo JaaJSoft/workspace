@@ -109,7 +109,14 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         self.assertEqual(self.page.locator(TAMPERED_BANNER).count(), 0)
 
     def test_nothing_changes_before_an_unlock(self):
-        self._seed_format_1()
+        self._open_vault()
+        vault_url = self.page.url
+        # The onboarding unlock schedules a pass of its own a few seconds out.
+        # Leaving the page cancels it, so it can neither migrate the rows
+        # seeded next nor be counted as a request the reload made.
+        self.page.goto("about:blank")
+        self._write_entries_as_reference(["Old one", "Old two"], format_version=1)
+        self.assertNotEqual(stale_rows(self.user), [])
         listings = []
         self.page.on(
             "request",
@@ -122,7 +129,7 @@ class FormatMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
         )
         before = _stored_rows(self.user)
 
-        self.page.reload()
+        self.page.goto(vault_url)
         self.page.wait_for_selector("input[autocomplete='current-password']")
         # Long enough for a migration that started without an unlock to have
         # asked for its listing - it does within a second of an unlock.

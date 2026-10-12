@@ -83,6 +83,14 @@ or what an instance sets in `PHOTOS_SIMILAR_MAX_DISTANCE`,
 change to a model's preprocessing or to its thresholds is judged by running
 the bench before and after it (`--json` then `--compare`).
 
+The near-duplicate suggestion is a ceiling, not a default. Open Images holds
+one photo per moment, so nothing in it looks like a burst; a personal library
+is shot in bursts, and its look-alikes come close. On the 695 photos of one
+photographer's library (`seed_demo.py --real-photos`), past 0.07 for SigLIP 2
+more and more of the pairs under the threshold were taken on different days:
+four in ten at 0.105, its loosest at 99% precision here. The defaults are the
+tightest threshold that still finds 95% of the copies.
+
 Open Images labels are complete for the labels verified on a photo, not for
 every label: a photo may show a dog nobody asked about, and count as a wrong
 answer to "dog". Every model pays that alike, so the numbers compare models;

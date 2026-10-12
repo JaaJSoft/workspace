@@ -48,6 +48,27 @@ class SimilarPhotosTests(TestCase):
         self.assertEqual([m.near_duplicate for m in matches], [True, False])
         self.assertLess(matches[0].distance, matches[1].distance)
 
+    def test_the_similar_photos_stop_after_a_screen_the_near_duplicates_do_not(self):
+        bursts = {library_photo(self.user, f"red-{i}.jpg", RED).pk for i in range(2)}
+        for i in range(31):
+            library_photo(self.user, f"dark-{i}.jpg", DARK_RED)
+
+        matches = similar_photos(self.user, self.red)
+
+        self.assertEqual({m.file_id for m in matches if m.near_duplicate}, bursts)
+        self.assertEqual(sum(not m.near_duplicate for m in matches), 30)
+
+    def test_a_long_burst_leaves_room_for_the_similar_photos(self):
+        bursts = {library_photo(self.user, f"red-{i}.jpg", RED).pk for i in range(3)}
+        dark = library_photo(self.user, "dark.jpg", DARK_RED)
+
+        matches = similar_photos(self.user, self.red, limit=3)
+
+        self.assertEqual({m.file_id for m in matches if m.near_duplicate}, bursts)
+        self.assertEqual(
+            [m.file_id for m in matches if not m.near_duplicate], [dark.pk]
+        )
+
     def test_none_while_the_photo_has_no_embedding(self):
         pending = library_photo(self.user, "new.jpg", RED, embed=False)
 

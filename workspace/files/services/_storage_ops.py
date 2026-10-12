@@ -112,24 +112,35 @@ def live_parent_path(node):
     return posixpath.join("files", "users", node.owner.username)
 
 
+def node_storage_path(node):
+    """Where *node*'s bytes belong according to its row, trashed or not."""
+    if node.deleted_at is not None:
+        return _trash.trashed_storage_path(node)
+    return live_node_path(node)
+
+
 def trash_node_path(node):
     """Where *node*'s bytes go once it is trashed in its own right."""
     return posixpath.join(_trash.trash_dir(node), node.name)
 
 
-def reconcile_trashed_children(node):
+def reconcile_trashed_children(node, trashed_at):
     """Move out whatever is still trashed inside a node that just came back.
 
     Restoring a file also restores its ancestors, so the directory that came
     back out of the trash can still hold trashed siblings. Each of those is
     now the outermost trashed node of its chain, so it needs a trash
     directory of its own.
+
+    Only what was trashed with *node* (at *trashed_at*) rode inside its
+    directory. A child trashed on its own before already has a directory of
+    its own, and its live path may belong to the node that replaced it.
     """
     if node.node_type != File.NodeType.FOLDER:
         return
     path = node.path or node.get_path()
     still_trashed = (
-        File.objects.filter(path__startswith=f"{path}/", deleted_at__isnull=False)
+        File.objects.filter(path__startswith=f"{path}/", deleted_at=trashed_at)
         .select_related("owner", "parent")
         .order_by("path")
     )
@@ -250,194 +261,6 @@ def _copy_blob(source, destination):
     return saved
 
 
-def rename_file_storage(file_obj, new_name):
-    """Rename a single file on disk."""
-    old_path = file_obj.content.name
-    dir_path = posixpath.dirname(old_path)
-
-    _, ext = posixpath.splitext(old_path)
-    if "." not in new_name and ext:
-        new_filename = f"{new_name}{ext}"
-    else:
-        new_filename = new_name
-    new_path = posixpath.join(dir_path, new_filename)
-
-    if not default_storage.exists(old_path):
-        logger.warning("Old file does not exist: '%s'", scrub(old_path))
-        return
-
-    saved_path = _copy_blob(old_path, new_path)
-    file_obj.content.name = saved_path
-
-    if old_path != saved_path:
-        try:
-            default_storage.delete(old_path)
-        except Exception as e:
-            logger.warning(
-                "Could not delete old file '%s': %s", scrub(old_path), scrub(e)
-            )
-
-
-def update_descendant_content_names(folder, old_seg, new_seg):
-    """Fix ``content.name`` for all descendant files after a rename."""
-    folder_path = folder.path or folder.get_path()
-    descendants = list(
-        File.objects.filter(
-            path__startswith=f"{folder_path}/",
-            node_type=File.NodeType.FILE,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
-
-    # Anchor the rename to the folder's actual storage prefix, not the first
-    # path segment that happens to match ``old_seg`` -- otherwise nested
-    # same-named folders (or a folder whose name collides with an ancestor
-    # segment such as the username) would be rewritten in the wrong place.
-    old_storage_prefix = folder_storage_path(folder).replace("\\", "/")
-    parent_storage = posixpath.dirname(old_storage_prefix)
-    new_storage_prefix = posixpath.join(parent_storage, new_seg)
-
-    updated = []
-    for child in descendants:
-        if not child.content.name:
-            continue
-        content_name = child.content.name.replace("\\", "/")
-        if content_name == old_storage_prefix or content_name.startswith(
-            old_storage_prefix + "/"
-        ):
-            child.content.name = (
-                new_storage_prefix + content_name[len(old_storage_prefix) :]
-            )
-            updated.append(child)
-
-    if updated:
-        File.objects.bulk_update(updated, ["content"], batch_size=500)
-
-
-def rename_folder_storage(folder, old_folder_name, new_folder_name):
-    """Rename a folder's directory on storage and update descendant paths."""
-    storage_path = folder_storage_path(folder)
-    new_storage_path = posixpath.join(posixpath.dirname(storage_path), new_folder_name)
-
-    try:
-        old_full = default_storage.path(storage_path)
-        new_full = default_storage.path(new_storage_path)
-        if os.path.isdir(old_full):
-            os.rename(old_full, new_full)
-    except NotImplementedError:
-        # Some storage backends (for example remote/object storage) do not
-        # implement filesystem paths/renames; skip best-effort disk rename.
-        pass
-    except OSError as e:
-        logger.warning(
-            "Could not rename folder '%s' -> '%s': %s",
-            scrub(storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
-
-    update_descendant_content_names(folder, old_folder_name, new_folder_name)
-
-
-def move_folder_storage(folder, new_parent, *, new_owner=None):
-    """Move a folder directory on storage and update descendant content paths."""
-    old_storage_path = folder_storage_path(folder)
-    effective_owner = new_owner or folder.owner
-    new_parent_storage = parent_storage_path(effective_owner, new_parent)
-    new_storage_path = posixpath.join(new_parent_storage, folder.name)
-
-    if old_storage_path == new_storage_path:
-        return
-
-    try:
-        old_full = default_storage.path(old_storage_path)
-        new_full = default_storage.path(new_storage_path)
-        if os.path.isdir(old_full):
-            os.makedirs(os.path.dirname(new_full), exist_ok=True)
-            os.rename(old_full, new_full)
-    except NotImplementedError:
-        logger.debug(
-            "Storage backend does not provide local filesystem paths; "
-            "skipping folder rename '%s' -> '%s'.",
-            scrub(old_storage_path),
-            scrub(new_storage_path),
-        )
-    except OSError as e:
-        logger.warning(
-            "Could not move folder '%s' -> '%s': %s",
-            scrub(old_storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
-
-    # Update content.name for all descendant files
-    folder_path = folder.path or folder.get_path()
-    descendants = list(
-        File.objects.filter(
-            path__startswith=f"{folder_path}/",
-            node_type=File.NodeType.FILE,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
-
-    old_prefix = old_storage_path.replace("\\", "/")
-    new_prefix = new_storage_path.replace("\\", "/")
-
-    updated = []
-    for child in descendants:
-        if not child.content.name:
-            continue
-        content_name = child.content.name.replace("\\", "/")
-        if content_name.startswith(old_prefix + "/"):
-            child.content.name = new_prefix + content_name[len(old_prefix) :]
-            updated.append(child)
-
-    if updated:
-        File.objects.bulk_update(updated, ["content"], batch_size=500)
-
-
-def move_file_storage(file_obj, new_parent, *, new_owner=None):
-    """Move a single file on storage to a new parent directory."""
-    old_path = file_obj.content.name
-    effective_owner = new_owner or file_obj.owner
-    new_parent_storage = parent_storage_path(effective_owner, new_parent)
-    new_path = posixpath.join(new_parent_storage, posixpath.basename(old_path))
-
-    if old_path == new_path:
-        return
-
-    try:
-        old_full = default_storage.path(old_path)
-        new_full = default_storage.path(new_path)
-        if os.path.isfile(old_full):
-            os.makedirs(os.path.dirname(new_full), exist_ok=True)
-            os.rename(old_full, new_full)
-            file_obj.content.name = new_path
-    except NotImplementedError:
-        # Fallback for non-local storage backends
-        if not default_storage.exists(old_path):
-            logger.warning("File does not exist on storage: '%s'", scrub(old_path))
-            return
-        saved_path = _copy_blob(old_path, new_path)
-        file_obj.content.name = saved_path
-        if old_path != saved_path:
-            try:
-                default_storage.delete(old_path)
-            except Exception as e:
-                logger.warning(
-                    "Could not delete old file '%s': %s", scrub(old_path), scrub(e)
-                )
-    except OSError as e:
-        logger.warning(
-            "Could not move file '%s' -> '%s': %s",
-            scrub(old_path),
-            scrub(new_path),
-            scrub(e),
-        )
-
-
 def _relocate_on_storage(source, destination, *, expect_dir):
     """Move a blob or a directory on storage.
 
@@ -467,7 +290,22 @@ def _relocate_on_storage(source, destination, *, expect_dir):
         )
         return False
     os.makedirs(os.path.dirname(destination_full), exist_ok=True)
-    os.rename(source_full, destination_full)
+    if expect_dir:
+        os.rename(source_full, destination_full)
+    else:
+        # move_node_storage refused a path another row keeps its bytes at,
+        # so a blob still there is an orphan; os.rename would refuse it on
+        # Windows.
+        try:
+            os.replace(source_full, destination_full)
+        except PermissionError:
+            # Windows will not move a file someone is reading (a download, an
+            # analysis): copy it, and leave the source if it is still held.
+            shutil.copyfile(source_full, destination_full)
+            try:
+                os.remove(source_full)
+            except OSError:
+                logger.warning("Could not remove moved blob %s", scrub(source))
     return True
 
 
@@ -519,6 +357,19 @@ def rewrite_descendant_content_names(folder, old_prefix, new_prefix):
         File.objects.bulk_update(updated, ["content"], batch_size=500)
 
 
+def blob_held_elsewhere(storage, path, node):
+    """Whether a row other than *node* keeps its bytes at *path*.
+
+    The storage makes a leaf name safe (``a b.txt`` is stored as
+    ``a_b.txt``), so two names the uniqueness constraint tells apart can
+    resolve to one path, and the storage overwrites in place. Case-blind for
+    the disks that are. The disk is asked first: the column is not indexed.
+    """
+    if not storage.exists(path):
+        return False
+    return File.objects.filter(content__iexact=path).exclude(pk=node.pk).exists()
+
+
 def move_node_storage(node, source, destination):
     """Move *node* from *source* to *destination* on storage.
 
@@ -536,6 +387,10 @@ def move_node_storage(node, source, destination):
     else:
         if not node.content or not node.content.name:
             return
+        if blob_held_elsewhere(default_storage, destination, node):
+            from ._names import NameTaken
+
+            raise NameTaken()
         node.content.name = destination
         File.objects.filter(pk=node.pk).update(content=destination)
 
@@ -567,27 +422,18 @@ def unique_copy_name(base_name, node_type, existing_names):
 
 
 def copy_node(node, parent, owner, _sibling_names=None):
-    """Recursively copy a single node."""
-    if _sibling_names is None:
-        # Folders count as well as files: a copied folder that reuses an
-        # existing folder's name merges the two trees. Imported here because
-        # _names imports unique_copy_name from this module.
-        from ._names import sibling_nodes
+    """Recursively copy a single node.
 
-        _sibling_names = set(
-            sibling_nodes(owner, parent).values_list("name", flat=True)
-        )
-
-    new_name = unique_copy_name(
-        node.name,
-        node.node_type,
-        _sibling_names,
-    )
-    _sibling_names.add(new_name)
+    The top-level copy competes for its name with every other writer of
+    *parent*; the nodes below it land in a folder that did not exist a moment
+    ago, so a name set kept along the way is enough for them.
+    """
+    # Imported here because _names imports from this module.
+    from ._names import insert_node, insert_node_keeping_both
 
     copied = File(
         owner=owner,
-        name=new_name,
+        name=node.name,
         node_type=node.node_type,
         parent=parent,
         # file_upload_path reads instance.group_id, so the group must be set
@@ -601,19 +447,27 @@ def copy_node(node, parent, owner, _sibling_names=None):
         color=node.color,
     )
 
+    def insert(content=None):
+        if _sibling_names is None:
+            # Folders count as well as files: a copied folder that reuses an
+            # existing folder's name would merge the two trees.
+            insert_node_keeping_both(copied, content)
+        else:
+            copied.name = unique_copy_name(node.name, node.node_type, _sibling_names)
+            _sibling_names.add(copied.name)
+            insert_node(copied, content)
+
     if node.node_type == File.NodeType.FILE and node.content:
-        # Stream the source blob into a fresh storage path. Wrapping the
-        # opened FieldFile in django.core.files.File flips _committed=False
-        # so the destination FileField triggers storage.save(), which copies
-        # via content.chunks() (default 64KB) instead of buffering everything
-        # in memory. A FieldFile passed directly would be _committed=True and
-        # the two rows would silently share the same blob.
+        # Stream the source blob into a fresh storage path. A django File
+        # wrapping the opened source is copied via content.chunks() (64KB)
+        # instead of being buffered, and never ends up shared: the FieldFile
+        # itself would leave both rows pointing at the same blob.
         #
         # The try/except is intentionally narrow: only the source-open step
         # is what we attribute to "source blob missing". A destination-side
-        # OSError raised later from copied.save() (disk full, permission on
-        # the destination path, remote storage flake) must propagate
-        # without that misleading log line.
+        # OSError raised later (disk full, permission on the destination
+        # path, remote storage flake) must propagate without that misleading
+        # log line.
         try:
             src = node.content.open("rb")
         except FileNotFoundError, OSError:
@@ -624,14 +478,13 @@ def copy_node(node, parent, owner, _sibling_names=None):
             raise
 
         with src:
-            copied.content = DjangoFile(src, name=new_name)
             copied.size = node.size
             # Same bytes, same digest; only legacy rows without one need
             # the extra read.
             copied.content_hash = node.content_hash or hash_stream(src)
-            copied.save()
+            insert(DjangoFile(src, name=node.name))
     else:
-        copied.save()
+        insert()
 
     if node.node_type == File.NodeType.FOLDER:
         # The folder was just created - no children yet, so start empty.

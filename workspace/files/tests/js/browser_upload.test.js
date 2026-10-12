@@ -85,18 +85,18 @@ function fakeFile(name, size = 100) {
 test('files dropped in a folder still land there after the user navigates away', async () => {
   const { browser, sent, state } = makePage({ folder: 'folder-a' });
 
-  browser.uploadFiles([fakeFile('one.jpg'), fakeFile('two.jpg')]);
+  browser.uploadFiles(['one.jpg', 'two.jpg', 'three.jpg', 'four.jpg'].map((name) => fakeFile(name)));
   await settle();
-  assert.equal(sent.length, 1, 'files go up one at a time');
+  assert.equal(sent.length, 3, 'the fourth file waits for a free slot');
 
   state.folder = 'folder-b';
   sent[0].respond(201, { uuid: 'u1', name: 'one.jpg' });
   await settle();
 
-  assert.equal(sent.length, 2);
+  assert.equal(sent.length, 4);
   assert.deepEqual(
     sent.map((xhr) => xhr.form.parent),
-    ['folder-a', 'folder-a'],
+    ['folder-a', 'folder-a', 'folder-a', 'folder-a'],
   );
 });
 
@@ -111,8 +111,8 @@ test('a conflict answer can be applied to the remaining conflicts of the batch',
 
   assert.equal(dialogs.length, 1, 'asked once for the whole batch');
   assert.equal(dialogs[0].checkbox, 'Do the same for the 2 other conflicts');
-  for (const name of ['a.jpg', 'new.jpg', 'b.jpg']) {
-    sent.at(-1).respond(201, { uuid: name, name });
+  for (const xhr of sent) {
+    xhr.respond(201, { uuid: xhr.form.name, name: xhr.form.name });
     await settle();
   }
   assert.deepEqual(

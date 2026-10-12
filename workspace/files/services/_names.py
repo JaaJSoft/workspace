@@ -1,7 +1,173 @@
 """Internal naming and validation helpers for the file service."""
 
+import gc
+import logging
+import os
+import posixpath
+import uuid
+from contextlib import contextmanager
+
+from django.db import IntegrityError, transaction
+
+from workspace.common.logging import scrub
+
 from ..models import File
-from ._storage_ops import unique_copy_name
+from ._storage_ops import blob_held_elsewhere, unique_copy_name
+
+logger = logging.getLogger(__name__)
+
+# Enough for every upload of a batch to lose the same name once.
+CLAIM_ATTEMPTS = 20
+
+# Under the storage root, so on the volume the tree lives on and a staged
+# blob is renamed into place; outside ``files/``, so the disk sync never
+# mistakes one for a file.
+STAGING_DIR = "tmp/staged"
+
+
+FILE_NAME_TAKEN = "A file with the same name already exists in this folder."
+FOLDER_NAME_TAKEN = "A folder with the same name already exists in this folder."
+
+
+class NameTaken(ValueError):
+    """A live node of that folder already holds the name."""
+
+    def __init__(self, held_by_folder=False):
+        self.held_by_folder = held_by_folder
+        super().__init__(FOLDER_NAME_TAKEN if held_by_folder else FILE_NAME_TAKEN)
+
+
+def _taken(owner, parent, name):
+    conflict = find_node_conflict(owner, parent, name)
+    return NameTaken(
+        held_by_folder=conflict is not None
+        and conflict.node_type == File.NodeType.FOLDER
+    )
+
+
+@contextmanager
+def name_claim(owner, parent, name):
+    """Run a row write that takes *name*, raising ``NameTaken`` if it is held.
+
+    The block runs in its own savepoint, so a refused write leaves an
+    enclosing transaction usable.
+    """
+    try:
+        with transaction.atomic():
+            yield
+    except IntegrityError as error:
+        if not any(c in str(error) for c in File.LIVE_NAME_CONSTRAINTS):
+            raise
+        raise _taken(owner, parent, name) from error
+
+
+class _Staged:
+    """Bytes written to the staging area, waiting for their row."""
+
+    def __init__(self, name):
+        self.name = name
+
+
+@contextmanager
+def _staged(content):
+    """*content* written out before any transaction opens.
+
+    The transaction that inserts the row holds SQLite's write lock from its
+    first statement, so the bytes - a large copy, an upload spooled on another
+    device - must not be written inside it. A storage without local paths
+    cannot rename a staged blob into place, and gets *content* back as is.
+    """
+    if content is None:
+        yield None
+        return
+    storage = File._meta.get_field("content").storage
+    try:
+        storage.path(STAGING_DIR)
+    except NotImplementedError:
+        yield content
+        return
+    staged = storage.save(posixpath.join(STAGING_DIR, uuid.uuid4().hex), content)
+    try:
+        yield _Staged(staged)
+    finally:
+        try:
+            storage.delete(staged)  # nothing left once it moved into place
+        except OSError:
+            logger.warning("Could not remove staged blob %s", scrub(staged))
+
+
+def _place(storage, staged, node):
+    destination = node.content.name
+    if blob_held_elsewhere(storage, destination, node):
+        raise NameTaken()
+    source_full = storage.path(staged.name)
+    destination_full = storage.path(destination)
+    os.makedirs(os.path.dirname(destination_full), exist_ok=True)
+    try:
+        os.replace(source_full, destination_full)
+    except PermissionError:
+        # Windows refuses to replace a file a forgotten handle still holds,
+        # and a free name's leftover blob can have one until the collector
+        # runs. Nothing reachable is open there: no other row uses it.
+        gc.collect()
+        os.replace(source_full, destination_full)
+
+
+def _insert(node, content):
+    """INSERT *node*, then move *content* to the path its name derives from.
+
+    The row goes first because it is what reserves the name: the blob path
+    derives from the name and the storage overwrites in place, so bytes put
+    there before a refused INSERT would land on the sibling that holds the
+    name. Both commit together, so a failed move takes the row with it.
+    """
+    field = File._meta.get_field("content")
+    with transaction.atomic():
+        if content is not None:
+            node.path = File._build_path_for(node.name, node.parent_id)
+            node.content = field.storage.get_available_name(
+                field.generate_filename(node, node.name),
+                max_length=field.max_length,
+            )
+        with name_claim(node.owner, node.parent, node.name):
+            node.save()
+        if isinstance(content, _Staged):
+            _place(field.storage, content, node)
+        elif content is not None:
+            if blob_held_elsewhere(field.storage, node.content.name, node):
+                raise NameTaken()
+            stored = field.storage.save(node.content.name, content)
+            if stored != node.content.name:
+                # A storage that renames around a collision moved the blob.
+                File.objects.filter(pk=node.pk).update(content=stored)
+                node.content = stored
+    return node
+
+
+def insert_node(node, content=None):
+    """INSERT *node* and put *content* in place, or raise ``NameTaken``."""
+    with _staged(content) as staged:
+        return _insert(node, staged)
+
+
+def insert_node_keeping_both(node, content=None):
+    """:func:`insert_node` under *node*'s name, or the first free copy name.
+
+    A name free when it was picked can be taken before the INSERT lands; the
+    loser picks again from what the folder holds then, with the bytes it
+    staged once.
+    """
+    requested = node.name
+    with _staged(content) as staged:
+        for _ in range(CLAIM_ATTEMPTS):
+            node.name = available_node_name(
+                node.owner, node.parent, requested, node.node_type
+            )
+            try:
+                return _insert(node, staged)
+            except NameTaken:
+                continue
+    raise _taken(node.owner, node.parent, node.name)
 
 
 def sibling_nodes(owner, parent):
@@ -58,9 +224,7 @@ def check_name_available(owner, parent, name, node_type, *, exclude_pk=None):
     conflict = find_node_conflict(owner, parent, name, exclude_pk=exclude_pk)
     if conflict is None:
         return
-    if conflict.node_type == File.NodeType.FOLDER:
-        raise ValueError("A folder with the same name already exists in this folder.")
-    raise ValueError("A file with the same name already exists in this folder.")
+    raise NameTaken(held_by_folder=conflict.node_type == File.NodeType.FOLDER)
 
 
 def available_node_name(owner, parent, name, node_type, *, avoiding=()):

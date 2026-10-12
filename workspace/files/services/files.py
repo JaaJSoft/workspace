@@ -196,6 +196,7 @@ class FileService:
         viewer=None,
         acting_user=None,
         check_quota=True,
+        keep_both=False,
     ):
         """Create a new file record, optionally with uploaded content.
 
@@ -208,6 +209,9 @@ class FileService:
         exact bytes to the bucket itself - the archive extraction loop, which
         would otherwise re-aggregate the bucket once per entry. Every other
         caller leaves it on: this is where a write is refused.
+
+        A taken name raises ``NameTaken``, unless ``keep_both`` asks for the
+        first free ``name (Copy N)`` instead - the returned row says which.
         """
         from workspace.files.services.content_hash import upload_hash
         from workspace.files.services.detection import (
@@ -220,7 +224,11 @@ class FileService:
         if group is None and parent and parent.group_id:
             group = parent.group
 
-        # Before the detection and hashing passes read the stream.
+        # Before the detection and hashing passes read the stream. Not the
+        # guarantee - the INSERT is - but it spares the loser of a known
+        # collision both passes.
+        if not keep_both:
+            _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
         if check_quota:
             check_write_allowed(
                 owner=owner,
@@ -252,8 +260,6 @@ class FileService:
 
         size = content.size if content is not None else None
 
-        _name_helpers.check_name_available(owner, parent, name, File.NodeType.FILE)
-
         file_obj = File(
             owner=owner,
             name=name,
@@ -272,14 +278,10 @@ class FileService:
                 else File.ProcessingStatus.READY
             ),
         )
-        if content is not None:
-            # The blob path derives from content.name, not from the row's
-            # name. Storage allows overwrite, so an upload stored under a
-            # different row name would otherwise land on - and clobber - a
-            # sibling's blob.
-            content.name = name
-            file_obj.content = content
-        file_obj.save()
+        if keep_both:
+            _name_helpers.insert_node_keeping_both(file_obj, content)
+        else:
+            _name_helpers.insert_node(file_obj, content)
         if size:
             FILES_UPLOAD_BYTES.inc(size)
         record_event(file_obj, acting_user or owner, FileEvent.Action.CREATED)
@@ -304,7 +306,7 @@ class FileService:
             color=color,
             group=group,
         )
-        folder.save()
+        _name_helpers.insert_node(folder)
         FileService._ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
@@ -352,7 +354,7 @@ class FileService:
             logger.warning(
                 "Cannot hash disk file %s: %s", scrub(content_path), scrub(e)
             )
-        file_obj.save()
+        _name_helpers.insert_node(file_obj)
         record_event(file_obj, acting_user, FileEvent.Action.CREATED)
         return file_obj
 
@@ -410,36 +412,32 @@ class FileService:
         )
         FileService.check_move_allowed(file_obj, new_parent, acting_user=acting_user)
 
-        if file_obj.node_type == File.NodeType.FOLDER:
-            FileService._move_folder_storage(file_obj, new_parent, new_owner=new_owner)
-        else:
-            if file_obj.content and file_obj.content.name:
-                FileService._move_file_storage(
-                    file_obj, new_parent, new_owner=new_owner
+        # Rows first, bytes last: the rows are what reserve the name, and a
+        # refusal must find the bytes where they were. Only the columns this
+        # move changes - a bare save() would write back a content write or a
+        # lock that landed meanwhile.
+        source = _storage.current_node_path(file_obj)
+        with _name_helpers.name_claim(
+            new_owner or file_obj.owner, new_parent, file_obj.name
+        ):
+            file_obj.parent = new_parent
+            file_obj.save(update_fields=["parent"])
+            # The group change is the statement that enters a group folder's
+            # namespace, so it belongs inside the claim too.
+            if (old_group and old_group != new_group) or (not old_group and new_group):
+                FileService.propagate_group(file_obj, new_group)
+            if old_group and not new_group and new_owner:
+                # The old owner's events become foreign to the new one: an
+                # overestimate of last_foreign_event_at is safe, a stale one
+                # hides them.
+                File.objects.filter(file_obj._descendant_filter()).update(
+                    owner=new_owner, last_foreign_event_at=F("last_event_at")
                 )
-
-        # Update parent in DB before propagating group to avoid unique constraint
-        # violations (e.g. unique_group_root_folder).
-        file_obj.parent = new_parent
-        # Only the two columns this move actually changed, ``content`` being
-        # where the blob now lives. A bare save() writes every column back from
-        # an instance loaded before the move began, so a content write or a
-        # lock that landed in between would be reverted by a request that never
-        # meant to touch either.
-        file_obj.save(update_fields=["parent", "content"])
-
-        # Propagate group change
-        if (old_group and old_group != new_group) or (not old_group and new_group):
-            FileService.propagate_group(file_obj, new_group)
-
-        # Update owner when moving from group to personal
-        if old_group and not new_group and new_owner:
-            # The old owner's events become foreign to the new one: an
-            # overestimate of last_foreign_event_at is safe, a stale one hides them.
-            File.objects.filter(file_obj._descendant_filter()).update(
-                owner=new_owner, last_foreign_event_at=F("last_event_at")
+                file_obj.owner = new_owner
+        if source:
+            _storage.move_node_storage(
+                file_obj, source, _storage.node_storage_path(file_obj)
             )
-            file_obj.owner = new_owner
 
         record_event(
             file_obj,
@@ -473,16 +471,16 @@ class FileService:
             exclude_pk=file_obj.pk,
         )
 
-        if file_obj.node_type == File.NodeType.FOLDER:
-            FileService._rename_folder_storage(file_obj, old_name, new_name)
-        else:
-            if file_obj.content and file_obj.content.name:
-                FileService._rename_file_storage(file_obj, new_name)
-
+        # Rows first, bytes last, as in ``move``. The name and the path it
+        # derives, and nothing else.
+        source = _storage.current_node_path(file_obj)
         file_obj.name = new_name
-        # The name and the blob's new path, and nothing else - see the same
-        # constraint in ``move``.
-        file_obj.save(update_fields=["name", "content"])
+        with _name_helpers.name_claim(file_obj.owner, file_obj.parent, new_name):
+            file_obj.save(update_fields=["name"])
+        if source:
+            _storage.move_node_storage(
+                file_obj, source, _storage.node_storage_path(file_obj)
+            )
         record_event(
             file_obj,
             acting_user,
@@ -941,20 +939,8 @@ class FileService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _rename_file_storage(file_obj, new_name):
-        return _storage.rename_file_storage(file_obj, new_name)
-
-    @staticmethod
-    def _rename_folder_storage(folder, old_folder_name, new_folder_name):
-        return _storage.rename_folder_storage(folder, old_folder_name, new_folder_name)
-
-    @staticmethod
     def _folder_storage_path(folder):
         return _storage.folder_storage_path(folder)
-
-    @staticmethod
-    def _update_descendant_content_names(folder, old_seg, new_seg):
-        return _storage.update_descendant_content_names(folder, old_seg, new_seg)
 
     @staticmethod
     def _ensure_folder_on_storage(folder):
@@ -963,14 +949,6 @@ class FileService:
     @staticmethod
     def _parent_storage_path(owner, parent):
         return _storage.parent_storage_path(owner, parent)
-
-    @staticmethod
-    def _move_folder_storage(folder, new_parent, *, new_owner=None):
-        return _storage.move_folder_storage(folder, new_parent, new_owner=new_owner)
-
-    @staticmethod
-    def _move_file_storage(file_obj, new_parent, *, new_owner=None):
-        return _storage.move_file_storage(file_obj, new_parent, new_owner=new_owner)
 
     @staticmethod
     def _unique_copy_name(base_name, node_type, existing_names):

@@ -265,29 +265,6 @@ class ProviderTests(TestCase):
         res = self.provider.get_resource_inst("/secret.txt", self.environ)
         self.assertIsNone(res)
 
-    def test_duplicate_records_do_not_crash(self):
-        """get_resource_inst survives duplicate File rows (uses filter/first)."""
-        FileService.create_file(self.user, "dup.txt", mime_type="text/plain")
-        # Force-create a second record with the same path
-        File.objects.create(
-            owner=self.user,
-            name="dup.txt",
-            node_type=File.NodeType.FILE,
-            path="dup.txt",
-            mime_type="text/plain",
-        )
-        self.assertEqual(
-            File.objects.filter(
-                owner=self.user,
-                path="dup.txt",
-                deleted_at__isnull=True,
-            ).count(),
-            2,
-        )
-        # Must not raise MultipleObjectsReturned
-        res = self.provider.get_resource_inst("/dup.txt", self.environ)
-        self.assertIsInstance(res, FileResource)
-
 
 # ── RootCollection ────────────────────────────────────────────────────
 

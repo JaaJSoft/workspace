@@ -6,6 +6,7 @@ the years); in a photo they count as one, a face named after someone already
 in it being folded into theirs (see face_corrections.fold_face).
 """
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -27,6 +28,8 @@ from .face_corrections import (
     start_cluster,
 )
 from .face_grouping import max_distance, photo_clusters, refresh_clusters
+
+logger = logging.getLogger(__name__)
 
 
 class NoCover(CorrectionError):
@@ -80,10 +83,12 @@ def _pin_person_cover(cluster, person):
 
 
 def link_new_person(cluster, user, name):
-    """Name *cluster* after a new personal contact called *name*."""
+    """Name *cluster* after a new personal contact called *name*, its cover
+    as their photo."""
     with transaction.atomic():
         person = create_person(owner=user, display_name=name)
         link_cluster(cluster, person)
+    give_default_avatar(person, cluster.cover_id)
     return person
 
 
@@ -162,20 +167,42 @@ def use_cover_as_avatar(cluster):
     Stored through the People avatar service like any upload, so People
     keeps knowing nothing about faces.
     """
-    crop = (
-        Face.objects.filter(pk=cluster.cover_id).values_list("crop", flat=True).first()
-    )
-    if cluster.person is None or not crop:
+    if cluster.person is None or not save_face_as_avatar(
+        cluster.person, cluster.cover_id
+    ):
         raise NoCover
+
+
+def save_face_as_avatar(person, face_id):
+    """Give *person* the crop of face *face_id* as their contact photo.
+
+    False, the person left as they were, when the face has no crop on disk.
+    """
+    crop = Face.objects.filter(pk=face_id).values_list("crop", flat=True).first()
+    if not crop:
+        return False
     try:
         handle = default_storage.open(crop, "rb")
-    except FileNotFoundError as exc:
-        raise NoCover from exc
+    except FileNotFoundError:
+        return False
     with handle:
         with Image.open(handle) as image:
             width, height = image.size
         handle.seek(0)
-        save_avatar(cluster.person, handle, 0, 0, width, height)
+        save_avatar(person, handle, 0, 0, width, height)
+    return True
+
+
+def give_default_avatar(person, face_id):
+    """A new contact's first photo: best effort, a failure never costs the
+    contact its creation (a savepoint keeps the caller's transaction usable)."""
+    try:
+        with transaction.atomic():
+            save_face_as_avatar(person, face_id)
+    except Exception:
+        logger.exception(
+            "Could not give contact %s face %s as photo", person.pk, face_id
+        )
 
 
 @dataclass(frozen=True)

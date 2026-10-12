@@ -11,7 +11,9 @@
  * Up to MAX_IN_FLIGHT files go up at once, which hides the round trip and
  * the server's fixed cost per file behind the other transfers. Two of them
  * racing for one free name is safe: the server reserves the name in the
- * database before the bytes move, and the loser picks the next one.
+ * database before the bytes move, and the loser gets what its onConflict
+ * asks for - the next free name, the winner's content replaced, or the
+ * usual refusal, shown here as skipped.
  *
  * `uploads-changed` is dispatched on window once the queue drains with new
  * files on the server, and after a discarded duplicate.
@@ -230,6 +232,9 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
     async discardAllDuplicates() {
       let changed = false;
       for (const item of this._duplicates()) {
+        // Two copies uploaded side by side each list the other; once one is
+        // gone the other is the only copy left, and stays.
+        if (!item.duplicates.length) continue;
         if (await this._discard(item)) changed = true;
       }
       if (changed) notify('uploads-changed');
@@ -253,6 +258,9 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       if (!(await discard(item.uuid, item.savedName || item.name))) return false;
       item.status = 'discarded';
       item.duplicates = [];
+      for (const other of this.items) {
+        other.duplicates = other.duplicates.filter((dup) => dup.uuid !== item.uuid);
+      }
       return true;
     },
 

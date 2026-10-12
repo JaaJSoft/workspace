@@ -296,6 +296,21 @@ test('every flagged duplicate can be discarded at once', async () => {
   assert.deepEqual(notified, ['uploads-changed', 'uploads-changed'], 'one refresh for the whole batch');
 });
 
+test('two copies uploaded side by side are never both discarded', async () => {
+  const { queue, requests, discarded } = makeQueue();
+  queue.add([{ file: file('a.jpg') }, { file: file('b.jpg') }]);
+  requests[0].resolve({ status: 201, body: { uuid: 'u-a', name: 'a.jpg', duplicates: [{ uuid: 'u-b', path: 'b.jpg' }] } });
+  requests[1].resolve({ status: 201, body: { uuid: 'u-b', name: 'b.jpg', duplicates: [{ uuid: 'u-a', path: 'a.jpg' }] } });
+  await settle();
+  assert.equal(queue.duplicateCount, 2);
+
+  await queue.discardAllDuplicates();
+
+  assert.deepEqual(discarded, ['u-a']);
+  assert.deepEqual(statuses(queue), ['a.jpg:discarded', 'b.jpg:done']);
+  assert.equal(queue.duplicateCount, 0, 'the copy left is no longer flagged');
+});
+
 test('every flagged duplicate can be kept at once', async () => {
   const { queue, discarded } = await queueWithDuplicates(['dup-a.jpg', 'dup-b.jpg']);
 

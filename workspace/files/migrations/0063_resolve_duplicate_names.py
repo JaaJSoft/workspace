@@ -12,19 +12,26 @@ bytes follow it into the path its new name derives from. Two rows can point
 at one blob - an exact duplicate written by the race, or two case variants
 on a case-insensitive disk - so a blob another row still reads is copied
 rather than moved.
+
+Not atomic: a blob that moved cannot roll back with its row, so each row is
+written as soon as its bytes are where it says.
 """
 
 import logging
 import os
 import posixpath
 
-from django.db import migrations
+from django.db import migrations, transaction
 from django.db.models import Count
 from django.db.models.functions import Lower
 
-from workspace.common.logging import scrub
-
 logger = logging.getLogger(__name__)
+
+
+def scrub(value):
+    """Inlined from ``common.logging``: a migration does not import live code."""
+    return str(value).replace("\r", "").replace("\n", "")
+
 
 # The scopes of the three constraints the next migration adds.
 SCOPES = (
@@ -112,23 +119,30 @@ def _rename(File, db, storage, row, new_name, keeper):
         return
 
     source_dir = _live_dir(row)
-    File.objects.using(db).filter(pk=row.pk).update(name=new_name, path=new_path)
     subtree = _subtree(File, db, row)
     moved = {row.pk} | {node.pk for node in subtree}
+    # The tree first, in one go: until every path follows, the subtree reads
+    # as half renamed. Each blob then moves with its own row update, so a
+    # failure partway leaves every row pointing where its bytes are.
+    with transaction.atomic(using=db):
+        File.objects.using(db).filter(pk=row.pk).update(name=new_name, path=new_path)
+        for node in subtree:
+            File.objects.using(db).filter(pk=node.pk).update(
+                path=new_path + node.path[len(old_path) :]
+            )
     _makedirs(storage, destination)
     for node in subtree:
-        node_path = new_path + node.path[len(old_path) :]
-        fields = {"path": node_path}
         content = (node.content.name or "").replace("\\", "/")
         if node.node_type == "folder":
             _makedirs(storage, destination + node.path[len(old_path) :])
         elif content.startswith(f"{source_dir}/"):
             # Trashed descendants sit under trash/ and stay where they are.
             node_destination = destination + content[len(source_dir) :]
-            fields["content"] = _relocate(
-                File, db, storage, node, node_destination, exclude=moved
+            File.objects.using(db).filter(pk=node.pk).update(
+                content=_relocate(
+                    File, db, storage, node, node_destination, exclude=moved
+                )
             )
-        File.objects.using(db).filter(pk=node.pk).update(**fields)
     # An exact duplicate shares the keeper's directory, and so does a case
     # variant on a case-insensitive disk: its empty folders are the keeper's.
     if not _same_place(storage, source_dir, posixpath.join(parent_dir, keeper.name)):
@@ -167,17 +181,24 @@ def _relocate(File, db, storage, row, destination, exclude):
         if not storage.exists(source):
             logger.warning("Duplicate's blob already missing: %s", scrub(source))
             return destination
+        try:
+            source_full = storage.path(source)
+        except NotImplementedError:
+            source_full = None
+        if source_full is not None and os.path.isdir(source_full):
+            # A stale file row pointing at what is now a directory: moving it
+            # would carry off content the row never owned.
+            logger.warning("Not moving %s: it is a directory", scrub(source))
+            return source
         if shared:
             with storage.open(source, "rb") as fh:
                 return storage.save(destination, fh)
-        try:
-            source_full = storage.path(source)
-            destination_full = storage.path(destination)
-        except NotImplementedError:
+        if source_full is None:
             with storage.open(source, "rb") as fh:
                 saved = storage.save(destination, fh)
             storage.delete(source)
             return saved
+        destination_full = storage.path(destination)
         os.makedirs(os.path.dirname(destination_full), exist_ok=True)
         os.replace(source_full, destination_full)
         return destination
@@ -216,6 +237,8 @@ def _prune_empty_dirs(storage, dir_path):
 
 
 class Migration(migrations.Migration):
+    atomic = False
+
     dependencies = [
         ("files", "0062_processing_pipeline"),
     ]

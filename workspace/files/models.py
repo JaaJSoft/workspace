@@ -545,8 +545,11 @@ class File(models.Model):
         """
         from workspace.files.services import _storage_ops as _storage
         from workspace.files.services._names import (
+            CLAIM_ATTEMPTS,
+            NameTaken,
             available_node_name,
             find_node_conflict,
+            name_claim,
         )
         from workspace.files.services._trash import trash_root_of
 
@@ -559,35 +562,46 @@ class File(models.Model):
             # the save() after it would fight over ``name`` and ``path``.
             root = self
         source = _storage.current_node_path(root) if root is not None else None
+        trashed_at = self.deleted_at
+        root_trashed_at = root.deleted_at if root is not None else None
+        claimant = root or self
 
-        if root is not None and find_node_conflict(
-            root.owner, root.parent, root.name, exclude_pk=root.pk
-        ):
-            # Something took the name while the node sat in the trash.
-            root.name = available_node_name(
-                root.owner, root.parent, root.name, root.node_type
-            )
-            root.save(update_fields=["name"])
-
-        if self.node_type == self.NodeType.FOLDER:
-            subtree = File.objects.filter(self._descendant_filter())
-            if self.deleted_at is not None:
-                # What was trashed with the folder. A child deleted on its own
-                # before it stays in the trash - its name may well be taken
-                # by the file created to replace it.
-                subtree = subtree.filter(deleted_at=self.deleted_at)
-            updated = subtree.update(deleted_at=None)
+        for _ in range(CLAIM_ATTEMPTS):
+            if root is not None and find_node_conflict(
+                root.owner, root.parent, root.name, exclude_pk=root.pk
+            ):
+                # Something took the name while the node sat in the trash.
+                root.name = available_node_name(
+                    root.owner, root.parent, root.name, root.node_type
+                )
+                root.save(update_fields=["name"])
+            try:
+                with name_claim(claimant.owner, claimant.parent, claimant.name):
+                    updated = self._bring_back(trashed_at)
+                    self._restore_parents()
+                break
+            except NameTaken:
+                continue  # taken between the check and the write: pick again
         else:
-            self.deleted_at = None
-            self.save(update_fields=["deleted_at"])
-            updated = 1
-        self._restore_parents()
+            raise NameTaken()
+        self.deleted_at = None
 
         if root is not None and source:
             root.deleted_at = None
             _storage.move_node_storage(root, source, _storage.live_node_path(root))
-            _storage.reconcile_trashed_children(root)
+            _storage.reconcile_trashed_children(root, root_trashed_at)
         return updated
+
+    def _bring_back(self, trashed_at):
+        if self.node_type != self.NodeType.FOLDER:
+            return File.objects.filter(pk=self.pk).update(deleted_at=None)
+        subtree = File.objects.filter(self._descendant_filter())
+        if trashed_at is not None:
+            # What was trashed with the folder. A child deleted on its own
+            # before it stays in the trash - its name may well be taken by
+            # the node created to replace it.
+            subtree = subtree.filter(deleted_at=trashed_at)
+        return subtree.update(deleted_at=None)
 
     def delete(self, *args, **kwargs):
         """Soft-delete by default; pass hard=True to permanently delete."""

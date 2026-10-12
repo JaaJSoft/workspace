@@ -444,12 +444,14 @@ class FileSerializer(serializers.ModelSerializer):
                 )
                 if conflict is not None:
                     if on_conflict == "rename":
-                        # A moved file is renamed before it leaves, so the
-                        # new name has to be free in its current folder too.
-                        avoiding = (instance.parent,) if instance else ()
-                        attrs["name"] = FileService.available_file_name(
-                            owner, parent, name, avoiding=avoiding
-                        )
+                        # A create picks the free name at its INSERT, from the
+                        # name asked for. A moved file is renamed before it
+                        # leaves, so the new name has to be free in its
+                        # current folder too.
+                        if instance is not None:
+                            attrs["name"] = FileService.available_file_name(
+                                owner, parent, name, avoiding=(instance.parent,)
+                            )
                     elif on_conflict == "replace":
                         if instance is None and attrs.get("content") is None:
                             raise serializers.ValidationError(

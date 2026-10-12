@@ -112,24 +112,35 @@ def live_parent_path(node):
     return posixpath.join("files", "users", node.owner.username)
 
 
+def node_storage_path(node):
+    """Where *node*'s bytes belong according to its row, trashed or not."""
+    if node.deleted_at is not None:
+        return _trash.trashed_storage_path(node)
+    return live_node_path(node)
+
+
 def trash_node_path(node):
     """Where *node*'s bytes go once it is trashed in its own right."""
     return posixpath.join(_trash.trash_dir(node), node.name)
 
 
-def reconcile_trashed_children(node):
+def reconcile_trashed_children(node, trashed_at):
     """Move out whatever is still trashed inside a node that just came back.
 
     Restoring a file also restores its ancestors, so the directory that came
     back out of the trash can still hold trashed siblings. Each of those is
     now the outermost trashed node of its chain, so it needs a trash
     directory of its own.
+
+    Only what was trashed with *node* (at *trashed_at*) rode inside its
+    directory. A child trashed on its own before already has a directory of
+    its own, and its live path may belong to the node that replaced it.
     """
     if node.node_type != File.NodeType.FOLDER:
         return
     path = node.path or node.get_path()
     still_trashed = (
-        File.objects.filter(path__startswith=f"{path}/", deleted_at__isnull=False)
+        File.objects.filter(path__startswith=f"{path}/", deleted_at=trashed_at)
         .select_related("owner", "parent")
         .order_by("path")
     )
@@ -250,194 +261,6 @@ def _copy_blob(source, destination):
     return saved
 
 
-def rename_file_storage(file_obj, new_name):
-    """Rename a single file on disk."""
-    old_path = file_obj.content.name
-    dir_path = posixpath.dirname(old_path)
-
-    _, ext = posixpath.splitext(old_path)
-    if "." not in new_name and ext:
-        new_filename = f"{new_name}{ext}"
-    else:
-        new_filename = new_name
-    new_path = posixpath.join(dir_path, new_filename)
-
-    if not default_storage.exists(old_path):
-        logger.warning("Old file does not exist: '%s'", scrub(old_path))
-        return
-
-    saved_path = _copy_blob(old_path, new_path)
-    file_obj.content.name = saved_path
-
-    if old_path != saved_path:
-        try:
-            default_storage.delete(old_path)
-        except Exception as e:
-            logger.warning(
-                "Could not delete old file '%s': %s", scrub(old_path), scrub(e)
-            )
-
-
-def update_descendant_content_names(folder, old_seg, new_seg):
-    """Fix ``content.name`` for all descendant files after a rename."""
-    folder_path = folder.path or folder.get_path()
-    descendants = list(
-        File.objects.filter(
-            path__startswith=f"{folder_path}/",
-            node_type=File.NodeType.FILE,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
-
-    # Anchor the rename to the folder's actual storage prefix, not the first
-    # path segment that happens to match ``old_seg`` -- otherwise nested
-    # same-named folders (or a folder whose name collides with an ancestor
-    # segment such as the username) would be rewritten in the wrong place.
-    old_storage_prefix = folder_storage_path(folder).replace("\\", "/")
-    parent_storage = posixpath.dirname(old_storage_prefix)
-    new_storage_prefix = posixpath.join(parent_storage, new_seg)
-
-    updated = []
-    for child in descendants:
-        if not child.content.name:
-            continue
-        content_name = child.content.name.replace("\\", "/")
-        if content_name == old_storage_prefix or content_name.startswith(
-            old_storage_prefix + "/"
-        ):
-            child.content.name = (
-                new_storage_prefix + content_name[len(old_storage_prefix) :]
-            )
-            updated.append(child)
-
-    if updated:
-        File.objects.bulk_update(updated, ["content"], batch_size=500)
-
-
-def rename_folder_storage(folder, old_folder_name, new_folder_name):
-    """Rename a folder's directory on storage and update descendant paths."""
-    storage_path = folder_storage_path(folder)
-    new_storage_path = posixpath.join(posixpath.dirname(storage_path), new_folder_name)
-
-    try:
-        old_full = default_storage.path(storage_path)
-        new_full = default_storage.path(new_storage_path)
-        if os.path.isdir(old_full):
-            os.rename(old_full, new_full)
-    except NotImplementedError:
-        # Some storage backends (for example remote/object storage) do not
-        # implement filesystem paths/renames; skip best-effort disk rename.
-        pass
-    except OSError as e:
-        logger.warning(
-            "Could not rename folder '%s' -> '%s': %s",
-            scrub(storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
-
-    update_descendant_content_names(folder, old_folder_name, new_folder_name)
-
-
-def move_folder_storage(folder, new_parent, *, new_owner=None):
-    """Move a folder directory on storage and update descendant content paths."""
-    old_storage_path = folder_storage_path(folder)
-    effective_owner = new_owner or folder.owner
-    new_parent_storage = parent_storage_path(effective_owner, new_parent)
-    new_storage_path = posixpath.join(new_parent_storage, folder.name)
-
-    if old_storage_path == new_storage_path:
-        return
-
-    try:
-        old_full = default_storage.path(old_storage_path)
-        new_full = default_storage.path(new_storage_path)
-        if os.path.isdir(old_full):
-            os.makedirs(os.path.dirname(new_full), exist_ok=True)
-            os.rename(old_full, new_full)
-    except NotImplementedError:
-        logger.debug(
-            "Storage backend does not provide local filesystem paths; "
-            "skipping folder rename '%s' -> '%s'.",
-            scrub(old_storage_path),
-            scrub(new_storage_path),
-        )
-    except OSError as e:
-        logger.warning(
-            "Could not move folder '%s' -> '%s': %s",
-            scrub(old_storage_path),
-            scrub(new_storage_path),
-            scrub(e),
-        )
-
-    # Update content.name for all descendant files
-    folder_path = folder.path or folder.get_path()
-    descendants = list(
-        File.objects.filter(
-            path__startswith=f"{folder_path}/",
-            node_type=File.NodeType.FILE,
-        )
-        .exclude(content="")
-        .exclude(content__isnull=True)
-    )
-
-    old_prefix = old_storage_path.replace("\\", "/")
-    new_prefix = new_storage_path.replace("\\", "/")
-
-    updated = []
-    for child in descendants:
-        if not child.content.name:
-            continue
-        content_name = child.content.name.replace("\\", "/")
-        if content_name.startswith(old_prefix + "/"):
-            child.content.name = new_prefix + content_name[len(old_prefix) :]
-            updated.append(child)
-
-    if updated:
-        File.objects.bulk_update(updated, ["content"], batch_size=500)
-
-
-def move_file_storage(file_obj, new_parent, *, new_owner=None):
-    """Move a single file on storage to a new parent directory."""
-    old_path = file_obj.content.name
-    effective_owner = new_owner or file_obj.owner
-    new_parent_storage = parent_storage_path(effective_owner, new_parent)
-    new_path = posixpath.join(new_parent_storage, posixpath.basename(old_path))
-
-    if old_path == new_path:
-        return
-
-    try:
-        old_full = default_storage.path(old_path)
-        new_full = default_storage.path(new_path)
-        if os.path.isfile(old_full):
-            os.makedirs(os.path.dirname(new_full), exist_ok=True)
-            os.rename(old_full, new_full)
-            file_obj.content.name = new_path
-    except NotImplementedError:
-        # Fallback for non-local storage backends
-        if not default_storage.exists(old_path):
-            logger.warning("File does not exist on storage: '%s'", scrub(old_path))
-            return
-        saved_path = _copy_blob(old_path, new_path)
-        file_obj.content.name = saved_path
-        if old_path != saved_path:
-            try:
-                default_storage.delete(old_path)
-            except Exception as e:
-                logger.warning(
-                    "Could not delete old file '%s': %s", scrub(old_path), scrub(e)
-                )
-    except OSError as e:
-        logger.warning(
-            "Could not move file '%s' -> '%s': %s",
-            scrub(old_path),
-            scrub(new_path),
-            scrub(e),
-        )
-
-
 def _relocate_on_storage(source, destination, *, expect_dir):
     """Move a blob or a directory on storage.
 
@@ -467,7 +290,21 @@ def _relocate_on_storage(source, destination, *, expect_dir):
         )
         return False
     os.makedirs(os.path.dirname(destination_full), exist_ok=True)
-    os.rename(source_full, destination_full)
+    if expect_dir:
+        os.rename(source_full, destination_full)
+    else:
+        # The destination's name is held by the row being moved, so a blob
+        # already there is an orphan; os.rename would refuse it on Windows.
+        try:
+            os.replace(source_full, destination_full)
+        except PermissionError:
+            # Windows will not move a file someone is reading (a download, an
+            # analysis): copy it, and leave the source if it is still held.
+            shutil.copyfile(source_full, destination_full)
+            try:
+                os.remove(source_full)
+            except OSError:
+                logger.warning("Could not remove moved blob %s", scrub(source))
     return True
 
 

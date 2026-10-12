@@ -20,6 +20,12 @@ migration = importlib.import_module(
 User = get_user_model()
 
 
+def read(file_obj):
+    file_obj.refresh_from_db()
+    with file_obj.content.open("rb") as fh:
+        return fh.read()
+
+
 class LiveNameConstraintTests(TestCase):
     """Rows written around the service, so only the constraints stand in the way."""
 
@@ -117,6 +123,64 @@ class RestoreFolderTests(TestCase):
         with old.content.open("rb") as fh:
             self.assertEqual(fh.read(), b"old")
 
+    def test_a_folder_trashed_on_its_own_stays_out_of_its_replacement(self):
+        root = FileService.create_folder(self.user, "R")
+        old = FileService.create_folder(self.user, "C", parent=root)
+        FileService.create_file(
+            self.user, "c1.txt", parent=old, content=ContentFile(b"1")
+        )
+        FileService.soft_delete(old, acting_user=self.user)
+        new = FileService.create_folder(self.user, "C", parent=root)
+        c2 = FileService.create_file(
+            self.user, "c2.txt", parent=new, content=ContentFile(b"2")
+        )
+        FileService.soft_delete(root, acting_user=self.user)
+
+        root.refresh_from_db()
+        FileService.restore(root, acting_user=self.user)
+
+        old.refresh_from_db()
+        self.assertIsNotNone(old.deleted_at)
+        self.assertEqual(read(c2), b"2")
+
+        FileService.soft_delete(new, acting_user=self.user)
+        old.refresh_from_db()
+        FileService.restore(old, acting_user=self.user)
+        c1 = File.objects.get(name="c1.txt")
+        self.assertIsNone(c1.deleted_at)
+        self.assertEqual(read(c1), b"1")
+
+    def test_a_name_taken_during_the_restore_falls_back_to_a_copy(self):
+        from unittest.mock import patch
+
+        from workspace.files.services import _names
+
+        trashed = FileService.create_file(
+            self.user, "a.txt", parent=self.folder, content=ContentFile(b"old")
+        )
+        FileService.soft_delete(trashed, acting_user=self.user)
+        find_node_conflict = _names.find_node_conflict
+        raced = []
+
+        def racing_find(*args, **kwargs):
+            conflict = find_node_conflict(*args, **kwargs)
+            if not raced:
+                raced.append(None)
+                raced[0] = FileService.create_file(
+                    self.user, "a.txt", parent=self.folder, content=ContentFile(b"new")
+                )
+            return conflict
+
+        trashed.refresh_from_db()
+        with patch.object(_names, "find_node_conflict", racing_find):
+            FileService.restore(trashed, acting_user=self.user)
+
+        trashed.refresh_from_db()
+        self.assertEqual(trashed.name, "a (Copy).txt")
+        self.assertIsNone(trashed.deleted_at)
+        self.assertEqual(read(trashed), b"old")
+        self.assertEqual(read(raced[0]), b"new")
+
 
 class ResolveDuplicateNamesMigrationTests(TestCase):
     """The duplicates an install may hold from before the constraints."""
@@ -190,6 +254,18 @@ class ResolveDuplicateNamesMigrationTests(TestCase):
         self.assertEqual(self._read(moved_child), b"mine")
         self.assertEqual(self._read(kept_child), b"kept")
         self.assertEqual(kept_child.path, "Docs/x.txt")
+
+    def test_a_file_row_pointing_at_a_directory_leaves_the_directory_alone(self):
+        folder = self._row("Docs", node_type="folder")
+        inside = self._row("x.txt", b"inside", parent=folder)
+        stale = self._row("docs", content="files/users/alice/Docs")
+
+        self._migrate()
+
+        stale.refresh_from_db()
+        self.assertEqual(stale.name, "docs (Copy)")
+        self.assertEqual(stale.content.name, "files/users/alice/Docs")
+        self.assertEqual(self._read(inside), b"inside")
 
     def test_group_members_duplicates_are_resolved_too(self):
         group = Group.objects.create(name="Team")

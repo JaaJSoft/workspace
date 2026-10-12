@@ -14,7 +14,7 @@
   aria-label="Uploads"
   data-testid="upload-panel"
 >
-  <header class="flex items-center gap-3 bg-base-200 px-4 py-3">
+  <header class="flex items-center gap-3 bg-base-200 py-3 pl-4 pr-3">
     <span
       class="shrink-0"
       :class="$store.uploads.pendingCount ? 'text-module' : ($store.uploads.failedCount ? 'text-error' : 'text-success')"
@@ -32,7 +32,7 @@
         x-text="formatFileSize($store.uploads.progress.loaded) + ' of ' + formatFileSize($store.uploads.progress.total) + ' - ' + $store.uploads.progress.percent + '%'"
       ></p>
     </div>
-    <div class="flex shrink-0 items-center">
+    <div class="flex shrink-0 items-center self-start">
       <button
         type="button"
         x-show="$store.uploads.pendingCount && !$store.uploads.paused"
@@ -135,7 +135,7 @@
   >
     <template x-for="item in $store.uploads.rows" :key="item.id">
       <li
-        class="flex items-center gap-3 px-4 py-2"
+        class="flex items-center gap-3 py-2 pl-4 pr-3"
         :data-status="item.status"
         x-effect="item.status === 'uploading' && $store.uploads.expanded && $el.scrollIntoView({ block: 'nearest' })"
       >

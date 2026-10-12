@@ -30,7 +30,7 @@ space a sentence can be embedded into too - gives three features:
 
 - **Similar photos**, from a photo's menu: the photos of the library on screen
   that look like it, the **near-duplicates** first (the shots of one burst, a
-  re-export), then a screen of the merely similar ones.
+  re-export), then up to 30 of the merely similar ones.
 - **Search by description**, from the search field in the Photos header:
   "dog on the beach", "snow", "birthday cake" ranked against the library,
   with no tag and no name to match. The global search offers it too, as
@@ -140,9 +140,9 @@ ones. After changing the setting:
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
-| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP). |
-| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP). |
-| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.92 for SigLIP 2, 0.765 for CLIP). |
+| `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP, 0.3 for Jina CLIP). |
+| `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP, 0.085 for Jina CLIP). |
+| `PHOTOS_DESCRIPTION_MAX_DISTANCE` | backend's own | Cosine distance past which a photo does not match a search (0.92 for SigLIP 2, 0.765 for CLIP, 0.89 for Jina CLIP). |
 
 Each local model's defaults are calibrated by the
 [embedding bench](embedding-bench.md), on its own embedding space: the same

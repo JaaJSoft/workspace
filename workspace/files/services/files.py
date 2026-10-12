@@ -422,11 +422,9 @@ class FileService:
         ):
             file_obj.parent = new_parent
             file_obj.save(update_fields=["parent"])
-            # The group change is the statement that enters a group folder's
-            # namespace, so it belongs inside the claim too.
-            if (old_group and old_group != new_group) or (not old_group and new_group):
-                FileService.propagate_group(file_obj, new_group)
             if old_group and not new_group and new_owner:
+                # Before the group change: the subtree is found through the
+                # group, and its rows belong to every member who added one.
                 # The old owner's events become foreign to the new one: an
                 # overestimate of last_foreign_event_at is safe, a stale one
                 # hides them.
@@ -434,6 +432,10 @@ class FileService:
                     owner=new_owner, last_foreign_event_at=F("last_event_at")
                 )
                 file_obj.owner = new_owner
+            # The group change is the statement that enters a group folder's
+            # namespace, so it belongs inside the claim too.
+            if (old_group and old_group != new_group) or (not old_group and new_group):
+                FileService.propagate_group(file_obj, new_group)
         if source:
             _storage.move_node_storage(
                 file_obj, source, _storage.node_storage_path(file_obj)

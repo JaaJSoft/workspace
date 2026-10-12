@@ -522,8 +522,7 @@ def properties(request, uuid):
         children_count = children.count()
         total_size = (
             File.objects.filter(
-                path__startswith=f"{file_obj.path}/",
-                owner=file_obj.owner,
+                file_obj._descendant_filter(include_self=False),
                 deleted_at__isnull=True,
                 node_type=File.NodeType.FILE,
             ).aggregate(total=Sum("size"))["total"]

@@ -31,8 +31,11 @@ class MediaItem(models.Model):
     # When the picture or the recording was taken: EXIF DateTimeOriginal for a
     # photo, the container's creation date for a video (see services/exif.py
     # and services/video.py for how each is read). Null when the file carries
-    # no date: the upload date is a different fact and never stands in.
+    # no date: the upload date is a different fact and never stands in. A
+    # date written in the file name stands in for missing metadata (see
+    # services/filename_dates.py), and follows the name when it is renamed.
     taken_at = models.DateTimeField(null=True, blank=True)
+    taken_at_from_name = models.BooleanField(default=False)
     # As displayed, i.e. with the EXIF orientation or the video rotation
     # applied. Null when the file could not be decoded.
     width = models.PositiveIntegerField(null=True, blank=True)

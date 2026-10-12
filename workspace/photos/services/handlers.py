@@ -3,8 +3,8 @@ embeddings in step with the files.
 
 All are upload processors (files.services.processors): the upload pipeline
 runs them once an upload or a content replacement has committed, and the
-hourly catch-up analyzes whatever that path missed. Moves are followed by a
-file-event handler of their own.
+hourly catch-up analyzes whatever that path missed. Moves and renames are
+followed by file-event handlers of their own.
 """
 
 from django.db import transaction
@@ -18,6 +18,7 @@ from .analysis import (
     forget_media,
     is_media_candidate,
     pending_media_qs,
+    redate_from_name,
     refresh_media_item,
 )
 from .face_analysis import (
@@ -70,6 +71,13 @@ def follow_moved_photo(event):
     embedding = getattr(moved, "photo_embedding", None)
     if embedding is not None and embedding.owner_id != moved.owner_id:
         _queue_embedding(moved)
+
+
+@on_file_event(FileEvent.Action.RENAMED)
+def follow_renamed_photo(event):
+    """A photo or a video dated by its name follows the new one."""
+    if is_media_candidate(event.file):
+        redate_from_name(event.file)
 
 
 def _queue_faces(file_obj):

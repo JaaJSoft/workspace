@@ -69,6 +69,52 @@ class UploadDispatchTests(TestCase):
 
         self.assertIsNone(MediaItem.objects.get(file=f).taken_at)
 
+    def test_renaming_an_undated_photo_dates_it_by_its_new_name(self):
+        f = self._write(lambda: upload(self.user, "scan.png", png_bytes()))
+
+        self._write(
+            lambda: FileService.rename(
+                f, "1998-07-12 Wedding.png", acting_user=self.user
+            )
+        )
+
+        photo = MediaItem.objects.get(file=f)
+        self.assertEqual(photo.taken_at, datetime(1998, 7, 12, 12, tzinfo=UTC))
+        self.assertTrue(photo.taken_at_from_name)
+
+    def test_a_photo_dated_by_its_name_follows_a_rename(self):
+        f = self._write(lambda: upload(self.user, "2020-01-02.png", png_bytes()))
+
+        self._write(
+            lambda: FileService.rename(f, "2021-03-04.png", acting_user=self.user)
+        )
+        self.assertEqual(
+            MediaItem.objects.get(file=f).taken_at, datetime(2021, 3, 4, 12, tzinfo=UTC)
+        )
+
+        self._write(lambda: FileService.rename(f, "beach.png", acting_user=self.user))
+        photo = MediaItem.objects.get(file=f)
+        self.assertIsNone(photo.taken_at)
+        self.assertFalse(photo.taken_at_from_name)
+
+    def test_renaming_never_overrides_the_capture_date(self):
+        f = self._write(
+            lambda: upload(
+                self.user,
+                "beach.jpg",
+                jpeg_bytes(taken="2024:07:14 18:32:05", offset="+00:00"),
+            )
+        )
+
+        self._write(
+            lambda: FileService.rename(f, "2020-01-02.jpg", acting_user=self.user)
+        )
+
+        self.assertEqual(
+            MediaItem.objects.get(file=f).taken_at,
+            datetime(2024, 7, 14, 18, 32, 5, tzinfo=UTC),
+        )
+
     def test_replacing_the_content_refreshes_the_row(self):
         f = self._write(
             lambda: upload(self.user, "a.jpg", jpeg_bytes(taken="2024:07:14 18:32:05"))

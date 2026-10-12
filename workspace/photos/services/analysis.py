@@ -3,6 +3,7 @@
 import dataclasses
 import logging
 
+from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -18,6 +19,7 @@ from workspace.users.services.settings import get_user_timezone
 from ..models import MediaItem
 from . import video
 from .exif import PhotoMetadata, read_metadata
+from .filename_dates import date_from_filename
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +34,10 @@ MEDIA_LABELS = RASTER_LABELS | VIDEO_LABELS
 # files/tasks.py, so a very large library takes several passes).
 ANALYSIS_VERSIONS = {
     # 2: lens, exposure settings and GPS position.
-    MediaItem.MediaType.PHOTO: 2,
-    MediaItem.MediaType.VIDEO: 1,
+    # 3: the date written in the file name when the EXIF has none.
+    MediaItem.MediaType.PHOTO: 3,
+    # 2: the date written in the file name when the container has none.
+    MediaItem.MediaType.VIDEO: 2,
 }
 # The version of a row written before rows recorded one.
 _UNVERSIONED = 1
@@ -114,6 +118,9 @@ def analyze_media(file_obj):
     nulls: it has been looked at, and it belongs in the Undated bucket rather
     than in front of every hourly pass. So does a video on a deployment
     without ffprobe.
+
+    A file whose metadata carries no date is dated by its name when the name
+    holds one.
     """
     if not is_media_candidate(file_obj):
         return None
@@ -128,26 +135,58 @@ def analyze_media(file_obj):
     if metadata is None:
         return None
 
-    current_hash = (
-        File.objects.filter(pk=file_obj.pk)
-        .values_list("content_hash", flat=True)
-        .first()
-    )
-    if current_hash is None or current_hash != read_hash:
-        return None
+    # The file row stays locked until the row below is written: a rename
+    # either landed before and its name is read here, or waits and its own
+    # handler re-dates the row this writes. Reading file_obj.name instead
+    # would let a name from before the rename win.
+    with transaction.atomic():
+        current = (
+            File.objects.select_for_update()
+            .filter(pk=file_obj.pk)
+            .values_list("content_hash", "name")
+            .first()
+        )
+        if current is None or current[0] != read_hash:
+            return None
+        current_name = current[1]
 
-    item, _ = MediaItem.objects.update_or_create(
-        file_id=file_obj.pk,
-        defaults={
-            **_EMPTY_METADATA,
-            **dataclasses.asdict(metadata),
-            "media_type": media_type,
-            "content_hash": read_hash,
-            "analysis_version": ANALYSIS_VERSIONS[media_type],
-            "analyzed_at": timezone.now(),
-        },
-    )
+        taken_at = metadata.taken_at
+        if taken_at is None:
+            taken_at = date_from_filename(current_name, default_tz=default_tz)
+            taken_at_from_name = taken_at is not None
+        else:
+            taken_at_from_name = False
+
+        item, _ = MediaItem.objects.update_or_create(
+            file_id=file_obj.pk,
+            defaults={
+                **_EMPTY_METADATA,
+                **dataclasses.asdict(metadata),
+                "taken_at": taken_at,
+                "taken_at_from_name": taken_at_from_name,
+                "media_type": media_type,
+                "content_hash": read_hash,
+                "analysis_version": ANALYSIS_VERSIONS[media_type],
+                "analyzed_at": timezone.now(),
+            },
+        )
     return item
+
+
+def redate_from_name(file_obj):
+    """Date *file_obj*'s row from its current name, unless its metadata
+    dated it.
+
+    Renaming an undated scan to "1998-07-12 Mariage.jpg" files it on that
+    day, and renaming a photo dated by its name moves it with the name (or
+    back to Undated). Only the name is read: the bytes have not changed.
+    """
+    taken_at = date_from_filename(
+        file_obj.name, default_tz=get_user_timezone(file_obj.owner)
+    )
+    MediaItem.objects.filter(
+        Q(taken_at__isnull=True) | Q(taken_at_from_name=True), file_id=file_obj.pk
+    ).update(taken_at=taken_at, taken_at_from_name=taken_at is not None)
 
 
 def refresh_media_item(file_obj):

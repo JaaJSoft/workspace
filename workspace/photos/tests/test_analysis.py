@@ -150,6 +150,52 @@ class AnalyzePhotoTests(TestCase):
         self.assertIsNone(photo.taken_at)
         self.assertEqual((photo.width, photo.height), (32, 32))
 
+    def test_without_a_capture_date_the_name_dates_the_photo(self):
+        set_setting(self.user, "core", "timezone", "Europe/Paris")
+        f = upload(self.user, "Screenshot_20240714-233000.png", png_bytes())
+
+        photo = analyze_media(f)
+
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 21, 30, tzinfo=UTC))
+        self.assertTrue(photo.taken_at_from_name)
+
+    def test_a_rename_during_the_analysis_dates_by_the_new_name(self):
+        f = upload(self.user, "upload.tmp.png", png_bytes())
+
+        def rename_while_reading(stream, **kwargs):
+            FileService.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
+            return PhotoMetadata()
+
+        with patch(
+            "workspace.photos.services.analysis.read_metadata",
+            side_effect=rename_while_reading,
+        ):
+            photo = analyze_media(f)
+
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 12, tzinfo=UTC))
+
+    def test_the_capture_date_wins_over_the_name(self):
+        f = upload(
+            self.user,
+            "IMG_20200101_120000.jpg",
+            jpeg_bytes(taken="2024:07:14 18:32:05", offset="+00:00"),
+        )
+
+        photo = analyze_media(f)
+
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 18, 32, 5, tzinfo=UTC))
+        self.assertFalse(photo.taken_at_from_name)
+
+    def test_an_undecodable_image_is_still_dated_by_its_name(self):
+        f = upload(self.user, "IMG-20240714-WA0001.jpg", b"\xff\xd8\xff garbage")
+        File.objects.filter(pk=f.pk).update(type="jpeg")
+        f.refresh_from_db()
+
+        with self.assertLogs("workspace.photos.services.analysis", "INFO"):
+            photo = analyze_media(f)
+
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 12, tzinfo=UTC))
+
     def test_wall_clock_capture_time_is_read_in_the_owners_timezone(self):
         set_setting(self.user, "core", "timezone", "Europe/Paris")
         f = upload(self.user, "dinner.jpg", jpeg_bytes(taken="2024:07:14 23:30:00"))
@@ -307,13 +353,14 @@ class PendingPhotosTests(TestCase):
                 analyze_media(f)
                 self.assertEqual(self._pending(), set())
 
-    def test_video_rows_from_before_versions_are_not_pending(self):
-        # The video reader did not change when rows started recording a
-        # version: probing every existing video again would buy nothing.
-        f = make_video(self.user, "clip.webm", None)
-        MediaItem.objects.filter(file=f).update(analysis_version=None)
+    def test_video_row_from_an_older_reader_is_pending(self):
+        older = ANALYSIS_VERSIONS[MediaItem.MediaType.VIDEO] - 1
+        for version in (None, older):
+            with self.subTest(analysis_version=version):
+                f = make_video(self.user, f"{version}.webm", None)
+                MediaItem.objects.filter(file=f).update(analysis_version=version)
 
-        self.assertEqual(self._pending(), set())
+                self.assertIn(f.pk, self._pending())
 
     def test_reanalyze_takes_every_image(self):
         f = upload(self.user, "a.jpg")
@@ -379,6 +426,16 @@ class AnalyzeVideoTests(TestCase):
         self.assertIsNone(item.flash_fired)
         self.assertIsNone(item.latitude)
         self.assertIsNone(item.altitude)
+
+    @patch("workspace.files.services.ffmpeg.FFPROBE", None)
+    def test_without_a_recording_date_the_name_dates_the_video(self):
+        f = self._video("VID_20240714_103001.webm", clip_bytes("clip.webm"))
+
+        with self.assertLogs("workspace.photos.services.analysis", "INFO"):
+            item = analyze_media(f)
+
+        self.assertEqual(item.taken_at, datetime(2024, 7, 14, 10, 30, 1, tzinfo=UTC))
+        self.assertTrue(item.taken_at_from_name)
 
     @patch("workspace.files.services.ffmpeg.FFPROBE", None)
     def test_without_ffprobe_the_video_goes_to_undated(self):

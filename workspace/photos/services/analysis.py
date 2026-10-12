@@ -3,6 +3,7 @@
 import dataclasses
 import logging
 
+from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
@@ -134,34 +135,41 @@ def analyze_media(file_obj):
     if metadata is None:
         return None
 
-    current_hash = (
-        File.objects.filter(pk=file_obj.pk)
-        .values_list("content_hash", flat=True)
-        .first()
-    )
-    if current_hash is None or current_hash != read_hash:
-        return None
+    # The file row stays locked until the row below is written: a rename
+    # either landed before and its name is read here, or waits and its own
+    # handler re-dates the row this writes. Reading file_obj.name instead
+    # would let a name from before the rename win.
+    with transaction.atomic():
+        current = (
+            File.objects.select_for_update()
+            .filter(pk=file_obj.pk)
+            .values_list("content_hash", "name")
+            .first()
+        )
+        if current is None or current[0] != read_hash:
+            return None
+        current_name = current[1]
 
-    taken_at = metadata.taken_at
-    if taken_at is None:
-        taken_at = date_from_filename(file_obj.name, default_tz=default_tz)
-        taken_at_from_name = taken_at is not None
-    else:
-        taken_at_from_name = False
+        taken_at = metadata.taken_at
+        if taken_at is None:
+            taken_at = date_from_filename(current_name, default_tz=default_tz)
+            taken_at_from_name = taken_at is not None
+        else:
+            taken_at_from_name = False
 
-    item, _ = MediaItem.objects.update_or_create(
-        file_id=file_obj.pk,
-        defaults={
-            **_EMPTY_METADATA,
-            **dataclasses.asdict(metadata),
-            "taken_at": taken_at,
-            "taken_at_from_name": taken_at_from_name,
-            "media_type": media_type,
-            "content_hash": read_hash,
-            "analysis_version": ANALYSIS_VERSIONS[media_type],
-            "analyzed_at": timezone.now(),
-        },
-    )
+        item, _ = MediaItem.objects.update_or_create(
+            file_id=file_obj.pk,
+            defaults={
+                **_EMPTY_METADATA,
+                **dataclasses.asdict(metadata),
+                "taken_at": taken_at,
+                "taken_at_from_name": taken_at_from_name,
+                "media_type": media_type,
+                "content_hash": read_hash,
+                "analysis_version": ANALYSIS_VERSIONS[media_type],
+                "analyzed_at": timezone.now(),
+            },
+        )
     return item
 
 

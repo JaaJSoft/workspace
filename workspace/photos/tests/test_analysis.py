@@ -159,6 +159,21 @@ class AnalyzePhotoTests(TestCase):
         self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 21, 30, tzinfo=UTC))
         self.assertTrue(photo.taken_at_from_name)
 
+    def test_a_rename_during_the_analysis_dates_by_the_new_name(self):
+        f = upload(self.user, "upload.tmp.png", png_bytes())
+
+        def rename_while_reading(stream, **kwargs):
+            FileService.rename(File.objects.get(pk=f.pk), "2024-07-14.png")
+            return PhotoMetadata()
+
+        with patch(
+            "workspace.photos.services.analysis.read_metadata",
+            side_effect=rename_while_reading,
+        ):
+            photo = analyze_media(f)
+
+        self.assertEqual(photo.taken_at, datetime(2024, 7, 14, 12, tzinfo=UTC))
+
     def test_the_capture_date_wins_over_the_name(self):
         f = upload(
             self.user,

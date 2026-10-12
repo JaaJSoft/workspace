@@ -38,6 +38,22 @@ class DateFromFilenameTests(SimpleTestCase):
             with self.subTest(name=name):
                 self.assertEqual(_read(name), wall_clock.replace(tzinfo=PARIS))
 
+    def test_a_time_without_seconds(self):
+        for name in (
+            "TOTO_2023-04-15T14:30.png",
+            "2023-04-15 14h30 Anniversaire.jpg",
+            "2023-04-15 14.30.jpg",
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    _read(name), datetime(2023, 4, 15, 14, 30, tzinfo=PARIS)
+                )
+
+    def test_the_date_may_sit_anywhere_in_the_name(self):
+        for name in ("TOTO_2023-04-15.png", "Vacances 2023.04.15 plage.jpg"):
+            with self.subTest(name=name):
+                self.assertEqual(_read(name), datetime(2023, 4, 15, 12, tzinfo=PARIS))
+
     def test_twelve_hour_clock(self):
         cases = {
             "Screen Shot 2020-01-02 at 3.04.05 PM.png": datetime(2020, 1, 2, 15, 4, 5),

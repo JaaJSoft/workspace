@@ -14,7 +14,11 @@ picture by hand. Among the names read:
 - ``Screenshot_20230415-143022.png``, ``Screenshot 2023-04-15 at 14.30.22.png``,
   ``Screen Shot 2020-01-02 at 3.04.05 PM.png`` (macOS)
 - ``2023-04-15 14.30.22.jpg`` (Dropbox camera uploads)
-- ``2023-04-15T14:30:22Z.jpg``, ``1998-07-12 Mariage.jpg``
+- ``2023-04-15T14:30:22Z.jpg``, ``2023-04-15 14h30 Anniversaire.jpg``,
+  ``1998-07-12 Mariage.jpg``
+
+The date may sit anywhere in the name (``TOTO_2023-04-15.png``): the
+prefixes above are examples, not a list the name is matched against.
 
 The year always comes first. A name that puts the day first (``15-04-2023``)
 cannot be told apart from one that puts the month first, and is not read.
@@ -33,7 +37,8 @@ _DATE_RE = re.compile(
         (?:\s+at\s+|[T_\- ]|)
         (?:
             (?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})
-          | (?P<hour_s>\d{1,2}) (?P<time_sep>[-_.:h]) (?P<minute_s>\d{2}) (?P=time_sep) (?P<second_s>\d{2})
+          | (?P<hour_s>\d{1,2}) (?P<time_sep>[-_.:h]) (?P<minute_s>\d{2})
+            (?:(?P=time_sep) (?P<second_s>\d{2}))?
         )
         # Milliseconds (Pixel, Signal) or a burst counter: read past, ignored.
         (?:[.,_-]?\d{1,9})?
@@ -80,7 +85,7 @@ def _moment(match, tz):
     else:
         hour = int(hour)
         minute = int(match["minute"] or match["minute_s"])
-        second = int(match["second"] or match["second_s"])
+        second = int(match["second"] or match["second_s"] or 0)
     if match["meridiem"]:
         if not 1 <= hour <= 12:
             return None

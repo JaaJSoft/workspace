@@ -121,7 +121,6 @@ test('a 400 abandons the vault and counts a failure', async () => {
 });
 
 test('a lock while building the items stops the run before any send', async () => {
-  const base = harness().globals;
   const locked = Object.assign(new Error('locked'), { reason: 'locked' });
   const { ctx, session, storage, calls } = harness({
     buildEntryMigrateItem: async () => { throw locked; },

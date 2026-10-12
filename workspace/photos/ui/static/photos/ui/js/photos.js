@@ -39,6 +39,21 @@ const ALBUM_MENU_ACTIONS = [
 const PHOTOS_MENU_WIDTH = 224;
 const PHOTOS_MENU_HEIGHT = 460;
 
+// The rule a menu row carries when it opens a group.
+const PHOTOS_MENU_RULE = 'mt-0.5 pt-0.5 border-t border-base-300';
+
+// The rows a menu shows, as groups of row ids: `groups` lists every row
+// with its condition (an id, or false), and the groups left empty drop out.
+function photosMenuRows(groups) {
+  return groups.map((group) => group.filter(Boolean)).filter((group) => group.length);
+}
+
+// The rule class of row `id` in `rows`: the first row of every group but
+// the first, so a rule only ever sits between two non-empty groups.
+function photosMenuRule(rows, id) {
+  return rows.findIndex((group) => group[0] === id) > 0 ? PHOTOS_MENU_RULE : '';
+}
+
 // How long the pointer rests on a video tile before its preview plays, in ms.
 const PHOTOS_HOVER_PREVIEW_DELAY = 400;
 
@@ -526,6 +541,67 @@ window.photosApp = function photosApp() {
       this.ctxMenu.open = false;
     },
 
+    // The photo menu, group by group: looking (open, similar, people),
+    // keeping (favorite, album, share, download), the album or person on
+    // screen, the file behind the photo, then taking it away (hide, trash)
+    // last. Empty until the registry answered.
+    ctxMenuRows() {
+      const { photo, actions } = this.ctxMenu;
+      if (!photo || actions === null) return [];
+      const has = (id) => actions.some((a) => a.id === id);
+      const own = !photo.albumScoped;
+      const inLibrary = own && !this.hiddenView;
+      const cluster = !!this.currentCluster();
+      return photosMenuRows([
+        [
+          (has('view') || photo.albumScoped) && 'open',
+          inLibrary && photo.mediaType !== 'video' && this.embeddingsEnabled() && 'similar',
+          inLibrary && this.facesEnabled() && 'faces',
+        ],
+        [
+          has('toggle_favorite') && 'toggle_favorite',
+          inLibrary && 'add_to_album',
+          has('share') && 'share',
+          (has('download') || (photo.albumScoped && photo.downloadUrl)) && 'download',
+        ],
+        [
+          this.albumAllows('set_cover') && 'album_cover',
+          this.albumAllows('remove_items') && photo.removable && 'remove_from_album',
+          cluster && 'person_cover',
+          cluster && 'not_this_person',
+        ],
+        [
+          photo.filesUrl && 'open_in_files',
+          has('copy_link') && 'copy_link',
+          has('rename') && 'rename',
+          has('properties') && 'properties',
+        ],
+        [
+          inLibrary && 'hide',
+          this.hiddenView && 'unhide',
+          has('delete') && 'delete',
+        ],
+      ]);
+    },
+
+    ctxShows(id) {
+      return this.ctxMenuRows().some((group) => group.includes(id));
+    },
+
+    ctxRule(id) {
+      return photosMenuRule(this.ctxMenuRows(), id);
+    },
+
+    ctxAction(id) {
+      return (this.ctxMenu.actions || []).find((a) => a.id === id) || null;
+    },
+
+    ctxDownloadUrl() {
+      const photo = this.ctxMenu.photo;
+      if (!photo) return '';
+      return photo.albumScoped ? photo.downloadUrl : `/api/v1/files/${photo.uuid}/download`;
+    },
+
     runCtxAction(action) {
       const photo = this.ctxMenu.photo;
       this.closeCtxMenu();
@@ -812,6 +888,36 @@ window.photosApp = function photosApp() {
 
     closeSelectionMenu() {
       this.selectionMenu.open = false;
+    },
+
+    // The groups of ctxMenuRows that apply to a selection, then Clear.
+    selectionMenuRows() {
+      const inLibrary = !this.hiddenView && !this.selectionAlbumScoped();
+      return photosMenuRows([
+        [
+          this.selectionAllows('toggle_favorite') && 'toggle_favorite',
+          inLibrary && 'add_to_album',
+          this.selectionDownloadable() && 'download',
+        ],
+        [
+          this.selectionRemovable() && 'remove_from_album',
+          !!this.currentCluster() && 'not_this_person',
+        ],
+        [
+          inLibrary && 'hide',
+          this.hiddenView && 'unhide',
+          this.selectionAllows('delete') && 'delete',
+        ],
+        ['clear'],
+      ]);
+    },
+
+    selectionShows(id) {
+      return this.selectionMenuRows().some((group) => group.includes(id));
+    },
+
+    selectionRule(id) {
+      return photosMenuRule(this.selectionMenuRows(), id);
     },
 
     // The selection holds a photo only the album serves: what needs Files

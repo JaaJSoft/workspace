@@ -1,18 +1,14 @@
 {% comment %}
 Rows of a photo's context menu. The panel around them is
-`ui/partials/context_menu_panel.html`, included from index.html.
+`ui/partials/context_menu_panel.html`, included from base.html.
 
-The file actions come from `POST /api/v1/files/actions`, narrowed to the ones
-that make sense on a photo (see PHOTO_ACTIONS in photos.js), so a row is only
-ever offered when the registry says the user may do it. Download is a link
-rather than a button, to carry the download attribute. "Open in Files" is
-not a file action: it is written out here, as in the notes menu, and so are
-the album rows, which the album action registry gates instead, Similar
-photos, a navigation offered where the instance embeds its photos, the face
-rows, offered while the user has face grouping on, and Hide, which never
-touches the file: it only takes it out of the viewer's own library. On the
-Hidden view the photo is out of albums and faces, so those rows give way to
-Unhide.
+ctxMenuRows() in photos.js decides which rows show, in which group: every
+row is written out here, in that order, and asks it with ctxShows() and
+ctxRule(). The file actions it offers come from `POST /api/v1/files/actions`
+(see PHOTO_ACTIONS), so a row is only ever offered when the registry says the
+user may do it. The album rows follow the album action registry instead, the
+face rows the user's face grouping, Similar photos the instance's embeddings.
+Hide never touches the file: it only takes it out of the viewer's own library.
 
 A photo of a shared album the viewer cannot open in Files (albumScoped) has
 no file action and no place in Files: its menu is the viewer, the download
@@ -25,71 +21,58 @@ the album allows (through the album), and the album rows.
       <span>Loading…</span>
     </span>
   </li>
-  <template x-for="(action, idx) in (ctxMenu.actions || [])" :key="action.id">
-    <li
-      :class="idx > 0 && action.category !== ctxMenu.actions[idx-1].category ? 'mt-0.5 pt-0.5 border-t border-base-300' : ''"
-    >
-      {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id === 'download'" icon="download" label_expr="action.label" href_expr="`/api/v1/files/${ctxMenu.photo?.uuid}/download`" download_expr="ctxMenu.photo?.name" click="closeCtxMenu()" only %}
-      {% include "ui/partials/context_menu_item.html" with bare=1 show="action.id !== 'download'" icon_expr="action.icon" icon_class_expr="action.id === 'toggle_favorite' && action.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="action.label" class_expr="action.css_class || ''" click="runCtxAction(action)" only %}
-    </li>
+  <template x-if="ctxShows('open')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open')" icon="eye" label="Open" click="closeCtxMenu(); openPhoto(_tile(ctxMenu.photo.uuid))" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && ctxMenu.photo.albumScoped">
-    {% include "ui/partials/context_menu_item.html" with icon="eye" label="View" click="closeCtxMenu(); openPhoto(_tile(ctxMenu.photo.uuid))" only %}
+  <template x-if="ctxShows('similar')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('similar')" icon="images" label="Similar photos" click="showSimilar(ctxMenu.photo.uuid); closeCtxMenu()" only %}
   </template>
-  <template
-    x-if="ctxMenu.actions !== null && ctxMenu.photo.albumScoped && ctxMenu.photo.downloadUrl"
-  >
-    {% include "ui/partials/context_menu_item.html" with icon="download" label="Download" href_expr="ctxMenu.photo.downloadUrl" download_expr="ctxMenu.photo.name" click="closeCtxMenu()" only %}
+  <template x-if="ctxShows('faces')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('faces')" icon="scan-face" label_expr="ctxMenu.photo?.mediaType === 'video' ? 'People in this video' : 'People in this photo'" click="openFacesDialog(ctxMenu.photo)" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && ctxMenu.photo.filesUrl">
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
+  <template x-if="ctxShows('toggle_favorite')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_favorite')" icon="star" icon_class_expr="ctxAction('toggle_favorite')?.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="ctxAction('toggle_favorite')?.label" click="runCtxAction(ctxAction('toggle_favorite'))" only %}
   </template>
-  {% comment %}
-    Album rows. Add to album is offered on every photo: the picker lists
-    the albums the viewer may add to. The two others act on the album on
-    screen, as its action registry allows (albumAllows).
-  {% endcomment %}
-  <template
-    x-if="ctxMenu.actions !== null && !hiddenView && !ctxMenu.photo.albumScoped"
-  >
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="book-plus" label="Add to album" click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
+  <template x-if="ctxShows('add_to_album')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('add_to_album')" icon="book-plus" label="Add to album" click="closeCtxMenu(); openAlbumPicker([ctxMenu.photo.uuid])" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && albumAllows('set_cover')">
-    {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
+  <template x-if="ctxShows('share')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('share')" icon="share-2" label="Share" click="runCtxAction(ctxAction('share'))" only %}
   </template>
-  <template
-    x-if="ctxMenu.actions !== null && albumAllows('remove_items') && ctxMenu.photo.removable"
-  >
-    {% include "ui/partials/context_menu_item.html" with icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
+  <template x-if="ctxShows('download')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('download')" icon="download" label="Download" href_expr="ctxDownloadUrl()" download_expr="ctxMenu.photo?.name" click="closeCtxMenu()" only %}
   </template>
-  <template
-    x-if="ctxMenu.actions !== null && !hiddenView && !ctxMenu.photo.albumScoped"
-  >
-    {% include "ui/partials/context_menu_item.html" with icon="eye-off" label="Hide from library" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}
+  <template x-if="ctxShows('album_cover')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('album_cover')" icon="image-up" label="Set as cover" click="closeCtxMenu(); setAlbumCover(ctxMenu.photo.uuid)" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && hiddenView">
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="eye" label="Unhide" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], false)" only %}
+  <template x-if="ctxShows('remove_from_album')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('remove_from_album')" icon="image-minus" label="Remove from album" click="closeCtxMenu(); removeFromAlbum([ctxMenu.photo.uuid])" only %}
   </template>
-  <template
-    x-if="ctxMenu.actions !== null && !hiddenView && embeddingsEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType !== 'video'"
-  >
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="images" label="Similar photos" click="showSimilar(ctxMenu.photo.uuid); closeCtxMenu()" only %}
+  <template x-if="ctxShows('person_cover')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('person_cover')" icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
   </template>
-  {# Face rows: only the owner's photos have faces, so a photo of someone else's opens an empty dialog at worst. #}
-  <template
-    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType !== 'video'"
-  >
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this photo" click="openFacesDialog(ctxMenu.photo)" only %}
+  <template x-if="ctxShows('not_this_person')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('not_this_person')" icon="user-x" label="Not this person" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
   </template>
-  <template
-    x-if="ctxMenu.actions !== null && !hiddenView && facesEnabled() && !ctxMenu.photo.albumScoped && ctxMenu.photo.mediaType === 'video'"
-  >
-    {% include "ui/partials/context_menu_item.html" with li_class="mt-0.5 pt-0.5 border-t border-base-300" icon="scan-face" label="People in this video" click="openFacesDialog(ctxMenu.photo)" only %}
+  <template x-if="ctxShows('open_in_files')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open_in_files')" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && currentCluster()">
-    {% include "ui/partials/context_menu_item.html" with icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
+  <template x-if="ctxShows('copy_link')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('copy_link')" icon="link" label="Copy link" click="runCtxAction(ctxAction('copy_link'))" only %}
   </template>
-  <template x-if="ctxMenu.actions !== null && currentCluster()">
-    {% include "ui/partials/context_menu_item.html" with icon="user-x" label="Not this person" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
+  <template x-if="ctxShows('rename')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('rename')" icon="pencil" label="Rename" click="runCtxAction(ctxAction('rename'))" only %}
+  </template>
+  <template x-if="ctxShows('properties')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('properties')" icon="info" label="Properties" click="runCtxAction(ctxAction('properties'))" only %}
+  </template>
+  <template x-if="ctxShows('hide')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('hide')" icon="eye-off" label="Hide from library" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}
+  </template>
+  <template x-if="ctxShows('unhide')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('unhide')" icon="eye" label="Unhide" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], false)" only %}
+  </template>
+  <template x-if="ctxShows('delete')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('delete')" icon="trash-2" label="Move to trash" tone="error" click="runCtxAction(ctxAction('delete'))" only %}
   </template>
 </ul>

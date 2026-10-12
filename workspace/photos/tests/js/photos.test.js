@@ -211,6 +211,103 @@ test('a slow answer for a previous photo does not fill the current menu', async 
   assert.deepEqual(Array.from(app.ctxMenu.actions, (a) => a.id), ['view']);
 });
 
+function pageJson(values) {
+  return {
+    getElementById: (id) => (id in values ? { textContent: JSON.stringify(values[id]) } : null),
+    querySelector: () => null,
+  };
+}
+
+const ALL_PHOTO_ACTIONS = [
+  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename', 'delete',
+].map((id) => ({ id }));
+
+test('the menu groups a photo of the library, taking it away last', async () => {
+  const { fileActions } = fetchActionsReturning({ u1: ALL_PHOTO_ACTIONS });
+  const document = pageJson({ 'photos-faces-enabled': true, 'photos-embeddings-enabled': true });
+  const app = load({ fileActions, document }).ctx.photosApp();
+  app.albumUuid = 'al1';
+  app.albumActions = ['set_cover', 'remove_items'];
+
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({ removable: '1' }));
+  assert.deepEqual(Array.from(app.ctxMenuRows()), []);
+  await flush();
+
+  assert.deepEqual(app.ctxMenuRows().map((group) => Array.from(group)), [
+    ['open', 'similar', 'faces'],
+    ['toggle_favorite', 'add_to_album', 'share', 'download'],
+    ['album_cover', 'remove_from_album'],
+    ['open_in_files', 'copy_link', 'rename', 'properties'],
+    ['hide', 'delete'],
+  ]);
+  // A rule opens every group but the first, and nothing else.
+  assert.equal(app.ctxRule('open'), '');
+  assert.equal(app.ctxRule('similar'), '');
+  assert.match(app.ctxRule('toggle_favorite'), /border-t/);
+  assert.match(app.ctxRule('hide'), /border-t/);
+  assert.equal(app.ctxRule('delete'), '');
+});
+
+test('a group left empty takes its rule with it', async () => {
+  const { fileActions } = fetchActionsReturning({ u1: [{ id: 'view' }, { id: 'delete' }] });
+  const app = load({ fileActions }).ctx.photosApp();
+  app.hiddenView = true;
+
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({ filesUrl: '', mediaType: 'video' }));
+  await flush();
+
+  assert.deepEqual(app.ctxMenuRows().map((group) => Array.from(group)), [
+    ['open'],
+    ['unhide', 'delete'],
+  ]);
+  assert.equal(app.ctxShows('add_to_album'), false);
+  assert.equal(app.ctxShows('hide'), false);
+  assert.match(app.ctxRule('unhide'), /border-t/);
+});
+
+test('a photo only the album serves opens and downloads through the album', () => {
+  const app = load({ fileActions: fetchActionsReturning({}).fileActions }).ctx.photosApp();
+
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({
+    albumScoped: '1', filesUrl: '', downloadUrl: '/api/v1/photos/albums/al1/files/u1/download',
+  }));
+
+  assert.deepEqual(app.ctxMenuRows().map((group) => Array.from(group)), [['open'], ['download']]);
+  assert.equal(app.ctxDownloadUrl(), '/api/v1/photos/albums/al1/files/u1/download');
+});
+
+test('the menu of a person offers its cover and the way out of it', async () => {
+  const { fileActions } = fetchActionsReturning({ u1: [{ id: 'view' }] });
+  const document = pageJson({ 'photos-cluster-data': { uuid: 'c1' } });
+  const app = load({ fileActions, document }).ctx.photosApp();
+
+  app.openCtxMenu({ clientX: 1, clientY: 1 }, tile());
+  await flush();
+
+  assert.deepEqual(Array.from(app.ctxMenuRows()[2]), ['person_cover', 'not_this_person']);
+  assert.equal(app.ctxDownloadUrl(), '/api/v1/files/u1/download');
+});
+
+test('the selection menu follows the same groups, then Clear', () => {
+  const app = load().ctx.photosApp();
+  app.selectionActions = [{ id: 'toggle_favorite', add: true }, { id: 'download' }, { id: 'delete' }];
+  app.selection = ['a', 'b'];
+
+  assert.deepEqual(app.selectionMenuRows().map((group) => Array.from(group)), [
+    ['toggle_favorite', 'add_to_album', 'download'],
+    ['hide', 'delete'],
+    ['clear'],
+  ]);
+  assert.equal(app.selectionRule('toggle_favorite'), '');
+  assert.match(app.selectionRule('hide'), /border-t/);
+  assert.match(app.selectionRule('clear'), /border-t/);
+
+  app.selectionActions = null;
+  assert.deepEqual(app.selectionMenuRows().map((group) => Array.from(group)), [
+    ['add_to_album'], ['hide'], ['clear'],
+  ]);
+});
+
 test('the "..." button anchors the menu under itself, inside the viewport', () => {
   const { fileActions } = fetchActionsReturning({});
   const app = load({ fileActions }).ctx.photosApp();

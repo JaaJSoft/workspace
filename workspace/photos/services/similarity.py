@@ -105,9 +105,9 @@ def photo_vector(file_obj):
 
 
 def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
-    """The photos of *scope* that look like *source*, nearest first: every
-    near-duplicate, flagged, then up to SIMILAR_LIMIT similar photos. None
-    when *source* has no embedding yet.
+    """The photos of *scope* that look like *source*, nearest first: up to
+    *limit* near-duplicates, flagged, then up to SIMILAR_LIMIT similar
+    photos. None when *source* has no embedding yet.
 
     *source* is a file the caller checked the user can open.
     """
@@ -126,13 +126,14 @@ def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
             scope,
             vector,
             max_distance=similar_max_distance(),
-            limit=limit,
+            # Room for both groups: a long burst alone could fill *limit*.
+            limit=limit + SIMILAR_LIMIT,
             exclude=(source.pk,),
         )
     ]
-    # Nearest first, so the near-duplicates are the head of the list.
-    near_duplicates = sum(match.near_duplicate for match in matches)
-    return matches[: near_duplicates + SIMILAR_LIMIT]
+    near_duplicates = [match for match in matches if match.near_duplicate]
+    similar = [match for match in matches if not match.near_duplicate]
+    return near_duplicates[:limit] + similar[:SIMILAR_LIMIT]
 
 
 def search_by_description(user, text, scope=MINE, *, limit=RESULT_LIMIT):

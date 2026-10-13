@@ -41,6 +41,20 @@
           <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
       {% else %}
+        {% if ranking.params.similar %}
+          {# Back to the page the photo menu was opened on (an album, a person...); the timeline when it was not opened in-app. #}
+          <a
+            href="{{ timeline_url }}"
+            x-target.push="photos-nav photos-content"
+            @click="goBack($event)"
+            class="btn btn-ghost btn-sm btn-square shrink-0"
+            title="Back"
+            aria-label="Back"
+            data-testid="photos-similar-back"
+          >
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </a>
+        {% endif %}
         <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
         <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
           <h1 class="text-lg font-semibold truncate">{{ title }}</h1>

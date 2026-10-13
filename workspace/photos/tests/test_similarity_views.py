@@ -104,6 +104,16 @@ class SimilarViewTests(RankedViewTestCase):
         self.assertContains(response, f"similar={self.red.pk}")
         self.assertEqual(len(self._tiles(response)), 1)
 
+    def test_the_back_link_falls_back_to_the_timeline_in_scope(self):
+        response = self.client.get(f"/photos?similar={self.red.pk}&scope=all")
+
+        back = re.search(
+            r'<a\s+href="([^"]*)"[^>]*data-testid="photos-similar-back"',
+            response.content.decode(),
+        )
+        self.assertIsNotNone(back)
+        self.assertEqual(back.group(1), "/photos?scope=all")
+
     def _embedded_media(self, response):
         match = re.search(
             r'<script id="photos-embedded-media" type="application/json">(.*?)</script>',

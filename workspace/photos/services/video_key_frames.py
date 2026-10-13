@@ -67,20 +67,19 @@ def embed_key_frames(file_obj, backend):
     frames = _sample(file_obj, backend.decode_size)
     if frames is None:
         return None
+    same = duplicate_max_distance()
     kept = []
     for timestamp, image in frames:
         vector = np.asarray(backend.embed_image(image), dtype=np.float64)
-        if not any(_is_near_duplicate(vector, frame.vector) for frame in kept):
+        if not any(_distance(vector, frame.vector) <= same for frame in kept):
             kept.append(KeyFrame(timestamp=timestamp, vector=vector, image=image))
     _FRAMES.observe(len(kept))
     return kept
 
 
-def _is_near_duplicate(a, b):
+def _distance(a, b):
     norms = float(np.linalg.norm(a) * np.linalg.norm(b))
-    if not norms:
-        return False
-    return 1.0 - float(a @ b) / norms <= duplicate_max_distance()
+    return 1.0 - float(a @ b) / norms if norms else 2.0
 
 
 def _sample(file_obj, size):

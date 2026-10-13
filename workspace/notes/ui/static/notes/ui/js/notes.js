@@ -201,6 +201,9 @@ window.notesApp = function notesApp(config) {
         // POST /api/v1/files/actions. Empty list = fail-safe (buttons disabled).
         selectedNoteActionIds: [],
         _actionsFetchGen: 0,
+        // Bumped by each back or forward; a restore still loading once a
+        // later one started must not apply what it fetched.
+        _restoreGen: 0,
 
         async init() {
             // Load folder data from embedded JSON
@@ -266,26 +269,19 @@ window.notesApp = function notesApp(config) {
 
             this.$nextTick(function() { this._setupNotesObserver(); }.bind(this));
 
-            // Auto-open note if specified
-            if (config.file) {
+            // A deep link is the entry the page landed on, not one to stack.
+            if (config.file && !(this.selectedNote && this.selectedNote.uuid === config.file)) {
                 const note = this.notes.find(function(n) { return n.uuid === config.file; });
                 if (note) {
-                    await this.selectNote(note);
+                    await this.selectNote(note, { history: 'replace' });
                 } else {
-                    await this.selectNoteById(config.file);
+                    await this.selectNoteById(config.file, { history: 'replace' });
                 }
             }
+            // Canonical address, so closing a note matches the entry it was opened from.
+            this.updateUrl();
 
-            // Handle browser back/forward on mobile
-            window.addEventListener('popstate', function() {
-                const p = new URLSearchParams(window.location.search);
-                const fileId = p.get('file');
-                if (fileId) {
-                    this.selectNoteById(fileId);
-                } else {
-                    this.selectedNote = null;
-                }
-            }.bind(this));
+            window.addEventListener('nav:restore', this.onRestore.bind(this));
 
             // Keyboard shortcuts
             window.addEventListener('keydown', this._handleShortcut.bind(this));
@@ -364,8 +360,7 @@ window.notesApp = function notesApp(config) {
                 case 'Escape':
                     if (this.selectedNote) {
                         e.preventDefault();
-                        this.selectedNote = null;
-                        this.updateUrl();
+                        this.closeNote();
                     }
                     break;
                 case 'g':
@@ -657,7 +652,10 @@ window.notesApp = function notesApp(config) {
 
         // ── Journal ─────────────────────────────────────────
 
-        async openJournal() {
+        // A restore only reloads the list: the entry names its own note, and
+        // creating today's would write the history it is replaying.
+        async openJournal(options) {
+            const restoring = !!(options && options.restoring);
             this.activeView = 'journal';
             this.activeId = null;
             this.viewTitle = 'Journal';
@@ -668,6 +666,7 @@ window.notesApp = function notesApp(config) {
 
             this.activeId = journalUuid;
             await this.loadNotes('/api/v1/files?type=markdown&parent=' + journalUuid + '&ordering=-name');
+            if (restoring) return;
 
             // Create today's note if needed ("today" in the user's timezone)
             const today = window.userTzDayKey
@@ -684,7 +683,7 @@ window.notesApp = function notesApp(config) {
             }
 
             if (todayNote) {
-                await this.selectNote(todayNote);
+                await this.selectNote(todayNote, { history: 'replace' });
             }
 
             this.updateUrl();
@@ -720,10 +719,15 @@ window.notesApp = function notesApp(config) {
             }
         },
 
-        async selectNote(note) {
+        // Opening a note from the list adds an entry, so back closes it;
+        // switching notes while one is open only rewrites it. The same on
+        // every screen size: on desktop back closes the note too.
+        // options.history: 'push' | 'replace' | 'none' (a restore replaying an entry).
+        async selectNote(note, options) {
+            const mode = (options && options.history) || (this.selectedNote ? 'replace' : 'push');
             this.selectedNote = note;
             this.selectedNoteActionIds = [];
-            this.updateUrl({push: this.isMobile()});
+            if (mode !== 'none') this.updateUrl({ push: mode === 'push' });
             await this.$nextTick();
             // Fetch available actions in parallel with the viewer — both are
             // independent HTTP calls, no sequential dependency.
@@ -731,12 +735,60 @@ window.notesApp = function notesApp(config) {
             await this.loadViewerPanel('/files/view/' + note.uuid);
         },
 
-        async selectNoteById(uuid) {
+        async selectNoteById(uuid, options) {
             if (!isValidUuid(uuid)) return;
             const resp = await fetch('/api/v1/files/' + uuid);
             if (resp.ok) {
                 const note = await resp.json();
-                await this.selectNote(note);
+                await this.selectNote(note, options);
+            }
+        },
+
+        // Back on the list: undoes the opening when the list is the entry it
+        // was opened from, rewrites this one otherwise.
+        closeNote() {
+            this.selectedNote = null;
+            window.navHistory.returnTo(this._urlForState());
+        },
+
+        // Back or forward: the view, the expanded folders and the open note
+        // follow the URL. Everything on screen is rebuilt from it, so an
+        // entry from an earlier page load needs no reload. Writes no history.
+        async onRestore(event) {
+            if (event.detail.stale) event.preventDefault();
+            const gen = ++this._restoreGen;
+            const p = new URLSearchParams(window.location.search);
+            // An address without a view shows the default one, as on a reload.
+            const view = p.get('view') || window._notesPrefsCache.defaultView || 'all';
+            const id = p.get('folder') || p.get('tag') || null;
+            const fileId = p.get('file');
+
+            const expanded = this._readExpandedFromUrl();
+            if (expanded.join(',') !== this.expandedFolders.join(',')) {
+                this.expandedFolders = [];
+                await this._restoreExpandedFolders();
+                if (gen !== this._restoreGen) return;
+            }
+
+            if (view === 'journal') {
+                if (this.activeView !== 'journal') await this.openJournal({ restoring: true });
+            } else if (view !== this.activeView || (id && id !== this.activeId)) {
+                const folder = id && (this._findFolder(id, this.sidebarFolders)
+                    || this._findFolder(id, this.sidebarGroupFolders));
+                await this.setView(view, id, folder ? folder.name : null, true);
+            }
+            if (gen !== this._restoreGen) return;
+
+            if (!fileId) {
+                this.selectedNote = null;
+            } else if (!this.selectedNote || this.selectedNote.uuid !== fileId) {
+                let note = this.notes.find(function(n) { return n.uuid === fileId; });
+                if (!note && isValidUuid(fileId)) {
+                    const resp = await fetch('/api/v1/files/' + fileId);
+                    note = resp.ok ? await resp.json() : null;
+                    if (gen !== this._restoreGen) return;
+                }
+                if (note) await this.selectNote(note, { history: 'none' });
             }
         },
 
@@ -818,8 +870,7 @@ window.notesApp = function notesApp(config) {
             if (resp.ok) {
                 const uuid = this.selectedNote.uuid;
                 this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
-                this.selectedNote = null;
-                this.updateUrl();
+                this.closeNote();
             }
         },
 
@@ -850,8 +901,7 @@ window.notesApp = function notesApp(config) {
                         if (next) {
                             this.selectNote(next);
                         } else {
-                            this.selectedNote = null;
-                            this.updateUrl();
+                            this.closeNote();
                         }
                     }
                 }
@@ -956,8 +1006,7 @@ window.notesApp = function notesApp(config) {
                         self.notes = self.notes.filter(function(n) { return n.uuid !== uuid; });
                         if (self.selectedNote && self.selectedNote.uuid === uuid) {
                             self.teardownViewerPanel();
-                            self.selectedNote = null;
-                            self.updateUrl();
+                            self.closeNote();
                         }
                     });
                 });
@@ -992,8 +1041,7 @@ window.notesApp = function notesApp(config) {
                 if (this.activeView === 'folder' || this.activeView === 'group_folder') {
                     this.notes = this.notes.filter(function(n) { return n.uuid !== uuid; });
                     if (self.selectedNote && self.selectedNote.uuid === uuid) {
-                        self.selectedNote = null;
-                        self.updateUrl();
+                        self.closeNote();
                     }
                 }
                 this.refreshSidebar();
@@ -1107,7 +1155,7 @@ window.notesApp = function notesApp(config) {
             } else {
                 url.searchParams.delete('expanded');
             }
-            window.history.replaceState({}, '', url);
+            window.navHistory.replace(url.href);
         },
 
         async _restoreExpandedFolders() {
@@ -1188,13 +1236,25 @@ window.notesApp = function notesApp(config) {
 
         // ── URL state ────────────────────────────────────────
 
+        // Filters, views and folder switches rewrite the entry; only opening
+        // a note from the list asks for a new one (see selectNote).
         updateUrl(options) {
-            options = options || {};
-            const push = options.push || false;
+            const url = this._urlForState();
+            if (options && options.push) {
+                window.navHistory.push(url);
+            } else {
+                window.navHistory.replace(url);
+            }
+        },
+
+        _urlForState() {
             const url = new URL(window.location);
             url.search = '';
 
-            if (this.activeView !== 'all') {
+            // An address without a view shows the default one, so 'all' is
+            // only implicit while it is the default.
+            const defaultView = window._notesPrefsCache.defaultView || 'all';
+            if (this.activeView !== 'all' || defaultView !== 'all') {
                 url.searchParams.set('view', this.activeView);
             }
             if (this.activeView === 'tag' && this.activeId) {
@@ -1209,12 +1269,7 @@ window.notesApp = function notesApp(config) {
             if (this.expandedFolders.length > 0) {
                 url.searchParams.set('expanded', this.expandedFolders.join(','));
             }
-
-            if (push) {
-                window.history.pushState({}, '', url);
-            } else {
-                window.history.replaceState({}, '', url);
-            }
+            return url.pathname + url.search + url.hash;
         },
 
         // ── Tag navigation (the contract the shared tag partials call) ──

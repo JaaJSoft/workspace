@@ -15,17 +15,7 @@ window.mailLabelsMixin = function mailLabelsMixin() {
     },
 
     selectLabel(label) {
-      this.unifiedInbox = false;
-      this.selectedLabel = label;
-      this.selectedFolder = null;
-      this.selectedMessage = null;
-      this.messageDetail = null;
-      this._updateUrl(null, {push: this.isMobile()});
-      this.selectedMessages = [];
-      this.currentPage = 1;
-      this._resetFilters();
-      this._closeDrawerOnMobile();
-      this.loadMessages();
+      this._switchScope(null, label);
     },
 
     showLabelModal(accountId, label) {

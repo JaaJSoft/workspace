@@ -74,7 +74,8 @@
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-circle lg:hidden"
-          @click="history.back()"
+          aria-label="Back to messages"
+          @click="closeMessage()"
         >
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>

@@ -115,15 +115,17 @@ window.mailMessagesMixin = function mailMessagesMixin() {
     },
 
     // ----- Message detail -----
+    // Opening a message adds an entry, so back returns to the list; moving
+    // to another one while a message is open only rewrites it.
     async selectMessage(msg) {
-      // Clear AI state from previous message
-      this.aiSummary = null;
-      this.aiSummarizing = false;
-      if (this._aiPollInterval) clearInterval(this._aiPollInterval);
-
+      const wasOpen = !!this.selectedMessage;
+      this._openingMessageUuid = null;
+      this._resetAi();
       this.selectedMessage = msg;
       this.loadingDetail = true;
-      this._updateUrl(msg.uuid, {push: this.isMobile()});
+      const url = this._mailUrl(msg.uuid);
+      if (wasOpen) window.navHistory.replace(url);
+      else window.navHistory.push(url);
       const res = await this._fetch(`/api/v1/mail/messages/${msg.uuid}`);
       // Bail if the user has selected another message in the meantime: a late
       // detail fetch must not overwrite messageDetail/aiSummary for a different
@@ -147,25 +149,54 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       }
     },
 
-    async _openMessageById(uuid) {
-      if (!isValidUuid(uuid)) return;
-      const res = await this._fetch(`/api/v1/mail/messages/${uuid}`);
-      if (res.ok) {
-        this.messageDetail = await res.json();
-        this.selectedMessage = this.messageDetail;
-        if (this.messageDetail.ai_summary_html) {
-          this.aiSummary = this.messageDetail.ai_summary_html;
-        }
-        // Load the folder
-        const folderId = this.messageDetail.folder_id;
-        const accountId = this.messageDetail.account_id;
-        await this.loadFolders(accountId);
-        const folder = this._resolveFolderUuid(accountId, folderId);
-        if (folder) {
-          this.selectedFolder = folder;
-          await this.loadMessages();
-        }
+    // Shows a message known only by its uuid (a link, back or forward).
+    // Writes no history. adoptFolder lists the message's own folder.
+    async _openMessageById(uuid, { adoptFolder = false } = {}) {
+      this._clearMessage();
+      this._resetAi();
+      const opening = isValidUuid(uuid) ? uuid : null;
+      this._openingMessageUuid = opening;
+      const res = opening ? await this._fetch(`/api/v1/mail/messages/${uuid}`) : null;
+      const data = res && res.ok ? await res.json() : null;
+      // A later open, close or restore took over while this one was in flight.
+      if (this._openingMessageUuid !== opening) return;
+      this._openingMessageUuid = null;
+      if (data) {
+        this.messageDetail = data;
+        this.selectedMessage = data;
+        if (data.ai_summary_html) this.aiSummary = data.ai_summary_html;
       }
+      if (!adoptFolder) return;
+      let folder = null;
+      if (data) {
+        await this.loadFolders(data.account_id);
+        folder = this._resolveFolderUuid(data.account_id, data.folder_id);
+      }
+      this.unifiedInbox = !folder;
+      this.selectedFolder = folder;
+      this.selectedLabel = null;
+      this.currentPage = 1;
+      await this.loadMessages();
+    },
+
+    // Back to the list. Undoes the entry the opening added when there is
+    // one, so the list is never stacked twice in history.
+    closeMessage() {
+      this._clearMessage();
+      window.navHistory.returnTo(this._mailUrl());
+    },
+
+    _clearMessage() {
+      this._openingMessageUuid = null;
+      this.selectedMessage = null;
+      this.messageDetail = null;
+      this.loadingDetail = false;
+    },
+
+    _resetAi() {
+      this.aiSummary = null;
+      this.aiSummarizing = false;
+      if (this._aiPollInterval) clearInterval(this._aiPollInterval);
     },
 
     // ----- Shared optimistic helpers -----
@@ -210,9 +241,7 @@ window.mailMessagesMixin = function mailMessagesMixin() {
       }
       // Clear detail if the viewed message was removed
       if (this.messageDetail && msgUuids.includes(this.messageDetail.uuid)) {
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this._updateUrl(null);
+        this.closeMessage();
       }
     },
 

@@ -205,7 +205,7 @@ window.mailAccountsMixin = function mailAccountsMixin() {
         this.messages = [];
         this.selectedMessage = null;
         this.messageDetail = null;
-        this._updateUrl(null);
+        window.navHistory.replace(this._mailUrl());
       }
     },
 

@@ -446,12 +446,6 @@ class File(models.Model):
         return f"{self.get_node_type_display()}: {self.name}"
 
     def save(self, *args, **kwargs):
-        written = kwargs.get("update_fields")
-        if self._state.adding or (written is not None and "name" in written):
-            # The service composes every name it is handed; this catches a
-            # row built without it. The blob path follows the content's own
-            # name, which the creator has to give in the same form.
-            self.name = canonical_name(self.name)
         if "/" in self.name:
             raise ValueError("File and folder names must not contain '/'.")
         # '.'/'..' would resolve to a parent directory in every storage path

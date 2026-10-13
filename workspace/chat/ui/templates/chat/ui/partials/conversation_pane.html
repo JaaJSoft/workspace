@@ -16,7 +16,8 @@
         <button
           type="button"
           class="btn btn-ghost btn-sm btn-square lg:hidden"
-          @click="activeConversation = null; history.pushState({}, '', '/chat')"
+          aria-label="Back to conversations"
+          @click="closeConversation()"
         >
           <i data-lucide="arrow-left" class="w-5 h-5"></i>
         </button>

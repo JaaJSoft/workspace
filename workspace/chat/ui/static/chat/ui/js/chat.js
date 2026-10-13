@@ -107,15 +107,7 @@ function chatApp(currentUserId) {
         if (e.matches) this.collapsed = true;
       });
 
-      // Handle browser back/forward
-      window.addEventListener('popstate', (e) => {
-        const uuid = e.state?.conversationUuid || null;
-        if (uuid) {
-          this.selectConversationById(uuid, false);
-        } else {
-          this.activeConversation = null;
-        }
-      });
+      window.addEventListener('nav:restore', (e) => this.onRestore(e));
 
       // Messages that arrived while nobody was looking stay unread until the
       // user actually comes back to them.
@@ -189,7 +181,7 @@ function chatApp(currentUserId) {
         this.$nextTick(() => this.showNewConversationDialog());
         const url = new URL(window.location);
         url.searchParams.delete('action');
-        history.replaceState(null, '', url);
+        window.navHistory.replace(url.pathname + url.search + url.hash);
       }
 
       // Auto-open DM from query param (e.g. /chat?dm=42)
@@ -204,14 +196,13 @@ function chatApp(currentUserId) {
       // drawer; here we just trigger the actual fetch + selection.
       if (!dmParam && this.pendingInitialConvUuid) {
         const uuid = this.pendingInitialConvUuid;
-        // Replace current history entry so back goes to /chat
-        history.replaceState({ conversationUuid: uuid }, '', `/chat/${uuid}`);
+        window.navHistory.replace(`/chat/${uuid}`);
         await this.selectConversationById(uuid, false);
 
         // ?thread=<root> - a thread-reply notification lands here. The reply
         // is not in the main flow (default preference), so without opening the
         // panel the page would show nothing new. `params` was captured before
-        // the replaceState above stripped the query string.
+        // the replace above stripped the query string.
         const threadParam = params.get('thread');
         if (threadParam && this.activeConversation?.uuid === uuid) {
           this.openThread(threadParam);

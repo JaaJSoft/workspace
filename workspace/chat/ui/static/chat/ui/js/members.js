@@ -140,9 +140,10 @@ window.chatMembersMixin = function chatMembersMixin() {
         });
         if (resp.ok || resp.status === 204) {
           this.conversations = this.conversations.filter(c => c.uuid !== this.activeConversation.uuid);
+          // Cleared first so closing saves no draft for a conversation left for good.
           this.activeConversation = null;
           this.showInfoPanel = false;
-          history.pushState({}, '', '/chat');
+          this.closeConversation();
           this.refreshConversationList();
         }
       } catch (e) {

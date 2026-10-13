@@ -180,7 +180,7 @@
             data-view-url="{{ current_view_url }}"
             data-parent-url="{{ parent_url|default:'' }}"
             data-sidebar-active="{{ sidebar_active }}"
-            x-init="$nextTick(() => { window.folderNav.onNavigate($el.dataset.viewUrl); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })"
+            x-init="$nextTick(() => { window.folderNav.onNavigate(); window.dispatchEvent(new CustomEvent('folder-browser-replaced', { detail: { viewUrl: $el.dataset.viewUrl } })); })"
           >
 
             <!-- Top Header Bar -->

@@ -1,59 +1,38 @@
-// --- Folder navigation history ---
-// A history stack for alpine-ajax navigation. Moving through it means
-// clicking one of two persistent hidden <a> elements, #folder-nav-push and
-// #folder-nav-replace, that the page renders outside its swap target with
-// an x-target pointing at it: the request then goes through alpine-ajax
-// exactly like a click on a folder link. The authenticated browser and the
-// public share page both use it; each renders its own pair of links.
+// --- Folder navigation ---
+// Moving between listings means clicking one of two persistent hidden <a>
+// elements, #folder-nav-push and #folder-nav-replace, that the page renders
+// outside its swap target with an x-target pointing at it: the request then
+// goes through alpine-ajax exactly like a click on a folder link. Back and
+// forward are the browser's own (navHistory); a step onto another listing
+// swaps it in place through the replace link. The authenticated browser and
+// the public share page both use it; each renders its own pair of links.
 window.folderNav = {
-  _stack: [],
-  _index: -1,
-  _skipPush: false,
-
   init() {
-    this._stack = [window.location.pathname + window.location.search];
-    this._index = 0;
-    window.addEventListener('popstate', () => { this._skipPush = true; });
+    window.addEventListener('nav:restore', (event) => {
+      if (!event.detail.stale || !document.getElementById('folder-nav-replace')) return;
+      event.preventDefault();
+      this.reload();
+    });
+    window.addEventListener('nav:change', () => this.onNavigate());
   },
 
-  // Called from x-init on the swap target after every AJAX render
-  onNavigate(url) {
-    if (this._skipPush) {
-      const idx = this._stack.lastIndexOf(url);
-      if (idx !== -1) this._index = idx;
-      this._skipPush = false;
-    } else if (url !== this._stack[this._index]) {
-      this._stack = this._stack.slice(0, this._index + 1);
-      this._stack.push(url);
-      this._index = this._stack.length - 1;
-    }
+  // Called from x-init on the swap target after every AJAX render.
+  onNavigate() {
     window.dispatchEvent(new Event('nav-state-changed'));
   },
 
-  canGoBack()    { return this._index > 0; },
-  canGoForward() { return this._index < this._stack.length - 1; },
-
-  back() {
-    if (!this.canGoBack()) return;
-    this._skipPush = true;
-    this._index--;
-    this._clickNavLink(this._stack[this._index], false);
-  },
-
-  forward() {
-    if (!this.canGoForward()) return;
-    this._skipPush = true;
-    this._index++;
-    this._clickNavLink(this._stack[this._index], false);
-  },
+  canGoBack() { return window.navHistory.canGoBack(); },
+  canGoForward() { return window.navHistory.canGoForward(); },
+  back() { window.navHistory.back(); },
+  forward() { window.navHistory.forward(); },
 
   navigateTo(url) {
     if (url) this._clickNavLink(url, true);
   },
 
-  // Re-fetch the current entry without touching the stack.
+  // Re-fetch the listing the address bar shows.
   reload() {
-    if (this._index >= 0) this._clickNavLink(this._stack[this._index], false);
+    this._clickNavLink(window.location.pathname + window.location.search, false);
   },
 
   _clickNavLink(url, push) {

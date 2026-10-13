@@ -264,7 +264,7 @@ window.photosApp = function photosApp() {
     contentLoading: false,
 
     init() {
-      this._tagLandingEntry();
+      window.addEventListener('nav:restore', (e) => this._restoreSwappedView(e));
       window.addEventListener('open-properties', (e) => {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
@@ -546,23 +546,15 @@ window.photosApp = function photosApp() {
       }
     },
 
-    // alpine-ajax reloads on back/forward only onto an entry it tagged, and
-    // the one the browser loaded carries no state: going back to it after a
-    // swap would leave the swapped page under its URL. Tagged as the landing
-    // entry so goBack() knows no photos page lies behind it.
-    _tagLandingEntry() {
-      if (history.state === null) {
-        history.replaceState({ __ajax: true, photosLanding: true }, '');
-      }
-    },
-
-    // Back to the photos page this one was opened from; on the first page
-    // loaded the link's own href applies.
-    goBack(event) {
-      if (history.state?.__ajax && !history.state.photosLanding) {
-        event.preventDefault();
-        history.back();
-      }
+    // A back or forward onto another listing: swapped in place, as the
+    // listing was, rather than reloading the page.
+    _restoreSwappedView(event) {
+      if (!event.detail.stale) return;
+      event.preventDefault();
+      this.$ajax(window.location.href, {
+        targets: ['photos-nav', 'photos-content'],
+        focus: false,
+      }).catch(() => window.location.reload());
     },
 
     // The photos that look like this one, in the library on screen.

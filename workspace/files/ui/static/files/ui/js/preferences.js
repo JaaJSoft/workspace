@@ -110,7 +110,6 @@ window.sidebarCollapse = function sidebarCollapse() {
 
     init() {
       this.syncActiveView();
-      window.addEventListener('popstate', () => this.syncActiveView());
       window.addEventListener('nav-state-changed', () => this.syncActiveView());
       window.addEventListener('preferences-changed', (e) => {
         this.showPinned = e.detail.showPinned !== false;

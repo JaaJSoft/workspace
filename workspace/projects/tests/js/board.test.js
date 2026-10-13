@@ -47,9 +47,9 @@ function panelDeleteBoard(calls) {
   ctx.getCSRFToken = () => 'token';
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
-  ctx.history = {
-    pushState: () => {},
-    replaceState: () => {},
+  ctx.navHistory = {
+    push: () => {},
+    replace: () => {}, returnTo: () => {},
   };
   const board = ctx.projectBoard({
     apiBase: '/api',
@@ -277,7 +277,7 @@ test('applyFilters rewrites the URL and refetches the task list only', () => {
   const board = panelBoard();
   const fetched = [];
   const replaced = [];
-  ctx.history.replaceState = (a, b, url) => replaced.push(url);
+  ctx.navHistory.replace = (url) => replaced.push(url);
   board.$ajax = (url, opts) => fetched.push([url, opts.target]);
   board.filters.priority = 'high';
   board.applyFilters();
@@ -655,9 +655,10 @@ test('openTask pushes the task URL and swaps the panel', async () => {
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board' };
-  ctx.history = {
-    pushState: (s, t, url) => calls.push('push ' + url),
-    replaceState: (s, t, url) => calls.push('replace ' + url),
+  ctx.navHistory = {
+    push: (url) => calls.push('push ' + url),
+    replace: (url) => calls.push('replace ' + url),
+    returnTo: (url) => calls.push('returnTo ' + url),
   };
   const board = ctx.projectBoard({
     apiBase: '/api',
@@ -678,9 +679,10 @@ test('closePanel clears state and strips the param', () => {
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   const calls = [];
   ctx.location = { href: 'http://x.test/projects/p/board?task=u1' };
-  ctx.history = {
-    pushState: (s, t, url) => calls.push('push ' + url),
-    replaceState: (s, t, url) => calls.push('replace ' + url),
+  ctx.navHistory = {
+    push: (url) => calls.push('push ' + url),
+    replace: (url) => calls.push('replace ' + url),
+    returnTo: (url) => calls.push('returnTo ' + url),
   };
   const board = ctx.projectBoard({
     apiBase: '/api',
@@ -690,7 +692,7 @@ test('closePanel clears state and strips the param', () => {
   board.panelTaskUuid = 'u1';
   board.closePanel();
   assert.equal(board.panelTaskUuid, null);
-  assert.deepStrictEqual(Array.from(calls), ['replace /projects/p/board']);
+  assert.deepStrictEqual(Array.from(calls), ['returnTo /projects/p/board']);
 });
 
 function panelBoard() {
@@ -700,7 +702,7 @@ function panelBoard() {
     origin: 'http://x.test',
     href: 'http://x.test/projects/p/board?task=u1',
   };
-  ctx.history = { pushState: () => {}, replaceState: () => {} };
+  ctx.navHistory = { push: () => {}, replace: () => {}, returnTo: () => {} };
   return ctx.projectBoard({
     apiBase: '/api',
     projectBase: '/projects/p',
@@ -1134,7 +1136,7 @@ test('refresh targets the all-tasks partial when viewing tasks', () => {
   assert.deepStrictEqual(Array.from(calls), ['/projects/p/tasks']);
 });
 
-test('onPopState recognizes the tasks view', () => {
+test('onRestore recognizes the tasks view', () => {
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     pathname: '/projects/p/tasks',
@@ -1145,7 +1147,7 @@ test('onPopState recognizes the tasks view', () => {
     projectBase: '/projects/p',
     writable: true,
   });
-  board.onPopState();
+  board.onRestore({ detail: { stale: false } });
   assert.equal(board.currentView, 'tasks');
 });
 
@@ -1167,7 +1169,7 @@ test('refresh targets the analytics partial when viewing analytics', () => {
   assert.deepStrictEqual(Array.from(calls), ['/projects/p/analytics']);
 });
 
-test('onPopState recognizes the analytics view', () => {
+test('onRestore recognizes the analytics view', () => {
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     pathname: '/projects/p/analytics',
@@ -1178,11 +1180,11 @@ test('onPopState recognizes the analytics view', () => {
     projectBase: '/projects/p',
     writable: true,
   });
-  board.onPopState();
+  board.onRestore({ detail: { stale: false } });
   assert.equal(board.currentView, 'analytics');
 });
 
-test('onPopState recognizes the timeline view', () => {
+test('onRestore recognizes the timeline view', () => {
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = {
     pathname: '/projects/p/timeline',
@@ -1193,7 +1195,7 @@ test('onPopState recognizes the timeline view', () => {
     projectBase: '/projects/p',
     writable: true,
   });
-  board.onPopState();
+  board.onRestore({ detail: { stale: false } });
   assert.equal(board.currentView, 'timeline');
 });
 
@@ -1381,9 +1383,10 @@ function sprintBoard(calls, islandData) {
   ctx.getCSRFToken = () => 'token';
   ctx.sidebarPreference = { initial: () => false, save: () => {} };
   ctx.location = { href: 'http://x.test/projects/p/board?sprint=s1' };
-  ctx.history = {
-    pushState: () => {},
-    replaceState: (state, title, url) => calls.push('replace ' + url),
+  ctx.navHistory = {
+    push: () => {},
+    replace: (url) => calls.push('replace ' + url),
+    returnTo: (url) => calls.push('returnTo ' + url),
   };
   ctx.document = {
     getElementById: (id) =>

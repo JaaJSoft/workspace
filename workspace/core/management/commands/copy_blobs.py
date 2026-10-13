@@ -27,6 +27,7 @@ BLOB_ROOTS = (
     "avatars",  # user and group conversation avatars
     "people",  # contact photos
     "faces",  # face crops
+    "photos",  # album previews and video remuxes
 )
 
 # Object stores report modification times to the second: a copy is only known

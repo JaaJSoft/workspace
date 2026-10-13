@@ -220,6 +220,9 @@ class LocalBackend(Backend):
         except OSError:
             return None
 
+    def moves_by_rename(self):
+        return True
+
     def move_in(self, name, path):
         full_path = self._path(name)
         try:

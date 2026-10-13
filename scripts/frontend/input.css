@@ -344,9 +344,27 @@ html:has(> body.overflow-hidden.h-dvh) {
   display: none;
 }
 
-[data-blur-sensitive] [data-sensitive="1"] .sensitive-badge,
 [data-blur-sensitive] .sensitive-cover {
   display: flex;
+}
+
+/* The badge says why a tile is blurred, on hover or keyboard focus only: at
+   rest the blur is enough, and a grid of them stays calm. A touch screen
+   never shows it (a tap opens the viewer and its cover). */
+[data-blur-sensitive] [data-sensitive="1"] .sensitive-badge {
+  display: flex;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+[data-blur-sensitive] [data-sensitive="1"]:has(:focus-visible) .sensitive-badge {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  [data-blur-sensitive] [data-sensitive="1"]:hover .sensitive-badge {
+    opacity: 1;
+  }
 }
 
 /* The viewer behind its cover, until the cover's Show button drops it. */

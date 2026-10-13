@@ -414,7 +414,6 @@ class FileService:
         return file_obj
 
     @staticmethod
-    @transaction.atomic
     def create_folder(
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
@@ -433,8 +432,9 @@ class FileService:
             color=color,
             group=group,
         )
-        _name_helpers.insert_node(folder)
-        FileService._ensure_folder_on_storage(folder)
+        with transaction.atomic():
+            _name_helpers.insert_node(folder)
+            FileService._ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
 

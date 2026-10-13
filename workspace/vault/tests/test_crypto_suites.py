@@ -41,6 +41,12 @@ class ManifestShapeTests(SimpleTestCase):
         self.assertNotIn("algo", suites.CURRENT_SUITE["kdf"]["params"])
 
 
+class ResignTests(SimpleTestCase):
+    def test_may_resign(self):
+        self.assertTrue(suites.may_resign(1))
+        self.assertFalse(suites.may_resign(9))
+
+
 class WireHeaderDispatchTests(SimpleTestCase):
     def _raw(self, format_version=2, aead_id=0x01, iv_len=12):
         return (

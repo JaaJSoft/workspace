@@ -126,9 +126,10 @@ leave those two unguarded.
 `workspace/vault/crypto_suites.json` names every algorithm and format
 identifier the vault knows - wire format, AEAD, HPKE suite, public key,
 signature, payload and KDF - and gives each one a state: `current` is what new
-data is written under, `superseded` is still read but never written by an
-up-to-date client (the server still accepts it on write, so a tab opened before
-a deploy can finish what it started), and `test` exists only for the test
+data is written under, `superseded` is still read, and an up-to-date client
+rewrites it under the current id the next time its owner unlocks (the server
+still accepts it on write, so a tab opened before a deploy can finish what it
+started), and `test` exists only for the test
 suites. The server reads it to refuse what it does not
 know, the Python reference reads it directly, and the browser reads only the
 copy built into `vault-crypto.js`: the server never serves it, so a server
@@ -142,6 +143,14 @@ The HPKE axis is keyed by format, with one suite per format today. A second KEM
 therefore needs that keying reworked in the bundle and the reference, not just
 a new manifest entry. Stored wraps already carry their format and every suite
 id, so the rework needs no data migration.
+
+### Retiring an algorithm
+
+1. Mark the id `superseded` and ship. Every client rewrites what it can open and verify the next time its owner unlocks; the server lists what is left (`GET /api/v1/vault/migration`) and counts it (`manage.py vault_suite_census`).
+2. Wait until the census shows zero rows for that id. There is no fixed delay: an account that never comes back keeps the count above zero.
+3. Only then remove the id from the manifest. `manage.py migrate` runs the `vault.E001` check first and refuses while any stored row still carries an id the manifest no longer declares.
+
+A superseded **signature** id carries `"resign": true | false`. `false` means the algorithm is considered broken: rows signed under it are never re-signed, because re-signing would turn a forgery into a valid signature. The migration on unlock leaves them as they are, and removing a tag or a folder that one of them carries is refused rather than re-signing it. The reader still opens them like any other row for as long as the manifest declares the id.
 
 ## The export archive
 

@@ -136,7 +136,7 @@ class ScopeTests(TestCase):
             if isinstance(member, type)
             and str(getattr(member, "scope", "")).startswith("vault.")
         }
-        self.assertEqual(len(scopes), 7)
+        self.assertEqual(len(scopes), 8)
         for scope in scopes:
             with self.subTest(scope=scope):
                 self.assertIn(scope, rates)

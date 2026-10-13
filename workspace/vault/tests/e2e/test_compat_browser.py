@@ -159,6 +159,27 @@ class _CorpusBrowserReplay:
                 status=200, body="0000000000000000000000000000000000000:1\n"
             ),
         )
+        # The replay proves format 1 opens; an unlock now starts a background
+        # migration that would rewrite the very rows it is reading. The
+        # listing is answered empty and any migrate POST is recorded.
+        self.migrate_posts = []
+        self.migration_listings = []
+
+        def answer_empty(route):
+            self.migration_listings.append(route.request.url)
+            route.fulfill(
+                status=200, content_type="application/json", body='{"vaults": []}'
+            )
+
+        self.page.route("**/api/v1/vault/migration", answer_empty)
+        self.page.on(
+            "request",
+            lambda request: (
+                self.migrate_posts.append(request.url)
+                if request.method == "POST" and request.url.endswith("/migrate")
+                else None
+            ),
+        )
 
     def _unlock(self):
         """Navigate to the vault and unlock with the corpus credentials.
@@ -200,6 +221,22 @@ class _CorpusBrowserReplay:
                 f"with every account already created. {exc}"
             ) from exc
 
+    def _assert_migration_held_off(self):
+        """The migration starts a moment after the unlock and POSTs later
+        still, so "no POST yet" proves nothing on its own. Waiting for the
+        stubbed listing to be asked for proves the migration did start and
+        was answered with nothing to do - without the stub it would have
+        listed the corpus rows and rewritten them.
+        """
+        for _ in range(100):
+            if self.migration_listings:
+                break
+            self.page.wait_for_timeout(100)
+        self.assertTrue(
+            self.migration_listings, "the unlock never asked for the migration"
+        )
+        self.assertEqual(self.migrate_posts, [])
+
     def test_a_browser_opens_every_row_of_the_frozen_account(self):
         """The whole manifest, compared in one shot - never a walk of
         selected keys. A partial comparison would pass on a reader that
@@ -229,6 +266,7 @@ class _CorpusBrowserReplay:
             ) from exc
 
         self.assertEqual(read, self.corpus.manifest)
+        self._assert_migration_held_off()
 
     def test_every_signed_row_still_verifies(self):
         """The other half of opening an account: a real client checks
@@ -269,6 +307,7 @@ class _CorpusBrowserReplay:
             ) from exc
 
         self.assertEqual(counts, expected)
+        self._assert_migration_held_off()
 
 
 # One test class per corpus, generated from CORPORA itself: a version added to

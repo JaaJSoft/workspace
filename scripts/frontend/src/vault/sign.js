@@ -1,12 +1,12 @@
 import { canonicalCbor, decodeCbor } from './cbor.js';
 import { equalBytes } from './encoding.js';
-import { CURRENT_SUITE, markImplemented, suiteEntry } from './suites.js';
+import { currentSuite, markImplemented, suiteEntry } from './suites.js';
 
 // One byte in front of every persisted signature, so a future algorithm lands
 // without a data migration.
 function prefixed(signature) {
   const out = new Uint8Array(1 + signature.length);
-  out[0] = CURRENT_SUITE.signatureAlg;
+  out[0] = currentSuite().signatureAlg;
   out.set(signature, 1);
   return out;
 }
@@ -47,8 +47,9 @@ const SIGNATURES = new Map([[1, ed25519]]);
 for (const id of SIGNATURES.keys()) markImplemented('signature', id);
 
 function currentSignature() {
-  suiteEntry('signature', CURRENT_SUITE.signatureAlg);
-  return SIGNATURES.get(CURRENT_SUITE.signatureAlg);
+  const alg = currentSuite().signatureAlg;
+  suiteEntry('signature', alg);
+  return SIGNATURES.get(alg);
 }
 
 // Not everything signed is a CBOR payload: the account key attestation signs a

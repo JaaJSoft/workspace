@@ -118,6 +118,20 @@ test('a row whose signature fails leaves the listing and is counted', async () =
   assert.deepStrictEqual(Array.from(result.rows.map((r) => r.uuid)), ['e-2']);
 });
 
+test('readEntries returns the raw rows that verified, and only those', async () => {
+  const { ctx, session } = reader({
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'bad') throw new Error('bad signature');
+      },
+    },
+  });
+  const rows = [{ ...ROW, uuid: 'good' }, { ...ROW, uuid: 'bad' }];
+  const result = await ctx.vaultReader.readEntries(session, VAULT, rows);
+  assert.deepStrictEqual(Array.from(result.verifiedRows, (r) => r.uuid), ['good']);
+  assert.strictEqual(result.verifiedRows[0], rows[0]);
+});
+
 test('one unreadable row does not cost the others their listing', async () => {
   const { ctx, session } = reader({
     crypto: {

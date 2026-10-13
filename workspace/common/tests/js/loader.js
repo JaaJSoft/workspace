@@ -29,10 +29,13 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
  * @param {string} repoRelativePath - script path from the repo root, e.g.
  *   'workspace/common/static/ui/js/uuid.js'
  * @param {object} extraGlobals - additional globals exposed to the script
+ * @param {object|null} existingContext - a context returned by an earlier
+ *   load: the script runs in it instead of a new one, as a second <script>
+ *   tag on the same page would (extraGlobals are then ignored)
  * @returns {object} the contextified sandbox holding the script's globals
  */
-function loadScript(repoRelativePath, extraGlobals = {}) {
-  return loadScripts([repoRelativePath], extraGlobals);
+function loadScript(repoRelativePath, extraGlobals = {}, existingContext = null) {
+  return loadScripts([repoRelativePath], extraGlobals, existingContext);
 }
 
 /**
@@ -44,10 +47,13 @@ function loadScript(repoRelativePath, extraGlobals = {}) {
  * @param {object} extraGlobals - additional globals exposed to the scripts
  * @returns {object} the contextified sandbox holding their globals
  */
-function loadScripts(repoRelativePaths, extraGlobals = {}) {
-  const sandbox = { console, ...extraGlobals };
-  sandbox.window = sandbox;
-  vm.createContext(sandbox);
+function loadScripts(repoRelativePaths, extraGlobals = {}, existingContext = null) {
+  let sandbox = existingContext;
+  if (!sandbox) {
+    sandbox = { console, ...extraGlobals };
+    sandbox.window = sandbox;
+    vm.createContext(sandbox);
+  }
   for (const repoRelativePath of repoRelativePaths) {
     const code = fs.readFileSync(path.join(REPO_ROOT, repoRelativePath), 'utf8');
     vm.runInContext(code, sandbox, { filename: repoRelativePath });

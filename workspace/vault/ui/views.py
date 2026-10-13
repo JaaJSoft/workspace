@@ -29,6 +29,9 @@ def index(request, vault_uuid=None):
             # leave the first minutes of every visit on the default.
             "vault_prefs": get_module_settings(request.user, "vault"),
             "vault_test_suites": bool(settings.VAULT_TEST_SUITES),
+            "vault_test_manifest": (
+                settings.VAULT_TEST_MANIFEST if settings.VAULT_TEST_SUITES else None
+            ),
         },
     )
 

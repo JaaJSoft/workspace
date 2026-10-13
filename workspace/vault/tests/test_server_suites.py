@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.test import SimpleTestCase, override_settings
 
 from ..services import suites
@@ -116,3 +118,107 @@ class ServerRegistryParityTests(SimpleTestCase):
             if value["state"] != "test"
         }
         self.assertEqual(set(attestation._SIGNATURE_VERIFIERS), declared)
+
+
+SWITCH_TO_TEST_AEAD = {"aead": {"1": "superseded", "240": "current"}}
+
+
+class SuiteStateTests(SimpleTestCase):
+    def test_state_reads_the_manifest(self):
+        self.assertEqual(suites.state("format", 1), "superseded")
+        self.assertEqual(suites.state("format", 2), "current")
+        self.assertIsNone(suites.state("format", 9))
+
+    def test_is_current(self):
+        self.assertTrue(suites.is_current("aead", 1))
+        self.assertFalse(suites.is_current("format", 1))
+        self.assertFalse(suites.is_current("aead", 7))
+
+    @override_settings(VAULT_TEST_SUITES=True, VAULT_TEST_MANIFEST=SWITCH_TO_TEST_AEAD)
+    def test_overrides_apply_under_the_test_switch(self):
+        self.assertEqual(suites.state("aead", 1), "superseded")
+        self.assertTrue(suites.is_current("aead", 240))
+
+    @override_settings(VAULT_TEST_SUITES=False, VAULT_TEST_MANIFEST=SWITCH_TO_TEST_AEAD)
+    def test_overrides_are_ignored_without_the_test_switch(self):
+        self.assertTrue(suites.is_current("aead", 1))
+        self.assertIsNone(suites.state("aead", 240))
+
+    @override_settings(
+        VAULT_TEST_SUITES=True, VAULT_TEST_MANIFEST={"aead": {"7": "current"}}
+    )
+    def test_an_override_naming_an_undeclared_id_is_refused(self):
+        with self.assertRaises(ValueError):
+            suites.state("aead", 1)
+
+    @override_settings(
+        VAULT_TEST_SUITES=True, VAULT_TEST_MANIFEST={"aead": {"240": "current"}}
+    )
+    def test_an_override_leaving_two_current_entries_is_refused(self):
+        with self.assertRaises(ValueError):
+            suites.state("aead", 1)
+
+    def test_current_hpke_suite_names_its_format(self):
+        self.assertEqual(
+            suites.current_hpke_suite(),
+            {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0, "format": 2},
+        )
+
+    def test_hpke_format(self):
+        base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        self.assertEqual(suites.hpke_format(base), 1)
+        self.assertEqual(suites.hpke_format({**base, "format": 2}), 2)
+        self.assertEqual(suites.hpke_format({**base, "format": 7}), 7)
+        self.assertIsNone(suites.hpke_format("nope"))
+
+    def test_hpke_format_reads_the_shape_without_the_manifest(self):
+        base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        with mock.patch.object(suites, "_manifest", return_value={"hpke": {}}):
+            self.assertEqual(suites.hpke_format(base), 1)
+            self.assertEqual(suites.hpke_format({**base, "format": 2}), 2)
+        self.assertEqual(suites.hpke_format({**base, "kem_id": 33}), 1)
+
+    def test_hpke_format_of_a_malformed_descriptor_is_none(self):
+        base = {"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0}
+        for value in (
+            {**base, "format": True},
+            {**base, "format": 2.0},
+            {**base, "format": "2"},
+            {**base, "kem_id": True},
+            {**base, "mode": 0.0},
+            {**base, "extra": 1},
+            {"kem_id": 32, "kdf_id": 1, "aead_id": 2},
+            [32, 1, 2, 0],
+            None,
+        ):
+            with self.subTest(value=value):
+                self.assertIsNone(suites.hpke_format(value))
+
+    def test_check_current_ciphertext(self):
+        good = bytes([2, 1, 1, 0, 1, 12]) + bytes(28)
+        suites.check_current_ciphertext(good, 1)
+        for bad, version in (
+            (bytes([1, 1, 1, 0, 1, 12]) + bytes(28), 1),  # format 1 is superseded
+            (good, 2),  # header key version 1, row key version 2
+        ):
+            with self.subTest(bad=bad[:6], version=version):
+                with self.assertRaises(suites.UnsupportedCiphertext):
+                    suites.check_current_ciphertext(bad, version)
+
+
+class ResignDeclarationTests(SimpleTestCase):
+    def test_every_superseded_signature_says_whether_it_resigns(self):
+        for identifier, entry in suites._manifest()["signature"].items():
+            with self.subTest(identifier=identifier):
+                if entry["state"] == "superseded":
+                    self.assertIsInstance(entry.get("resign"), bool)
+                else:
+                    self.assertNotIn("resign", entry)
+
+    def test_resign_appears_on_no_other_axis(self):
+        for axis, entries in suites._manifest().items():
+            if axis == "signature":
+                continue
+            for identifier, entry in entries.items():
+                with self.subTest(axis=axis, identifier=identifier):
+                    self.assertNotIn("resign", entry)

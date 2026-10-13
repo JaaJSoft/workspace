@@ -8,6 +8,7 @@ entries and lives in its own transactional endpoint.
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 from drf_spectacular.utils import OpenApiParameter, extend_schema
@@ -49,7 +50,10 @@ class _SignatureRefused(Exception):
 
 
 class _ContentsChanged(Exception):
-    """The folder does not hold what the request says it holds.
+    """The stored state is not what the request says it is.
+
+    A folder that does not hold the submitted entries, a tag carried by other
+    entries than the submitted ones, a row that moved since it was read.
 
     Raised for the same reason as the one above: the checks run inside the
     transaction, so a return would commit it. ``detail`` is chosen at the raise
@@ -312,8 +316,17 @@ class FolderDeleteView(CacheControlMixin, APIView):
                         )
                     except AttestationError as exc:
                         raise _SignatureRefused from exc
-                    entry.metadata_sig = item["metadata_sig"]
-                    entry.save(update_fields=["folder", "metadata_sig", "updated_at"])
+                    written = VaultEntry.objects.filter(
+                        pk=entry.pk, metadata_sig=entry.metadata_sig
+                    ).update(
+                        folder=None,
+                        metadata_sig=item["metadata_sig"],
+                        updated_at=timezone.now(),
+                    )
+                    if written != 1:
+                        raise _ContentsChanged(
+                            "An entry changed while the folder was being deleted."
+                        )
                 folder.delete()
         except _SignatureRefused:
             return Response(

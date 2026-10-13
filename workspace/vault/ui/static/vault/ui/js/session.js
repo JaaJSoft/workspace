@@ -471,6 +471,39 @@ window.vaultSession = (function () {
       return derived;
     },
 
+    // Re-seal a vault key for this account under the current HPKE suite. The
+    // key never leaves this function, exactly as in _openDerivedKey. The
+    // recipient is the key-exchange key this session established and checked
+    // against its attestation at unlock - never one a server could supply -
+    // and the new wrap is opened again before it is handed back: the server
+    // cannot verify a wrap, so this is the only check it ever gets.
+    rewrapVaultKey: async function (vault) {
+      const stillOurs = sessionGuard();
+      const V = window.vaultCrypto;
+      const raw = await recipient.open(
+        V.AD.vaultKeyInfo(vault.uuid, accountUuid, vault.hpke_suite),
+        V.fromBase64Url(vault.wrapped_key),
+        vault.hpke_suite
+      );
+      let reopened = null;
+      try {
+        stillOurs();
+        const suite = V.CURRENT_SUITE.hpke;
+        const info = V.AD.vaultKeyInfo(vault.uuid, accountUuid, suite);
+        const sealed = await V.hpkeSeal(kexPublicRaw, info, raw, suite);
+        stillOurs();
+        reopened = await recipient.open(info, sealed, suite);
+        if (!V.equalBytes(raw, reopened)) {
+          throw new Error('the new key wrap does not open to the vault key');
+        }
+        stillOurs();
+        return { wrapped_key: V.toBase64Url(sealed), hpke_suite: suite };
+      } finally {
+        zero(raw);
+        if (reopened) zero(reopened);
+      }
+    },
+
     // One full read of the account, with each entry key derived once. Both
     // passes the export makes over an entry ask for the same key, and deriving
     // one is an X25519 open plus an HKDF - the slowest thing in this module,

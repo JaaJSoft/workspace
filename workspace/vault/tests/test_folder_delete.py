@@ -226,3 +226,27 @@ class FolderDeleteTests(TestCase):
             entry.refresh_from_db()
             self.assertEqual(entry.folder_id, self.folder.pk)
             self.assertEqual(entry.metadata_sig, "AQ")
+
+    def test_an_entry_rewritten_after_it_was_read_is_409_and_changes_nothing(self):
+        """A migration batch re-sealing an occupant between the read and the
+        write leaves a signature over ciphertexts the row no longer holds."""
+        body = {"entries": [self.resigned(entry) for entry in self.entries]}
+        raced = []
+
+        def verify_then_race(payload, public, signature):
+            verify_record(payload, public, signature)
+            if not raced:
+                raced.append(payload["entry_uuid"])
+                VaultEntry.objects.filter(uuid=raced[0]).update(metadata_sig="ZZ")
+
+        with mock.patch(
+            "workspace.vault.views.folders.verify_record", verify_then_race
+        ):
+            response = self._post(self.folder, body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultFolder.objects.filter(uuid=self.folder.uuid).exists())
+        submitted = {item["metadata_sig"] for item in body["entries"]}
+        for entry in self.entries:
+            entry.refresh_from_db()
+            self.assertEqual(entry.folder_id, self.folder.pk)
+            self.assertNotIn(entry.metadata_sig, submitted)

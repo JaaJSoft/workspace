@@ -46,8 +46,9 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     # Django's per-thread connections become per-greenlet: each incoming HTTP
     # connection opens its own, which nothing can reuse once that greenlet
     # ends. Kept open, it lingers in a reference cycle until a full garbage
-    # collection, holding its page cache and mmap - a grid of thumbnails
-    # leaves hundreds behind. Opening a SQLite file costs well under a ms.
+    # collection, holding its parsed schema and page cache - a grid of
+    # thumbnails leaves hundreds behind. Opening a SQLite file costs well
+    # under a ms.
     DATABASES["default"]["CONN_MAX_AGE"] = 0
     DATABASES["default"].setdefault("OPTIONS", {})
     DATABASES["default"]["OPTIONS"]["timeout"] = 60.0
@@ -61,14 +62,34 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
     # works as intended and concurrent writers serialize cleanly instead
     # of failing with "database is locked".
     DATABASES["default"]["OPTIONS"]["transaction_mode"] = "IMMEDIATE"
+    # Memory: every connection has a private page cache, on the heap, while
+    # the mmap is the OS page cache, shared by every connection and process
+    # and reclaimable. Reads of the database file go through the mmap when
+    # it covers them, so the private cache only holds what it cannot: pages
+    # still in the WAL, pages being written, and the database past the mmap.
+    # A connection lives one request (CONN_MAX_AGE above), so a large private
+    # cache buys nothing beyond it and costs that much per concurrent
+    # request - 64 MB each took a worker past its limit while the WAL was
+    # held back.
+    # - mmap_size: the most SQLite accepts (SQLITE_MAX_MMAP_SIZE, 2 GiB), so
+    #   that a database of real size is read through the mmap, not the heap.
+    #   Only address space is reserved.
+    # - cache_size: 8 MB per connection.
+    # - journal_size_limit: a checkpoint truncates the WAL back to 64 MB,
+    #   rather than leaving it at its largest until the nightly
+    #   wal_checkpoint(TRUNCATE) of core.db_maintenance. A long read
+    #   transaction stops checkpoints from catching up, and the WAL grows.
+    # - temp_store=FILE: a sort or temporary table spills past the page cache
+    #   into a temporary file instead of holding all its rows in memory.
     DATABASES["default"]["OPTIONS"]["init_command"] = (
         "PRAGMA journal_mode=WAL; "
         "PRAGMA foreign_keys=ON; "
         "PRAGMA busy_timeout=60000; "
         "PRAGMA synchronous=NORMAL; "
-        "PRAGMA temp_store=MEMORY; "
-        "PRAGMA mmap_size=268435456; "
-        "PRAGMA cache_size=-64000;"
+        "PRAGMA temp_store=FILE; "
+        "PRAGMA mmap_size=2147418112; "
+        "PRAGMA cache_size=-8000; "
+        "PRAGMA journal_size_limit=67108864;"
     )
 
 # E2E runs drive the app through a real server process, which needs a test

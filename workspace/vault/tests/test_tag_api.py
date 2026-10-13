@@ -292,6 +292,25 @@ class TagDeleteTests(TestCase):
         stored = set(VaultEntry.objects.values_list("metadata_sig", flat=True))
         self.assertFalse(stored & {item["metadata_sig"] for item in body})
 
+    def test_an_entry_tagged_after_the_carriers_were_read_is_409(self):
+        """Its signature covers the tag, so cascading its link away would
+        leave it signed over a tag set it no longer has."""
+        body = [self.resigned(e) for e in self.carriers]
+        late = []
+
+        def verify_then_tag(payload, public, signature):
+            verify_record(payload, public, signature)
+            if not late:
+                late.append(self._entry(7))
+
+        with patch("workspace.vault.views.tags.verify_record", verify_then_tag):
+            response = self._post(body)
+        self.assertEqual(response.status_code, 409)
+        self.assertTrue(VaultTag.objects.filter(pk=self.tag.pk).exists())
+        # The late link was written inside the request's transaction, so the
+        # rollback takes it too; what matters is that the carriers kept theirs.
+        self.assertEqual(set(self.tag.entries.all()), set(self.carriers))
+
     def test_an_extra_entry_of_another_vault_is_409_and_changes_nothing(self):
         stranger, _, _ = make_account("stranger")
         foreign = VaultEntry.objects.create(

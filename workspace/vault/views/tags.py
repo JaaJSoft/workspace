@@ -208,6 +208,10 @@ class TagDeleteView(CacheControlMixin, APIView):
 
         try:
             with transaction.atomic():
+                # Locked first: on PostgreSQL, linking an entry to the tag takes
+                # a key-share lock on this row, so no carrier can appear between
+                # the read below and the delete.
+                VaultTag.objects.select_for_update().filter(pk=tag.pk).first()
                 # Trashed carriers included: deleted_at is a view, and the
                 # tag is still in their signature.
                 carriers = list(
@@ -244,7 +248,13 @@ class TagDeleteView(CacheControlMixin, APIView):
                         raise _ContentsChanged(
                             "An entry changed while the tag was being deleted."
                         )
-                    entry.tags.remove(tag)
+                unlinked, _ = VaultEntry.tags.through.objects.filter(
+                    vaulttag=tag
+                ).delete()
+                if unlinked != len(carriers):
+                    raise _ContentsChanged(
+                        "An entry was tagged while the tag was being deleted."
+                    )
                 tag.delete()
         except _SignatureRefused:
             return Response(

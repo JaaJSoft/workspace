@@ -157,8 +157,8 @@ class BlobStorage(Storage):
     def delete_prefix(self, name):
         return self.backend.delete_prefix(name)
 
-    def move(self, source, destination):
-        self.backend.move(source, destination)
+    def move(self, source, destination, *, overwrite=False):
+        self.backend.move(source, destination, overwrite=overwrite)
 
     def relocate(self, source, destination):
         return self.backend.relocate(source, destination)
@@ -182,6 +182,9 @@ class BlobStorage(Storage):
 
     def free_bytes(self):
         return self.backend.free_bytes()
+
+    def moves_by_rename(self):
+        return self.backend.moves_by_rename()
 
     def replace(self, name, content):
         """Put *content* at *name*, swapping the previous blob in one step.

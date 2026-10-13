@@ -270,6 +270,14 @@ class Backend(abc.ABC):
         """
         return False
 
+    def moves_by_rename(self):
+        """Whether :meth:`move` renames a blob rather than copying its bytes.
+
+        Bytes written under one name can then be put under another for
+        nothing, so a caller can write them before it knows their final name.
+        """
+        return False
+
     def signed_url(self, name, *, filename, attachment, content_type):
         """A short-lived URL a client can fetch the blob from directly, or None.
 

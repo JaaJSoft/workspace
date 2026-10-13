@@ -252,6 +252,17 @@ class BlobStorageContract:
         self.assertFalse(self.storage.is_dir("files/users/alice/Docs"))
         self.assertEqual(_read(self.storage, "files/users/alice/Archive/a.txt"), b"a")
 
+    def test_a_move_can_replace_the_blob_at_its_destination(self):
+        self.save("tmp/staged/upload", b"new")
+        self.save("files/users/alice/a.txt", b"old")
+
+        self.storage.move(
+            "tmp/staged/upload", "files/users/alice/a.txt", overwrite=True
+        )
+
+        self.assertFalse(self.storage.exists("tmp/staged/upload"))
+        self.assertEqual(_read(self.storage, "files/users/alice/a.txt"), b"new")
+
     def test_move_an_empty_directory(self):
         self.storage.make_dir("files/users/alice/Empty")
 
@@ -413,6 +424,16 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
     def test_free_bytes_is_the_free_space_of_its_disk(self):
         self.assertGreater(self.storage.free_bytes(), 0)
 
+    def test_a_move_renames_the_blob(self):
+        name = self.save("tmp/staged/upload", b"x")
+        inode = os.stat(self.storage.path(name)).st_ino
+
+        self.storage.move(name, "files/users/alice/a.txt", overwrite=True)
+
+        self.assertTrue(self.storage.moves_by_rename())
+        moved = self.storage.path("files/users/alice/a.txt")
+        self.assertEqual(os.stat(moved).st_ino, inode)
+
     def test_local_path_is_the_blob_itself(self):
         name = self.save("files/users/alice/clip.webm", b"x" * 2048)
 
@@ -572,6 +593,9 @@ class S3BlobStorageTests(S3TestMixin, BlobStorageContract, SimpleTestCase):
 
     def test_an_object_store_sets_no_limit(self):
         self.assertIsNone(self.storage.free_bytes())
+
+    def test_an_object_store_moves_by_copying(self):
+        self.assertFalse(self.storage.moves_by_rename())
 
 
 class S3BackendTests(S3TestMixin, SimpleTestCase):

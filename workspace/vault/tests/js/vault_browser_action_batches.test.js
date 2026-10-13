@@ -43,7 +43,7 @@ function browser(options = {}) {
       addEventListener() {},
       CustomEvent: class { constructor(name) { this.type = name; } },
       dispatchEvent() {},
-      history: { replaceState() {} },
+      navHistory: { state: () => ({}), push() {}, replace() {} },
       setInterval: () => 1,
       clearInterval() {},
       TAG_CHIP_COLORS: [{ name: 'None', value: '' }],

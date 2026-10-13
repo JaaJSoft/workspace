@@ -10,12 +10,14 @@
 //
 // The vault is in the URL and the folder is not: the server assigns a vault's
 // UUID and it leaks nothing, whereas a folder is named by a ciphertext the
-// server has never read. Neither switching vault nor walking the tree is a
-// navigation: the keys live in vaultSession's closure and a page load would
-// take them with it, so the vault is swapped in place and the URL follows
-// through replaceState. What a navigation used to reset for free, loadVault
-// now resets on purpose - see resetNavigation. Every page load starts locked,
-// which is why the vault is loaded by afterUnlock and never by init.
+// server has never read. Neither switching vault nor walking the tree loads a
+// page: the keys live in vaultSession's closure and a page load would take
+// them with it. Each move is a navHistory entry carrying its place (vault
+// UUID, view, folder and tag UUIDs, never a name), and a back or forward
+// restores that place in this page - see onNavRestore. What a page load used
+// to reset for free, loadVault now resets on purpose - see resetNavigation.
+// Every page load starts locked, which is why the vault is loaded by
+// afterUnlock and never by init.
 // Every id runAction can carry out. The registry answers what the caller may
 // do; an id it offers that lands on no branch here would be a menu row that
 // does nothing when clicked - worse than an absent one, and exactly the drift
@@ -115,6 +117,15 @@ window.vaultBrowser = (function () {
         ? 'Permanently delete this entry?'
         : 'Permanently delete these ' + count + ' entries?',
   };
+
+  const ROOT = { view: 'all', folder: null, tag: null };
+
+  // The vault's part of a history entry: { uuid, view, folder, tag, depth }.
+  // Null on an entry this page has written nothing into yet.
+  function placeOf(state) {
+    const place = state && state.vault;
+    return place && typeof place === 'object' ? place : null;
+  }
 
   function readJson(elementId) {
     const element = document.getElementById(elementId);
@@ -219,6 +230,14 @@ window.vaultBrowser = (function () {
       backgroundMenu: { open: false, x: 0, y: 0 },
       // Only the newest opening may write its answer; see openMenu.
       menuGeneration: 0,
+      // Vault entries behind the one on screen, kept in each entry. Not
+      // navHistory.canGoBack(): that also counts the page the user came from,
+      // and Back must not leave the vault for it.
+      navDepth: 0,
+      // Vault entries ahead, counted from the moves this page load saw. A
+      // reload starts it at zero, so Forward can be under-offered, never
+      // offered onto a page that is not the vault.
+      navAhead: 0,
 
       init: function () {
         this.vaultUuid = readJson('vault-uuid');
@@ -230,6 +249,16 @@ window.vaultBrowser = (function () {
         this.initUnlock();
         this.readCommand();
         const self = this;
+        const landed = placeOf(window.navHistory.state());
+        this.navDepth = landed ? landed.depth || 0 : 0;
+        window.addEventListener('nav:restore', function (event) {
+          self.onNavRestore(event);
+        });
+        // Back from the bfcache: the page was left by a navigation, and a
+        // link drops every entry that lay ahead of it.
+        window.addEventListener('pageshow', function (event) {
+          if (event.persisted) self.navAhead = 0;
+        });
         window.vaultClipboard.onChange(function (state) {
           self.clipboard = state;
         });
@@ -370,9 +399,19 @@ window.vaultBrowser = (function () {
         const arriving = this.openVault ? String(this.openVault.uuid) : null;
         if (arriving !== leaving) {
           this.resetNavigation();
+          // A draft is seeded with the folder, the tags and the key version
+          // of the vault it was opened in, and saves into whichever is open.
+          this.closeEntryDialog();
+          this.closeFolderDialog();
+          this.closeTagDialog();
+          // A reload, or a back onto another vault, lands where the entry was.
+          const landed = placeOf(window.navHistory.state());
+          if (landed && String(landed.uuid) === arriving) this.apply(landed);
         }
         if (this.openVault) {
-          this.rememberVault(this.openVault.uuid);
+          this.vaultUuid = this.openVault.uuid;
+          writePreference(LAST_VAULT_KEY, arriving);
+          this.syncEntry();
         } else if (!this.vaultUuid) {
           this.forgetVault();
         }
@@ -399,19 +438,49 @@ window.vaultBrowser = (function () {
       // pointing at one costs the next visit a fallback it need not make.
       forgetVault: function () {
         removePreference(LAST_VAULT_KEY);
-        if (window.history && window.history.replaceState) {
-          window.history.replaceState({}, '', '/vault');
-        }
+        window.navHistory.replace('/vault', this.navEntry());
       },
 
-      rememberVault: function (uuid) {
+      // Another vault is a move like a folder is: Back returns to the vault
+      // and the place it left. Never a page load, which would take the keys.
+      goToVault: function (uuid) {
+        if (String(uuid) === String(this.vaultUuid)) return;
         this.vaultUuid = uuid;
-        writePreference(LAST_VAULT_KEY, String(uuid));
-        // replaceState, never a navigation: the keys live in a closure that a
-        // page load would take with it, and the master password with them.
-        if (window.history && window.history.replaceState) {
-          window.history.replaceState({}, '', '/vault/' + uuid);
-        }
+        this.navDepth += 1;
+        this.navAhead = 0;
+        window.navHistory.push(this.vaultPath(), this.navEntry(ROOT));
+      },
+
+      vaultPath: function () {
+        return this.vaultUuid ? '/vault/' + this.vaultUuid : '/vault';
+      },
+
+      // Identifiers only: an entry outlives the lock and the page load.
+      navEntry: function (place) {
+        const at = place || this.place();
+        return {
+          vault: {
+            uuid: this.vaultUuid ? String(this.vaultUuid) : null,
+            view: at.view,
+            folder: at.folder,
+            tag: at.tag,
+            depth: this.navDepth,
+          },
+        };
+      },
+
+      // Names the open vault on the entry on screen: the landing one, or one
+      // whose vault was resolved to another. An entry that already names it
+      // was written by a move or is being restored, and is left alone.
+      syncEntry: function () {
+        const path = this.vaultPath();
+        const entry = placeOf(window.navHistory.state());
+        if (
+          entry
+          && String(entry.uuid) === String(this.vaultUuid)
+          && window.location.pathname === path
+        ) return;
+        window.navHistory.replace(path, this.navEntry());
       },
 
       // Told apart from `missing` on purpose: one is an account with nothing in
@@ -473,6 +542,9 @@ window.vaultBrowser = (function () {
         // between, and by then onLocked has already emptied the store.
         // Assigning anyway would put opened names back into a locked page.
         if (!session.isUnlocked()) return;
+        // Nor with a second load: two backs in a row each open a vault, and
+        // the slower listing must not land under the other vault's name.
+        if (this.openVault !== vault) return;
         // Kept beside the opened rows: opening one field later needs the
         // ciphertexts, and an opened row deliberately carries none. Only rows
         // the reader verified: the others are kept apart so a removal can
@@ -904,10 +976,58 @@ window.vaultBrowser = (function () {
       // Every navigation the store knows about lands here - forward, back,
       // up, a view, a tag - so this is the one place that has to take the
       // panel with it. The row it describes has left the screen.
-      apply: function (state) {
-        store.apply.call(this, state);
+      apply: function (place) {
+        store.apply.call(this, place);
         this.resetPanel();
         this.closeMenu();
+      },
+
+      // A move to the place on screen records nothing: Back would stay put.
+      navigate: function (place) {
+        const here = this.place();
+        const moved = place.view !== here.view
+          || place.folder !== here.folder
+          || place.tag !== here.tag;
+        this.apply(place);
+        if (!moved) return;
+        this.navDepth += 1;
+        this.navAhead = 0;
+        window.navHistory.push(this.vaultPath(), this.navEntry());
+      },
+
+      canGoBack: function () {
+        return this.navDepth > 0;
+      },
+
+      canGoForward: function () {
+        return this.navAhead > 0;
+      },
+
+      goBack: function () {
+        if (this.canGoBack()) window.navHistory.back();
+      },
+
+      goForward: function () {
+        if (this.canGoForward()) window.navHistory.forward();
+      },
+
+      // Every entry of this page is a vault place, restored from the entry
+      // alone: there is no server content to fetch again, and the reload
+      // navHistory falls back to would lock the vault.
+      onNavRestore: function (event) {
+        if (event.detail.stale) event.preventDefault();
+        const place = placeOf(event.detail.state);
+        const depth = place ? place.depth || 0 : 0;
+        this.navAhead = Math.max(0, this.navAhead + this.navDepth - depth);
+        this.navDepth = depth;
+        if (place && place.uuid && String(place.uuid) !== String(this.vaultUuid)) {
+          // loadVault lands on the entry's place once that vault is open, or
+          // after the unlock when the keys are not there yet.
+          this.vaultUuid = place.uuid;
+          if (window.vaultSession.isUnlocked()) this.load();
+          return;
+        }
+        this.apply(place || ROOT);
       },
 
       // Every menu item and every panel button comes through here. The action

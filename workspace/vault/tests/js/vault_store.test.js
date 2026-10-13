@@ -135,24 +135,6 @@ test('the default sort leaves the server order alone', () => {
   assert.deepStrictEqual(names(s.visibleEntries()), ['Compte courant', 'Streaming']);
 });
 
-test('going back then somewhere else drops the future', () => {
-  const s = store();
-  s.openFolder('f-bank');
-  s.openFolder('f-savings');
-  s.goBack();
-  assert.equal(s.folderUuid, 'f-bank');
-  assert.ok(s.canGoForward());
-
-  s.openFolder('f-insurance');
-  assert.ok(!s.canGoForward());
-  assert.equal(s.folderUuid, 'f-insurance');
-  // The assertion that bites: with the abandoned branch still in the stack,
-  // the cursor sits at the end all the same, and only *back* reveals it -
-  // landing on the folder the user turned away from.
-  s.goBack();
-  assert.equal(s.folderUuid, 'f-bank');
-});
-
 test('up walks the tree, not the history', () => {
   // The distinction matters: arriving in a nested folder from a tag filter
   // still has a parent to climb to, and no back entry that means the same.

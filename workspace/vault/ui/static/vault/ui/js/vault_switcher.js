@@ -95,7 +95,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       // working screen for a banner.
       if (this.vaultIsDegraded(vault)) return;
       this.closeSwitcher();
-      this.rememberVault(vault.uuid);
+      this.goToVault(vault.uuid);
       await this.load();
     },
 
@@ -324,7 +324,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         this.closeCreateDialog();
         // Straight into it: a vault created and then not opened would leave
         // the user on the one they were already in, wondering where it went.
-        this.rememberVault(created.uuid);
+        this.goToVault(created.uuid);
         await this.load();
       } catch (err) {
         // The vault is written; only the local half was cut short. Saying it
@@ -349,7 +349,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
             // Opened like one created cleanly. Confirming a vault exists and
             // then leaving the user where they were is the same puzzle by
             // another route.
-            this.rememberVault(pending);
+            this.goToVault(pending);
             await this.load();
           } catch (reloadErr) {
             this.error = 'Your vault was created, but it could not be opened.';

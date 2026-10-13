@@ -66,7 +66,67 @@ function jsonScripts(data) {
   };
 }
 
+// A browser tab as navHistory presents it: entries, a cursor, and a
+// nav:restore on every back or forward. A restore nobody prevents on stale
+// content counts a reload, which in the vault is a lock.
+function tab(url, state = {}) {
+  const listeners = [];
+  const clone = (value) => JSON.parse(JSON.stringify(value === undefined ? {} : value));
+  const t = {
+    entries: [{ url: url, state: clone(state) }],
+    index: 0,
+    pushed: [],
+    replaced: [],
+    reloads: 0,
+    path() { return t.entries[t.index].url; },
+    others: {},
+    listen(type, fn) {
+      if (type === 'nav:restore') listeners.push(fn);
+      else (t.others[type] ||= []).push(fn);
+    },
+    fire(type, event) { (t.others[type] || []).forEach((fn) => fn(event)); },
+    go(delta, stale = false) {
+      const next = t.index + delta;
+      if (next < 0 || next >= t.entries.length) return;
+      t.index = next;
+      const event = {
+        detail: { state: clone(t.entries[t.index].state), stale: stale },
+        defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true; },
+      };
+      listeners.forEach((fn) => fn(event));
+      if (stale && !event.defaultPrevented) t.reloads += 1;
+    },
+    nav: {
+      state: () => clone(t.entries[t.index].state),
+      push(url, state) {
+        t.entries.splice(t.index + 1);
+        t.entries.push({ url: url, state: clone(state) });
+        t.index += 1;
+        t.pushed.push(url);
+      },
+      replace(url, state) {
+        t.entries[t.index] = { url: url, state: clone(state) };
+        t.replaced.push(url);
+      },
+      canGoBack: () => t.index > 0,
+      canGoForward: () => t.index < t.entries.length - 1,
+      back: () => t.go(-1),
+      forward: () => t.go(1),
+    },
+  };
+  return t;
+}
+
+// Lets every load a restore started run to its end: each stub answers in a
+// microtask, so one macrotask is enough.
+const drain = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 function browser(options = {}) {
+  const routed = options.data && 'vault-uuid' in options.data
+    ? options.data['vault-uuid']
+    : VAULT_UUID;
+  const history = options.tab || tab(routed ? '/vault/' + routed : '/vault');
   const opened = [];
   const entryKeys = [];
   const locks = [];
@@ -101,7 +161,10 @@ function browser(options = {}) {
         'entry-types': [{ id: 'login', label: 'Login', icon: 'key-round', fields: [] }],
         ...options.data,
       }),
-      location: { search: options.search || '' },
+      location: {
+        search: options.search || '',
+        get pathname() { return history.path(); },
+      },
       localStorage: {
         values: {},
         getItem(key) {
@@ -112,13 +175,10 @@ function browser(options = {}) {
         setItem(key, value) { this.values[key] = String(value); },
         removeItem(key) { delete this.values[key]; },
       },
-      addEventListener() {},
+      addEventListener: (type, fn) => history.listen(type, fn),
       CustomEvent: class { constructor(name) { this.type = name; } },
       dispatchEvent(event) { (this.dispatched ||= []).push(event.type); },
-      history: {
-        replaced: [],
-        replaceState(state, title, url) { this.replaced.push(url); },
-      },
+      navHistory: history.nav,
       TAG_CHIP_COLORS: [
         { name: 'None', value: '' },
         { name: 'Red', value: '#ef4444' },
@@ -190,7 +250,7 @@ function browser(options = {}) {
       },
     },
   );
-  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx, options };
+  return { component: ctx.vaultBrowser(), opened, entryKeys, locks, copied, visited, ctx, options, history };
 }
 
 test('the browser reads the vault it was routed to from the page', () => {
@@ -2552,12 +2612,12 @@ test('opening a vault records it as the one to come back to', async () => {
 });
 
 test('the uuid reaches the address bar without a navigation', async () => {
-  // replaceState, never a redirect: a page load would take the closure that
-  // holds the keys with it, and the master password would be asked again.
-  const { component, ctx } = browser({ data: { 'vault-uuid': null } });
+  // A rewrite of the entry, never a redirect: a page load would take the
+  // closure that holds the keys with it, and the master password with them.
+  const { component, history } = browser({ data: { 'vault-uuid': null } });
   component.init();
   await component.load();
-  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+  assert.deepStrictEqual(Array.from(history.replaced), ['/vault/' + VAULT_UUID]);
 });
 
 test('a vault whose signature is refused is never the one landed on', async () => {
@@ -2709,15 +2769,15 @@ test('losing the last vault empties the sidebar with the listing', async () => {
 });
 
 test('losing the last vault takes its name out of the address bar', async () => {
-  const { component, ctx, options } = browser({ data: { 'vault-uuid': null } });
+  const { component, ctx, options, history } = browser({ data: { 'vault-uuid': null } });
   component.init();
   await component.load();
-  assert.deepStrictEqual(Array.from(ctx.history.replaced), ['/vault/' + VAULT_UUID]);
+  assert.deepStrictEqual(Array.from(history.replaced), ['/vault/' + VAULT_UUID]);
 
   options.vaults = [];
   component.vaultUuid = null;
   await component.load();
-  assert.equal(ctx.history.replaced[ctx.history.replaced.length - 1], '/vault');
+  assert.equal(history.replaced[history.replaced.length - 1], '/vault');
   // And the device stops pointing at a vault nobody can open.
   assert.equal(ctx.localStorage.getItem('vault.lastVault'), null);
 });
@@ -2750,11 +2810,207 @@ test('switching vault leaves behind the folder the last one was walked into', as
   assert.equal(component.folderUuid, null, 'the folder went with the vault it belonged to');
   assert.equal(component.view, 'all');
   assert.equal(component.tagFilter, null);
-  assert.equal(component.canGoBack(), false, 'and so did the trail through it');
   assert.equal(
     component.visibleEntries().length,
     1,
     'the opened vault shows its root entry instead of reading as empty',
+  );
+});
+
+// --- browser history ---------------------------------------------------------
+
+const FOLDER_A = 'folder-aaaa-7111-8111-111111111111';
+const FOLDER_B = 'folder-bbbb-7111-8111-111111111111';
+
+async function openedBrowser(options) {
+  const opened = browser(options);
+  opened.component.init();
+  await opened.component.load();
+  return opened;
+}
+
+test('every move is a browser history entry carrying identifiers only', async () => {
+  const { component, history } = await openedBrowser();
+
+  component.openFolder(FOLDER_A);
+  component.setView('trash');
+
+  assert.deepStrictEqual(Array.from(history.pushed), [
+    '/vault/' + VAULT_UUID,
+    '/vault/' + VAULT_UUID,
+  ]);
+  // Nothing but identifiers: an entry outlives the lock, so an opened name
+  // must never be in one.
+  assert.deepStrictEqual(history.nav.state(), {
+    vault: { uuid: VAULT_UUID, view: 'trash', folder: null, tag: null, depth: 2 },
+  });
+});
+
+test('the browser back button walks the vault without reloading it', async () => {
+  // The page used to keep a trail of its own and rewrite a single entry, so
+  // the browser's back left the vault - and a page load locks it.
+  const { component, history } = await openedBrowser();
+  component.openFolder(FOLDER_A);
+  component.openFolder(FOLDER_B);
+
+  // Stale, as an entry from before a reload is: preventing is what stops
+  // navHistory reloading the page.
+  history.go(-1, true);
+  assert.equal(component.folderUuid, FOLDER_A);
+  history.go(-1, true);
+  assert.equal(component.folderUuid, null);
+  assert.equal(component.view, 'all');
+  history.go(1, true);
+  assert.equal(component.folderUuid, FOLDER_A);
+  assert.equal(history.reloads, 0);
+});
+
+test('a move to where the listing already is records nothing', async () => {
+  const { component, history } = await openedBrowser();
+  component.openFolder(FOLDER_A);
+  component.openFolder(FOLDER_A);
+  assert.equal(history.pushed.length, 1);
+});
+
+test('back is offered over vault entries only, not over the page before', async () => {
+  // Arrived from another page of the app: navHistory can go back, and the
+  // vault's own Back must not, because that step leaves the vault.
+  const arrival = tab('/files/');
+  arrival.nav.push('/vault/' + VAULT_UUID, {});
+  const { component, history } = await openedBrowser({ tab: arrival });
+  assert.equal(history.nav.canGoBack(), true);
+  assert.equal(component.canGoBack(), false);
+
+  component.openFolder(FOLDER_A);
+  assert.equal(component.canGoBack(), true);
+  component.goBack();
+  assert.equal(component.folderUuid, null);
+  assert.equal(component.canGoBack(), false);
+  component.goBack();
+  assert.equal(history.path(), '/vault/' + VAULT_UUID, 'Back stayed in the vault');
+});
+
+test('forward is offered while a vault entry lies ahead', async () => {
+  const { component, history } = await openedBrowser();
+  assert.equal(component.canGoForward(), false);
+  component.openFolder(FOLDER_A);
+  component.openFolder(FOLDER_B);
+
+  component.goBack();
+  component.goBack();
+  assert.equal(component.canGoForward(), true);
+  component.goForward();
+  assert.equal(component.folderUuid, FOLDER_A);
+  assert.equal(component.canGoForward(), true);
+  component.goForward();
+  assert.equal(component.folderUuid, FOLDER_B);
+  assert.equal(component.canGoForward(), false);
+
+  // Going somewhere else after a back drops what was ahead, as the browser does.
+  component.goBack();
+  component.setView('favorites');
+  assert.equal(component.canGoForward(), false);
+  assert.equal(history.nav.canGoForward(), false);
+});
+
+test('forward is no longer offered once the page comes back from the bfcache', async () => {
+  // It was left by a navigation, and a link drops everything that lay ahead:
+  // Forward would step out of the vault onto the page the link opened.
+  const { component, history } = await openedBrowser();
+  component.openFolder(FOLDER_A);
+  component.goBack();
+  assert.equal(component.canGoForward(), true);
+
+  history.fire('pageshow', { persisted: false });
+  assert.equal(component.canGoForward(), true, 'a fresh show changes nothing');
+  history.fire('pageshow', { persisted: true });
+  assert.equal(component.canGoForward(), false);
+});
+
+test('an entry the page wrote nothing into restores the vault root', async () => {
+  const { component, history } = await openedBrowser({ tab: tab('/vault/' + VAULT_UUID) });
+  // The landing entry, as a page that never unlocked leaves it.
+  history.entries[0].state = {};
+  component.openFolder(FOLDER_A);
+  history.go(-1, true);
+  assert.equal(component.folderUuid, null);
+  assert.equal(component.view, 'all');
+  assert.equal(component.canGoBack(), false);
+  assert.equal(history.reloads, 0);
+});
+
+test('a reloaded page lands where its entry was, behind the same entries', async () => {
+  const kept = { vault: { uuid: VAULT_UUID, view: 'all', folder: FOLDER_B, tag: null, depth: 2 } };
+  const { component, history } = await openedBrowser({ tab: tab('/vault/' + VAULT_UUID, kept) });
+  assert.equal(component.folderUuid, FOLDER_B);
+  assert.equal(component.canGoBack(), true);
+  assert.deepStrictEqual(Array.from(history.replaced), [], 'the entry already said all of it');
+});
+
+test('back after switching vault reopens the vault and the folder it left', async () => {
+  const { component, history } = await openedBrowser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), vaultRow(OTHER_UUID, 'Work')],
+  });
+  component.openFolder(FOLDER_A);
+  await component.switchVault({ uuid: OTHER_UUID });
+  assert.equal(history.path(), '/vault/' + OTHER_UUID);
+  assert.equal(component.canGoBack(), true);
+  const written = history.replaced.length;
+
+  component.goBack();
+  await drain();
+
+  assert.equal(String(component.openVault.uuid), VAULT_UUID);
+  assert.equal(component.folderUuid, FOLDER_A);
+  assert.equal(history.replaced.length, written, 'restoring wrote no history');
+  assert.equal(history.reloads, 0);
+});
+
+test('a draft does not follow a back into another vault', async () => {
+  // It is seeded with the folder and key version of the vault it was opened
+  // in, and would save into whichever vault is open by then.
+  const { component } = await openedBrowser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), vaultRow(OTHER_UUID, 'Work')],
+  });
+  await component.switchVault({ uuid: OTHER_UUID });
+  component.newEntry('login');
+  component.goBack();
+  await drain();
+  assert.equal(String(component.openVault.uuid), VAULT_UUID);
+  assert.equal(component.draft, null);
+});
+
+test('a slower listing of the vault left never lands under the next one', async () => {
+  let gated = false;
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const { component } = await openedBrowser({
+    vaults: [vaultRow(VAULT_UUID, 'Personal'), vaultRow(OTHER_UUID, 'Work')],
+    api: {
+      listEntries: async (uuid, options) => {
+        if (options && options.trashed) return [];
+        if (uuid === VAULT_UUID) {
+          if (gated) await gate;
+          return [entryRow('entry-in-first')];
+        }
+        return [Object.assign(entryRow('entry-in-second'), { vault: OTHER_UUID })];
+      },
+    },
+  });
+  await component.switchVault({ uuid: OTHER_UUID });
+  gated = true;
+
+  component.goBack();
+  await drain();
+  component.goForward();
+  await drain();
+  assert.equal(String(component.openVault.uuid), OTHER_UUID);
+  release();
+  await drain();
+
+  assert.deepStrictEqual(
+    Array.from(component.entries.map((entry) => entry.uuid)),
+    ['entry-in-second'],
   );
 });
 

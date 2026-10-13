@@ -57,7 +57,6 @@ function switcher(overrides = {}) {
       },
       vaultCrypto: { uuidV7: () => 'v-new' },
       vaultSession: { isUnlocked: () => true, accountUuid: () => 'account-1' },
-      history: { replaceState() {} },
       localStorage: {
         values: {},
         getItem(key) {
@@ -83,7 +82,7 @@ function switcher(overrides = {}) {
       loaded: 0,
       load: async function () { this.loaded += 1; },
       confirm: async () => true,
-      rememberVault: function (uuid) { this.vaultUuid = uuid; },
+      goToVault: function (uuid) { this.vaultUuid = uuid; },
       $nextTick: null,
     },
     ctx.vaultSwitcherMixin(),

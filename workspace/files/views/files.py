@@ -391,13 +391,20 @@ class FileViewSet(
             return RECENT_FILES_LIMIT
         return min(limit, RECENT_FILES_MAX_LIMIT)
 
-    def _resolve_file_with_access(self, uuid):
+    def _resolve_file_with_access(self, uuid, *, include_trashed=False):
         """Resolve a file by UUID and check access.
 
         Returns (file_obj, permission).
         Raises Http404 if no access.
+
+        *include_trashed* also resolves a trashed file, for the read-only
+        endpoints the trash view previews through. Only its owner gets a
+        permission on it, which is who the trash lists it for.
         """
-        file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
+        files = File.objects.filter(uuid=uuid)
+        if not include_trashed:
+            files = files.filter(deleted_at__isnull=True)
+        file_obj = files.first()
         if not file_obj:
             raise Http404
         perm = FileService.get_permission(self.request.user, file_obj)

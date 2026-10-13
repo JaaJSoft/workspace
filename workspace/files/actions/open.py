@@ -16,8 +16,6 @@ class ViewAction(BaseFileAction):
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         from workspace.files.services.scanning.policy import is_blocked
 
-        if file_obj.deleted_at is not None:
-            return False
         if is_blocked(file_obj):
             return False
         if not file_obj.is_viewable():

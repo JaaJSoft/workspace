@@ -263,6 +263,18 @@ class BlobStorageContract:
         self.assertFalse(self.storage.exists("tmp/staged/upload"))
         self.assertEqual(_read(self.storage, "files/users/alice/a.txt"), b"new")
 
+    def test_relocating_a_blob_replaces_one_at_its_destination(self):
+        self.save("files/users/alice/a.txt", b"moved")
+        self.save("files/users/alice/b.txt", b"orphan")
+
+        relocation = self.storage.relocate(
+            "files/users/alice/a.txt", "files/users/alice/b.txt"
+        )
+        relocation.commit()
+
+        self.assertFalse(self.storage.exists("files/users/alice/a.txt"))
+        self.assertEqual(_read(self.storage, "files/users/alice/b.txt"), b"moved")
+
     def test_move_an_empty_directory(self):
         self.storage.make_dir("files/users/alice/Empty")
 
@@ -423,6 +435,63 @@ class LocalBlobStorageTests(BlobStorageContract, SimpleTestCase):
 
     def test_free_bytes_is_the_free_space_of_its_disk(self):
         self.assertGreater(self.storage.free_bytes(), 0)
+
+    def test_a_blob_that_cannot_be_renamed_is_copied_then_dropped(self):
+        """Windows refuses to rename a file another process holds open."""
+        self.save("files/users/alice/a.txt", b"a")
+
+        with mock.patch(
+            "workspace.common.storage.local.os.replace", side_effect=PermissionError
+        ):
+            relocation = self.storage.relocate(
+                "files/users/alice/a.txt", "files/users/alice/b.txt"
+            )
+
+        self.assertEqual(_read(self.storage, "files/users/alice/b.txt"), b"a")
+        self.assertTrue(self.storage.exists("files/users/alice/a.txt"))
+        self.assertTrue(relocation.commit())
+        self.assertFalse(self.storage.exists("files/users/alice/a.txt"))
+
+    def test_a_copy_that_fails_leaves_no_partial_blob(self):
+        self.save("files/users/alice/a.txt", b"a")
+
+        with (
+            mock.patch(
+                "workspace.common.storage.local.os.replace",
+                side_effect=PermissionError,
+            ),
+            mock.patch(
+                "workspace.common.storage.local.shutil.copyfile",
+                side_effect=self._copy_half,
+            ),
+            self.assertRaises(OSError),
+        ):
+            self.storage.relocate("files/users/alice/a.txt", "files/users/alice/b.txt")
+
+        self.assertFalse(self.storage.exists("files/users/alice/b.txt"))
+        self.assertEqual(_read(self.storage, "files/users/alice/a.txt"), b"a")
+
+    @staticmethod
+    def _copy_half(source, destination):
+        with open(destination, "wb") as fh:
+            fh.write(b"partial")
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def test_a_copied_blob_still_held_open_is_reported_left_behind(self):
+        self.save("files/users/alice/a.txt", b"a")
+        with mock.patch(
+            "workspace.common.storage.local.os.replace", side_effect=PermissionError
+        ):
+            relocation = self.storage.relocate(
+                "files/users/alice/a.txt", "files/users/alice/b.txt"
+            )
+
+        with mock.patch(
+            "workspace.common.storage.local.os.unlink", side_effect=PermissionError
+        ):
+            self.assertFalse(relocation.commit())
+
+        self.assertEqual(_read(self.storage, "files/users/alice/a.txt"), b"a")
 
     def test_a_move_renames_the_blob(self):
         name = self.save("tmp/staged/upload", b"x")

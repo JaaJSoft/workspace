@@ -12,7 +12,7 @@ The helpers at the top are shared with the public link endpoints
 from django.core.files.storage import default_storage
 from django.db.models import F
 from django.http import FileResponse, StreamingHttpResponse
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,7 +24,11 @@ from workspace.common.uuids import (
     UuidBatchError,
     parse_uuid_batch,
 )
-from workspace.files.services.thumbnails.generation import get_thumbnail_path
+from workspace.files.services.thumbnails.generation import (
+    THUMBNAIL_SIZES,
+    parse_thumbnail_size,
+    thumbnail_variant_path,
+)
 
 from ..actions import AlbumActionRegistry
 from ..queries import (
@@ -42,11 +46,24 @@ from ..services.album_renditions import (
 # One request's worth of a selection; the whole album has no limit.
 MAX_FILES = 2000
 
+THUMBNAIL_SIZE_PARAMETER = OpenApiParameter(
+    "size",
+    int,
+    enum=list(THUMBNAIL_SIZES),
+    description="Longest side in pixels; defaults to the largest.",
+)
 
-def thumbnail_response(file_obj, *, cache_control):
-    """*file_obj*'s WebP thumbnail, or a 404 when it has none."""
-    path = get_thumbnail_path(file_obj.uuid)
-    if not file_obj.has_thumbnail or not default_storage.exists(path):
+
+def thumbnail_response(request, file_obj, *, cache_control):
+    """*file_obj*'s WebP thumbnail at the ``?size=`` asked for, a 400 for a
+    size there is none of, or a 404 when it has none."""
+    size = parse_thumbnail_size(request.query_params.get("size"))
+    if size is None:
+        return Response(status=status.HTTP_400_BAD_REQUEST)
+    path = (
+        thumbnail_variant_path(file_obj.uuid, size) if file_obj.has_thumbnail else None
+    )
+    if path is None:
         return Response(status=status.HTTP_404_NOT_FOUND)
     response = FileResponse(default_storage.open(path, "rb"), content_type="image/webp")
     response["Cache-Control"] = cache_control
@@ -160,13 +177,16 @@ def _may_download(user, album):
 class AlbumFileThumbnailView(APIView):
     @extend_schema(
         summary="Thumbnail of an album photo",
+        parameters=[THUMBNAIL_SIZE_PARAMETER],
         responses={200: OpenApiResponse(description="WebP thumbnail.")},
     )
     def get(self, request, uuid, file_uuid):
         _, file_obj = _album_and_file(request, uuid, file_uuid)
         if file_obj is None:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        return thumbnail_response(file_obj, cache_control="private, max-age=3600")
+        return thumbnail_response(
+            request, file_obj, cache_control="private, max-age=3600"
+        )
 
 
 @extend_schema(tags=["Photos - Album files"])

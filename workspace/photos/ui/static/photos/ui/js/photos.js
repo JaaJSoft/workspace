@@ -307,6 +307,14 @@ window.photosApp = function photosApp() {
       return width ? { '--photo-tile': width + 'px' } : {};
     },
 
+    // The tile's img sizes, as photo_tile.html renders it: `auto` where the
+    // browser knows it (the laid-out width), the slider's width elsewhere,
+    // so moving the slider picks another thumbnail size there too.
+    tileImageSizes() {
+      const width = this._tileWidths[this.tileSize - 1];
+      return `auto, (min-width: 640px) ${width}px, calc((100vw - 24px) / 3)`;
+    },
+
     // Never awaited: the grid has already resized, and a refused write only
     // costs the size on the next load.
     saveTileSize() {

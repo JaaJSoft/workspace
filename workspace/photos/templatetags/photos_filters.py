@@ -4,6 +4,10 @@ from django import template
 from django.db.models import F
 from django.urls import reverse
 
+from workspace.files.services.thumbnails.generation import (
+    THUMBNAIL_MAX_SIZE,
+    THUMBNAIL_SIZES,
+)
 from workspace.photos.queries import person_photos
 
 register = template.Library()
@@ -22,6 +26,29 @@ def tile_aspect(file_obj):
         return "1"
     low, high = _TILE_ASPECT_RANGE
     return f"{min(max(item.width / item.height, low), high):.4f}"
+
+
+@register.filter
+def tile_srcset(url, file_obj):
+    """A srcset offering *file_obj*'s thumbnail at *url* in every size it
+    comes in, each described by its short side.
+
+    A tile crops the photo to cover it, so the short side is the one that
+    spans the tile: described by its long side, as a srcset usually is, a
+    3:2 photo would be picked a size too small and shown upscaled. In the
+    "original" tile shape the pick is then a size too large for a landscape
+    photo - more bytes, never a blurrier tile.
+    """
+    item = getattr(file_obj, "media_item", None)
+    ratio = 1.0
+    if item is not None and item.width and item.height:
+        ratio = max(item.width, item.height) / min(item.width, item.height)
+    separator = "&" if "?" in url else "?"
+    return ", ".join(
+        f"{url if size == THUMBNAIL_MAX_SIZE[0] else f'{url}{separator}size={size}'}"
+        f" {max(1, round(size / ratio))}w"
+        for size in THUMBNAIL_SIZES
+    )
 
 
 @register.filter
@@ -49,7 +76,7 @@ def photos_of_person(user, person, limit=8):
     photos = person_photos(user, person)
     return {
         "photos": list(
-            photos.order_by(
+            photos.select_related("media_item").order_by(
                 F("media_item__taken_at").desc(nulls_last=True), "-created_at"
             )[:limit]
         ),

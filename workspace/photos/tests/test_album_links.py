@@ -142,6 +142,18 @@ class PublicLinkApiTests(LinkTestCase):
         self.assertIn("public", thumbnail["Cache-Control"])
         self.assertEqual(content.status_code, 200)
 
+    def test_a_visitor_gets_the_thumbnail_size_asked_for(self):
+        default_storage.save(
+            get_thumbnail_path(self.photos[0].uuid, 128), ContentFile(b"small")
+        )
+
+        small = self.client.get(self.url(self.photos[0], "thumbnail", size=128))
+        unknown = self.client.get(self.url(self.photos[0], "thumbnail", size=300))
+
+        self.assertEqual(small.status_code, 200)
+        self.assertEqual(b"".join(small.streaming_content), b"small")
+        self.assertEqual(unknown.status_code, 400)
+
     def test_downloads_follow_the_link_setting(self):
         self.assertEqual(
             self.client.get(self.url(self.photos[0], "download")).status_code, 403

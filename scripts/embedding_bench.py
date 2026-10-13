@@ -18,6 +18,12 @@ and scores what comes out against what people verified the photos show:
 - **Similar photos**: each photo against the others, a photo showing one of
   the same things being a right answer; precision of what the similar
   threshold returns, and the threshold that would have done best.
+- **Automatic tags**: each single-label query as a tag placed on every photo
+  under its threshold; the precision of the tags placed and their recall, at
+  the description threshold, at one threshold fitted for every label, and at
+  one fitted per label to keep TAG_PRECISION, bare and inside a prompt, in
+  English and in French. Fitted thresholds are scored on the half of the
+  photos they were not fitted on.
 - **Cost**: time to load the models, CPU time per photo and per query (one
   thread unless PHOTOS_ONNX_THREADS says otherwise), the weights on disk and
   the memory the process grew to.
@@ -59,6 +65,12 @@ LOCAL_BACKENDS = ("clip_vit_b32", "siglip2_base", "jina_clip_v1")
 DUPLICATES = 200
 # What a near-duplicate threshold must keep right, at the least.
 DUPLICATE_PRECISION = 0.99
+# What an automatic tag must keep right, at the least: it shows on the photo
+# alone, with no ranking to bury a mistake under better answers.
+TAG_PRECISION = 0.9
+# The labels of a tag, embedded inside a sentence instead of alone.
+ENGLISH_PROMPT = "a photo of {}"
+FRENCH_PROMPT = "une photo de {}"
 # Distances the thresholds are searched over: cosine distance, 0 to 2.
 _GRID = np.round(np.arange(0.0, 2.0005, 0.005), 3)
 
@@ -242,6 +254,96 @@ def score_similar(image_vectors, labels, threshold):
     }
 
 
+def loosest_threshold(row, relevant, target):
+    """The loosest threshold on the distances *row* whose returns keep
+    *target* precision, two right ones at the least; nan when none does."""
+    order = np.argsort(row, kind="stable")
+    hits = np.cumsum(np.asarray(relevant, dtype=bool)[order])
+    precision = hits / np.arange(1, len(hits) + 1)
+    keeping = np.flatnonzero((precision >= target) & (hits >= 2))
+    return float(row[order][keeping[-1]]) if len(keeping) else np.nan
+
+
+def tag_thresholds(matrix, relevant, *, per_label):
+    """One threshold per label (row), nan for a label never tagged: each
+    label's own, or the one threshold all of them share."""
+    if per_label:
+        return np.array(
+            [
+                loosest_threshold(row, wanted, TAG_PRECISION)
+                for row, wanted in zip(matrix, relevant, strict=True)
+            ]
+        )
+    shared = loosest_threshold(matrix.ravel(), relevant.ravel(), TAG_PRECISION)
+    return np.full(len(matrix), shared)
+
+
+def tag_scores(tagged, relevant):
+    """Precision over every tag placed (what a user sees on the photos),
+    recall averaged over the labels, tags per photo."""
+    placed = tagged.sum()
+    right = tagged & relevant
+    return {
+        "precision": float(right.sum() / placed) if placed else 0.0,
+        "recall": float(
+            np.mean(right.sum(axis=1) / np.maximum(relevant.sum(axis=1), 1))
+        ),
+        "per_photo": float(placed / tagged.shape[1]),
+    }
+
+
+def held_out_tags(matrix, relevant, *, per_label):
+    """Each half of the photos tagged with thresholds fitted on the other
+    half: a threshold fitted on the photos it is scored on flatters itself,
+    the more so with 30 photos a label."""
+    even = np.arange(matrix.shape[1]) % 2 == 0
+    tagged = np.zeros(matrix.shape, dtype=bool)
+    kept = []
+    for fit, applied in ((even, ~even), (~even, even)):
+        thresholds = tag_thresholds(
+            matrix[:, fit], relevant[:, fit], per_label=per_label
+        )
+        # A nan threshold tags nothing: no distance compares under it.
+        tagged[:, applied] = matrix[:, applied] <= thresholds[:, None]
+        kept.append(np.count_nonzero(~np.isnan(thresholds)))
+    return tag_scores(tagged, relevant) | {
+        "labels": float(np.mean(kept)),
+        "of": len(matrix),
+    }
+
+
+def score_tagging(vectors, images, relevant, queries, threshold):
+    """The single-label queries as automatic tags, each placed on every photo
+    that lies under its threshold: the description threshold as it stands,
+    one threshold fitted for all, and one fitted per label, with and without
+    a prompt around the label."""
+    single = [i for i, q in enumerate(queries) if len(q.labels) == 1]
+    relevant = relevant[single]
+
+    def matrix(key):
+        return distances(vectors[key][single], images)
+
+    def per_label(key):
+        fitted = tag_thresholds(matrix(key), relevant, per_label=True)
+        return held_out_tags(matrix(key), relevant, per_label=True) | {
+            # Fitted on every photo: what a backend would ship.
+            "thresholds": {
+                queries[i].text: None if np.isnan(t) else float(t)
+                for i, t in zip(single, fitted, strict=True)
+            },
+        }
+
+    return {
+        "description": tag_scores(matrix("english") <= threshold, relevant)
+        | {"threshold": float(threshold)},
+        "global": held_out_tags(matrix("english"), relevant, per_label=False),
+        "per_label": per_label("english"),
+        "prompted": per_label("english_prompt"),
+        "french": per_label("french"),
+        "french_prompted": per_label("french_prompt"),
+    }
+
+
 def score(vectors, photos, queries):
     """The report of one backend's run, from what it embedded."""
     wanted = [frozenset(q.labels) for q in queries]
@@ -260,6 +362,9 @@ def score(vectors, photos, queries):
         ),
         "similar": score_similar(
             images, [p.labels & query_labels for p in photos], thresholds["similar"]
+        ),
+        "tagging": score_tagging(
+            vectors, images, relevant, queries, thresholds["description"]
         ),
     }
 
@@ -373,12 +478,20 @@ def embed(key, photos, paths, queries, duplicates):
         english.append(backend.embed_text(query.text))
         text_ms.append((time.process_time() - started) * 1000)
     french = [backend.embed_text(query.french) for query in queries]
+    english_prompt = [
+        backend.embed_text(ENGLISH_PROMPT.format(query.text)) for query in queries
+    ]
+    french_prompt = [
+        backend.embed_text(FRENCH_PROMPT.format(query.french)) for query in queries
+    ]
 
     return {
         "images": np.asarray(images, dtype=np.float64),
         "copies": np.asarray(copies, dtype=np.float64),
         "english": np.asarray(english, dtype=np.float64),
         "french": np.asarray(french, dtype=np.float64),
+        "english_prompt": np.asarray(english_prompt, dtype=np.float64),
+        "french_prompt": np.asarray(french_prompt, dtype=np.float64),
         "thresholds": {
             "similar": registry.similar_max_distance(),
             "duplicate": registry.duplicate_max_distance(),
@@ -474,6 +587,13 @@ ROWS = (
     ("  precision in the first 10", "similar.p10", "pct"),
     ("  at its threshold", "similar.at_threshold", "cut"),
     ("  best threshold", "similar.suggested", "cut"),
+    ("Automatic tags", None, None),
+    ("  at the description threshold", "tagging.description", "tags"),
+    (f"  one threshold at {TAG_PRECISION:.0%} precision", "tagging.global", "tags"),
+    ("  per label", "tagging.per_label", "tags"),
+    (f'  per label, "{ENGLISH_PROMPT}"', "tagging.prompted", "tags"),
+    ("  per label (French)", "tagging.french", "tags"),
+    (f'  per label, "{FRENCH_PROMPT}"', "tagging.french_prompted", "tags"),
     ("Cost", None, None),
     ("  load (s)", "cost.load_s", "num"),
     ("  CPU per photo (ms)", "cost.image_ms", "num"),
@@ -503,6 +623,17 @@ def _format(value, kind):
         return f"{value:.0f}"
     if kind == "num":
         return f"{value:.1f}"
+    if kind == "tags":
+        # "P 91% R 40% (1.2/photo, 30/39 labels)", after the threshold when
+        # there is a single one.
+        shown = f"{value['threshold']:.3f} " if "threshold" in value else ""
+        shown += (
+            f"P {value['precision'] * 100:.0f}% R {value['recall'] * 100:.0f}% "
+            f"({value['per_photo']:.1f}/photo"
+        )
+        if "labels" in value:
+            shown += f", {value['labels']:.0f}/{value['of']} labels"
+        return shown + ")"
     # A threshold and what it returns: "0.800 P 62% R 41% (n 12)".
     return (
         f"{value['threshold']:.3f} P {value['precision'] * 100:.0f}% "

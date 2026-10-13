@@ -68,6 +68,37 @@ threshold past it starts grouping photos that are merely alike.
 the others; a right answer shows one of the same. mAP and precision in the
 first 10, the similar threshold, and the one with the best F1.
 
+**Automatic tags.** Each query of a single label ("dog", not "dog in the
+snow") read as a tag, placed on every photo whose distance to it is under a
+threshold. A tag shows on a photo alone, with no ranking to bury a mistake
+under better answers, so it needs a precision a search does without: the
+bench fits thresholds for 90% (`TAG_PRECISION`). `P` is the share of the
+tags placed that are right, `R` the share of each label's photos it tags,
+averaged over the labels, then the tags per photo. Rows:
+
+- *at the description threshold*: the search threshold reused as it is;
+- *one threshold*: the loosest single threshold keeping 90% over every label;
+- *per label*: each label its own loosest threshold at 90%, a label that
+  cannot reach it (two right tags at the least) being never placed - the
+  `labels` count says how many survive. Bare, then inside a prompt
+  ("a photo of dog", "une photo de chien"), in English and in French.
+
+A fitted threshold is scored on the half of the photos it was not fitted
+on, then the halves swap: fitted and scored on the same 30 photos a label,
+it would flatter itself. The JSON keeps each label's threshold fitted on
+every photo, what a backend would ship. Since each label is its own yes or
+no, its threshold does not depend on how many other labels the vocabulary
+holds.
+
+On the first run (1,508 photos), the description threshold tags at 82%
+precision with SigLIP 2, 68% with CLIP: one tag in five wrong, too many for a
+tag. One shared threshold reaches 90% on the held-out half with every label
+kept (SigLIP 2: 63% recall, 0.7 tags a photo; CLIP: 38%), and thresholds per
+label do no better while dropping the labels they cannot fit ("bird" on every
+model): 30 photos a label are too few to fit a threshold each. The prompt
+brings nothing in English; in French it helps CLIP and Jina CLIP, not
+SigLIP 2, which tags in French at 87% precision and 50% recall.
+
 **Cost.** Time to load both encoders, CPU time per photo and per query (one
 thread: `PHOTOS_ONNX_THREADS`), the weights on disk, and how much the process
 grew. CPU time, not wall time: it is what a Raspberry Pi pays, whatever the

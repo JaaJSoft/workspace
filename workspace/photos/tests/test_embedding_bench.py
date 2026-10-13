@@ -133,6 +133,56 @@ class SimilarScoreTests(SimpleTestCase):
         self.assertEqual(scores["at_threshold"]["precision"], 0.0)
 
 
+class TaggingScoreTests(SimpleTestCase):
+    def test_the_loosest_threshold_keeps_the_precision(self):
+        row = np.array([0.1, 0.2, 0.3, 0.4, 0.5])
+        relevant = np.array([True, True, True, False, False])
+
+        # Three right then two wrong: 3/4 at 0.4 is under 90%.
+        self.assertEqual(bench.loosest_threshold(row, relevant, 0.9), 0.3)
+        self.assertEqual(bench.loosest_threshold(row, relevant, 0.7), 0.4)
+
+    def test_a_label_without_two_clean_tags_is_never_placed(self):
+        row = np.array([0.1, 0.2, 0.3])
+
+        self.assertTrue(
+            np.isnan(bench.loosest_threshold(row, [False, True, False], 0.9))
+        )
+        self.assertTrue(
+            np.isnan(bench.loosest_threshold(row, [True, False, False], 0.5))
+        )
+
+    def test_precision_counts_every_tag_placed(self):
+        tagged = np.array([[True, True, False, False], [False, False, False, False]])
+        relevant = np.array([[True, False, True, False], [True, False, False, False]])
+
+        scores = bench.tag_scores(tagged, relevant)
+
+        self.assertEqual(scores["precision"], 0.5)
+        # Half of the first label's photos, none of the second's.
+        self.assertEqual(scores["recall"], 0.25)
+        self.assertEqual(scores["per_photo"], 0.5)
+
+    def test_thresholds_are_scored_on_the_photos_they_were_not_fitted_on(self):
+        # Even photos right under 0.3, odd ones right only under 0.1: a
+        # threshold fitted on the even half lets the odd half's mistakes in.
+        matrix = np.array([[0.1, 0.05, 0.2, 0.08, 0.25, 0.2, 0.9, 0.25]])
+        relevant = np.array([[True, True, True, True, True, False, False, False]])
+
+        scores = bench.held_out_tags(matrix, relevant, per_label=True)
+
+        self.assertLess(scores["precision"], 1.0)
+        self.assertEqual(scores["of"], 1)
+
+    def test_one_shared_threshold_tags_every_label_alike(self):
+        matrix = np.array([[0.1, 0.2], [0.15, 0.6]])
+        relevant = np.array([[True, True], [True, False]])
+
+        thresholds = bench.tag_thresholds(matrix, relevant, per_label=False)
+
+        self.assertEqual(list(thresholds), [0.2, 0.2])
+
+
 class VariantTests(SimpleTestCase):
     def test_every_variant_is_a_picture_of_the_same_scene(self):
         image = Image.new("RGB", (200, 100), (200, 30, 30))
@@ -239,8 +289,10 @@ class EndToEndTests(SimpleTestCase):
         colours = {"red": (255, 0, 0), "blue": (0, 0, 255)}
         photos, paths = [], {}
         with tempfile.TemporaryDirectory() as tmp:
-            for index in range(6):
-                name = "red" if index % 2 else "blue"
+            # Two of each colour in either half of the photos: tag
+            # thresholds are fitted on one half and scored on the other.
+            for index in range(8):
+                name = "red" if index % 4 < 2 else "blue"
                 path = Path(tmp) / f"{index}.jpg"
                 Image.new("RGB", (64, 48), colours[name]).save(path)
                 photo = dataset.BenchPhoto(str(index), frozenset({name.title()}))
@@ -259,7 +311,12 @@ class EndToEndTests(SimpleTestCase):
         self.assertEqual(report["search"]["map"], 1.0)
         self.assertEqual(report["duplicates"]["at_threshold"]["recall"], 1.0)
         self.assertEqual(run["copies"].shape, (2, len(bench.VARIANTS), 768))
+        tagging = report["tagging"]
+        self.assertEqual(tagging["description"]["precision"], 1.0)
+        self.assertEqual(tagging["prompted"]["recall"], 1.0)
+        self.assertEqual(set(tagging["prompted"]["thresholds"]), {"red", "blue"})
         table = bench.render([report])
         self.assertIn("fake (768-d)", table)
         self.assertIn("mAP (English)  ", table)
         self.assertIn("100.0%", table)
+        self.assertIn("2/2 labels", table)

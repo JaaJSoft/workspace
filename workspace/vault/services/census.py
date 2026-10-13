@@ -10,6 +10,7 @@ import base64
 import binascii
 from collections import Counter
 
+from django.db.models import Count
 from django.db.models.functions import Substr
 
 from ..models import (
@@ -63,7 +64,7 @@ def _prefix_marks(axis: str, head: str) -> list[Mark]:
     if not head:
         return []
     raw = _head_bytes(head.ljust(_HEAD, "A")) if len(head) >= 2 else None
-    return [(axis, raw[0])] if raw else [(axis, "?")]
+    return [(axis, raw[0])] if raw else [(axis, UNREADABLE_ID)]
 
 
 def signature_marks(head: str) -> list[Mark]:
@@ -76,7 +77,7 @@ def pubkey_marks(head: str) -> list[Mark]:
 
 def hpke_marks(value) -> list[Mark]:
     fmt = suites.hpke_format(value)
-    return [("hpke", "?" if fmt is None else fmt)]
+    return [("hpke", UNREADABLE_ID if fmt is None else fmt)]
 
 
 def is_stale(marks) -> bool:
@@ -177,81 +178,62 @@ def stale_rows(user) -> list[dict]:
     return sorted(listing.values(), key=lambda item: item["uuid"])
 
 
-def census(using: str = "default") -> Counter:
-    counts = Counter()
+_PREFIX_HEAD = 2
 
-    for row in (
-        _heads(
-            Vault.objects.using(using),
-            "encrypted_name",
-            "encrypted_description",
-            "metadata_sig",
-        )
-        .values_list("h_encrypted_name", "h_encrypted_description", "h_metadata_sig")
-        .iterator()
+
+def _grouped(queryset, column, length, marks):
+    """Counts per mark of one column, grouped on its head in SQL: a handful of
+    rows back whatever the table holds. A ciphertext head is three header
+    bytes, a signature or key head only the prefix byte, so neither carries
+    enough of the random body to spread the groups."""
+    counts = Counter()
+    for head, rows in (
+        queryset.annotate(h=Substr(column, 1, length))
+        .values("h")
+        .annotate(rows=Count("pk"))
+        .values_list("h", "rows")
     ):
-        counts.update(
-            ciphertext_marks(row[0])
-            + ciphertext_marks(row[1])
-            + signature_marks(row[2])
-        )
-    for suite in (
+        for mark in marks(head or ""):
+            counts[mark] += rows
+    return counts
+
+
+def census(using: str = "default") -> Counter:
+    columns = [
+        (Vault, "encrypted_name", ciphertext_marks),
+        (Vault, "encrypted_description", ciphertext_marks),
+        (Vault, "metadata_sig", signature_marks),
+        (VaultFolder, "encrypted_name", ciphertext_marks),
+        (VaultFolder, "metadata_sig", signature_marks),
+        (VaultTag, "encrypted_name", ciphertext_marks),
+        (VaultTag, "metadata_sig", signature_marks),
+        (VaultEntry, "encrypted_name", ciphertext_marks),
+        (VaultEntry, "encrypted_notes", ciphertext_marks),
+        (VaultEntry, "metadata_sig", signature_marks),
+        (EntryField, "encrypted_value", ciphertext_marks),
+        (AccountIdentity, "wrapped_kex_priv", ciphertext_marks),
+        (AccountIdentity, "wrapped_sig_priv", ciphertext_marks),
+        (AccountIdentity, "kex_public", pubkey_marks),
+        (AccountIdentity, "sig_public", pubkey_marks),
+        (AccountIdentity, "sig_over_kex_pub", signature_marks),
+    ]
+    counts = Counter()
+    for model, column, marks in columns:
+        length = _HEAD if marks is ciphertext_marks else _PREFIX_HEAD
+        counts += _grouped(model.objects.using(using), column, length, marks)
+    for suite, rows in (
         VaultKeyWrap.objects.using(using)
-        .values_list("hpke_suite", flat=True)
-        .iterator()
+        .values("hpke_suite")
+        .annotate(rows=Count("pk"))
+        .values_list("hpke_suite", "rows")
     ):
-        counts.update(hpke_marks(suite))
-    for model in (VaultFolder, VaultTag):
-        for name, sig in (
-            _heads(model.objects.using(using), "encrypted_name", "metadata_sig")
-            .values_list("h_encrypted_name", "h_metadata_sig")
-            .iterator()
-        ):
-            counts.update(ciphertext_marks(name) + signature_marks(sig))
-    for name, notes, sig in (
-        _heads(
-            VaultEntry.objects.using(using),
-            "encrypted_name",
-            "encrypted_notes",
-            "metadata_sig",
-        )
-        .values_list("h_encrypted_name", "h_encrypted_notes", "h_metadata_sig")
-        .iterator()
+        for mark in hpke_marks(suite):
+            counts[mark] += rows
+    for algo, rows in (
+        AccountIdentity.objects.using(using)
+        .values("kdf_algo")
+        .annotate(rows=Count("pk"))
+        .values_list("kdf_algo", "rows")
     ):
-        counts.update(
-            ciphertext_marks(name) + ciphertext_marks(notes) + signature_marks(sig)
-        )
-    for (value,) in (
-        _heads(EntryField.objects.using(using), "encrypted_value")
-        .values_list("h_encrypted_value")
-        .iterator()
-    ):
-        counts.update(ciphertext_marks(value))
-    for row in (
-        _heads(
-            AccountIdentity.objects.using(using),
-            "wrapped_kex_priv",
-            "wrapped_sig_priv",
-            "kex_public",
-            "sig_public",
-            "sig_over_kex_pub",
-        )
-        .values_list(
-            "h_wrapped_kex_priv",
-            "h_wrapped_sig_priv",
-            "h_kex_public",
-            "h_sig_public",
-            "h_sig_over_kex_pub",
-            "kdf_algo",
-        )
-        .iterator()
-    ):
-        counts.update(
-            ciphertext_marks(row[0])
-            + ciphertext_marks(row[1])
-            + pubkey_marks(row[2])
-            + pubkey_marks(row[3])
-            + signature_marks(row[4])
-            + [("kdf", row[5])]
-        )
+        counts[("kdf", algo)] += rows
     return counts

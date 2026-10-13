@@ -205,3 +205,28 @@ class CensusTests(TestCase):
             deleted_at=timezone.now(),
         )
         self.assertEqual(census.census()[("format", 1)], 1)
+
+    def test_counts_each_row_once_whatever_the_bytes_after_the_head(self):
+        """Rows sharing a header but not a body, and signatures sharing only
+        their algorithm prefix, still add up row by row."""
+        user, signer, _ = make_account("owner")
+        vault = make_vault(user, encrypted_name=sealed("v", 1), metadata_sig="AQ")
+        for index in range(3):
+            entry = VaultEntry.objects.create(
+                vault=vault,
+                type=EntryType.LOGIN,
+                encrypted_name=sealed(f"n{index}", 2, key_version=index + 1),
+                encrypted_notes=sealed(f"notes{index}", 1),
+                metadata_sig=f"A{'QRSTU'[index]}{'xyz'[index] * 86}",
+            )
+            EntryField.objects.create(
+                entry=entry, field_id="password", encrypted_value=sealed(f"p{index}", 1)
+            )
+        VaultFolder.objects.create(
+            vault=vault, encrypted_name=sealed("f", 2), metadata_sig="AQ"
+        )
+        counts = census.census()
+        self.assertEqual(counts[("format", 2)], 4)
+        self.assertEqual(counts[("format", 1)], 7)
+        self.assertEqual(counts[("signature", 1)], 5)
+        self.assertEqual(counts[("aead", 1)], 11)

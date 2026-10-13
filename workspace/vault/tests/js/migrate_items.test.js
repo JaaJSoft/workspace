@@ -214,13 +214,16 @@ test('fmt1 reproduces the shared format-1 vector byte for byte', async () => {
   assert.equal(wire, 'AQEBAAEMAAECAwQFBgcICQoLL3e4b6CX8FW9_oUFDfT_p5rMtkgiX7U');
 });
 
-test('a direct-kdf header keeps its kdf id when resealed', async () => {
+test('a format-1 kdf id, authenticated by nothing, never reaches the format-2 header', async () => {
   const { ctx, V } = setup();
   const key = await V.importAeadKey(V.fromBase64Url(KEY_B64));
   const context = V.AD.entryFieldAd(ENTRY, 'password');
-  const old = await ctx.fmt1(KEY_B64, `entry-field|${ENTRY}|password`, 'hunter2', 1, 0);
-  const out = await ctx.vaultReseal(V, key, old, context, 3);
-  assert.equal(V.decodeCiphertext(V.fromBase64Url(out)).kdfId, 0);
+  for (const forged of [V.KDF_DIRECT, 0x7f]) {
+    const old = await ctx.fmt1(KEY_B64, `entry-field|${ENTRY}|password`, 'hunter2', 1, forged);
+    const out = await ctx.vaultReseal(V, key, old, context, 3);
+    assert.equal(V.decodeCiphertext(V.fromBase64Url(out)).kdfId, V.KDF_HKDF_SHA256, String(forged));
+    assert.equal(await plain(V, key, out, context), 'hunter2');
+  }
 });
 
 test('an entry takes its key version from the row, not the vault', async () => {

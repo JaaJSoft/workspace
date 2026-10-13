@@ -9,8 +9,8 @@
 //
 // The key version is the row's (an entry) or the vault's (its metadata, its
 // folders and tags, which carry none), as the signed payload states it. A
-// format-1 header is authenticated by nothing, so its own key version is never
-// read here.
+// format-1 header is authenticated by nothing, so neither its key version nor
+// its kdf id is read here: the kdf is the one every writer uses.
 window.vaultReseal = async function vaultReseal(V, key, b64, context, keyVersion) {
   const raw = V.fromBase64Url(b64);
   const header = V.decodeCiphertext(raw);
@@ -18,7 +18,7 @@ window.vaultReseal = async function vaultReseal(V, key, b64, context, keyVersion
   const plaintext = await V.open(key, raw, context);
   try {
     return V.toBase64Url(
-      await V.seal(key, plaintext, context, { keyVersion: keyVersion, kdfId: header.kdfId }),
+      await V.seal(key, plaintext, context, { keyVersion: keyVersion, kdfId: V.KDF_HKDF_SHA256 }),
     );
   } finally {
     plaintext.fill(0);

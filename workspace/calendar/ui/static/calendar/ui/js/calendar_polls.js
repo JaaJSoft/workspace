@@ -109,14 +109,15 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this.pollFormSubmitting = false;
     },
 
-    async openPollDetail(uuid) {
+    // `restoring`: a back or forward already put the URL in place.
+    async openPollDetail(uuid, restoring = false) {
       this.showPollListModal = false;
       this.showPollDetailModal = true;
       this.currentPoll = null;
       this.currentPollLoading = true;
       this.pollMyVotes = {};
       this.pollFinalizeSlotId = null;
-      this._setPollUrl(uuid);
+      if (!restoring) this._setPollUrl(uuid);
       await this.loadPoll(uuid);
 
     },
@@ -126,6 +127,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       this._setPollUrl(null);
     },
 
+    // Rewrites the entry it opens over: the poll modal adds no entry of its own.
     _setPollUrl(pollId) {
       const params = new URLSearchParams(window.location.search);
       if (pollId) {
@@ -135,7 +137,7 @@ window.calendarPollsMixin = function calendarPollsMixin() {
       }
       const qs = params.toString();
       const url = window.location.pathname + (qs ? '?' + qs : '');
-      history.replaceState(null, '', url);
+      window.navHistory.replace(url);
     },
 
     async loadPoll(uuid) {

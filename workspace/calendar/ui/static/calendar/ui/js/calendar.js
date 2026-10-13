@@ -285,7 +285,8 @@ window.calendarApp = function calendarApp() {
       }
       if (this.calendar) { this.calendar.today(); this._syncTitle(); this._syncUrl(); }
     },
-    changeView(view) {
+    // `restoring`: a back or forward already put the URL in place.
+    changeView(view, restoring = false) {
       if (!this.calendar) return;
       this.ctxMenu.open = false;
 
@@ -296,7 +297,7 @@ window.calendarApp = function calendarApp() {
           this.loadAgenda();
         }
         this._syncTitle();
-        this._syncUrl();
+        if (!restoring) this._syncUrl();
         return;
       }
 
@@ -304,7 +305,7 @@ window.calendarApp = function calendarApp() {
       this.currentView = view;
       this.calendar.setOption('selectable', true);
       this._syncTitle();
-      this._syncUrl();
+      if (!restoring) this._syncUrl();
     },
     _syncTitle() {
       if (this.currentView === 'agenda') {
@@ -361,22 +362,36 @@ window.calendarApp = function calendarApp() {
         const today = this._dayKeyIn(new Date(), tz);
         if (dateStr !== today) params.set('date', dateStr);
       }
+      // The poll modal writes ?poll itself; carry it over.
+      const poll = new URLSearchParams(window.location.search).get('poll');
+      if (poll) params.set('poll', poll);
       if (this.showPanel && this.form.uuid) params.set('event', this.form.uuid);
       return params;
     },
 
-    _syncUrl() {
-      if (!this.calendar) return;
-      const qs = this._buildUrlParams().toString();
-      const url = window.location.pathname + (qs ? '?' + qs : '');
-      history.replaceState(null, '', url);
+    // Built the same way for every state: returnTo matches addresses
+    // character for character.
+    _urlOf(params) {
+      const qs = params.toString();
+      return window.location.pathname + (qs ? '?' + qs : '');
     },
 
-    _pushUrl() {
+    // View and date changes rewrite the entry: back never steps through days.
+    _syncUrl() {
       if (!this.calendar) return;
-      const qs = this._buildUrlParams().toString();
-      const url = window.location.pathname + (qs ? '?' + qs : '');
-      history.pushState(null, '', url);
+      window.navHistory.replace(this._urlOf(this._buildUrlParams()));
+    },
+
+    // Opening an event adds an entry, so back closes it; opening another one
+    // over it only rewrites that entry.
+    _recordOpenedEvent() {
+      if (!this.calendar) return;
+      const url = this._urlOf(this._buildUrlParams());
+      if (new URLSearchParams(window.location.search).has('event')) {
+        window.navHistory.replace(url);
+      } else {
+        window.navHistory.push(url);
+      }
     },
 
     // ── Date/time helpers ───────────────────────────────────

@@ -226,12 +226,13 @@ class Backend(abc.ABC):
     def relocate(self, source, destination):
         """Move a blob or a whole directory, keeping the source until commit.
 
-        When this returns, the destination holds everything and a
-        :class:`Relocation` is handed back. A backend that moves by copying
-        keeps the source until its commit(): the caller points its rows at
-        the destination and commits once they are durable, so a failure in
-        between leaves duplicates behind, never a row pointing at nothing.
-        Raises with the source untouched when the move could not complete.
+        A blob replaces one already at *destination*. When this returns, the
+        destination holds everything and a :class:`Relocation` is handed
+        back. A backend that moves by copying keeps the source until its
+        commit(): the caller points its rows at the destination and commits
+        once they are durable, so a failure in between leaves duplicates
+        behind, never a row pointing at nothing. Raises with the source
+        untouched when the move could not complete.
         """
 
     @abc.abstractmethod

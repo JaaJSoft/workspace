@@ -1,7 +1,7 @@
 """System checks the vault registers in VaultConfig.ready()."""
 
 from django.conf import settings
-from django.core.checks import Error
+from django.core.checks import Error, Warning
 from django.db import DatabaseError, connections
 
 from .models import (
@@ -65,6 +65,15 @@ def retired_ids_check(app_configs, databases=None, **kwargs):
         try:
             counts = census_service.census(using=alias)
         except DatabaseError:
+            errors.append(
+                Warning(
+                    f"The crypto suite census could not run on database '{alias}', "
+                    "so no retired algorithm id was looked for there.",
+                    hint="Run `manage.py vault_suite_census` once the database "
+                    "answers.",
+                    id="vault.W001",
+                )
+            )
             continue
         for (axis, identifier), count in sorted(counts.items(), key=str):
             if identifier == census_service.UNREADABLE_ID:

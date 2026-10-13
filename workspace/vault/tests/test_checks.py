@@ -1,7 +1,7 @@
 import copy
 from unittest import mock
 
-from django.core.checks import Tags, registry
+from django.core.checks import Tags, Warning, registry
 from django.db import OperationalError, connection
 from django.test import SimpleTestCase, TestCase, override_settings
 
@@ -119,12 +119,17 @@ class RetiredIdsCheckTests(TestCase):
         self.assertEqual([error.id for error in errors], ["vault.E001"])
         self.assertNotIn("\n", errors[0].msg)
 
-    def test_a_database_error_while_counting_is_not_an_error(self):
+    def test_a_database_error_while_counting_is_a_warning_not_an_error(self):
+        """The guard did not run: that must show, without blocking a migrate
+        that may be the very thing the census is waiting for."""
         with mock.patch(
             "workspace.vault.checks.census_service.census",
             side_effect=OperationalError("no such column"),
         ):
-            self.assertEqual(retired_ids_check(None, databases=["default"]), [])
+            problems = retired_ids_check(None, databases=["default"])
+        self.assertEqual([p.id for p in problems], ["vault.W001"])
+        self.assertIsInstance(problems[0], Warning)
+        self.assertIn("default", problems[0].msg)
 
 
 class RetirementAfterRecordMigrationTests(TestCase):

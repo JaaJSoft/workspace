@@ -494,7 +494,12 @@ _setting_fields = {
 }
 
 
-_PHOTOS_FLAGS = ("tile_badges", "video_hover_preview", "import_by_date", "show_hidden")
+_PHOTOS_FLAGS = (
+    "tile_badges",
+    "video_hover_preview",
+    "import_by_date",
+    "show_hidden",
+)
 _PHOTOS_CHOICES = {
     "tile_shape": ("square", "original"),
     "default_media_type": ("all", "photo", "video"),
@@ -522,6 +527,9 @@ def _validate_setting_value(module, key, value):
             ZoneInfo(str(value))
         except ZoneInfoNotFoundError, ValueError:
             return "Invalid timezone."
+    if module == "core" and key == "blur_sensitive" and value is not None:
+        if not isinstance(value, bool):
+            return "blur_sensitive must be a boolean."
     if module == "core" and key == "search_scope" and value is not None:
         if value not in SearchScope.CHOICES:
             return f"search_scope must be one of: {', '.join(SearchScope.CHOICES)}."

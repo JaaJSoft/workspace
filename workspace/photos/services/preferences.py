@@ -6,7 +6,9 @@ back to the default on one anyway: a value stored before the rule existed
 must not break the page.
 """
 
-from workspace.users.services.settings import get_module_settings
+from workspace.core.setting_keys import BLUR_SENSITIVE
+from workspace.core.setting_keys import MODULE as CORE_MODULE
+from workspace.users.services.settings import get_module_settings, get_setting
 
 from ..models import MediaItem
 from ..queries import ALL, MINE, SHARED
@@ -80,6 +82,14 @@ def show_hidden(user):
     return _flag(user, SHOW_HIDDEN, False)
 
 
+def blur_sensitive(user):
+    """Whether sensitive photos show blurred, in Photos and in Files alike.
+    On by default: turning it off is a choice made for one's own screen. A
+    core setting (core/setting_keys.py), shown in this panel."""
+    value = get_setting(user, CORE_MODULE, BLUR_SENSITIVE, default=True)
+    return value if isinstance(value, bool) else True
+
+
 def default_scope_token(user):
     """The library the timeline opens on when the URL names none."""
     value = _prefs(user).get(DEFAULT_SCOPE)
@@ -105,4 +115,5 @@ def display_preferences(user):
         "default_media_type": media_type.value if media_type else ALL_TYPES,
         "import_by_date": import_by_date(user),
         "show_hidden": show_hidden(user),
+        "blur_sensitive": blur_sensitive(user),
     }

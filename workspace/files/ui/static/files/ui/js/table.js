@@ -331,6 +331,9 @@ window.fileTableControls = function fileTableControls() {
         if (action.id === 'toggle_pin') {
           return { ...action, _bulkAdd: !allHaveState('toggle_pin', 'is_pinned') };
         }
+        if (action.id === 'toggle_sensitive') {
+          return { ...action, _bulkAdd: !allHaveState('toggle_sensitive', 'is_sensitive') };
+        }
         return action;
       });
     },
@@ -640,6 +643,16 @@ window.fileTableControls = function fileTableControls() {
           });
           window.dispatchEvent(new CustomEvent('bulk-action', {
             detail: { action: 'pin', uuids, add: !allPinned }
+          }));
+          break;
+        }
+        case 'toggle_sensitive': {
+          const allSensitive = uuids.every(uuid => {
+            const a = (this.actionsMap[uuid] || []).find(x => x.id === 'toggle_sensitive');
+            return a && a.state && a.state.is_sensitive;
+          });
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'sensitive', uuids, add: !allSensitive }
           }));
           break;
         }

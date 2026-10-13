@@ -1,0 +1,15 @@
+{% comment %}
+  The closed-eye mark over a blurred preview, centred. Only shows inside an
+  element with data-sensitive="1" while the page blurs sensitive previews
+  (the rule is in scripts/frontend/input.css); the caller is positioned.
+{% endcomment %}
+<span
+  class="sensitive-badge pointer-events-none absolute inset-0 z-[1] items-center justify-center"
+  aria-hidden="true"
+>
+  <span
+    class="rounded-full bg-base-100/70 p-2 text-base-content backdrop-blur-sm"
+  >
+    <i data-lucide="eye-closed" class="w-5 h-5"></i>
+  </span>
+</span>

@@ -3,6 +3,7 @@ from rest_framework.routers import SimpleRouter
 
 from .views.files import FileViewSet
 from .views.graph import FileGraphView
+from .views.sensitive import SensitiveFilesView
 from .views.share_links import (
     SharedFileContentView,
     SharedFileDownloadView,
@@ -20,6 +21,11 @@ router.register(r"files", FileViewSet, basename="file")
 router.register(r"tags", TagViewSet, basename="tag")
 
 urlpatterns = [
+    path(
+        "api/v1/files/sensitive",
+        SensitiveFilesView.as_view(),
+        name="files-sensitive",
+    ),
     path(
         "api/v1/files/shared/<str:token>",
         SharedFileMetaView.as_view(),

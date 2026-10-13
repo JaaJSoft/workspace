@@ -15,12 +15,20 @@ const PHOTOS_SWAP_TARGETS = [
 // user may run on a given file; this only drops the ones that mean nothing on
 // a timeline (cut, paste, pin, extract...).
 const PHOTO_ACTIONS = [
-  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename', 'delete',
+  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename',
+  'toggle_sensitive', 'delete',
 ];
 
 // The file actions the selection offers, when the registry offers them as
 // bulk actions on every selected photo.
-const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'download', 'delete'];
+const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'toggle_sensitive', 'download', 'delete'];
+
+// The state each toggle of the selection reads.
+const PHOTO_TOGGLE_STATES = { toggle_favorite: 'is_favorite', toggle_sensitive: 'is_sensitive' };
+
+// The preferences of the panel stored outside the photos settings: the blur
+// applies to Files too, so the shell reads it with the core ones.
+const PHOTO_PREF_MODULES = { blur_sensitive: 'core' };
 
 // The actions endpoint refuses more than 200 uuids per call.
 const PHOTOS_ACTIONS_BATCH = 200;
@@ -121,8 +129,8 @@ function photosBatches(items, size) {
 
 // What the selection can have done to it, out of the registry's answer for
 // each selected photo (`lists`, one per photo): the PHOTO_BULK_ACTIONS every
-// photo offers as a bulk action. The favorite toggle adds unless every photo
-// already is a favorite, as in Files.
+// photo offers as a bulk action. A toggle adds unless every photo already
+// has its state (a favorite, a sensitive photo), as in Files.
 function photosSelectionActions(lists) {
   if (!lists.length) return [];
   const offered = (list, id) => list.find((a) => a.id === id && a.bulk);
@@ -130,12 +138,13 @@ function photosSelectionActions(lists) {
     .filter((id) => lists.every((list) => offered(list, id)))
     .map((id) => {
       const action = offered(lists[0], id);
-      if (id !== 'toggle_favorite') return action;
-      const allFavorite = lists.every((list) => {
+      const key = PHOTO_TOGGLE_STATES[id];
+      if (!key) return action;
+      const allHave = lists.every((list) => {
         const toggle = offered(list, id);
-        return !!(toggle.state && toggle.state.is_favorite);
+        return !!(toggle.state && toggle.state[key]);
       });
-      return { ...action, add: !allFavorite };
+      return { ...action, add: !allHave };
     });
 }
 
@@ -335,7 +344,8 @@ window.photosApp = function photosApp() {
       this._prefVersions[key] = version;
       this.photoPrefs[key] = value;
       if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
-      return fetch(`/api/v1/settings/photos/${key}`, {
+      if (key === 'blur_sensitive') this._applyBlurSensitive(value);
+      return fetch(`/api/v1/settings/${PHOTO_PREF_MODULES[key] || 'photos'}/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value }),
@@ -348,8 +358,15 @@ window.photosApp = function photosApp() {
         .catch(() => {
           if (this._prefVersions[key] !== version) return;
           this.photoPrefs[key] = previous;
+          if (key === 'blur_sensitive') this._applyBlurSensitive(previous);
           window.AppAlert.error('Could not save the preference');
         });
+    },
+
+    // The page root's attribute every blurred preview hangs on, Files' too
+    // (see scripts/frontend/input.css): base.html renders it, this flips it.
+    _applyBlurSensitive(value) {
+      document.documentElement.toggleAttribute('data-blur-sensitive', !!value);
     },
 
     // ── Video preview on hover ──────────────────────────
@@ -585,6 +602,7 @@ window.photosApp = function photosApp() {
           has('properties') && 'properties',
         ],
         [
+          has('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',
           this.hiddenView && 'unhide',
           has('delete') && 'delete',
@@ -638,6 +656,9 @@ window.photosApp = function photosApp() {
         case 'rename':
           window.fileActions.showRenameDialog(photo.uuid, photo.name);
           break;
+        case 'toggle_sensitive':
+          this.markSensitive([photo.uuid], !(action.state && action.state.is_sensitive));
+          break;
         case 'delete':
           this.trashPhoto(photo.uuid, photo.name);
           break;
@@ -681,6 +702,28 @@ window.photosApp = function photosApp() {
       } catch (_) {
         window.AppAlert.error('Failed to update favorites');
       }
+    },
+
+    // Blurs the photos for everyone who can open them, or stops blurring
+    // them. Resolves to whether the server took it.
+    async markSensitive(uuids, sensitive) {
+      try {
+        const response = await fetch('/api/v1/files/sensitive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ uuids, sensitive }),
+        });
+        if (!response.ok) throw new Error();
+      } catch (_) {
+        window.AppAlert.error('Failed to update the photos');
+        return false;
+      }
+      uuids.forEach((uuid) => {
+        const tile = this._tile(uuid);
+        if (tile) tile.dataset.sensitive = sensitive ? '1' : '0';
+      });
+      this._forgetActions(uuids);
+      return true;
     },
 
     async renamePhoto(uuid, name) {
@@ -894,6 +937,12 @@ window.photosApp = function photosApp() {
       return !action || action.add;
     },
 
+    // Whether the selection's sensitive toggle marks rather than unmarks.
+    selectionSensitiveAdds() {
+      const action = this._selectionAction('toggle_sensitive');
+      return !action || action.add;
+    },
+
     closeSelectionMenu() {
       this.selectionMenu.open = false;
     },
@@ -912,6 +961,7 @@ window.photosApp = function photosApp() {
           !!this.currentCluster() && 'not_this_person',
         ],
         [
+          this.selectionAllows('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',
           this.hiddenView && 'unhide',
           this.selectionAllows('delete') && 'delete',
@@ -991,6 +1041,24 @@ window.photosApp = function photosApp() {
         done.length, uuids.length,
         add ? `Added ${count} to favorites` : `Removed ${count} from favorites`,
         'Failed to update favorites',
+      );
+      this.clearSelection();
+    },
+
+    async sensitiveSelection() {
+      this.closeSelectionMenu();
+      const action = this._selectionAction('toggle_sensitive');
+      if (!action || this.selectionBusy) return;
+      const uuids = this.selection.slice();
+      const add = action.add;
+      this.selectionBusy = true;
+      const done = await this.markSensitive(uuids, add);
+      this.selectionBusy = false;
+      if (!done) return;
+      const count = photosCountLabel(uuids.length);
+      window.AppAlert.success(
+        add ? `Marked ${count} as sensitive` : `Unmarked ${count} as sensitive`,
+        { duration: 2500 },
       );
       this.clearSelection();
     },

@@ -54,12 +54,17 @@
             :data-picker-album="album.uuid"
           >
             <template x-if="album.cover_url">
-              <img
-                :src="album.cover_url"
-                alt=""
-                class="w-10 h-10 rounded-lg object-cover flex-shrink-0"
-                draggable="false"
-              />
+              <span
+                class="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0"
+                :data-sensitive="album.cover_sensitive ? '1' : '0'"
+              >
+                <img
+                  :src="album.cover_url"
+                  alt=""
+                  class="w-full h-full object-cover"
+                  draggable="false"
+                />
+              </span>
             </template>
             <template x-if="!album.cover_url">
               <span

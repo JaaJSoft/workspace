@@ -329,3 +329,27 @@ html:has(> body.overflow-hidden.h-dvh) {
 .modal .prose kbd {
   color: oklch(var(--bc));
 }
+
+/* Sensitive previews (files/sensitivity.py). The page root carries
+   data-blur-sensitive while the viewer wants them hidden; a preview opts in
+   with data-sensitive="1". `scale` composes with a hover `transform` and
+   pushes the blur's soft edges out of the clipped tile. */
+[data-blur-sensitive] [data-sensitive="1"] :is(img, video) {
+  filter: blur(24px);
+  scale: 1.2;
+}
+
+.sensitive-badge,
+.sensitive-cover {
+  display: none;
+}
+
+[data-blur-sensitive] [data-sensitive="1"] .sensitive-badge,
+[data-blur-sensitive] .sensitive-cover {
+  display: flex;
+}
+
+/* The viewer behind its cover, until the cover's Show button drops it. */
+[data-blur-sensitive] .sensitive-veiled {
+  display: none !important;
+}

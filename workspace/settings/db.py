@@ -42,6 +42,13 @@ if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
         # exotic path), sqlite will raise a clearer error at connect time.
         pass
 
+    # Closed at the end of every request. Gunicorn runs gevent workers, where
+    # Django's per-thread connections become per-greenlet: each incoming HTTP
+    # connection opens its own, which nothing can reuse once that greenlet
+    # ends. Kept open, it lingers in a reference cycle until a full garbage
+    # collection, holding its page cache and mmap - a grid of thumbnails
+    # leaves hundreds behind. Opening a SQLite file costs well under a ms.
+    DATABASES["default"]["CONN_MAX_AGE"] = 0
     DATABASES["default"].setdefault("OPTIONS", {})
     DATABASES["default"]["OPTIONS"]["timeout"] = 60.0
     # Force BEGIN IMMEDIATE for every transaction. Django's default

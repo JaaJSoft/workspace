@@ -26,7 +26,7 @@
   listUuid: '{{ list_uuid|escapejs }}',
   initialPerson: '{{ panel_person_uuid|escapejs }}',
   })"
-  @popstate.window="onPopState()"
+  @nav:restore.window="onRestore($event)"
   @people-lists-changed.window="reloadLists()"
   @people-scope-changed.window="onScopeChanged($event.detail)"
   @ajax:error="AppAlert.show({ type: 'error', message: 'Could not load that contact.' })"

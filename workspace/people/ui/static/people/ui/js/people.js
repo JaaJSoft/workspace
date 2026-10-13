@@ -79,7 +79,8 @@ window.peopleApp = function peopleApp(config) {
       this.lists = window.peopleHelpers.readJson('people-lists-data', []);
       this.groups = window.peopleHelpers.readJson('people-groups-data', []);
       this.mineCount = window.peopleHelpers.readJson('people-mine-count-data', 0);
-      if (this.current) this.openPerson(this.current, { push: false });
+      // A deep link already sits on its own entry: load the panel, add none.
+      if (this.current) this._loadPanel(this.current);
       const params = new URLSearchParams(window.location.search);
       if (params.get('action') === 'new-person') this.newPerson();
       if (params.get('action') === 'import') this.openImport();
@@ -120,7 +121,7 @@ window.peopleApp = function peopleApp(config) {
     },
 
     refreshList() {
-      history.replaceState(history.state, '', this.pageUrl());
+      window.navHistory.replace(this.pageUrl(), window.navHistory.state());
       return this.swapList();
     },
 
@@ -136,28 +137,56 @@ window.peopleApp = function peopleApp(config) {
       this.refreshList();
     },
 
-    openPerson(uuid, { push = true } = {}) {
+    // Opening from the list adds an entry, so back closes the panel; switching
+    // contacts in an open panel only rewrites it.
+    openPerson(uuid) {
+      const wasOpen = this.panelOpen && Boolean(this.current);
+      this._showPerson(uuid);
+      if (wasOpen) window.navHistory.replace(this.pageUrl());
+      else window.navHistory.push(this.pageUrl());
+      return this._loadPanel(uuid);
+    },
+
+    _showPerson(uuid) {
       this.current = uuid;
       this.panelOpen = true;
-      if (push) history.pushState({ person: uuid }, '', this.pageUrl());
+    },
+
+    _loadPanel(uuid) {
       return this.$ajax(`/people/${uuid}/panel`, { target: 'person-panel' });
     },
 
-    closePanel({ push = true } = {}) {
+    _hidePanel() {
       this.current = '';
       this.panelOpen = false;
-      if (push) history.pushState({}, '', this.pageUrl());
     },
 
-    onPopState() {
+    // Steps back onto the list entry the panel was opened from, so closing
+    // undoes the opening instead of stacking an entry.
+    closePanel() {
+      this._hidePanel();
+      window.navHistory.returnTo(this.pageUrl());
+    },
+
+    // Back or forward: filters and panel follow the URL. Never writes history.
+    onRestore(event) {
       const params = new URLSearchParams(window.location.search);
-      this.query = params.get('q') || '';
-      this.scope = params.get('scope') || '';
-      this.listUuid = params.get('list') || '';
-      this.swapList();
-      const uuid = params.get('person');
-      if (uuid) this.openPerson(uuid, { push: false });
-      else this.closePanel({ push: false });
+      const query = params.get('q') || '';
+      const scope = params.get('scope') || '';
+      const listUuid = params.get('list') || '';
+      const filtersMoved =
+        query !== this.query || scope !== this.scope || listUuid !== this.listUuid;
+      this.query = query;
+      this.scope = scope;
+      this.listUuid = listUuid;
+      if (event.detail.stale) event.preventDefault();
+      if (event.detail.stale || filtersMoved) this.swapList();
+      const uuid = params.get('person') || '';
+      if (!uuid) this._hidePanel();
+      else if (event.detail.stale || uuid !== this.current || !this.panelOpen) {
+        this._showPerson(uuid);
+        this._loadPanel(uuid);
+      }
     },
 
     // ---- context menu ---------------------------------------------------
@@ -252,8 +281,9 @@ window.peopleApp = function peopleApp(config) {
         return;
       }
       this.onScopeChanged({ from: data.scope, to: null });
+      // closePanel owns the address; the delete alone leaves it unchanged.
       if (this.current === data.uuid) this.closePanel();
-      this.refreshList();
+      this.swapList();
     },
 
     // A group earns its sidebar row with its first contact and loses it with

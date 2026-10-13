@@ -11,17 +11,33 @@ function deferredFetch() {
   return { impl, calls };
 }
 
-function load(fetchImpl) {
+// Records every write, so a test can assert which entries a gesture adds.
+function navStub({ returnsBack = false } = {}) {
+  const writes = [];
+  return {
+    writes,
+    push: (url, state) => writes.push(['push', url, state]),
+    replace: (url, state) => writes.push(['replace', url, state]),
+    returnTo: (url) => {
+      writes.push(['returnTo', url]);
+      return returnsBack;
+    },
+    state: () => ({}),
+  };
+}
+
+function load(fetchImpl, extra = {}) {
   return loadScript('workspace/people/ui/static/people/ui/js/people.js', {
     document: { getElementById: () => null },
     sidebarPreference: { initial: () => false, save: () => {} },
     matchMedia: () => ({ matches: false }),
-    history: { replaceState() {}, pushState() {}, state: null },
+    navHistory: navStub(),
     URLSearchParams,
     FormData,
     fetch: fetchImpl || (() => Promise.reject(new Error('no network in tests'))),
     getCSRFToken: () => 'token',
     AppAlert: { show() {} },
+    ...extra,
   });
 }
 
@@ -312,4 +328,121 @@ test('a QR image failure says too large only when the server answered 413', asyn
     assert.equal(app.qrError, expected);
     assert.deepEqual(requested, ['/api/v1/people/qrcode?person=abc']);
   }
+});
+
+test('opening a contact from the list pushes, switching to another replaces', () => {
+  const nav = navStub();
+  const ctx = load(undefined, { navHistory: nav });
+  const app = ctx.peopleApp({ query: 'bo' });
+  const panels = [];
+  app.$ajax = (url) => {
+    panels.push(url);
+    return Promise.resolve();
+  };
+  app.openPerson('p1');
+  app.openPerson('p2');
+  assert.deepEqual(
+    nav.writes.map((w) => [w[0], w[1]]),
+    [
+      ['push', '/people?q=bo&person=p1'],
+      ['replace', '/people?q=bo&person=p2'],
+    ]
+  );
+  assert.deepEqual(panels, ['/people/p1/panel', '/people/p2/panel']);
+});
+
+test('closing the panel returns to the list instead of adding an entry', () => {
+  const nav = navStub();
+  const ctx = load(undefined, { navHistory: nav });
+  const app = ctx.peopleApp({ scope: 'mine', initialPerson: 'p1' });
+  app.$ajax = () => Promise.resolve();
+  app.closePanel();
+  assert.deepEqual(nav.writes, [['returnTo', '/people?scope=mine']]);
+  assert.equal(app.panelOpen, false);
+  assert.equal(app.current, '');
+});
+
+test('a deep link loads its contact without writing history', () => {
+  const nav = navStub();
+  const ctx = load(undefined, { navHistory: nav, location: { search: '?person=p1' } });
+  const app = ctx.peopleApp({ initialPerson: 'p1' });
+  const panels = [];
+  app.$ajax = (url) => {
+    panels.push(url);
+    return Promise.resolve();
+  };
+  app.init();
+  assert.deepEqual(nav.writes, []);
+  assert.deepEqual(panels, ['/people/p1/panel']);
+});
+
+test('filters rewrite the entry on screen', () => {
+  const nav = navStub();
+  const ctx = load(undefined, { navHistory: nav });
+  const app = ctx.peopleApp({});
+  app.$ajax = () => Promise.resolve();
+  app.query = 'al';
+  app.refreshList();
+  app.setScope('mine');
+  assert.deepEqual(
+    nav.writes.map((w) => w[0]),
+    ['replace', 'replace']
+  );
+});
+
+function restoreEvent(stale) {
+  const event = { detail: { state: {}, stale }, prevented: false };
+  event.preventDefault = () => {
+    event.prevented = true;
+  };
+  return event;
+}
+
+test('a restore follows the URL and never writes history', () => {
+  const nav = navStub();
+  const location = { search: '?q=al&person=p2' };
+  const ctx = load(undefined, { navHistory: nav, location });
+  const app = ctx.peopleApp({ query: 'al', initialPerson: 'p1' });
+  const swaps = [];
+  app.$ajax = (url, opts) => {
+    swaps.push([url, opts.target]);
+    return Promise.resolve();
+  };
+
+  const toOther = restoreEvent(false);
+  app.onRestore(toOther);
+  assert.equal(app.current, 'p2');
+  assert.equal(app.panelOpen, true);
+  assert.deepEqual(swaps, [['/people/p2/panel', 'person-panel']]);
+  assert.equal(toOther.prevented, false);
+
+  location.search = '?q=al';
+  app.onRestore(restoreEvent(false));
+  assert.equal(app.panelOpen, false);
+  assert.equal(app.current, '');
+  assert.equal(swaps.length, 1);
+
+  location.search = '?q=bob';
+  app.onRestore(restoreEvent(false));
+  assert.equal(app.query, 'bob');
+  assert.deepEqual(swaps[1], ['/people?q=bob', 'person-list']);
+
+  assert.deepEqual(nav.writes, []);
+});
+
+test('a stale restore refreshes the list and the panel in place', () => {
+  const nav = navStub();
+  const location = { search: '?person=p1' };
+  const ctx = load(undefined, { navHistory: nav, location });
+  const app = ctx.peopleApp({ initialPerson: 'p1' });
+  const swaps = [];
+  app.$ajax = (url) => {
+    swaps.push(url);
+    return Promise.resolve();
+  };
+  const event = restoreEvent(true);
+  app.onRestore(event);
+  assert.equal(event.prevented, true);
+  assert.deepEqual(swaps, ['/people', '/people/p1/panel']);
+  assert.deepEqual(nav.writes, []);
 });

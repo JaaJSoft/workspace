@@ -133,7 +133,15 @@ window.vaultMigration = (function () {
     const vaults = await window.vaultApi.listVaults();
     const vaultRow = vaults.find(function (row) { return String(row.uuid) === String(listed.uuid); });
     if (!vaultRow) return { status: 'done', wrote: false };
-    const items = await buildItems(session, listed, vaultRow);
+    let items;
+    try {
+      items = await buildItems(session, listed, vaultRow);
+    } catch (err) {
+      // A row that will not open or reseal is this vault's problem: the
+      // others still migrate. A lock or a failed request stops the pass.
+      if ((err && err.reason === 'locked') || (err && err.status)) throw err;
+      return { status: 'abandoned', wrote: false };
+    }
     let wrote = false;
     for (const batch of batches(items)) {
       if (!session.isUnlocked()) throw lockedError();

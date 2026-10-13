@@ -326,3 +326,30 @@ test('a 400 on one vault abandons it and the pass moves on to the next', async (
   assert.equal(result.wrote, true);
   assert.equal(storage.get('vault.migration.failures'), '1');
 });
+
+test('a row that fails to build abandons its vault and the pass moves on to the next', async () => {
+  const base = harness().globals;
+  const sent = [];
+  const listed = (uuid) => ({ uuid, metadata: false, wrap: false, folders: [], tags: [], entries: ['e1'] });
+  const { ctx, session, storage } = harness({
+    vaultApi: {
+      ...base.vaultApi,
+      fetchMigration: async () => ({ vaults: [listed('v'), listed('w')] }),
+      listVaults: async () => [
+        { uuid: 'v', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ' },
+        { uuid: 'w', wrapped_key: 'w', hpke_suite: {}, metadata_sig: 'AQ' },
+      ],
+      listEntries: async (vault, opts) => (opts && opts.trashed ? [] : [{ uuid: 'e1', vault, metadata_sig: 'AQ' }]),
+      migrateVault: async (uuid) => { sent.push(uuid); return null; },
+    },
+    buildEntryMigrateItem: async (s, vault, row) => {
+      if (vault.uuid === 'v') throw new Error('unknown AEAD');
+      return { kind: 'entry', uuid: row.uuid, fields: {}, encrypted_name: 'x' };
+    },
+  });
+  const result = await ctx.vaultMigration.run(session);
+  assert.deepStrictEqual(sent, ['w']);
+  assert.equal(result.outcome, 'failed');
+  assert.equal(result.wrote, true);
+  assert.equal(storage.get('vault.migration.failures'), '1');
+});

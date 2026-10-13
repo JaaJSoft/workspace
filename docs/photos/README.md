@@ -36,16 +36,21 @@ by renaming it. A date read from the file itself always wins over the name.
 
 ## Similar photos and search by description
 
-One image embedding per photo - a vector saying what the photo shows, in a
-space a sentence can be embedded into too - gives three features:
+One image embedding per photo, and one per key frame of a video - a vector
+saying what the picture shows, in a space a sentence can be embedded into too -
+gives three features:
 
-- **Similar photos**, from a photo's menu: the photos of the library on screen
-  that look like it, the **near-duplicates** first (the shots of one burst, a
-  re-export), then up to 30 of the merely similar ones.
+- **Similar photos**, from the menu of a photo or a video: the photos and
+  videos of the library on screen that look like it, the **near-duplicates**
+  first (the shots of one burst, a re-export), then up to 30 of the merely
+  similar ones.
 - **Search by description**, from the search field in the Photos header:
   "dog on the beach", "snow", "birthday cake" ranked against the library,
   with no tag and no name to match. The global search offers it too, as
   *Photos showing "..."*.
+- A video ranks by its closest key frame and is listed once. Its tile says
+  the moment that matched ("0:42 / 1:30"), and opens the video there, in the
+  viewer and in the hover preview.
 - Both follow the library tab on screen (Mine, All, Shared with me, a group),
   and never show a photo the user cannot open: trashed, quarantined, hidden
   and unshared photos stay out.
@@ -59,18 +64,49 @@ scene, not who is in it. Identity stays with face grouping above.
 PHOTOS_EMBEDDINGS_ENABLED=1
 ```
 
-It is an instance-level setting, with no per-user opt-in: every photo of the
-instance is embedded, group folders' included. Videos are not, for now. The
-embedding runs in the Celery worker, at low priority after an upload and at
-background priority for the hourly catch-up (`python manage.py catch_up
-embeddings`). A search embeds its text in the worker too, at interactive
+It is an instance-level setting, with no per-user opt-in: every photo and
+video of the instance is embedded, group folders' included (videos only where
+ffmpeg is installed, see below). The embedding runs in the Celery worker, at
+low priority after an upload and at background priority for the hourly
+catch-up (`python manage.py catch_up embeddings`). A search embeds its text in the worker too, at interactive
 priority: the web process never loads a model. A search waits
 `PHOTOS_EMBEDDING_QUERY_TIMEOUT` seconds for the answer, then says it could
 not run.
 
 The admin dashboard shows a **Photo search** card: whether the backend is
-known and ready. Embedded photos are listed, read-only, in the admin under
-*Photo embeddings*.
+known and ready. Embedded photos and video frames are listed, read-only, in
+the admin under *Photo embeddings*.
+
+### Videos
+
+Videos are embedded where ffmpeg and ffprobe are installed (the Docker image
+ships them); without them, videos are left out and never count as pending,
+and their menu does not offer Similar photos. Each video runs in its own
+low-priority task (`photos.embed_video`), next to the face analysis of
+videos.
+
+- **Key frames**: ffmpeg reads the first frame, one at every scene change, and
+  one at a regular pace that spreads half of
+  `PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES` over the video, never more often than
+  every 2 seconds: a phone clip is usually one long shot that no scene change
+  would ever cut. The frames are decoded at the size the backend reads a photo
+  at.
+- **One vector per moment**: a frame within the near-duplicate distance of one
+  already kept shows nothing new and is dropped. A still shot is one vector,
+  a clip panning from the pool to the dog jumping in a few. Each one kept is
+  stored as a small WebP too (10 to 40 KB): the picture a result shows of the
+  moment that matched.
+- **Limits**: a video longer than `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` or
+  larger than `PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES` is not read, nor one
+  ffmpeg cannot decode; like a photo that cannot be, it is recorded as
+  analyzed so the catch-up does not try it again every hour. A voice
+  recording in a video container is not a video and stays out.
+
+The cost is the embedding of up to 12 frames (about 4 s of CPU with SigLIP 2,
+1 s with CLIP), plus the decoding: ffmpeg reads the whole video to find its
+scene changes, so a long 4K recording costs far more than a short phone clip.
+Lower `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` on a server that should not
+spend that.
 
 ### Backends
 
@@ -150,6 +186,9 @@ ones. After changing the setting:
 | `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
+| `PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES` | `12` | The most frames read from one video. |
+| `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` | `1200` | Longer videos (seconds) are not embedded. |
+| `PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES` | 2 GB | Larger videos are not embedded. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
 | `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP, 0.3 for Jina CLIP). |
 | `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP, 0.085 for Jina CLIP). |

@@ -1,9 +1,14 @@
 """Similar photos, near-duplicates and search by description, over the
-photos' embeddings (services/photo_embeddings.py).
+embeddings of the photos and of the videos' key frames
+(services/photo_embeddings.py).
 
-The vector index narrows the search to one owner's photos at a time; it
+A video ranks by its closest key frame and is listed once, with the time of
+that frame: a result opens it at the moment that matched. A video asking for
+its look-alikes asks with every one of its key frames.
+
+The vector index narrows the search to one owner's files at a time; it
 authorizes nothing. Every answer re-enters the library through
-``queries.library_files(user, scope)``, so a photo the user cannot open, or
+``queries.library_files(user, scope)``, so a file the user cannot open, or
 that is trashed, quarantined or hidden, never surfaces through a vector.
 """
 
@@ -41,6 +46,10 @@ class Match:
     file_id: object
     distance: float
     near_duplicate: bool = False
+    # Seconds into a video of the key frame that matched, and the row whose
+    # picture shows it; None for a photo.
+    timestamp: float | None = None
+    frame_id: object = None
 
 
 def _embeddings(files, model_key):
@@ -51,68 +60,84 @@ def _embeddings(files, model_key):
     )
 
 
-def _rank(user, scope, vector, *, max_distance, limit, exclude=()):
-    """The photos of the library in *scope* within *max_distance* of
-    *vector*, nearest first, as Match.
+def _rank(user, scope, vectors, *, max_distance, limit, exclude=()):
+    """The files of the library in *scope* within *max_distance* of any of
+    *vectors*, nearest first, each once, as Match.
 
-    One KNN per owner whose photos are in scope: the user alone for their
-    own library, the members of a group, whoever shared photos with them.
+    One KNN per owner whose files are in scope and per vector: the user
+    alone for their own library, the members of a group, whoever shared
+    photos with them.
     """
     files = library_files(user, scope)
     model_key = get_embedding_backend().model_key
     embeddings = _embeddings(files, model_key)
-    # Each partition is asked for more than the limit: the hits that do not
-    # make it back through the library (another model's vector, a file
-    # trashed since, someone else's photo in a shared owner's partition) are
-    # dropped below.
-    k = min(MAX_K, max(4 * limit, 200))
-    hits = []
+    # Each partition is asked for more than the limit: a video holds a row
+    # per key frame, and the hits that do not make it back through the
+    # library (another model's vector, a file trashed since, someone else's
+    # photo in a shared owner's partition) are dropped below.
+    k = min(MAX_K, max(8 * limit, 400))
+    closest = {}
     for owner_id in embeddings.values_list("owner_id", flat=True).distinct():
-        hits += nearest(PHOTO_EMBEDDINGS, vector, partition=owner_id, k=k)
-    hits = [(pk, distance) for pk, distance in hits if distance <= max_distance]
-    if not hits:
+        for vector in vectors:
+            for pk, distance in nearest(
+                PHOTO_EMBEDDINGS, vector, partition=owner_id, k=k
+            ):
+                if distance <= max_distance:
+                    closest[pk] = min(distance, closest.get(pk, distance))
+    if not closest:
         return []
-    file_of = dict(
-        embeddings.filter(pk__in=[pk for pk, _ in hits]).values_list("pk", "file_id")
-    )
+    rows = {
+        pk: (file_id, timestamp, frame)
+        for pk, file_id, timestamp, frame in embeddings.filter(
+            pk__in=list(closest)
+        ).values_list("pk", "file_id", "timestamp", "frame")
+    }
     matches, seen = [], set(exclude)
-    for pk, distance in sorted(hits, key=lambda hit: hit[1]):
-        file_id = file_of.get(pk)
-        if file_id is None or file_id in seen:
+    for pk, distance in sorted(closest.items(), key=lambda hit: hit[1]):
+        if pk not in rows:
+            continue
+        file_id, timestamp, frame = rows[pk]
+        if file_id in seen:
             continue
         seen.add(file_id)
-        matches.append(Match(file_id=file_id, distance=distance))
+        matches.append(
+            Match(
+                file_id=file_id,
+                distance=distance,
+                timestamp=timestamp,
+                frame_id=pk if frame else None,
+            )
+        )
         if len(matches) == limit:
             break
     return matches
 
 
-def photo_vector(file_obj):
-    """*file_obj*'s embedding under the configured model, or None when it has
-    none yet (not analyzed, or undecodable)."""
-    row = (
-        PhotoEmbedding.objects.filter(
+def file_vectors(file_obj):
+    """*file_obj*'s embeddings under the configured model: one for a photo,
+    one per key frame for a video, none when it has none yet (not analyzed,
+    or unreadable)."""
+    return [
+        from_bytes(embedding, PHOTO_EMBEDDINGS.dims)
+        for embedding in PhotoEmbedding.objects.filter(
             file_id=file_obj.pk,
             model=get_embedding_backend().model_key,
             embedding__isnull=False,
-        )
-        .only("embedding")
-        .first()
-    )
-    if row is None:
-        return None
-    return from_bytes(row.embedding, PHOTO_EMBEDDINGS.dims)
+        ).values_list("embedding", flat=True)
+    ]
 
 
 def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
-    """The photos of *scope* that look like *source*, nearest first: up to
-    *limit* near-duplicates, flagged, then up to SIMILAR_LIMIT similar
-    photos. None when *source* has no embedding yet.
+    """The photos and videos of *scope* that look like *source*, nearest
+    first: up to *limit* near-duplicates, flagged, then up to SIMILAR_LIMIT
+    similar ones. None when *source* has no embedding yet.
 
-    *source* is a file the caller checked the user can open.
+    *source* is a file the caller checked the user can open. A video is
+    never similar to itself, and one with several close frames is listed
+    once, by the closest.
     """
-    vector = photo_vector(source)
-    if vector is None:
+    vectors = file_vectors(source)
+    if not vectors:
         return None
     duplicate = duplicate_max_distance()
     matches = [
@@ -120,11 +145,13 @@ def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
             file_id=match.file_id,
             distance=match.distance,
             near_duplicate=match.distance <= duplicate,
+            timestamp=match.timestamp,
+            frame_id=match.frame_id,
         )
         for match in _rank(
             user,
             scope,
-            vector,
+            vectors,
             max_distance=similar_max_distance(),
             # Room for both groups: a long burst alone could fill *limit*.
             limit=limit + SIMILAR_LIMIT,
@@ -137,7 +164,8 @@ def similar_photos(user, source, scope=MINE, *, limit=RESULT_LIMIT):
 
 
 def search_by_description(user, text, scope=MINE, *, limit=RESULT_LIMIT):
-    """The photos of *scope* that *text* describes, the best match first.
+    """The photos and videos of *scope* that *text* describes, the best
+    match first.
 
     Raises photo_embeddings.QueryEmbeddingUnavailable when the text could not
     be embedded.
@@ -145,7 +173,7 @@ def search_by_description(user, text, scope=MINE, *, limit=RESULT_LIMIT):
     return _rank(
         user,
         scope,
-        embed_query(text),
+        [embed_query(text)],
         max_distance=description_max_distance(),
         limit=limit,
     )

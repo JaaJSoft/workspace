@@ -7,13 +7,18 @@
   Optional context:
     - duration: float - the length in seconds (MediaInfo.duration). Without
       it the badge shows the play icon alone.
+    - position: float - where the preview opens, in seconds, shown before
+      the length as a player shows it ("0:42 / 1:30").
 {% endcomment %}
 <span
   class="absolute bottom-2 left-2 z-10 inline-flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-xs font-medium tabular-nums text-white pointer-events-none"
   data-duration-badge
 >
   <i data-lucide="play" class="w-3 h-3 fill-current" aria-hidden="true"></i>
-  {% if duration %}
+  {% if position %}
+    <span class="sr-only">Opens at</span>
+    <span>{{ position|media_duration }}{% if duration %} / {{ duration|media_duration }}{% endif %}</span>
+  {% elif duration %}
     <span>{{ duration|media_duration }}</span>
   {% else %}
     <span class="sr-only">Playable media</span>

@@ -18,6 +18,8 @@ import numpy as np
 from django.test import SimpleTestCase, override_settings
 from PIL import Image
 
+from workspace.files.tests.videos import requires_ffmpeg
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPTS = REPO_ROOT / "scripts"
 
@@ -131,6 +133,61 @@ class SimilarScoreTests(SimpleTestCase):
         # One row only, whose one candidate shows something else.
         self.assertEqual(scores["at_threshold"]["results"], 1.0)
         self.assertEqual(scores["at_threshold"]["precision"], 0.0)
+
+
+class FrameScoreTests(SimpleTestCase):
+    def _vectors(self, frames, shots):
+        # Photos 0 and 1 show a dog, photo 2 a cat; "dog" points at the dogs.
+        return {
+            "images": np.array([_direction(0), _direction(10), _direction(120)]),
+            "frames": np.array(frames),
+            "shots": np.array(shots),
+            "english": np.array([_direction(5)]),
+            "thresholds": {"duplicate": 0.01, "similar": 0.1, "description": 0.1},
+        }
+
+    def test_scores_the_frames_against_the_photos_they_were_filmed_from(self):
+        vectors = self._vectors(
+            frames=[_direction(2), _direction(12), _direction(121)],
+            shots=[_direction(3), _direction(30)],
+        )
+        relevant = np.array([[True, True, False]])
+        labels = [frozenset({"Dog"}), frozenset({"Dog"}), frozenset({"Cat"})]
+
+        scores = bench.score_frames(vectors, relevant, labels)
+
+        self.assertEqual(scores["duplicates"]["at_threshold"]["recall"], 1.0)
+        self.assertEqual(set(scores["duplicates"]["by_variant"]), {"frame"})
+        # The first shot's two frames are a degree apart, the second's 18.
+        self.assertEqual(scores["shot"]["found"], 0.5)
+        self.assertEqual(scores["search"]["map"], 1.0)
+        # Each dog finds the other dog's frame, never its own.
+        self.assertEqual(scores["similar"]["map"], (1 + 1 + 0) / 3)
+
+    def test_nothing_without_frames(self):
+        vectors = self._vectors(frames=np.empty((0, 2)), shots=np.empty((0, 2)))
+
+        self.assertIsNone(bench.score_frames(vectors, np.zeros((1, 3)), []))
+
+
+@requires_ffmpeg
+class FilmTests(SimpleTestCase):
+    def test_a_filmed_photo_comes_back_as_two_frames_of_its_size(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "photo.jpg"
+            Image.new("RGB", (65, 48), (200, 30, 30)).save(path)
+
+            bench.film(path, tmp)
+
+            frames = bench.frame_paths(tmp, "photo")
+            self.assertEqual(len(frames), len(bench.FRAME_NUMBERS))
+            for frame in frames:
+                with Image.open(frame) as img:
+                    self.assertEqual(img.size, (64, 48))
+                    red, green, _blue = img.convert("RGB").getpixel((32, 24))
+                    self.assertGreater(red, 150)
+                    self.assertLess(green, 80)
+            self.assertFalse((Path(tmp) / "photo.mp4").exists())
 
 
 class VariantTests(SimpleTestCase):
@@ -259,7 +316,39 @@ class EndToEndTests(SimpleTestCase):
         self.assertEqual(report["search"]["map"], 1.0)
         self.assertEqual(report["duplicates"]["at_threshold"]["recall"], 1.0)
         self.assertEqual(run["copies"].shape, (2, len(bench.VARIANTS), 768))
+        self.assertIsNone(report["frames"])
         table = bench.render([report])
         self.assertIn("fake (768-d)", table)
         self.assertIn("mAP (English)  ", table)
         self.assertIn("100.0%", table)
+
+    @requires_ffmpeg
+    def test_measures_the_video_frames_of_the_photos_filmed(self):
+        colours = {"red": (255, 0, 0), "blue": (0, 0, 255)}
+        photos, paths = [], {}
+        with tempfile.TemporaryDirectory() as tmp:
+            for index in range(4):
+                name = "red" if index % 2 else "blue"
+                path = Path(tmp) / f"{index}.jpg"
+                Image.new("RGB", (64, 48), colours[name]).save(path)
+                photo = dataset.BenchPhoto(str(index), frozenset({name.title()}))
+                photos.append(photo)
+                paths[photo.image_id] = path
+            queries = [
+                dataset.Query("red", "rouge", ("Red",)),
+                dataset.Query("blue", "bleu", ("Blue",)),
+            ]
+            frames_dir = Path(tmp) / "frames"
+            frames_dir.mkdir()
+            bench.film_all(photos, paths, frames_dir)
+            with patch.dict(os.environ):
+                run = bench.embed(
+                    "fake", photos, paths, queries, duplicates=2, frames_dir=frames_dir
+                )
+
+        report = bench.score(run, photos, queries)
+
+        self.assertEqual(run["frames"].shape, (4, 768))
+        self.assertEqual(run["shots"].shape, (2, 768))
+        self.assertEqual(report["frames"]["search"]["map"], 1.0)
+        self.assertEqual(report["frames"]["shot"]["found"], 1.0)

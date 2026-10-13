@@ -18,6 +18,7 @@ from workspace.users.models import UserSetting
 from .indexes import FACE_EMBEDDINGS, PHOTO_EMBEDDINGS
 from .models import Face, MediaItem, PhotoEmbedding
 from .services.face_preferences import FACES_ENABLED, MODULE
+from .services.photo_embeddings import delete_frames
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,14 @@ def drop_face_derivatives(sender, instance, using, **kwargs):
 
 
 @receiver(post_delete, sender=PhotoEmbedding)
-def drop_photo_vector(sender, instance, using, **kwargs):
-    """A deleted embedding takes its vector with it, a File purged from the
-    trash (a cascade) included."""
+def drop_photo_embedding_derivatives(sender, instance, using, **kwargs):
+    """A deleted embedding takes its vector and its key frame's picture with
+    it, a File purged from the trash (a cascade) included. The picture goes
+    once the delete has committed, as a face crop does."""
     drop_vector(PHOTO_EMBEDDINGS, instance.pk, using=using)
+    if instance.frame:
+        name = instance.frame
+        transaction.on_commit(lambda: delete_frames([name]), using=using)
 
 
 def _delete_crop(name):

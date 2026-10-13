@@ -110,6 +110,19 @@ PHOTOS_EMBEDDING_TIMEOUT = float(os.getenv("PHOTOS_EMBEDDING_TIMEOUT", "30"))
 PHOTOS_EMBEDDING_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_EMBEDDING_MAX_FILE_BYTES", str(64 * 1024 * 1024))
 )
+# Videos are embedded where ffmpeg is installed, one vector per key frame: at
+# most PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES frames are read, at the start, at
+# scene changes and at a pace spreading half of them over the video. Videos
+# longer (seconds) or larger than the limits are not embedded.
+PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES = int(
+    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES", "12")
+)
+PHOTOS_EMBEDDING_VIDEO_MAX_DURATION = int(
+    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_DURATION", str(20 * 60))
+)
+PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES = int(
+    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES", str(2 * 1024**3))
+)
 # Seconds a search waits for the worker to embed its text before giving up.
 PHOTOS_EMBEDDING_QUERY_TIMEOUT = float(
     os.getenv("PHOTOS_EMBEDDING_QUERY_TIMEOUT", "15")

@@ -482,6 +482,8 @@ window.photosApp = function photosApp() {
         video.setAttribute('aria-hidden', 'true');
         video.dataset.hoverPreview = '';
         video.src = tile.dataset.contentUrl || `/api/v1/files/${tile.dataset.uuid}/content`;
+        // Before the metadata has loaded, this sets where playback starts.
+        if (tile.dataset.at) video.currentTime = Number(tile.dataset.at);
         tile.querySelector('button').appendChild(video);
         video.play().catch(() => {});
         this._hoverPreview = { tile, timer: null, video };
@@ -518,22 +520,26 @@ window.photosApp = function photosApp() {
       this.openPhoto(tile);
     },
 
+    // A video found by a search opens at the moment that matched (data-at).
     openPhoto(tile) {
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
         detail: {
           uuid: tile.dataset.uuid,
           name: tile.dataset.displayName,
           type: tile.dataset.fileType,
+          at: tile.dataset.at ? Number(tile.dataset.at) : null,
         },
       }));
     },
 
-    // Read from the page each time, as facesEnabled(): a navigation swaps the
-    // content it is embedded in.
-    embeddingsEnabled() {
-      const el = document.getElementById('photos-embeddings-enabled');
+    // Whether this instance embeds photos or videos ("photo", "video"), so
+    // Similar photos can work on them. Read from the page each time, as
+    // facesEnabled(): a navigation swaps the content it is embedded in.
+    embeds(mediaType) {
+      const el = document.getElementById('photos-embedded-media');
       try {
-        return !!el && JSON.parse(el.textContent) === true;
+        const types = el ? JSON.parse(el.textContent) : [];
+        return Array.isArray(types) && types.includes(mediaType);
       } catch (_) {
         return false;
       }
@@ -675,7 +681,7 @@ window.photosApp = function photosApp() {
       return photosMenuRows([
         [
           (has('view') || photo.albumScoped) && 'open',
-          inLibrary && photo.mediaType !== 'video' && this.embeddingsEnabled() && 'similar',
+          inLibrary && this.embeds(photo.mediaType) && 'similar',
           inLibrary && this.facesEnabled() && 'faces',
         ],
         [

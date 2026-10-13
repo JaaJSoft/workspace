@@ -1,5 +1,5 @@
-"""Celery tasks of the photos module: faces, image embeddings, sensitive
-content, and filing imports by date."""
+"""Celery tasks of the photos module: faces, photo and video embeddings,
+sensitive content, and filing imports by date."""
 
 import logging
 
@@ -84,16 +84,43 @@ def embed_photo(self, file_uuid):
     max_retries=0: a photo that failed is still pending, and the hourly
     catch-up (or ``manage.py catch_up embeddings``) comes back for it.
     """
+    _embed_pending(file_uuid)
+
+
+@shared_task(
+    name="photos.embed_video",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def embed_video(self, file_uuid):
+    """Embed the key frames of one video, unless they are already up to date.
+
+    Its own task, as analyze_video_faces: a video costs a whole decode and a
+    dozen frames to embed, which a deployment may route to a worker of its
+    own. max_retries=0 for the reason embed_photo gives.
+    """
+    _embed_pending(file_uuid)
+
+
+def _embed_pending(file_uuid):
     from workspace.common.uuids import parse_uuid_or_none
 
-    from .services.photo_embeddings import embed_photo as embed
-    from .services.photo_embeddings import pending_embeddings_qs
+    from .services.photo_embeddings import embed_file, pending_embeddings_qs
 
     file_obj = (
         pending_embeddings_qs().filter(uuid=parse_uuid_or_none(file_uuid)).first()
     )
     if file_obj is not None:
-        embed(file_obj)
+        embed_file(file_obj)
+
+
+def embedding_task(file_type):
+    """The task that embeds a pending file of content label *file_type*."""
+    from workspace.files.services.thumbnails.generation import VIDEO_LABELS
+
+    return embed_video if file_type in VIDEO_LABELS else embed_photo
 
 
 @shared_task(

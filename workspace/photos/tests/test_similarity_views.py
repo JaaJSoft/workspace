@@ -1,6 +1,7 @@
 """The ranked listings: similar photos (``?similar=``) and search by
 description (``?q=``), and the global search's way into the latter."""
 
+import json
 import re
 from unittest.mock import patch
 
@@ -11,13 +12,22 @@ from django.test import TestCase, override_settings
 
 from workspace.core.module_registry import SearchScope
 from workspace.files.services import FileService
-from workspace.photos.models import HiddenFile
+from workspace.photos.models import HiddenFile, PhotoEmbedding
 from workspace.photos.search import search_by_description_entry, search_photos
 from workspace.photos.services import similarity
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
 from workspace.photos.services.photo_embeddings import QueryEmbeddingUnavailable
 
-from .embeddings import BLUE, DARK_RED, RED, embeddings_on, library_photo
+from .embeddings import (
+    BLUE,
+    DARK_RED,
+    RED,
+    embeddings_on,
+    ffmpeg_installed,
+    library_photo,
+    library_video,
+)
+from .images import make_video
 
 User = get_user_model()
 
@@ -94,14 +104,31 @@ class SimilarViewTests(RankedViewTestCase):
         self.assertContains(response, f"similar={self.red.pk}")
         self.assertEqual(len(self._tiles(response)), 1)
 
-    def test_the_photo_menus_offer_similar_photos(self):
+    def _embedded_media(self, response):
+        match = re.search(
+            r'<script id="photos-embedded-media" type="application/json">(.*?)</script>',
+            response.content.decode(),
+        )
+        return json.loads(match[1])
+
+    @ffmpeg_installed()
+    def test_the_menus_offer_similar_photos_on_photos_and_videos(self):
         response = self.client.get("/photos")
 
         self.assertContains(response, "showSimilar(ctxMenu.photo.uuid)")
-        self.assertContains(
-            response,
-            '<script id="photos-embeddings-enabled" type="application/json">true',
-        )
+        self.assertEqual(self._embedded_media(response), ["photo", "video"])
+
+    @ffmpeg_installed(False)
+    def test_without_ffmpeg_the_menus_offer_it_on_photos_only(self):
+        response = self.client.get("/photos")
+
+        self.assertEqual(self._embedded_media(response), ["photo"])
+
+    @override_settings(PHOTOS_EMBEDDINGS_ENABLED=False)
+    def test_the_menus_offer_nothing_where_the_instance_does_not_embed(self):
+        response = self.client.get("/photos")
+
+        self.assertEqual(self._embedded_media(response), [])
 
 
 @embeddings_on
@@ -147,6 +174,107 @@ class DescriptionSearchViewTests(RankedViewTestCase):
 
         self.assertNotContains(response, 'data-testid="photos-search"')
         self.assertEqual(self.client.get("/photos?q=red").status_code, 404)
+
+
+@embeddings_on
+class VideoRankingViewTests(RankedViewTestCase):
+    """A video in a ranking: listed once, opened at the moment that matched."""
+
+    def _tile(self, response, file_obj):
+        match = re.search(
+            rf'<div[^>]*data-uuid="{file_obj.pk}".*?</button>.*?(?=<div\s|$)',
+            response.content.decode(),
+            re.S,
+        )
+        return match[0]
+
+    def test_a_video_opens_at_the_moment_that_looks_like_the_photo(self):
+        red = library_photo(self.user, "red.jpg", RED)
+        clip = library_video(self.user, "clip.webm", [(0.0, BLUE), (2.0, RED)])
+
+        response = self.client.get(f"/photos?similar={red.pk}")
+
+        self.assertEqual(self._tiles(response), [str(clip.pk)])
+        tile = self._tile(response, clip)
+        frame = PhotoEmbedding.objects.get(file=clip, timestamp=2.0)
+        self.assertIn(f'src="/api/v1/photos/frames/{frame.pk}"', tile)
+        self.assertIn('data-at="2.000"', tile)
+        self.assertRegex(tile, r"Opens at</span>\s*<span>0:02 / 0:03</span>")
+        self.assertContains(response, "1 video")
+
+    def test_a_match_on_the_first_frame_opens_at_the_start(self):
+        red = library_photo(self.user, "red.jpg", RED)
+        clip = library_video(self.user, "clip.webm", [(0.0, RED)])
+
+        response = self.client.get(f"/photos?similar={red.pk}")
+
+        self.assertNotIn("data-at=", self._tile(response, clip))
+
+    def test_a_videos_look_alikes_never_list_itself(self):
+        clip = library_video(self.user, "clip.webm", [(0.0, RED), (3.0, BLUE)])
+        blue = library_photo(self.user, "blue.jpg", BLUE)
+
+        response = self.client.get(f"/photos?similar={clip.pk}")
+
+        self.assertEqual(self._tiles(response), [str(blue.pk)])
+        self.assertContains(response, "Similar to clip.webm")
+        self.assertContains(response, "1 photo")
+
+    def test_a_video_not_analyzed_yet_says_so(self):
+        pending = make_video(self.user, "new.webm", None)
+
+        response = self.client.get(f"/photos?similar={pending.pk}")
+
+        self.assertContains(response, "This video has not been analyzed yet")
+
+    def test_a_description_ranks_photos_and_videos_together(self):
+        library_photo(self.user, "blue.jpg", BLUE)
+        library_video(self.user, "clip.webm", [(0.0, RED), (2.5, BLUE)])
+
+        with patch.object(similarity, "embed_query", side_effect=_query):
+            response = self.client.get("/photos?q=blue")
+
+        self.assertEqual(len(self._tiles(response)), 2)
+        self.assertContains(response, "1 photo, 1 video")
+        self.assertContains(response, 'data-at="2.500"')
+
+
+@embeddings_on
+class VideoFrameViewTests(RankedViewTestCase):
+    def setUp(self):
+        super().setUp()
+        self.clip = library_video(self.user, "clip.webm", [(0.0, RED), (3.0, BLUE)])
+        self.frame = PhotoEmbedding.objects.get(file=self.clip, timestamp=3.0)
+
+    def test_serves_the_picture_of_a_key_frame(self):
+        response = self.client.get(f"/api/v1/photos/frames/{self.frame.pk}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/webp")
+        self.assertIn("private", response["Cache-Control"])
+        response.close()
+
+    def test_404_to_whoever_cannot_open_the_video(self):
+        User.objects.create_user(username="bob", password="p")
+        self.client.login(username="bob", password="p")
+
+        response = self.client.get(f"/api/v1/photos/frames/{self.frame.pk}")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_404_for_a_photo(self):
+        photo = library_photo(self.user, "red.jpg", RED)
+        row = PhotoEmbedding.objects.get(file=photo)
+
+        response = self.client.get(f"/api/v1/photos/frames/{row.pk}")
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(PHOTOS_EMBEDDINGS_ENABLED=False)
+    def test_404_where_the_instance_does_not_embed(self):
+        response = self.client.get(f"/api/v1/photos/frames/{self.frame.pk}")
+
+        self.assertEqual(response.status_code, 404)
 
 
 @embeddings_on

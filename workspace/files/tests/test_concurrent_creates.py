@@ -15,6 +15,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File
 from workspace.files.services import FileService, _names
 
@@ -323,8 +324,13 @@ class ConcurrentRenameAndMoveTests(TestCase):
         self.assertEqual(read(inside), b"inside")
 
 
+@local_storage_only
 class BytesOutsideTheTransactionTests(TestCase):
-    """The blob is written before the INSERT's transaction takes the lock."""
+    """The blob is written before the INSERT's transaction takes the lock.
+
+    Only where a move is a rename: object storage writes it in the INSERT's
+    transaction rather than twice.
+    """
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pass")

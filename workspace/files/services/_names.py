@@ -2,7 +2,6 @@
 
 import gc
 import logging
-import os
 import posixpath
 import uuid
 from contextlib import contextmanager
@@ -12,7 +11,7 @@ from django.db import IntegrityError, transaction
 from workspace.common.logging import scrub
 from workspace.common.text import caseless
 
-from ..models import File
+from ..models import File, canonical_name
 from ._storage_ops import blob_held_elsewhere, unique_copy_name
 
 logger = logging.getLogger(__name__)
@@ -76,16 +75,15 @@ def _staged(content):
 
     The transaction that inserts the row holds SQLite's write lock from its
     first statement, so the bytes - a large copy, an upload spooled on another
-    device - must not be written inside it. A storage without local paths
-    cannot rename a staged blob into place, and gets *content* back as is.
+    device - must not be written inside it. A storage that moves a blob by
+    copying it would write them a second time, inside the transaction all the
+    same, and gets *content* back as is.
     """
     if content is None:
         yield None
         return
     storage = File._meta.get_field("content").storage
-    try:
-        storage.path(STAGING_DIR)
-    except NotImplementedError:
+    if not storage.moves_by_rename():
         yield content
         return
     staged = storage.save(posixpath.join(STAGING_DIR, uuid.uuid4().hex), content)
@@ -128,17 +126,14 @@ def _place(storage, staged, node):
     destination = node.content.name
     if blob_held_elsewhere(storage, destination, node):
         raise NameTaken()
-    source_full = storage.path(staged.name)
-    destination_full = storage.path(destination)
-    os.makedirs(os.path.dirname(destination_full), exist_ok=True)
     try:
-        os.replace(source_full, destination_full)
+        storage.move(staged.name, destination, overwrite=True)
     except PermissionError:
         # Windows refuses to replace a file a forgotten handle still holds,
         # and a free name's leftover blob can have one until the collector
         # runs. Nothing reachable is open there: no other row uses it.
         gc.collect()
-        os.replace(source_full, destination_full)
+        storage.move(staged.name, destination, overwrite=True)
 
 
 def _insert(node, content):
@@ -264,7 +259,7 @@ def available_node_name(owner, parent, name, node_type, *, avoiding=()):
     taken = set(sibling_nodes(owner, parent).values_list("name", flat=True))
     for other in avoiding:
         taken.update(sibling_nodes(owner, other).values_list("name", flat=True))
-    return unique_copy_name(name, node_type, taken)
+    return unique_copy_name(canonical_name(name), node_type, taken)
 
 
 def available_file_name(owner, parent, name, *, avoiding=()):

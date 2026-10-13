@@ -3,13 +3,12 @@
 Two cleanup phases:
 1. Abandoned conversations — all human members have left, only bot messages
    remain.  Deletes attachments (disk + DB), messages, and the conversation.
-2. Orphan files — files on disk whose MessageAttachment row no longer exists.
+2. Orphan files — blobs in storage whose MessageAttachment row no longer exists.
 """
 
 import logging
-import os
 
-from django.conf import settings
+from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand
 
 from workspace.chat.models import (
@@ -18,6 +17,7 @@ from workspace.chat.models import (
     Message,
     MessageAttachment,
 )
+from workspace.common.logging import scrub
 
 logger = logging.getLogger(__name__)
 
@@ -125,10 +125,8 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
 
     def _purge_orphan_files(self, dry_run, stats):
-        """Delete files in chat/ that have no matching DB row."""
-        chat_root = os.path.join(settings.MEDIA_ROOT, "chat")
-
-        if not os.path.isdir(chat_root):
+        """Delete blobs under chat/ that have no matching DB row."""
+        if not default_storage.is_dir("chat"):
             return
 
         known_paths = set(MessageAttachment.objects.values_list("file", flat=True))
@@ -136,27 +134,25 @@ class Command(BaseCommand):
         orphan_files = []
         orphan_dirs = []
 
-        for conv_dir in os.scandir(chat_root):
-            if not conv_dir.is_dir():
+        for conv_dir in default_storage.scan("chat"):
+            if not conv_dir.is_dir:
                 continue
 
+            conv_prefix = f"chat/{conv_dir.name}"
             dir_has_live_files = False
 
-            for entry in os.scandir(conv_dir.path):
-                if not entry.is_file():
+            for entry in default_storage.scan(conv_prefix):
+                if not entry.is_file:
                     continue
 
-                rel_path = os.path.join("chat", conv_dir.name, entry.name)
-                # Normalize to forward slashes (Django stores paths this way)
-                rel_path = rel_path.replace("\\", "/")
-
-                if rel_path in known_paths:
+                name = f"{conv_prefix}/{entry.name}"
+                if name in known_paths:
                     dir_has_live_files = True
                 else:
-                    orphan_files.append(entry.path)
+                    orphan_files.append(name)
 
             if not dir_has_live_files:
-                orphan_dirs.append(conv_dir.path)
+                orphan_dirs.append(conv_prefix)
 
         if not orphan_files and not orphan_dirs:
             return
@@ -174,16 +170,19 @@ class Command(BaseCommand):
                 self.stdout.write(f"  dir:  {d}")
             return
 
-        for filepath in orphan_files:
+        for name in orphan_files:
             try:
-                os.remove(filepath)
+                default_storage.delete(name)
                 stats["orphan_files"] += 1
             except OSError:
-                logger.warning("Could not delete file %s", filepath)
+                logger.warning("Could not delete file %s", scrub(name))
 
-        for dirpath in orphan_dirs:
+        for prefix in orphan_dirs:
             try:
-                os.rmdir(dirpath)
-                stats["empty_dirs"] += 1
+                removed = default_storage.remove_dir_if_empty(prefix)
             except OSError:
-                logger.warning("Could not remove dir %s", dirpath)
+                removed = False
+            if removed:
+                stats["empty_dirs"] += 1
+            else:
+                logger.warning("Could not remove dir %s", scrub(prefix))

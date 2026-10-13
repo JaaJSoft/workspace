@@ -489,7 +489,11 @@ class MigrateItemSerializer(serializers.Serializer):
     hpke_suite = serializers.JSONField(required=False, validators=[validate_hpke_suite])
 
     def to_internal_value(self, data):
-        if not isinstance(data, dict) or data.get("kind") not in ITEM_KEYS:
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("kind"), str)
+            or data["kind"] not in ITEM_KEYS
+        ):
             raise serializers.ValidationError("unknown kind")
         if set(data) != ITEM_KEYS[data["kind"]]:
             raise serializers.ValidationError("wrong key set for this kind")

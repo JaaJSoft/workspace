@@ -399,6 +399,11 @@ class MigrateBatchTests(TestCase):
         item = {**self._entry_item(self._entry()), "is_favorite": True}
         self.assertEqual(self._post([item]).status_code, 400)
 
+    def test_a_kind_that_is_not_a_string_is_400(self):
+        for kind in ([], {}, None, 1):
+            with self.subTest(kind=kind):
+                self.assertEqual(self._post([{"kind": kind}]).status_code, 400)
+
     def test_adding_or_removing_a_field_is_400(self):
         entry = self._entry(fields={"password": sealed("p", 1)})
         self.assertEqual(

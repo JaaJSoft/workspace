@@ -55,7 +55,10 @@
             <i data-lucide="arrow-left" class="w-4 h-4"></i>
           </a>
         {% endif %}
-        <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
+        <i
+          data-lucide="{{ title_icon }}"
+          class="w-5 h-5 text-module shrink-0{% if ranking.params.similar %} max-sm:hidden{% endif %}"
+        ></i>
         <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
           <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
           <span class="text-sm text-base-content/60">{{ count_label }}</span>

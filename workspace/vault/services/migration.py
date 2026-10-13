@@ -6,6 +6,8 @@ then verify and write. Every signed payload is rebuilt from the plaintext
 columns already stored - the body carries ciphertexts and a signature only.
 """
 
+from collections import defaultdict
+
 from django.db import transaction
 
 from ..models import (
@@ -52,32 +54,41 @@ class Refused(Exception):
         self.detail = detail
 
 
-def _resolve(user, vault, item):
-    kind = item["kind"]
-    if kind == "metadata":
-        if get_vault_role(user, vault) != VaultRole.OWNER:
+def _resolve_all(user, vault, items):
+    """The row each item rewrites, in order - one query per kind, not per item."""
+    wanted = defaultdict(set)
+    for item in items:
+        if item["kind"] in ("folder", "tag", "entry"):
+            wanted[item["kind"]].add(item["uuid"])
+
+    found = {}
+    if wanted["folder"]:
+        folders = visible_folders(user, vault).filter(uuid__in=wanted["folder"])
+        found.update((("folder", row.uuid), row) for row in folders)
+    if wanted["tag"]:
+        tags = visible_tags(user, vault).filter(uuid__in=wanted["tag"])
+        found.update((("tag", row.uuid), row) for row in tags)
+    if wanted["entry"]:
+        entries = VaultEntry.objects.filter(
+            accessible_entries_q(user), vault=vault, uuid__in=wanted["entry"]
+        ).prefetch_related("fields", "tags")
+        found.update((("entry", row.uuid), row) for row in entries)
+
+    rows = []
+    for item in items:
+        kind = item["kind"]
+        if kind == "metadata":
+            if get_vault_role(user, vault) != VaultRole.OWNER:
+                raise RowOutOfReach
+            row = vault
+        elif kind == "wrap":
+            row = VaultKeyWrap.objects.filter(vault=vault, recipient=user).first()
+        else:
+            row = found.get((kind, item["uuid"]))
+        if row is None:
             raise RowOutOfReach
-        return vault
-    if kind == "wrap":
-        wrap = VaultKeyWrap.objects.filter(vault=vault, recipient=user).first()
-        if wrap is None:
-            raise RowOutOfReach
-        return wrap
-    if kind == "folder":
-        row = visible_folders(user, vault).filter(uuid=item["uuid"]).first()
-    elif kind == "tag":
-        row = visible_tags(user, vault).filter(uuid=item["uuid"]).first()
-    else:
-        row = (
-            VaultEntry.objects.filter(
-                accessible_entries_q(user), vault=vault, uuid=item["uuid"]
-            )
-            .prefetch_related("fields", "tags")
-            .first()
-        )
-    if row is None:
-        raise RowOutOfReach
-    return row
+        rows.append(row)
+    return rows
 
 
 def _expected(row, item):
@@ -255,7 +266,7 @@ def _write(user, vault, row, item):
 
 @transaction.atomic
 def apply_batch(user, identity, vault, items):
-    rows = [_resolve(user, vault, item) for item in items]
+    rows = _resolve_all(user, vault, items)
     for row, item in zip(rows, items, strict=True):
         if not _expected(row, item):
             raise Conflict(item["kind"], item.get("uuid"))

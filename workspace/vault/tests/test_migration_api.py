@@ -3,7 +3,9 @@ from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from workspace.vault import serializers
@@ -219,6 +221,24 @@ class MigrateBatchTests(TestCase):
     def test_entry_without_fields_or_notes_migrates(self):
         entry = self._entry()
         self.assertEqual(self._post([self._entry_item(entry)]).status_code, 204)
+
+    def test_resolving_a_batch_costs_the_same_reads_whatever_its_size(self):
+        tag = VaultTag.objects.create(
+            vault=self.vault, encrypted_name=sealed("t", 1), metadata_sig="AQ"
+        )
+
+        def selects(size):
+            entries = [
+                self._entry(fields={"password": sealed("p", 1)}) for _ in range(size)
+            ]
+            for entry in entries:
+                entry.tags.add(tag)
+            items = [self._entry_item(entry) for entry in entries]
+            with CaptureQueriesContext(connection) as queries:
+                self.assertEqual(self._post(items).status_code, 204)
+            return sum(q["sql"].lstrip().upper().startswith("SELECT") for q in queries)
+
+        self.assertEqual(selects(2), selects(6))
 
     def test_empty_description_stays_empty(self):
         item = self._metadata_item(description=sealed("filled"))

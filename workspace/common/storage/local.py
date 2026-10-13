@@ -21,7 +21,15 @@ from django.core.files.storage import FileSystemStorage
 
 from workspace.common.logging import scrub
 
-from .backend import Backend, Blob, Entry, Moved, StagedWriter, checked_name
+from .backend import (
+    Backend,
+    Blob,
+    Entry,
+    Moved,
+    Relocation,
+    StagedWriter,
+    checked_name,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -148,8 +156,25 @@ class LocalBackend(Backend):
             os.rename(source_path, destination_path)
 
     def relocate(self, source, destination):
-        # A rename is final the moment it returns: nothing is left to drop.
-        self.move(source, destination)
+        source_path = self._path(source)
+        if not os.path.isfile(source_path):
+            # A rename is final the moment it returns: nothing is left to drop.
+            self.move(source, destination)
+            return Moved()
+        try:
+            # os.rename would refuse a blob already there on Windows.
+            self.move(source, destination, overwrite=True)
+        except PermissionError:
+            # Windows will not rename a file someone is reading (a download,
+            # an analysis): copy it, and drop it once it is let go.
+            destination_path = self._path(destination)
+            try:
+                shutil.copyfile(source_path, destination_path)
+            except BaseException:
+                with suppress(OSError):
+                    os.unlink(destination_path)
+                raise
+            return _DropFile(source_path)
         return Moved()
 
     def staged_writer(self, name):
@@ -208,6 +233,23 @@ class LocalBackend(Backend):
         if not os.path.isfile(path):
             raise FileNotFoundError(path)
         yield path
+
+
+class _DropFile(Relocation):
+    """The source of a blob that had to be copied rather than renamed."""
+
+    def __init__(self, path):
+        self._path = path
+
+    def commit(self):
+        try:
+            os.unlink(self._path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            logger.warning("Could not remove moved blob %s", scrub(self._path))
+            return False
+        return True
 
 
 class _StagedFile(StagedWriter):

@@ -122,7 +122,8 @@ class BlobNameTests(IsolatedMediaRootMixin, TestCase):
 
         kept = self._create(DECOMPOSED, b"decomposed", keep_both=True)
 
-        self.assertEqual(kept.name, "Été (Copy).txt")
+        # Composed like every name the service is handed.
+        self.assertEqual(kept.name, COMPOSED.replace(".txt", " (Copy).txt"))
         self.assertEqual(read(kept), b"decomposed")
 
     def test_a_rename_refreshes_the_key_the_constraint_compares(self):

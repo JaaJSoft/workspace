@@ -91,7 +91,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "files.purge_trash",
         "schedule": crontab(hour=2, minute=30),  # Every day at 2:30 AM
     },
-    # Bytes a killed worker staged for a new file and never moved into place.
+    # Bytes a killed worker staged and never moved into place: a new file's, or
+    # an upload's.
     "purge-staged-blobs": {
         "task": "files.purge_staged_blobs",
         "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
@@ -99,11 +100,6 @@ CELERY_BEAT_SCHEDULE = {
     "purge-stale-uploads": {
         "task": "core.purge_stale_uploads",
         "schedule": crontab(hour=2, minute=40),  # Every day at 2:40 AM
-    },
-    # Uploads a killed worker could neither finish nor abort.
-    "purge-staged-writes": {
-        "task": "files.purge_staged_writes",
-        "schedule": crontab(hour=2, minute=45),  # Every day at 2:45 AM
     },
     # Moves a killed worker or a rolled-back transaction left half done.
     "settle-relocations": {

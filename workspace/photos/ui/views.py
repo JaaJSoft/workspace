@@ -1355,8 +1355,10 @@ def _review_cards(user):
             }
         )
     cards.sort(key=lambda card: (-card["weight"], _REVIEW_ORDER[card["kind"]]))
-    # The unnamed clusters past the first page were not read.
-    left = len(cards) + max(0, unnamed_count(user) - REVIEW_CARDS)
+    # The unnamed clusters past the first page were not read: they are
+    # counted, the doubts and loose groups all are cards already.
+    to_name = unnamed_count(user)
+    to_check = sum(card["kind"] != "cluster" for card in cards)
     cards = cards[:REVIEW_CARDS]
     faces = {
         UUID(item["uuid"]): item
@@ -1366,7 +1368,17 @@ def _review_cards(user):
         face_ids = card.pop("face_ids")
         del card["weight"]
         card["faces"] = [faces[pk] for pk in face_ids if pk in faces]
-    return cards, left
+    return {"cards": cards, "to_name": to_name, "to_check": to_check}
+
+
+def _review_left_label(to_name, to_check):
+    """The review page's header count; leftLabel() in faces.js keeps it."""
+    parts = []
+    if to_name:
+        parts.append(f"{to_name} {'person' if to_name == 1 else 'people'} to name")
+    if to_check:
+        parts.append(f"{to_check} to check")
+    return " · ".join(parts)
 
 
 @login_required
@@ -1378,10 +1390,11 @@ def people_review(request):
     if not faces_enabled(request.user):
         # The opt-in card lives on the People tab.
         return redirect("photos_ui:people")
-    cards, left = _review_cards(request.user)
+    review = _review_cards(request.user)
     context = {
         **_people_shell_context(request.user),
-        "review": {"cards": cards, "left": left},
+        "review": review,
+        "review_left_label": _review_left_label(review["to_name"], review["to_check"]),
     }
     return _render_page(request, "photos/ui/people_review.html", context)
 

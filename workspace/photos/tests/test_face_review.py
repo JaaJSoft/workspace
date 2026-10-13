@@ -290,7 +290,22 @@ class ReviewPageTests(ReviewTestCase):
 
         review = response.context["review"]
         self.assertEqual(len(review["cards"]), 1)
-        self.assertEqual(review["left"], 2)
+        self.assertEqual((review["to_name"], review["to_check"]), (2, 0))
+
+    def test_counts_people_to_name_apart_from_faces_to_check(self):
+        stray = self._stray_alice_face()
+        Face.objects.filter(file__name__in=["alice-1.png", "alice-2.png"]).exclude(
+            pk=stray.pk
+        ).update(cluster=None)
+
+        response = self.client.get(REVIEW)
+
+        # Bob's cluster is to name; Alice's doubt and the loose face to check.
+        review = response.context["review"]
+        self.assertEqual((review["to_name"], review["to_check"]), (1, 2))
+        self.assertContains(response, "1 person to name · 2 to check")
+        people = self.client.get("/photos/people")
+        self.assertEqual(people.context["unnamed_count"], review["to_name"])
 
     def test_nothing_to_review(self):
         FaceCluster.objects.filter(pk=self.bob.pk).update(
@@ -299,7 +314,9 @@ class ReviewPageTests(ReviewTestCase):
 
         response = self.client.get(REVIEW)
 
-        self.assertEqual(response.context["review"], {"cards": [], "left": 0})
+        self.assertEqual(
+            response.context["review"], {"cards": [], "to_name": 0, "to_check": 0}
+        )
         self.assertContains(response, "Everyone is sorted out")
 
     def test_the_people_tab_links_to_it(self):

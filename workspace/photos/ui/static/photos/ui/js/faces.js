@@ -1197,7 +1197,9 @@ function reviewSteps(card, kept, left, answer) {
 window.facesReview = function facesReview() {
   return {
     cards: [],
-    left: 0,
+    // Unnamed clusters, and doubts and loose groups, past this page included.
+    toName: 0,
+    toCheck: 0,
     // The key of the card whose name field is in use.
     position: null,
     pickerOpen: false,
@@ -1220,7 +1222,8 @@ window.facesReview = function facesReview() {
     init() {
       const data = facesJson('photos-review-data') || {};
       this.cards = (data.cards || []).map((card) => ({ ...card, excluded: [] }));
-      this.left = data.left || 0;
+      this.toName = data.to_name || 0;
+      this.toCheck = data.to_check || 0;
       this._keyboardFirst = !window.matchMedia || window.matchMedia('(pointer: fine)').matches;
       if (this.cards.length) this.searchReviewNames();
       if (this.cards.length && this._keyboardFirst) this._requestFocus(this.cards[0], false);
@@ -1232,6 +1235,14 @@ window.facesReview = function facesReview() {
 
     photoLabel(count) {
       return photoCount(count);
+    },
+
+    // Mirrors _review_left_label() in photos/ui/views.py.
+    leftLabel() {
+      const parts = [];
+      if (this.toName) parts.push(`${this.toName} ${this.toName === 1 ? 'person' : 'people'} to name`);
+      if (this.toCheck) parts.push(`${this.toCheck} to check`);
+      return parts.join(' · ');
     },
 
     // ── The faces ───────────────────────────────────────
@@ -1504,7 +1515,8 @@ window.facesReview = function facesReview() {
       this._announce(card, answer, main, undo);
       const index = this.cards.indexOf(card);
       this.cards = this.cards.filter((c) => c !== card);
-      this.left = Math.max(0, this.left - 1);
+      if (card.kind === 'cluster') this.toName = Math.max(0, this.toName - 1);
+      else this.toCheck = Math.max(0, this.toCheck - 1);
       if (this.isActive(card)) {
         this.position = null;
         this.query = '';

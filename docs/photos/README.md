@@ -142,11 +142,12 @@ has served a search, 1.1 GB for SigLIP 2's multilingual vocabulary): raise
 1.5 GB (1572864) for CLIP, or the default 512 MB recycles the worker after
 every photo.
 
-**`remote`** sends each photo, as a JPEG downscaled to
-`PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to another
-service: **every photo of the instance leaves the server.** Only enable it
-for an endpoint the instance's users can trust with their photos. There is no
-standard for image input on `/embeddings`; the contract is the most common
+**`remote`** sends each photo and each frame read from a video, as a JPEG
+downscaled to `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to
+another service: **every photo of the instance, and frames of every video,
+leave the server.** Only enable it for an endpoint the instance's users can
+trust with their photos. There is no standard for image input on
+`/embeddings`; the contract is the most common
 one:
 
 ```json

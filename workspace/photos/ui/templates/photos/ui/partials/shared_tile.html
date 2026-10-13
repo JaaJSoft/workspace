@@ -4,6 +4,7 @@
   page in place. Nothing else: a visitor has no selection and no menu.
   shared_thumbnail_url and shared_view_url come from ui.views._shared_tiles.
 {% endcomment %}
+{% load photos_filters %}
 <a
   href="{{ file.shared_view_url }}"
   x-target.push="shared-album-content"
@@ -14,6 +15,9 @@
   {% if file.has_thumbnail %}
     <img
       src="{{ file.shared_thumbnail_url }}"
+      srcset="{{ file.shared_thumbnail_url|tile_srcset:file }}"
+      sizes="auto, (min-width: 640px) 160px,
+             calc((100vw - 56px) / 3)"
       alt="{{ file.name }}"
       class="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
       loading="lazy"

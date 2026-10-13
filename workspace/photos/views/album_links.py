@@ -19,6 +19,7 @@ from workspace.files.views.share_links import ShareLinkVerifyThrottle
 from ..queries import link_files
 from ..services.album_links import access_token_for, find_link, has_access
 from .album_files import (
+    THUMBNAIL_SIZE_PARAMETER,
     archive_response,
     content_response,
     rendition_response,
@@ -101,14 +102,19 @@ class AlbumLinkVerifyView(_PublicView):
 
 @extend_schema(tags=["Photos - Album links"])
 class AlbumLinkThumbnailView(_PublicView):
-    @extend_schema(summary="Thumbnail of a photo of a linked album")
+    @extend_schema(
+        summary="Thumbnail of a photo of a linked album",
+        parameters=[THUMBNAIL_SIZE_PARAMETER],
+    )
     def get(self, request, token, file_uuid):
         _, file_obj, error = _link_file(request, token, file_uuid)
         if error:
             return error
         # `public`: the token is the only credential and already in the URL
         # a cache would key on, as for file links.
-        return thumbnail_response(file_obj, cache_control="public, max-age=3600")
+        return thumbnail_response(
+            request, file_obj, cache_control="public, max-age=3600"
+        )
 
 
 @extend_schema(tags=["Photos - Album links"])

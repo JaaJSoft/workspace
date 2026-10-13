@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
+from PIL import Image
 
 from workspace.files.models import File
 from workspace.files.services.sharing import share_file
@@ -115,6 +116,24 @@ class AlbumFileServingTests(AlbumFilesTestCase):
         self.assertEqual(
             self.client.get(self.file_url(self.photo, "thumbnail")).status_code, 404
         )
+
+    def test_a_thumbnail_comes_in_the_size_asked_for(self):
+        full = io.BytesIO()
+        Image.new("RGB", (512, 384)).save(full, "WEBP")
+        path = get_thumbnail_path(self.photo.uuid)
+        default_storage.delete(path)
+        default_storage.save(path, ContentFile(full.getvalue()))
+
+        response = self.client.get(self.file_url(self.photo, "thumbnail") + "?size=256")
+
+        self.assertEqual(response.status_code, 200)
+        with Image.open(io.BytesIO(b"".join(response.streaming_content))) as image:
+            self.assertEqual(image.size, (256, 192))
+
+    def test_a_thumbnail_size_there_is_none_of_is_a_400(self):
+        response = self.client.get(self.file_url(self.photo, "thumbnail") + "?size=300")
+
+        self.assertEqual(response.status_code, 400)
 
     def test_a_vanished_blob_is_a_404(self):
         File.objects.filter(pk=self.photo.pk).update(

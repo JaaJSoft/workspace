@@ -114,6 +114,10 @@ def _tile_size(user):
     return size if 1 <= size <= len(TILE_WIDTHS) else DEFAULT_TILE_SIZE
 
 
+def _tile_width(user):
+    return TILE_WIDTHS[_tile_size(user) - 1]
+
+
 @dataclass(frozen=True)
 class _Defaults:
     """What the listing shows when the URL names no library or no media type:
@@ -351,7 +355,9 @@ def _paging(page, page_url, view_params=None):
 
 def _page_context(request, page, page_url, view_params=None):
     mark_favorite_toggles(page.photos, request.user)
-    return _paging(page, page_url, view_params)
+    return _paging(page, page_url, view_params) | {
+        "tile_width": _tile_width(request.user),
+    }
 
 
 def _timeline_page_context(request, files, position, tz, view_params):
@@ -384,6 +390,7 @@ def _album_page_context(request, album, role, files, cursor, tz):
     page_url = reverse("photos_ui:album_timeline", args=[album.uuid])
     return _paging(page, page_url) | {
         "manual_order": album.sort_mode == Album.SortMode.MANUAL,
+        "tile_width": _tile_width(request.user),
     }
 
 

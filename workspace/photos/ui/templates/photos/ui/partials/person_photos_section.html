@@ -16,6 +16,8 @@
       {% if photo.has_thumbnail %}
         <img
           src="{{ photo|thumbnail_url }}"
+          srcset="{{ photo|thumbnail_url|tile_srcset:photo }}"
+          sizes="auto, 160px"
           alt="{{ photo.name }}"
           class="w-full h-full object-cover"
           loading="lazy"

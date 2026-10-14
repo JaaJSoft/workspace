@@ -215,6 +215,9 @@ window.vaultBrowser = (function () {
       // screen and one click undoes it. It is dropped when the panel closes,
       // when another entry is selected, and when the vault locks.
       revealed: {},
+      // A reload a migration pass asked for while a secret was revealed; see
+      // flushDeferredReload.
+      reloadDeferred: false,
       // The authenticator key, held as a handle rather than as a secret: the
       // HMAC key is imported non-extractable, so what sits here is something
       // javascript cannot read back. `code` is a six-digit derivative that
@@ -290,8 +293,8 @@ window.vaultBrowser = (function () {
 
       // Never awaited: the vault is on screen first, and nothing here may
       // delay it or surface as an error. A pass that rewrote rows reloads the
-      // listing, because a later re-sign (a tag or folder removal) builds from
-      // the rows this page holds and must sign what is actually stored.
+      // listing, because a later re-sign builds from the rows this page holds
+      // and must sign what is actually stored.
       startMigration: function () {
         const self = this;
         const mine = this.migrationGeneration;
@@ -302,14 +305,30 @@ window.vaultBrowser = (function () {
           if (result.outcome === 'busy' || mine !== self.migrationGeneration) return;
           if (!window.vaultSession.isUnlocked()) return;
           self.migrationWarning = result.warn;
-          if (result.wrote) self.load();
+          if (!result.wrote) return;
+          if (Object.keys(self.revealed).length) self.reloadDeferred = true;
+          else self.load();
         }, function () { /* a migration never surfaces as an error */ });
+      },
+
+      // A reload takes back a revealed secret, so a pass that rewrote rows
+      // under one waits for the gesture that takes it back anyway - closing
+      // the panel, opening another entry. Any write that re-signs a row runs
+      // it first: it must sign the ciphertexts the server now holds, not the
+      // ones the migration replaced.
+      flushDeferredReload: async function () {
+        if (!this.reloadDeferred) return;
+        this.reloadDeferred = false;
+        await this.load();
       },
 
       onLocked: function () {
         this.migrationWarning = false;
         this.unlockedWithPrevious = false;
         this.migrationGeneration += 1;
+        // Before resetPanel, which would otherwise run it: the rows it would
+        // fetch belong to keys that are leaving.
+        this.reloadDeferred = false;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
         // this machine.
@@ -344,6 +363,8 @@ window.vaultBrowser = (function () {
       },
 
       load: async function () {
+        // Whatever reload was being held, this is it.
+        this.reloadDeferred = false;
         this.loading = true;
         this.error = '';
         // Every row is about to be rebuilt, and a menu left open would go on
@@ -965,6 +986,7 @@ window.vaultBrowser = (function () {
         this.panelEntry = entry;
         this.revealed = {};
         this.revealing = {};
+        this.flushDeferredReload();
         return this.startTotp(entry);
       },
 
@@ -976,6 +998,7 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.totp = null;
+        this.flushDeferredReload();
       },
 
       closePanel: function () {
@@ -1213,6 +1236,7 @@ window.vaultBrowser = (function () {
       // signature covers the ciphertexts, so they are what has to be signed
       // again.
       setFavorite: async function (uuid, value) {
+        await this.flushDeferredReload();
         const row = this.rowFor(uuid);
         if (!row || !this.openVault) return;
         const body = await window.buildEntryResignRequest(
@@ -1462,6 +1486,7 @@ window.vaultBrowser = (function () {
           delete carriedFields.totp;
           delete values.totp;
         }
+        await this.flushDeferredReload();
         this.busy = true;
         try {
           const body = await window.buildEntryWriteRequest(
@@ -1502,6 +1527,7 @@ window.vaultBrowser = (function () {
           { title: 'Delete tag', okLabel: 'Delete', okClass: 'btn-error' }
         );
         if (!confirmed) return;
+        await this.flushDeferredReload();
         this.busy = true;
         let failed = false;
         try {
@@ -1532,6 +1558,7 @@ window.vaultBrowser = (function () {
           { title: 'Delete folder', okLabel: 'Delete', okClass: 'btn-error' }
         );
         if (!confirmed) return;
+        await this.flushDeferredReload();
         this.busy = true;
         let failed = false;
         try {
@@ -1632,6 +1659,7 @@ window.vaultBrowser = (function () {
         if (!draft || !this.openVault) return;
         const name = (draft.name || '').trim();
         if (!name) return;
+        await this.flushDeferredReload();
         this.busy = true;
         try {
           if (draft.existing) window.vaultResign.assertMayResign({ metadata_sig: draft.storedSig });

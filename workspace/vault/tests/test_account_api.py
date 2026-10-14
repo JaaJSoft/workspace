@@ -477,16 +477,36 @@ class AccountRotateTests(TestCase):
         self.assertEqual(self.identity.previous_kdf_algo, "argon2id")
         self.assertEqual(self.identity.previous_kdf_params, self.params)
 
+    def _age_the_envelope(self):
+        """Gives the stored envelope a kdf that no rotation can write, so every
+        one of the four previous columns tells the original envelope apart from
+        a rotated one."""
+        older = {**self.params, "m": self.params["m"] // 4}
+        AccountIdentity.objects.filter(pk=self.identity.pk).update(
+            kdf_algo="argon2i", kdf_params=older
+        )
+        return AccountIdentity.objects.get(pk=self.identity.pk)
+
+    def _assert_previous_is(self, original):
+        self.identity.refresh_from_db()
+        self.assertEqual(
+            self.identity.previous_wrapped_kex_priv, original.wrapped_kex_priv
+        )
+        self.assertEqual(
+            self.identity.previous_wrapped_sig_priv, original.wrapped_sig_priv
+        )
+        self.assertEqual(self.identity.previous_kdf_algo, original.kdf_algo)
+        self.assertEqual(self.identity.previous_kdf_params, original.kdf_params)
+
     def test_an_unproven_envelope_never_replaces_the_previous_one(self):
         """The previous slot holds the last envelope an unlock opened. A second
         rotation before any unlock replaces the unproven current one only."""
-        original_kex = self.identity.wrapped_kex_priv
-        self.assertEqual(self._post().status_code, 200)
+        original = self._age_the_envelope()
+        self.assertEqual(self._post(self._body("first")).status_code, 200)
         second = self._body("second")
         self.assertEqual(self._post(second).status_code, 200)
-        self.identity.refresh_from_db()
+        self._assert_previous_is(original)
         self.assertEqual(self.identity.wrapped_kex_priv, second["wrapped_kex_priv"])
-        self.assertEqual(self.identity.previous_wrapped_kex_priv, original_kex)
 
     def test_a_stale_expected_envelope_is_409_and_writes_nothing(self):
         before = AccountIdentity.objects.filter(pk=self.identity.pk).values().get()
@@ -497,14 +517,13 @@ class AccountRotateTests(TestCase):
         )
 
     def test_two_rotations_from_the_same_read_land_once(self):
+        original = self._age_the_envelope()
         first = self._body("tab-a")
         second = self._body("tab-b", expected=first["expected_wrapped_kex_priv"])
-        original_kex = self.identity.wrapped_kex_priv
         self.assertEqual(self._post(first).status_code, 200)
         self.assertEqual(self._post(second).status_code, 409)
-        self.identity.refresh_from_db()
+        self._assert_previous_is(original)
         self.assertEqual(self.identity.wrapped_kex_priv, first["wrapped_kex_priv"])
-        self.assertEqual(self.identity.previous_wrapped_kex_priv, original_kex)
 
     def test_refuses_params_other_than_the_current_ones(self):
         for params in (
@@ -585,6 +604,23 @@ class AccountRotateTests(TestCase):
         Vault.objects.all().delete()
         AccountIdentity.objects.all().delete()
         self.assertEqual(self._post().status_code, 404)
+
+    def test_answers_404_before_validating_the_body(self):
+        AccountIdentity.objects.filter(user=self.user).update(
+            state=AccountIdentity.State.PENDING
+        )
+        self.assertEqual(
+            self._post({**self.body, "kdf_algo": "scrypt"}).status_code, 404
+        )
+
+    def test_never_touches_another_users_identity(self):
+        before = AccountIdentity.objects.filter(pk=self.identity.pk).values().get()
+        other = User.objects.create_user(username="other", password="pw")
+        self.client.force_login(other)
+        self.assertEqual(self._post().status_code, 404)
+        self.assertEqual(
+            AccountIdentity.objects.filter(pk=self.identity.pk).values().get(), before
+        )
 
     def test_the_response_is_never_cached(self):
         self.assertEqual(self._post()["Cache-Control"], "no-store")

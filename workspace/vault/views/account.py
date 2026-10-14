@@ -194,10 +194,15 @@ class AccountRotateView(CacheControlMixin, APIView):
             "kept until an unlock proves the new one."
         ),
         request=AccountRotateSerializer,
-        responses={200: None, 409: None},
+        responses={200: None, 404: None, 409: None},
     )
     @sensitive_variables()
     def post(self, request):
+        mine = AccountIdentity.objects.filter(
+            user=request.user, state=AccountIdentity.State.ACTIVE
+        )
+        if not mine.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
         serializer = AccountRotateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
@@ -217,9 +222,7 @@ class AccountRotateView(CacheControlMixin, APIView):
                 output_field=AccountIdentity._meta.get_field(f"previous_{column}"),
             )
 
-        rotated = AccountIdentity.objects.filter(
-            user=request.user,
-            state=AccountIdentity.State.ACTIVE,
+        rotated = mine.filter(
             wrapped_kex_priv=data["expected_wrapped_kex_priv"],
         ).update(
             previous_kdf_algo=kept_or_taken("kdf_algo"),
@@ -232,13 +235,8 @@ class AccountRotateView(CacheControlMixin, APIView):
             wrapped_sig_priv=data["wrapped_sig_priv"],
             updated_at=timezone.now(),
         )
-        if rotated:
-            return Response(status=status.HTTP_200_OK)
-        active = AccountIdentity.objects.filter(
-            user=request.user, state=AccountIdentity.State.ACTIVE
-        ).exists()
         return Response(
-            status=status.HTTP_409_CONFLICT if active else status.HTTP_404_NOT_FOUND
+            status=status.HTTP_200_OK if rotated else status.HTTP_409_CONFLICT
         )
 
 

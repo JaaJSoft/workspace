@@ -156,6 +156,8 @@
                 uuid: r.dataset.uuid,
                 name: r.dataset.displayName,
                 fileType: r.dataset.fileType,
+                // A row may name the moment a video opens at, in seconds.
+                at: r.dataset.at ? Number(r.dataset.at) : null,
               };
             });
         },
@@ -165,7 +167,7 @@
           const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx >= 0 && idx < files.length - 1) {
             const next = files[idx + 1];
-            this.openFile(next.uuid, next.name, next.fileType);
+            this.openFile(next.uuid, next.name, next.fileType, true, next.at);
           }
         },
 
@@ -174,7 +176,7 @@
           const idx = files.findIndex(f => f.uuid === this.fileUuid);
           if (idx > 0) {
             const prev = files[idx - 1];
-            this.openFile(prev.uuid, prev.name, prev.fileType);
+            this.openFile(prev.uuid, prev.name, prev.fileType, true, prev.at);
           }
         },
 

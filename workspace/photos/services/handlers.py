@@ -1,4 +1,4 @@
-"""Keep MediaItem rows, the faces found in photos and videos, the photos'
+"""Keep MediaItem rows, the faces found in photos and videos, their
 embeddings and their sensitive-content verdicts in step with the files.
 
 All are upload processors (files.services.processors): the upload pipeline
@@ -73,9 +73,8 @@ def follow_moved_photo(event):
     ):
         forget_faces(moved)
     _queue_faces(moved)
-    # Given to another owner: the vector moves to their partition.
-    embedding = getattr(moved, "photo_embedding", None)
-    if embedding is not None and embedding.owner_id != moved.owner_id:
+    # Given to another owner: the vectors move to their partition.
+    if moved.photo_embeddings.exclude(owner_id=moved.owner_id).exists():
         _queue_embedding(moved)
 
 
@@ -100,20 +99,22 @@ def _queue_faces(file_obj):
 def _queue_embedding(file_obj):
     # Its own task, as for faces: a model run must not hold up the pipeline.
     if is_embedding_candidate(file_obj):
-        from ..tasks import embed_photo
+        from ..tasks import embedding_task
 
+        task = embedding_task(file_obj.type)
         uuid = str(file_obj.pk)
-        transaction.on_commit(lambda: embed_photo.delay(uuid))
+        transaction.on_commit(lambda: task.delay(uuid))
 
 
 def _queue_sensitive(file_obj):
-    # Its own task, as for faces. Normal priority: the photo shows in clear
-    # until it runs.
+    # Its own task, as for faces. Normal priority for a photo: it shows in
+    # clear until it runs.
     if is_sensitive_candidate(file_obj):
-        from ..tasks import check_sensitive_photo
+        from ..tasks import sensitive_task
 
+        task = sensitive_task(file_obj.type)
         uuid = str(file_obj.pk)
-        transaction.on_commit(lambda: check_sensitive_photo.delay(uuid))
+        transaction.on_commit(lambda: task.delay(uuid))
 
 
 register_processor(

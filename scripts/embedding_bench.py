@@ -18,6 +18,11 @@ and scores what comes out against what people verified the photos show:
 - **Similar photos**: each photo against the others, a photo showing one of
   the same things being a right answer; precision of what the similar
   threshold returns, and the threshold that would have done best.
+- **Video frames**: each photo filmed as a short clip, compressed as a phone
+  video sent through a messaging app, and read back the way the library
+  reads a video's key frames. Whether the duplicate threshold still finds a
+  photo's own frame, and two frames of one shot; then search by description
+  and similar photos over the frames instead of the photos.
 - **Cost**: time to load the models, CPU time per photo and per query (one
   thread unless PHOTOS_ONNX_THREADS says otherwise), the weights on disk and
   the memory the process grew to.
@@ -31,6 +36,7 @@ Usage:
     uv run python scripts/embedding_bench.py --backend siglip2_base --json siglip.json
     uv run python scripts/embedding_bench.py --compare siglip.json
     uv run python scripts/embedding_bench.py --images 300 --duplicates 50
+    uv run python scripts/embedding_bench.py --no-video-frames
 """
 
 from __future__ import annotations
@@ -38,10 +44,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -103,6 +111,99 @@ VARIANTS = (
 def variants(image):
     """The near-duplicates of *image* a library ends up with, in VARIANTS order."""
     return [make(image) for _name, make in VARIANTS]
+
+
+# -- video frames ------------------------------------------------------------
+
+# A photo filmed: a clip pushing in slowly on it (CLIP_ZOOM over the clip, so
+# every frame but the first is predicted from its neighbours), encoded as a
+# messaging app leaves a phone video (H.264, 4:2:0, CLIP_CRF), then read back
+# at FRAME_NUMBERS. The first frame stands for the photo; the two of them, a
+# second apart, for two moments of one shot.
+CLIP_SECONDS = 2
+CLIP_FPS = 30
+CLIP_ZOOM = 0.04
+CLIP_CRF = 30
+FRAME_NUMBERS = (15, 45)
+
+
+def _ffmpeg(*args):
+    try:
+        result = subprocess.run(
+            [shutil.which("ffmpeg"), "-nostdin", "-v", "error", "-y", *args],
+            capture_output=True,
+        )
+    except OSError as exc:
+        raise BenchError(f"ffmpeg failed: {exc}") from exc
+    if result.returncode:
+        error = result.stderr.decode(errors="replace").strip()
+        raise BenchError(f"ffmpeg failed: {error or result.returncode}")
+
+
+def frame_paths(frames_dir, image_id):
+    """Where film() writes the frames of photo *image_id*, in FRAME_NUMBERS order."""
+    return [
+        Path(frames_dir) / f"{image_id}-{i}.png"
+        for i in range(1, len(FRAME_NUMBERS) + 1)
+    ]
+
+
+def film(path, frames_dir):
+    """Film the photo at *path*: its frames at FRAME_NUMBERS, as PNG files
+    in *frames_dir* (see frame_paths)."""
+    path = Path(path)
+    count = CLIP_SECONDS * CLIP_FPS
+    with Image.open(path) as img:
+        # 4:2:0 wants even sides.
+        width, height = img.width // 2 * 2, img.height // 2 * 2
+    clip = Path(frames_dir) / f"{path.stem}.mp4"
+    _ffmpeg(
+        "-framerate",
+        str(CLIP_FPS),
+        "-loop",
+        "1",
+        "-t",
+        str(CLIP_SECONDS),
+        "-i",
+        str(path),
+        "-vf",
+        f"zoompan=z='1+{CLIP_ZOOM}*on/{count}':x='iw/2-iw/zoom/2'"
+        f":y='ih/2-ih/zoom/2':d=1:s={width}x{height}:fps={CLIP_FPS}",
+        "-c:v",
+        "libx264",
+        # One thread each: film_all runs several encoders at once.
+        "-threads",
+        "1",
+        "-preset",
+        "fast",
+        "-crf",
+        str(CLIP_CRF),
+        "-pix_fmt",
+        "yuv420p",
+        str(clip),
+    )
+    selection = "+".join(f"eq(n,{n})" for n in FRAME_NUMBERS)
+    _ffmpeg(
+        "-i",
+        str(clip),
+        "-vf",
+        f"select='{selection}'",
+        "-fps_mode",
+        "vfr",
+        str(Path(frames_dir) / f"{path.stem}-%d.png"),
+    )
+    clip.unlink()
+
+
+def film_all(photos, paths, frames_dir):
+    """Film every photo into *frames_dir*, a few ffmpeg processes at a time."""
+
+    def run(photo):
+        film(paths[photo.image_id], frames_dir)
+
+    with ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as pool:
+        for done, _ in enumerate(pool.map(run, photos), 1):
+            _progress("filming photos", done, len(photos))
 
 
 # -- scoring -----------------------------------------------------------------
@@ -185,12 +286,14 @@ def score_search(text_vectors, image_vectors, relevant, threshold):
     }
 
 
-def score_duplicates(images, copies, threshold):
+def score_duplicates(images, copies, threshold, names=None):
     """*copies* (n x v x d) of the first n of *images* (m x d), the library.
 
     Each of those photos' right answers are its own copies; every other
     photo of the library, and every other photo's copies, is a mistake.
+    *names* are the copies', VARIANTS' by default.
     """
+    names = names or [name for name, _make in VARIANTS]
     n, v, _ = copies.shape
     candidates = np.concatenate([copies.reshape(n * v, -1), images])
     matrix = distances(images[:n], candidates)
@@ -211,7 +314,7 @@ def score_duplicates(images, copies, threshold):
         loosest = t
     variant_recall = {
         name: float((matrix[np.arange(n), np.arange(n) * v + j] <= threshold).mean())
-        for j, (name, _make) in enumerate(VARIANTS[:v])
+        for j, name in enumerate(names[:v])
     }
     others = matrix[~relevant]
     return {
@@ -242,6 +345,51 @@ def score_similar(image_vectors, labels, threshold):
     }
 
 
+def score_similar_frames(image_vectors, frame_vectors, labels, threshold):
+    """Each photo showing one of the queries' labels against the frames of
+    all the others: a right answer shows one of the same."""
+    images, frames = np.asarray(image_vectors), np.asarray(frame_vectors)
+    rows = [i for i, own in enumerate(labels) if own]
+    matrix = distances(images[rows], frames)
+    relevant = np.array([[bool(labels[i] & other) for other in labels] for i in rows])
+    for row, i in enumerate(rows):
+        # A photo's own frame is a near-duplicate, not a look-alike.
+        matrix[row, i] = np.inf
+        relevant[row, i] = False
+    return ranking(matrix, relevant) | {
+        "at_threshold": at_threshold(matrix, relevant, threshold),
+        "suggested": best_threshold(matrix, relevant),
+    }
+
+
+def score_frames(vectors, relevant, labels):
+    """The video frames' part of the report, or None when none were filmed."""
+    images, frames, shots = vectors["images"], vectors["frames"], vectors["shots"]
+    if not len(frames):
+        return None
+    thresholds = vectors["thresholds"]
+    n = len(shots)
+    shot = 1.0 - np.sum(unit(frames[:n]) * unit(shots), axis=1)
+    return {
+        # A photo against the frame of its own clip, among every photo and
+        # the other photos' frames.
+        "duplicates": score_duplicates(
+            images, frames[:n, None, :], thresholds["duplicate"], names=["frame"]
+        ),
+        # Two moments of one shot: what a video's key frames are told apart
+        # by.
+        "shot": {
+            "found": float((shot <= thresholds["duplicate"]).mean()),
+            "median": float(np.median(shot)),
+            "p95": float(np.percentile(shot, 95)),
+        },
+        "search": score_search(
+            vectors["english"], frames, relevant, thresholds["description"]
+        ),
+        "similar": score_similar_frames(images, frames, labels, thresholds["similar"]),
+    }
+
+
 def score(vectors, photos, queries):
     """The report of one backend's run, from what it embedded."""
     wanted = [frozenset(q.labels) for q in queries]
@@ -260,6 +408,9 @@ def score(vectors, photos, queries):
         ),
         "similar": score_similar(
             images, [p.labels & query_labels for p in photos], thresholds["similar"]
+        ),
+        "frames": score_frames(
+            vectors, relevant, [p.labels & query_labels for p in photos]
         ),
     }
 
@@ -338,9 +489,10 @@ def _load_image(path, size):
         return img
 
 
-def embed(key, photos, paths, queries, duplicates):
+def embed(key, photos, paths, queries, duplicates, frames_dir=None):
     """Run backend *key* over the bench, in this process: its vectors, its
-    thresholds and what it cost."""
+    thresholds and what it cost. *frames_dir* holds the photos filmed (see
+    film), when the video frames are measured."""
     os.environ["PHOTOS_EMBEDDING_BACKEND"] = key
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
     sys.path.insert(0, str(REPO_ROOT))
@@ -367,6 +519,17 @@ def embed(key, photos, paths, queries, duplicates):
             copies.append([backend.embed_image(copy) for copy in variants(image)])
         _progress(f"{key}: photos", index + 1, len(photos))
 
+    frames, shots = [], []
+    if frames_dir:
+        for index, photo in enumerate(photos):
+            first, second = frame_paths(frames_dir, photo.image_id)
+            frames.append(backend.embed_image(_load_image(first, backend.decode_size)))
+            if index < duplicates:
+                shots.append(
+                    backend.embed_image(_load_image(second, backend.decode_size))
+                )
+            _progress(f"{key}: video frames", index + 1, len(photos))
+
     english, text_ms = [], []
     for query in queries:
         started = time.process_time()
@@ -377,6 +540,8 @@ def embed(key, photos, paths, queries, duplicates):
     return {
         "images": np.asarray(images, dtype=np.float64),
         "copies": np.asarray(copies, dtype=np.float64),
+        "frames": np.asarray(frames, dtype=np.float64),
+        "shots": np.asarray(shots, dtype=np.float64),
         "english": np.asarray(english, dtype=np.float64),
         "french": np.asarray(french, dtype=np.float64),
         "thresholds": {
@@ -414,14 +579,22 @@ def _worker(args):
     # Already downloaded by the parent: this only resolves their paths.
     paths = embedding_dataset.fetch_images(photos, args.cache_dir)
     queries = embedding_dataset.usable_queries(photos)
-    run = embed(args.worker, photos, paths, queries, min(args.duplicates, len(photos)))
+    run = embed(
+        args.worker,
+        photos,
+        paths,
+        queries,
+        min(args.duplicates, len(photos)),
+        frames_dir=args.frames_dir,
+    )
     meta = {k: run.pop(k) for k in ("thresholds", "cost", "label", "dims")}
     np.savez(args.out, **run)
     Path(args.out).with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
 
 
-def run_backend(key, args):
-    """Run backend *key* in a process of its own; its report."""
+def run_backend(key, args, frames_dir=None):
+    """Run backend *key* in a process of its own; its report. *frames_dir*
+    holds the photos filmed, when the video frames are measured."""
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "vectors.npz"
         command = [
@@ -438,6 +611,8 @@ def run_backend(key, args):
             command += ["--images", str(args.images)]
         if args.cache_dir:
             command += ["--cache-dir", str(args.cache_dir)]
+        if frames_dir:
+            command += ["--frames-dir", str(frames_dir)]
         result = subprocess.run(command, cwd=REPO_ROOT, check=False)
         if result.returncode:
             raise BenchError(f"{key}: the run failed (exit {result.returncode})")
@@ -474,6 +649,17 @@ ROWS = (
     ("  precision in the first 10", "similar.p10", "pct"),
     ("  at its threshold", "similar.at_threshold", "cut"),
     ("  best threshold", "similar.suggested", "cut"),
+    ("Video frames", None, None),
+    ("  photo vs its frame, at its threshold", "frames.duplicates.at_threshold", "cut"),
+    ("  loosest at 99% precision", "frames.duplicates.suggested", "cut"),
+    ("  two frames of a shot, within it", "frames.shot.found", "pct"),
+    ("  two frames of a shot, median", "frames.shot.median", "dist"),
+    ("  search mAP (English)", "frames.search.map", "pct"),
+    ("  search at its threshold", "frames.search.at_threshold", "cut"),
+    ("  search best threshold", "frames.search.suggested", "cut"),
+    ("  similar mAP", "frames.similar.map", "pct"),
+    ("  similar at its threshold", "frames.similar.at_threshold", "cut"),
+    ("  similar best threshold", "frames.similar.suggested", "cut"),
     ("Cost", None, None),
     ("  load (s)", "cost.load_s", "num"),
     ("  CPU per photo (ms)", "cost.image_ms", "num"),
@@ -570,7 +756,13 @@ def main(argv=None):
     parser.add_argument("--json", help="Write the reports to this file.")
     parser.add_argument("--compare", help="Show the reports of this file alongside.")
     parser.add_argument("--cache-dir", type=Path, help="Where the photos are kept.")
+    parser.add_argument(
+        "--no-video-frames",
+        action="store_true",
+        help="Skip the video frames (filming the photos needs ffmpeg).",
+    )
     parser.add_argument("--worker", help=argparse.SUPPRESS)
+    parser.add_argument("--frames-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--out", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
@@ -579,7 +771,7 @@ def main(argv=None):
         return 0
 
     photos = embedding_dataset.load(args.cache_dir, limit=args.images)
-    embedding_dataset.fetch_images(
+    paths = embedding_dataset.fetch_images(
         photos,
         args.cache_dir,
         progress=lambda done, total: _progress("photos", done, total),
@@ -591,14 +783,23 @@ def main(argv=None):
         file=sys.stderr,
     )
     reports, failed = [], []
-    for key in args.backend or LOCAL_BACKENDS:
-        try:
-            reports.append(run_backend(key, args))
-        except BenchError as exc:
-            # One model that cannot run (weights out of reach, a remote
-            # endpoint down) leaves the others' results standing.
-            print(exc, file=sys.stderr)
-            failed.append(key)
+    with tempfile.TemporaryDirectory(prefix="embedding-bench-frames-") as tmp:
+        frames_dir = None
+        if args.no_video_frames:
+            pass
+        elif not shutil.which("ffmpeg"):
+            print("ffmpeg is not installed: no video frames", file=sys.stderr)
+        else:
+            film_all(photos, paths, tmp)
+            frames_dir = tmp
+        for key in args.backend or LOCAL_BACKENDS:
+            try:
+                reports.append(run_backend(key, args, frames_dir))
+            except BenchError as exc:
+                # One model that cannot run (weights out of reach, a remote
+                # endpoint down) leaves the others' results standing.
+                print(exc, file=sys.stderr)
+                failed.append(key)
     run = {
         "date": datetime.now().isoformat(timespec="seconds"),
         "commit": _git_commit(),

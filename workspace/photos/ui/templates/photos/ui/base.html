@@ -108,7 +108,7 @@
       <div id="photos-content" class="h-full overflow-y-auto">
         {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
         {{ faces_enabled|json_script:"photos-faces-enabled" }}
-        {{ embeddings_available|json_script:"photos-embeddings-enabled" }}
+        {{ embedded_media|json_script:"photos-embedded-media" }}
         {% block photos_content %}{% endblock %}
       </div>
     {% endblock %}

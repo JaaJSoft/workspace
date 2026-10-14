@@ -75,6 +75,7 @@ from workspace.photos.services.import_folder import import_folder, import_folder
 from workspace.photos.services.photo_embeddings import (
     MAX_QUERY_LENGTH,
     QueryEmbeddingUnavailable,
+    embedded_media_types,
 )
 from workspace.photos.services.preferences import (
     ALL_TYPES,
@@ -583,7 +584,7 @@ def _render_page(request, template, context):
     """
     swap = bool(request.headers.get("X-Alpine-Request"))
     # Every page's photo menus offer Similar photos where it can work.
-    context.setdefault("embeddings_available", embeddings_available())
+    context.setdefault("embedded_media", embedded_media_types())
     if swap:
         context["photos_shell"] = "photos/ui/swap.html"
     else:
@@ -626,15 +627,20 @@ def _similar_ranking(request, scope, raw_uuid):
     if source is None:
         raise Http404
     matches = similar_photos(request.user, source, scope)
+    kind = (
+        "video"
+        if source.media_item.media_type == MediaItem.MediaType.VIDEO
+        else "photo"
+    )
     if matches is None:
         empty_title = "Not analyzed yet"
         empty_text = (
-            "This photo has not been analyzed yet. Similar photos show up "
+            f"This {kind} has not been analyzed yet. Similar photos show up "
             "once it has been, usually within the hour."
         )
     else:
         empty_title = "No similar photo"
-        empty_text = "Nothing in this library looks like this photo."
+        empty_text = f"Nothing in this library looks like this {kind}."
     return _Ranking(
         title=f"Similar to {source.name}",
         icon="images",
@@ -659,8 +665,8 @@ def _description_ranking(request, scope, query):
         matches=matches,
         empty_title="No match",
         empty_text=(
-            "No photo in this library matches this description. Describe what "
-            "the photo shows: a place, an object, a scene."
+            "No photo or video in this library matches this description. "
+            "Describe what it shows: a place, an object, a scene."
         ),
         error=error,
     )
@@ -713,10 +719,21 @@ def _ranked(request, query, similar):
             request.user,
         )
     }
-    photos = [by_pk[m.file_id] for m in matches if m.file_id in by_pk]
+    photos = []
+    for match in matches:
+        photo = by_pk.get(match.file_id)
+        if photo is not None:
+            # The moment of a video that matched: its tile shows it and
+            # opens there.
+            photo.match_at = match.timestamp
+            if match.frame_id is not None:
+                photo.match_frame_url = reverse(
+                    "photos-video-frame", kwargs={"pk": match.frame_id}
+                )
+            photos.append(photo)
     mark_favorite_toggles(photos, request.user)
     scope_params = _scope_params(scope, defaults)
-    count = len(photos)
+    videos = sum(p.media_item.media_type == MediaItem.MediaType.VIDEO for p in photos)
     context = {
         "person_views": None,
         "active_view": "search",
@@ -724,7 +741,9 @@ def _ranked(request, query, similar):
         "title": ranking.title,
         "title_icon": ranking.icon,
         "cluster": None,
-        "count_label": f"{count} photo{'s' if count != 1 else ''}",
+        "count_label": _count_label(
+            {"photos": len(photos) - videos, "videos": videos}, None
+        ),
         "view_empty": not photos,
         "pending": 0,
         "date_param": "",

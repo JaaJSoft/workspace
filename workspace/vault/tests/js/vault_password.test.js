@@ -16,6 +16,7 @@ function harness(overrides = {}) {
   const posts = [];
   const derived = [];
   const buffers = [];
+  const zeroAtSend = [];
   const session = { locks: 0, remembered: overrides.remembered || null };
   const fresh = (n) => { const b = Uint8Array.from({ length: 4 }, () => n); buffers.push(b); return b; };
   const ctx = loadScripts(
@@ -30,14 +31,20 @@ function harness(overrides = {}) {
         fromBase64Url: () => new Uint8Array(32),
       },
       vaultEnvelope: {
-        deriveUnwrapKey: async (fields, password) => { derived.push([fields.kdf_params, password]); return fresh(7); },
+        deriveUnwrapKey: overrides.deriveUnwrapKey
+          ? async (fields, password) => { derived.push([fields.kdf_params, password]); return overrides.deriveUnwrapKey(fresh); }
+          : async (fields, password) => { derived.push([fields.kdf_params, password]); return fresh(7); },
         openKeys: overrides.openKeys || (async () => ({ kexPriv: fresh(1), sigSeed: fresh(2) })),
         sealAndReread: overrides.sealAndReread || (async () => ({ wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig' })),
         rotateBody: (sealed, expected) => ({ ...sealed, expected_wrapped_kex_priv: expected }),
       },
       vaultApi: {
         fetchEnvelope: async () => ENVELOPE,
-        rotateEnvelope: overrides.rotateEnvelope || (async (body) => { posts.push(body); return null; }),
+        rotateEnvelope: overrides.rotateEnvelope || (async (body) => {
+          posts.push(body);
+          zeroAtSend.push(buffers.every((b) => b.every((byte) => byte === 0)));
+          return null;
+        }),
       },
       vaultSession: {
         rememberedSecret: () => session.remembered,
@@ -51,7 +58,7 @@ function harness(overrides = {}) {
   const component = ctx.vaultPasswordChange();
   const events = [];
   component.$dispatch = (name) => events.push(name);
-  return { ctx, component, posts, derived, buffers, session, events };
+  return { ctx, component, posts, derived, buffers, session, events, zeroAtSend };
 }
 
 // Opens the floor without a network round trip: the floor's own behaviour is
@@ -133,6 +140,56 @@ test('the raw keys and derived keys are zeroed on success and on failure', async
     assert.ok(h.buffers.length >= 5);
     for (const buffer of h.buffers) assert.deepStrictEqual(Array.from(buffer), [0, 0, 0, 0]);
   }
+});
+
+test('the raw and derived keys are already zero when the rotation leaves', async () => {
+  const h = harness();
+  ready(h.component);
+  await h.component.submit();
+  assert.deepStrictEqual(h.zeroAtSend, [true]);
+});
+
+test('a dialog that went away during the first derivation sends nothing', async () => {
+  // destroy() empties the fields: a flow that read them after an await would
+  // go on to seal the keys under an empty password and send that.
+  let release;
+  let calls = 0;
+  const h = harness({
+    deriveUnwrapKey: (fresh) => {
+      calls += 1;
+      if (calls > 1) return fresh(7);
+      return new Promise((resolve) => { release = () => resolve(fresh(7)); });
+    },
+  });
+  ready(h.component);
+  const pending = h.component.submit();
+  await new Promise((resolve) => setImmediate(resolve));
+  h.component.destroy();
+  release();
+  await pending;
+  assert.deepStrictEqual(h.posts, []);
+  assert.deepStrictEqual(h.events, []);
+  assert.equal(h.session.locks, 0);
+  for (const [, password] of h.derived) assert.notEqual(password, '');
+  for (const buffer of h.buffers) assert.deepStrictEqual(Array.from(buffer), [0, 0, 0, 0]);
+});
+
+test('a dialog that went away during the reseal sends nothing', async () => {
+  let release;
+  const h = harness({
+    sealAndReread: () => new Promise((resolve) => {
+      release = () => resolve({ wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig' });
+    }),
+  });
+  ready(h.component);
+  const pending = h.component.submit();
+  while (!release) await new Promise((resolve) => setImmediate(resolve));
+  h.component.destroy();
+  release();
+  await pending;
+  assert.deepStrictEqual(h.posts, []);
+  assert.deepStrictEqual(h.events, []);
+  assert.equal(h.session.locks, 0);
 });
 
 test('the secret is prefilled from the device when remembered', () => {

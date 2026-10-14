@@ -95,52 +95,70 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       const V = window.vaultCrypto;
       const E = window.vaultEnvelope;
       const life = this.life;
+      // Read once, before the first await: destroy() empties the fields, and
+      // a flow that read them afterwards would seal the keys under an empty
+      // password - and send it.
+      const currentPassword = this.currentPassword;
+      const secretText = this.secretText;
+      const newPassword = this.password;
+      const gone = () => life !== this.life;
       this.busy = true;
       this.error = '';
       let secretBytes = null;
       let oldKey = null;
       let newKey = null;
       let keys = null;
+      const zeroAll = function () {
+        [secretBytes, oldKey, newKey, keys && keys.kexPriv, keys && keys.sigSeed].forEach(function (b) {
+          if (b && typeof b.fill === 'function') b.fill(0);
+        });
+      };
       try {
         const envelope = await window.vaultApi.fetchEnvelope();
-        secretBytes = V.crockfordDecode(this.secretText);
+        if (gone()) return;
+        secretBytes = V.crockfordDecode(secretText);
         const salt = V.fromBase64Url(envelope.kdf_salt);
         try {
-          oldKey = await E.deriveUnwrapKey(envelope, this.currentPassword, secretBytes, salt);
+          oldKey = await E.deriveUnwrapKey(envelope, currentPassword, secretBytes, salt);
+          if (gone()) return;
           keys = await E.openKeys(oldKey, envelope, envelope.uuid);
         } catch (err) {
-          if (life === this.life) this.error = 'Current password is incorrect.';
+          if (!gone()) this.error = 'Current password is incorrect.';
           return;
         }
+        if (gone()) return;
         const current = V.CURRENT_SUITE.kdf;
         newKey = await E.deriveUnwrapKey(
-          { kdf_algo: current.algo, kdf_params: current.params }, this.password, secretBytes, salt
+          { kdf_algo: current.algo, kdf_params: current.params }, newPassword, secretBytes, salt
         );
+        if (gone()) return;
         let sealed;
         try {
           sealed = await E.sealAndReread(newKey, keys, envelope.uuid);
         } catch (err) {
-          if (life === this.life) this.error = 'The new password could not be applied.';
+          if (!gone()) this.error = 'The new password could not be applied.';
           return;
         }
+        // Nothing raw rides along with the request: only the two sealed
+        // ciphertexts are needed from here on.
+        zeroAll();
+        if (gone()) return;
         try {
           await window.vaultApi.rotateEnvelope(E.rotateBody(sealed, envelope.wrapped_kex_priv));
         } catch (err) {
-          if (life !== this.life) return;
+          if (gone()) return;
           this.error = err && err.status === 409
             ? 'Your account changed in another tab. Reload and try again.'
             : 'The password could not be changed. Try again.';
           return;
         }
-        if (life !== this.life) return;
+        if (gone()) return;
         this.$dispatch('vault-password-changed');
         window.vaultSession.lock();
       } catch (err) {
-        if (life === this.life) this.error = 'The password could not be changed. Try again.';
+        if (!gone()) this.error = 'The password could not be changed. Try again.';
       } finally {
-        [secretBytes, oldKey, newKey, keys && keys.kexPriv, keys && keys.sigSeed].forEach(function (b) {
-          if (b && typeof b.fill === 'function') b.fill(0);
-        });
+        zeroAll();
         this.busy = false;
       }
     },

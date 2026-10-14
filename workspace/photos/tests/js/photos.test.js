@@ -1275,6 +1275,25 @@ test('a preference applies at once and is saved under the photos module', async 
   assert.equal(app.photoPrefs.tile_shape, 'original');
 });
 
+test('a saved default library or media type fetches the grid and the sidebar again', async () => {
+  const swaps = [];
+  const app = load({
+    location: { href: '/photos' },
+    document: withPrefsData('{"default_scope": "mine", "tile_shape": "square"}'),
+    fetch: () => Promise.resolve({ ok: true }),
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+  app.$ajax = (url, options) => { swaps.push(Array.from(options.targets)); return Promise.resolve(); };
+
+  await app.savePhotoPref('default_scope', 'all');
+  await app._refreshing;
+  await app.savePhotoPref('default_media_type', 'video');
+  await app._refreshing;
+  await app.savePhotoPref('tile_shape', 'original');
+
+  assert.deepEqual(swaps, [['photos-nav', 'photos-content'], ['photos-nav', 'photos-content']]);
+});
+
 test('a refused save puts the previous value back and says so', async () => {
   const errors = [];
   const app = load({

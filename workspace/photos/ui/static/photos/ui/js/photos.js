@@ -42,6 +42,13 @@ const PHOTO_PREF_ROOT_ATTRIBUTES = {
   reveal_sensitive_in_viewer: 'data-reveal-sensitive-in-viewer',
 };
 
+// The parts of the page to fetch again once a preference is saved.
+const PHOTO_PREF_REFRESH = {
+  show_hidden: ['photos-nav'],
+  default_scope: ['photos-nav', 'photos-content'],
+  default_media_type: ['photos-nav', 'photos-content'],
+};
+
 // The sensitivity level of a photo marked by hand (files.sensitivity.MAX_LEVEL):
 // blurred under every blur preference but off.
 const SENSITIVE_MARKED_LEVEL = 4;
@@ -383,8 +390,11 @@ window.photosApp = function photosApp() {
       })
         .then((response) => {
           if (!response.ok) throw new Error(String(response.status));
-          // The Hidden entry of the sidebar is server-rendered.
-          if (key === 'show_hidden') this._refresh(['photos-nav']);
+          // Server-rendered from the preference: the Hidden entry of the
+          // sidebar, and for the defaults, what a URL without ?scope= or
+          // ?type= shows and every link of the page, which leave out
+          // whatever equals the default.
+          if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;

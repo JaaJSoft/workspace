@@ -27,7 +27,7 @@ function harness(overrides = {}) {
     {
       vaultCrypto: {
         CURRENT_SUITE: { kdf: CURRENT },
-        crockfordDecode: () => fresh(9),
+        crockfordDecode: overrides.crockfordDecode || (() => fresh(9)),
         fromBase64Url: () => new Uint8Array(32),
       },
       vaultEnvelope: {
@@ -87,9 +87,36 @@ test('a wrong current password sends nothing', async () => {
   const h = harness({ openKeys: async () => { throw new Error('tag mismatch'); } });
   ready(h.component);
   await h.component.submit();
-  assert.equal(h.component.error, 'Current password is incorrect.');
+  assert.equal(h.component.error, 'Current password or recovery key is incorrect.');
   assert.deepStrictEqual(h.posts, []);
   assert.equal(h.session.locks, 0);
+});
+
+test('with a remembered key, a failed open can only blame the password', async () => {
+  const h = harness({ remembered: 'B'.repeat(53), openKeys: async () => { throw new Error('tag mismatch'); } });
+  h.component.init();
+  ready(h.component, { secretText: h.component.secretText });
+  await h.component.submit();
+  assert.equal(h.component.error, 'Current password is incorrect.');
+  assert.deepStrictEqual(h.posts, []);
+});
+
+test('a recovery key that does not decode says so, sends nothing and asks for the key', async () => {
+  const h = harness({
+    remembered: 'B'.repeat(53),
+    crockfordDecode: () => { throw new Error('bad symbol'); },
+  });
+  h.component.init();
+  ready(h.component, { secretText: h.component.secretText });
+  await h.component.submit();
+  assert.equal(
+    h.component.error,
+    'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.'
+  );
+  assert.deepStrictEqual(h.derived, []);
+  assert.deepStrictEqual(h.posts, []);
+  assert.equal(h.component.secretRemembered, false);
+  assert.equal(h.component.secretText, '');
 });
 
 test('a reseal that does not reread sends nothing', async () => {
@@ -192,10 +219,18 @@ test('a dialog that went away during the reseal sends nothing', async () => {
   assert.equal(h.session.locks, 0);
 });
 
-test('the secret is prefilled from the device when remembered', () => {
+test('a remembered secret is used without being asked for', () => {
   const h = harness({ remembered: 'B'.repeat(53) });
   h.component.init();
   assert.equal(h.component.secretText, 'B'.repeat(53));
+  assert.equal(h.component.secretRemembered, true);
+});
+
+test('without a remembered secret the field is asked for, empty', () => {
+  const h = harness();
+  h.component.init();
+  assert.equal(h.component.secretText, '');
+  assert.equal(h.component.secretRemembered, false);
 });
 
 test('a submit that resolves after the dialog went away neither reports nor locks', async () => {

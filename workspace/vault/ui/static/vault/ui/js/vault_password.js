@@ -41,6 +41,11 @@ window.vaultPasswordChange = function vaultPasswordChange() {
     ...window.vaultPasswordFloorMixin(),
     currentPassword: '',
     secretText: '',
+    // Whether secretText came from this device, decided once at mount as on
+    // the unlock form: a remembered key is used without ever being printed,
+    // and the gate must not follow secretText, which x-model rewrites on
+    // every keystroke.
+    secretRemembered: false,
     busy: false,
     error: '',
     // Bumped by destroy(): a submit still awaiting when the dialog went away
@@ -56,7 +61,9 @@ window.vaultPasswordChange = function vaultPasswordChange() {
     followsGenerator: false,
 
     init() {
-      this.secretText = window.vaultSession.rememberedSecret() || '';
+      const remembered = window.vaultSession.rememberedSecret();
+      this.secretText = remembered || '';
+      this.secretRemembered = !!remembered;
     },
 
     destroy() {
@@ -100,6 +107,7 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       // password - and send it.
       const currentPassword = this.currentPassword;
       const secretText = this.secretText;
+      const secretRemembered = this.secretRemembered;
       const newPassword = this.password;
       const gone = () => life !== this.life;
       this.busy = true;
@@ -116,14 +124,30 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       try {
         const envelope = await window.vaultApi.fetchEnvelope();
         if (gone()) return;
-        secretBytes = V.crockfordDecode(secretText);
+        try {
+          secretBytes = V.crockfordDecode(secretText);
+        } catch (err) {
+          if (gone()) return;
+          this.error = 'Your recovery key could not be read. Dashes and case do not matter - check it against your emergency kit.';
+          // A remembered key that does not decode is no use hidden: the
+          // field comes back, empty, for the emergency kit.
+          this.secretText = '';
+          this.secretRemembered = false;
+          return;
+        }
         const salt = V.fromBase64Url(envelope.kdf_salt);
         try {
           oldKey = await E.deriveUnwrapKey(envelope, currentPassword, secretBytes, salt);
           if (gone()) return;
           keys = await E.openKeys(oldKey, envelope, envelope.uuid);
         } catch (err) {
-          if (!gone()) this.error = 'Current password is incorrect.';
+          // The same tag fails for a wrong password and a wrong recovery key;
+          // only a key the user typed here can be the culprit.
+          if (!gone()) {
+            this.error = secretRemembered
+              ? 'Current password is incorrect.'
+              : 'Current password or recovery key is incorrect.';
+          }
           return;
         }
         if (gone()) return;

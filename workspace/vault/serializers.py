@@ -117,6 +117,10 @@ class AccountEnvelopeSerializer(serializers.ModelSerializer):
             "wrapped_kex_priv",
             "wrapped_sig_priv",
             "sig_over_kex_pub",
+            "previous_kdf_algo",
+            "previous_kdf_params",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
             "state",
             "updated_at",
         ]

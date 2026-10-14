@@ -174,6 +174,30 @@ class AccountEnvelopeTests(TestCase):
             state=AccountIdentity.State.ACTIVE,
         )
 
+    def test_returns_an_empty_previous_envelope_as_nulls(self):
+        self._identity(self.user)
+        body = self.client.get(ENVELOPE_URL).json()
+        for key in (
+            "previous_kdf_algo",
+            "previous_kdf_params",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
+        ):
+            self.assertIn(key, body)
+            self.assertIsNone(body[key])
+
+    def test_returns_a_pending_previous_envelope(self):
+        self._identity(self.user)
+        AccountIdentity.objects.filter(user=self.user).update(
+            previous_kdf_algo="argon2id",
+            previous_kdf_params={"v": "1.3", "m": 65536, "t": 3, "p": 2},
+            previous_wrapped_kex_priv="PREV-KEX",
+            previous_wrapped_sig_priv="PREV-SIG",
+        )
+        body = self.client.get(ENVELOPE_URL).json()
+        self.assertEqual(body["previous_wrapped_kex_priv"], "PREV-KEX")
+        self.assertEqual(body["previous_wrapped_sig_priv"], "PREV-SIG")
+
     def test_returns_the_callers_envelope(self):
         identity = self._identity(self.user)
         response = self.client.get(ENVELOPE_URL)

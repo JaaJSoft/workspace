@@ -16,6 +16,7 @@ from workspace.vault.models import (
     VaultKeyWrap,
     VaultTag,
 )
+from workspace.vault.tests.factories import make_account, sealed_envelope
 
 User = get_user_model()
 
@@ -480,3 +481,23 @@ class EntryFieldTests(TestCase):
     def test_accepts_a_custom_field_named_name(self):
         field = self._field("custom:name")
         self.assertEqual(field.field_id, "custom:name")
+
+
+class AccountPreviousEnvelopeConstraintTests(TestCase):
+    def test_the_previous_envelope_is_all_or_nothing(self):
+        _, _, identity = make_account("owner")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AccountIdentity.objects.filter(pk=identity.pk).update(
+                previous_wrapped_kex_priv=sealed_envelope("k")
+            )
+
+    def test_a_complete_previous_envelope_is_accepted(self):
+        _, _, identity = make_account("owner")
+        AccountIdentity.objects.filter(pk=identity.pk).update(
+            previous_kdf_algo="argon2id",
+            previous_kdf_params={"v": "1.3", "m": 65536, "t": 3, "p": 2},
+            previous_wrapped_kex_priv=sealed_envelope("k"),
+            previous_wrapped_sig_priv=sealed_envelope("s"),
+        )
+        identity.refresh_from_db()
+        self.assertEqual(identity.previous_kdf_algo, "argon2id")

@@ -18,6 +18,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.vault.models import AccountIdentity
 
 from .. import compat
 from .compat_scripts import READ_EVERYTHING
@@ -138,6 +139,21 @@ async () => {
 """
 
 
+def _envelope(user):
+    return (
+        AccountIdentity.objects.filter(user=user)
+        .values(
+            "kdf_algo",
+            "kdf_params",
+            "wrapped_kex_priv",
+            "wrapped_sig_priv",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
+        )
+        .get()
+    )
+
+
 class _CorpusBrowserReplay:
     """Every replay, run once per corpus by the classes generated below."""
 
@@ -173,6 +189,18 @@ class _CorpusBrowserReplay:
             )
 
         self.page.route("**/api/v1/vault/migration", answer_empty)
+        # The corpus envelope is format 1, so the unlock also re-wraps it -
+        # a write to the very account being replayed. The envelope writes are
+        # answered as the server answers them and never reach it.
+        self.envelope_before = _envelope(self.user)
+        self.page.route(
+            "**/api/v1/vault/account/rotate",
+            lambda route: route.fulfill(status=200, body=""),
+        )
+        self.page.route(
+            "**/api/v1/vault/account/confirm",
+            lambda route: route.fulfill(status=204, body=""),
+        )
         self.page.on(
             "request",
             lambda request: (
@@ -237,6 +265,8 @@ class _CorpusBrowserReplay:
             self.migration_listings, "the unlock never asked for the migration"
         )
         self.assertEqual(self.migrate_posts, [])
+        self.page.evaluate("() => window.vaultSession.envelopeWrites()")
+        self.assertEqual(_envelope(self.user), self.envelope_before)
 
     def test_a_browser_opens_every_row_of_the_frozen_account(self):
         """The whole manifest, compared in one shot - never a walk of

@@ -191,6 +191,20 @@ test('rotateEnvelope posts its body as JSON with the CSRF token', () => {
   });
 });
 
+test('rotateEnvelope resolves on the bodiless 200 a rotation answers', async () => {
+  // A body read on an empty 200 rejects, and the caller would report a
+  // failure for an envelope the server has already replaced.
+  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/api.js', {
+    fetch: () => Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+    }),
+    getCSRFToken: () => 'token',
+  });
+  assert.equal(await ctx.vaultApi.rotateEnvelope({ kdf_algo: 'argon2id' }), null);
+});
+
 test('confirmEnvelope posts the envelope it opened', () => {
   const { api, calls } = withFetch();
   api.confirmEnvelope('x');

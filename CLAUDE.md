@@ -612,11 +612,13 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - The helper lives in `workspace/common/logging.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` - do not refactor the replaces away or wrap them in another helper.
 
 **Secrets are a separate concern.** `scrub()` stops log injection; it hides nothing. Fields whose
-*name* marks them secret - `password`, `secret_key`, `session_key`, and anything prefixed `wrapped_`,
-`encrypted_` or `sig_` - are redacted by `workspace/common/redaction.py`, on the console log handler
-and on `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend that catalogue rather than remembering not to log
-a field. It does not reach access logs (`django.server` and gunicorn own theirs), so never put a
-secret in a URL.
+*name* marks them secret - `password`, `secret_key`, `session_key`, anything prefixed `wrapped_` or
+`encrypted_`, anything suffixed `token` or `_encrypted` - are redacted by
+`workspace/common/redaction.py`, on the console log handler and on
+`DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend that catalogue rather than remembering not to log a
+field. Names that describe a secret without holding one (`has_password`, `password_verified`,
+`claim_token`) and public key material (`sig_public`) are deliberately left legible. It does not
+reach access logs (`django.server` and gunicorn own theirs), so never put a secret in a URL.
 
 Name matching cannot reach a frame's locals either - the local holding a wrapped key is called
 `data`, not `wrapped_kex_priv` - so **a view handling secrets must declare it**. On a JSON API that

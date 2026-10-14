@@ -25,13 +25,23 @@ from django.views.debug import SafeExceptionReporterFilter
 
 REDACTED = "[redacted]"
 
-# password / secret_key / session_key anywhere in the name; wrapped_, encrypted_
-# and sig_ as a prefix only, token and encrypted as a suffix only - so
-# `signature_count`, `designation` and the `prompt_tokens` counters stay
+# password / secret_key / session_key anywhere in the name; wrapped_ and
+# encrypted_ as a prefix only, token and _encrypted as a suffix only - so
+# `designation`, the `prompt_tokens` counters and a PDF's `encrypted` flag stay
 # legible, while access_token, refresh_token and oauth2_data_encrypted do not.
+# Signatures and public keys (`sig_public`, `metadata_sig`) are public by
+# design: the server hands them to every account that verifies them.
 _SENSITIVE_NAME = re.compile(
-    r"(password|secret_key|session_key|^wrapped_|^encrypted_|^sig_"
-    r"|token$|encrypted$)",
+    r"(password|secret_key|session_key|^wrapped_|^encrypted_|token$|_encrypted$)",
+    re.IGNORECASE,
+)
+
+# Names that talk about a secret without holding one: whether a share link has
+# a password, whether the visitor proved it, the timestamp a Celery claim
+# compares against. Redacting them only blinds the log line that explains why
+# an access was refused.
+_DESCRIBES_A_SECRET = re.compile(
+    r"(^(has|is|needs|requires)_|_(ok|verified)$|^claim_token$)",
     re.IGNORECASE,
 )
 
@@ -45,7 +55,8 @@ _CONVERSION = re.compile(r"%(?:\([A-Za-z0-9_]+\))?[-+ #0-9.]*[a-zA-Z%]")
 
 def is_sensitive_name(name) -> bool:
     """True if a field called *name* must never appear in a log or a report."""
-    return bool(_SENSITIVE_NAME.search(str(name)))
+    name = str(name)
+    return bool(_SENSITIVE_NAME.search(name)) and not _DESCRIBES_A_SECRET.search(name)
 
 
 def redact(value):
@@ -145,8 +156,8 @@ class RedactingExceptionReporterFilter(SafeExceptionReporterFilter):
 
     A traceback is where a secret escapes even when no line ever logged it,
     because every frame's local variables are rendered. Django already hides
-    ``password``-ish names; the wrapped keys, the ciphertexts and the
-    signatures are ours to declare.
+    ``password``-ish names; the wrapped keys and the ciphertexts are ours to
+    declare.
     """
 
     def is_active(self, request):

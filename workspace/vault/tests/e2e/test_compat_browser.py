@@ -148,6 +148,7 @@ class _CorpusBrowserReplay:
         self.user = get_user_model().objects.get(
             username=self.corpus.credentials["username"]
         )
+        self.dismiss_auto_open_modals(self.user)
         self.login_as(self.user)
         # The unlock screen never calls out to pwnedpasswords itself, but
         # onboarding does, and stubbing it unconditionally is what keeps

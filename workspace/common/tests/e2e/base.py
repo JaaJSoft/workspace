@@ -233,9 +233,6 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
         ``seen_changelog=False`` / ``completed_onboarding=False`` if the
         test specifically exercises one of those auto-open behaviours.
         """
-        from workspace.core import setting_keys
-        from workspace.users.services.settings import set_setting
-
         User = get_user_model()
         user = User.objects.create_user(
             username=username,
@@ -243,7 +240,22 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
             email=extra.pop("email", f"{username}@example.com"),
             **extra,
         )
-        if seen_changelog:
+        self.dismiss_auto_open_modals(
+            user, changelog=seen_changelog, onboarding=completed_onboarding
+        )
+        return user
+
+    def dismiss_auto_open_modals(self, user, *, changelog=True, onboarding=True):
+        """Mark ``user`` as past the changelog and onboarding modals.
+
+        ``create_user`` already does this; call it directly for a user that
+        comes from a fixture, whose rows carry no settings - the onboarding
+        dialog otherwise opens a beat after load and swallows the next click.
+        """
+        from workspace.core import setting_keys
+        from workspace.users.services.settings import set_setting
+
+        if changelog:
             from workspace.core.changelog import get_latest_version
 
             latest = get_latest_version()
@@ -254,14 +266,13 @@ class PlaywrightTestCase(StaticLiveServerTestCase):
                     setting_keys.CHANGELOG_LAST_SEEN_VERSION,
                     latest,
                 )
-        if completed_onboarding:
+        if onboarding:
             set_setting(
                 user,
                 setting_keys.MODULE,
                 setting_keys.ONBOARDING_COMPLETED,
                 True,
             )
-        return user
 
     def login_via_ui(self, username, password, *, wait_for_redirect=True):
         """Log in through the actual login form.

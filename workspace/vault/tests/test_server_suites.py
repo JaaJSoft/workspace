@@ -222,3 +222,68 @@ class ResignDeclarationTests(SimpleTestCase):
             for identifier, entry in entries.items():
                 with self.subTest(axis=axis, identifier=identifier):
                     self.assertNotIn("resign", entry)
+
+
+LIGHT_PARAMS = {"v": "1.3", "m": 16384, "t": 1, "p": 1}
+LIGHTER_KDF = {"kdf": {"argon2id": {"params": LIGHT_PARAMS}}}
+
+
+class CurrentKdfTests(SimpleTestCase):
+    def test_reads_the_manifest_params(self):
+        algo, params = suites.current_kdf()
+        self.assertEqual(algo, "argon2id")
+        self.assertEqual(params, {"v": "1.3", "m": 65536, "t": 3, "p": 2})
+
+    @override_settings(VAULT_TEST_SUITES=True, VAULT_TEST_MANIFEST=LIGHTER_KDF)
+    def test_a_test_manifest_may_change_the_params(self):
+        self.assertEqual(suites.current_kdf(), ("argon2id", LIGHT_PARAMS))
+
+    @override_settings(VAULT_TEST_SUITES=False, VAULT_TEST_MANIFEST=LIGHTER_KDF)
+    def test_the_params_override_needs_the_test_switch(self):
+        self.assertEqual(suites.current_kdf()[1]["m"], 65536)
+
+    def test_refuses_params_outside_the_bounds_or_shaped_otherwise(self):
+        for params in (
+            {**LIGHT_PARAMS, "m": 1024},
+            {**LIGHT_PARAMS, "v": "1.0"},
+            {"v": "1.3", "m": 16384, "t": 1},
+            {**LIGHT_PARAMS, "extra": 1},
+            {**LIGHT_PARAMS, "t": True},
+        ):
+            with (
+                self.subTest(params=params),
+                override_settings(
+                    VAULT_TEST_SUITES=True,
+                    VAULT_TEST_MANIFEST={"kdf": {"argon2id": {"params": params}}},
+                ),
+                self.assertRaises(ValueError),
+            ):
+                suites.current_kdf()
+
+    def test_refuses_params_on_another_axis(self):
+        with (
+            override_settings(
+                VAULT_TEST_SUITES=True,
+                VAULT_TEST_MANIFEST={"aead": {"1": {"params": LIGHT_PARAMS}}},
+            ),
+            self.assertRaises(ValueError),
+        ):
+            suites.current_kdf()
+
+
+class EnvelopeCiphertextTests(SimpleTestCase):
+    def _raw(self, fmt=2, aead=1, kdf=0, key_version=0):
+        return bytes([fmt, aead, kdf, key_version >> 8, key_version & 255, 12]) + bytes(
+            28
+        )
+
+    def test_accepts_the_onboarding_header(self):
+        suites.check_envelope_ciphertext(self._raw())
+
+    def test_refuses_anything_else(self):
+        for raw in (self._raw(fmt=1), self._raw(kdf=1), self._raw(key_version=1)):
+            with (
+                self.subTest(raw=raw[:6]),
+                self.assertRaises(suites.UnsupportedCiphertext),
+            ):
+                suites.check_envelope_ciphertext(raw)

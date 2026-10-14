@@ -51,7 +51,8 @@ from .embedding.registry import (
     is_misconfigured,
 )
 from .photo_decoding import decode_photo
-from .video_key_frames import embed_key_frames, video_frames_available
+from .video_frames import video_frames_available
+from .video_key_frames import embed_key_frames
 
 logger = logging.getLogger(__name__)
 

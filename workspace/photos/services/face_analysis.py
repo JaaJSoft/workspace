@@ -46,7 +46,8 @@ from .face_preferences import (
     lock_opt_in,
     opted_in_owner_ids,
 )
-from .face_video import find_video_faces, video_faces_available
+from .face_video import find_video_faces
+from .video_frames import video_frames_available
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ def face_media_type(file_obj):
     """The kind of library item *file_obj* is when it can be read for faces:
     a photo, or a video where ffmpeg is installed. None otherwise."""
     media_type = media_type_for(file_obj)
-    if media_type == MediaItem.MediaType.VIDEO and not video_faces_available():
+    if media_type == MediaItem.MediaType.VIDEO and not video_frames_available():
         return None
     return media_type
 
@@ -111,7 +112,7 @@ def face_candidates(files):
     Without it a video is never pending: nothing could ever read it.
     """
     files = library_candidates(files)
-    if not video_faces_available():
+    if not video_frames_available():
         files = files.filter(type__in=RASTER_LABELS)
     return files
 

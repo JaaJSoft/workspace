@@ -183,7 +183,7 @@ class VideoKeyFrameTests(TestCase):
         video = self._video(colour_video((1, RED)))
         video.content.save("clip.mkv", ContentFile(b"not a video"), save=False)
 
-        with self.assertLogs("workspace.photos.services.video_key_frames", "INFO"):
+        with self.assertLogs("workspace.photos.services.video_frames", "INFO"):
             (row,) = embed_file(video)
 
         self.assertIsNone(row.embedding)

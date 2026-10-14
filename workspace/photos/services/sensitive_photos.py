@@ -46,7 +46,8 @@ from .sensitivity.registry import (
     get_sensitive_backend,
     is_misconfigured,
 )
-from .video_key_frames import read_frames, video_frames_available
+from .video_frames import video_frames_available
+from .video_key_frames import read_frames
 
 logger = logging.getLogger(__name__)
 

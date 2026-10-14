@@ -77,6 +77,13 @@
   {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
   <hr class="border-base-300" />
   {% include "ui/partials/pref_toggle.html" with label="Blur sensitive photos" state="photoPrefs.blur_sensitive" change="savePhotoPref('blur_sensitive', $event.target.checked)" accent="toggle-module" %}
+  <div class="pl-4 space-y-3" x-show="photoPrefs.blur_sensitive">
+    {# A touch screen has no hover: the toggle would do nothing there. #}
+    <div class="[@media(hover:none)]:hidden">
+      {% include "ui/partials/pref_toggle.html" with label="Unblur on hover" state="photoPrefs.reveal_sensitive_on_hover" change="savePhotoPref('reveal_sensitive_on_hover', $event.target.checked)" accent="toggle-module" %}
+    </div>
+    {% include "ui/partials/pref_toggle.html" with label="Show in the viewer without asking" state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
+  </div>
   {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>

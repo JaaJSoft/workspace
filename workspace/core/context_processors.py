@@ -15,6 +15,8 @@ from workspace.core.setting_keys import (
     CHANGELOG_LAST_SEEN_VERSION,
     MODULE,
     ONBOARDING_COMPLETED,
+    REVEAL_SENSITIVE_IN_VIEWER,
+    REVEAL_SENSITIVE_ON_HOVER,
     SEARCH_SCOPE,
     SIDEBAR_COLLAPSED,
 )
@@ -28,6 +30,8 @@ def workspace_modules(request):
     search_scope = SearchScope.ALL
     # A page nobody is signed in to has no preference to turn it off.
     blur_sensitive = True
+    reveal_sensitive_on_hover = False
+    reveal_sensitive_in_viewer = False
     if request.user.is_authenticated:
         # Both keys live in the core module; fetch them in a single query
         # (shared with the user_preferences context processor via the cache).
@@ -36,6 +40,10 @@ def workspace_modules(request):
         if core_settings.get(SEARCH_SCOPE) == SearchScope.MINE:
             search_scope = SearchScope.MINE
         blur_sensitive = core_settings.get(BLUR_SENSITIVE) is not False
+        reveal_sensitive_on_hover = core_settings.get(REVEAL_SENSITIVE_ON_HOVER) is True
+        reveal_sensitive_in_viewer = (
+            core_settings.get(REVEAL_SENSITIVE_IN_VIEWER) is True
+        )
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
@@ -62,6 +70,8 @@ def workspace_modules(request):
         )
     return {
         "workspace_blur_sensitive": blur_sensitive,
+        "workspace_reveal_sensitive_on_hover": reveal_sensitive_on_hover,
+        "workspace_reveal_sensitive_in_viewer": reveal_sensitive_in_viewer,
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,
         "workspace_sidebar_collapsed": sidebar_collapsed,

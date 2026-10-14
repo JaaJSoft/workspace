@@ -28,7 +28,19 @@ const PHOTO_TOGGLE_STATES = { toggle_favorite: 'is_favorite', toggle_sensitive: 
 
 // The preferences of the panel stored outside the photos settings: the blur
 // applies to Files too, so the shell reads it with the core ones.
-const PHOTO_PREF_MODULES = { blur_sensitive: 'core' };
+const PHOTO_PREF_MODULES = {
+  blur_sensitive: 'core',
+  reveal_sensitive_on_hover: 'core',
+  reveal_sensitive_in_viewer: 'core',
+};
+
+// The page root's attribute each of those hangs on, Files' too (see
+// scripts/frontend/input.css): base.html renders them, the panel flips them.
+const PHOTO_PREF_ROOT_ATTRIBUTES = {
+  blur_sensitive: 'data-blur-sensitive',
+  reveal_sensitive_on_hover: 'data-reveal-sensitive-on-hover',
+  reveal_sensitive_in_viewer: 'data-reveal-sensitive-in-viewer',
+};
 
 // The actions endpoint refuses more than 200 uuids per call.
 const PHOTOS_ACTIONS_BATCH = 200;
@@ -344,7 +356,7 @@ window.photosApp = function photosApp() {
       this._prefVersions[key] = version;
       this.photoPrefs[key] = value;
       if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
-      if (key === 'blur_sensitive') this._applyBlurSensitive(value);
+      this._applyRootAttribute(key, value);
       return fetch(`/api/v1/settings/${PHOTO_PREF_MODULES[key] || 'photos'}/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
@@ -358,15 +370,14 @@ window.photosApp = function photosApp() {
         .catch(() => {
           if (this._prefVersions[key] !== version) return;
           this.photoPrefs[key] = previous;
-          if (key === 'blur_sensitive') this._applyBlurSensitive(previous);
+          this._applyRootAttribute(key, previous);
           window.AppAlert.error('Could not save the preference');
         });
     },
 
-    // The page root's attribute every blurred preview hangs on, Files' too
-    // (see scripts/frontend/input.css): base.html renders it, this flips it.
-    _applyBlurSensitive(value) {
-      document.documentElement.toggleAttribute('data-blur-sensitive', !!value);
+    _applyRootAttribute(key, value) {
+      const attribute = PHOTO_PREF_ROOT_ATTRIBUTES[key];
+      if (attribute) document.documentElement.toggleAttribute(attribute, !!value);
     },
 
     // ── Video preview on hover ──────────────────────────

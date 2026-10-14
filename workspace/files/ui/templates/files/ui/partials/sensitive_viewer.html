@@ -1,14 +1,14 @@
 {% comment %}
   A viewer behind a "Sensitive content" cover, for a file whose preview is
   blurred (files/sensitivity.py). The cover and the veil only apply while the
-  page blurs sensitive previews (scripts/frontend/input.css); otherwise the
-  viewer shows straight away. A covered video or recording does not start
-  playing on its own behind it.
+  page blurs sensitive previews and the user has not asked to skip the cover
+  (scripts/frontend/input.css); otherwise the viewer shows straight away. A
+  covered video or recording does not start playing on its own behind it.
 {% endcomment %}
 <div
   class="contents"
   x-data="{ revealed: false }"
-  x-init="if (document.documentElement.hasAttribute('data-blur-sensitive')) { $el.querySelectorAll('video, audio').forEach((media) => { media.autoplay = false; media.pause(); }); } else { revealed = true; }"
+  x-init="if (document.documentElement.matches('[data-blur-sensitive]:not([data-reveal-sensitive-in-viewer])')) { $el.querySelectorAll('video, audio').forEach((media) => { media.autoplay = false; media.pause(); }); } else { revealed = true; }"
 >
   <div
     class="sensitive-cover h-full min-h-72 flex-col items-center justify-center gap-3 p-8 text-center"

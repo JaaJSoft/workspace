@@ -31,3 +31,9 @@ SEARCH_SCOPE = "search_scope"
 # renders it on every page, Files' included, from the core settings it reads
 # anyway.
 BLUR_SENSITIVE = "blur_sensitive"
+
+# Two softenings of the blur, booleans off when unset: a blurred preview shows
+# in clear while the pointer rests on it, and the viewer opens a sensitive file
+# without its "Sensitive content" cover. Neither applies once the blur is off.
+REVEAL_SENSITIVE_ON_HOVER = "reveal_sensitive_on_hover"
+REVEAL_SENSITIVE_IN_VIEWER = "reveal_sensitive_in_viewer"

@@ -494,6 +494,12 @@ _setting_fields = {
 }
 
 
+_CORE_FLAGS = (
+    "blur_sensitive",
+    "reveal_sensitive_on_hover",
+    "reveal_sensitive_in_viewer",
+)
+
 _PHOTOS_FLAGS = (
     "tile_badges",
     "video_hover_preview",
@@ -527,9 +533,9 @@ def _validate_setting_value(module, key, value):
             ZoneInfo(str(value))
         except ZoneInfoNotFoundError, ValueError:
             return "Invalid timezone."
-    if module == "core" and key == "blur_sensitive" and value is not None:
+    if module == "core" and key in _CORE_FLAGS and value is not None:
         if not isinstance(value, bool):
-            return "blur_sensitive must be a boolean."
+            return f"{key} must be a boolean."
     if module == "core" and key == "search_scope" and value is not None:
         if value not in SearchScope.CHOICES:
             return f"search_scope must be one of: {', '.join(SearchScope.CHOICES)}."

@@ -111,6 +111,15 @@ test('a pass that wrote while a secret is revealed holds its reload', async () =
   assert.equal(component.revealed['e-1|password'], 'hunter2');
 });
 
+test('a pass that wrote while a reveal is still decrypting holds its reload', async () => {
+  const component = browser(async () => ({ outcome: 'clean', wrote: true, warn: false }));
+  component.revealing = { 'e-1|password': true };
+  component.startMigration();
+  await settle();
+  assert.equal(component.loads || 0, 0);
+  assert.equal(component.reloadDeferred, true);
+});
+
 test('closing the panel runs the held reload, once', async () => {
   const component = browser(async () => ({ outcome: 'clean', wrote: true, warn: false }));
   component.revealed = { 'e-1|password': 'hunter2' };

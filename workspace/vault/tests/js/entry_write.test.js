@@ -52,6 +52,7 @@ const DRAFT = {
   name: 'GitHub',
   notes: '',
   values: { username: 'chevron-j', password: 'hunter2' },
+  isNew: true,
 };
 
 test('every value is sealed under its own field slot', async () => {
@@ -298,6 +299,7 @@ test('a carried format 1 field and a freshly sealed one both open through the re
     [
       'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js',
       'workspace/vault/ui/static/vault/ui/js/entry_write.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     ],
     {
@@ -338,6 +340,9 @@ test('a carried format 1 field and a freshly sealed one both open through the re
     values: { username: 'ada' },
     carriedFields: { password: frozen.expected_wire_b64 },
     keyVersion: frozen.key_version,
+    isNew: false,
+    // Signature suite 1, which the bundle may re-sign.
+    storedSig: 'AQ',
   });
   assert.equal(body.fields.password, frozen.expected_wire_b64);
   assert.equal(V.fromBase64Url(body.fields.password)[0], 1);
@@ -383,7 +388,7 @@ test('a re-signature refuses a row signed under an algorithm marked broken', asy
 test('an edit refuses to replace a row signed under an algorithm marked broken', async () => {
   const { ctx, session, signed } = builder();
   await assert.rejects(
-    ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { storedSig: 'CQ' })),
+    ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false, storedSig: 'CQ' })),
     (err) => err.name === 'VaultResignBlocked',
   );
   assert.equal(signed.length, 0);
@@ -391,6 +396,26 @@ test('an edit refuses to replace a row signed under an algorithm marked broken',
 
 test('an edit of a row under a current algorithm is signed', async () => {
   const { ctx, session, signed } = builder();
-  await ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { storedSig: 'AQ' }));
+  await ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false, storedSig: 'AQ' }));
   assert.equal(signed.length, 1);
+});
+
+test('an edit that carries no stored signature is refused rather than written unchecked', async () => {
+  const { ctx, session, signed } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false })),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
+});
+
+test('a draft that does not say it is new is checked as an edit', async () => {
+  const { ctx, session, signed } = builder();
+  const draft = Object.assign({}, DRAFT);
+  delete draft.isNew;
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, draft),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
 });

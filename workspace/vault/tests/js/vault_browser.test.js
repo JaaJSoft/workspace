@@ -1632,7 +1632,7 @@ test('a pasted authenticator key is normalized before it is sealed', async () =>
     uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
     name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
     hasTotp: false, totpInput: 'JBSWY3DPEHPK3PXP', totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written.length, 1);
@@ -1655,7 +1655,7 @@ test('removing the key drops it from the write instead of carrying it', async ()
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: true,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.ok(!('totp' in written[0].fields), 'a removed key must not be carried');
@@ -1673,7 +1673,7 @@ test('an untouched key is carried through an edit', async () => {
     name: 'Renamed', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written[0].fields.totp, 'ct:totp');
@@ -1719,7 +1719,7 @@ test('cancelling an add after a remove does not bring the key back', async () =>
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   assert.equal(component.totpFieldState(), 'set');
   component.removeTotp();
@@ -1750,7 +1750,7 @@ test('typing a key after a remove seals the new one', async () => {
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   component.removeTotp();
   component.startTotpEntry();
@@ -1776,7 +1776,7 @@ test('a malformed key is refused with a message rather than saved', async () => 
     uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
     name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
     hasTotp: false, totpInput: 'nope!', totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written.length, 0, 'nothing is written');

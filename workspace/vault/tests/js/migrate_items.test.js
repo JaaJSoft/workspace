@@ -128,6 +128,7 @@ test('an entry signs what a fresh write of the same record signs', async () => {
   const written = await ctx.buildEntryWriteRequest(session, vault, {
     uuid: ENTRY, type: 'login', folder: FOLDER, tags: [TAG, ACCOUNT], favorite: true,
     entryVersion: 2, name: 'GitHub', notes: 'n', values: { password: 'hunter2', username: 'jc' },
+    isNew: true,
   });
   const expected = signed.pop();
   assert.deepStrictEqual(plainJson(migrated), plainJson(expected));

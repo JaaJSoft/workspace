@@ -306,13 +306,17 @@ window.vaultBrowser = (function () {
           if (!window.vaultSession.isUnlocked()) return;
           self.migrationWarning = result.warn;
           if (!result.wrote) return;
-          if (Object.keys(self.revealed).length) self.reloadDeferred = true;
+          // A reveal still decrypting lands in `revealed` after the reload
+          // would have cleared it, so it holds the reload just the same.
+          const showing = Object.keys(self.revealed).length
+            || Object.keys(self.revealing).length;
+          if (showing) self.reloadDeferred = true;
           else self.load();
         }, function () { /* a migration never surfaces as an error */ });
       },
 
       // A reload takes back a revealed secret, so a pass that rewrote rows
-      // under one waits for the gesture that takes it back anyway - closing
+      // under one - or under a reveal still decrypting - waits for the gesture that takes it back anyway - closing
       // the panel, opening another entry. Any write that re-signs a row runs
       // it first: it must sign the ciphertexts the server now holds, not the
       // ones the migration replaced.

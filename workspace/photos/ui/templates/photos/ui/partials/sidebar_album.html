@@ -15,13 +15,18 @@
     data-album="{{ item.card.album.uuid }}"
   >
     {% if item.card.cover_url %}
-      <img
-        src="{{ item.card.cover_url }}"
-        alt=""
-        class="w-6 h-6 rounded object-cover flex-shrink-0"
-        loading="lazy"
-        draggable="false"
-      />
+      <span
+        class="w-6 h-6 rounded overflow-hidden flex-shrink-0"
+        data-sensitive="{{ item.card.cover_sensitive_level }}"
+      >
+        <img
+          src="{{ item.card.cover_url }}"
+          alt=""
+          class="w-full h-full object-cover"
+          loading="lazy"
+          draggable="false"
+        />
+      </span>
     {% else %}
       <span
         class="w-6 h-6 rounded bg-base-300 flex items-center justify-center flex-shrink-0"

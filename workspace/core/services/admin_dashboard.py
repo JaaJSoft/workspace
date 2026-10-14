@@ -203,6 +203,39 @@ def embedding_backend_health_card(request):
     }
 
 
+_SENSITIVE_BACKEND_HEALTH_CACHE_KEY = "photos:sensitive:backend:health"
+
+
+def sensitive_backend_health_card(request):
+    """A health card for sensitive-photo detection, or None when the
+    instance has it off."""
+    from django.core.cache import cache
+
+    from workspace.photos.services.sensitivity.registry import (
+        detection_available,
+        get_sensitive_backend,
+    )
+
+    if not detection_available():
+        return None
+
+    cached = cache.get(_SENSITIVE_BACKEND_HEALTH_CACHE_KEY)
+    if cached is None:
+        health = get_sensitive_backend().health()
+        cached = {"ok": health.ok, "label": health.detail or "unavailable"}
+        cache.set(_SENSITIVE_BACKEND_HEALTH_CACHE_KEY, cached, _FACE_BACKEND_HEALTH_TTL)
+
+    return {
+        "title": "Sensitive photos",
+        "icon": "visibility_off",
+        "description": "photos sensitive-content detector and its weights",
+        "value": cached["label"],
+        "url": reverse("admin:files_processingfailure_changelist")
+        + "?processor=sensitive",
+        "tone": "success" if cached["ok"] else "danger",
+    }
+
+
 def dashboard_callback(request, context):
     from workspace.files.services.scanning.policy import blocked_statuses
 
@@ -275,5 +308,8 @@ def dashboard_callback(request, context):
     embedding_health = embedding_backend_health_card(request)
     if embedding_health is not None:
         cards.append(embedding_health)
+    sensitive_health = sensitive_backend_health_card(request)
+    if sensitive_health is not None:
+        cards.append(sensitive_health)
     context["health_cards"] = cards
     return context

@@ -78,7 +78,7 @@ test('every unsafe call carries the CSRF token, and no read does', () => {
   api.deleteFolder(FOLDER, []);
   api.createTag({});
   api.updateTag(FOLDER, {});
-  api.deleteTag(FOLDER);
+  api.deleteTag(FOLDER, []);
   assert.equal(calls.length, 9);
   for (const call of calls) {
     assert.notEqual(call.options.method, 'GET');
@@ -86,6 +86,16 @@ test('every unsafe call carries the CSRF token, and no read does', () => {
   }
   api.getEntry(ENTRY);
   assert.equal(calls[9].options.headers['X-CSRFToken'], undefined);
+});
+
+test('deleteTag posts the re-signed carriers to the delete route', () => {
+  const { api, calls } = withFetch();
+  api.deleteTag(FOLDER, [{ uuid: ENTRY, metadata_sig: 'sig' }]);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].url, `/api/v1/vault/tags/${FOLDER}/delete`);
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), {
+    entries: [{ uuid: ENTRY, metadata_sig: 'sig' }],
+  });
 });
 
 test('restore and purge both post, and carry the token', () => {
@@ -150,4 +160,21 @@ test('the target is always sent, never left to the server default', () => {
   api.fetchVaultActions([ENTRY]);
   const targets = calls.map((call) => JSON.parse(call.options.body).target);
   assert.deepStrictEqual(Array.from(targets), ['entry', 'vault']);
+});
+
+test('fetchMigration reads the migration listing', async () => {
+  const { api, calls } = withFetch();
+  await api.fetchMigration();
+  assert.equal(calls[0].url, '/api/v1/vault/migration');
+  assert.equal(calls[0].options.method, 'GET');
+});
+
+test('migrateVault posts its items to the vault', async () => {
+  const { api, calls } = withFetch();
+  const items = [{ kind: 'wrap' }];
+  await api.migrateVault(VAULT, items);
+  assert.equal(calls[0].url, `/api/v1/vault/vaults/${VAULT}/migrate`);
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { items });
 });

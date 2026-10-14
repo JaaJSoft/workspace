@@ -535,16 +535,19 @@ files = album_files(user, album)          # its items the user can open, as live
 #### Vault - `workspace.vault.queries`
 
 ```python
-from workspace.vault.models import VaultEntry
+from workspace.vault.models import VaultEntry, EntryField, VaultFolder, VaultTag
 from workspace.vault.queries import (
-    accessible_entries_q, active_identity, get_vault_role, reachable_vault, user_vault_ids,
-    visible_folders, visible_tags,
+    accessible_entries_q, accessible_entry_fields_q, accessible_folders_q, accessible_tags_q,
+    active_identity, get_vault_role, reachable_vault, user_vault_ids, visible_folders, visible_tags,
 )
 
 vault_ids = user_vault_ids(user)              # vaults the user can open
 vault = reachable_vault(user, vault_uuid)     # the vault or None - 404 on None
 role = get_vault_role(user, vault)            # 'owner' | 'member' | None
 qs = VaultEntry.objects.filter(accessible_entries_q(user))  # does NOT filter deleted_at
+fields = EntryField.objects.filter(accessible_entry_fields_q(user))   # trashed entries included
+folders = VaultFolder.objects.filter(accessible_folders_q(user))  # every vault, not just one
+tags = VaultTag.objects.filter(accessible_tags_q(user))           # every vault, not just one
 folders = visible_folders(user, vault)        # empty queryset when the vault is out of reach
 tags = visible_tags(user, vault)              # empty queryset when the vault is out of reach
 identity = active_identity(user)              # the user's finished AccountIdentity, or None
@@ -609,11 +612,13 @@ logger.exception("Activity provider '%s' failed", scrub(source))
 - The helper lives in `workspace/common/logging.py`. The `str(...).replace('\r','').replace('\n','')` chain inside is the exact form CodeQL recognizes as a sanitizer for `py/log-injection` - do not refactor the replaces away or wrap them in another helper.
 
 **Secrets are a separate concern.** `scrub()` stops log injection; it hides nothing. Fields whose
-*name* marks them secret - `password`, `secret_key`, `session_key`, and anything prefixed `wrapped_`,
-`encrypted_` or `sig_` - are redacted by `workspace/common/redaction.py`, on the console log handler
-and on `DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend that catalogue rather than remembering not to log
-a field. It does not reach access logs (`django.server` and gunicorn own theirs), so never put a
-secret in a URL.
+*name* marks them secret - `password`, `secret_key`, `session_key`, anything prefixed `wrapped_` or
+`encrypted_`, anything suffixed `token` or `_encrypted` - are redacted by
+`workspace/common/redaction.py`, on the console log handler and on
+`DEFAULT_EXCEPTION_REPORTER_FILTER`. Extend that catalogue rather than remembering not to log a
+field. Names that describe a secret without holding one (`has_password`, `password_verified`,
+`claim_token`) and public key material (`sig_public`) are deliberately left legible. It does not
+reach access logs (`django.server` and gunicorn own theirs), so never put a secret in a URL.
 
 Name matching cannot reach a frame's locals either - the local holding a wrapped key is called
 `data`, not `wrapped_kex_priv` - so **a view handling secrets must declare it**. On a JSON API that

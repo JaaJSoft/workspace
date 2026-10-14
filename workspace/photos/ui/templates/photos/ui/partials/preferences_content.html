@@ -79,6 +79,40 @@
     {% include "ui/partials/pref_toggle.html" with label="Tag photos automatically" state="photoPrefs.auto_tags" change="savePhotoPref('auto_tags', $event.target.checked)" accent="toggle-module" %}
   {% endif %}
   <hr class="border-base-300" />
+  <div data-testid="photos-sensitive-blur">
+    <div class="flex items-center justify-between gap-2">
+      <label for="photos-sensitive-blur" class="text-sm">Blur sensitive photos</label>
+      <span class="text-xs text-base-content/60" x-text="sensitiveBlurLabel()"></span>
+    </div>
+    <input
+      id="photos-sensitive-blur"
+      type="range"
+      min="0"
+      max="{{ sensitive_blur_choices|length|add:'-1' }}"
+      step="1"
+      class="range range-xs range-module w-full mt-1"
+      :value="sensitiveBlurStep()"
+      :aria-valuetext="sensitiveBlurLabel()"
+      @input="previewSensitiveBlurStep($event.target.valueAsNumber)"
+      @change="saveSensitiveBlurStep($event.target.valueAsNumber)"
+    />
+    <div
+      class="flex justify-between text-xs text-base-content/50"
+      aria-hidden="true"
+    >
+      {% with first=sensitive_blur_choices|first last=sensitive_blur_choices|last %}
+        <span>{{ first.label }}</span>
+        <span>{{ last.label }}</span>
+      {% endwith %}
+    </div>
+  </div>
+  <div class="pl-4 space-y-3" x-show="photoPrefs.sensitive_blur !== 'off'">
+    {# A touch screen has no hover: the toggle would do nothing there. #}
+    <div class="[@media(hover:none)]:hidden">
+      {% include "ui/partials/pref_toggle.html" with label="Unblur on hover" state="photoPrefs.reveal_sensitive_on_hover" change="savePhotoPref('reveal_sensitive_on_hover', $event.target.checked)" accent="toggle-module" %}
+    </div>
+    {% include "ui/partials/pref_toggle.html" with label="Show in the viewer without asking" state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
+  </div>
   {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>

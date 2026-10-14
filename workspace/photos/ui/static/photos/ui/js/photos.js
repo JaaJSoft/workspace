@@ -15,12 +15,43 @@ const PHOTOS_SWAP_TARGETS = [
 // user may run on a given file; this only drops the ones that mean nothing on
 // a timeline (cut, paste, pin, extract...).
 const PHOTO_ACTIONS = [
-  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename', 'delete',
+  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename',
+  'toggle_sensitive', 'delete',
 ];
 
 // The file actions the selection offers, when the registry offers them as
 // bulk actions on every selected photo.
-const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'download', 'delete'];
+const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'toggle_sensitive', 'download', 'delete'];
+
+// The state each toggle of the selection reads.
+const PHOTO_TOGGLE_STATES = { toggle_favorite: 'is_favorite', toggle_sensitive: 'is_sensitive' };
+
+// The preferences of the panel stored outside the photos settings: the blur
+// applies to Files too, so the shell reads it with the core ones.
+const PHOTO_PREF_MODULES = {
+  sensitive_blur: 'core',
+  reveal_sensitive_on_hover: 'core',
+  reveal_sensitive_in_viewer: 'core',
+};
+
+// The page root's attribute each of the two softenings of the blur hangs on,
+// Files' too (see scripts/frontend/input.css): base.html renders them, the
+// panel flips them. The blur itself moves with _applySensitiveBlur.
+const PHOTO_PREF_ROOT_ATTRIBUTES = {
+  reveal_sensitive_on_hover: 'data-reveal-sensitive-on-hover',
+  reveal_sensitive_in_viewer: 'data-reveal-sensitive-in-viewer',
+};
+
+// The parts of the page to fetch again once a preference is saved.
+const PHOTO_PREF_REFRESH = {
+  show_hidden: ['photos-nav'],
+  default_scope: ['photos-nav', 'photos-content'],
+  default_media_type: ['photos-nav', 'photos-content'],
+};
+
+// The sensitivity level of a photo marked by hand (files.sensitivity.MAX_LEVEL):
+// blurred under every blur preference but off.
+const SENSITIVE_MARKED_LEVEL = 4;
 
 // The actions endpoint refuses more than 200 uuids per call.
 const PHOTOS_ACTIONS_BATCH = 200;
@@ -121,8 +152,8 @@ function photosBatches(items, size) {
 
 // What the selection can have done to it, out of the registry's answer for
 // each selected photo (`lists`, one per photo): the PHOTO_BULK_ACTIONS every
-// photo offers as a bulk action. The favorite toggle adds unless every photo
-// already is a favorite, as in Files.
+// photo offers as a bulk action. A toggle adds unless every photo already
+// has its state (a favorite, a sensitive photo), as in Files.
 function photosSelectionActions(lists) {
   if (!lists.length) return [];
   const offered = (list, id) => list.find((a) => a.id === id && a.bulk);
@@ -130,12 +161,13 @@ function photosSelectionActions(lists) {
     .filter((id) => lists.every((list) => offered(list, id)))
     .map((id) => {
       const action = offered(lists[0], id);
-      if (id !== 'toggle_favorite') return action;
-      const allFavorite = lists.every((list) => {
+      const key = PHOTO_TOGGLE_STATES[id];
+      if (!key) return action;
+      const allHave = lists.every((list) => {
         const toggle = offered(list, id);
-        return !!(toggle.state && toggle.state.is_favorite);
+        return !!(toggle.state && toggle.state[key]);
       });
-      return { ...action, add: !allFavorite };
+      return { ...action, add: !allHave };
     });
 }
 
@@ -150,6 +182,19 @@ function photosTilePrefs() {
     // Unreadable: the root keeps the width the server rendered.
   }
   return { size: 1, widths: [] };
+}
+
+// The steps of the sensitive-blur slider, strictest first, each a
+// { value, label } (photos/services/preferences.py).
+function sensitiveBlurChoices() {
+  const el = document.getElementById('photos-sensitive-blur-choices');
+  try {
+    const data = el ? JSON.parse(el.textContent) : null;
+    if (Array.isArray(data)) return data;
+  } catch (_) {
+    // Unreadable: the slider has no step to offer.
+  }
+  return [];
 }
 
 // The Preferences panel's settings (photos/services/preferences.py), as the
@@ -182,6 +227,8 @@ window.photosApp = function photosApp() {
     tileSize: tile.size,
     _tileWidths: tile.widths,
     photoPrefs: photosPrefs(),
+    sensitiveBlurChoices: sensitiveBlurChoices(),
+    _sensitiveBlurDraft: null,
     _prefVersions: {},
     _hoverPreview: null,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
@@ -335,21 +382,86 @@ window.photosApp = function photosApp() {
       this._prefVersions[key] = version;
       this.photoPrefs[key] = value;
       if (key === 'video_hover_preview' && !value) this.stopHoverPreview();
-      return fetch(`/api/v1/settings/photos/${key}`, {
+      this._applyRootAttribute(key, value);
+      return fetch(`/api/v1/settings/${PHOTO_PREF_MODULES[key] || 'photos'}/${key}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
         body: JSON.stringify({ value }),
       })
         .then((response) => {
           if (!response.ok) throw new Error(String(response.status));
-          // The Hidden entry of the sidebar is server-rendered.
-          if (key === 'show_hidden') this._refresh(['photos-nav']);
+          // Server-rendered from the preference: the Hidden entry of the
+          // sidebar, and for the defaults, what a URL without ?scope= or
+          // ?type= shows and every link of the page, which leave out
+          // whatever equals the default.
+          if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;
           this.photoPrefs[key] = previous;
+          this._applyRootAttribute(key, previous);
           window.AppAlert.error('Could not save the preference');
         });
+    },
+
+    _applyRootAttribute(key, value) {
+      if (key === 'sensitive_blur') {
+        this._applySensitiveBlur(value);
+        return;
+      }
+      const attribute = PHOTO_PREF_ROOT_ATTRIBUTES[key];
+      if (attribute) document.documentElement.toggleAttribute(attribute, !!value);
+    },
+
+    // The slider's step, strictest first: the one under the thumb while it
+    // is dragged, the saved preference otherwise.
+    sensitiveBlurStep() {
+      if (this._sensitiveBlurDraft !== null) return this._sensitiveBlurDraft;
+      const step = this.sensitiveBlurChoices.findIndex(
+        (choice) => choice.value === this.photoPrefs.sensitive_blur,
+      );
+      return Math.max(step, 0);
+    },
+
+    sensitiveBlurLabel() {
+      const choice = this.sensitiveBlurChoices[this.sensitiveBlurStep()];
+      return choice ? choice.label : '';
+    },
+
+    // While the thumb moves: the page blurs as that step would, nothing is
+    // saved. The preference itself stays put, so a refused save still has
+    // the previous value to put back.
+    previewSensitiveBlurStep(step) {
+      const choice = this.sensitiveBlurChoices[step];
+      if (!choice) return;
+      this._sensitiveBlurDraft = step;
+      this._applySensitiveBlur(choice.value);
+    },
+
+    // Once the thumb is released: one save, or the saved step back on the
+    // page when the thumb ended where it started.
+    saveSensitiveBlurStep(step) {
+      this._sensitiveBlurDraft = null;
+      const choice = this.sensitiveBlurChoices[step];
+      if (!choice || choice.value === this.photoPrefs.sensitive_blur) {
+        this._applySensitiveBlur(this.photoPrefs.sensitive_blur);
+        return Promise.resolve();
+      }
+      return this.savePhotoPref('sensitive_blur', choice.value);
+    },
+
+    // The page root's attribute every blurred preview hangs on, Files' too
+    // (see scripts/frontend/input.css): base.html renders it, this moves it.
+    // Its value is the lowest level the preference blurs, its step + 1; the
+    // last step, off, blurs nothing and drops it.
+    _applySensitiveBlur(value) {
+      const step = this.sensitiveBlurChoices.findIndex((choice) => choice.value === value);
+      const root = document.documentElement;
+      if (step < 0 || step === this.sensitiveBlurChoices.length - 1) {
+        root.removeAttribute('data-blur-sensitive');
+      } else {
+        root.setAttribute('data-blur-sensitive', String(step + 1));
+      }
     },
 
     // ── Video preview on hover ──────────────────────────
@@ -585,6 +697,7 @@ window.photosApp = function photosApp() {
           has('properties') && 'properties',
         ],
         [
+          has('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',
           this.hiddenView && 'unhide',
           has('delete') && 'delete',
@@ -638,6 +751,9 @@ window.photosApp = function photosApp() {
         case 'rename':
           window.fileActions.showRenameDialog(photo.uuid, photo.name);
           break;
+        case 'toggle_sensitive':
+          this.markSensitive([photo.uuid], !(action.state && action.state.is_sensitive));
+          break;
         case 'delete':
           this.trashPhoto(photo.uuid, photo.name);
           break;
@@ -681,6 +797,28 @@ window.photosApp = function photosApp() {
       } catch (_) {
         window.AppAlert.error('Failed to update favorites');
       }
+    },
+
+    // Blurs the photos for everyone who can open them, or stops blurring
+    // them. Resolves to whether the server took it.
+    async markSensitive(uuids, sensitive) {
+      try {
+        const response = await fetch('/api/v1/files/sensitive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+          body: JSON.stringify({ uuids, sensitive }),
+        });
+        if (!response.ok) throw new Error();
+      } catch (_) {
+        window.AppAlert.error('Failed to update the photos');
+        return false;
+      }
+      uuids.forEach((uuid) => {
+        const tile = this._tile(uuid);
+        if (tile) tile.dataset.sensitive = sensitive ? String(SENSITIVE_MARKED_LEVEL) : '0';
+      });
+      this._forgetActions(uuids);
+      return true;
     },
 
     async renamePhoto(uuid, name) {
@@ -894,6 +1032,12 @@ window.photosApp = function photosApp() {
       return !action || action.add;
     },
 
+    // Whether the selection's sensitive toggle marks rather than unmarks.
+    selectionSensitiveAdds() {
+      const action = this._selectionAction('toggle_sensitive');
+      return !action || action.add;
+    },
+
     closeSelectionMenu() {
       this.selectionMenu.open = false;
     },
@@ -912,6 +1056,7 @@ window.photosApp = function photosApp() {
           !!this.currentCluster() && 'not_this_person',
         ],
         [
+          this.selectionAllows('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',
           this.hiddenView && 'unhide',
           this.selectionAllows('delete') && 'delete',
@@ -991,6 +1136,24 @@ window.photosApp = function photosApp() {
         done.length, uuids.length,
         add ? `Added ${count} to favorites` : `Removed ${count} from favorites`,
         'Failed to update favorites',
+      );
+      this.clearSelection();
+    },
+
+    async sensitiveSelection() {
+      this.closeSelectionMenu();
+      const action = this._selectionAction('toggle_sensitive');
+      if (!action || this.selectionBusy) return;
+      const uuids = this.selection.slice();
+      const add = action.add;
+      this.selectionBusy = true;
+      const done = await this.markSensitive(uuids, add);
+      this.selectionBusy = false;
+      if (!done) return;
+      const count = photosCountLabel(uuids.length);
+      window.AppAlert.success(
+        add ? `Marked ${count} as sensitive` : `Unmarked ${count} as sensitive`,
+        { duration: 2500 },
       );
       this.clearSelection();
     },

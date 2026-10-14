@@ -28,6 +28,15 @@ class AlbumCard:
             "photo-album-file-thumbnail", args=[self.album.uuid, self.cover.uuid]
         )
 
+    @property
+    def cover_sensitive_level(self):
+        """The cover's sensitivity level, which blurs it as the photo is
+        everywhere else."""
+        if self.cover is None:
+            return 0
+        media_item = getattr(self.cover, "media_item", None)
+        return media_item.sensitive_level if media_item else 0
+
 
 def album_cards(user, albums):
     """An ``AlbumCard`` per album of *albums*, in the same order.
@@ -40,7 +49,11 @@ def album_cards(user, albums):
     summaries = album_summaries(user, albums)
     roles = album_roles(user, albums)
     cover_ids = {s["cover_id"] for s in summaries.values() if s["cover_id"]}
-    covers = File.objects.only("uuid", "has_thumbnail").in_bulk(cover_ids)
+    covers = (
+        File.objects.select_related("media_item")
+        .only("uuid", "has_thumbnail", "media_item__sensitive_level")
+        .in_bulk(cover_ids)
+    )
     return [
         AlbumCard(
             album=album,

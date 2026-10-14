@@ -15,8 +15,17 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
+from workspace.files.sensitivity import (
+    DEFAULT_BLUR,
+    blur_preference,
+    sensitive_level,
+)
 from workspace.files.services.filetype import get_viewer_by_slug
-from workspace.files.ui.viewers import ViewerRegistry, render_viewer_panel
+from workspace.files.ui.viewers import (
+    ViewerRegistry,
+    render_viewer_panel,
+    veil_sensitive,
+)
 from workspace.notifications.services.notifications import mark_source_read
 from workspace.people.queries import reachable_person
 from workspace.photos.models import Album, Face, MediaItem
@@ -73,6 +82,7 @@ from workspace.photos.services.preferences import (
     default_media_type,
     default_scope_token,
     display_preferences,
+    sensitive_blur_choices,
     show_hidden,
 )
 from workspace.photos.services.similarity import (
@@ -579,6 +589,7 @@ def _render_page(request, template, context):
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
         context["photos_prefs"] = display_preferences(request.user)
+        context["sensitive_blur_choices"] = sensitive_blur_choices()
         context["hidden_folders"] = [
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
@@ -972,9 +983,10 @@ def album_timeline(request, uuid):
     return render(request, "photos/ui/partials/timeline_page.html", context)
 
 
-def _viewer_html(request, file_obj, content_url):
+def _viewer_html(request, file_obj, content_url, blur):
     """*file_obj* in the Files viewer that fits it, read-only, its bytes
-    fetched from *content_url*; empty when no viewer fits it."""
+    fetched from *content_url*, covered when sensitive under the *blur*
+    preference; empty when no viewer fits it."""
     if not file_obj.is_viewable():
         return ""
     viewer_class = get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
@@ -985,7 +997,7 @@ def _viewer_html(request, file_obj, content_url):
     viewer = viewer_class(file_obj)
     viewer._user_can_edit = False
     viewer._content_url = content_url
-    return viewer.render(request)
+    return veil_sensitive(viewer.render(request), sensitive_level(file_obj), blur)
 
 
 @login_required
@@ -1002,6 +1014,7 @@ def album_viewer(request, uuid, file_uuid):
         request,
         file_obj,
         reverse("photo-album-file-content", args=[album.uuid, file_obj.uuid]),
+        blur_preference(request.user),
     )
     if not html:
         return HttpResponse(
@@ -1093,7 +1106,9 @@ def _shared_photo_context(request, link, access_token, files, file_obj):
     )
     return {
         "file": file_obj,
-        "viewer_html": _viewer_html(request, file_obj, content_url),
+        # Blurred as by default, whoever is signed in: the shared page blurs
+        # its tiles the same way (files/ui/shared_base.html).
+        "viewer_html": _viewer_html(request, file_obj, content_url, DEFAULT_BLUR),
         "download_url": download_url,
         "previous_url": previous_url,
         "next_url": next_url,
@@ -1355,8 +1370,10 @@ def _review_cards(user):
             }
         )
     cards.sort(key=lambda card: (-card["weight"], _REVIEW_ORDER[card["kind"]]))
-    # The unnamed clusters past the first page were not read.
-    left = len(cards) + max(0, unnamed_count(user) - REVIEW_CARDS)
+    # The unnamed clusters past the first page were not read: they are
+    # counted, the doubts and loose groups all are cards already.
+    to_name = unnamed_count(user)
+    to_check = sum(card["kind"] != "cluster" for card in cards)
     cards = cards[:REVIEW_CARDS]
     faces = {
         UUID(item["uuid"]): item
@@ -1366,7 +1383,17 @@ def _review_cards(user):
         face_ids = card.pop("face_ids")
         del card["weight"]
         card["faces"] = [faces[pk] for pk in face_ids if pk in faces]
-    return cards, left
+    return {"cards": cards, "to_name": to_name, "to_check": to_check}
+
+
+def _review_left_label(to_name, to_check):
+    """The review page's header count; leftLabel() in faces.js keeps it."""
+    parts = []
+    if to_name:
+        parts.append(f"{to_name} {'person' if to_name == 1 else 'people'} to name")
+    if to_check:
+        parts.append(f"{to_check} to check")
+    return " · ".join(parts)
 
 
 @login_required
@@ -1378,10 +1405,11 @@ def people_review(request):
     if not faces_enabled(request.user):
         # The opt-in card lives on the People tab.
         return redirect("photos_ui:people")
-    cards, left = _review_cards(request.user)
+    review = _review_cards(request.user)
     context = {
         **_people_shell_context(request.user),
-        "review": {"cards": cards, "left": left},
+        "review": review,
+        "review_left_label": _review_left_label(review["to_name"], review["to_check"]),
     }
     return _render_page(request, "photos/ui/people_review.html", context)
 

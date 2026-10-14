@@ -133,3 +133,18 @@ PHOTOS_DESCRIPTION_MAX_DISTANCE = (
     if os.getenv("PHOTOS_DESCRIPTION_MAX_DISTANCE")
     else None
 )
+
+# Sensitive photos (nudity) detected on analysis and blurred wherever they
+# show as a thumbnail. Off by default, like the other models: it downloads
+# 87 MB of weights and costs every photo one more pass in the worker. Photos
+# can always be marked by hand.
+PHOTOS_SENSITIVE_DETECTION_ENABLED = env_bool(
+    "PHOTOS_SENSITIVE_DETECTION_ENABLED", False
+)
+# Which detector runs (photos/services/sensitivity/registry.py):
+# "falconsai_vit" (Falconsai's ViT NSFW classifier, Apache-2.0, int8 ONNX).
+PHOTOS_SENSITIVE_BACKEND = os.getenv("PHOTOS_SENSITIVE_BACKEND", "falconsai_vit")
+# Originals larger than this are not checked.
+PHOTOS_SENSITIVE_MAX_FILE_BYTES = int(
+    os.getenv("PHOTOS_SENSITIVE_MAX_FILE_BYTES", str(64 * 1024 * 1024))
+)

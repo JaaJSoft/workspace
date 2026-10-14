@@ -17,13 +17,18 @@
 {% endcomment %}
 <div class="flex items-start gap-3 min-w-0 flex-1" data-album-header>
   {% if album.card.cover_url %}
-    <img
-      src="{{ album.card.cover_url }}"
-      alt=""
-      class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg object-cover shrink-0"
-      data-album-cover="{{ album.card.cover.uuid }}"
-      draggable="false"
-    />
+    <span
+      class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg overflow-hidden shrink-0"
+      data-sensitive="{{ album.card.cover_sensitive_level }}"
+    >
+      <img
+        src="{{ album.card.cover_url }}"
+        alt=""
+        class="w-full h-full object-cover"
+        data-album-cover="{{ album.card.cover.uuid }}"
+        draggable="false"
+      />
+    </span>
   {% else %}
     <span
       class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg bg-module/10 text-module flex items-center justify-center shrink-0"

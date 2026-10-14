@@ -21,6 +21,12 @@ class AlbumSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     cover = serializers.SerializerMethodField()
     cover_url = serializers.CharField()
+    cover_sensitive_level = serializers.IntegerField(
+        help_text=(
+            "The cover's sensitivity level, from 0 (nothing to hide) to 4: "
+            "the viewer's blur preference blurs it from its own level on."
+        )
+    )
     url = serializers.SerializerMethodField()
     created_at = serializers.DateTimeField(source="album.created_at")
     updated_at = serializers.DateTimeField(source="album.updated_at")

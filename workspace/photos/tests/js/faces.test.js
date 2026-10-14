@@ -348,12 +348,18 @@ test('adding a name is not offered when a contact has exactly that name', () => 
   assert.deepEqual(options.map((o) => o.kind), ['person']);
 });
 
-function reviewPage({ cards = [], left = cards.length, responses = {}, alerts = [] } = {}) {
+function reviewPage({
+  cards = [],
+  toName = cards.filter((card) => card.kind === 'cluster').length,
+  toCheck = cards.length - toName,
+  responses = {},
+  alerts = [],
+} = {}) {
   const requests = [];
   const events = [];
   const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
     document: {
-      getElementById: (id) => (id === 'photos-review-data' ? { textContent: JSON.stringify({ cards, left }) } : null),
+      getElementById: (id) => (id === 'photos-review-data' ? { textContent: JSON.stringify({ cards, to_name: toName, to_check: toCheck }) } : null),
     },
     getCSRFToken: () => 'token',
     location: { pathname: '/photos/people/review', search: '' },
@@ -528,15 +534,37 @@ test('hiding an unnamed cluster hides the whole group', async () => {
 test('the last card settled brings the next ones from the server', async () => {
   const { component } = reviewPage({
     cards: [{ key: 'k', kind: 'loose', guess: null, faces: faces('f1') }],
-    left: 40,
+    toCheck: 40,
     responses: { [BATCH]: batchDone },
   });
 
   await component.hideCard(component.cards[0]);
 
   assert.equal(component.cards.length, 0);
-  assert.equal(component.left, 39);
+  assert.equal(component.toCheck, 39);
   assert.equal(component.reloads, 1);
+});
+
+test('the header counts people to name apart from faces to check', async () => {
+  const { component } = reviewPage({
+    cards: [clusterCard('c1', 'f1'), { key: 'k', kind: 'loose', guess: null, faces: faces('f2') }],
+    toName: 3,
+    toCheck: 5,
+    responses: { [BATCH]: batchDone },
+  });
+  assert.equal(component.leftLabel(), '3 people to name · 5 to check');
+
+  await component.hideCard(component.cards[0]);
+  assert.equal(component.leftLabel(), '2 people to name · 5 to check');
+
+  await component.hideCard(component.cards[0]);
+  assert.equal(component.leftLabel(), '2 people to name · 4 to check');
+});
+
+test('a count that reached zero leaves the header', () => {
+  const { component } = reviewPage({ toName: 1, toCheck: 0 });
+
+  assert.equal(component.leftLabel(), '1 person to name');
 });
 
 test('a refused answer keeps the card, and reloads once something went through', async () => {

@@ -15,8 +15,11 @@ under the production audience (``staff``) a preview module refuses every
 request they make, so its own tests would test nothing but the refusal. The
 tests of the audience itself override the setting back.
 
-The vault's test algorithms (``VAULT_TEST_SUITES``) are enabled suite-wide the
-same way, so the dispatch they exist to prove is exercised by every test.
+The vault's test algorithms (``VAULT_TEST_SUITES``) are enabled suite-wide
+too, so the dispatch they exist to prove is exercised by every test. Unlike the
+settings above they never go through the environment: a subprocess a test
+starts (``manage.py migrate``, a gunicorn boot) would inherit the switch without
+the runner marker, and vault.E002 would refuse to start it.
 """
 
 import os
@@ -25,6 +28,8 @@ import tempfile
 
 from django.test.runner import DiscoverRunner, ParallelTestSuite, _init_worker
 from django.test.utils import override_settings
+
+VAULT_TEST_SWITCHES = {"VAULT_TEST_SUITES": True, "VAULT_TEST_RUNNER_ACTIVE": True}
 
 
 def make_worker_media_root(session_root):
@@ -46,7 +51,7 @@ def _init_worker_with_media_root(counter, *args, **kwargs):
     # Under spawn and forkserver ``_init_worker`` has just re-imported the
     # settings from the environment, so the override has to follow it.
     worker_root = make_worker_media_root(os.environ["MEDIA_ROOT"])
-    override_settings(MEDIA_ROOT=worker_root).enable()
+    override_settings(MEDIA_ROOT=worker_root, **VAULT_TEST_SWITCHES).enable()
 
 
 class MediaRootParallelTestSuite(ParallelTestSuite):
@@ -81,8 +86,10 @@ class MediaRootTestRunner(DiscoverRunner):
             _override_from_env("MEDIA_ROOT", self._media_root),
             _override_from_env("FILE_UPLOAD_TEMP_DIR", upload_temp_dir),
             _override_from_env("PREVIEW_VISIBILITY", "all"),
-            _override_from_env("VAULT_TEST_SUITES", "1"),
         ]
+        vault_switches = override_settings(**VAULT_TEST_SWITCHES)
+        vault_switches.enable()
+        self._restore_settings.append(vault_switches.disable)
 
     def teardown_test_environment(self, **kwargs):
         for restore in reversed(self._restore_settings):

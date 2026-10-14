@@ -4,7 +4,7 @@
 // interchangeable to the KDF - an attacker who learns one then gets the
 // other's search space free.
 import { argon2id } from 'hash-wasm';
-import { CURRENT_SUITE, UnsupportedAlgorithmError, kdfEntry, markImplemented } from './suites.js';
+import { currentSuite, UnsupportedAlgorithmError, kdfEntry, markImplemented } from './suites.js';
 
 // Refused before Argon2 runs. The bounds are not a secret - parameters a
 // server lowers derive another key and fail anyway - they stop an absurd m from
@@ -92,7 +92,7 @@ const ARCHIVE_KEY_INFO = new TextEncoder().encode('v1|archive-key');
 // archive is weaker than the account it came from and why the passphrase has
 // to carry real entropy. deriveAmk cannot stand in - it requires a 32-byte K
 // and throws without one.
-export async function deriveArchiveKey({ passphrase, salt, params = CURRENT_SUITE.kdf.params }) {
+export async function deriveArchiveKey({ passphrase, salt, params = currentSuite().kdf.params }) {
   if (salt.length !== SALT_LENGTH) {
     throw new Error(`salt is ${salt.length} bytes, expected ${SALT_LENGTH}`);
   }

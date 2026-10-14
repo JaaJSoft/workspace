@@ -25,7 +25,6 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
-from PIL import Image, ImageOps, UnidentifiedImageError
 
 from workspace.common.logging import scrub
 from workspace.common.metrics import safe_counter, safe_histogram
@@ -44,6 +43,7 @@ from .embedding.registry import (
     get_embedding_backend,
     is_misconfigured,
 )
+from .photo_decoding import decode_photo
 
 logger = logging.getLogger(__name__)
 
@@ -167,48 +167,10 @@ def _embed(file_obj, backend):
     False when its blob could not be opened (the catch-up tries again)."""
     if file_obj.size and file_obj.size > settings.PHOTOS_EMBEDDING_MAX_FILE_BYTES:
         return None
-    image = _decode(file_obj, backend.decode_size)
+    image = decode_photo(file_obj, backend.decode_size, reader="Photo embedding")
     if image is None or image is False:
         return image
     return backend.embed_image(image)
-
-
-def _decode(file_obj, size):
-    """The photo as displayed, at most *size* on a side, as a PIL RGB image.
-
-    None when the bytes are not a picture Pillow can read, False when the
-    blob could not be opened at all.
-    """
-    try:
-        handle = file_obj.content.open("rb")
-    except OSError as exc:
-        logger.warning(
-            "Photo embedding cannot read the blob of %s: %s",
-            scrub(file_obj.content.name),
-            scrub(str(exc)),
-        )
-        return False
-    try:
-        with Image.open(handle) as img:
-            # A JPEG decodes straight at a fraction of its size.
-            img.draft("RGB", (size, size))
-            img = ImageOps.exif_transpose(img).convert("RGB")
-            img.thumbnail((size, size), Image.LANCZOS)
-            return img
-    except (
-        UnidentifiedImageError,
-        OSError,
-        ValueError,
-        Image.DecompressionBombError,
-    ) as exc:
-        logger.info(
-            "Photo embedding could not decode %s: %s",
-            scrub(file_obj.content.name),
-            scrub(str(exc)),
-        )
-        return None
-    finally:
-        handle.close()
 
 
 def _store(file_obj, model_key, read_hash, vector):

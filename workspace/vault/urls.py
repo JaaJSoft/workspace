@@ -1,8 +1,13 @@
 from django.urls import path
 
-from .views import account, actions, entries, folders, tags, vaults
+from .views import account, actions, entries, folders, migration, tags, vaults
 
 urlpatterns = [
+    path(
+        "api/v1/vault/migration",
+        migration.MigrationListView.as_view(),
+        name="vault-migration",
+    ),
     path(
         "api/v1/vault/account/init",
         account.AccountInitView.as_view(),
@@ -34,6 +39,11 @@ urlpatterns = [
         name="vault-detail",
     ),
     path(
+        "api/v1/vault/vaults/<uuid:uuid>/migrate",
+        migration.VaultMigrateView.as_view(),
+        name="vault-migrate",
+    ),
+    path(
         "api/v1/vault/folders",
         folders.FolderListView.as_view(),
         name="vault-folder-list",
@@ -57,6 +67,11 @@ urlpatterns = [
         "api/v1/vault/tags/<uuid:uuid>",
         tags.TagDetailView.as_view(),
         name="vault-tag-detail",
+    ),
+    path(
+        "api/v1/vault/tags/<uuid:uuid>/delete",
+        tags.TagDeleteView.as_view(),
+        name="vault-tag-delete",
     ),
     path(
         "api/v1/vault/entries",

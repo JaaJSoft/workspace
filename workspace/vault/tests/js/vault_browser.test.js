@@ -167,7 +167,8 @@ function browser(options = {}) {
       },
       vaultCrypto: {
         uuidV7: () => 'entry-uuid',
-        fromBase64Url: (value) => value,
+        fromBase64Url: (value) => (value === 'AQ' ? Uint8Array.of(1) : value),
+        mayResign: () => true,
         toBase64Url: (value) => 'b64',
         seal: async () => new Uint8Array(4),
         KDF_HKDF_SHA256: 0x01,
@@ -249,6 +250,35 @@ test('an entry whose signature does not verify is counted, never listed', async 
   await component.load();
   assert.deepStrictEqual(Array.from(component.entries), []);
   assert.equal(component.tamperedCount, 1);
+});
+
+test('load keeps only verified rows in entryRows', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryRow('good'), entryRow('bad')],
+    },
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'bad') throw new Error('forged');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  assert.deepStrictEqual(Array.from(component.entryRows, (r) => r.uuid), ['good']);
+  assert.deepStrictEqual(Array.from(component.unverifiedEntryRows, (r) => r.uuid), ['bad']);
+});
+
+test('a lock forgets the rows the reader rejected too', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('bad')]) },
+    session: { verifyRecord: async () => { throw new Error('forged'); } },
+  });
+  component.init();
+  await component.load();
+  component.onLocked();
+  assert.deepStrictEqual(Array.from(component.unverifiedEntryRows), []);
 });
 
 test('the switcher lists every vault and marks the one that is open', async () => {
@@ -2022,7 +2052,7 @@ test('a bulk action stops at the first refusal rather than half-finishing quietl
 
 // --- dropping a tag or a folder from the browser ---------------------------
 
-test('deleting a tag re-signs the entries carrying it, then removes it', async () => {
+test('deleting a tag sends the re-signed carriers in the one removal request', async () => {
   const calls = [];
   const { component } = browser({
     api: {
@@ -2032,14 +2062,17 @@ test('deleting a tag re-signs the entries carrying it, then removes it', async (
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryWith('e-1', { tags: ['t-1'] })],
       updateEntry: async (uuid) => { calls.push('put:' + uuid); return {}; },
-      deleteTag: async (uuid) => { calls.push('delete:' + uuid); return null; },
+      deleteTag: async (uuid, entries) => {
+        calls.push('delete:' + uuid + ':' + entries.map((e) => e.uuid).join(','));
+        return null;
+      },
     },
   });
   component.init();
   await component.load();
   component.confirm = async () => true;
   await component.deleteTag(component.tags[0]);
-  assert.deepStrictEqual(Array.from(calls), ['put:e-1', 'delete:t-1']);
+  assert.deepStrictEqual(Array.from(calls), ['delete:t-1:e-1']);
 });
 
 test('a refused confirmation deletes nothing and re-signs nothing', async () => {
@@ -2245,14 +2278,23 @@ test('a refresh shuts a menu that was still open', async () => {
 test('a field that will not open leaves the form shut and says so', async () => {
   // An unhandled rejection out of a click handler would leave no dialog and
   // no message - the user would press Edit and watch nothing happen.
+  // The listing opens the name and the login too, so the failure starts only
+  // once the row is listed: a row that cannot be opened at load is rejected.
+  let listed = false;
   const { component } = typed({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
     },
-    crypto: { open: async () => { throw new Error('cannot open'); } },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (listed) throw new Error('cannot open');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
   });
   component.init();
   await component.load();
+  listed = true;
   await component.editEntry({
     uuid: 'e-1', type: 'login', fieldIds: ['username'], tags: [],
   });
@@ -2757,4 +2799,119 @@ test('closing the entry dialog forgets which field had its generator open', asyn
   component.openGenerator('password');
   component.closeEntryDialog();
   assert.equal(component.generatorField, null);
+});
+
+// --- rows the reader rejected, seen from the browser ------------------------
+
+const ALL_ACTIONS = (ids) => Object.fromEntries(ids.map((id) => [id, [{ id: 'delete_forever', bulk: true }]]));
+
+test('the trash counts, offers and asks about rows the reader rejected', async () => {
+  const asked = [];
+  const requested = [];
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? [entryWith('ok', { deleted_at: '2026-09-01' }), entryWith('bad', { deleted_at: '2026-09-01' })]
+          : [],
+      fetchEntryActions: async (uuids) => { requested.push(...uuids); return ALL_ACTIONS(uuids); },
+    },
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'bad') throw new Error('forged');
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  component.view = 'trash';
+  component.confirm = async (message) => { asked.push(message); return false; };
+  assert.deepStrictEqual(Array.from(requested).sort(), ['bad', 'ok']);
+  assert.equal(component.trashedRowCount(), 2);
+  assert.equal(component.canEmptyTrash(), true);
+  await component.emptyTrash();
+  assert.match(asked[0], /Permanently delete the 2 entries in the trash\?/);
+  assert.match(asked[0], /1 of them cannot be read on this device\./);
+});
+
+test('a trash holding only rejected rows can still be emptied', async () => {
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [entryWith('bad', { deleted_at: '2026-09-01' })] : [],
+      fetchEntryActions: async (uuids) => ALL_ACTIONS(uuids),
+    },
+    session: { verifyRecord: async () => { throw new Error('forged'); } },
+  });
+  component.init();
+  await component.load();
+  component.view = 'trash';
+  assert.equal(component.canEmptyTrash(), true);
+});
+
+// --- tag and folder removal through the component ---------------------------
+
+function removalBrowser(extraApi = {}) {
+  const calls = [];
+  const made = browser({
+    api: {
+      listTags: async () => [
+        { uuid: 't-1', vault: VAULT_UUID, encrypted_name: 'ct', color: '#3b82f6', metadata_sig: 'sig' },
+      ],
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0, encrypted_name: 'ct', metadata_sig: 'sig' },
+      ],
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed
+          ? []
+          : [entryWith('good', { tags: ['t-1'], folder: 'f-1' }), entryWith('bad', { tags: ['t-1'], folder: 'f-1' })],
+      updateEntry: async (uuid) => { calls.push('put:' + uuid); return {}; },
+      deleteTag: async (uuid) => { calls.push('delete-tag:' + uuid); return null; },
+      deleteFolder: async (uuid) => { calls.push('delete-folder:' + uuid); return null; },
+      ...extraApi,
+    },
+    session: {
+      verifyRecord: async (payload) => {
+        if (payload.entry_uuid === 'bad') throw new Error('forged');
+      },
+    },
+  });
+  made.calls = calls;
+  return made;
+}
+
+test('a tag carried by a rejected entry is not deleted, and nothing is re-signed', async () => {
+  const { component, calls } = removalBrowser();
+  component.init();
+  await component.load();
+  component.confirm = async () => true;
+  await component.deleteTag(component.tags[0]);
+  assert.deepStrictEqual(Array.from(calls), []);
+  assert.match(component.error, /could not be verified/);
+  assert.equal(component.busy, false);
+});
+
+test('a folder holding a rejected entry is not deleted, and nothing is re-signed', async () => {
+  const { component, calls } = removalBrowser();
+  component.init();
+  await component.load();
+  component.confirm = async () => true;
+  await component.deleteFolder(component.folders[0]);
+  assert.deepStrictEqual(Array.from(calls), []);
+  assert.match(component.error, /could not be verified/);
+  assert.equal(component.busy, false);
+});
+
+test('losing the last vault forgets the rows the reader rejected too', async () => {
+  const { component, options } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('bad')]) },
+    session: { verifyRecord: async () => { throw new Error('forged'); } },
+  });
+  component.init();
+  await component.load();
+  assert.equal(component.unverifiedEntryRows.length, 1);
+  options.vaults = [];
+  component.vaultUuid = null;
+  await component.load();
+  assert.deepStrictEqual(Array.from(component.unverifiedEntryRows), []);
 });

@@ -138,18 +138,28 @@ window.vaultReader = (function () {
   // of what is only an old tab.
   async function readAll(rows, read) {
     const results = [];
+    const verifiedRows = [];
     let tamperedCount = 0;
     let unsupportedCount = 0;
     for (const row of rows) {
       try {
         results.push(await read(row));
+        verifiedRows.push(row);
       } catch (err) {
         if (err && err.reason === 'locked') throw err;
         if (isUnsupported(err)) unsupportedCount += 1;
         else tamperedCount += 1;
       }
     }
-    return { rows: results, tamperedCount: tamperedCount, unsupportedCount: unsupportedCount };
+    return {
+      rows: results,
+      // The raw rows that verified. Anything that re-signs builds from these
+      // and only these: re-signing a row that failed would put the account's
+      // signature on whatever the server wrote into it.
+      verifiedRows: verifiedRows,
+      tamperedCount: tamperedCount,
+      unsupportedCount: unsupportedCount,
+    };
   }
 
   // A vault's own metadata: verified, then its name opened. Both screens

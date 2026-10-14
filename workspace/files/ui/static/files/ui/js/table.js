@@ -205,7 +205,7 @@ window.fileTableControls = function fileTableControls() {
         return;
       }
 
-      if (inTrash || target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
+      if (target.closest('a, button, input, select, textarea, label, [data-stop-row-click]')) {
         return;
       }
       // With a selection under way, a click extends it instead of opening,
@@ -215,7 +215,9 @@ window.fileTableControls = function fileTableControls() {
         return;
       }
       const isFolder = item.dataset.nodeType === 'folder';
-      if (!isFolder && item.dataset.viewable !== '1') return;
+      // A trashed folder has no listing to open; a trashed file opens in the
+      // viewer, read-only.
+      if (isFolder ? inTrash : item.dataset.viewable !== '1') return;
       if (isFolder) {
         window.folderNav.navigateTo(`/files/${uuid}`);
         return;
@@ -330,6 +332,9 @@ window.fileTableControls = function fileTableControls() {
         }
         if (action.id === 'toggle_pin') {
           return { ...action, _bulkAdd: !allHaveState('toggle_pin', 'is_pinned') };
+        }
+        if (action.id === 'toggle_sensitive') {
+          return { ...action, _bulkAdd: !allHaveState('toggle_sensitive', 'is_sensitive') };
         }
         return action;
       });
@@ -640,6 +645,16 @@ window.fileTableControls = function fileTableControls() {
           });
           window.dispatchEvent(new CustomEvent('bulk-action', {
             detail: { action: 'pin', uuids, add: !allPinned }
+          }));
+          break;
+        }
+        case 'toggle_sensitive': {
+          const allSensitive = uuids.every(uuid => {
+            const a = (this.actionsMap[uuid] || []).find(x => x.id === 'toggle_sensitive');
+            return a && a.state && a.state.is_sensitive;
+          });
+          window.dispatchEvent(new CustomEvent('bulk-action', {
+            detail: { action: 'sensitive', uuids, add: !allSensitive }
           }));
           break;
         }

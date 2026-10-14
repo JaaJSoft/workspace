@@ -25,3 +25,15 @@ SIDEBAR_COLLAPSED = "sidebar_collapsed"
 # unset. The palette sends it with every query rather than the API reading it,
 # since the search response is cached per query string.
 SEARCH_SCOPE = "search_scope"
+
+# How much of what is sensitive (files/sensitivity.py) is blurred: a
+# BlurPreference value, ``standard`` when unset. A core setting rather than a
+# photos one because the shell renders it on every page, Files' included, from
+# the core settings it reads anyway.
+SENSITIVE_BLUR = "sensitive_blur"
+
+# Two softenings of the blur, booleans off when unset: a blurred preview shows
+# in clear while the pointer rests on it, and the viewer opens a sensitive file
+# without its "Sensitive content" cover. Neither applies once the blur is off.
+REVEAL_SENSITIVE_ON_HOVER = "reveal_sensitive_on_hover"
+REVEAL_SENSITIVE_IN_VIEWER = "reveal_sensitive_in_viewer"

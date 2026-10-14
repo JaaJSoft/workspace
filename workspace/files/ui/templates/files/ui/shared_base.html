@@ -1,6 +1,11 @@
-{% load static %}
+{% load static file_filters %}
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+{# A visitor has no preference to change the blur: sensitive previews are blurred as by default. #}
+<html
+  lang="en"
+  data-theme="light"
+  data-blur-sensitive="{% default_blur_from %}"
+>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

@@ -98,6 +98,32 @@ def _staged(content):
             logger.warning("Could not remove staged blob %s", scrub(staged))
 
 
+def purge_staged(before):
+    """Delete the staged blobs last written before *before*; return how many.
+
+    :func:`_staged` removes its blob however its request ends, but a worker
+    killed inside it - a deploy, the OOM killer, a timeout - never gets that
+    far, and the staging area is on the persistent volume, which no restart
+    empties.
+    """
+    storage = File._meta.get_field("content").storage
+    try:
+        _dirs, names = storage.listdir(STAGING_DIR)
+    except FileNotFoundError:
+        return 0
+    purged = 0
+    for name in names:
+        staged = posixpath.join(STAGING_DIR, name)
+        try:
+            if storage.get_modified_time(staged) >= before:
+                continue
+        except FileNotFoundError:
+            continue  # its request finished in the meantime
+        storage.delete(staged)
+        purged += 1
+    return purged
+
+
 def _place(storage, staged, node):
     destination = node.content.name
     if blob_held_elsewhere(storage, destination, node):

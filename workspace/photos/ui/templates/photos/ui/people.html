@@ -52,6 +52,7 @@
             {% if unnamed_count %}
               <span
                 class="badge badge-sm tabular-nums border-0 bg-module-content/20 text-module-content"
+                title="{{ unnamed_count }} {% if unnamed_count == 1 %}person{% else %}people{% endif %} to name"
               >{{ unnamed_count }}</span>
             {% endif %}
           </a>

@@ -555,7 +555,7 @@
               outranks the quarantine tint by specificity, not stylesheet order.
                 {% endcomment %}
                 <tr
-                  class="hover group {% if not is_trash_view and node.node_type == 'folder' or not is_trash_view and node.node_type == 'file' and node.viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15 data-[busy]:opacity-50 data-[busy]:pointer-events-none"
+                  class="hover group {% if node.node_type == 'folder' and not is_trash_view or node.node_type == 'file' and node.viewable %}cursor-pointer{% endif %} transition-opacity{% if node.is_quarantined %} bg-error/10{% endif %} data-[selected]:bg-module/15 data-[busy]:opacity-50 data-[busy]:pointer-events-none"
                   data-uuid="{{ node.uuid }}"
                   data-name="{{ node.name|lower }}"
                   data-display-name="{{ node.name }}"
@@ -612,7 +612,7 @@
                           draggable="false"
                           title="{{ node.name }}"
                         >{{ node.name }}</a>
-                      {% elif node.node_type == "file" and not is_trash_view and node.viewable %}
+                      {% elif node.node_type == "file" and node.viewable %}
                         <span
                           class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline"
                           title="{{ node.name }}"
@@ -798,7 +798,7 @@
                   {% if node.node_type == "folder" %}
                     {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.icon|default:"folder" icon_color=node.color|default:"text-warning" icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" %}
                   {% else %}
-                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" duration=node.media_info.duration %}
+                    {% include "files/ui/partials/node_preview.html" with thumbnail_url=node|thumbnail_url icon=node.type|type_to_icon icon_color=node.type|type_to_color icon_size_style_expr="'width: ' + tileIconSize() + 'px; height: ' + tileIconSize() + 'px'" thumbnail_sizes_expr="tileImageSizes()" duration=node.media_info.duration sensitive_level=node.sensitive_level %}
                   {% endif %}
 
                   <!-- File info -->

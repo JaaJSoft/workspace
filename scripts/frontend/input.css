@@ -329,3 +329,84 @@ html:has(> body.overflow-hidden.h-dvh) {
 .modal .prose kbd {
   color: oklch(var(--bc));
 }
+
+/* Sensitive previews (files/sensitivity.py). The page root carries
+   data-blur-sensitive="<rank>", the lowest sensitivity level the viewer's
+   preference blurs (none at all when it blurs nothing); a preview carries its
+   own level in data-sensitive, and is blurred when that level reaches the
+   rank. Every rule below spells out that comparison, one rank at a time.
+   `scale` composes with a hover `transform` and pushes the blur's soft edges
+   out of the clipped tile. */
+:is(
+  [data-blur-sensitive="1"] :is([data-sensitive="1"], [data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="2"] :is([data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="3"] :is([data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="4"] [data-sensitive="4"]
+) :is(img, video) {
+  filter: blur(24px);
+  scale: 1.2;
+}
+
+.sensitive-badge,
+.sensitive-cover {
+  display: none;
+}
+
+[data-blur-sensitive]:not([data-reveal-sensitive-in-viewer]) .sensitive-cover {
+  display: flex;
+}
+
+/* The badge says why a tile is blurred, on hover or keyboard focus only: at
+   rest the blur is enough, and a grid of them stays calm. A touch screen
+   never shows it (a tap opens the viewer and its cover). */
+:is(
+  [data-blur-sensitive="1"] :is([data-sensitive="1"], [data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="2"] :is([data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="3"] :is([data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="4"] [data-sensitive="4"]
+) .sensitive-badge {
+  display: flex;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+:is(
+  [data-blur-sensitive="1"] :is([data-sensitive="1"], [data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="2"] :is([data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="3"] :is([data-sensitive="3"], [data-sensitive="4"]),
+  [data-blur-sensitive="4"] [data-sensitive="4"]
+):has(:focus-visible) .sensitive-badge {
+  opacity: 1;
+}
+
+/* Under "Unblur on hover" the pointer shows the photo itself, and the badge
+   would sit over it to say what the blur already said. */
+@media (hover: hover) {
+  html:not([data-reveal-sensitive-on-hover]) :is(
+    [data-blur-sensitive="1"] :is([data-sensitive="1"], [data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+    [data-blur-sensitive="2"] :is([data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
+    [data-blur-sensitive="3"] :is([data-sensitive="3"], [data-sensitive="4"]),
+    [data-blur-sensitive="4"] [data-sensitive="4"]
+  ):hover .sensitive-badge {
+    opacity: 1;
+  }
+
+  /* The preview in clear while the pointer rests on it. The transition lists
+     `transform` too: this rule outranks the tile's own transition utility,
+     whose hover zoom would otherwise snap. */
+  [data-blur-sensitive][data-reveal-sensitive-on-hover] [data-sensitive]:not([data-sensitive="0"]) :is(img, video) {
+    transition-property: filter, scale, transform;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  [data-blur-sensitive][data-reveal-sensitive-on-hover] [data-sensitive]:not([data-sensitive="0"]):hover :is(img, video) {
+    filter: none;
+    scale: none;
+  }
+}
+
+/* The viewer behind its cover, until the cover's Show button drops it. */
+[data-blur-sensitive]:not([data-reveal-sensitive-in-viewer]) .sensitive-veiled {
+  display: none !important;
+}

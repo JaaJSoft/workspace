@@ -81,16 +81,15 @@ function browser(options = {}) {
   // The stored rows behind the opened ones. A row that fails to verify lives
   // only here: readAll drops it from `entries` and counts it as tampered.
   const unreadable = options.unreadable || 0;
-  component.entryRows = Array.from(
-    { length: count + unreadable },
-    (_, i) => ({ uuid: `e-${i}`, deleted_at: '2026-09-20T00:00:00Z' }),
-  );
+  const stored = (i) => ({ uuid: `e-${i}`, deleted_at: '2026-09-20T00:00:00Z' });
+  component.entryRows = Array.from({ length: count }, (_, i) => stored(i));
+  component.unverifiedEntryRows = Array.from({ length: unreadable }, (_, i) => stored(count + i));
   component.selected = component.entries.map((entry) => entry.uuid);
   // Keyed on the stored rows, the way loadEntryActions asks: the endpoint
   // answers for a row this device could not open, and the trash button is
   // the one control that acts on those.
   component.entryActions = Object.fromEntries(
-    component.entryRows.map((row) => [
+    component.storedRows().map((row) => [
       row.uuid,
       [{ id: 'delete_forever', bulk: true }],
     ]),

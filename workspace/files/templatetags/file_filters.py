@@ -5,12 +5,19 @@ from django import template
 from django.utils.html import conditional_escape, format_html_join
 from django.utils.safestring import mark_safe
 
+from workspace.files.sensitivity import DEFAULT_BLUR, blur_from
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_MAX_SIZE,
     THUMBNAIL_SIZES,
 )
 
 register = template.Library()
+
+
+@register.simple_tag
+def default_blur_from():
+    """The lowest sensitivity level the default BlurPreference blurs."""
+    return blur_from(DEFAULT_BLUR)
 
 
 @register.filter

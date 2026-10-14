@@ -63,7 +63,7 @@ dependencies = [
     # and the feature is off by default)
     "clamav-client>=0.7.2",
     # ai
-    "openai>=3.24.0",
+    "openai>=3.28.0",
     "ollama>=0.6.3",
     # web search & scraping
     "httpx2>=2.13.1",
@@ -87,7 +87,7 @@ dependencies = [
     # brute-force fallback wherever no vector extension is available.
     # sqlite-vec ships wheels for Linux x86_64/aarch64, macOS and Windows.
     "sqlite-vec>=0.1.6",
-    "numpy>=2.5.3",
+    "numpy>=2.5.4",
     # photos face detection and embedding (photos/services/detection/), run on
     # the model files directly: no opencv, no insightface package.
     "onnxruntime>=1.30.0",
@@ -118,7 +118,7 @@ dev = [
     "pyhpke>=0.6.0",
     # Exact pin: the ruff-action CI job auto-discovers this version from
     # pyproject.toml, keeping CI and local runs on the same ruff release.
-    "ruff==0.16.10",
+    "ruff==0.17.0",
     # HTML template linter/formatter (djlint workspace --lint / --reformat).
     "djlint>=1.46.4",
     # Office authoring libraries, used only to write the fixtures the text
@@ -128,7 +128,7 @@ dev = [
     # scaffolding. Never imported by application code - workspace/common/
     # documents/office.py reads documents and depends on nothing but lxml.
     # Only ever writes: the fixtures the extractor is tested against.
-    "pypdf>=6.19.0",
+    "pypdf>=6.20.0",
     "python-docx>=1.2.0",
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",

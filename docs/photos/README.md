@@ -188,6 +188,94 @@ distance means a different thing to CLIP and to SigLIP 2. A remote model starts
 from generic defaults (0.25, 0.06, 0.8); measure it with the bench
 (`--backend remote`) before relying on them.
 
+## Sensitive photos
+
+A sensitive photo (nudity, a medical photo) is **blurred wherever it shows as
+a thumbnail**: the timeline, albums and their covers, search and similar
+photos, a contact's photos in People, the Files mosaic and public share
+pages. Opening it shows a *Sensitive content* cover over the viewer, with a
+**Show** button; a covered video does not start playing behind it.
+
+- The photo carries a sensitivity level, from 0 (nothing to hide) to 4, not a
+  tag of its owner's: everyone who can open it gets the same level, in a share
+  or a shared album too.
+- Each user chooses how much of it is blurred on their own screen, with the
+  **Blur sensitive photos** slider of the Photos preferences, in five steps:
+
+  | Step | Blurs the photos of level | With the default detector, a score of |
+  |---|---|---|
+  | Strict | 1 and up | 0.25 or more |
+  | High | 2 and up | 0.35 or more |
+  | Standard (default) | 3 and up | 0.5 or more |
+  | Low | 4 | 0.9 or more |
+  | Off | none, photos marked by hand included | |
+
+  A visitor of a public link always gets Standard, whoever is signed in.
+- Anyone with edit rights on a photo or a video marks it, or unmarks it, from
+  its menu in Photos or in Files, or for a whole selection: a marked photo
+  goes to level 4, blurred under every step but Off, an unmarked one to 0.
+  That choice wins over detection, for good. The menu offers to unmark any
+  photo above level 0, blurred on the user's own screen or not.
+- Two options below the slider soften the blur without turning it off, both
+  off by default and for the user's own screen too. **Unblur on hover** shows a
+  thumbnail in clear while the pointer rests on it (a touch screen has no
+  hover, so the option is not offered there). **Show in the viewer without
+  asking** opens a sensitive photo or video straight away, with no cover. Both
+  apply in Files as well; a public link gets neither.
+
+### Detection
+
+```bash
+PHOTOS_SENSITIVE_DETECTION_ENABLED=1
+```
+
+Off by default, like the other models: without it, photos are only marked by
+hand. When on, every photo of the instance is checked in the Celery worker,
+at normal priority after an upload (the photo shows in clear until then) and
+at background priority for the hourly catch-up (`python manage.py catch_up
+sensitive`). Videos are not checked yet.
+
+The default detector, `falconsai_vit`, is
+[Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
+(a ViT-base, Apache-2.0) run from its int8 ONNX export: 87 MB of weights,
+about 120 ms a photo on one desktop core. It was trained on nudity: a medical
+or a gory photo is marked by hand. Its weights download on first use into
+`PHOTOS_MODEL_DIR`, or ahead of time:
+
+```bash
+python manage.py download_sensitive_models
+```
+
+The detector gives every photo a score from 0 to 1, and the photo's level is
+the number of steps whose threshold that score reaches. It is not a probability:
+the model card defines neither of its two classes, `normal` and `nsfw`, nor
+what a score of 0.2 or 0.8 means. Its one published figure is 98% accuracy on
+its own 80,000 images, which are not public, taken at the model's decision
+boundary of 0.5. That is Standard's threshold, the only one anyone measured.
+On 1,971 Open Images photos, none of them explicit, it blurs 9 (0.5%); a
+threshold of 0.2 would blur 11 (a bikini, a kiss, a mannequin...), with no
+measured gain on explicit photos. Strict's 0.25, High's 0.35 and Low's 0.9 sit
+between those figures and are not measured on their own. There
+is no explicit evaluation set in the repository: recall has not been measured
+on this instance's terms.
+
+The thresholds belong to the detector (`thresholds` in
+`photos/services/sensitivity/`). When they change, the photos already checked
+get their new level on the next catch-up, from the scores they were given: the
+model does not run again, and a photo marked or unmarked by hand keeps that
+choice.
+
+The admin dashboard shows a **Sensitive photos** card: whether the detector
+is known and ready.
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
+| `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
+| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger originals are not checked. |
+
 ## Face detection and grouping
 
 The **People** tab finds the faces in a user's photos and videos and groups the

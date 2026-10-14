@@ -63,6 +63,19 @@ class MediaItem(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     # Metres above sea level, negative below it. Only kept with a position.
     altitude = models.FloatField(null=True, blank=True)
+    # How sensitive the photo is (files/sensitivity.py), for everyone who can
+    # open it: 0 is nothing to hide, and each viewer's blur preference blurs
+    # it from its own level on (services/sensitive_photos.py). A choice made
+    # by hand (sensitive_by_user, null while nobody made one) wins over the
+    # detector's score.
+    sensitive_level = models.PositiveSmallIntegerField(default=0)
+    sensitive_by_user = models.BooleanField(null=True, blank=True)
+    # What the detector made of the bytes: its score, from 0 to 1 (null when
+    # the photo could not be decoded), and the detector and content_hash it
+    # read. Empty sensitive_model: never checked.
+    sensitive_score = models.FloatField(null=True, blank=True)
+    sensitive_model = models.CharField(max_length=64, blank=True, default="")
+    sensitive_hash = models.CharField(max_length=64, blank=True, default="")
     # The file's content_hash when these values were read. A row whose hash
     # no longer matches the file describes bytes that were replaced, and the
     # catch-up task reads the file again.

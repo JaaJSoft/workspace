@@ -102,7 +102,7 @@ class ContentMixin:
         from django.http import FileResponse, HttpResponse, StreamingHttpResponse
 
         try:
-            file_obj, perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid, include_trashed=True)
         except Http404:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -208,7 +208,7 @@ class ContentMixin:
             )
 
         try:
-            file_obj, perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid, include_trashed=True)
         except Http404:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 

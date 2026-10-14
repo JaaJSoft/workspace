@@ -92,6 +92,14 @@
           </inline-alert>
 
           {% comment %}
+              x-if, not x-show: inline-alert reads its attributes once, when
+              it connects.
+          {% endcomment %}
+          <template x-if="migrationWarning">
+            <inline-alert type="info" dismissible class="mx-5 mt-4" message="Some items could not be updated to the latest encryption. They still open normally; the app will try again next time."></inline-alert>
+          </template>
+
+          {% comment %}
               A count is all that survives a row whose signature fails, so
               this banner is the whole of what the user is told - hence it
               says what was not done rather than inviting a retry.
@@ -157,9 +165,17 @@
 {% endblock %}
 
 {% block extra_scripts %}
-  <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
+  {% if vault_test_manifest %}
+    <script src="{% static 'vault/ui/js/vendor/vault-crypto-test.js' %}"></script>
+  {% else %}
+    <script src="{% static 'vault/ui/js/vendor/vault-crypto.js' %}"></script>
+  {% endif %}
   {% if vault_test_suites %}
     <script src="{% static 'vault/ui/js/test_suites/test_aead.js' %}"></script>
+  {% endif %}
+  {% if vault_test_manifest %}
+    {{ vault_test_manifest|json_script:"vault-test-manifest" }}
+    <script src="{% static 'vault/ui/js/test_suites/test_manifest.js' %}"></script>
   {% endif %}
   <script src="{% static 'vault/ui/js/api.js' %}"></script>
   <script src="{% static 'vault/ui/js/session.js' %}"></script>
@@ -171,6 +187,8 @@
   <script src="{% static 'vault/ui/js/entry_write.js' %}"></script>
   <script src="{% static 'vault/ui/js/folder_write.js' %}"></script>
   <script src="{% static 'vault/ui/js/tag_write.js' %}"></script>
+  <script src="{% static 'vault/ui/js/migrate_items.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_migrate.js' %}"></script>
   <script src="{% static 'vault/ui/js/clipboard.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_resign.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_format.js' %}"></script>

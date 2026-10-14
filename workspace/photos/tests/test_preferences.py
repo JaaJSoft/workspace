@@ -13,6 +13,7 @@ from workspace.photos.models import MediaItem
 from workspace.photos.services.preferences import (
     display_preferences,
     is_scope_token,
+    sensitive_blur_choices,
 )
 from workspace.photos.templatetags.photos_filters import tile_aspect
 from workspace.users.services.settings import set_setting
@@ -51,6 +52,9 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "auto_tags": True,
+                "sensitive_blur": "standard",
+                "reveal_sensitive_on_hover": False,
+                "reveal_sensitive_in_viewer": False,
             },
         )
 
@@ -78,6 +82,36 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertIs(prefs["show_hidden"], True)
         self.assertIs(prefs["auto_tags"], False)
 
+    def test_the_blur_is_a_core_setting(self):
+        set_setting(self.user, "core", "sensitive_blur", "off")
+
+        self.assertEqual(display_preferences(self.user)["sensitive_blur"], "off")
+
+        set_setting(self.user, "core", "sensitive_blur", False)
+
+        self.assertEqual(display_preferences(self.user)["sensitive_blur"], "standard")
+
+    def test_the_blur_slider_steps_run_from_strict_to_off(self):
+        self.assertEqual(
+            [choice["value"] for choice in sensitive_blur_choices()],
+            ["strict", "high", "standard", "low", "off"],
+        )
+
+    def test_the_reveal_options_are_core_settings(self):
+        set_setting(self.user, "core", "reveal_sensitive_on_hover", True)
+        set_setting(self.user, "core", "reveal_sensitive_in_viewer", True)
+
+        prefs = display_preferences(self.user)
+        self.assertIs(prefs["reveal_sensitive_on_hover"], True)
+        self.assertIs(prefs["reveal_sensitive_in_viewer"], True)
+
+        set_setting(self.user, "core", "reveal_sensitive_on_hover", "yes")
+        set_setting(self.user, "core", "reveal_sensitive_in_viewer", "on")
+
+        prefs = display_preferences(self.user)
+        self.assertIs(prefs["reveal_sensitive_on_hover"], False)
+        self.assertIs(prefs["reveal_sensitive_in_viewer"], False)
+
     def test_a_malformed_value_reads_as_the_default(self):
         """Written before the API checked it, or by hand: never a broken page."""
         for key, value in {
@@ -103,6 +137,9 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "auto_tags": True,
+                "sensitive_blur": "standard",
+                "reveal_sensitive_on_hover": False,
+                "reveal_sensitive_in_viewer": False,
             },
         )
 

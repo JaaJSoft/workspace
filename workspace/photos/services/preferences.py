@@ -6,6 +6,12 @@ back to the default on one anyway: a value stored before the rule existed
 must not break the page.
 """
 
+from workspace.core.setting_keys import MODULE as CORE_MODULE
+from workspace.core.setting_keys import (
+    REVEAL_SENSITIVE_IN_VIEWER,
+    REVEAL_SENSITIVE_ON_HOVER,
+)
+from workspace.files.sensitivity import BlurPreference, blur_preference
 from workspace.users.services.settings import get_module_settings
 
 from ..models import MediaItem
@@ -88,6 +94,29 @@ def auto_tags(user):
     return _flag(user, AUTO_TAGS, True)
 
 
+def sensitive_blur_choices():
+    """The steps of the panel's sensitive-blur slider, strictest first: the
+    ``core/sensitive_blur`` setting (files/sensitivity.py) it writes, shown in
+    this panel because the photos are what it blurs, in Files too. So are the
+    two softenings below, core settings as well."""
+    return [{"value": value, "label": label} for value, label in BlurPreference.choices]
+
+
+def _core_flag(user, key, default):
+    value = get_module_settings(user, CORE_MODULE).get(key, default)
+    return value if isinstance(value, bool) else default
+
+
+def reveal_sensitive_on_hover(user):
+    """Whether a blurred preview shows in clear under the pointer."""
+    return _core_flag(user, REVEAL_SENSITIVE_ON_HOVER, False)
+
+
+def reveal_sensitive_in_viewer(user):
+    """Whether the viewer opens a sensitive photo without its cover."""
+    return _core_flag(user, REVEAL_SENSITIVE_IN_VIEWER, False)
+
+
 def default_scope_token(user):
     """The library the timeline opens on when the URL names none."""
     value = _prefs(user).get(DEFAULT_SCOPE)
@@ -114,4 +143,7 @@ def display_preferences(user):
         "import_by_date": import_by_date(user),
         "show_hidden": show_hidden(user),
         "auto_tags": auto_tags(user),
+        "sensitive_blur": blur_preference(user).value,
+        "reveal_sensitive_on_hover": reveal_sensitive_on_hover(user),
+        "reveal_sensitive_in_viewer": reveal_sensitive_in_viewer(user),
     }

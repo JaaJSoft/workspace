@@ -12,6 +12,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.properties_sections import render_properties_sections
+from workspace.files.sensitivity import (
+    DEFAULT_BLUR,
+    blur_preference,
+    sensitive_level,
+    with_sensitivity,
+)
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.public_links import resolve_within, scope_q
@@ -34,7 +40,7 @@ from ..models import (
     PinnedFolder,
     Tag,
 )
-from .viewers import ViewerRegistry, render_viewer_panel
+from .viewers import ViewerRegistry, render_viewer_panel, veil_sensitive
 
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
@@ -254,7 +260,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         file_id=OuterRef("pk"),
     )
     nodes = with_scan(
-        nodes.select_related("media_info")
+        with_sensitivity(nodes.select_related("media_info"))
         .annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
@@ -802,19 +808,16 @@ def view_file(request, uuid):
     Returns the appropriate viewer HTML based on file MIME type.
     Used by the file viewer modal to load content via Alpine AJAX.
     """
-    # Get file — allow owner or shared-with user
-    file_obj = (
-        File.objects.select_related("locked_by")
-        .filter(uuid=uuid, deleted_at__isnull=True)
-        .first()
-    )
+    # A trashed file only grants a permission to its owner, who previews it
+    # from the trash - read-only, since every write refuses a trashed row.
+    file_obj = File.objects.select_related("locked_by").filter(uuid=uuid).first()
     if not file_obj:
         raise Http404
 
     perm = FileService.get_permission(request.user, file_obj)
     if perm is None:
         raise Http404
-    user_can_edit = perm >= FilePermission.WRITE
+    user_can_edit = perm >= FilePermission.WRITE and file_obj.deleted_at is None
 
     from workspace.files.services.scanning.policy import blocked_reason
 
@@ -878,7 +881,9 @@ def view_file(request, uuid):
     viewer = ViewerClass(file_obj)
     viewer._user_can_edit = user_can_edit
     viewer._lock_info = lock_info
-    html = viewer.render(request)
+    html = veil_sensitive(
+        viewer.render(request), sensitive_level(file_obj), blur_preference(request.user)
+    )
 
     return HttpResponse(render_viewer_panel(html))
 
@@ -1034,8 +1039,10 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
     # row when is_quarantined() below reads the scan verdict.
     children = list(
         with_scan(
-            File.objects.filter(
-                scope_q(link.file), parent=current, deleted_at__isnull=True
+            with_sensitivity(
+                File.objects.filter(
+                    scope_q(link.file), parent=current, deleted_at__isnull=True
+                )
             ).name_ordered("-node_type")
         )[: SHARED_FOLDER_PAGE_SIZE + 1]
     )
@@ -1062,6 +1069,7 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
                 "size": None if is_dir else node.size,
                 "modified": node.updated_at,
                 "is_quarantined": False if is_dir else node.is_quarantined(),
+                "sensitive_level": node.sensitive_level or 0,
                 "url": _shared_page_url(
                     request.path, access_token, view_mode, node=node.uuid
                 ),
@@ -1181,7 +1189,11 @@ def shared_file_view(request, token):
             viewer._content_url = _shared_action_url(
                 token, "/content", effective_access_token, file=target.uuid
             )
-            viewer_html = viewer.render(request)
+            # Blurred as by default, whoever is signed in: shared_base.html
+            # blurs the listing the same way.
+            viewer_html = veil_sensitive(
+                viewer.render(request), sensitive_level(target), DEFAULT_BLUR
+            )
 
     # No download link for a quarantined file: the endpoint refuses it anyway,
     # and offering the button would only produce a 403 the visitor cannot act on.

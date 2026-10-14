@@ -40,11 +40,11 @@ class ViewActionTests(TestCase):
         action = ActionRegistry.get("view")
         self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
 
-    def test_deleted_file(self):
+    def test_trashed_file_opens_from_the_trash(self):
         f = _make_file(self.user, mime_type="text/plain")
         f.deleted_at = timezone.now()
         action = ActionRegistry.get("view")
-        self.assertFalse(action.is_available(self.user, f, permission=MANAGE))
+        self.assertTrue(action.is_available(self.user, f, permission=MANAGE))
 
     def test_folder_not_applicable(self):
         folder = _make_folder(self.user)

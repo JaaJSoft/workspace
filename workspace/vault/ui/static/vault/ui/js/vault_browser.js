@@ -315,11 +315,12 @@ window.vaultBrowser = (function () {
         }, function () { /* a migration never surfaces as an error */ });
       },
 
-      // A reload takes back a revealed secret, so a pass that rewrote rows
-      // under one - or under a reveal still decrypting - waits for the gesture that takes it back anyway - closing
-      // the panel, opening another entry. Any write that re-signs a row runs
-      // it first: it must sign the ciphertexts the server now holds, not the
-      // ones the migration replaced.
+      // A reload takes back a revealed secret. A pass that rewrote rows while
+      // a secret was revealed, or while a reveal was still decrypting,
+      // therefore waits for a gesture that takes the secret back anyway:
+      // closing the panel or opening another entry. Any write that re-signs a
+      // row runs it first: it must sign the ciphertexts the server now holds,
+      // not the ones the migration replaced.
       flushDeferredReload: async function () {
         if (!this.reloadDeferred) return;
         this.reloadDeferred = false;

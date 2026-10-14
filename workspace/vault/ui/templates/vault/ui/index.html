@@ -92,12 +92,12 @@
           <span x-text="error"></span>
           </inline-alert>
 
+          <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
+
           {% comment %}
               x-if, not x-show: inline-alert reads its attributes once, when
               it connects.
           {% endcomment %}
-          <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
-
           <template x-if="migrationWarning">
             <inline-alert type="info" dismissible class="mx-5 mt-4" message="Some items could not be updated to the latest encryption. They still open normally; the app will try again next time."></inline-alert>
           </template>

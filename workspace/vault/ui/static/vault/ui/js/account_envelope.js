@@ -17,8 +17,9 @@ window.vaultEnvelope = (function () {
     if (buffer && typeof buffer.fill === 'function') buffer.fill(0);
   }
 
-  // Typed equality: 2.0 or true would compare equal to 2 or 1 and still name
-  // another value to a server that types them.
+  // Strict equality: loosely, true equals 1, yet a server that types its
+  // params reads them as two different values. A 2.0 and a 2 are one number
+  // once JSON.parse has run, so only the server can tell those apart.
   function sameParams(given, expected) {
     if (!given || typeof given !== 'object' || Array.isArray(given)) return false;
     const keys = Object.keys(expected);

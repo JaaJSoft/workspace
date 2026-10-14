@@ -25,8 +25,6 @@ class SensitiveNameTests(TestCase):
             "session_key",
             "wrapped_kex_priv",
             "encrypted_name",
-            "sig_over_kex_pub",
-            "SIG_PUBLIC",
         ):
             with self.subTest(name=name):
                 self.assertTrue(is_sensitive_name(name))
@@ -37,6 +35,9 @@ class SensitiveNameTests(TestCase):
             "refresh_token",
             "share_token",
             "oauth2_data_encrypted",
+            "password_encrypted",
+            "secret_encrypted",
+            "voter_token",
         ):
             with self.subTest(name=name):
                 self.assertTrue(is_sensitive_name(name))
@@ -52,6 +53,17 @@ class SensitiveNameTests(TestCase):
             # Counters, not credentials - the suffix rule is singular for them.
             "prompt_tokens",
             "completion_tokens",
+            # Public by design: served to every account that verifies them.
+            "sig_public",
+            "sig_over_kex_pub",
+            "SIG_ALG_ED25519",
+            # Flags and timestamps about a secret, not the secret.
+            "encrypted",
+            "has_password",
+            "needs_password",
+            "password_verified",
+            "password_ok",
+            "claim_token",
         ):
             with self.subTest(name=name):
                 self.assertFalse(is_sensitive_name(name))
@@ -200,6 +212,23 @@ class SecretRedactingFilterTests(TestCase):
         rendered = record.getMessage()
         self.assertNotIn("SECRETVALUE", rendered)
         self.assertIn("attempts=", rendered)
+
+    def test_a_flag_about_a_password_keeps_its_neighbours(self):
+        """A format string naming a secret blanks every positional argument,
+        so a flag mistaken for one costs the whole line its content."""
+        record = logging.LogRecord(
+            "workspace.test",
+            logging.INFO,
+            __file__,
+            1,
+            "share link refused: user=%s has_password=%s",
+            ("alice", True),
+            None,
+        )
+        SecretRedactingFilter().filter(record)
+        self.assertEqual(
+            record.getMessage(), "share link refused: user=alice has_password=True"
+        )
 
     def test_leaves_an_ordinary_message_untouched(self):
         self.assertEqual(self._render("synced %s folders", 3), "synced 3 folders")

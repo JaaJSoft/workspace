@@ -131,3 +131,12 @@ test('the rotate body names the current kdf and the envelope it replaces', () =>
     wrapped_kex_priv: 'n', wrapped_sig_priv: 'm', expected_wrapped_kex_priv: 'old',
   });
 });
+
+test('the same value under another type is another parameter', () => {
+  const { E } = harness();
+  assert.equal(E.needsDerivation(fields({ kdf_params: { v: '1.3', m: '65536', t: 3, p: 2 } })), true);
+  const unit = { algo: 'argon2id', params: { v: '1.3', m: 65536, t: 3, p: 1 } };
+  const { E: single } = harness({ vaultCrypto: { CURRENT_SUITE: { kdf: unit } } });
+  assert.equal(single.needsDerivation(fields({ kdf_params: { v: '1.3', m: 65536, t: 3, p: 1 } })), false);
+  assert.equal(single.needsDerivation(fields({ kdf_params: { v: '1.3', m: 65536, t: 3, p: true } })), true);
+});

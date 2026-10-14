@@ -24,8 +24,7 @@ window.vaultEnvelope = (function () {
     const keys = Object.keys(expected);
     return Object.keys(given).length === keys.length
       && keys.every(function (key) {
-        return Object.hasOwn(given, key) && typeof given[key] === typeof expected[key]
-          && given[key] === expected[key];
+        return Object.hasOwn(given, key) && given[key] === expected[key];
       });
   }
 

@@ -17,15 +17,16 @@ class SensitiveBackend(abc.ABC):
     """A sensitive-content detector."""
 
     # The registry key (PHOTOS_SENSITIVE_BACKEND), recorded with every score:
-    # a photo scored by another detector counts as pending again.
+    # a photo scored by another detector counts as pending again. A stored
+    # score is reused as long as the key and the bytes match, so a change
+    # that moves the scores needs a new key.
     key: str = ""
     # The weights files it runs (detection.weights.ModelFile).
     models: tuple = ()
     # Longest side, in px, of the copy of the photo handed to score.
     decode_size: int = 224
     # The default score from which a photo is blurred, overridden by
-    # PHOTOS_SENSITIVE_THRESHOLD. Tuned for recall: a photo blurred by mistake
-    # costs a click, an explicit one shown in clear costs much more.
+    # PHOTOS_SENSITIVE_THRESHOLD.
     threshold: float = 0.5
 
     def prepare(self):

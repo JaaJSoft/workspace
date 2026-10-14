@@ -38,11 +38,14 @@ class FalconsaiVitBackend(SensitiveBackend):
     # Twice the input: the short side of a photo up to 2:1 is squashed down
     # to it rather than stretched up.
     decode_size = 2 * _INPUT_SIZE
-    # Measured on 1,971 Open Images photos, none of them explicit: 11 score
-    # 0.2 or more (a bikini, a kiss, a mannequin...), 9 score 0.5 or more,
-    # the median 0.0001. The scores are that bimodal, so the low threshold
-    # costs a couple of false positives for whatever recall it buys.
-    threshold = 0.2
+    # The model's own decision boundary, the only one its card evaluates (98%
+    # accuracy on its argmax, over 80,000 images it does not publish). The
+    # score is not a calibrated probability, and the card does not say what
+    # its "nsfw" class takes in. On 1,971 Open Images photos, none of them
+    # explicit, 9 score 0.5 or more and 11 score 0.2 or more (a bikini, a
+    # kiss, a mannequin...), the median 0.0001: a lower threshold blurs more
+    # photos of people and buys no measured recall.
+    threshold = 0.5
 
     def score(self, image):
         resized = image.resize((_INPUT_SIZE, _INPUT_SIZE), Image.BILINEAR)

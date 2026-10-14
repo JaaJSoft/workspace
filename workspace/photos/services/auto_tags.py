@@ -9,7 +9,9 @@ owner's own Tag of that name (matched case-insensitively, created on first
 use).
 
 A photo is tagged once, after it is embedded (``PhotoEmbedding.auto_tagged_at``,
-reset with every new vector): a tag its owner took off stays off.
+reset with every new vector): a tag its owner took off stays off. Videos are
+not tagged: the thresholds are fitted on photos, and a tag placed from any of
+a video's key frames would be wrong far more often.
 
 Only personal photos: a Tag belongs to its owner, and the files API tags
 nothing else. Runs in the worker, after the embedding and from the hourly
@@ -88,11 +90,15 @@ def tag_photo(row):
     """Give the photo of the PhotoEmbedding *row* its automatic tags, once.
 
     Returns True when the row is settled: tagged, or nothing to tag (no
-    vector, a group photo, trashed, the owner turned the tags off).
+    vector, a video's key frame, a group photo, trashed, the owner turned the
+    tags off). A row tagged already is left as it is.
     """
+    if row.auto_tagged_at is not None:
+        return True
     file_obj = row.file
     taggable = (
         row.embedding is not None
+        and row.timestamp is None
         and file_obj.group_id is None
         and file_obj.deleted_at is None
         and file_obj.owner_id == row.owner_id
@@ -130,20 +136,23 @@ def tag_photo_safely(row):
 def pending_auto_tags_qs(*, reanalyze=False):
     """The live personal photos embedded with a vector of the current model
     but not tagged yet."""
-    qs = File.objects.alive().filter(
-        group__isnull=True,
-        photo_embedding__embedding__isnull=False,
-        photo_embedding__model=get_embedding_backend().model_key,
-    )
-    if reanalyze:
-        return qs
-    return qs.filter(photo_embedding__auto_tagged_at__isnull=True)
+    # One filter() call: every condition is on the same row, the photo's own
+    # (a photo has a single untimed row).
+    photo_row = {
+        "group__isnull": True,
+        "photo_embeddings__embedding__isnull": False,
+        "photo_embeddings__timestamp__isnull": True,
+        "photo_embeddings__model": get_embedding_backend().model_key,
+    }
+    if not reanalyze:
+        photo_row["photo_embeddings__auto_tagged_at__isnull"] = True
+    return File.objects.alive().filter(**photo_row)
 
 
 def refresh_auto_tags(file_obj):
     """The catch-up's processor: tag one pending photo."""
     row = (
-        PhotoEmbedding.objects.filter(file_id=file_obj.pk)
+        PhotoEmbedding.objects.filter(file_id=file_obj.pk, timestamp__isnull=True)
         .select_related("file__owner")
         .first()
     )

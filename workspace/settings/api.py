@@ -213,6 +213,10 @@ SPECTACULAR_SETTINGS = {
             "description": "The folder photos imported from the Photos page are saved to.",
         },
         {
+            "name": "Photos - Search",
+            "description": "The moments of videos found by similar photos and search by description.",
+        },
+        {
             "name": "Projects",
             "description": "Collaborative projects: settings, members, archiving, and actions.",
         },

@@ -13,6 +13,7 @@ from workspace.core.services.admin_dashboard import embedding_backend_health_car
 from workspace.files.models import File, FileEvent, FileScan
 from workspace.files.services import FileService
 from workspace.files.services.processors import get_processor
+from workspace.files.ui.viewers import AudioViewer
 from workspace.photos.indexes import PHOTO_EMBEDDINGS
 from workspace.photos.models import PhotoEmbedding
 from workspace.photos.services import photo_embeddings
@@ -20,14 +21,14 @@ from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
 from workspace.photos.services.handlers import follow_moved_photo
 from workspace.photos.services.photo_embeddings import (
     QueryEmbeddingUnavailable,
-    embed_photo,
+    embed_file,
     embed_query,
     forget_embedding,
     is_embedding_candidate,
     pending_embeddings_qs,
 )
 
-from .embeddings import BLUE, RED, embeddings_on
+from .embeddings import BLUE, RED, embeddings_on, ffmpeg_installed
 from .images import jpeg_bytes, make_video, upload
 
 User = get_user_model()
@@ -49,8 +50,8 @@ class EmbedPhotoTests(TestCase):
         red = upload(self.user, "red.jpg", jpeg_bytes(color=RED))
         blue = upload(self.user, "blue.jpg", jpeg_bytes(color=BLUE))
 
-        row = embed_photo(red)
-        embed_photo(blue)
+        (row,) = embed_file(red)
+        embed_file(blue)
 
         row.refresh_from_db()
         self.assertEqual(row.owner, self.user)
@@ -65,7 +66,7 @@ class EmbedPhotoTests(TestCase):
         broken = upload(self.user, "broken.jpg")
         broken.content.save("broken.jpg", ContentFile(b"not a picture"), save=False)
 
-        row = embed_photo(broken)
+        (row,) = embed_file(broken)
 
         self.assertIsNone(row.embedding)
         self.assertNotIn(broken, pending_embeddings_qs())
@@ -79,7 +80,7 @@ class EmbedPhotoTests(TestCase):
             ),
             patch.object(backend, "embed_image") as embed_image,
         ):
-            row = embed_photo(upload(self.user, "big.jpg"))
+            (row,) = embed_file(upload(self.user, "big.jpg"))
 
         embed_image.assert_not_called()
         self.assertIsNone(row.embedding)
@@ -94,7 +95,7 @@ class EmbedPhotoTests(TestCase):
             patch.object(backend, "embed_image", side_effect=RuntimeError("down")),
             self.assertLogs("workspace.photos.services.photo_embeddings", "ERROR"),
         ):
-            self.assertIsNone(embed_photo(photo))
+            self.assertIsNone(embed_file(photo))
 
         self.assertFalse(PhotoEmbedding.objects.exists())
         self.assertIn(photo, pending_embeddings_qs())
@@ -103,26 +104,26 @@ class EmbedPhotoTests(TestCase):
         photo = upload(self.user, "a.jpg")
         File.objects.filter(pk=photo.pk).update(content_hash="f" * 64)
 
-        self.assertIsNone(embed_photo(photo))
+        self.assertIsNone(embed_file(photo))
         self.assertFalse(PhotoEmbedding.objects.exists())
 
     def test_new_bytes_make_the_photo_pending_and_replace_the_vector(self):
         photo = upload(self.user, "a.jpg", jpeg_bytes(color=RED))
-        before = _vector_of(embed_photo(photo))
+        before = _vector_of(*embed_file(photo))
 
         FileService.update_content(
             photo, ContentFile(jpeg_bytes(color=BLUE), name="a.jpg")
         )
         photo.refresh_from_db()
         self.assertIn(photo, pending_embeddings_qs())
-        after = _vector_of(embed_photo(photo))
+        after = _vector_of(*embed_file(photo))
 
         self.assertLess(float(before @ after), 0)
         self.assertEqual(PhotoEmbedding.objects.count(), 1)
 
     def test_another_model_makes_every_photo_pending(self):
         photo = upload(self.user, "a.jpg")
-        embed_photo(photo)
+        embed_file(photo)
         PhotoEmbedding.objects.update(model="clip_vit_b32")
 
         self.assertIn(photo, pending_embeddings_qs())
@@ -130,17 +131,17 @@ class EmbedPhotoTests(TestCase):
     def test_a_photo_given_to_someone_else_moves_partition_without_a_rerun(self):
         bob = User.objects.create_user(username="bob", password="p")
         photo = upload(self.user, "a.jpg", jpeg_bytes(color=RED))
-        row = embed_photo(photo)
+        (row,) = embed_file(photo)
         File.objects.filter(pk=photo.pk).update(owner=bob)
         photo.refresh_from_db()
         self.assertIn(photo, pending_embeddings_qs())
 
         with patch.object(FakeEmbeddingBackend, "embed_image") as embed_image:
-            moved = embed_photo(photo)
+            (moved,) = embed_file(photo)
 
         embed_image.assert_not_called()
         self.assertEqual(moved.pk, row.pk)
-        self.assertEqual(moved.owner, bob)
+        self.assertEqual(PhotoEmbedding.objects.get().owner, bob)
         vector = _vector_of(PhotoEmbedding.objects.get(pk=row.pk))
         self.assertEqual(
             [pk for pk, _ in nearest(PHOTO_EMBEDDINGS, vector, partition=bob.pk, k=1)],
@@ -157,11 +158,11 @@ class EmbedPhotoTests(TestCase):
         photo = upload(self.user, "a.jpg", parent=folder)
 
         self.assertTrue(is_embedding_candidate(photo))
-        self.assertEqual(embed_photo(photo).owner, self.user)
+        self.assertEqual(embed_file(photo)[0].owner, self.user)
 
     def test_a_deleted_row_takes_its_vector_along(self):
         photo = upload(self.user, "a.jpg")
-        row = embed_photo(photo)
+        (row,) = embed_file(photo)
         vector = _vector_of(row)
 
         FileService.hard_delete(photo)
@@ -173,7 +174,7 @@ class EmbedPhotoTests(TestCase):
 
     def test_forget_drops_the_row_and_its_vector(self):
         photo = upload(self.user, "a.jpg")
-        vector = _vector_of(embed_photo(photo))
+        vector = _vector_of(*embed_file(photo))
 
         forget_embedding(photo)
 
@@ -199,7 +200,7 @@ class CandidateTests(TestCase):
         photo = upload(self.user, "a.jpg")
 
         self.assertFalse(is_embedding_candidate(photo))
-        self.assertIsNone(embed_photo(photo))
+        self.assertIsNone(embed_file(photo))
         self.assertFalse(get_processor("embeddings").pending_files().exists())
 
     @override_settings(PHOTOS_EMBEDDING_BACKEND="nope")
@@ -208,12 +209,28 @@ class CandidateTests(TestCase):
 
         self.assertFalse(get_processor("embeddings").pending_files().exists())
 
-    def test_videos_and_other_files_are_left_out(self):
+    @ffmpeg_installed()
+    def test_a_video_is_a_candidate_where_ffmpeg_is_installed(self):
         video = make_video(self.user, "clip.webm", None)
-        text = upload(self.user, "a.txt", b"hello")
+
+        self.assertTrue(is_embedding_candidate(video))
+        self.assertIn(video, pending_embeddings_qs())
+
+    @ffmpeg_installed(False)
+    def test_without_ffmpeg_a_video_is_never_pending(self):
+        video = make_video(self.user, "clip.webm", None)
 
         self.assertFalse(is_embedding_candidate(video))
+        self.assertNotIn(video, pending_embeddings_qs())
+
+    def test_other_files_and_audio_recordings_are_left_out(self):
+        text = upload(self.user, "a.txt", b"hello")
+        recording = make_video(self.user, "memo.webm", None)
+        File.objects.filter(pk=recording.pk).update(viewer=AudioViewer.slug)
+        recording.refresh_from_db()
+
         self.assertFalse(is_embedding_candidate(text))
+        self.assertFalse(is_embedding_candidate(recording))
         self.assertEqual(set(pending_embeddings_qs()), set())
 
     @override_settings(FILES_MALWARE_SCAN_ENABLED=True)
@@ -253,9 +270,9 @@ class CandidateTests(TestCase):
     def test_a_photo_moved_to_another_owner_is_queued_again(self):
         bob = User.objects.create_user(username="bob", password="p")
         photo = upload(self.user, "a.jpg")
-        embed_photo(photo)
+        embed_file(photo)
         File.objects.filter(pk=photo.pk).update(owner=bob)
-        photo = File.objects.select_related("photo_embedding").get(pk=photo.pk)
+        photo = File.objects.get(pk=photo.pk)
 
         with (
             patch("workspace.photos.tasks.embed_photo.delay") as delay,

@@ -9,14 +9,14 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.models import FileTag, Tag
+from workspace.files.models import File, FileTag, Tag
 from workspace.files.services import FileService
 from workspace.files.services.processors import get_processor
 from workspace.photos.models import PhotoEmbedding
-from workspace.photos.services import auto_tags
+from workspace.photos.services import auto_tags, photo_embeddings
 from workspace.photos.services.auto_tags import pending_auto_tags_qs, refresh_auto_tags
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
-from workspace.photos.services.photo_embeddings import embed_photo
+from workspace.photos.services.photo_embeddings import embed_file
 from workspace.photos.services.tag_vocabulary import CLASSIC_TAGS, ClassicTag
 from workspace.users.services.settings import set_setting
 
@@ -89,7 +89,7 @@ class ClassicTagTests(AutoTagTestCase):
         red = library_photo(self.user, "red.jpg", RED, embed=False)
         self.tag_by_hand(Tag.objects.create(owner=self.user, name="Red"), red)
 
-        embed_photo(red)
+        embed_file(red)
 
         self.assertEqual(_tags(red), {("Red", FileTag.Source.MANUAL)})
 
@@ -99,7 +99,7 @@ class ClassicTagTests(AutoTagTestCase):
 
         for file_obj in get_processor("auto_tags").pending_files():
             refresh_auto_tags(file_obj)
-        embed_photo(red)
+        embed_file(red)
 
         self.assertEqual(_tags(red), set())
 
@@ -108,7 +108,7 @@ class ClassicTagTests(AutoTagTestCase):
         self.assertEqual(_tags(photo), set())
 
         FileService.update_content(photo, ContentFile(jpeg_bytes(color=RED)))
-        embed_photo(photo)
+        embed_file(photo)
 
         self.assertEqual(_tags(photo), {("Red", FileTag.Source.AUTO)})
 
@@ -143,10 +143,38 @@ class ClassicTagTests(AutoTagTestCase):
         self.assertEqual(pending, [red])
         self.assertEqual(_tags(red), {("Red", FileTag.Source.AUTO)})
 
+    def test_a_photo_given_to_someone_else_is_tagged_with_their_tags(self):
+        red = library_photo(self.user, "red.jpg", RED)
+        bob = User.objects.create_user(username="bob", password="p")
+        File.objects.filter(pk=red.pk).update(owner=bob)
+        red.refresh_from_db()
+
+        embed_file(red)
+
+        self.assertEqual(
+            set(
+                FileTag.objects.filter(file=red).values_list(
+                    "tag__owner__username", flat=True
+                )
+            ),
+            {"alice", "bob"},
+        )
+
+    def test_a_video_key_frame_is_never_tagged(self):
+        red = library_photo(self.user, "red.jpg", RED, embed=False)
+        with patch.object(photo_embeddings, "tag_photo_safely"):
+            (row,) = embed_file(red)
+        PhotoEmbedding.objects.filter(pk=row.pk).update(timestamp=1.0)
+        row.refresh_from_db()
+
+        self.assertTrue(auto_tags.tag_photo(row))
+
+        self.assertEqual(_tags(red), set())
+
     def test_a_tagging_failure_leaves_the_embedding_stored(self):
         red = upload(self.user, "red.jpg", jpeg_bytes(color=RED))
         with patch.object(auto_tags, "tags_for", side_effect=RuntimeError("boom")):
-            row = embed_photo(red)
+            (row,) = embed_file(red)
 
         self.assertIsNotNone(row.embedding)
         self.assertIn(red, pending_auto_tags_qs())

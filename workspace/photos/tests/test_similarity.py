@@ -15,7 +15,16 @@ from workspace.photos.services.similarity import (
     similar_photos,
 )
 
-from .embeddings import BLUE, DARK_RED, RED, embeddings_on, library_photo
+from .embeddings import (
+    BLUE,
+    DARK_RED,
+    GREEN,
+    RED,
+    embeddings_on,
+    library_photo,
+    library_video,
+)
+from .images import make_video
 
 User = get_user_model()
 
@@ -144,3 +153,55 @@ class SearchByDescriptionTests(TestCase):
 
         with patch.object(similarity, "embed_query", side_effect=_query):
             self.assertEqual(search_by_description(bob, "red", ALL), [])
+
+
+@embeddings_on
+class VideoSimilarityTests(TestCase):
+    """A video ranks by its closest key frame, once, at that frame's time."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_a_photo_lists_a_video_once_at_its_closest_moment(self):
+        red = library_photo(self.user, "red.jpg", RED)
+        clip = library_video(
+            self.user, "clip.webm", [(0.0, BLUE), (4.0, RED), (9.0, DARK_RED)]
+        )
+
+        (match,) = similar_photos(self.user, red)
+
+        self.assertEqual(match.file_id, clip.pk)
+        self.assertEqual(match.timestamp, 4.0)
+        self.assertTrue(match.near_duplicate)
+
+    def test_a_video_finds_what_looks_like_any_of_its_moments_but_never_itself(self):
+        clip = library_video(self.user, "clip.webm", [(0.0, BLUE), (5.0, RED)])
+        red = library_photo(self.user, "red.jpg", RED)
+        blue = library_photo(self.user, "blue.jpg", BLUE)
+        other = library_video(self.user, "other.webm", [(2.0, DARK_RED)])
+
+        matches = similar_photos(self.user, clip)
+
+        self.assertEqual({m.file_id for m in matches}, {red.pk, blue.pk, other.pk})
+        timestamps = {m.file_id: m.timestamp for m in matches}
+        self.assertIsNone(timestamps[red.pk])
+        self.assertEqual(timestamps[other.pk], 2.0)
+
+    def test_none_while_the_video_has_no_key_frame(self):
+        pending = make_video(self.user, "new.webm", None)
+        unreadable = library_video(self.user, "broken.webm", [])
+
+        self.assertIsNone(similar_photos(self.user, pending))
+        self.assertIsNone(similar_photos(self.user, unreadable))
+
+    def test_search_by_description_opens_a_video_at_the_moment_it_describes(self):
+        clip = library_video(self.user, "clip.webm", [(0.0, GREEN), (6.5, BLUE)])
+
+        with patch.object(similarity, "embed_query", side_effect=_query):
+            (match,) = search_by_description(self.user, "blue", MINE)
+
+        self.assertEqual(match.file_id, clip.pk)
+        self.assertEqual(match.timestamp, 6.5)

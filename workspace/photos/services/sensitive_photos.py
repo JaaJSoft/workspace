@@ -1,4 +1,4 @@
-"""Sensitive photos: blurred wherever they show as a thumbnail.
+"""Sensitive photos and videos: blurred wherever they show as a thumbnail.
 
 A photo's sensitivity level (files/sensitivity.py) comes from the detector's
 score (services/sensitivity/), run in the Celery worker after its MediaItem
@@ -10,7 +10,9 @@ on the MediaItem row, not on a tag of the owner's: everyone who can open the
 photo sees it blurred under their own preference, in a share or a shared
 album too.
 
-Videos are not checked yet; they can be marked by hand.
+A video is checked where ffmpeg is installed, on the frames read for its key
+frames (video_key_frames.py): its score is its highest frame's, as one
+explicit shot is enough.
 """
 
 from __future__ import annotations
@@ -44,21 +46,32 @@ from .sensitivity.registry import (
     get_sensitive_backend,
     is_misconfigured,
 )
+from .video_frames import video_frames_available
+from .video_key_frames import read_frames
 
 logger = logging.getLogger(__name__)
 
 _RESULTS = safe_counter(
     "workspace_photos_sensitive_total",
-    "Photos checked for sensitive content, by outcome.",
+    "Photos and videos checked for sensitive content, by outcome.",
     labels=("result",),
 )
 
 
+def sensitive_media_type(file_obj):
+    """The kind of library item *file_obj* is when it can be checked: a
+    photo, or a video where ffmpeg is installed. None otherwise."""
+    media_type = media_type_for(file_obj)
+    if media_type == MediaItem.MediaType.VIDEO and not video_frames_available():
+        return None
+    return media_type
+
+
 def is_sensitive_candidate(file_obj):
-    """Whether *file_obj* is a photo this instance checks."""
+    """Whether *file_obj* is a photo or a video this instance checks."""
     return (
         detection_available()
-        and media_type_for(file_obj) == MediaItem.MediaType.PHOTO
+        and sensitive_media_type(file_obj) is not None
         and file_obj.deleted_at is None
         and not is_blocked(file_obj)
     )
@@ -71,18 +84,22 @@ def sensitive_catch_up_enabled():
 
 
 def pending_sensitive_qs(*, reanalyze=False):
-    """The live library photos never checked, checked on other bytes or by
-    another detector, or whose level no longer matches the thresholds.
+    """The live library photos and videos never checked, checked on other
+    bytes or by another detector, or whose level no longer matches the
+    thresholds.
 
-    A photo without a MediaItem row is not in the library yet: its row's
-    writer runs first, and the photo is pending from then on. A file whose
-    own hash is empty only counts when it was never checked.
+    A file without a MediaItem row is not in the library yet: its row's
+    writer runs first, and the file is pending from then on. Without ffmpeg
+    a video is never pending: nothing could ever read it. A file whose own
+    hash is empty only counts when it was never checked.
     """
     qs = exclude_blocked(
         library_candidates(File.objects.alive().with_blob()).filter(
-            type__in=RASTER_LABELS, media_item__isnull=False
+            media_item__isnull=False
         )
     )
+    if not video_frames_available():
+        qs = qs.filter(type__in=RASTER_LABELS)
     if reanalyze:
         return qs
     backend = get_sensitive_backend()
@@ -134,15 +151,15 @@ def refresh_sensitive(file_obj):
 
 
 def check_photo(file_obj):
-    """Score *file_obj* and record its level on its MediaItem row; True
-    when it was written.
+    """Score the photo or the video *file_obj* and record its level on its
+    MediaItem row; True when it was written.
 
     A score this detector already gave these bytes is reused rather than
     computed again: only the thresholds moved.
 
     False means nothing was stored: the file is not a candidate, its blob
     could not be opened, the backend failed, or the file changed while it
-    was read. A photo that cannot be decoded, or is past the size limit, is
+    was read. A file that cannot be decoded, or is past the limits, is
     recorded without a score, so it does not come back every hour.
     """
     if not is_sensitive_candidate(file_obj):
@@ -201,14 +218,27 @@ def _stored_score(file_obj, backend):
 
 
 def _score(file_obj, backend):
-    """The photo's score; None when it cannot be decoded or is too large,
-    False when its blob could not be opened (the catch-up tries again)."""
+    """The file's score; None when it cannot be decoded or is past the
+    limits, False when its blob could not be opened (the catch-up tries
+    again)."""
+    if sensitive_media_type(file_obj) == MediaItem.MediaType.VIDEO:
+        return _video_score(file_obj, backend)
     if file_obj.size and file_obj.size > settings.PHOTOS_SENSITIVE_MAX_FILE_BYTES:
         return None
     image = decode_photo(file_obj, backend.decode_size, reader="Sensitive check")
     if image is None or image is False:
         return image
     return backend.score(image)
+
+
+def _video_score(file_obj, backend):
+    """The highest score among the video's frames, as _score answers."""
+    frames = read_frames(file_obj, backend.decode_size)
+    if frames is None:
+        return False
+    if not frames:
+        return None
+    return max(backend.score(image) for _timestamp, image in frames)
 
 
 def mark_sensitive(file_uuids, sensitive):

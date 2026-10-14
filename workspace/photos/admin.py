@@ -26,10 +26,10 @@ class FaceAnalysisAdmin(ModelAdmin):
 
 @admin.register(PhotoEmbedding)
 class PhotoEmbeddingAdmin(ModelAdmin):
-    """Which photos were embedded for similarity and search, and by which
-    model. Read-only; the vectors themselves are not shown."""
+    """Which photos and video frames were embedded for similarity and search,
+    and by which model. Read-only; the vectors themselves are not shown."""
 
-    list_display = ["file", "owner", "model", "has_vector", "analyzed_at"]
+    list_display = ["file", "timestamp", "owner", "model", "has_vector", "analyzed_at"]
     list_filter = ["model"]
     search_fields = ["file__name", "owner__username"]
     list_select_related = ["file", "owner"]

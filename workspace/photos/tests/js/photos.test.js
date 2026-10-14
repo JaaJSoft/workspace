@@ -84,7 +84,13 @@ test('a tile opens the Files viewer with its uuid, name and type', () => {
   ctx.photosApp().openPhoto({ dataset: { uuid: 'u1', displayName: 'beach.jpg', fileType: 'jpeg' } });
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, 'open-file-viewer');
-  assert.deepEqual({ ...dispatched[0].detail }, { uuid: 'u1', name: 'beach.jpg', type: 'jpeg' });
+  assert.deepEqual({ ...dispatched[0].detail }, { uuid: 'u1', name: 'beach.jpg', type: 'jpeg', at: null });
+});
+
+test('a video a search found opens at the moment that matched', () => {
+  const { ctx, dispatched } = load();
+  ctx.photosApp().openPhoto({ dataset: { uuid: 'v1', displayName: 'pool.mp4', fileType: 'mp4', at: '12.500' } });
+  assert.equal(dispatched[0].detail.at, 12.5);
 });
 
 function sentinel(ctx, ajax) {
@@ -150,6 +156,7 @@ function tile(dataset = {}) {
       uuid: 'u1',
       displayName: 'beach.jpg',
       fileType: 'jpeg',
+      mediaType: 'photo',
       filesUrl: '/files/p1?open=u1',
       favorite: '0',
       ...dataset,
@@ -224,7 +231,7 @@ const ALL_PHOTO_ACTIONS = [
 
 test('the menu groups a photo of the library, taking it away last', async () => {
   const { fileActions } = fetchActionsReturning({ u1: ALL_PHOTO_ACTIONS });
-  const document = pageJson({ 'photos-faces-enabled': true, 'photos-embeddings-enabled': true });
+  const document = pageJson({ 'photos-faces-enabled': true, 'photos-embedded-media': ['photo'] });
   const app = load({ fileActions, document }).ctx.photosApp();
   app.albumUuid = 'al1';
   app.albumActions = ['set_cover', 'remove_items'];
@@ -2051,17 +2058,52 @@ test('a hover preview of an album-scoped video reads through the album', () => {
   assert.equal(video.src, '/api/v1/photos/albums/al1/files/u1/content');
 });
 
-test('similar photos are offered as the page says the instance embeds photos', () => {
-  const flag = { textContent: 'true' };
+test('similar photos are offered on what the page says the instance embeds', () => {
+  const flag = { textContent: '["photo", "video"]' };
   const { ctx } = load({
-    document: { getElementById: (id) => (id === 'photos-embeddings-enabled' ? flag : null), querySelector: () => null },
+    document: { getElementById: (id) => (id === 'photos-embedded-media' ? flag : null), querySelector: () => null },
   });
   const app = ctx.photosApp();
-  assert.equal(app.embeddingsEnabled(), true);
-  flag.textContent = 'false';
-  assert.equal(app.embeddingsEnabled(), false);
+  assert.equal(app.embeds('photo'), true);
+  assert.equal(app.embeds('video'), true);
+  flag.textContent = '["photo"]';
+  assert.equal(app.embeds('video'), false);
+  flag.textContent = '[]';
+  assert.equal(app.embeds('photo'), false);
   flag.textContent = '';
-  assert.equal(app.embeddingsEnabled(), false);
+  assert.equal(app.embeds('photo'), false);
+});
+
+test('a video offers similar photos where the instance embeds videos', async () => {
+  const { fileActions } = fetchActionsReturning({ u1: [{ id: 'view' }] });
+  for (const [embedded, offered] of [[['photo', 'video'], true], [['photo'], false]]) {
+    const document = pageJson({ 'photos-embedded-media': embedded });
+    const app = load({ fileActions, document }).ctx.photosApp();
+
+    app.openCtxMenu({ clientX: 1, clientY: 1 }, tile({ mediaType: 'video' }));
+    await flush();
+
+    assert.equal(app.ctxShows('similar'), offered, embedded.join());
+  }
+});
+
+test('the hover preview of a video a search found starts at the moment that matched', () => {
+  const timers = [];
+  const video = { play: () => Promise.resolve(), pause() {}, removeAttribute() {}, load() {}, remove() {}, dataset: {}, setAttribute() {} };
+  const app = load({
+    setTimeout: (fn) => { timers.push(fn); return 1; },
+    clearTimeout() {},
+    matchMedia: () => ({ matches: false }),
+    document: { getElementById: () => null, querySelector: () => null, createElement: () => video },
+  }).ctx.photosApp();
+  app.photoPrefs = { video_hover_preview: true };
+  const t = tile({ mediaType: 'video', at: '42.000' });
+  t.querySelector = () => ({ appendChild() {} });
+
+  app.startHoverPreview(t);
+  timers[0]();
+
+  assert.equal(video.currentTime, 42);
 });
 
 test('similar photos opens the ranking in the library on screen, in history', async () => {

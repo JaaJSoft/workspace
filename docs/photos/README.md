@@ -36,16 +36,21 @@ by renaming it. A date read from the file itself always wins over the name.
 
 ## Similar photos and search by description
 
-One image embedding per photo - a vector saying what the photo shows, in a
-space a sentence can be embedded into too - gives three features:
+One image embedding per photo, and one per key frame of a video - a vector
+saying what the picture shows, in a space a sentence can be embedded into too -
+gives three features:
 
-- **Similar photos**, from a photo's menu: the photos of the library on screen
-  that look like it, the **near-duplicates** first (the shots of one burst, a
-  re-export), then up to 30 of the merely similar ones.
+- **Similar photos**, from the menu of a photo or a video: the photos and
+  videos of the library on screen that look like it, the **near-duplicates**
+  first (the shots of one burst, a re-export), then up to 30 of the merely
+  similar ones.
 - **Search by description**, from the search field in the Photos header:
   "dog on the beach", "snow", "birthday cake" ranked against the library,
   with no tag and no name to match. The global search offers it too, as
   *Photos showing "..."*.
+- A video ranks by its closest key frame and is listed once. Its tile says
+  the moment that matched ("0:42 / 1:30"), and opens the video there, in the
+  viewer and in the hover preview.
 - Both follow the library tab on screen (Mine, All, Shared with me, a group),
   and never show a photo the user cannot open: trashed, quarantined, hidden
   and unshared photos stay out.
@@ -59,18 +64,49 @@ scene, not who is in it. Identity stays with face grouping above.
 PHOTOS_EMBEDDINGS_ENABLED=1
 ```
 
-It is an instance-level setting, with no per-user opt-in: every photo of the
-instance is embedded, group folders' included. Videos are not, for now. The
-embedding runs in the Celery worker, at low priority after an upload and at
-background priority for the hourly catch-up (`python manage.py catch_up
-embeddings`). A search embeds its text in the worker too, at interactive
+It is an instance-level setting, with no per-user opt-in: every photo and
+video of the instance is embedded, group folders' included (videos only where
+ffmpeg is installed, see below). The embedding runs in the Celery worker, at
+low priority after an upload and at background priority for the hourly
+catch-up (`python manage.py catch_up embeddings`). A search embeds its text in the worker too, at interactive
 priority: the web process never loads a model. A search waits
 `PHOTOS_EMBEDDING_QUERY_TIMEOUT` seconds for the answer, then says it could
 not run.
 
 The admin dashboard shows a **Photo search** card: whether the backend is
-known and ready. Embedded photos are listed, read-only, in the admin under
-*Photo embeddings*.
+known and ready. Embedded photos and video frames are listed, read-only, in
+the admin under *Photo embeddings*.
+
+### Videos
+
+Videos are embedded where ffmpeg and ffprobe are installed (the Docker image
+ships them); without them, videos are left out and never count as pending,
+and their menu does not offer Similar photos. Each video runs in its own
+low-priority task (`photos.embed_video`), next to the face analysis of
+videos.
+
+- **Key frames**: ffmpeg reads the first frame, one at every scene change, and
+  one at a regular pace that spreads half of `PHOTOS_VIDEO_KEY_FRAMES_MAX` over
+  the video, never more often than every 2 seconds: a phone clip is usually
+  one long shot that no scene change would ever cut. The frames are decoded at
+  the size the backend reads a photo at. The sensitive-content check reads the
+  same frames (see *Sensitive photos* below).
+- **One vector per moment**: a frame within the near-duplicate distance of one
+  already kept shows nothing new and is dropped. A still shot is one vector,
+  a clip panning from the pool to the dog jumping in a few. Each one kept is
+  stored as a small WebP too (10 to 40 KB): the picture a result shows of the
+  moment that matched.
+- **Limits**: a video longer than `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` or
+  larger than `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` is not read, nor one
+  ffmpeg cannot decode; like a photo that cannot be, it is recorded as
+  analyzed so the catch-up does not try it again every hour. A voice
+  recording in a video container is not a video and stays out.
+
+The cost is the embedding of up to 12 frames (about 4 s of CPU with SigLIP 2,
+1 s with CLIP), plus the decoding: ffmpeg reads the whole video to find its
+scene changes, so a long 4K recording costs far more than a short phone clip.
+Lower `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` on a server that should not
+spend that.
 
 ### Backends
 
@@ -106,11 +142,12 @@ has served a search, 1.1 GB for SigLIP 2's multilingual vocabulary): raise
 1.5 GB (1572864) for CLIP, or the default 512 MB recycles the worker after
 every photo.
 
-**`remote`** sends each photo, as a JPEG downscaled to
-`PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to another
-service: **every photo of the instance leaves the server.** Only enable it
-for an endpoint the instance's users can trust with their photos. There is no
-standard for image input on `/embeddings`; the contract is the most common
+**`remote`** sends each photo and each frame read from a video, as a JPEG
+downscaled to `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` px (never the original), to
+another service: **every photo of the instance, and frames of every video,
+leave the server.** Only enable it for an endpoint the instance's users can
+trust with their photos. There is no standard for image input on
+`/embeddings`; the contract is the most common
 one:
 
 ```json
@@ -158,7 +195,9 @@ properties panel marks them with a sparkle.
 - A photo is tagged once, after it is embedded: a tag its owner takes off
   stays off. A new version of the photo, or a new model, tags it again.
 - Only personal photos: a tag belongs to its owner, and a group folder's
-  photo is never tagged.
+  photo is never tagged. Videos are not tagged either: the thresholds are
+  fitted on photos, and a tag drawn from any of a video's key frames would be
+  wrong far more often.
 - Users turn it off with *Tag photos automatically* in the Photos
   preferences; the photos embedded meanwhile are not tagged later.
 - The tagging runs in the worker right after the embedding, and the hourly
@@ -177,6 +216,9 @@ properties panel marks them with a sparkle.
 | `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX` | `12` | The most frames read from one video. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` | `1200` | Longer videos (seconds) are neither embedded nor checked for sensitive content. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` | 2 GB | Larger videos are neither embedded nor checked for sensitive content. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
 | `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP, 0.3 for Jina CLIP). |
 | `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP, 0.085 for Jina CLIP). |
@@ -233,7 +275,15 @@ Off by default, like the other models: without it, photos are only marked by
 hand. When on, every photo of the instance is checked in the Celery worker,
 at normal priority after an upload (the photo shows in clear until then) and
 at background priority for the hourly catch-up (`python manage.py catch_up
-sensitive`). Videos are not checked yet.
+sensitive`).
+
+Videos are checked too where ffmpeg is installed, on the frames read for
+their key frames (see *Videos* under similar photos, and its
+`PHOTOS_VIDEO_KEY_FRAMES_*` limits): a video's score is its highest frame's,
+so one explicit shot is enough to blur it. Each runs in its own low-priority
+task (`photos.check_sensitive_video`), so a video shows in clear a little
+longer than a photo after an upload, and costs a decoding of its own plus up
+to 12 frames through the detector (about 1.5 s of CPU).
 
 The default detector, `falconsai_vit`, is
 [Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
@@ -274,7 +324,7 @@ is known and ready.
 |---|---|---|
 | `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
 | `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
-| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger originals are not checked. |
+| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger photos are not checked. |
 
 ## Face detection and grouping
 

@@ -552,19 +552,21 @@ class Face(models.Model):
 
 
 class PhotoEmbedding(models.Model):
-    """One photo's place in the image embedding space: what it shows, as a
-    vector that a similar photo, or a sentence describing it, lands near.
+    """One photo's place in the image embedding space, or one key frame of a
+    video's: what it shows, as a vector that a similar photo, or a sentence
+    describing it, lands near.
 
-    Written off-request (services/photo_embeddings.py). A photo that could
-    not be decoded gets a row too, with no vector, so the catch-up does not
+    Written off-request (services/photo_embeddings.py), every row of a file
+    at once. A photo has one row, a video one per key frame. A file that could
+    not be read gets a single row with no vector, so the catch-up does not
     read it again every hour. Any mismatch with the file (new bytes, another
     owner, another model) makes it pending again. Never a way to tell people
     apart: identity is the face pipeline's.
     """
 
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
-    file = models.OneToOneField(
-        File, on_delete=models.CASCADE, related_name="photo_embedding"
+    file = models.ForeignKey(
+        File, on_delete=models.CASCADE, related_name="photo_embeddings"
     )
     # The vector index partition: the file's owner when it was read.
     owner = models.ForeignKey(
@@ -576,11 +578,26 @@ class PhotoEmbedding(models.Model):
     model = models.CharField(max_length=128)
     # The source of the photos.indexes.PHOTO_EMBEDDINGS vector index.
     embedding = models.BinaryField(null=True, blank=True)
+    # Seconds into a video, as a player counts them, of the key frame the
+    # vector comes from. Null for a photo, and for a video that has no vector.
+    timestamp = models.FloatField(null=True, blank=True)
+    # Storage path of the key frame as a WebP: what a ranking shows of the
+    # moment that matched. Empty for a photo.
+    frame = models.CharField(max_length=255, blank=True, default="")
     analyzed_at = models.DateTimeField()
     # When the photo was given its automatic tags (services/auto_tags.py),
     # reset with every new vector. Each photo is tagged once: a tag its owner
     # took off never comes back on its own.
     auto_tagged_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["file"],
+                condition=models.Q(timestamp__isnull=True),
+                name="photo_embedding_one_untimed_per_file",
+            ),
+        ]
 
     def __str__(self):
         return f"PhotoEmbedding: {self.file_id}"

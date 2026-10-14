@@ -10,6 +10,7 @@ uv run python scripts/embedding_bench.py --json bench.json
 uv run python scripts/embedding_bench.py --backend siglip2_base --compare bench.json
 uv run python scripts/embedding_bench.py --images 300 --duplicates 50   # a quick run
 uv run python scripts/embedding_bench.py --vectors ~/bench-vectors       # keep the vectors
+uv run python scripts/embedding_bench.py --no-video-frames              # photos only
 ```
 
 `--vectors` keeps each backend's vectors in that folder, and a later run
@@ -26,7 +27,9 @@ into `~/.cache/workspace/embedding-dataset` (beside the face bench's,
 `PHOTO_DATASET_CACHE` moves both, `--cache-dir` this one alone), and each
 model's weights into `PHOTOS_MODEL_DIR`, where the app finds them afterwards.
 The `remote` backend is measured too when its settings are in the
-environment.
+environment. The video frames need ffmpeg: without it they are skipped. On
+Windows, run it with `PYTHONUTF8=1`: SigLIP 2's and Jina CLIP's tokenizers are
+read in the system code page otherwise, and their run fails.
 
 ## What it runs
 
@@ -123,6 +126,17 @@ with negatives did no better (13-19%). Open Images labels are broader than
 a user's own tag (every dog, not one's dog), so this is a lower bound, but
 not one that justifies the feature yet.
 
+**Video frames.** Each photo is filmed (with ffmpeg, before any backend runs):
+a 2-second clip pushing in slowly on it, 4% over the clip, encoded in H.264
+4:2:0 at CRF 30, as a messaging app leaves a phone video. Two of its frames
+are read back, a second apart, and embedded the way the library embeds a
+video's key frames. *Photo vs its frame* is the near-duplicate test with the
+frame as the only copy, among every photo and the other photos' frames. *Two
+frames of a shot* is the share of those pairs within the duplicate threshold,
+which is what tells a video's key frames apart: within it, the second frame
+is dropped. Search by description and similar photos then run with the
+frames in place of the photos.
+
 **Cost.** Time to load both encoders, CPU time per photo and per query (one
 thread: `PHOTOS_ONNX_THREADS`), the weights on disk, and how much the process
 grew. CPU time, not wall time: it is what a Raspberry Pi pays, whatever the
@@ -145,6 +159,26 @@ photographer's library (`seed_demo.py --real-photos`), past 0.07 for SigLIP 2
 more and more of the pairs under the threshold were taken on different days:
 four in ten at 0.105, its loosest at 99% precision here. The defaults are the
 tightest threshold that still finds 95% of the copies.
+
+The video frames answer whether a video needs thresholds of its own:
+
+| Model | Photo vs its frame found | Loosest at 99% | Search mAP, photos / frames | Best description threshold | Best similar threshold |
+|---|---|---|---|---|---|
+| SigLIP 2 | 86% | 0.085 (96%) | 83.2% / 83.4% | 0.920 / 0.920 | 0.385 / 0.405 |
+| CLIP ViT-B/32 | 81% | 0.075 (81%) | 69.8% / 67.0% | 0.765 / 0.760 | 0.385 / 0.405 |
+| Jina CLIP v1 | 92% | 0.085 (92%) | 80.1% / 79.4% | 0.890 / 0.895 | 0.440 / 0.470 |
+
+Search and similar photos lose little on the frames (Jina CLIP's similar
+photos the most, 3 points of mAP), and their best thresholds barely move: one
+description and one similar threshold serve photos and videos alike.
+
+The near-duplicate threshold finds fewer frames than photo copies (86%
+against 96% for SigLIP 2): a compressed, moving frame of a photo is further
+from it than a re-export. It stays the same all the same, for the reason
+above: a frame it misses still comes first among the similar photos, while a
+looser threshold would group moments of different days. Two frames of one
+shot a second apart are always within it (a median distance of 0.01): a still
+or slowly moving shot is one key frame.
 
 Open Images labels are complete for the labels verified on a photo, not for
 every label: a photo may show a dog nobody asked about, and count as a wrong

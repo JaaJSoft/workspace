@@ -10,6 +10,7 @@ from .views import (
     faces,
     hidden,
     import_folder,
+    video_frames,
 )
 
 router = SimpleRouter(trailing_slash=False)
@@ -168,6 +169,11 @@ urlpatterns = [
         "api/v1/photos/faces/<uuid:pk>/crop",
         faces.FaceCropView.as_view(),
         name="photos-face-crop",
+    ),
+    path(
+        "api/v1/photos/frames/<uuid:pk>",
+        video_frames.VideoFrameView.as_view(),
+        name="photos-video-frame",
     ),
     path(
         "api/v1/photos/files/<uuid:file_uuid>/faces",

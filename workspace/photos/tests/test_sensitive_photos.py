@@ -18,6 +18,7 @@ from workspace.files.sensitivity import (
 from workspace.files.services import FileService
 from workspace.files.services.processors import get_processor
 from workspace.files.services.sharing import share_file
+from workspace.files.tests.videos import requires_ffmpeg
 from workspace.photos.models import MediaItem
 from workspace.photos.services.album_cards import album_cards
 from workspace.photos.services.albums import add_items, create_album
@@ -29,10 +30,18 @@ from workspace.photos.services.sensitive_photos import (
     pending_sensitive_qs,
 )
 from workspace.photos.services.sensitivity.fake import FakeSensitiveBackend
-from workspace.photos.tasks import check_sensitive_photo
+from workspace.photos.tasks import check_sensitive_photo, check_sensitive_video
 from workspace.users.services.settings import set_setting
 
-from .images import jpeg_bytes, make_photo, make_video, upload
+from .embeddings import ffmpeg_installed
+from .images import (
+    colour_video,
+    jpeg_bytes,
+    library_clip,
+    make_photo,
+    make_video,
+    upload,
+)
 
 User = get_user_model()
 
@@ -178,11 +187,6 @@ class CheckPhotoTests(TestCase):
 
         self.assertIn(photo, pending_sensitive_qs())
 
-    def test_a_video_is_not_checked(self):
-        video = make_video(self.user, "clip.webm", _at(2024, 7, 14))
-
-        self.assertFalse(is_sensitive_candidate(video))
-
     @override_settings(PHOTOS_SENSITIVE_DETECTION_ENABLED=False)
     def test_nothing_is_checked_with_detection_off(self):
         photo = library_photo(self.user, "red.jpg", RED)
@@ -196,6 +200,90 @@ class CheckPhotoTests(TestCase):
         check_sensitive_photo(str(photo.pk))
 
         self.assertEqual(_item(photo).sensitive_level, MAX_LEVEL)
+
+
+@requires_ffmpeg
+@detection_on
+class CheckVideoTests(TestCase):
+    """A video is checked on its frames: one explicit shot is enough."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+
+    def test_a_video_with_one_explicit_shot_is_flagged(self):
+        video = library_clip(self.user, "clip.mkv", colour_video((3, BLUE), (3, RED)))
+
+        self.assertTrue(check_photo(video))
+
+        item = _item(video)
+        self.assertEqual(item.sensitive_level, MAX_LEVEL)
+        self.assertAlmostEqual(item.sensitive_score, 1.0, places=2)
+        self.assertEqual(item.sensitive_hash, video.content_hash)
+        self.assertNotIn(video, pending_sensitive_qs())
+
+    def test_a_harmless_video_is_left_in_clear(self):
+        video = library_clip(self.user, "clip.mkv", colour_video((3, BLUE)))
+
+        check_photo(video)
+
+        self.assertEqual(_item(video).sensitive_level, 0)
+
+    @override_settings(PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION=2)
+    def test_a_video_too_long_is_recorded_without_a_score(self):
+        video = library_clip(self.user, "clip.mkv", colour_video((3, RED)))
+
+        self.assertTrue(check_photo(video))
+
+        item = _item(video)
+        self.assertIsNone(item.sensitive_score)
+        self.assertEqual(item.sensitive_level, 0)
+        self.assertNotIn(video, pending_sensitive_qs())
+
+    def test_the_video_task_checks_a_pending_video(self):
+        video = library_clip(self.user, "clip.mkv", colour_video((2, RED)))
+
+        check_sensitive_video(str(video.pk))
+
+        self.assertEqual(_item(video).sensitive_level, MAX_LEVEL)
+
+
+@detection_on
+class VideoCandidateTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        self.video = make_video(self.user, "clip.webm", _at(2024, 7, 14))
+
+    @ffmpeg_installed()
+    def test_a_video_is_checked_where_ffmpeg_is_installed(self):
+        self.assertTrue(is_sensitive_candidate(self.video))
+        self.assertIn(self.video, pending_sensitive_qs())
+
+    @ffmpeg_installed(False)
+    def test_without_ffmpeg_a_video_is_never_pending(self):
+        self.assertFalse(is_sensitive_candidate(self.video))
+        self.assertNotIn(self.video, pending_sensitive_qs())
+
+    @ffmpeg_installed()
+    def test_a_frame_that_cannot_be_read_stores_nothing(self):
+        with patch(
+            "workspace.photos.services.sensitive_photos.read_frames",
+            return_value=None,
+        ):
+            self.assertFalse(check_photo(self.video))
+
+        self.assertIn(self.video, pending_sensitive_qs())
+
+    @ffmpeg_installed()
+    def test_an_upload_queues_the_video_task_once_committed(self):
+        with (
+            patch("workspace.photos.tasks.check_sensitive_video.delay") as video,
+            patch("workspace.photos.tasks.check_sensitive_photo.delay") as photo,
+            self.captureOnCommitCallbacks(execute=True),
+        ):
+            get_processor("sensitive").enqueue(self.video)
+
+        video.assert_called_once_with(str(self.video.pk))
+        photo.assert_not_called()
 
 
 @detection_on

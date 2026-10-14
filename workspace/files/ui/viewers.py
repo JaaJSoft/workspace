@@ -25,10 +25,13 @@ def render_viewer_panel(html: str) -> str:
     return f'<div id="{VIEWER_PANEL_ID}" style="display: contents">{html}</div>'
 
 
-def veil_sensitive(html: str, sensitive) -> str:
-    """*html*, a rendered viewer, behind a "Sensitive content" cover when
-    *sensitive* (files.sensitivity.is_sensitive); unchanged otherwise."""
-    if not sensitive:
+def veil_sensitive(html: str, level, preference) -> str:
+    """*html*, a rendered viewer, behind a "Sensitive content" cover when a
+    file of sensitivity *level* (files.sensitivity.sensitive_level) is
+    blurred under *preference*; unchanged otherwise."""
+    from workspace.files.sensitivity import is_blurred
+
+    if not is_blurred(level, preference):
         return html
     from django.template.loader import render_to_string
     from django.utils.safestring import mark_safe

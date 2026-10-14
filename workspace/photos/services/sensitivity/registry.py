@@ -79,9 +79,3 @@ def get_sensitive_backend(key=None):
 
 def is_misconfigured():
     return settings.PHOTOS_SENSITIVE_BACKEND not in _BACKENDS
-
-
-def sensitive_threshold(backend):
-    """The score from which *backend*'s verdict blurs a photo."""
-    value = settings.PHOTOS_SENSITIVE_THRESHOLD
-    return backend.threshold if value is None else value

@@ -46,7 +46,7 @@ class PhotosConfig(AppConfig):
         )
         from workspace.photos.services.sensitive_photos import (
             mark_sensitive,
-            sensitive_flag,
+            sensitive_level_expression,
         )
 
         register_vector_index(FACE_EMBEDDINGS)
@@ -105,7 +105,7 @@ class PhotosConfig(AppConfig):
 
         # Files blurs what photos flags: the flag is on the MediaItem row.
         register_sensitivity_provider(
-            SensitivityProvider(flag=sensitive_flag, mark=mark_sensitive)
+            SensitivityProvider(level=sensitive_level_expression, mark=mark_sensitive)
         )
 
         properties_section_registry.register(

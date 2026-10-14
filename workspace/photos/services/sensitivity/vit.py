@@ -11,6 +11,8 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
+from workspace.files.sensitivity import BlurPreference
+
 from ..detection import runtime
 from ..detection.health import weights_health
 from ..detection.weights import ModelFile
@@ -38,14 +40,20 @@ class FalconsaiVitBackend(SensitiveBackend):
     # Twice the input: the short side of a photo up to 2:1 is squashed down
     # to it rather than stretched up.
     decode_size = 2 * _INPUT_SIZE
-    # The model's own decision boundary, the only one its card evaluates (98%
-    # accuracy on its argmax, over 80,000 images it does not publish). The
-    # score is not a calibrated probability, and the card does not say what
-    # its "nsfw" class takes in. On 1,971 Open Images photos, none of them
-    # explicit, 9 score 0.5 or more and 11 score 0.2 or more (a bikini, a
-    # kiss, a mannequin...), the median 0.0001: a lower threshold blurs more
-    # photos of people and buys no measured recall.
-    threshold = 0.5
+    # Standard is the model's own decision boundary, the only one its card
+    # evaluates (98% accuracy on its argmax, over 80,000 images it does not
+    # publish). The score is not a calibrated probability, and the card does
+    # not say what its "nsfw" class takes in. On 1,971 Open Images photos,
+    # none of them explicit, 9 score 0.5 or more and 11 score 0.2 or more (a
+    # bikini, a kiss, a mannequin...), the median 0.0001. The stricter steps
+    # stay close above that: lower, they blur more photos of people for no
+    # measured recall.
+    thresholds = {
+        BlurPreference.STRICT: 0.25,
+        BlurPreference.HIGH: 0.35,
+        BlurPreference.STANDARD: 0.5,
+        BlurPreference.LOW: 0.9,
+    }
 
     def score(self, image):
         resized = image.resize((_INPUT_SIZE, _INPUT_SIZE), Image.BILINEAR)

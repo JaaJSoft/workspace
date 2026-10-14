@@ -8,8 +8,13 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 
 from workspace.core.services.admin_dashboard import sensitive_backend_health_card
-from workspace.files.models import File, FileShare
-from workspace.files.sensitivity import is_sensitive, with_sensitivity
+from workspace.files.models import File, FileShare, FileShareLink
+from workspace.files.sensitivity import (
+    MAX_LEVEL,
+    BlurPreference,
+    sensitive_level,
+    with_sensitivity,
+)
 from workspace.files.services import FileService
 from workspace.files.services.processors import get_processor
 from workspace.files.services.sharing import share_file
@@ -19,6 +24,7 @@ from workspace.photos.services.albums import add_items, create_album
 from workspace.photos.services.sensitive_photos import (
     check_photo,
     is_sensitive_candidate,
+    level_for_score,
     mark_sensitive,
     pending_sensitive_qs,
 )
@@ -33,14 +39,21 @@ User = get_user_model()
 detection_on = override_settings(
     PHOTOS_SENSITIVE_DETECTION_ENABLED=True,
     PHOTOS_SENSITIVE_BACKEND="fake",
-    PHOTOS_SENSITIVE_THRESHOLD=None,
 )
 
 # What the fake detector makes of a picture: the share of red in its colour.
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
-# Scores about 0.6: flagged at the fake's 0.5, in clear at 0.7.
+# Scores about 0.6: blurred from the fake's standard threshold (0.5) on, not
+# under low (0.8).
 PURPLE = (150, 0, 100)
+# Each threshold of the fake, moved: PURPLE no longer reaches standard.
+HIGHER_THRESHOLDS = {
+    BlurPreference.STRICT: 0.2,
+    BlurPreference.HIGH: 0.35,
+    BlurPreference.STANDARD: 0.7,
+    BlurPreference.LOW: 0.8,
+}
 
 
 def _at(year, month, day):
@@ -72,7 +85,7 @@ class CheckPhotoTests(TestCase):
         self.assertTrue(check_photo(photo))
 
         item = _item(photo)
-        self.assertTrue(item.sensitive)
+        self.assertEqual(item.sensitive_level, MAX_LEVEL)
         self.assertAlmostEqual(item.sensitive_score, 1.0, places=2)
         self.assertEqual(item.sensitive_model, "fake")
         self.assertEqual(item.sensitive_hash, photo.content_hash)
@@ -83,30 +96,29 @@ class CheckPhotoTests(TestCase):
 
         check_photo(photo)
 
-        self.assertFalse(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, 0)
 
-    @override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.01)
-    def test_the_threshold_setting_overrides_the_backends(self):
-        photo = library_photo(self.user, "blue.jpg", (20, 0, 255))
+    def test_a_borderline_photo_is_blurred_only_by_the_stricter_preferences(self):
+        photo = library_photo(self.user, "purple.jpg", PURPLE)
 
         check_photo(photo)
 
-        self.assertTrue(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, 3)
 
-    def test_a_new_threshold_reuses_the_score_already_given(self):
+    def test_new_thresholds_reuse_the_score_already_given(self):
         photo = library_photo(self.user, "purple.jpg", PURPLE)
         check_photo(photo)
-        self.assertTrue(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, 3)
         score = _item(photo).sensitive_score
 
         with (
-            override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.9),
+            patch.object(FakeSensitiveBackend, "thresholds", HIGHER_THRESHOLDS),
             patch.object(FakeSensitiveBackend, "score") as model,
         ):
             self.assertTrue(check_photo(photo))
 
         model.assert_not_called()
-        self.assertFalse(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, 2)
         self.assertEqual(_item(photo).sensitive_score, score)
 
     def test_new_bytes_are_scored_again(self):
@@ -118,7 +130,7 @@ class CheckPhotoTests(TestCase):
 
         check_photo(photo)
 
-        self.assertFalse(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, 0)
 
     def test_a_choice_made_by_hand_wins_over_the_detector(self):
         red = library_photo(self.user, "red.jpg", RED)
@@ -129,8 +141,8 @@ class CheckPhotoTests(TestCase):
         check_photo(red)
         check_photo(blue)
 
-        self.assertFalse(_item(red).sensitive)
-        self.assertTrue(_item(blue).sensitive)
+        self.assertEqual(_item(red).sensitive_level, 0)
+        self.assertEqual(_item(blue).sensitive_level, MAX_LEVEL)
         # Its verdict is still recorded, so the photo is not pending forever.
         self.assertAlmostEqual(_item(red).sensitive_score, 1.0, places=2)
 
@@ -144,7 +156,7 @@ class CheckPhotoTests(TestCase):
 
         item = _item(photo)
         self.assertIsNone(item.sensitive_score)
-        self.assertFalse(item.sensitive)
+        self.assertEqual(item.sensitive_level, 0)
         self.assertNotIn(photo, pending_sensitive_qs())
 
     def test_a_photo_replaced_while_it_was_read_is_left_to_the_next_pass(self):
@@ -183,7 +195,7 @@ class CheckPhotoTests(TestCase):
 
         check_sensitive_photo(str(photo.pk))
 
-        self.assertTrue(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, MAX_LEVEL)
 
 
 @detection_on
@@ -219,28 +231,39 @@ class PendingSensitiveTests(TestCase):
 
         self.assertIn(photo, pending_sensitive_qs())
 
-    def test_a_photo_flagged_on_another_threshold_is_pending_again(self):
+    def test_a_photo_leveled_on_higher_thresholds_is_pending_again(self):
         photo = library_photo(self.user, "purple.jpg", PURPLE)
         check_photo(photo)
+        self.assertNotIn(photo, pending_sensitive_qs())
 
-        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+        with patch.object(FakeSensitiveBackend, "thresholds", HIGHER_THRESHOLDS):
             self.assertIn(photo, pending_sensitive_qs())
             check_photo(photo)
             self.assertNotIn(photo, pending_sensitive_qs())
 
-    def test_a_photo_in_clear_is_pending_again_under_a_lower_threshold(self):
+    def test_a_photo_leveled_on_lower_thresholds_is_pending_again(self):
         photo = library_photo(self.user, "purple.jpg", PURPLE)
-        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+        with patch.object(FakeSensitiveBackend, "thresholds", HIGHER_THRESHOLDS):
             check_photo(photo)
 
         self.assertIn(photo, pending_sensitive_qs())
 
-    def test_a_choice_made_by_hand_is_not_pending_on_a_new_threshold(self):
+    def test_an_undecodable_photo_is_not_pending_on_new_thresholds(self):
+        photo = library_photo(self.user, "red.jpg", RED)
+        check_photo(photo)
+        MediaItem.objects.filter(file=photo).update(
+            sensitive_score=None, sensitive_level=0
+        )
+
+        with patch.object(FakeSensitiveBackend, "thresholds", HIGHER_THRESHOLDS):
+            self.assertNotIn(photo, pending_sensitive_qs())
+
+    def test_a_choice_made_by_hand_is_not_pending_on_new_thresholds(self):
         photo = library_photo(self.user, "purple.jpg", PURPLE)
         check_photo(photo)
         mark_sensitive([photo.pk], True)
 
-        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+        with patch.object(FakeSensitiveBackend, "thresholds", HIGHER_THRESHOLDS):
             self.assertNotIn(photo, pending_sensitive_qs())
 
     def test_reanalyze_takes_every_library_photo(self):
@@ -263,35 +286,37 @@ class MarkSensitiveTests(TestCase):
         self.assertEqual(mark_sensitive([photo.pk, note.pk], True), 1)
 
         item = _item(photo)
-        self.assertTrue(item.sensitive)
+        self.assertEqual(item.sensitive_level, MAX_LEVEL)
         self.assertTrue(item.sensitive_by_user)
 
     def test_unmarking_records_the_choice(self):
-        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive=True)
+        photo = make_photo(
+            self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=MAX_LEVEL
+        )
 
         mark_sensitive([photo.pk], False)
 
         item = _item(photo)
-        self.assertFalse(item.sensitive)
+        self.assertEqual(item.sensitive_level, 0)
         self.assertIs(item.sensitive_by_user, False)
 
-    def test_files_reads_the_flag_through_its_hook(self):
-        flagged = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive=True)
+    def test_files_reads_the_level_through_its_hook(self):
+        flagged = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=2)
         clear = make_photo(self.user, "b.jpg", _at(2024, 7, 14))
         note = FileService.create_file(
             owner=self.user, name="n.md", content=ContentFile(b"# hi", name="n.md")
         )
 
-        flags = dict(
+        levels = dict(
             with_sensitivity(File.objects.filter(owner=self.user)).values_list(
-                "uuid", "is_sensitive"
+                "uuid", "sensitive_level"
             )
         )
 
-        self.assertIs(flags[flagged.uuid], True)
-        self.assertIs(flags[clear.uuid], False)
-        self.assertIsNone(flags[note.uuid])
-        self.assertIs(is_sensitive(flagged), True)
+        self.assertEqual(levels[flagged.uuid], 2)
+        self.assertEqual(levels[clear.uuid], 0)
+        self.assertIsNone(levels[note.uuid])
+        self.assertEqual(sensitive_level(flagged), 2)
 
 
 class AlbumCoverTests(TestCase):
@@ -300,12 +325,12 @@ class AlbumCoverTests(TestCase):
 
     def test_a_sensitive_cover_says_so(self):
         album = create_album(self.user, "Trip")
-        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive=True)
+        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=3)
         add_items(album, [photo], added_by=self.user)
 
         (card,) = album_cards(self.user, [album])
 
-        self.assertTrue(card.cover_sensitive)
+        self.assertEqual(card.cover_sensitive_level, 3)
 
     def test_a_cover_in_clear_says_so(self):
         album = create_album(self.user, "Trip")
@@ -317,17 +342,17 @@ class AlbumCoverTests(TestCase):
 
         (card,) = album_cards(self.user, [album])
 
-        self.assertFalse(card.cover_sensitive)
+        self.assertEqual(card.cover_sensitive_level, 0)
 
     def test_the_album_list_exposes_it(self):
         album = create_album(self.user, "Trip")
-        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive=True)
+        photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=3)
         add_items(album, [photo], added_by=self.user)
         self.client.force_login(self.user)
 
         (data,) = self.client.get("/api/v1/photos/albums").json()
 
-        self.assertIs(data["cover_sensitive"], True)
+        self.assertEqual(data["cover_sensitive_level"], 3)
 
 
 class SensitiveFilesApiTests(TestCase):
@@ -347,11 +372,11 @@ class SensitiveFilesApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"marked": 1, "sensitive": True})
-        self.assertTrue(_item(self.photo).sensitive)
+        self.assertEqual(_item(self.photo).sensitive_level, MAX_LEVEL)
 
         self._post({"uuids": [str(self.photo.uuid)], "sensitive": False})
 
-        self.assertFalse(_item(self.photo).sensitive)
+        self.assertEqual(_item(self.photo).sensitive_level, 0)
 
     def test_a_group_member_marks_a_group_photo(self):
         group = Group.objects.create(name="Family")
@@ -363,7 +388,7 @@ class SensitiveFilesApiTests(TestCase):
         response = self._post({"uuids": [str(photo.uuid)], "sensitive": True})
 
         self.assertEqual(response.status_code, 200)
-        self.assertTrue(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_level, MAX_LEVEL)
 
     def test_a_photo_shared_with_the_caller_is_refused_and_nothing_is_marked(self):
         bobs = make_photo(self.bob, "b.jpg", _at(2024, 7, 14))
@@ -379,8 +404,8 @@ class SensitiveFilesApiTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
-        self.assertFalse(_item(self.photo).sensitive)
-        self.assertFalse(_item(bobs).sensitive)
+        self.assertEqual(_item(self.photo).sensitive_level, 0)
+        self.assertEqual(_item(bobs).sensitive_level, 0)
 
     def test_a_file_outside_the_library_is_refused(self):
         note = FileService.create_file(
@@ -397,7 +422,7 @@ class SensitiveFilesApiTests(TestCase):
         response = self._post({"uuids": [str(bobs.uuid)], "sensitive": True})
 
         self.assertEqual(response.status_code, 404)
-        self.assertFalse(_item(bobs).sensitive)
+        self.assertEqual(_item(bobs).sensitive_level, 0)
 
     def test_a_malformed_body_is_refused(self):
         for body in (
@@ -429,47 +454,71 @@ class SensitiveFilesApiTests(TestCase):
         self.assertEqual(toggle["state"], {"is_sensitive": True})
 
 
+class SensitivityLevelTests(TestCase):
+    def test_a_score_counts_the_thresholds_it_reaches(self):
+        thresholds = FakeSensitiveBackend.thresholds
+        for score, level in (
+            (None, 0),
+            (0.0, 0),
+            (0.19, 0),
+            (0.2, 1),
+            (0.4, 2),
+            (0.5, 3),
+            (0.79, 3),
+            (0.8, 4),
+            (1.0, MAX_LEVEL),
+        ):
+            with self.subTest(score=score):
+                self.assertEqual(level_for_score(score, thresholds), level)
+
+
 class SensitivePreviewTests(TestCase):
     """Where a sensitive photo's preview is blurred, and the viewer covered."""
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
-        self.photo = make_photo(self.user, "a.jpg", _at(2024, 7, 14), sensitive=True)
+        self.photo = make_photo(
+            self.user, "a.jpg", _at(2024, 7, 14), sensitive_level=MAX_LEVEL
+        )
         self.client.force_login(self.user)
 
     def tearDown(self):
         cache.clear()
 
-    def test_the_timeline_tile_carries_the_flag(self):
+    def _set_blur(self, value):
+        return self.client.put(
+            "/api/v1/settings/core/sensitive_blur",
+            {"value": value},
+            content_type="application/json",
+        )
+
+    def _page_root(self, url="/photos"):
+        return self.client.get(url).content.decode().split("<head>")[0]
+
+    def test_the_timeline_tile_carries_the_level(self):
         html = self.client.get("/photos").content.decode()
 
-        self.assertIn('data-sensitive="1"', html)
+        self.assertIn(f'data-sensitive="{MAX_LEVEL}"', html)
 
-    def test_the_page_blurs_by_default(self):
-        html = self.client.get("/photos").content.decode()
+    def test_the_page_blurs_from_the_standard_level_by_default(self):
+        self.assertIn('data-blur-sensitive="3"', self._page_root())
 
-        self.assertIn("data-blur-sensitive", html.split("<head>")[0])
+    def test_the_page_blurs_from_the_level_the_user_chose(self):
+        for value, rank in (("strict", 1), ("high", 2), ("standard", 3), ("low", 4)):
+            with self.subTest(value=value):
+                self.assertEqual(self._set_blur(value).status_code, 200)
+
+                self.assertIn(f'data-blur-sensitive="{rank}"', self._page_root())
 
     def test_the_page_does_not_blur_once_the_user_turned_it_off(self):
-        response = self.client.put(
-            "/api/v1/settings/core/blur_sensitive",
-            {"value": False},
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._set_blur("off").status_code, 200)
 
-        html = self.client.get("/photos").content.decode()
+        self.assertNotIn("data-blur-sensitive", self._page_root())
 
-        self.assertNotIn("data-blur-sensitive", html.split("<head>")[0])
-
-    def test_the_setting_must_be_a_boolean(self):
-        response = self.client.put(
-            "/api/v1/settings/core/blur_sensitive",
-            {"value": "off"},
-            content_type="application/json",
-        )
-
-        self.assertEqual(response.status_code, 400)
+    def test_the_setting_must_be_a_preference(self):
+        for value in (False, "medium", 3):
+            with self.subTest(value=value):
+                self.assertEqual(self._set_blur(value).status_code, 400)
 
     def test_the_reveal_options_are_off_by_default(self):
         root = self.client.get("/photos").content.decode().split("<head>")[0]
@@ -515,12 +564,45 @@ class SensitivePreviewTests(TestCase):
 
         self.assertNotIn("sensitive-cover", html)
 
+    def test_the_viewer_is_covered_only_under_a_preference_that_blurs_it(self):
+        borderline = make_photo(self.user, "b.jpg", _at(2024, 7, 14), sensitive_level=1)
+        url = f"/files/view/{borderline.uuid}"
+
+        self.assertNotIn("sensitive-cover", self.client.get(url).content.decode())
+
+        self._set_blur("strict")
+
+        self.assertIn("sensitive-cover", self.client.get(url).content.decode())
+
+    def test_the_viewer_is_not_covered_once_the_user_turned_it_off(self):
+        self._set_blur("off")
+
+        html = self.client.get(f"/files/view/{self.photo.uuid}").content.decode()
+
+        self.assertNotIn("sensitive-cover", html)
+
     def test_the_files_mosaic_blurs_it(self):
         set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
 
         html = self.client.get("/files").content.decode()
 
-        self.assertIn('data-sensitive="1"', html)
+        self.assertIn(f'data-sensitive="{MAX_LEVEL}"', html)
+
+    def test_a_public_link_blurs_from_the_standard_level_whatever_the_user_chose(self):
+        self._set_blur("off")
+        link = FileShareLink.objects.create(file=self.photo, created_by=self.user)
+
+        html = self.client.get(f"/files/shared/{link.token}").content.decode()
+
+        self.assertIn('data-blur-sensitive="3"', html.split("<head>")[0])
+        self.assertIn("sensitive-cover", html)
+
+    def test_the_preferences_panel_offers_the_five_steps(self):
+        html = self.client.get("/photos").content.decode()
+
+        self.assertIn('id="photos-sensitive-blur"', html)
+        self.assertIn('max="4"', html)
+        self.assertIn("photos-sensitive-blur-choices", html)
 
 
 class SensitiveHealthCardTests(TestCase):

@@ -11,16 +11,17 @@ from workspace.core.services.module_visibility import (
     visible_modules,
 )
 from workspace.core.setting_keys import (
-    BLUR_SENSITIVE,
     CHANGELOG_LAST_SEEN_VERSION,
     MODULE,
     ONBOARDING_COMPLETED,
     REVEAL_SENSITIVE_IN_VIEWER,
     REVEAL_SENSITIVE_ON_HOVER,
     SEARCH_SCOPE,
+    SENSITIVE_BLUR,
     SIDEBAR_COLLAPSED,
 )
 from workspace.dashboard.services.modules import switcher_modules_for
+from workspace.files.sensitivity import DEFAULT_BLUR, blur_from, parse_blur_preference
 from workspace.users.services.settings import get_module_settings, get_setting
 
 
@@ -28,8 +29,8 @@ def workspace_modules(request):
     onboarding_pending = False
     changelog_unread = False
     search_scope = SearchScope.ALL
-    # A page nobody is signed in to has no preference to turn it off.
-    blur_sensitive = True
+    # A page nobody is signed in to has no preference to change it.
+    blur_preference = DEFAULT_BLUR
     reveal_sensitive_on_hover = False
     reveal_sensitive_in_viewer = False
     if request.user.is_authenticated:
@@ -39,7 +40,7 @@ def workspace_modules(request):
         onboarding_pending = not core_settings.get(ONBOARDING_COMPLETED, False)
         if core_settings.get(SEARCH_SCOPE) == SearchScope.MINE:
             search_scope = SearchScope.MINE
-        blur_sensitive = core_settings.get(BLUR_SENSITIVE) is not False
+        blur_preference = parse_blur_preference(core_settings.get(SENSITIVE_BLUR))
         reveal_sensitive_on_hover = core_settings.get(REVEAL_SENSITIVE_ON_HOVER) is True
         reveal_sensitive_in_viewer = (
             core_settings.get(REVEAL_SENSITIVE_IN_VIEWER) is True
@@ -69,7 +70,7 @@ def workspace_modules(request):
             lambda: switcher_modules_for(request.user, current)
         )
     return {
-        "workspace_blur_sensitive": blur_sensitive,
+        "workspace_blur_from": blur_from(blur_preference),
         "workspace_reveal_sensitive_on_hover": reveal_sensitive_on_hover,
         "workspace_reveal_sensitive_in_viewer": reveal_sensitive_in_viewer,
         "workspace_active_modules": [asdict(m) for m in modules],

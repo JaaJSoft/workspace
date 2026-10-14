@@ -6,13 +6,20 @@ explicit, a blue one is not, a dark red one sits in between.
 
 import numpy as np
 
+from workspace.files.sensitivity import BlurPreference
+
 from ..detection.base import BackendHealth
 from .base import SensitiveBackend
 
 
 class FakeSensitiveBackend(SensitiveBackend):
     key = "fake"
-    threshold = 0.5
+    thresholds = {
+        BlurPreference.STRICT: 0.2,
+        BlurPreference.HIGH: 0.35,
+        BlurPreference.STANDARD: 0.5,
+        BlurPreference.LOW: 0.8,
+    }
 
     def score(self, image):
         mean = np.asarray(image.convert("RGB"), dtype=np.float64).mean(axis=(0, 1))

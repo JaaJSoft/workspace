@@ -29,18 +29,29 @@ const PHOTO_TOGGLE_STATES = { toggle_favorite: 'is_favorite', toggle_sensitive: 
 // The preferences of the panel stored outside the photos settings: the blur
 // applies to Files too, so the shell reads it with the core ones.
 const PHOTO_PREF_MODULES = {
-  blur_sensitive: 'core',
+  sensitive_blur: 'core',
   reveal_sensitive_on_hover: 'core',
   reveal_sensitive_in_viewer: 'core',
 };
 
-// The page root's attribute each of those hangs on, Files' too (see
-// scripts/frontend/input.css): base.html renders them, the panel flips them.
+// The page root's attribute each of the two softenings of the blur hangs on,
+// Files' too (see scripts/frontend/input.css): base.html renders them, the
+// panel flips them. The blur itself moves with _applySensitiveBlur.
 const PHOTO_PREF_ROOT_ATTRIBUTES = {
-  blur_sensitive: 'data-blur-sensitive',
   reveal_sensitive_on_hover: 'data-reveal-sensitive-on-hover',
   reveal_sensitive_in_viewer: 'data-reveal-sensitive-in-viewer',
 };
+
+// The parts of the page to fetch again once a preference is saved.
+const PHOTO_PREF_REFRESH = {
+  show_hidden: ['photos-nav'],
+  default_scope: ['photos-nav', 'photos-content'],
+  default_media_type: ['photos-nav', 'photos-content'],
+};
+
+// The sensitivity level of a photo marked by hand (files.sensitivity.MAX_LEVEL):
+// blurred under every blur preference but off.
+const SENSITIVE_MARKED_LEVEL = 4;
 
 // The actions endpoint refuses more than 200 uuids per call.
 const PHOTOS_ACTIONS_BATCH = 200;
@@ -173,6 +184,19 @@ function photosTilePrefs() {
   return { size: 1, widths: [] };
 }
 
+// The steps of the sensitive-blur slider, strictest first, each a
+// { value, label } (photos/services/preferences.py).
+function sensitiveBlurChoices() {
+  const el = document.getElementById('photos-sensitive-blur-choices');
+  try {
+    const data = el ? JSON.parse(el.textContent) : null;
+    if (Array.isArray(data)) return data;
+  } catch (_) {
+    // Unreadable: the slider has no step to offer.
+  }
+  return [];
+}
+
 // The Preferences panel's settings (photos/services/preferences.py), as the
 // page was rendered with them.
 function photosPrefs() {
@@ -203,6 +227,8 @@ window.photosApp = function photosApp() {
     tileSize: tile.size,
     _tileWidths: tile.widths,
     photoPrefs: photosPrefs(),
+    sensitiveBlurChoices: sensitiveBlurChoices(),
+    _sensitiveBlurDraft: null,
     _prefVersions: {},
     _hoverPreview: null,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
@@ -364,8 +390,11 @@ window.photosApp = function photosApp() {
       })
         .then((response) => {
           if (!response.ok) throw new Error(String(response.status));
-          // The Hidden entry of the sidebar is server-rendered.
-          if (key === 'show_hidden') this._refresh(['photos-nav']);
+          // Server-rendered from the preference: the Hidden entry of the
+          // sidebar, and for the defaults, what a URL without ?scope= or
+          // ?type= shows and every link of the page, which leave out
+          // whatever equals the default.
+          if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;
@@ -376,8 +405,63 @@ window.photosApp = function photosApp() {
     },
 
     _applyRootAttribute(key, value) {
+      if (key === 'sensitive_blur') {
+        this._applySensitiveBlur(value);
+        return;
+      }
       const attribute = PHOTO_PREF_ROOT_ATTRIBUTES[key];
       if (attribute) document.documentElement.toggleAttribute(attribute, !!value);
+    },
+
+    // The slider's step, strictest first: the one under the thumb while it
+    // is dragged, the saved preference otherwise.
+    sensitiveBlurStep() {
+      if (this._sensitiveBlurDraft !== null) return this._sensitiveBlurDraft;
+      const step = this.sensitiveBlurChoices.findIndex(
+        (choice) => choice.value === this.photoPrefs.sensitive_blur,
+      );
+      return Math.max(step, 0);
+    },
+
+    sensitiveBlurLabel() {
+      const choice = this.sensitiveBlurChoices[this.sensitiveBlurStep()];
+      return choice ? choice.label : '';
+    },
+
+    // While the thumb moves: the page blurs as that step would, nothing is
+    // saved. The preference itself stays put, so a refused save still has
+    // the previous value to put back.
+    previewSensitiveBlurStep(step) {
+      const choice = this.sensitiveBlurChoices[step];
+      if (!choice) return;
+      this._sensitiveBlurDraft = step;
+      this._applySensitiveBlur(choice.value);
+    },
+
+    // Once the thumb is released: one save, or the saved step back on the
+    // page when the thumb ended where it started.
+    saveSensitiveBlurStep(step) {
+      this._sensitiveBlurDraft = null;
+      const choice = this.sensitiveBlurChoices[step];
+      if (!choice || choice.value === this.photoPrefs.sensitive_blur) {
+        this._applySensitiveBlur(this.photoPrefs.sensitive_blur);
+        return Promise.resolve();
+      }
+      return this.savePhotoPref('sensitive_blur', choice.value);
+    },
+
+    // The page root's attribute every blurred preview hangs on, Files' too
+    // (see scripts/frontend/input.css): base.html renders it, this moves it.
+    // Its value is the lowest level the preference blurs, its step + 1; the
+    // last step, off, blurs nothing and drops it.
+    _applySensitiveBlur(value) {
+      const step = this.sensitiveBlurChoices.findIndex((choice) => choice.value === value);
+      const root = document.documentElement;
+      if (step < 0 || step === this.sensitiveBlurChoices.length - 1) {
+        root.removeAttribute('data-blur-sensitive');
+      } else {
+        root.setAttribute('data-blur-sensitive', String(step + 1));
+      }
     },
 
     // ── Video preview on hover ──────────────────────────
@@ -731,7 +815,7 @@ window.photosApp = function photosApp() {
       }
       uuids.forEach((uuid) => {
         const tile = this._tile(uuid);
-        if (tile) tile.dataset.sensitive = sensitive ? '1' : '0';
+        if (tile) tile.dataset.sensitive = sensitive ? String(SENSITIVE_MARKED_LEVEL) : '0';
       });
       this._forgetActions(uuids);
       return true;

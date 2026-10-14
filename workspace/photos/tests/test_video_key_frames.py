@@ -7,7 +7,6 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase, override_settings
-from django.utils import timezone
 from PIL import Image
 
 from workspace.common.vectors import nearest
@@ -17,10 +16,9 @@ from workspace.files.services import FileService
 from workspace.files.services.processors import get_processor
 from workspace.files.tests.videos import requires_ffmpeg
 from workspace.photos.indexes import PHOTO_EMBEDDINGS
-from workspace.photos.models import MediaItem, PhotoEmbedding
+from workspace.photos.models import PhotoEmbedding
 from workspace.photos.queries import MINE
 from workspace.photos.services import similarity
-from workspace.photos.services.analysis import ANALYSIS_VERSIONS
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend, colour_vector
 from workspace.photos.services.photo_embeddings import (
     embed_file,
@@ -38,17 +36,9 @@ from .embeddings import (
     ffmpeg_installed,
     library_video,
 )
-from .images import make_video, upload, video_bytes
+from .images import colour_video, library_clip, make_video, video_bytes
 
 User = get_user_model()
-
-
-def colour_video(*shots, fps=4):
-    """A lossless video of ``(seconds, colour)`` shots, one after the other."""
-    return video_bytes(
-        [(seconds, Image.new("RGB", (64, 48), colour)) for seconds, colour in shots],
-        fps=fps,
-    )
 
 
 def fade_video(start, end, *, seconds, fps=4):
@@ -108,16 +98,7 @@ class VideoKeyFrameTests(TestCase):
         cache.clear()
 
     def _video(self, data, name="clip.mkv"):
-        """A video of the library: uploaded, its MediaItem row written."""
-        video = upload(self.user, name, data)
-        MediaItem.objects.create(
-            file=video,
-            media_type=MediaItem.MediaType.VIDEO,
-            content_hash=video.content_hash,
-            analysis_version=ANALYSIS_VERSIONS[MediaItem.MediaType.VIDEO],
-            analyzed_at=timezone.now(),
-        )
-        return video
+        return library_clip(self.user, name, data)
 
     def test_each_shot_is_one_key_frame_from_the_moment_it_starts(self):
         video = self._video(colour_video((3, RED), (3, BLUE)))
@@ -182,13 +163,13 @@ class VideoKeyFrameTests(TestCase):
         self.assertEqual(match.timestamp, rows[-1].timestamp)
         self.assertGreater(match.timestamp, 8)
 
-    @override_settings(PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES=2)
+    @override_settings(PHOTOS_VIDEO_KEY_FRAMES_MAX=2)
     def test_the_frame_budget_caps_the_key_frames(self):
         video = self._video(colour_video((2, RED), (2, BLUE), (2, GREEN)))
 
         self.assertEqual(len(embed_file(video)), 2)
 
-    @override_settings(PHOTOS_EMBEDDING_VIDEO_MAX_DURATION=2)
+    @override_settings(PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION=2)
     def test_a_video_too_long_is_recorded_without_a_vector(self):
         video = self._video(colour_video((3, RED)))
 
@@ -257,7 +238,7 @@ class VideoEmbeddingTests(TestCase):
     def tearDown(self):
         cache.clear()
 
-    @override_settings(PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES=10)
+    @override_settings(PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES=10)
     def test_a_video_too_large_is_never_decoded(self):
         with patch("workspace.files.services.ffmpeg.sample_frames") as sample:
             (row,) = embed_file(self.video)

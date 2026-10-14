@@ -136,6 +136,29 @@ def check_sensitive_photo(self, file_uuid):
     max_retries=0: a photo that failed is still pending, and the hourly
     catch-up (or ``manage.py catch_up sensitive``) comes back for it.
     """
+    _check_pending_sensitive(file_uuid)
+
+
+@shared_task(
+    name="photos.check_sensitive_video",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def check_sensitive_video(self, file_uuid):
+    """Check the frames of one video for sensitive content, unless it is
+    already up to date.
+
+    Its own task, below the photos', as for faces and embeddings: a whole
+    decode must not hold up the photos queued behind it, which show in clear
+    until they are checked. max_retries=0 for the reason
+    check_sensitive_photo gives.
+    """
+    _check_pending_sensitive(file_uuid)
+
+
+def _check_pending_sensitive(file_uuid):
     from workspace.common.uuids import parse_uuid_or_none
 
     from .services.sensitive_photos import check_photo, pending_sensitive_qs
@@ -143,6 +166,13 @@ def check_sensitive_photo(self, file_uuid):
     file_obj = pending_sensitive_qs().filter(uuid=parse_uuid_or_none(file_uuid)).first()
     if file_obj is not None:
         check_photo(file_obj)
+
+
+def sensitive_task(file_type):
+    """The task that checks a pending file of content label *file_type*."""
+    from workspace.files.services.thumbnails.generation import VIDEO_LABELS
+
+    return check_sensitive_video if file_type in VIDEO_LABELS else check_sensitive_photo
 
 
 @shared_task(

@@ -1,11 +1,13 @@
-"""What a video shows, moment by moment: its key frames, embedded in the
-photos' space (photo_embeddings.py).
+"""What a video shows, moment by moment: the frames read for its embeddings
+(photo_embeddings.py) and its sensitive-content check (sensitive_photos.py).
 
-ffmpeg samples the first frame, one at every scene change, and one at a
-regular pace that spreads half of PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES over the
-video: a phone clip is one long shot, which no scene change would ever cut.
-The frames are decoded at the backend's decode_size and embedded once the
-video has been read. A frame within the near-duplicate distance of one already
+ffmpeg reads the first frame, one at every scene change, and one at a regular
+pace that spreads half of PHOTOS_VIDEO_KEY_FRAMES_MAX over the video: a phone
+clip is one long shot, which no scene change would ever cut. The frames are
+decoded at the size the model reads a photo at, and handed over once the
+video has been read.
+
+For the embeddings, a frame within the near-duplicate distance of one already
 kept shows nothing new and is dropped: a still shot is one vector, not ten
 alike, and a video ranks by the closest of the moments it shows.
 """
@@ -52,8 +54,8 @@ class KeyFrame:
     image: Image.Image
 
 
-def video_embeddings_available():
-    """Whether this deployment can read videos for embeddings at all."""
+def video_frames_available():
+    """Whether this deployment can read the frames of a video at all."""
     return bool(ffmpeg.FFMPEG and ffmpeg.FFPROBE)
 
 
@@ -64,7 +66,7 @@ def embed_key_frames(file_obj, backend):
     too large or too long to read, or one ffmpeg cannot decode, has none.
     Raises what the backend raises: the video stays pending.
     """
-    frames = _sample(file_obj, backend.decode_size)
+    frames = read_frames(file_obj, backend.decode_size)
     if frames is None:
         return None
     same = duplicate_max_distance()
@@ -82,9 +84,14 @@ def _distance(a, b):
     return 1.0 - float(a @ b) / norms if norms else 2.0
 
 
-def _sample(file_obj, size):
-    """``(timestamp, PIL image)`` for each frame sampled from *file_obj*."""
-    max_bytes = settings.PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES
+def read_frames(file_obj, size):
+    """``(timestamp, PIL image)`` for each frame read from the video
+    *file_obj*, at most *size* on a side, in order.
+
+    None when the blob could not be opened (the catch-up tries again). A video
+    too large or too long to read, or one ffmpeg cannot decode, has none.
+    """
+    max_bytes = settings.PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES
     if file_obj.size and file_obj.size > max_bytes:
         return []
     try:
@@ -92,14 +99,14 @@ def _sample(file_obj, size):
             return _read(path, size)
     except ffmpeg.MediaToolError as exc:
         logger.info(
-            "Video embedding could not read %s: %s",
+            "Could not read the frames of %s: %s",
             scrub(file_obj.content.name),
             scrub(str(exc)),
         )
         return []
     except OSError as exc:
         logger.warning(
-            "Video embedding cannot read the blob of %s: %s",
+            "Cannot read the blob of the video %s: %s",
             scrub(file_obj.content.name),
             scrub(str(exc)),
         )
@@ -109,13 +116,16 @@ def _sample(file_obj, size):
 def _read(path, size):
     report = ffmpeg.probe(path)
     duration = ffmpeg.duration(report)
-    if duration is not None and duration > settings.PHOTOS_EMBEDDING_VIDEO_MAX_DURATION:
+    if (
+        duration is not None
+        and duration > settings.PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION
+    ):
         return []
     shown = ffmpeg.display_size(report)
     if shown is None:
         return []
     width, height = ffmpeg.fit(shown, size)
-    max_frames = settings.PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES
+    max_frames = settings.PHOTOS_VIDEO_KEY_FRAMES_MAX
     images = []
 
     def on_frame(index, pixels):

@@ -205,3 +205,24 @@ def faces_video(*scenes, fps=4):
     return video_bytes(
         [(seconds, faces_image(*faces)) for seconds, faces in scenes], fps=fps
     )
+
+
+def colour_video(*shots, fps=4):
+    """:func:`video_bytes` of ``(seconds, colour)`` shots, one after the other."""
+    return video_bytes(
+        [(seconds, Image.new("RGB", (64, 48), colour)) for seconds, colour in shots],
+        fps=fps,
+    )
+
+
+def library_clip(owner, name, data):
+    """The video *data* uploaded, with its MediaItem row written directly."""
+    video = upload(owner, name, data)
+    MediaItem.objects.create(
+        file=video,
+        media_type=MediaItem.MediaType.VIDEO,
+        content_hash=video.content_hash,
+        analysis_version=ANALYSIS_VERSIONS[MediaItem.MediaType.VIDEO],
+        analyzed_at=timezone.now(),
+    )
+    return video

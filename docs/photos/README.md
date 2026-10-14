@@ -86,18 +86,18 @@ low-priority task (`photos.embed_video`), next to the face analysis of
 videos.
 
 - **Key frames**: ffmpeg reads the first frame, one at every scene change, and
-  one at a regular pace that spreads half of
-  `PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES` over the video, never more often than
-  every 2 seconds: a phone clip is usually one long shot that no scene change
-  would ever cut. The frames are decoded at the size the backend reads a photo
-  at.
+  one at a regular pace that spreads half of `PHOTOS_VIDEO_KEY_FRAMES_MAX` over
+  the video, never more often than every 2 seconds: a phone clip is usually
+  one long shot that no scene change would ever cut. The frames are decoded at
+  the size the backend reads a photo at. The sensitive-content check reads the
+  same frames (see *Sensitive photos* below).
 - **One vector per moment**: a frame within the near-duplicate distance of one
   already kept shows nothing new and is dropped. A still shot is one vector,
   a clip panning from the pool to the dog jumping in a few. Each one kept is
   stored as a small WebP too (10 to 40 KB): the picture a result shows of the
   moment that matched.
-- **Limits**: a video longer than `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` or
-  larger than `PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES` is not read, nor one
+- **Limits**: a video longer than `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` or
+  larger than `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` is not read, nor one
   ffmpeg cannot decode; like a photo that cannot be, it is recorded as
   analyzed so the catch-up does not try it again every hour. A voice
   recording in a video container is not a video and stays out.
@@ -105,7 +105,7 @@ videos.
 The cost is the embedding of up to 12 frames (about 4 s of CPU with SigLIP 2,
 1 s with CLIP), plus the decoding: ffmpeg reads the whole video to find its
 scene changes, so a long 4K recording costs far more than a short phone clip.
-Lower `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` on a server that should not
+Lower `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` on a server that should not
 spend that.
 
 ### Backends
@@ -187,9 +187,9 @@ ones. After changing the setting:
 | `PHOTOS_EMBEDDING_REMOTE_IMAGE_SIZE` | `512` | Longest side, in px, of the copy sent to the remote backend. |
 | `PHOTOS_EMBEDDING_TIMEOUT` | `30` | Seconds per remote request. |
 | `PHOTOS_EMBEDDING_MAX_FILE_BYTES` | 64 MB | Larger originals are not embedded. |
-| `PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES` | `12` | The most frames read from one video. |
-| `PHOTOS_EMBEDDING_VIDEO_MAX_DURATION` | `1200` | Longer videos (seconds) are not embedded. |
-| `PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES` | 2 GB | Larger videos are not embedded. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX` | `12` | The most frames read from one video. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION` | `1200` | Longer videos (seconds) are neither embedded nor checked for sensitive content. |
+| `PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES` | 2 GB | Larger videos are neither embedded nor checked for sensitive content. |
 | `PHOTOS_EMBEDDING_QUERY_TIMEOUT` | `15` | Seconds a search waits for the worker to embed its text. |
 | `PHOTOS_SIMILAR_MAX_DISTANCE` | backend's own | Cosine distance under which a photo is similar (0.3 for SigLIP 2, 0.25 for CLIP, 0.3 for Jina CLIP). |
 | `PHOTOS_DUPLICATE_MAX_DISTANCE` | backend's own | Cosine distance under which it is a near-duplicate (0.07 for SigLIP 2, 0.075 for CLIP, 0.085 for Jina CLIP). |
@@ -246,7 +246,15 @@ Off by default, like the other models: without it, photos are only marked by
 hand. When on, every photo of the instance is checked in the Celery worker,
 at normal priority after an upload (the photo shows in clear until then) and
 at background priority for the hourly catch-up (`python manage.py catch_up
-sensitive`). Videos are not checked yet.
+sensitive`).
+
+Videos are checked too where ffmpeg is installed, on the frames read for
+their key frames (see *Videos* under similar photos, and its
+`PHOTOS_VIDEO_KEY_FRAMES_*` limits): a video's score is its highest frame's,
+so one explicit shot is enough to blur it. Each runs in its own low-priority
+task (`photos.check_sensitive_video`), so a video shows in clear a little
+longer than a photo after an upload, and costs a decoding of its own plus up
+to 12 frames through the detector (about 1.5 s of CPU).
 
 The default detector, `falconsai_vit`, is
 [Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
@@ -287,7 +295,7 @@ is known and ready.
 |---|---|---|
 | `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
 | `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
-| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger originals are not checked. |
+| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger photos are not checked. |
 
 ## Face detection and grouping
 

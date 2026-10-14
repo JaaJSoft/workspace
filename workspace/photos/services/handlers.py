@@ -107,13 +107,14 @@ def _queue_embedding(file_obj):
 
 
 def _queue_sensitive(file_obj):
-    # Its own task, as for faces. Normal priority: the photo shows in clear
-    # until it runs.
+    # Its own task, as for faces. Normal priority for a photo: it shows in
+    # clear until it runs.
     if is_sensitive_candidate(file_obj):
-        from ..tasks import check_sensitive_photo
+        from ..tasks import sensitive_task
 
+        task = sensitive_task(file_obj.type)
         uuid = str(file_obj.pk)
-        transaction.on_commit(lambda: check_sensitive_photo.delay(uuid))
+        transaction.on_commit(lambda: task.delay(uuid))
 
 
 register_processor(

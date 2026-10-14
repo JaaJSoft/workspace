@@ -51,7 +51,7 @@ from .embedding.registry import (
     is_misconfigured,
 )
 from .photo_decoding import decode_photo
-from .video_key_frames import embed_key_frames, video_embeddings_available
+from .video_key_frames import embed_key_frames, video_frames_available
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ def embedding_media_type(file_obj):
     """The kind of library item *file_obj* is when it can be embedded: a
     photo, or a video where ffmpeg is installed. None otherwise."""
     media_type = media_type_for(file_obj)
-    if media_type == MediaItem.MediaType.VIDEO and not video_embeddings_available():
+    if media_type == MediaItem.MediaType.VIDEO and not video_frames_available():
         return None
     return media_type
 
@@ -96,7 +96,7 @@ def embedded_media_types():
     offers similar photos on."""
     if not embeddings_available():
         return []
-    if not video_embeddings_available():
+    if not video_frames_available():
         return [MediaItem.MediaType.PHOTO.value]
     return [MediaItem.MediaType.PHOTO.value, MediaItem.MediaType.VIDEO.value]
 
@@ -127,7 +127,7 @@ def pending_embeddings_qs(*, reanalyze=False):
     row at all, as for MediaItem.
     """
     qs = exclude_blocked(library_candidates(File.objects.alive().with_blob()))
-    if not video_embeddings_available():
+    if not video_frames_available():
         qs = qs.filter(type__in=RASTER_LABELS)
     if reanalyze:
         return qs

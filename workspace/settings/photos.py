@@ -71,6 +71,19 @@ PHOTOS_FACES_VIDEO_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_FACES_VIDEO_MAX_FILE_BYTES", str(2 * 1024**3))
 )
 
+# Videos are embedded and checked for sensitive content from their key frames,
+# where ffmpeg is installed: at most PHOTOS_VIDEO_KEY_FRAMES_MAX frames are
+# read, at the start, at scene changes and at a pace spreading half of them
+# over the video. Videos longer (seconds) or larger than the limits are not
+# read for either.
+PHOTOS_VIDEO_KEY_FRAMES_MAX = int(os.getenv("PHOTOS_VIDEO_KEY_FRAMES_MAX", "12"))
+PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION = int(
+    os.getenv("PHOTOS_VIDEO_KEY_FRAMES_MAX_DURATION", str(20 * 60))
+)
+PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES = int(
+    os.getenv("PHOTOS_VIDEO_KEY_FRAMES_MAX_FILE_BYTES", str(2 * 1024**3))
+)
+
 # Seconds a burst of additions to a shared album is gathered before its
 # members are told, in one notification per contributor.
 PHOTOS_ALBUM_NOTIFY_WINDOW_SECONDS = int(
@@ -110,19 +123,6 @@ PHOTOS_EMBEDDING_TIMEOUT = float(os.getenv("PHOTOS_EMBEDDING_TIMEOUT", "30"))
 PHOTOS_EMBEDDING_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_EMBEDDING_MAX_FILE_BYTES", str(64 * 1024 * 1024))
 )
-# Videos are embedded where ffmpeg is installed, one vector per key frame: at
-# most PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES frames are read, at the start, at
-# scene changes and at a pace spreading half of them over the video. Videos
-# longer (seconds) or larger than the limits are not embedded.
-PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES = int(
-    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_FRAMES", "12")
-)
-PHOTOS_EMBEDDING_VIDEO_MAX_DURATION = int(
-    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_DURATION", str(20 * 60))
-)
-PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES = int(
-    os.getenv("PHOTOS_EMBEDDING_VIDEO_MAX_FILE_BYTES", str(2 * 1024**3))
-)
 # Seconds a search waits for the worker to embed its text before giving up.
 PHOTOS_EMBEDDING_QUERY_TIMEOUT = float(
     os.getenv("PHOTOS_EMBEDDING_QUERY_TIMEOUT", "15")
@@ -157,7 +157,7 @@ PHOTOS_SENSITIVE_DETECTION_ENABLED = env_bool(
 # Which detector runs (photos/services/sensitivity/registry.py):
 # "falconsai_vit" (Falconsai's ViT NSFW classifier, Apache-2.0, int8 ONNX).
 PHOTOS_SENSITIVE_BACKEND = os.getenv("PHOTOS_SENSITIVE_BACKEND", "falconsai_vit")
-# Originals larger than this are not checked.
+# Photos larger than this are not checked (videos: PHOTOS_VIDEO_KEY_FRAMES_*).
 PHOTOS_SENSITIVE_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_SENSITIVE_MAX_FILE_BYTES", str(64 * 1024 * 1024))
 )

@@ -379,8 +379,10 @@ html:has(> body.overflow-hidden.h-dvh) {
   opacity: 1;
 }
 
+/* Under "Unblur on hover" the pointer shows the photo itself, and the badge
+   would sit over it to say what the blur already said. */
 @media (hover: hover) {
-  :is(
+  html:not([data-reveal-sensitive-on-hover]) :is(
     [data-blur-sensitive="1"] :is([data-sensitive="1"], [data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
     [data-blur-sensitive="2"] :is([data-sensitive="2"], [data-sensitive="3"], [data-sensitive="4"]),
     [data-blur-sensitive="3"] :is([data-sensitive="3"], [data-sensitive="4"]),

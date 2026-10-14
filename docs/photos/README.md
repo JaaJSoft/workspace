@@ -201,12 +201,19 @@ or a gory photo is marked by hand. Its weights download on first use into
 python manage.py download_sensitive_models
 ```
 
-The threshold favours recall over precision: a photo blurred by mistake costs a
-click, an explicit one shown in clear costs much more. On 1,971 Open Images
-photos, none of them explicit, the default of 0.2 blurs 11 (0.6%: a bikini, a
-kiss, a mannequin...). The scores are bimodal, so a lower or higher threshold
-changes little there. There is no explicit evaluation set in the repository:
-recall has not been measured on this instance's terms.
+The detector gives every photo a score from 0 to 1. It is not a probability:
+the model card defines neither of its two classes, `normal` and `nsfw`, nor
+what a score of 0.2 or 0.8 means. Its one published figure is 98% accuracy on
+its own 80,000 images, which are not public, taken at the model's decision
+boundary of 0.5. That is the default threshold, the only one anyone measured.
+On 1,971 Open Images photos, none of them explicit, it blurs 9 (0.5%); 0.2
+would blur 11 (a bikini, a kiss, a mannequin...), with no measured gain on
+explicit photos. There is no explicit evaluation set in the repository: recall
+has not been measured on this instance's terms.
+
+A new `PHOTOS_SENSITIVE_THRESHOLD` applies to the photos already checked on the
+next catch-up, from the scores they were given: the model does not run again,
+and a photo marked or unmarked by hand keeps that choice.
 
 The admin dashboard shows a **Sensitive photos** card: whether the detector
 is known and ready.
@@ -217,7 +224,7 @@ is known and ready.
 |---|---|---|
 | `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
 | `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
-| `PHOTOS_SENSITIVE_THRESHOLD` | backend's own (0.2) | Score, from 0 to 1, from which a photo is blurred. Applies to the photos checked afterwards: `python manage.py catch_up sensitive --reanalyze` checks the others again. |
+| `PHOTOS_SENSITIVE_THRESHOLD` | backend's own (0.5) | Score, from 0 to 1, from which a photo is blurred. Applies to every photo on the next catch-up (hourly, or `python manage.py catch_up sensitive`), from its stored score. |
 | `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger originals are not checked. |
 
 ## Face detection and grouping

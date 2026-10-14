@@ -60,8 +60,8 @@ def sensitive_catch_up_enabled():
 
 
 def pending_sensitive_qs(*, reanalyze=False):
-    """The live library photos never checked, or checked on other bytes or by
-    another detector.
+    """The live library photos never checked, checked on other bytes or by
+    another detector, or whose verdict no longer matches the threshold.
 
     A photo without a MediaItem row is not in the library yet: its row's
     writer runs first, and the photo is pending from then on. A file whose
@@ -74,9 +74,20 @@ def pending_sensitive_qs(*, reanalyze=False):
     )
     if reanalyze:
         return qs
+    backend = get_sensitive_backend()
     return qs.filter(
-        ~Q(media_item__sensitive_model=get_sensitive_backend().key)
+        ~Q(media_item__sensitive_model=backend.key)
         | (~Q(content_hash="") & ~Q(media_item__sensitive_hash=F("content_hash")))
+        | _verdict_off_threshold_q(sensitive_threshold(backend))
+    )
+
+
+def _verdict_off_threshold_q(threshold):
+    """The photos the detector flagged on another threshold than *threshold*:
+    PHOTOS_SENSITIVE_THRESHOLD changed since. A choice made by hand stays."""
+    return Q(media_item__sensitive_by_user__isnull=True) & (
+        Q(media_item__sensitive=True, media_item__sensitive_score__lt=threshold)
+        | Q(media_item__sensitive=False, media_item__sensitive_score__gte=threshold)
     )
 
 
@@ -89,6 +100,9 @@ def check_photo(file_obj):
     """Score *file_obj* and record the verdict on its MediaItem row; True
     when it was written.
 
+    A score this detector already gave these bytes is reused rather than
+    computed again: only the threshold moved.
+
     False means nothing was stored: the file is not a candidate, its blob
     could not be opened, the backend failed, or the file changed while it
     was read. A photo that cannot be decoded, or is past the size limit, is
@@ -99,7 +113,9 @@ def check_photo(file_obj):
     backend = get_sensitive_backend()
     read_hash = file_obj.content_hash
     try:
-        score = _score(file_obj, backend)
+        score = _stored_score(file_obj, backend)
+        if score is None:
+            score = _score(file_obj, backend)
     except Exception:
         _RESULTS.labels(result="error").inc()
         logger.exception(
@@ -128,6 +144,21 @@ def check_photo(file_obj):
         else:
             _RESULTS.labels(result="sensitive" if verdict else "clear").inc()
     return bool(written)
+
+
+def _stored_score(file_obj, backend):
+    """The score *backend* gave the current bytes of *file_obj*, or None."""
+    if not file_obj.content_hash:
+        return None
+    return (
+        MediaItem.objects.filter(
+            file_id=file_obj.pk,
+            sensitive_model=backend.key,
+            sensitive_hash=file_obj.content_hash,
+        )
+        .values_list("sensitive_score", flat=True)
+        .first()
+    )
 
 
 def _score(file_obj, backend):

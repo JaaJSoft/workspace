@@ -39,6 +39,8 @@ detection_on = override_settings(
 # What the fake detector makes of a picture: the share of red in its colour.
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+# Scores about 0.6: flagged at the fake's 0.5, in clear at 0.7.
+PURPLE = (150, 0, 100)
 
 
 def _at(year, month, day):
@@ -90,6 +92,33 @@ class CheckPhotoTests(TestCase):
         check_photo(photo)
 
         self.assertTrue(_item(photo).sensitive)
+
+    def test_a_new_threshold_reuses_the_score_already_given(self):
+        photo = library_photo(self.user, "purple.jpg", PURPLE)
+        check_photo(photo)
+        self.assertTrue(_item(photo).sensitive)
+        score = _item(photo).sensitive_score
+
+        with (
+            override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.9),
+            patch.object(FakeSensitiveBackend, "score") as model,
+        ):
+            self.assertTrue(check_photo(photo))
+
+        model.assert_not_called()
+        self.assertFalse(_item(photo).sensitive)
+        self.assertEqual(_item(photo).sensitive_score, score)
+
+    def test_new_bytes_are_scored_again(self):
+        photo = library_photo(self.user, "red.jpg", RED)
+        check_photo(photo)
+        photo.content.save("blue.jpg", ContentFile(jpeg_bytes(color=BLUE)), save=False)
+        File.objects.filter(pk=photo.pk).update(content_hash="new")
+        photo.content_hash = "new"
+
+        check_photo(photo)
+
+        self.assertFalse(_item(photo).sensitive)
 
     def test_a_choice_made_by_hand_wins_over_the_detector(self):
         red = library_photo(self.user, "red.jpg", RED)
@@ -189,6 +218,30 @@ class PendingSensitiveTests(TestCase):
         MediaItem.objects.filter(file=photo).update(sensitive_model="older")
 
         self.assertIn(photo, pending_sensitive_qs())
+
+    def test_a_photo_flagged_on_another_threshold_is_pending_again(self):
+        photo = library_photo(self.user, "purple.jpg", PURPLE)
+        check_photo(photo)
+
+        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+            self.assertIn(photo, pending_sensitive_qs())
+            check_photo(photo)
+            self.assertNotIn(photo, pending_sensitive_qs())
+
+    def test_a_photo_in_clear_is_pending_again_under_a_lower_threshold(self):
+        photo = library_photo(self.user, "purple.jpg", PURPLE)
+        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+            check_photo(photo)
+
+        self.assertIn(photo, pending_sensitive_qs())
+
+    def test_a_choice_made_by_hand_is_not_pending_on_a_new_threshold(self):
+        photo = library_photo(self.user, "purple.jpg", PURPLE)
+        check_photo(photo)
+        mark_sensitive([photo.pk], True)
+
+        with override_settings(PHOTOS_SENSITIVE_THRESHOLD=0.7):
+            self.assertNotIn(photo, pending_sensitive_qs())
 
     def test_reanalyze_takes_every_library_photo(self):
         photo = library_photo(self.user, "red.jpg", RED)

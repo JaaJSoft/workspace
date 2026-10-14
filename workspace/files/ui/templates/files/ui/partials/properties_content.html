@@ -135,18 +135,7 @@ Context:
         x-init="selectedFile = { uuid: '{{ file.uuid }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
       >
         <template x-for="t in (selectedFile ? selectedFile.tags : [])" :key="t.uuid">
-          <span
-            class="inline-flex items-center gap-0.5"
-            :title="t.source === 'auto' ? 'Added automatically from what the photo shows' : ''"
-          >
-            <tag-chip :name="t.name" :color="t.color" :icon="t.icon"></tag-chip>
-            <i
-              data-lucide="sparkles"
-              class="w-3 h-3 text-base-content/40"
-              x-show="t.source === 'auto'"
-              aria-label="Added automatically"
-            ></i>
-          </span>
+          <tag-chip :name="t.name" :color="t.color" :icon="t.icon" :trailing-icon="t.source === 'auto' ? 'sparkles' : null" trailing-label="Added automatically from what the photo shows"></tag-chip>
         </template>
         <span
           class="text-sm text-base-content/40"

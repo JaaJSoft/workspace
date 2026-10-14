@@ -30,7 +30,7 @@ function setup() {
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  for (const file of ['entry_write', 'folder_write', 'tag_write', 'vault_update', 'migrate_items']) {
+  for (const file of ['entry_write', 'folder_write', 'tag_write', 'vault_update', 'vault_resign', 'migrate_items']) {
     loadScript(JS + file + '.js', {}, ctx);
   }
   vm.runInContext(`

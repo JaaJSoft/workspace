@@ -4,7 +4,7 @@
 // longer verify, and only the client can repair it.
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 const VAULT = {
   uuid: 'v-1',
@@ -15,12 +15,16 @@ const VAULT = {
   key_version: 1,
   wrapped_key: 'AQ',
   encrypted_description: '',
+  metadata_sig: 'AQ',
 };
 
 function build(changes, overrides = {}) {
   const signed = [];
   const sealed = [];
-  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_update.js', {
+  const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/vault_update.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
+  ], {
     TextEncoder: globalThis.TextEncoder,
     vaultCrypto: {
       toBase64Url: () => 'sealed',
@@ -31,6 +35,9 @@ function build(changes, overrides = {}) {
       KDF_HKDF_SHA256: 0x01,
       AD: { vaultFieldAd: (uuid, field) => `${uuid}|${field}` },
       vaultMetadataPayload: (fields) => fields,
+      // 'CQ' is a signature whose first byte names suite 9, the one refused.
+      fromBase64Url: (value) => Uint8Array.of(value === 'CQ' ? 9 : 1),
+      mayResign: (id) => id !== 9,
       ...overrides.crypto,
     },
   });
@@ -142,4 +149,11 @@ test('a description cleared to nothing becomes an empty string, not a ciphertext
   );
   assert.equal(body.encrypted_description, '');
   assert.deepStrictEqual(Array.from(sealed), ['Perso']);
+});
+
+test('a vault signed under an algorithm marked broken is never re-signed', async () => {
+  await assert.rejects(
+    build({ is_favorite: true }, { vault: Object.assign({}, VAULT, { metadata_sig: 'CQ' }) }),
+    (err) => err.name === 'VaultResignBlocked',
+  );
 });

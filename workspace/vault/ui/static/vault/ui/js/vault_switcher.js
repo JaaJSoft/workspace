@@ -217,6 +217,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         await this.load();
       } catch (err) {
         if (err && err.reason === 'locked') return;
+        if (err && err.name === 'VaultResignBlocked') {
+          this.error = 'This vault could not be verified. It was left untouched.';
+          return;
+        }
         this.error = 'That change could not be saved. Try again.';
       }
     },
@@ -269,6 +273,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         await this.load();
       } catch (err) {
         if (err && err.reason === 'locked') return;
+        if (err && err.name === 'VaultResignBlocked') {
+          this.error = 'This vault could not be verified. It was left untouched.';
+          return;
+        }
         this.error = 'That change could not be saved. Try again.';
       } finally {
         this.busy = false;

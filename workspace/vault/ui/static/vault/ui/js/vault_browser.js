@@ -1200,7 +1200,10 @@ window.vaultBrowser = (function () {
         // makes the listing describe what actually happened, and it clears
         // the error line on its way in.
         await this.load();
-        if (failure) {
+        if (failure && failure.name === 'VaultResignBlocked') {
+          this.error =
+            'An entry could not be verified. It was left untouched, and so were the ones after it.';
+        } else if (failure) {
           this.error =
             'Some entries could not be changed. The list above is up to date.';
         }
@@ -1409,6 +1412,9 @@ window.vaultBrowser = (function () {
           totpInput: null,
           totpRemoved: false,
           entryVersion: row.entry_version || 1,
+          // The signature the save replaces, so the write can refuse to
+          // re-sign a row under an algorithm marked broken.
+          storedSig: row.metadata_sig,
           isNew: false,
         };
       },
@@ -1476,6 +1482,10 @@ window.vaultBrowser = (function () {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error = 'This entry could not be verified. It was left untouched.';
+            return;
+          }
           this.error = 'That entry could not be saved. Try again.';
         } finally {
           this.busy = false;
@@ -1558,6 +1568,7 @@ window.vaultBrowser = (function () {
           parent: folder.parent || null,
           name: folder.name,
           position: folder.position || 0,
+          storedSig: folder.metadata_sig,
           existing: true,
         };
       },
@@ -1623,6 +1634,7 @@ window.vaultBrowser = (function () {
         if (!name) return;
         this.busy = true;
         try {
+          if (draft.existing) window.vaultResign.assertMayResign({ metadata_sig: draft.storedSig });
           const body = await window.buildFolderWriteRequest(
             window.vaultSession,
             this.openVault,
@@ -1637,6 +1649,10 @@ window.vaultBrowser = (function () {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error = 'This folder could not be verified. It was left untouched.';
+            return;
+          }
           this.error = draft.existing
             ? 'That folder could not be renamed. Try again.'
             : 'That folder could not be created. Try again.';

@@ -369,3 +369,16 @@ test('a 409 for a uuid that is nobody else here reports the failure', async () =
   assert.match(component.error, /could not be created/);
   assert.equal(component.vaultUuid, 'v-1', 'and leaves the open vault alone');
 });
+
+test('a vault signed under an algorithm marked broken is left untouched, and the user is told', async () => {
+  const { ctx, component, calls } = switcher();
+  ctx.buildVaultUpdateRequest = async () => {
+    const error = new Error('blocked');
+    error.name = 'VaultResignBlocked';
+    throw error;
+  };
+  await component.loadVaultActions();
+  await component.runVaultAction(ACTION.favorite, VAULT);
+  assert.deepStrictEqual(Array.from(calls), []);
+  assert.equal(component.error, 'This vault could not be verified. It was left untouched.');
+});

@@ -57,6 +57,13 @@ window.vaultResign = (function () {
   return {
     Blocked: Blocked,
 
+    // Every write that re-signs a stored row asks this first. A signature
+    // algorithm marked broken must never be re-signed by the account: the
+    // new signature would vouch for whatever the server put in the row.
+    assertMayResign: function (row) {
+      if (!window.vaultCrypto.mayResign(signaturePrefix(row))) throw Blocked();
+    },
+
     // One transactional request: the body carries every entry that holds the
     // tag - trashed ones included - each re-signed without it. The server
     // compares the set against the tag's real carriers and refuses a mismatch.

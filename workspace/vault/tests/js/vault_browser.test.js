@@ -3205,3 +3205,71 @@ test('losing the last vault forgets the rows the reader rejected too', async () 
   await component.load();
   assert.deepStrictEqual(Array.from(component.unverifiedEntryRows), []);
 });
+
+// --- a signature algorithm marked broken ------------------------------------
+
+// 'CQ' decodes to a first byte naming suite 9, the one this stub refuses.
+const BROKEN_SUITE = {
+  fromBase64Url: (value) => (value === 'AQ' ? Uint8Array.of(1) : value === 'CQ' ? Uint8Array.of(9) : value),
+  mayResign: (id) => id !== 9,
+};
+
+test('renaming a folder signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = browser({
+    crypto: BROKEN_SUITE,
+    api: {
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0,
+          encrypted_name: 'ct', metadata_sig: 'CQ' },
+      ],
+      updateFolder: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.renameFolder(component.folders[0]);
+  component.folderDraft.name = 'Bills';
+  await component.saveFolder();
+  assert.equal(written.length, 0);
+  assert.equal(component.error, 'This folder could not be verified. It was left untouched.');
+});
+
+test('editing an entry signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = typed({
+    crypto: BROKEN_SUITE,
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { metadata_sig: 'CQ' })],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+      updateEntry: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  await component.saveEntry();
+  assert.equal(written.length, 0);
+  assert.equal(component.error, 'This entry could not be verified. It was left untouched.');
+});
+
+test('favouriting an entry signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = browser({
+    crypto: BROKEN_SUITE,
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { metadata_sig: 'CQ' })],
+      updateEntry: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.applyTo('favorite', [component.entries[0]]);
+  assert.equal(written.length, 0);
+  assert.equal(
+    component.error,
+    'An entry could not be verified. It was left untouched, and so were the ones after it.',
+  );
+});

@@ -18,6 +18,8 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   vault,
   draft,
 ) {
+  // An edit re-signs the row it was opened from; a new entry has none.
+  if (draft.storedSig) window.vaultResign.assertMayResign({ metadata_sig: draft.storedSig });
   const V = window.vaultCrypto;
   const keyVersion = vault.key_version || 1;
   const key = await session.openEntryKey(vault, draft.uuid);
@@ -126,6 +128,7 @@ window.buildEntryResignRequest = async function buildEntryResignRequest(
   row,
   changes,
 ) {
+  window.vaultResign.assertMayResign(row);
   const V = window.vaultCrypto;
   const next = Object.assign(
     {

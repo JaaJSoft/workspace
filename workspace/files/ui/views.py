@@ -12,6 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.properties_sections import render_properties_sections
+from workspace.files.sensitivity import is_sensitive, with_sensitivity
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.public_links import resolve_within, scope_q
@@ -34,7 +35,7 @@ from ..models import (
     PinnedFolder,
     Tag,
 )
-from .viewers import ViewerRegistry, render_viewer_panel
+from .viewers import ViewerRegistry, render_viewer_panel, veil_sensitive
 
 RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 INITIAL_EVENTS_LIMIT = 15
@@ -254,7 +255,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         file_id=OuterRef("pk"),
     )
     nodes = with_scan(
-        nodes.select_related("media_info")
+        with_sensitivity(nodes.select_related("media_info"))
         .annotate(
             is_favorite=Exists(favorite_subquery),
             is_pinned=Exists(pinned_subquery),
@@ -874,7 +875,7 @@ def view_file(request, uuid):
     viewer = ViewerClass(file_obj)
     viewer._user_can_edit = user_can_edit
     viewer._lock_info = lock_info
-    html = viewer.render(request)
+    html = veil_sensitive(viewer.render(request), is_sensitive(file_obj))
 
     return HttpResponse(render_viewer_panel(html))
 
@@ -1030,8 +1031,10 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
     # row when is_quarantined() below reads the scan verdict.
     children = list(
         with_scan(
-            File.objects.filter(
-                scope_q(link.file), parent=current, deleted_at__isnull=True
+            with_sensitivity(
+                File.objects.filter(
+                    scope_q(link.file), parent=current, deleted_at__isnull=True
+                )
             ).name_ordered("-node_type")
         )[: SHARED_FOLDER_PAGE_SIZE + 1]
     )
@@ -1058,6 +1061,7 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
                 "size": None if is_dir else node.size,
                 "modified": node.updated_at,
                 "is_quarantined": False if is_dir else node.is_quarantined(),
+                "is_sensitive": bool(node.is_sensitive),
                 "url": _shared_page_url(
                     request.path, access_token, view_mode, node=node.uuid
                 ),
@@ -1177,7 +1181,7 @@ def shared_file_view(request, token):
             viewer._content_url = _shared_action_url(
                 token, "/content", effective_access_token, file=target.uuid
             )
-            viewer_html = viewer.render(request)
+            viewer_html = veil_sensitive(viewer.render(request), is_sensitive(target))
 
     # No download link for a quarantined file: the endpoint refuses it anyway,
     # and offering the button would only produce a 403 the visitor cannot act on.

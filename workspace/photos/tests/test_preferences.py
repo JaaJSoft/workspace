@@ -50,6 +50,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "blur_sensitive": True,
             },
         )
 
@@ -75,6 +76,15 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertIs(prefs["import_by_date"], True)
         self.assertIs(prefs["show_hidden"], True)
 
+    def test_the_blur_is_a_core_setting(self):
+        set_setting(self.user, "core", "blur_sensitive", False)
+
+        self.assertIs(display_preferences(self.user)["blur_sensitive"], False)
+
+        set_setting(self.user, "core", "blur_sensitive", "no")
+
+        self.assertIs(display_preferences(self.user)["blur_sensitive"], True)
+
     def test_a_malformed_value_reads_as_the_default(self):
         """Written before the API checked it, or by hand: never a broken page."""
         for key, value in {
@@ -98,6 +108,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "blur_sensitive": True,
             },
         )
 

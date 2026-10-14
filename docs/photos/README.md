@@ -161,6 +161,65 @@ distance means a different thing to CLIP and to SigLIP 2. A remote model starts
 from generic defaults (0.25, 0.06, 0.8); measure it with the bench
 (`--backend remote`) before relying on them.
 
+## Sensitive photos
+
+A sensitive photo (nudity, a medical photo) is **blurred wherever it shows as
+a thumbnail**: the timeline, albums and their covers, search and similar
+photos, a contact's photos in People, the Files mosaic and public share
+pages. Opening it shows a *Sensitive content* cover over the viewer, with a
+**Show** button; a covered video does not start playing behind it.
+
+- The flag is on the photo, not on a tag of its owner's: everyone who can open
+  it sees it blurred, in a share or a shared album too.
+- Anyone with edit rights on a photo or a video marks it, or unmarks it, from
+  its menu in Photos or in Files, or for a whole selection. That choice wins
+  over detection, for good.
+- Each user can turn the blur off for their own screen: **Blur sensitive
+  photos** in the Photos preferences. It is on by default; a visitor of a
+  public link always gets the blur.
+
+### Detection
+
+```bash
+PHOTOS_SENSITIVE_DETECTION_ENABLED=1
+```
+
+Off by default, like the other models: without it, photos are only marked by
+hand. When on, every photo of the instance is checked in the Celery worker,
+at normal priority after an upload (the photo shows in clear until then) and
+at background priority for the hourly catch-up (`python manage.py catch_up
+sensitive`). Videos are not checked yet.
+
+The default detector, `falconsai_vit`, is
+[Falconsai's NSFW classifier](https://huggingface.co/Falconsai/nsfw_image_detection)
+(a ViT-base, Apache-2.0) run from its int8 ONNX export: 87 MB of weights,
+about 120 ms a photo on one desktop core. It was trained on nudity: a medical
+or a gory photo is marked by hand. Its weights download on first use into
+`PHOTOS_MODEL_DIR`, or ahead of time:
+
+```bash
+python manage.py download_sensitive_models
+```
+
+The threshold favours recall over precision: a photo blurred by mistake costs a
+click, an explicit one shown in clear costs much more. On 1,971 Open Images
+photos, none of them explicit, the default of 0.2 blurs 11 (0.6%: a bikini, a
+kiss, a mannequin...). The scores are bimodal, so a lower or higher threshold
+changes little there. There is no explicit evaluation set in the repository:
+recall has not been measured on this instance's terms.
+
+The admin dashboard shows a **Sensitive photos** card: whether the detector
+is known and ready.
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `PHOTOS_SENSITIVE_DETECTION_ENABLED` | off | Check the photos of this instance for sensitive content. |
+| `PHOTOS_SENSITIVE_BACKEND` | `falconsai_vit` | The detector. |
+| `PHOTOS_SENSITIVE_THRESHOLD` | backend's own (0.2) | Score, from 0 to 1, from which a photo is blurred. Applies to the photos checked afterwards: `python manage.py catch_up sensitive --reanalyze` checks the others again. |
+| `PHOTOS_SENSITIVE_MAX_FILE_BYTES` | 64 MB | Larger originals are not checked. |
+
 ## Face detection and grouping
 
 The **People** tab finds the faces in a user's photos and videos and groups the

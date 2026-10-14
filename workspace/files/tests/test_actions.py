@@ -60,6 +60,7 @@ class ActionRegistryTests(TestCase):
             "copy_link",
             "toggle_favorite",
             "toggle_pin",
+            "toggle_sensitive",
             "manage_tags",
             "share",
             "rename",
@@ -378,6 +379,7 @@ class BulkFlagTests(TestCase):
     EXPECTED_BULK = {
         "toggle_favorite",
         "toggle_pin",
+        "toggle_sensitive",
         "download",
         "cut",
         "copy",

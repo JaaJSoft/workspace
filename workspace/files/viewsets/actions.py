@@ -13,6 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from workspace.files.models import File, FileFavorite, FileShare, PinnedFolder
+from workspace.files.sensitivity import with_sensitivity
 from workspace.files.serializers import FileSerializer
 from workspace.files.services import FileService
 
@@ -85,9 +86,11 @@ class ActionsMixin:
 
         file_objects = list(
             with_scan(
-                File.objects.filter(
-                    FileService.accessible_files_q(request.user),
-                    uuid__in=uuids,
+                with_sensitivity(
+                    File.objects.filter(
+                        FileService.accessible_files_q(request.user),
+                        uuid__in=uuids,
+                    )
                 )
                 .annotate(
                     is_favorite=Exists(favorite_subquery),

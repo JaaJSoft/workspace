@@ -63,6 +63,9 @@ window.fileBrowser = function fileBrowser() {
           case 'toggle_pin':
             this.togglePin(uuid, state && state.is_pinned);
             break;
+          case 'toggle_sensitive':
+            this.markSensitive([uuid], !(state && state.is_sensitive));
+            break;
           case 'rename':
             this.showRenameDialog(uuid, name);
             break;
@@ -153,6 +156,9 @@ window.fileBrowser = function fileBrowser() {
             break;
           case 'pin':
             this.bulkTogglePin(uuids, add);
+            break;
+          case 'sensitive':
+            this.markSensitive(uuids, add);
             break;
           case 'download':
             this.bulkDownload(uuids);
@@ -603,6 +609,38 @@ window.fileBrowser = function fileBrowser() {
         window.AppAlert.error('Failed to update favorites');
       } finally {
         this._stopLoading(uuid);
+      }
+    },
+
+    // Blurs the previews for everyone who can open the files, or stops
+    // blurring them.
+    async markSensitive(uuids, sensitive) {
+      if (!uuids.length) return;
+      uuids.forEach(uuid => this._startLoading(uuid));
+      try {
+        const response = await fetch('/api/v1/files/sensitive', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+          },
+          body: JSON.stringify({ uuids, sensitive })
+        });
+        if (response.ok) {
+          this.refreshFolderBrowser();
+          return;
+        }
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = {};
+        }
+        window.AppAlert.error(data.detail || 'Failed to update the files');
+      } catch (error) {
+        window.AppAlert.error('Failed to update the files');
+      } finally {
+        uuids.forEach(uuid => this._stopLoading(uuid));
       }
     },
 

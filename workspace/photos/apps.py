@@ -17,6 +17,10 @@ class PhotosConfig(AppConfig):
             PropertiesSection,
             properties_section_registry,
         )
+        from workspace.files.sensitivity import (
+            SensitivityProvider,
+            register_sensitivity_provider,
+        )
         from workspace.people.sections import PersonSection
         from workspace.people.sections import (
             section_registry as person_section_registry,
@@ -39,6 +43,10 @@ class PhotosConfig(AppConfig):
         from workspace.photos.services.details import (
             is_section_visible,
             section_context,
+        )
+        from workspace.photos.services.sensitive_photos import (
+            mark_sensitive,
+            sensitive_flag,
         )
 
         register_vector_index(FACE_EMBEDDINGS)
@@ -93,6 +101,11 @@ class PhotosConfig(AppConfig):
                 order=50,
                 is_visible=has_photos_of_person,
             )
+        )
+
+        # Files blurs what photos flags: the flag is on the MediaItem row.
+        register_sensitivity_provider(
+            SensitivityProvider(flag=sensitive_flag, mark=mark_sensitive)
         )
 
         properties_section_registry.register(

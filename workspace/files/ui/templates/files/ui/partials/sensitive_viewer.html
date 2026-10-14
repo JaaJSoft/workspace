@@ -1,0 +1,35 @@
+{% comment %}
+  A viewer behind a "Sensitive content" cover, for a file whose preview is
+  blurred (files/sensitivity.py). The cover and the veil only apply while the
+  page blurs sensitive previews (scripts/frontend/input.css); otherwise the
+  viewer shows straight away. A covered video or recording does not start
+  playing on its own behind it.
+{% endcomment %}
+<div
+  class="contents"
+  x-data="{ revealed: false }"
+  x-init="if (document.documentElement.hasAttribute('data-blur-sensitive')) { $el.querySelectorAll('video, audio').forEach((media) => { media.autoplay = false; media.pause(); }); } else { revealed = true; }"
+>
+  <div
+    class="sensitive-cover h-full min-h-72 flex-col items-center justify-center gap-3 p-8 text-center"
+    x-show="!revealed"
+  >
+    <span class="rounded-full bg-base-300 p-4">
+      <i data-lucide="eye-closed" class="w-8 h-8 text-base-content/70"></i>
+    </span>
+    <p class="font-semibold">Sensitive content</p>
+    <p class="text-sm text-base-content/60 max-w-xs">
+      This file is marked as sensitive. Show it only if no one else can see your screen.
+    </p>
+    <button type="button" class="btn btn-sm" @click="revealed = true">
+      <i data-lucide="eye" class="w-4 h-4"></i>
+      Show
+    </button>
+  </div>
+  <div
+    class="contents sensitive-veiled"
+    :class="{ 'sensitive-veiled': !revealed }"
+  >
+    {{ viewer_html }}
+  </div>
+</div>

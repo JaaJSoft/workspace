@@ -25,3 +25,9 @@ SIDEBAR_COLLAPSED = "sidebar_collapsed"
 # unset. The palette sends it with every query rather than the API reading it,
 # since the search response is cached per query string.
 SEARCH_SCOPE = "search_scope"
+
+# Whether sensitive previews (files/sensitivity.py) are blurred: a boolean,
+# on when unset. A core setting rather than a photos one because the shell
+# renders it on every page, Files' included, from the core settings it reads
+# anyway.
+BLUR_SENSITIVE = "blur_sensitive"

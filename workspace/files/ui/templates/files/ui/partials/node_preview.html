@@ -22,9 +22,14 @@
       binding). Omit for a fixed-size icon (w-12 h-12).
     - duration: float - an audio or video length in seconds, shown as a
       play badge over the preview.
+    - sensitive: bool - blur the thumbnail (see files/sensitivity.py).
 {% endcomment %}
 {% load file_filters %}
-<div class="relative w-full" style="padding-bottom: 100%">
+<div
+  class="relative w-full{% if sensitive %} overflow-hidden{% endif %}"
+  style="padding-bottom: 100%"
+  {% if sensitive %}data-sensitive="1"{% endif %}
+>
   {% if thumbnail_url %}
     <img
       src="{{ thumbnail_url }}"
@@ -46,6 +51,9 @@
         <i data-lucide="{{ icon }}" class="w-full h-full {{ icon_color }}"></i>
       </div>
     </div>
+  {% endif %}
+  {% if sensitive and thumbnail_url %}
+    {% include "files/ui/partials/sensitive_badge.html" %}
   {% endif %}
   {% if duration %}
     {% include "files/ui/partials/duration_badge.html" with duration=duration only %}

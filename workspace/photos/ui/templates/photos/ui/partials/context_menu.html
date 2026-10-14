@@ -9,6 +9,7 @@ ctxRule(). The file actions it offers come from `POST /api/v1/files/actions`
 user may do it. The album rows follow the album action registry instead, the
 face rows the user's face grouping, Similar photos the instance's embeddings.
 Hide never touches the file: it only takes it out of the viewer's own library.
+Marking it sensitive blurs it for everyone who can open it.
 
 A photo of a shared album the viewer cannot open in Files (albumScoped) has
 no file action and no place in Files: its menu is the viewer, the download
@@ -65,6 +66,9 @@ the album allows (through the album), and the album rows.
   </template>
   <template x-if="ctxShows('properties')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('properties')" icon="info" label="Properties" click="runCtxAction(ctxAction('properties'))" only %}
+  </template>
+  <template x-if="ctxShows('toggle_sensitive')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_sensitive')" icon_expr="ctxAction('toggle_sensitive')?.icon" label_expr="ctxAction('toggle_sensitive')?.label" click="runCtxAction(ctxAction('toggle_sensitive'))" only %}
   </template>
   <template x-if="ctxShows('hide')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('hide')" icon="eye-off" label="Hide from library" click="closeCtxMenu(); setPhotosHidden([ctxMenu.photo.uuid], true)" only %}

@@ -11,6 +11,7 @@ from workspace.core.services.module_visibility import (
     visible_modules,
 )
 from workspace.core.setting_keys import (
+    BLUR_SENSITIVE,
     CHANGELOG_LAST_SEEN_VERSION,
     MODULE,
     ONBOARDING_COMPLETED,
@@ -25,6 +26,8 @@ def workspace_modules(request):
     onboarding_pending = False
     changelog_unread = False
     search_scope = SearchScope.ALL
+    # A page nobody is signed in to has no preference to turn it off.
+    blur_sensitive = True
     if request.user.is_authenticated:
         # Both keys live in the core module; fetch them in a single query
         # (shared with the user_preferences context processor via the cache).
@@ -32,6 +35,7 @@ def workspace_modules(request):
         onboarding_pending = not core_settings.get(ONBOARDING_COMPLETED, False)
         if core_settings.get(SEARCH_SCOPE) == SearchScope.MINE:
             search_scope = SearchScope.MINE
+        blur_sensitive = core_settings.get(BLUR_SENSITIVE) is not False
         if not onboarding_pending:
             latest = get_latest_version()
             if latest:
@@ -57,6 +61,7 @@ def workspace_modules(request):
             lambda: switcher_modules_for(request.user, current)
         )
     return {
+        "workspace_blur_sensitive": blur_sensitive,
         "workspace_active_modules": [asdict(m) for m in modules],
         "workspace_current_module": asdict(current) if current else None,
         "workspace_sidebar_collapsed": sidebar_collapsed,

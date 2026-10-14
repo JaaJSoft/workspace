@@ -1,5 +1,5 @@
-"""Celery tasks of the photos module: faces, image embeddings, and filing
-imports by date."""
+"""Celery tasks of the photos module: faces, image embeddings, sensitive
+content, and filing imports by date."""
 
 import logging
 
@@ -94,6 +94,28 @@ def embed_photo(self, file_uuid):
     )
     if file_obj is not None:
         embed(file_obj)
+
+
+@shared_task(
+    name="photos.check_sensitive",
+    priority=NORMAL_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def check_sensitive_photo(self, file_uuid):
+    """Check one photo for sensitive content, unless it is already up to date.
+
+    max_retries=0: a photo that failed is still pending, and the hourly
+    catch-up (or ``manage.py catch_up sensitive``) comes back for it.
+    """
+    from workspace.common.uuids import parse_uuid_or_none
+
+    from .services.sensitive_photos import check_photo, pending_sensitive_qs
+
+    file_obj = pending_sensitive_qs().filter(uuid=parse_uuid_or_none(file_uuid)).first()
+    if file_obj is not None:
+        check_photo(file_obj)
 
 
 @shared_task(

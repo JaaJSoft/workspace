@@ -121,6 +121,9 @@ window.contextMenu = function contextMenu() {
           case 'toggle_pin':
             detail = { action: 'pin', uuids, add: !!action._bulkAdd };
             break;
+          case 'toggle_sensitive':
+            detail = { action: 'sensitive', uuids, add: !!action._bulkAdd };
+            break;
           case 'delete':
           case 'restore':
           case 'purge':

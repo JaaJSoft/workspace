@@ -1,6 +1,6 @@
 """The account envelope API.
 
-Four endpoints over one row: the caller's :class:`AccountIdentity`. The server
+Five endpoints over one row: the caller's :class:`AccountIdentity`. The server
 generates the KDF salt - the only random material it owns, and it is public -
 then stores opaque text it can never open.
 
@@ -29,6 +29,7 @@ from workspace.common.mixins import CacheControlMixin
 
 from ..models import AccountIdentity
 from ..serializers import (
+    AccountConfirmSerializer,
     AccountEnvelopeSerializer,
     AccountFinalizeSerializer,
     AccountInitResponseSerializer,
@@ -36,6 +37,7 @@ from ..serializers import (
 )
 from ..services.attestation import AttestationError, verify_kex_pub_attestation
 from ..throttling import (
+    AccountConfirmUserThrottle,
     AccountEnvelopeBurstThrottle,
     AccountEnvelopeIpThrottle,
     AccountEnvelopeUserThrottle,
@@ -238,3 +240,40 @@ class AccountRotateView(CacheControlMixin, APIView):
         return Response(
             status=status.HTTP_409_CONFLICT if active else status.HTTP_404_NOT_FOUND
         )
+
+
+@method_decorator(sensitive_post_parameters(*SENSITIVE_BODY_FIELDS), name="dispatch")
+class AccountConfirmView(CacheControlMixin, APIView):
+    cache_no_store = True
+    throttle_classes = [AccountConfirmUserThrottle]
+
+    @extend_schema(
+        tags=["Vault"],
+        summary="Confirm the current account envelope",
+        description=(
+            "Called after an unlock opened the current envelope. Drops the "
+            "previous envelope, but only while the current one is still the "
+            "envelope that was opened."
+        ),
+        request=AccountConfirmSerializer,
+        responses={204: None},
+    )
+    @sensitive_variables()
+    def post(self, request):
+        serializer = AccountConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        mine = AccountIdentity.objects.filter(
+            user=request.user, state=AccountIdentity.State.ACTIVE
+        )
+        if not mine.exists():
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        mine.filter(
+            wrapped_kex_priv=serializer.validated_data["wrapped_kex_priv"]
+        ).update(
+            previous_kdf_algo=None,
+            previous_kdf_params=None,
+            previous_wrapped_kex_priv=None,
+            previous_wrapped_sig_priv=None,
+            updated_at=timezone.now(),
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

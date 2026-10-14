@@ -592,3 +592,85 @@ class AccountRotateTests(TestCase):
     def test_requires_authentication(self):
         self.client.logout()
         self.assertIn(self._post().status_code, (401, 403))
+
+
+CONFIRM_URL = "/api/v1/vault/account/confirm"
+
+
+class AccountConfirmTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        _, params = suites.current_kdf()
+        self.identity = AccountIdentity.objects.create(
+            user=self.user,
+            kdf_algo="argon2id",
+            kdf_params=params,
+            kdf_salt="SALT",
+            kex_public="KEX",
+            sig_public="SIG",
+            wrapped_kex_priv=sealed_envelope("new-kex"),
+            wrapped_sig_priv=sealed_envelope("new-sig"),
+            sig_over_kex_pub="ATTEST",
+            state=AccountIdentity.State.ACTIVE,
+            previous_kdf_algo="argon2id",
+            previous_kdf_params=params,
+            previous_wrapped_kex_priv=sealed_envelope("old-kex", 1),
+            previous_wrapped_sig_priv=sealed_envelope("old-sig", 1),
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _post(self, value):
+        return self.client.post(
+            CONFIRM_URL,
+            data={"wrapped_kex_priv": value},
+            content_type="application/json",
+        )
+
+    def test_clears_the_previous_envelope_once_the_current_one_opened(self):
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 204)
+        self.identity.refresh_from_db()
+        self.assertIsNone(self.identity.previous_kdf_algo)
+        self.assertIsNone(self.identity.previous_kdf_params)
+        self.assertIsNone(self.identity.previous_wrapped_kex_priv)
+        self.assertIsNone(self.identity.previous_wrapped_sig_priv)
+        self.assertEqual(self.identity.wrapped_kex_priv, sealed_envelope("new-kex"))
+
+    def test_keeps_it_when_the_current_one_moved_since(self):
+        self.assertEqual(
+            self._post(sealed_envelope("what-another-tab-opened")).status_code, 204
+        )
+        self.identity.refresh_from_db()
+        self.assertEqual(
+            self.identity.previous_wrapped_kex_priv, sealed_envelope("old-kex", 1)
+        )
+
+    def test_is_idempotent(self):
+        self._post(self.identity.wrapped_kex_priv)
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 204)
+
+    def test_answers_404_without_an_active_identity(self):
+        AccountIdentity.objects.filter(pk=self.identity.pk).update(
+            state=AccountIdentity.State.PENDING
+        )
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 404)
+
+    def test_never_touches_another_users_identity(self):
+        other = User.objects.create_user(username="other", password="pw")
+        self.client.force_login(other)
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 404)
+        self.identity.refresh_from_db()
+        self.assertIsNotNone(self.identity.previous_wrapped_kex_priv)
+
+    def test_the_response_is_never_cached(self):
+        self.assertEqual(
+            self._post(self.identity.wrapped_kex_priv)["Cache-Control"], "no-store"
+        )
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        self.assertIn(
+            self._post(self.identity.wrapped_kex_priv).status_code, (401, 403)
+        )

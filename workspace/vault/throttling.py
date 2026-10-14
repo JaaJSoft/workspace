@@ -69,5 +69,9 @@ class AccountRotateUserThrottle(UserRateThrottle):
     scope = "vault.account.rotate.user"
 
 
+class AccountConfirmUserThrottle(UserRateThrottle):
+    scope = "vault.account.confirm.user"
+
+
 class MigrateUserThrottle(UserRateThrottle):
     scope = "vault.migrate.user"

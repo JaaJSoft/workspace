@@ -164,6 +164,14 @@ def _same_json_values(given, expected) -> bool:
     )
 
 
+class AccountConfirmSerializer(serializers.Serializer):
+    """The current envelope an unlock just opened, named by its sealed
+    key-exchange key: a confirmation only clears the previous envelope while
+    that is still the current one."""
+
+    wrapped_kex_priv = _OpaqueField()
+
+
 class AccountRotateSerializer(serializers.Serializer):
     """Every envelope written to an active account: the unlock re-wrap and the
     password change alike.

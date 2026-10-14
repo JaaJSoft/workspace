@@ -38,6 +38,7 @@ from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
 from ..indexes import PHOTO_EMBEDDINGS
 from ..models import MediaItem, PhotoEmbedding
 from .analysis import library_candidates, media_type_for
+from .auto_tags import tag_photo_safely
 from .embedding.registry import (
     embeddings_available,
     get_embedding_backend,
@@ -153,7 +154,12 @@ def embed_photo(file_obj):
         return None
     _DURATION.labels(backend=backend.key).observe(time.monotonic() - started)
     _RESULTS.labels(result="embedded" if vector is not None else "undecodable").inc()
-    return _store(file_obj, model_key, file_obj.content_hash, vector)
+    row = _store(file_obj, model_key, file_obj.content_hash, vector)
+    if row is not None:
+        # Here rather than left to the catch-up: the photo is tagged within
+        # moments of its upload, while the backend is loaded.
+        tag_photo_safely(row)
+    return row
 
 
 def _embed(file_obj, backend):
@@ -229,6 +235,8 @@ def _store(file_obj, model_key, read_hash, vector):
                 "content_hash": read_hash,
                 "model": model_key,
                 "analyzed_at": timezone.now(),
+                # A new vector, or a new owner: tagged again from it.
+                "auto_tagged_at": None,
             },
         )
         if vector is None:

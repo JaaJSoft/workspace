@@ -6,9 +6,9 @@ and must not end up with a second favorite or a second tag on the same file.
 
 from itertools import batched
 
-from workspace.files.models import FileFavorite, FileTag, Tag
+from workspace.files.models import FileFavorite, FileTag
+from workspace.files.services.tags import get_or_create_tag
 
-_MAX_TAG_NAME = Tag._meta.get_field("name").max_length
 _CHUNK = 500
 
 
@@ -43,23 +43,6 @@ def apply_tag(owner, name, file_uuids) -> int:
         )
         added += len(missing)
     return added
-
-
-def get_or_create_tag(owner, name) -> Tag | None:
-    """The owner's tag by that name, matched case-insensitively.
-
-    The remote and the local tag list are two flat namespaces of names, so a
-    second 'Invoices' next to an existing 'invoices' would read as a duplicate
-    in the tag picker. ``None`` when the remote name holds nothing usable.
-    """
-    name = name.strip()[:_MAX_TAG_NAME].strip()
-    if not name:
-        return None
-    existing = Tag.objects.filter(owner=owner, name__iexact=name).first()
-    if existing is not None:
-        return existing
-    tag, _ = Tag.objects.get_or_create(owner=owner, name=name)
-    return tag
 
 
 def _existing(queryset, file_uuids) -> set:

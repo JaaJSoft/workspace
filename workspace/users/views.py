@@ -494,7 +494,13 @@ _setting_fields = {
 }
 
 
-_PHOTOS_FLAGS = ("tile_badges", "video_hover_preview", "import_by_date", "show_hidden")
+_PHOTOS_FLAGS = (
+    "tile_badges",
+    "video_hover_preview",
+    "import_by_date",
+    "show_hidden",
+    "auto_tags",
+)
 _PHOTOS_CHOICES = {
     "tile_shape": ("square", "original"),
     "default_media_type": ("all", "photo", "video"),

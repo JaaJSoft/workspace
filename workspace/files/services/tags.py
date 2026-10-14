@@ -1,9 +1,11 @@
-"""Tag collection operations: usage counts, merge, purge."""
+"""Tag collection operations: usage counts, lookup by name, merge, purge."""
 
 from django.db import transaction
 from django.db.models import Count
 
 from ..models import FileTag, Tag
+
+_MAX_TAG_NAME = Tag._meta.get_field("name").max_length
 
 
 class TagMergeError(ValueError):
@@ -22,6 +24,23 @@ def tags_with_usage(user):
     `purge_unused_tags` has to mean the same thing as a count of zero here.
     """
     return Tag.objects.filter(owner=user).annotate(file_count=Count("file_tags"))
+
+
+def get_or_create_tag(owner, name) -> Tag | None:
+    """The owner's tag by that name, matched case-insensitively.
+
+    A tag list is a flat namespace of names, so a second 'Invoices' next to
+    an existing 'invoices' would read as a duplicate in the tag picker.
+    ``None`` when *name* holds nothing usable.
+    """
+    name = name.strip()[:_MAX_TAG_NAME].strip()
+    if not name:
+        return None
+    existing = Tag.objects.filter(owner=owner, name__iexact=name).first()
+    if existing is not None:
+        return existing
+    tag, _ = Tag.objects.get_or_create(owner=owner, name=name)
+    return tag
 
 
 def merge_tags(source, target):

@@ -564,6 +564,10 @@ class PhotoEmbedding(models.Model):
     # The source of the photos.indexes.PHOTO_EMBEDDINGS vector index.
     embedding = models.BinaryField(null=True, blank=True)
     analyzed_at = models.DateTimeField()
+    # When the photo was given its automatic tags (services/auto_tags.py),
+    # reset with every new vector. Each photo is tagged once: a tag its owner
+    # took off never comes back on its own.
+    auto_tagged_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"PhotoEmbedding: {self.file_id}"

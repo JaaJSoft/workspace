@@ -34,6 +34,11 @@ class EmbeddingBackend(abc.ABC):
     similar_max_distance: float = 0.25
     duplicate_max_distance: float = 0.06
     description_max_distance: float = 0.8
+    # Automatic tags: {classic tag text: max distance}, fitted per tag by
+    # the bench (scripts/embedding_bench.py prints the table). A tag left out
+    # is one the model does not tell apart well enough; none by default, a
+    # remote model being uncalibrated.
+    tag_thresholds: dict = {}
 
     @property
     def model_key(self):

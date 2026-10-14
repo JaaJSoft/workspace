@@ -50,6 +50,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "auto_tags": True,
             },
         )
 
@@ -62,6 +63,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_media_type": "video",
             "import_by_date": True,
             "show_hidden": True,
+            "auto_tags": False,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -74,6 +76,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertEqual(prefs["default_media_type"], "video")
         self.assertIs(prefs["import_by_date"], True)
         self.assertIs(prefs["show_hidden"], True)
+        self.assertIs(prefs["auto_tags"], False)
 
     def test_a_malformed_value_reads_as_the_default(self):
         """Written before the API checked it, or by hand: never a broken page."""
@@ -85,6 +88,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_media_type": ["photo"],
             "import_by_date": "yes",
             "show_hidden": 1,
+            "auto_tags": "no",
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -98,6 +102,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "auto_tags": True,
             },
         )
 

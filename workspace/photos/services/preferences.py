@@ -20,6 +20,7 @@ DEFAULT_SCOPE = "default_scope"
 DEFAULT_MEDIA_TYPE = "default_media_type"
 IMPORT_BY_DATE = "import_by_date"
 SHOW_HIDDEN = "show_hidden"
+AUTO_TAGS = "auto_tags"
 
 SQUARE = "square"
 ORIGINAL = "original"
@@ -80,6 +81,13 @@ def show_hidden(user):
     return _flag(user, SHOW_HIDDEN, False)
 
 
+def auto_tags(user):
+    """Whether the library tags the user's photos with what they show
+    (services/auto_tags.py). On by default; off, the photos embedded
+    meanwhile are never tagged, turning it back on tags the next ones."""
+    return _flag(user, AUTO_TAGS, True)
+
+
 def default_scope_token(user):
     """The library the timeline opens on when the URL names none."""
     value = _prefs(user).get(DEFAULT_SCOPE)
@@ -105,4 +113,5 @@ def display_preferences(user):
         "default_media_type": media_type.value if media_type else ALL_TYPES,
         "import_by_date": import_by_date(user),
         "show_hidden": show_hidden(user),
+        "auto_tags": auto_tags(user),
     }

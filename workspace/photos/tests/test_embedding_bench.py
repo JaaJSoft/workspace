@@ -182,6 +182,21 @@ class TaggingScoreTests(SimpleTestCase):
 
         self.assertEqual(list(thresholds), [0.2, 0.2])
 
+    def test_examples_are_left_out_of_the_tags_learnt_from_them(self):
+        images = np.array(
+            [_direction(0), _direction(10), _direction(5), _direction(90)]
+        )
+        relevant = np.array([[True, True, True, False]])
+
+        matrix, remaining = bench.example_distances(images, relevant, count=2)
+
+        # Learnt from the first two: the third is near their mean, the
+        # fourth far, the examples themselves never scored.
+        self.assertEqual(list(remaining[0]), [False, False, True, False])
+        self.assertTrue(np.isinf(matrix[0, :2]).all())
+        self.assertLess(matrix[0, 2], 0.01)
+        self.assertGreater(matrix[0, 3], 0.5)
+
 
 class VariantTests(SimpleTestCase):
     def test_every_variant_is_a_picture_of_the_same_scene(self):
@@ -273,6 +288,13 @@ class DatasetTests(SimpleTestCase):
 
         self.assertNotIn("c", {p.image_id for p in photos})
 
+    def test_every_classic_tag_is_one_label(self):
+        self.assertGreaterEqual(len(dataset.TAGS), 30)
+        self.assertEqual(len({t.text for t in dataset.TAGS}), len(dataset.TAGS))
+        for tag in dataset.TAGS:
+            with self.subTest(tag=tag.text):
+                self.assertEqual(len(tag.labels), 1)
+
     def test_every_query_asks_for_labels_and_speaks_french(self):
         for query in dataset.QUERIES:
             with self.subTest(query=query.text):
@@ -289,9 +311,10 @@ class EndToEndTests(SimpleTestCase):
         colours = {"red": (255, 0, 0), "blue": (0, 0, 255)}
         photos, paths = [], {}
         with tempfile.TemporaryDirectory() as tmp:
-            # Two of each colour in either half of the photos: tag
-            # thresholds are fitted on one half and scored on the other.
-            for index in range(8):
+            # Four of each colour in either half of the photos: tag
+            # thresholds are fitted on one half and scored on the other,
+            # and the tags learnt from examples need some left to find.
+            for index in range(16):
                 name = "red" if index % 4 < 2 else "blue"
                 path = Path(tmp) / f"{index}.jpg"
                 Image.new("RGB", (64, 48), colours[name]).save(path)
@@ -303,18 +326,24 @@ class EndToEndTests(SimpleTestCase):
                 dataset.Query("blue", "bleu", ("Blue",)),
             ]
             with patch.dict(os.environ):
-                run = bench.embed("fake", photos, paths, queries, duplicates=2)
+                run = bench.embed(
+                    "fake", photos, paths, queries, duplicates=2, tags=queries
+                )
 
-        report = bench.score(run, photos, queries)
+        report = bench.score(run, photos, queries, queries)
         report |= {k: run[k] for k in ("label", "dims", "cost", "thresholds")}
 
         self.assertEqual(report["search"]["map"], 1.0)
         self.assertEqual(report["duplicates"]["at_threshold"]["recall"], 1.0)
         self.assertEqual(run["copies"].shape, (2, len(bench.VARIANTS), 768))
         tagging = report["tagging"]
-        self.assertEqual(tagging["description"]["precision"], 1.0)
-        self.assertEqual(tagging["prompted"]["recall"], 1.0)
-        self.assertEqual(set(tagging["prompted"]["thresholds"]), {"red", "blue"})
+        self.assertEqual(tagging["at_threshold"]["precision"], 1.0)
+        self.assertEqual(tagging["shared"]["recall"], 1.0)
+        # Learnt from three red photos, the tag finds the other five.
+        self.assertEqual(tagging["examples_3"]["recall"], 1.0)
+        # The fake backend's table recognizes red alone.
+        self.assertEqual(tagging["at_threshold"]["labels"], 1)
+        self.assertEqual(set(tagging["suggested"]), {"red", "blue"})
         table = bench.render([report])
         self.assertIn("fake (768-d)", table)
         self.assertIn("mAP (English)  ", table)

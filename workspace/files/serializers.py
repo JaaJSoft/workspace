@@ -372,6 +372,7 @@ class FileSerializer(serializers.ModelSerializer):
                 "name": ft.tag.name,
                 "icon": ft.tag.icon,
                 "color": ft.tag.color,
+                "source": ft.source,
             }
             for ft in fts
         ]

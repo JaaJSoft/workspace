@@ -5,8 +5,8 @@ file opens the viewer, any other file does nothing), selects through its
 checkbox without opening, toggles its favourite, opens the item menu from
 its menu button and on a right-click, becomes the keyboard shortcuts'
 target while hovered, dims while an action runs on it, and offers itself
-for a drag once the registry allows a cut. In the trash, it does none of
-the opening or dragging.
+for a drag once the registry allows a cut. In the trash, a viewable file
+still opens the viewer, but a folder does not navigate and nothing drags.
 """
 
 from __future__ import annotations
@@ -225,21 +225,29 @@ class _ListingItemInteractions:
         for file_obj in (self.folder, self.blob, self.note):
             expect(self.item(file_obj)).to_have_attribute("draggable", "true")
 
-    def test_trashed_items_neither_open_nor_drag(self):
-        self.note.deleted_at = timezone.now()
-        self.note.save()
+    def test_trashed_files_open_but_nothing_navigates_or_drags(self):
+        for node in (self.note, self.folder):
+            node.deleted_at = timezone.now()
+            node.save()
         self.open_listing("/files/trash")
         self.wait_for_actions(self.note)
 
-        self.plain_spot(self.note).click()
+        self.plain_spot(self.folder).click()
         self.page.wait_for_timeout(200)
-        self.assertEqual(self.opened(), [])
-        expect(self.item(self.note)).not_to_have_attribute("draggable", "true")
+        self.assertTrue(self.page.url.endswith("/files/trash"))
+        expect(self.item(self.folder)).not_to_have_attribute("draggable", "true")
 
         self.plain_spot(self.note).click(button="right")
         self.assertEqual(
             self.menu_target(), {"uuid": str(self.note.uuid), "background": False}
         )
+        self.close_menu()
+
+        # Last: the viewer it opens covers the listing.
+        self.plain_spot(self.note).click()
+        self.page.wait_for_function("window.__opened.length > 0")
+        self.assertEqual(self.opened(), [str(self.note.uuid)])
+        expect(self.item(self.note)).not_to_have_attribute("draggable", "true")
 
 
 class ListItemInteractionTests(_ListingItemInteractions, PlaywrightTestCase):

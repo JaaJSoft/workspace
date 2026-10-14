@@ -802,19 +802,16 @@ def view_file(request, uuid):
     Returns the appropriate viewer HTML based on file MIME type.
     Used by the file viewer modal to load content via Alpine AJAX.
     """
-    # Get file — allow owner or shared-with user
-    file_obj = (
-        File.objects.select_related("locked_by")
-        .filter(uuid=uuid, deleted_at__isnull=True)
-        .first()
-    )
+    # A trashed file only grants a permission to its owner, who previews it
+    # from the trash - read-only, since every write refuses a trashed row.
+    file_obj = File.objects.select_related("locked_by").filter(uuid=uuid).first()
     if not file_obj:
         raise Http404
 
     perm = FileService.get_permission(request.user, file_obj)
     if perm is None:
         raise Http404
-    user_can_edit = perm >= FilePermission.WRITE
+    user_can_edit = perm >= FilePermission.WRITE and file_obj.deleted_at is None
 
     from workspace.files.services.scanning.policy import blocked_reason
 

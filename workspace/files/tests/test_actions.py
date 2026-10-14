@@ -219,8 +219,8 @@ class GetAvailableActionsTests(TestCase):
         action_ids = [a["id"] for a in actions]
         self.assertIn("restore", action_ids)
         self.assertIn("purge", action_ids)
-        # Should not see normal actions
-        self.assertNotIn("view", action_ids)
+        # Opened read-only from the trash, but nothing else of a live file
+        self.assertIn("view", action_ids)
         self.assertNotIn("download", action_ids)
         self.assertNotIn("rename", action_ids)
         self.assertNotIn("delete", action_ids)

@@ -20,6 +20,7 @@ from workspace.vault.tests.factories import (
     make_key_wrap,
     make_vault,
     sealed,
+    sealed_envelope,
 )
 
 CURRENT_HPKE = {**HPKE_SUITE, "format": 2}
@@ -173,6 +174,20 @@ class StaleRowsTests(TestCase):
 
 
 class CensusTests(TestCase):
+    def test_counts_a_previous_envelope_until_it_is_confirmed(self):
+        _, _, identity = make_account("owner")
+        AccountIdentity.objects.filter(pk=identity.pk).update(
+            wrapped_kex_priv=sealed_envelope("k"),
+            wrapped_sig_priv=sealed_envelope("s"),
+            previous_kdf_algo="argon2id",
+            previous_kdf_params={"v": "1.3", "m": 65536, "t": 3, "p": 2},
+            previous_wrapped_kex_priv=sealed_envelope("pk", 1),
+            previous_wrapped_sig_priv=sealed_envelope("ps", 1),
+        )
+        counts = census.census()
+        self.assertEqual(counts[("format", 1)], 2)
+        self.assertEqual(counts[("kdf", "argon2id")], 2)
+
     def test_counts_every_column_without_a_state_filter(self):
         user, _, identity = make_account("owner")
         AccountIdentity.objects.filter(pk=identity.pk).update(

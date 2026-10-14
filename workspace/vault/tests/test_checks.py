@@ -14,6 +14,7 @@ from workspace.vault.tests.factories import (
     make_key_wrap,
     make_vault,
     sealed,
+    sealed_envelope,
 )
 
 
@@ -157,3 +158,43 @@ class RetirementAfterRecordMigrationTests(TestCase):
         ):
             errors = retired_ids_check(None, databases=["default"])
         self.assertEqual([error.id for error in errors], ["vault.E001"])
+
+
+class RetirementOnceTheEnvelopeMigratedTests(TestCase):
+    databases = {"default"}
+
+    def _without_format_1(self):
+        real_state = suites.state
+
+        def without(axis, identifier):
+            if (axis, identifier) == ("format", 1):
+                return None
+            return real_state(axis, identifier)
+
+        return mock.patch("workspace.vault.checks.suites.state", side_effect=without)
+
+    def _migrated_account(self):
+        user, _, identity = make_account("owner")
+        AccountIdentity.objects.filter(pk=identity.pk).update(
+            wrapped_kex_priv=sealed_envelope("k"),
+            wrapped_sig_priv=sealed_envelope("s"),
+        )
+        make_vault(user)
+        return identity
+
+    def test_an_unconfirmed_previous_envelope_still_blocks_the_retirement(self):
+        identity = self._migrated_account()
+        AccountIdentity.objects.filter(pk=identity.pk).update(
+            previous_kdf_algo="argon2id",
+            previous_kdf_params={"v": "1.3", "m": 65536, "t": 3, "p": 2},
+            previous_wrapped_kex_priv=sealed_envelope("pk", 1),
+            previous_wrapped_sig_priv=sealed_envelope("ps", 1),
+        )
+        with self._without_format_1():
+            errors = retired_ids_check(None, databases=["default"])
+        self.assertEqual([error.id for error in errors], ["vault.E001"])
+
+    def test_the_retirement_passes_once_everything_migrated(self):
+        self._migrated_account()
+        with self._without_format_1():
+            self.assertEqual(retired_ids_check(None, databases=["default"]), [])

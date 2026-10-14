@@ -1359,6 +1359,49 @@ test('a blur step is saved as a core setting and moves the page root at once', a
   ]);
 });
 
+test('dragging the blur slider previews each step and saves once, on release', async () => {
+  const requests = [];
+  const document = withBlurData({ sensitive_blur: 'standard' });
+  const app = load({
+    document,
+    fetch: (url, opts) => { requests.push(opts.body); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+  const root = document.documentElement;
+
+  app.previewSensitiveBlurStep(1);
+  app.previewSensitiveBlurStep(0);
+
+  assert.equal(root.getAttribute('data-blur-sensitive'), '1');
+  assert.equal(app.sensitiveBlurLabel(), 'strict');
+  assert.equal(app.photoPrefs.sensitive_blur, 'standard');
+  assert.deepEqual(requests, []);
+
+  await app.saveSensitiveBlurStep(0);
+
+  assert.equal(app.photoPrefs.sensitive_blur, 'strict');
+  assert.deepEqual(requests, ['{"value":"strict"}']);
+});
+
+test('a drag released on the step it started from saves nothing and restores the page', async () => {
+  const requests = [];
+  const document = withBlurData({ sensitive_blur: 'standard' });
+  const app = load({
+    document,
+    fetch: () => { requests.push(1); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+
+  app.previewSensitiveBlurStep(4);
+  assert.equal(document.documentElement.getAttribute('data-blur-sensitive'), null);
+  app.previewSensitiveBlurStep(2);
+  await app.saveSensitiveBlurStep(2);
+
+  assert.deepEqual(requests, []);
+  assert.equal(document.documentElement.getAttribute('data-blur-sensitive'), '3');
+  assert.equal(app.sensitiveBlurStep(), 2);
+});
+
 test('a refused blur step puts the page root back', async () => {
   const document = withBlurData({ sensitive_blur: 'standard' });
   const app = load({

@@ -90,6 +90,7 @@
       class="range range-xs range-module w-full mt-1"
       :value="sensitiveBlurStep()"
       :aria-valuetext="sensitiveBlurLabel()"
+      @input="previewSensitiveBlurStep($event.target.valueAsNumber)"
       @change="saveSensitiveBlurStep($event.target.valueAsNumber)"
     />
     <div

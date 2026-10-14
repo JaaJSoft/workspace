@@ -221,6 +221,7 @@ window.photosApp = function photosApp() {
     _tileWidths: tile.widths,
     photoPrefs: photosPrefs(),
     sensitiveBlurChoices: sensitiveBlurChoices(),
+    _sensitiveBlurDraft: null,
     _prefVersions: {},
     _hoverPreview: null,
     ctxMenu: { open: false, x: 0, y: 0, photo: null, actions: null },
@@ -402,8 +403,10 @@ window.photosApp = function photosApp() {
       if (attribute) document.documentElement.toggleAttribute(attribute, !!value);
     },
 
-    // The slider's step for the current preference, strictest first.
+    // The slider's step, strictest first: the one under the thumb while it
+    // is dragged, the saved preference otherwise.
     sensitiveBlurStep() {
+      if (this._sensitiveBlurDraft !== null) return this._sensitiveBlurDraft;
       const step = this.sensitiveBlurChoices.findIndex(
         (choice) => choice.value === this.photoPrefs.sensitive_blur,
       );
@@ -415,9 +418,25 @@ window.photosApp = function photosApp() {
       return choice ? choice.label : '';
     },
 
-    saveSensitiveBlurStep(step) {
+    // While the thumb moves: the page blurs as that step would, nothing is
+    // saved. The preference itself stays put, so a refused save still has
+    // the previous value to put back.
+    previewSensitiveBlurStep(step) {
       const choice = this.sensitiveBlurChoices[step];
-      if (!choice || choice.value === this.photoPrefs.sensitive_blur) return Promise.resolve();
+      if (!choice) return;
+      this._sensitiveBlurDraft = step;
+      this._applySensitiveBlur(choice.value);
+    },
+
+    // Once the thumb is released: one save, or the saved step back on the
+    // page when the thumb ended where it started.
+    saveSensitiveBlurStep(step) {
+      this._sensitiveBlurDraft = null;
+      const choice = this.sensitiveBlurChoices[step];
+      if (!choice || choice.value === this.photoPrefs.sensitive_blur) {
+        this._applySensitiveBlur(this.photoPrefs.sensitive_blur);
+        return Promise.resolve();
+      }
       return this.savePhotoPref('sensitive_blur', choice.value);
     },
 

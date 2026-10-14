@@ -13,6 +13,7 @@ the failure surfaces the next time they try to unlock.
 
 import secrets
 
+from django.db.models import Case, F, Q, When
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import (
@@ -55,6 +56,7 @@ SENSITIVE_BODY_FIELDS = (
     "wrapped_kex_priv",
     "wrapped_sig_priv",
     "sig_over_kex_pub",
+    "expected_wrapped_kex_priv",
 )
 
 
@@ -185,25 +187,54 @@ class AccountRotateView(CacheControlMixin, APIView):
         tags=["Vault"],
         summary="Rotate the vault password envelope",
         description=(
-            "Re-wraps the same account private keys under a key derived from a "
-            "new vault password. No vault is re-encrypted: the vault keys have "
-            "not changed, only the envelope that seals the account keys."
+            "Re-wraps the same account private keys under the current suite, "
+            "against the envelope the client read. The envelope it replaces is "
+            "kept until an unlock proves the new one."
         ),
         request=AccountRotateSerializer,
-        responses={200: None},
+        responses={200: None, 409: None},
     )
     @sensitive_variables()
     def post(self, request):
         serializer = AccountRotateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
-        # The serializer's field list is the only place naming the columns a
-        # rotation rewrites: a write that widened to the salt or the public
-        # keys would orphan every VaultKeyWrap the account holds, since the
-        # sealed private keys are the only path back to them.
+        # One UPDATE, conditioned on the envelope the client read. SQL
+        # evaluates every right-hand side against the row as it was before the
+        # statement (PostgreSQL and SQLite alike), so the current envelope is
+        # copied into the previous slot only when that slot was empty - the
+        # current envelope had been proven - and an unproven one never
+        # displaces the last envelope an unlock opened.
+        previous_empty = Q(previous_wrapped_kex_priv__isnull=True)
+
+        def kept_or_taken(column):
+            return Case(
+                When(previous_empty, then=F(column)),
+                default=F(f"previous_{column}"),
+                output_field=AccountIdentity._meta.get_field(f"previous_{column}"),
+            )
+
         rotated = AccountIdentity.objects.filter(
+            user=request.user,
+            state=AccountIdentity.State.ACTIVE,
+            wrapped_kex_priv=data["expected_wrapped_kex_priv"],
+        ).update(
+            previous_kdf_algo=kept_or_taken("kdf_algo"),
+            previous_kdf_params=kept_or_taken("kdf_params"),
+            previous_wrapped_kex_priv=kept_or_taken("wrapped_kex_priv"),
+            previous_wrapped_sig_priv=kept_or_taken("wrapped_sig_priv"),
+            kdf_algo=data["kdf_algo"],
+            kdf_params=data["kdf_params"],
+            wrapped_kex_priv=data["wrapped_kex_priv"],
+            wrapped_sig_priv=data["wrapped_sig_priv"],
+            updated_at=timezone.now(),
+        )
+        if rotated:
+            return Response(status=status.HTTP_200_OK)
+        active = AccountIdentity.objects.filter(
             user=request.user, state=AccountIdentity.State.ACTIVE
-        ).update(updated_at=timezone.now(), **serializer.validated_data)
-        if not rotated:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-        return Response(status=status.HTTP_200_OK)
+        ).exists()
+        return Response(
+            status=status.HTTP_409_CONFLICT if active else status.HTTP_404_NOT_FOUND
+        )

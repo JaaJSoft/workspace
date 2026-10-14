@@ -13,6 +13,8 @@ from workspace.vault.serializers import (
     VaultUpdateSerializer,
     validate_base64url,
 )
+from workspace.vault.services import suites
+from workspace.vault.tests.factories import sealed_envelope
 from workspace.vault.tests.reference.encoding import to_base64url
 
 VALID_PARAMS = {"v": "1.3", "m": 65536, "t": 3, "p": 2}
@@ -147,13 +149,15 @@ class ValidateBase64urlTests(SimpleTestCase):
 
 
 class AccountRotateSerializerTests(SimpleTestCase):
-    def test_accepts_the_three_rotatable_fields(self):
+    def test_accepts_the_current_kdf_and_envelopes_with_the_expected_one(self):
+        algo, params = suites.current_kdf()
         serializer = AccountRotateSerializer(
             data={
-                "kdf_algo": "argon2id",
-                "kdf_params": dict(VALID_PARAMS),
-                "wrapped_kex_priv": CIPHERTEXT,
-                "wrapped_sig_priv": CIPHERTEXT,
+                "kdf_algo": algo,
+                "kdf_params": dict(params),
+                "wrapped_kex_priv": sealed_envelope("kex"),
+                "wrapped_sig_priv": sealed_envelope("sig"),
+                "expected_wrapped_kex_priv": OPAQUE,
             }
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -165,7 +169,13 @@ class AccountRotateSerializerTests(SimpleTestCase):
         declared = set(AccountRotateSerializer().fields)
         self.assertEqual(
             declared,
-            {"kdf_algo", "kdf_params", "wrapped_kex_priv", "wrapped_sig_priv"},
+            {
+                "kdf_algo",
+                "kdf_params",
+                "wrapped_kex_priv",
+                "wrapped_sig_priv",
+                "expected_wrapped_kex_priv",
+            },
         )
 
 

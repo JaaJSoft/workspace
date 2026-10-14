@@ -344,7 +344,7 @@ html:has(> body.overflow-hidden.h-dvh) {
   display: none;
 }
 
-[data-blur-sensitive] .sensitive-cover {
+[data-blur-sensitive]:not([data-reveal-sensitive-in-viewer]) .sensitive-cover {
   display: flex;
 }
 
@@ -365,9 +365,23 @@ html:has(> body.overflow-hidden.h-dvh) {
   [data-blur-sensitive] [data-sensitive="1"]:hover .sensitive-badge {
     opacity: 1;
   }
+
+  /* The preview in clear while the pointer rests on it. The transition lists
+     `transform` too: this rule outranks the tile's own transition utility,
+     whose hover zoom would otherwise snap. */
+  [data-blur-sensitive][data-reveal-sensitive-on-hover] [data-sensitive="1"] :is(img, video) {
+    transition-property: filter, scale, transform;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  [data-blur-sensitive][data-reveal-sensitive-on-hover] [data-sensitive="1"]:hover :is(img, video) {
+    filter: none;
+    scale: none;
+  }
 }
 
 /* The viewer behind its cover, until the cover's Show button drops it. */
-[data-blur-sensitive] .sensitive-veiled {
+[data-blur-sensitive]:not([data-reveal-sensitive-in-viewer]) .sensitive-veiled {
   display: none !important;
 }

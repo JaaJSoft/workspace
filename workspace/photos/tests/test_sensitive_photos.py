@@ -471,6 +471,37 @@ class SensitivePreviewTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_the_reveal_options_are_off_by_default(self):
+        root = self.client.get("/photos").content.decode().split("<head>")[0]
+
+        self.assertNotIn("data-reveal-sensitive-on-hover", root)
+        self.assertNotIn("data-reveal-sensitive-in-viewer", root)
+
+    def test_the_page_carries_the_reveal_options_the_user_turned_on(self):
+        for key in ("reveal_sensitive_on_hover", "reveal_sensitive_in_viewer"):
+            response = self.client.put(
+                f"/api/v1/settings/core/{key}",
+                {"value": True},
+                content_type="application/json",
+            )
+            self.assertEqual(response.status_code, 200)
+
+        root = self.client.get("/photos").content.decode().split("<head>")[0]
+
+        self.assertIn("data-blur-sensitive", root)
+        self.assertIn("data-reveal-sensitive-on-hover", root)
+        self.assertIn("data-reveal-sensitive-in-viewer", root)
+
+    def test_the_reveal_options_must_be_booleans(self):
+        for key in ("reveal_sensitive_on_hover", "reveal_sensitive_in_viewer"):
+            response = self.client.put(
+                f"/api/v1/settings/core/{key}",
+                {"value": "on"},
+                content_type="application/json",
+            )
+
+            self.assertEqual(response.status_code, 400, key)
+
     def test_the_files_viewer_is_covered(self):
         html = self.client.get(f"/files/view/{self.photo.uuid}").content.decode()
 

@@ -1963,3 +1963,49 @@ test('a similar photos navigation that never answered drops the loading veil', a
 
   assert.equal(app.contentLoading, false);
 });
+
+function pageRoot() {
+  const attributes = new Set();
+  return {
+    attributes,
+    toggleAttribute(name, on) { if (on) attributes.add(name); else attributes.delete(name); },
+  };
+}
+
+test('the sensitive reveal preferences are core settings flipped on the page root', async () => {
+  const requests = [];
+  const root = pageRoot();
+  const app = load({
+    fetch: (url, opts) => { requests.push([url, opts.method]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+    document: { getElementById: () => null, querySelector: () => null, documentElement: root },
+  }).ctx.photosApp();
+
+  await app.savePhotoPref('reveal_sensitive_on_hover', true);
+  await app.savePhotoPref('reveal_sensitive_in_viewer', true);
+
+  assert.deepEqual(requests, [
+    ['/api/v1/settings/core/reveal_sensitive_on_hover', 'PUT'],
+    ['/api/v1/settings/core/reveal_sensitive_in_viewer', 'PUT'],
+  ]);
+  assert.deepEqual(
+    [...root.attributes].sort(),
+    ['data-reveal-sensitive-in-viewer', 'data-reveal-sensitive-on-hover'],
+  );
+});
+
+test('a refused reveal preference puts the page root back', async () => {
+  const root = pageRoot();
+  const app = load({
+    fetch: () => Promise.resolve({ ok: false, status: 400 }),
+    getCSRFToken: () => 't',
+    AppAlert: { error() {} },
+    document: { getElementById: () => null, querySelector: () => null, documentElement: root },
+  }).ctx.photosApp();
+  app.photoPrefs.reveal_sensitive_on_hover = false;
+
+  await app.savePhotoPref('reveal_sensitive_on_hover', true);
+
+  assert.equal(app.photoPrefs.reveal_sensitive_on_hover, false);
+  assert.deepEqual([...root.attributes], []);
+});

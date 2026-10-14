@@ -177,6 +177,12 @@ pages. Opening it shows a *Sensitive content* cover over the viewer, with a
 - Each user can turn the blur off for their own screen: **Blur sensitive
   photos** in the Photos preferences. It is on by default; a visitor of a
   public link always gets the blur.
+- Two options below it soften the blur without turning it off, both off by
+  default and for the user's own screen too. **Unblur on hover** shows a
+  thumbnail in clear while the pointer rests on it (a touch screen has no
+  hover, so the option is not offered there). **Show in the viewer without
+  asking** opens a sensitive photo or video straight away, with no cover. Both
+  apply in Files as well; a public link gets neither.
 
 ### Detection
 

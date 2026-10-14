@@ -51,6 +51,8 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "blur_sensitive": True,
+                "reveal_sensitive_on_hover": False,
+                "reveal_sensitive_in_viewer": False,
             },
         )
 
@@ -85,6 +87,21 @@ class DisplayPreferencesTests(PreferencesTestCase):
 
         self.assertIs(display_preferences(self.user)["blur_sensitive"], True)
 
+    def test_the_reveal_options_are_core_settings(self):
+        set_setting(self.user, "core", "reveal_sensitive_on_hover", True)
+        set_setting(self.user, "core", "reveal_sensitive_in_viewer", True)
+
+        prefs = display_preferences(self.user)
+        self.assertIs(prefs["reveal_sensitive_on_hover"], True)
+        self.assertIs(prefs["reveal_sensitive_in_viewer"], True)
+
+        set_setting(self.user, "core", "reveal_sensitive_on_hover", "yes")
+        set_setting(self.user, "core", "reveal_sensitive_in_viewer", "on")
+
+        prefs = display_preferences(self.user)
+        self.assertIs(prefs["reveal_sensitive_on_hover"], False)
+        self.assertIs(prefs["reveal_sensitive_in_viewer"], False)
+
     def test_a_malformed_value_reads_as_the_default(self):
         """Written before the API checked it, or by hand: never a broken page."""
         for key, value in {
@@ -109,6 +126,8 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "blur_sensitive": True,
+                "reveal_sensitive_on_hover": False,
+                "reveal_sensitive_in_viewer": False,
             },
         )
 

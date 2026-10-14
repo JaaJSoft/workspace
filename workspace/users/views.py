@@ -28,6 +28,7 @@ from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import SearchScope
 from workspace.files.models import File
+from workspace.files.sensitivity import BlurPreference
 from workspace.users.models import APITokenLabel, UserSetting
 from workspace.users.queries import (
     DEFAULT_SEARCH_LIMIT,
@@ -495,7 +496,6 @@ _setting_fields = {
 
 
 _CORE_FLAGS = (
-    "blur_sensitive",
     "reveal_sensitive_on_hover",
     "reveal_sensitive_in_viewer",
 )
@@ -536,6 +536,9 @@ def _validate_setting_value(module, key, value):
     if module == "core" and key in _CORE_FLAGS and value is not None:
         if not isinstance(value, bool):
             return f"{key} must be a boolean."
+    if module == "core" and key == "sensitive_blur" and value is not None:
+        if value not in BlurPreference.values:
+            return f"sensitive_blur must be one of: {', '.join(BlurPreference.values)}."
     if module == "core" and key == "search_scope" and value is not None:
         if value not in SearchScope.CHOICES:
             return f"search_scope must be one of: {', '.join(SearchScope.CHOICES)}."

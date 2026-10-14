@@ -1,7 +1,8 @@
 """The interface every sensitive-content detector implements.
 
 A detector scores a photo from 0 (nothing to hide) to 1 (explicit): the
-pipeline (services/sensitive_photos.py) blurs it from the threshold on. It
+pipeline (services/sensitive_photos.py) turns the score into the photo's
+sensitivity level, from the detector's threshold for each blur preference. It
 says nothing about who or what is in the picture, only whether it should be
 kept off a screen others may see.
 """
@@ -25,9 +26,9 @@ class SensitiveBackend(abc.ABC):
     models: tuple = ()
     # Longest side, in px, of the copy of the photo handed to score.
     decode_size: int = 224
-    # The default score from which a photo is blurred, overridden by
-    # PHOTOS_SENSITIVE_THRESHOLD.
-    threshold: float = 0.5
+    # The score from which a photo is blurred, for each BlurPreference but
+    # OFF: a stricter preference needs a lower score.
+    thresholds: dict = {}
 
     def prepare(self):
         """Download and verify the weights; a no-op once done in this process.

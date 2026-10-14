@@ -15,7 +15,11 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
-from workspace.files.sensitivity import is_sensitive
+from workspace.files.sensitivity import (
+    DEFAULT_BLUR,
+    blur_preference,
+    sensitive_level,
+)
 from workspace.files.services.filetype import get_viewer_by_slug
 from workspace.files.ui.viewers import (
     ViewerRegistry,
@@ -78,6 +82,7 @@ from workspace.photos.services.preferences import (
     default_media_type,
     default_scope_token,
     display_preferences,
+    sensitive_blur_choices,
     show_hidden,
 )
 from workspace.photos.services.similarity import (
@@ -584,6 +589,7 @@ def _render_page(request, template, context):
     else:
         context["import_folder"] = import_folder_data(import_folder(request.user))
         context["photos_prefs"] = display_preferences(request.user)
+        context["sensitive_blur_choices"] = sensitive_blur_choices()
         context["hidden_folders"] = [
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
@@ -977,9 +983,10 @@ def album_timeline(request, uuid):
     return render(request, "photos/ui/partials/timeline_page.html", context)
 
 
-def _viewer_html(request, file_obj, content_url):
+def _viewer_html(request, file_obj, content_url, blur):
     """*file_obj* in the Files viewer that fits it, read-only, its bytes
-    fetched from *content_url*; empty when no viewer fits it."""
+    fetched from *content_url*, covered when sensitive under the *blur*
+    preference; empty when no viewer fits it."""
     if not file_obj.is_viewable():
         return ""
     viewer_class = get_viewer_by_slug(file_obj.viewer) or ViewerRegistry.get_viewer(
@@ -990,7 +997,7 @@ def _viewer_html(request, file_obj, content_url):
     viewer = viewer_class(file_obj)
     viewer._user_can_edit = False
     viewer._content_url = content_url
-    return veil_sensitive(viewer.render(request), is_sensitive(file_obj))
+    return veil_sensitive(viewer.render(request), sensitive_level(file_obj), blur)
 
 
 @login_required
@@ -1007,6 +1014,7 @@ def album_viewer(request, uuid, file_uuid):
         request,
         file_obj,
         reverse("photo-album-file-content", args=[album.uuid, file_obj.uuid]),
+        blur_preference(request.user),
     )
     if not html:
         return HttpResponse(
@@ -1098,7 +1106,9 @@ def _shared_photo_context(request, link, access_token, files, file_obj):
     )
     return {
         "file": file_obj,
-        "viewer_html": _viewer_html(request, file_obj, content_url),
+        # Blurred as by default, whoever is signed in: the shared page blurs
+        # its tiles the same way (files/ui/shared_base.html).
+        "viewer_html": _viewer_html(request, file_obj, content_url, DEFAULT_BLUR),
         "download_url": download_url,
         "previous_url": previous_url,
         "next_url": next_url,

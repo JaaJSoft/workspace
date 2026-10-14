@@ -29,12 +29,13 @@ class AlbumCard:
         )
 
     @property
-    def cover_sensitive(self):
-        """Whether the cover is blurred, as the photo is everywhere else."""
+    def cover_sensitive_level(self):
+        """The cover's sensitivity level, which blurs it as the photo is
+        everywhere else."""
         if self.cover is None:
-            return False
+            return 0
         media_item = getattr(self.cover, "media_item", None)
-        return bool(media_item and media_item.sensitive)
+        return media_item.sensitive_level if media_item else 0
 
 
 def album_cards(user, albums):
@@ -50,7 +51,7 @@ def album_cards(user, albums):
     cover_ids = {s["cover_id"] for s in summaries.values() if s["cover_id"]}
     covers = (
         File.objects.select_related("media_item")
-        .only("uuid", "has_thumbnail", "media_item__sensitive")
+        .only("uuid", "has_thumbnail", "media_item__sensitive_level")
         .in_bulk(cover_ids)
     )
     return [

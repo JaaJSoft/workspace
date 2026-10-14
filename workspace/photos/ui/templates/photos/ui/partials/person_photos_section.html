@@ -12,7 +12,7 @@
       href="{{ strip.url }}&open={{ photo.uuid }}"
       class="block aspect-square overflow-hidden rounded-md bg-base-200"
       title="{{ photo.name }}"
-      data-sensitive="{{ photo.media_item.sensitive|yesno:'1,0' }}"
+      data-sensitive="{{ photo.media_item.sensitive_level }}"
     >
       {% if photo.has_thumbnail %}
         <img

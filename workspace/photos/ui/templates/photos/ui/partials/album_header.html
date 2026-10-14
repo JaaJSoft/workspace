@@ -19,7 +19,7 @@
   {% if album.card.cover_url %}
     <span
       class="w-8 h-8 rounded-md sm:w-11 sm:h-11 sm:rounded-lg overflow-hidden shrink-0"
-      data-sensitive="{{ album.card.cover_sensitive|yesno:'1,0' }}"
+      data-sensitive="{{ album.card.cover_sensitive_level }}"
     >
       <img
         src="{{ album.card.cover_url }}"

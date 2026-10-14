@@ -12,7 +12,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.charts import donut_chart
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.properties_sections import render_properties_sections
-from workspace.files.sensitivity import is_sensitive, with_sensitivity
+from workspace.files.sensitivity import (
+    DEFAULT_BLUR,
+    blur_preference,
+    sensitive_level,
+    with_sensitivity,
+)
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
 from workspace.files.services.public_links import resolve_within, scope_q
@@ -875,7 +880,9 @@ def view_file(request, uuid):
     viewer = ViewerClass(file_obj)
     viewer._user_can_edit = user_can_edit
     viewer._lock_info = lock_info
-    html = veil_sensitive(viewer.render(request), is_sensitive(file_obj))
+    html = veil_sensitive(
+        viewer.render(request), sensitive_level(file_obj), blur_preference(request.user)
+    )
 
     return HttpResponse(render_viewer_panel(html))
 
@@ -1061,7 +1068,7 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
                 "size": None if is_dir else node.size,
                 "modified": node.updated_at,
                 "is_quarantined": False if is_dir else node.is_quarantined(),
-                "is_sensitive": bool(node.is_sensitive),
+                "sensitive_level": node.sensitive_level or 0,
                 "url": _shared_page_url(
                     request.path, access_token, view_mode, node=node.uuid
                 ),
@@ -1181,7 +1188,11 @@ def shared_file_view(request, token):
             viewer._content_url = _shared_action_url(
                 token, "/content", effective_access_token, file=target.uuid
             )
-            viewer_html = veil_sensitive(viewer.render(request), is_sensitive(target))
+            # Blurred as by default, whoever is signed in: shared_base.html
+            # blurs the listing the same way.
+            viewer_html = veil_sensitive(
+                viewer.render(request), sensitive_level(target), DEFAULT_BLUR
+            )
 
     # No download link for a quarantined file: the endpoint refuses it anyway,
     # and offering the button would only produce a 403 the visitor cannot act on.

@@ -70,8 +70,10 @@ class TogglePinAction(BaseFileAction):
 class ToggleSensitiveAction(BaseFileAction):
     """Blur a photo for everyone who can open it, or stop blurring it.
 
-    Reads ``is_sensitive`` (files.sensitivity.with_sensitivity): None, or a
-    caller that did not annotate it, means the file cannot be marked.
+    Reads ``sensitive_level`` (files.sensitivity.with_sensitivity): None, or
+    a caller that did not annotate it, means the file cannot be marked. Any
+    level above 0 offers to unmark, whatever the viewer's own preference
+    blurs: the file is blurred for someone.
     """
 
     id = "toggle_sensitive"
@@ -84,21 +86,25 @@ class ToggleSensitiveAction(BaseFileAction):
     def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
         if file_obj.deleted_at is not None:
             return False
-        if getattr(file_obj, "is_sensitive", None) is None:
+        if getattr(file_obj, "sensitive_level", None) is None:
             return False
         return permission is not None and permission >= FilePermission.EDIT
 
+    @staticmethod
+    def _is_sensitive(file_obj):
+        return bool(getattr(file_obj, "sensitive_level", 0))
+
     def get_label(self, file_obj):
-        if getattr(file_obj, "is_sensitive", False):
+        if self._is_sensitive(file_obj):
             return "Unmark as sensitive"
         return "Mark as sensitive"
 
     def get_icon(self, file_obj):
-        return "eye" if getattr(file_obj, "is_sensitive", False) else "eye-closed"
+        return "eye" if self._is_sensitive(file_obj) else "eye-closed"
 
     def serialize(self, file_obj):
         data = super().serialize(file_obj)
-        data["state"] = {"is_sensitive": bool(getattr(file_obj, "is_sensitive", False))}
+        data["state"] = {"is_sensitive": self._is_sensitive(file_obj)}
         return data
 
 

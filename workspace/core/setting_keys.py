@@ -26,11 +26,11 @@ SIDEBAR_COLLAPSED = "sidebar_collapsed"
 # since the search response is cached per query string.
 SEARCH_SCOPE = "search_scope"
 
-# Whether sensitive previews (files/sensitivity.py) are blurred: a boolean,
-# on when unset. A core setting rather than a photos one because the shell
-# renders it on every page, Files' included, from the core settings it reads
-# anyway.
-BLUR_SENSITIVE = "blur_sensitive"
+# How much of what is sensitive (files/sensitivity.py) is blurred: a
+# BlurPreference value, ``standard`` when unset. A core setting rather than a
+# photos one because the shell renders it on every page, Files' included, from
+# the core settings it reads anyway.
+SENSITIVE_BLUR = "sensitive_blur"
 
 # Two softenings of the blur, booleans off when unset: a blurred preview shows
 # in clear while the pointer rests on it, and the viewer opens a sensitive file

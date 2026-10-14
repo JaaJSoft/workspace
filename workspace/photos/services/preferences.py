@@ -6,12 +6,12 @@ back to the default on one anyway: a value stored before the rule existed
 must not break the page.
 """
 
+from workspace.core.setting_keys import MODULE as CORE_MODULE
 from workspace.core.setting_keys import (
-    BLUR_SENSITIVE,
     REVEAL_SENSITIVE_IN_VIEWER,
     REVEAL_SENSITIVE_ON_HOVER,
 )
-from workspace.core.setting_keys import MODULE as CORE_MODULE
+from workspace.files.sensitivity import BlurPreference, blur_preference
 from workspace.users.services.settings import get_module_settings
 
 from ..models import MediaItem
@@ -86,17 +86,17 @@ def show_hidden(user):
     return _flag(user, SHOW_HIDDEN, False)
 
 
+def sensitive_blur_choices():
+    """The steps of the panel's sensitive-blur slider, strictest first: the
+    ``core/sensitive_blur`` setting (files/sensitivity.py) it writes, shown in
+    this panel because the photos are what it blurs, in Files too. So are the
+    two softenings below, core settings as well."""
+    return [{"value": value, "label": label} for value, label in BlurPreference.choices]
+
+
 def _core_flag(user, key, default):
     value = get_module_settings(user, CORE_MODULE).get(key, default)
     return value if isinstance(value, bool) else default
-
-
-def blur_sensitive(user):
-    """Whether sensitive photos show blurred, in Photos and in Files alike.
-    On by default: turning it off is a choice made for one's own screen. A
-    core setting (core/setting_keys.py), shown in this panel, as are the two
-    below."""
-    return _core_flag(user, BLUR_SENSITIVE, True)
 
 
 def reveal_sensitive_on_hover(user):
@@ -134,7 +134,7 @@ def display_preferences(user):
         "default_media_type": media_type.value if media_type else ALL_TYPES,
         "import_by_date": import_by_date(user),
         "show_hidden": show_hidden(user),
-        "blur_sensitive": blur_sensitive(user),
+        "sensitive_blur": blur_preference(user).value,
         "reveal_sensitive_on_hover": reveal_sensitive_on_hover(user),
         "reveal_sensitive_in_viewer": reveal_sensitive_in_viewer(user),
     }

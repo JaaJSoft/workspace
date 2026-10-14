@@ -63,10 +63,12 @@ class MediaItem(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     # Metres above sea level, negative below it. Only kept with a position.
     altitude = models.FloatField(null=True, blank=True)
-    # Blurred wherever it shows as a thumbnail, for everyone who can open it
-    # (services/sensitive_photos.py). A choice made by hand (sensitive_by_user,
-    # null while nobody made one) wins over the detector's verdict.
-    sensitive = models.BooleanField(default=False)
+    # How sensitive the photo is (files/sensitivity.py), for everyone who can
+    # open it: 0 is nothing to hide, and each viewer's blur preference blurs
+    # it from its own level on (services/sensitive_photos.py). A choice made
+    # by hand (sensitive_by_user, null while nobody made one) wins over the
+    # detector's score.
+    sensitive_level = models.PositiveSmallIntegerField(default=0)
     sensitive_by_user = models.BooleanField(null=True, blank=True)
     # What the detector made of the bytes: its score, from 0 to 1 (null when
     # the photo could not be decoded), and the detector and content_hash it

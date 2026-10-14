@@ -1311,6 +1311,69 @@ test('a refused save does not undo a later change that went through', async () =
   assert.equal(errors.length, 0);
 });
 
+const BLUR_CHOICES = JSON.stringify(
+  ['strict', 'high', 'standard', 'low', 'off'].map((value) => ({ value, label: value })),
+);
+
+function withBlurData(prefs) {
+  const attributes = new Map([['data-blur-sensitive', '3']]);
+  const documentElement = {
+    getAttribute: (name) => (attributes.has(name) ? attributes.get(name) : null),
+    setAttribute: (name, value) => attributes.set(name, value),
+    removeAttribute: (name) => attributes.delete(name),
+  };
+  const data = { 'photos-prefs-data': JSON.stringify(prefs), 'photos-sensitive-blur-choices': BLUR_CHOICES };
+  return {
+    documentElement,
+    getElementById: (id) => (id in data ? { textContent: data[id] } : null),
+    querySelector: () => null,
+  };
+}
+
+test('the blur slider sits on the step of the stored preference', () => {
+  const app = load({ document: withBlurData({ sensitive_blur: 'low' }) }).ctx.photosApp();
+
+  assert.equal(app.sensitiveBlurStep(), 3);
+  assert.equal(app.sensitiveBlurLabel(), 'low');
+});
+
+test('a blur step is saved as a core setting and moves the page root at once', async () => {
+  const requests = [];
+  const document = withBlurData({ sensitive_blur: 'standard' });
+  const app = load({
+    document,
+    fetch: (url, opts) => { requests.push([url, opts.body]); return Promise.resolve({ ok: true }); },
+    getCSRFToken: () => 't',
+  }).ctx.photosApp();
+  const root = document.documentElement;
+
+  const saving = app.saveSensitiveBlurStep(0);
+  assert.equal(root.getAttribute('data-blur-sensitive'), '1');
+  await saving;
+  await app.saveSensitiveBlurStep(4);
+
+  assert.equal(root.getAttribute('data-blur-sensitive'), null);
+  assert.deepEqual(requests.map((r) => Array.from(r)), [
+    ['/api/v1/settings/core/sensitive_blur', '{"value":"strict"}'],
+    ['/api/v1/settings/core/sensitive_blur', '{"value":"off"}'],
+  ]);
+});
+
+test('a refused blur step puts the page root back', async () => {
+  const document = withBlurData({ sensitive_blur: 'standard' });
+  const app = load({
+    document,
+    fetch: () => Promise.resolve({ ok: false, status: 400 }),
+    getCSRFToken: () => 't',
+    AppAlert: { error: () => {} },
+  }).ctx.photosApp();
+
+  await app.saveSensitiveBlurStep(4);
+
+  assert.equal(app.photoPrefs.sensitive_blur, 'standard');
+  assert.equal(document.documentElement.getAttribute('data-blur-sensitive'), '3');
+});
+
 // ── Video preview on hover ───────────────────────────────
 
 function fakeTimers() {

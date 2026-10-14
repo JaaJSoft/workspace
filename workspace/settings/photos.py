@@ -144,15 +144,6 @@ PHOTOS_SENSITIVE_DETECTION_ENABLED = env_bool(
 # Which detector runs (photos/services/sensitivity/registry.py):
 # "falconsai_vit" (Falconsai's ViT NSFW classifier, Apache-2.0, int8 ONNX).
 PHOTOS_SENSITIVE_BACKEND = os.getenv("PHOTOS_SENSITIVE_BACKEND", "falconsai_vit")
-# The score (0 to 1) from which a photo is blurred, empty meaning the
-# backend's own default. A change applies to the photos already checked on the
-# next catch-up (hourly, or `manage.py catch_up sensitive`), from the scores
-# they were given: the model does not run again.
-PHOTOS_SENSITIVE_THRESHOLD = (
-    float(os.environ["PHOTOS_SENSITIVE_THRESHOLD"])
-    if os.getenv("PHOTOS_SENSITIVE_THRESHOLD")
-    else None
-)
 # Originals larger than this are not checked.
 PHOTOS_SENSITIVE_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_SENSITIVE_MAX_FILE_BYTES", str(64 * 1024 * 1024))

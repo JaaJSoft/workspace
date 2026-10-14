@@ -11,6 +11,7 @@
   class="group relative block shrink-0 w-[calc((100vw-3.5rem)/3)] sm:w-40 aspect-square overflow-hidden rounded-lg bg-base-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module"
   title="{{ file.name }}"
   data-shared-photo="{{ file.uuid }}"
+  data-sensitive="{{ file.media_item.sensitive|yesno:'1,0' }}"
 >
   {% if file.has_thumbnail %}
     <img
@@ -33,6 +34,9 @@
         class="w-8 h-8"
       ></i>
     </span>
+  {% endif %}
+  {% if file.has_thumbnail %}
+    {% include "files/ui/partials/sensitive_badge.html" %}
   {% endif %}
   {% if file.media_item.media_type == "video" %}
     {% include "files/ui/partials/duration_badge.html" with duration=file.media_info.duration only %}

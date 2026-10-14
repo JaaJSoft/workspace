@@ -25,6 +25,19 @@ def render_viewer_panel(html: str) -> str:
     return f'<div id="{VIEWER_PANEL_ID}" style="display: contents">{html}</div>'
 
 
+def veil_sensitive(html: str, sensitive) -> str:
+    """*html*, a rendered viewer, behind a "Sensitive content" cover when
+    *sensitive* (files.sensitivity.is_sensitive); unchanged otherwise."""
+    if not sensitive:
+        return html
+    from django.template.loader import render_to_string
+    from django.utils.safestring import mark_safe
+
+    return render_to_string(
+        "files/ui/partials/sensitive_viewer.html", {"viewer_html": mark_safe(html)}
+    )
+
+
 class ViewerRegistry:
     @classmethod
     def get_viewer(

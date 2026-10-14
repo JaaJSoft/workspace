@@ -76,6 +76,7 @@
   </div>
   {% include "ui/partials/pref_toggle.html" with label="Sort imports into year/month" state="photoPrefs.import_by_date" change="savePhotoPref('import_by_date', $event.target.checked)" accent="toggle-module" %}
   <hr class="border-base-300" />
+  {% include "ui/partials/pref_toggle.html" with label="Blur sensitive photos" state="photoPrefs.blur_sensitive" change="savePhotoPref('blur_sensitive', $event.target.checked)" accent="toggle-module" %}
   {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>

@@ -1,5 +1,5 @@
-"""Keep MediaItem rows, the faces found in photos and videos, and the photos'
-embeddings in step with the files.
+"""Keep MediaItem rows, the faces found in photos and videos, the photos'
+embeddings and their sensitive-content verdicts in step with the files.
 
 All are upload processors (files.services.processors): the upload pipeline
 runs them once an upload or a content replacement has committed, and the
@@ -34,6 +34,12 @@ from .photo_embeddings import (
     is_embedding_candidate,
     pending_embeddings_qs,
     refresh_embedding,
+)
+from .sensitive_photos import (
+    is_sensitive_candidate,
+    pending_sensitive_qs,
+    refresh_sensitive,
+    sensitive_catch_up_enabled,
 )
 
 
@@ -100,6 +106,16 @@ def _queue_embedding(file_obj):
         transaction.on_commit(lambda: embed_photo.delay(uuid))
 
 
+def _queue_sensitive(file_obj):
+    # Its own task, as for faces. Normal priority: the photo shows in clear
+    # until it runs.
+    if is_sensitive_candidate(file_obj):
+        from ..tasks import check_sensitive_photo
+
+        uuid = str(file_obj.pk)
+        transaction.on_commit(lambda: check_sensitive_photo.delay(uuid))
+
+
 register_processor(
     "photos",
     applies_to=is_media_candidate,
@@ -123,4 +139,13 @@ register_processor(
     pending=pending_embeddings_qs,
     process=refresh_embedding,
     enabled=embeddings_catch_up_enabled,
+)
+# After "photos": the verdict is written on the MediaItem row that one writes.
+register_processor(
+    "sensitive",
+    applies_to=is_sensitive_candidate,
+    enqueue=_queue_sensitive,
+    pending=pending_sensitive_qs,
+    process=refresh_sensitive,
+    enabled=sensitive_catch_up_enabled,
 )

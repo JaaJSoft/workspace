@@ -15,8 +15,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from workspace.common.booleans import is_truthy
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import Tag
+from workspace.files.sensitivity import is_sensitive
 from workspace.files.services.filetype import get_viewer_by_slug
-from workspace.files.ui.viewers import ViewerRegistry, render_viewer_panel
+from workspace.files.ui.viewers import (
+    ViewerRegistry,
+    render_viewer_panel,
+    veil_sensitive,
+)
 from workspace.notifications.services.notifications import mark_source_read
 from workspace.people.queries import reachable_person
 from workspace.photos.models import Album, Face, MediaItem
@@ -985,7 +990,7 @@ def _viewer_html(request, file_obj, content_url):
     viewer = viewer_class(file_obj)
     viewer._user_can_edit = False
     viewer._content_url = content_url
-    return viewer.render(request)
+    return veil_sensitive(viewer.render(request), is_sensitive(file_obj))
 
 
 @login_required

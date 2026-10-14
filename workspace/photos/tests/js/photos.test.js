@@ -1003,6 +1003,19 @@ test('the favorite toggle removes once every selected photo is a favorite', () =
   assert.equal(ctx.photosSelectionActions([]).length, 0);
 });
 
+const SENSITIVE = (isSensitive) => ({ id: 'toggle_sensitive', bulk: true, state: { is_sensitive: isSensitive } });
+
+test('the sensitive toggle marks unless every selected photo already is', () => {
+  const { ctx } = load();
+
+  const [mixed] = ctx.photosSelectionActions([[SENSITIVE(true)], [SENSITIVE(false)]]);
+  const [marked] = ctx.photosSelectionActions([[SENSITIVE(true)], [SENSITIVE(true)]]);
+
+  assert.equal(mixed.id, 'toggle_sensitive');
+  assert.equal(mixed.add, true);
+  assert.equal(marked.add, false);
+});
+
 test('the registry is asked in slices of 200, once per photo', async () => {
   const uuids = Array.from({ length: 450 }, (_, i) => `u${i}`);
   const calls = [];

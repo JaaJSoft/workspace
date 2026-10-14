@@ -844,6 +844,28 @@ test('a wrong password on the current envelope falls back to the previous one', 
   assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
 });
 
+test('a stale current envelope that only the previous one stands in for is never resealed', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    vaultCrypto: {
+      open: async (key, raw, ad) => {
+        const text = String.fromCharCode(...raw);
+        if (text === ENVELOPE.wrapped_kex_priv || text === ENVELOPE.wrapped_sig_priv) {
+          throw new Error('tag mismatch');
+        }
+        return String(ad).startsWith('kex') ? h.kexPriv : h.sigSeed;
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.session.openedWithPrevious(), true);
+  // One derivation per envelope tried, none for a reseal under the current suite.
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 2);
+  assert.equal(h.calls.some((c) => String(c).startsWith('seal:')), false);
+  await h.session.envelopeWrites();
+  assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
+});
+
 test('the first attempt of a fallback leaves no unwrap key behind', async () => {
   const unwrapKeys = [];
   const h = harness({

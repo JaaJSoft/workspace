@@ -562,6 +562,7 @@ def properties(request, uuid):
                 "name": ft.tag.name,
                 "icon": ft.tag.icon,
                 "color": ft.tag.color,
+                "source": ft.source,
             }
             for ft in file_obj.file_tags.select_related("tag").order_by(
                 Lower("tag__name")

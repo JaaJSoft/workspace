@@ -585,6 +585,10 @@ class PhotoEmbedding(models.Model):
     # moment that matched. Empty for a photo.
     frame = models.CharField(max_length=255, blank=True, default="")
     analyzed_at = models.DateTimeField()
+    # When the photo was given its automatic tags (services/auto_tags.py),
+    # reset with every new vector. Each photo is tagged once: a tag its owner
+    # took off never comes back on its own.
+    auto_tagged_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [

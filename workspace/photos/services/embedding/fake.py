@@ -40,6 +40,7 @@ class FakeEmbeddingBackend(EmbeddingBackend):
     similar_max_distance = 0.3
     duplicate_max_distance = 0.02
     description_max_distance = 0.5
+    tag_thresholds = {"red": 0.1}
 
     def embed_image(self, image):
         mean = np.asarray(image.convert("RGB"), dtype=np.float64).mean(axis=(0, 1))

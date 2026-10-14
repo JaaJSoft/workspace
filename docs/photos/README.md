@@ -122,7 +122,7 @@ spend that.
 preprocessing, tokenizer and ONNX runtime. The
 [embedding bench](embedding-bench.md) measures all three on the same photos:
 SigLIP 2, the default, finds the best photos for a description, and the
-only ones worth showing for a query typed in French (78% mAP, against 51% for
+only ones worth showing for a query typed in French (75% mAP, against 49% for
 CLIP). CLIP ViT-B/32 costs a quarter of its CPU per photo (88 ms against
 315 ms on one desktop core) and a third of its memory, for a host that cannot
 spare them. Jina CLIP v1 costs as much CPU as SigLIP 2 for less. The weights
@@ -175,6 +175,35 @@ ones. After changing the setting:
    new size (only needed when the size changes).
 2. The hourly catch-up embeds the library again, or at once:
    `python manage.py catch_up embeddings --reanalyze`.
+
+### Automatic tags
+
+Each embedded photo is tagged with what it shows, from a vocabulary of 33
+classic tags (`workspace/photos/services/tag_vocabulary.py`: dog, beach,
+snow, cake, wedding, screenshot...). The tags are the owner's ordinary file
+tags: an existing tag of the same name is reused (case-insensitively), a
+missing one is created the first time a photo gets it. They show in Files,
+filter the Photos timeline and can be taken off like any other; the
+properties panel marks them with a sparkle.
+
+- Each backend places only the tags it tells apart well, each under its own
+  threshold (`tag_thresholds` in `workspace/photos/services/embedding/local.py`),
+  fitted by the [embedding bench](embedding-bench.md) for 90% precision on
+  photos it never saw. SigLIP 2 places 24 of the 33 tags and finds about a
+  third of the photos each one describes; CLIP places 13. The `remote`
+  backend has no table, so it places none until one is measured.
+- A photo is tagged once, after it is embedded: a tag its owner takes off
+  stays off. A new version of the photo, or a new model, tags it again.
+- Only personal photos: a tag belongs to its owner, and a group folder's
+  photo is never tagged. Videos are not tagged either: the thresholds are
+  fitted on photos, and a tag drawn from any of a video's key frames would be
+  wrong far more often.
+- Users turn it off with *Tag photos automatically* in the Photos
+  preferences; the photos embedded meanwhile are not tagged later.
+- The tagging runs in the worker right after the embedding, and the hourly
+  catch-up (`python manage.py catch_up auto_tags`) tags the photos embedded
+  before it existed. It embeds the vocabulary once per model, which loads the
+  text encoder in the worker.
 
 ### Settings
 

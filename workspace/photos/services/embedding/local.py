@@ -134,6 +134,21 @@ class ClipVitB32Backend(LocalBackend):
     similar_max_distance = 0.25
     duplicate_max_distance = 0.075
     description_max_distance = 0.765
+    tag_thresholds = {
+        "dog": 0.759,
+        "cat": 0.737,
+        "horse": 0.714,
+        "mountain": 0.742,
+        "snow": 0.75,
+        "sunset": 0.751,
+        "garden": 0.733,
+        "car": 0.747,
+        "cake": 0.74,
+        "cocktail": 0.723,
+        "wedding": 0.729,
+        "christmas": 0.742,
+        "swimming pool": 0.726,
+    }
 
 
 class Siglip2BaseBackend(LocalBackend):
@@ -163,6 +178,32 @@ class Siglip2BaseBackend(LocalBackend):
     similar_max_distance = 0.3
     duplicate_max_distance = 0.07
     description_max_distance = 0.92
+    tag_thresholds = {
+        "dog": 0.926,
+        "cat": 0.901,
+        "horse": 0.888,
+        "beach": 0.899,
+        "mountain": 0.902,
+        "snow": 0.895,
+        "sea": 0.89,
+        "forest": 0.904,
+        "lake": 0.887,
+        "sunset": 0.911,
+        "garden": 0.906,
+        "night": 0.889,
+        "car": 0.918,
+        "boat": 0.884,
+        "bicycle": 0.91,
+        "cake": 0.899,
+        "cocktail": 0.903,
+        "child": 0.881,
+        "wedding": 0.896,
+        "christmas": 0.897,
+        "skiing": 0.869,
+        "swimming pool": 0.888,
+        "screenshot": 0.885,
+        "document": 0.901,
+    }
 
 
 class JinaClipV1Backend(LocalBackend):
@@ -188,3 +229,27 @@ class JinaClipV1Backend(LocalBackend):
     similar_max_distance = 0.3
     duplicate_max_distance = 0.085
     description_max_distance = 0.89
+    tag_thresholds = {
+        "dog": 0.889,
+        "cat": 0.84,
+        "horse": 0.816,
+        "beach": 0.834,
+        "mountain": 0.86,
+        "snow": 0.865,
+        "forest": 0.827,
+        "lake": 0.834,
+        "sunset": 0.828,
+        "garden": 0.843,
+        "car": 0.879,
+        "boat": 0.822,
+        "airplane": 0.824,
+        "bicycle": 0.837,
+        "cake": 0.845,
+        "cocktail": 0.821,
+        "selfie": 0.816,
+        "wedding": 0.848,
+        "skiing": 0.837,
+        "swimming pool": 0.818,
+        "screenshot": 0.863,
+        "document": 0.853,
+    }

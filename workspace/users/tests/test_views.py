@@ -549,6 +549,7 @@ class SettingDetailTests(UserTestMixin, APITestCase):
             "video_hover_preview": ([True, False], ["yes", 0]),
             "import_by_date": ([True, False], ["on", 1]),
             "show_hidden": ([True, False], ["1", 1]),
+            "auto_tags": ([True, False], ["1", 1]),
             "default_media_type": (["all", "photo", "video"], ["audio", 1]),
             "default_scope": (
                 ["mine", "all", "shared", "group:12"],

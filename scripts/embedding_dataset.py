@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import importlib.util
 import io
 import os
 import sys
@@ -30,6 +31,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 SCRIPTS = Path(__file__).resolve().parent
+VOCABULARY = SCRIPTS.parent / "workspace" / "photos" / "services" / "tag_vocabulary.py"
 if str(SCRIPTS) not in sys.path:
     sys.path.append(str(SCRIPTS))
 
@@ -109,6 +111,21 @@ QUERIES = (
     Query("child with a toy", "enfant avec un jouet", ("Child", "Toy")),
     Query("bicycle in the city", "vélo en ville", ("Bicycle", "Building")),
 )
+
+
+def _classic_tags():
+    """The app's CLASSIC_TAGS, read from its file: importing the workspace
+    package would start Celery."""
+    spec = importlib.util.spec_from_file_location("tag_vocabulary", VOCABULARY)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.CLASSIC_TAGS
+
+
+# The tags the app places on every library, as the queries they are scored
+# like: a tag is right on a photo carrying its label. No French twin: a tag
+# is matched in English.
+TAGS = tuple(Query(tag.text, "", (tag.label,)) for tag in _classic_tags())
 
 # Photos picked per query, at most, and how many show none of the queries'
 # labels: the rest of a library, which a search must leave out.
@@ -198,7 +215,9 @@ def load(cache_dir=None, *, limit=None):
     labels_path = cache_dir / "val-human-imagelabels.csv"
     photo_dataset._ensure(classes_path, CLASSES_URL, CLASSES_SHA256)
     photo_dataset._ensure(labels_path, LABELS_URL, LABELS_SHA256)
-    photos = pick(read_labels(labels_path, read_classes(classes_path)))
+    photos = pick(
+        read_labels(labels_path, read_classes(classes_path)), (*QUERIES, *TAGS)
+    )
     return photos[:limit] if limit else photos
 
 

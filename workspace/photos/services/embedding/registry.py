@@ -138,3 +138,9 @@ def description_max_distance():
         "PHOTOS_DESCRIPTION_MAX_DISTANCE",
         get_embedding_backend().description_max_distance,
     )
+
+
+def tag_thresholds():
+    """The backend's automatic tags: {tag text: max distance}, the classic
+    tags it recognizes."""
+    return dict(get_embedding_backend().tag_thresholds)

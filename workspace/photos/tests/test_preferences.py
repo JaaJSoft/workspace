@@ -51,6 +51,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "auto_tags": True,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,
@@ -66,6 +67,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_media_type": "video",
             "import_by_date": True,
             "show_hidden": True,
+            "auto_tags": False,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -78,6 +80,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertEqual(prefs["default_media_type"], "video")
         self.assertIs(prefs["import_by_date"], True)
         self.assertIs(prefs["show_hidden"], True)
+        self.assertIs(prefs["auto_tags"], False)
 
     def test_the_blur_is_a_core_setting(self):
         set_setting(self.user, "core", "sensitive_blur", "off")
@@ -119,6 +122,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "default_media_type": ["photo"],
             "import_by_date": "yes",
             "show_hidden": 1,
+            "auto_tags": "no",
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -132,6 +136,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "default_media_type": "all",
                 "import_by_date": False,
                 "show_hidden": False,
+                "auto_tags": True,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,

@@ -13,6 +13,10 @@
  *                "accent", "info", ...) resolved against the active theme.
  *                Empty or "ghost" renders the neutral pill.
  *   - icon       lucide icon name, rendered before the label.
+ *   - trailing-icon  lucide icon name, rendered after the label, dimmed: a
+ *                mark on the chip (how it was set) rather than the tag's
+ *                own icon. trailing-label is its accessible name and the
+ *                chip's tooltip.
  *   - size       "sm" for dense lists (board cards, backlog rows, listings).
  *   - removable  the chip carries a trailing control, so the pill gets the
  *                tighter right padding. In attribute mode the element also
@@ -112,7 +116,16 @@ window.tagChipColor = function tagChipColor(value) {
 
   class TagChip extends HTMLElement {
     static get observedAttributes() {
-      return ['name', 'color', 'icon', 'size', 'removable', 'compact'];
+      return [
+        'name',
+        'color',
+        'icon',
+        'size',
+        'removable',
+        'compact',
+        'trailing-icon',
+        'trailing-label',
+      ];
     }
 
     connectedCallback() {
@@ -176,12 +189,35 @@ window.tagChipColor = function tagChipColor(value) {
         children.push(iconEl);
       }
       children.push(this._label);
+      const trailingIcon = this.getAttribute('trailing-icon');
+      const trailingLabel = this.getAttribute('trailing-label') || '';
+      if (trailingIcon) children.push(this._trailingMark(trailingIcon, trailingLabel));
+      if (trailingIcon && trailingLabel) {
+        this.title = trailingLabel;
+      } else {
+        this.removeAttribute('title');
+      }
       if (removable) children.push(this._removeButton(name));
       this.replaceChildren(...children);
 
-      if (icon && typeof lucide !== 'undefined' && lucide.createIcons) {
+      if ((icon || trailingIcon) && typeof lucide !== 'undefined' && lucide.createIcons) {
         lucide.createIcons({ root: this });
       }
+    }
+
+    _trailingMark(icon, label) {
+      // Wrapped: lucide replaces the <i> with an svg, the span keeps the name.
+      const mark = document.createElement('span');
+      mark.className = 'inline-flex flex-shrink-0 opacity-60';
+      if (label) {
+        mark.setAttribute('role', 'img');
+        mark.setAttribute('aria-label', label);
+      }
+      const iconEl = document.createElement('i');
+      iconEl.setAttribute('data-lucide', icon);
+      iconEl.className = 'w-3 h-3';
+      mark.appendChild(iconEl);
+      return mark;
     }
 
     _removeButton(name) {

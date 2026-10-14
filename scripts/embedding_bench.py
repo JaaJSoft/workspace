@@ -18,6 +18,11 @@ and scores what comes out against what people verified the photos show:
 - **Similar photos**: each photo against the others, a photo showing one of
   the same things being a right answer; precision of what the similar
   threshold returns, and the threshold that would have done best.
+- **Automatic tags**: each of the app's classic tags placed on every photo
+  under a threshold from its name: one shared, or one per tag, fitted on half
+  the photos and scored on the other half; the backend's own table; and the
+  table to ship, fitted on every photo. Then tags learnt from the mean of 3,
+  5 or 10 photos tagged by hand.
 - **Video frames**: each photo filmed as a short clip, compressed as a phone
   video sent through a messaging app, and read back the way the library
   reads a video's key frames. Whether the duplicate threshold still finds a
@@ -67,6 +72,17 @@ LOCAL_BACKENDS = ("clip_vit_b32", "siglip2_base", "jina_clip_v1")
 DUPLICATES = 200
 # What a near-duplicate threshold must keep right, at the least.
 DUPLICATE_PRECISION = 0.99
+# What an automatic tag must keep right, at the least: it shows on the photo
+# alone, with no ranking to bury a mistake under better answers.
+TAG_PRECISION = 0.9
+# What a tag's own threshold is fitted for: tighter than TAG_PRECISION, since
+# 30 photos a tag are few, and a threshold fitted on them keeps less on the
+# photos it never saw. And the average precision a tag's ranking needs to be
+# placed at all: under it, no threshold separates the tag from the rest.
+TAG_FIT_PRECISION = 0.97
+TAG_MIN_AP = 0.75
+# How many photos a user tagged by hand, in the tags learnt from them.
+EXAMPLES = (3, 5, 10)
 # Distances the thresholds are searched over: cosine distance, 0 to 2.
 _GRID = np.round(np.arange(0.0, 2.0005, 0.005), 3)
 
@@ -345,6 +361,128 @@ def score_similar(image_vectors, labels, threshold):
     }
 
 
+def loosest_threshold(row, relevant, target):
+    """The loosest threshold on the distances *row* whose returns keep
+    *target* precision, two right ones at the least; nan when none does."""
+    order = np.argsort(row, kind="stable")
+    hits = np.cumsum(np.asarray(relevant, dtype=bool)[order])
+    precision = hits / np.arange(1, len(hits) + 1)
+    keeping = np.flatnonzero((precision >= target) & (hits >= 2))
+    return float(row[order][keeping[-1]]) if len(keeping) else np.nan
+
+
+def tag_thresholds(matrix, relevant, *, per_label):
+    """One threshold per label (row), nan for a label never tagged: each
+    label's own (calibrate), or the one threshold all of them share."""
+    if per_label:
+        return calibrate(matrix, relevant)
+    shared = loosest_threshold(matrix.ravel(), relevant.ravel(), TAG_PRECISION)
+    return np.full(len(matrix), shared)
+
+
+def calibrate(matrix, relevant):
+    """Each tag's threshold, as a backend ships it: its loosest at
+    TAG_FIT_PRECISION, nan for a tag whose ranking is under TAG_MIN_AP or
+    that cannot reach it."""
+    thresholds = []
+    for row, wanted in zip(matrix, relevant, strict=True):
+        if average_precision(row, wanted) < TAG_MIN_AP:
+            thresholds.append(np.nan)
+        else:
+            thresholds.append(loosest_threshold(row, wanted, TAG_FIT_PRECISION))
+    return np.array(thresholds)
+
+
+def tag_scores(tagged, relevant):
+    """Precision over every tag placed (what a user sees on the photos),
+    recall averaged over the labels, tags per photo."""
+    placed = tagged.sum()
+    right = tagged & relevant
+    return {
+        "precision": float(right.sum() / placed) if placed else 0.0,
+        "recall": float(
+            np.mean(right.sum(axis=1) / np.maximum(relevant.sum(axis=1), 1))
+        ),
+        "per_photo": float(placed / tagged.shape[1]),
+    }
+
+
+def held_out_tags(matrix, relevant, *, per_label):
+    """Each half of the photos tagged with thresholds fitted on the other
+    half: a threshold fitted on the photos it is scored on flatters itself,
+    the more so with 30 photos a label."""
+    even = np.arange(matrix.shape[1]) % 2 == 0
+    tagged = np.zeros(matrix.shape, dtype=bool)
+    kept = []
+    for fit, applied in ((even, ~even), (~even, even)):
+        thresholds = tag_thresholds(
+            matrix[:, fit], relevant[:, fit], per_label=per_label
+        )
+        # A nan threshold tags nothing: no distance compares under it.
+        tagged[:, applied] = matrix[:, applied] <= thresholds[:, None]
+        kept.append(np.count_nonzero(~np.isnan(thresholds)))
+    scores = tag_scores(tagged, relevant) | {
+        "labels": float(np.mean(kept)),
+        "of": len(matrix),
+    }
+    if not per_label:
+        # Fitted on every photo: what a backend would ship.
+        scores["threshold"] = float(
+            tag_thresholds(matrix, relevant, per_label=False)[0]
+        )
+    return scores
+
+
+def example_distances(images, relevant, count):
+    """Distances from every photo to the mean of the first *count* photos of
+    each label, standing for the photos a user tagged by hand; and the right
+    answers left once those examples are out of the scoring."""
+    units = unit(images)
+    matrix = np.empty(relevant.shape)
+    remaining = relevant.copy()
+    for row, wanted in enumerate(relevant):
+        examples = np.flatnonzero(wanted)[:count]
+        matrix[row] = 1.0 - units @ unit(units[examples].mean(axis=0))
+        matrix[row, examples] = np.inf
+        remaining[row, examples] = False
+    return matrix, remaining
+
+
+def score_tagging(tag_vectors, images, relevant, names, thresholds):
+    """The classic tags (*names*) placed on every photo under a threshold
+    from their name: the description threshold, the one threshold keeping
+    TAG_PRECISION, one fitted per tag (calibrate), and the backend's own
+    table. Then tags learnt from the mean of a few photos tagged by hand,
+    for want of a better way to learn the owner's own tags."""
+    matrix = distances(tag_vectors, images)
+    table = thresholds["tags"]
+    shipped = np.array([table.get(name, np.nan) for name in names])
+    fitted = calibrate(matrix, relevant)
+    report = {
+        "description": tag_scores(matrix <= thresholds["description"], relevant)
+        | {"threshold": float(thresholds["description"])},
+        "shared": held_out_tags(matrix, relevant, per_label=False),
+        "per_label": held_out_tags(matrix, relevant, per_label=True),
+        # Scored on the photos the table was fitted on: flattered, as the
+        # held-out row above tells.
+        "at_threshold": tag_scores(matrix <= shipped[:, None], relevant)
+        | {"labels": float(np.count_nonzero(~np.isnan(shipped))), "of": len(names)},
+        "suggested": {
+            name: round(float(t), 3)
+            for name, t in zip(names, fitted, strict=True)
+            if not np.isnan(t)
+        },
+        "by_tag": {
+            name: {"ap": average_precision(row, wanted), "photos": int(wanted.sum())}
+            for name, row, wanted in zip(names, matrix, relevant, strict=True)
+        },
+    }
+    for count in EXAMPLES:
+        learnt, remaining = example_distances(images, relevant, count)
+        report[f"examples_{count}"] = held_out_tags(learnt, remaining, per_label=False)
+    return report
+
+
 def score_similar_frames(image_vectors, frame_vectors, labels, threshold):
     """Each photo showing one of the queries' labels against the frames of
     all the others: a right answer shows one of the same."""
@@ -390,11 +528,12 @@ def score_frames(vectors, relevant, labels):
     }
 
 
-def score(vectors, photos, queries):
+def score(vectors, photos, queries, tags):
     """The report of one backend's run, from what it embedded."""
     wanted = [frozenset(q.labels) for q in queries]
     relevant = np.array([[w <= p.labels for p in photos] for w in wanted])
     query_labels = frozenset().union(*wanted)
+    tagged = np.array([[set(t.labels) <= p.labels for p in photos] for t in tags])
     thresholds = vectors["thresholds"]
     images = vectors["images"]
     english = score_search(
@@ -412,6 +551,11 @@ def score(vectors, photos, queries):
         "frames": score_frames(
             vectors, relevant, [p.labels & query_labels for p in photos]
         ),
+        "tagging": score_tagging(
+            vectors["tags"], images, tagged, [t.text for t in tags], thresholds
+        )
+        if tags
+        else None,
     }
 
 
@@ -489,7 +633,7 @@ def _load_image(path, size):
         return img
 
 
-def embed(key, photos, paths, queries, duplicates, frames_dir=None):
+def embed(key, photos, paths, queries, duplicates, tags=(), frames_dir=None):
     """Run backend *key* over the bench, in this process: its vectors, its
     thresholds and what it cost. *frames_dir* holds the photos filmed (see
     film), when the video frames are measured."""
@@ -536,6 +680,7 @@ def embed(key, photos, paths, queries, duplicates, frames_dir=None):
         english.append(backend.embed_text(query.text))
         text_ms.append((time.process_time() - started) * 1000)
     french = [backend.embed_text(query.french) for query in queries]
+    tag_vectors = [backend.embed_text(tag.text) for tag in tags]
 
     return {
         "images": np.asarray(images, dtype=np.float64),
@@ -544,11 +689,8 @@ def embed(key, photos, paths, queries, duplicates, frames_dir=None):
         "shots": np.asarray(shots, dtype=np.float64),
         "english": np.asarray(english, dtype=np.float64),
         "french": np.asarray(french, dtype=np.float64),
-        "thresholds": {
-            "similar": registry.similar_max_distance(),
-            "duplicate": registry.duplicate_max_distance(),
-            "description": registry.description_max_distance(),
-        },
+        "tags": np.asarray(tag_vectors, dtype=np.float64),
+        "thresholds": _thresholds(registry),
         "cost": {
             "load_s": load_s,
             # The mean, not the median: Windows advances process_time by
@@ -579,12 +721,15 @@ def _worker(args):
     # Already downloaded by the parent: this only resolves their paths.
     paths = embedding_dataset.fetch_images(photos, args.cache_dir)
     queries = embedding_dataset.usable_queries(photos)
+    tags = embedding_dataset.usable_queries(photos, embedding_dataset.TAGS)
+    duplicates = min(args.duplicates, len(photos))
     run = embed(
         args.worker,
         photos,
         paths,
         queries,
-        min(args.duplicates, len(photos)),
+        duplicates,
+        tags,
         frames_dir=args.frames_dir,
     )
     meta = {k: run.pop(k) for k in ("thresholds", "cost", "label", "dims")}
@@ -592,35 +737,104 @@ def _worker(args):
     Path(args.out).with_suffix(".json").write_text(json.dumps(meta), encoding="utf-8")
 
 
+def _fingerprint(photos, queries, tags, duplicates, frames):
+    """What a run's vectors depend on, the model aside."""
+    import hashlib
+
+    parts = [p.image_id for p in photos]
+    parts += [f"{q.text}|{q.french}" for q in queries]
+    parts += [t.text for t in tags]
+    parts.append(f"{duplicates}|{bool(frames)}")
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
+def _current_thresholds(key):
+    """The backend's thresholds as the app reads them now, in a process of
+    its own: they may have moved since the cached vectors were embedded."""
+    command = [sys.executable, str(Path(__file__).resolve()), "--thresholds", key]
+    result = subprocess.run(
+        command, cwd=REPO_ROOT, check=False, capture_output=True, text=True
+    )
+    if result.returncode:
+        raise BenchError(f"{key}: cannot read its thresholds: {result.stderr}")
+    return json.loads(result.stdout)
+
+
+def _thresholds_worker(key):
+    os.environ["PHOTOS_EMBEDDING_BACKEND"] = key
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "workspace.settings")
+    sys.path.insert(0, str(REPO_ROOT))
+    import django
+
+    django.setup()
+    from workspace.photos.services.embedding import registry
+
+    print(json.dumps(_thresholds(registry)))
+
+
+def _thresholds(registry):
+    return {
+        "similar": registry.similar_max_distance(),
+        "duplicate": registry.duplicate_max_distance(),
+        "description": registry.description_max_distance(),
+        "tags": registry.tag_thresholds(),
+    }
+
+
+def _embed_in_worker(key, args, out, frames_dir=None):
+    command = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--worker",
+        key,
+        "--out",
+        str(out),
+        "--duplicates",
+        str(args.duplicates),
+    ]
+    if args.images:
+        command += ["--images", str(args.images)]
+    if args.cache_dir:
+        command += ["--cache-dir", str(args.cache_dir)]
+    if frames_dir:
+        command += ["--frames-dir", str(frames_dir)]
+    result = subprocess.run(command, cwd=REPO_ROOT, check=False)
+    if result.returncode:
+        raise BenchError(f"{key}: the run failed (exit {result.returncode})")
+
+
 def run_backend(key, args, frames_dir=None):
     """Run backend *key* in a process of its own; its report. *frames_dir*
-    holds the photos filmed, when the video frames are measured."""
-    with tempfile.TemporaryDirectory() as tmp:
-        out = Path(tmp) / "vectors.npz"
-        command = [
-            sys.executable,
-            str(Path(__file__).resolve()),
-            "--worker",
-            key,
-            "--out",
-            str(out),
-            "--duplicates",
-            str(args.duplicates),
-        ]
-        if args.images:
-            command += ["--images", str(args.images)]
-        if args.cache_dir:
-            command += ["--cache-dir", str(args.cache_dir)]
-        if frames_dir:
-            command += ["--frames-dir", str(frames_dir)]
-        result = subprocess.run(command, cwd=REPO_ROOT, check=False)
-        if result.returncode:
-            raise BenchError(f"{key}: the run failed (exit {result.returncode})")
-        loaded = dict(np.load(out))
-        meta = json.loads(out.with_suffix(".json").read_text(encoding="utf-8"))
+    holds the photos filmed, when the video frames are measured.
+
+    With --vectors, the vectors of a run on the same photos, queries and tags
+    are read back instead of embedded again, and scored at the thresholds
+    the app reads now: a scoring change or a threshold change takes seconds.
+    """
     photos = embedding_dataset.load(args.cache_dir, limit=args.images)
     queries = embedding_dataset.usable_queries(photos)
-    report = score(loaded | meta, photos, queries)
+    tags = embedding_dataset.usable_queries(photos, embedding_dataset.TAGS)
+    fingerprint = _fingerprint(photos, queries, tags, args.duplicates, frames_dir)
+    with tempfile.TemporaryDirectory() as tmp:
+        folder = Path(args.vectors) if args.vectors else Path(tmp)
+        folder.mkdir(parents=True, exist_ok=True)
+        out = folder / f"{key}.npz"
+        meta_path = out.with_suffix(".json")
+        meta = (
+            json.loads(meta_path.read_text(encoding="utf-8"))
+            if args.vectors and out.is_file() and meta_path.is_file()
+            else None
+        )
+        if meta is None or meta.get("fingerprint") != fingerprint:
+            _embed_in_worker(key, args, out, frames_dir)
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            meta["fingerprint"] = fingerprint
+            meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        else:
+            meta["thresholds"] = _current_thresholds(key)
+            print(f"{key}: vectors read back from {out}", file=sys.stderr)
+        loaded = dict(np.load(out))
+    report = score(loaded | meta, photos, queries, tags)
     return {
         "backend": key,
         "label": meta["label"],
@@ -660,6 +874,15 @@ ROWS = (
     ("  similar mAP", "frames.similar.map", "pct"),
     ("  similar at its threshold", "frames.similar.at_threshold", "cut"),
     ("  similar best threshold", "frames.similar.suggested", "cut"),
+    ("Automatic tags", None, None),
+    ("  at the description threshold", "tagging.description", "tags"),
+    (f"  one threshold at {TAG_PRECISION:.0%} precision", "tagging.shared", "tags"),
+    ("  one threshold per tag", "tagging.per_label", "tags"),
+    ("  at its tag table (fitted here)", "tagging.at_threshold", "tags"),
+    *(
+        (f"  from {count} tagged photos", f"tagging.examples_{count}", "tags")
+        for count in EXAMPLES
+    ),
     ("Cost", None, None),
     ("  load (s)", "cost.load_s", "num"),
     ("  CPU per photo (ms)", "cost.image_ms", "num"),
@@ -689,6 +912,17 @@ def _format(value, kind):
         return f"{value:.0f}"
     if kind == "num":
         return f"{value:.1f}"
+    if kind == "tags":
+        # "P 91% R 40% (1.2/photo, 30/39 labels)", after the threshold when
+        # there is a single one.
+        shown = f"{value['threshold']:.3f} " if "threshold" in value else ""
+        shown += (
+            f"P {value['precision'] * 100:.0f}% R {value['recall'] * 100:.0f}% "
+            f"({value['per_photo']:.1f}/photo"
+        )
+        if "labels" in value:
+            shown += f", {value['labels']:.0f}/{value['of']} labels"
+        return shown + ")"
     # A threshold and what it returns: "0.800 P 62% R 41% (n 12)".
     return (
         f"{value['threshold']:.3f} P {value['precision'] * 100:.0f}% "
@@ -757,17 +991,27 @@ def main(argv=None):
     parser.add_argument("--compare", help="Show the reports of this file alongside.")
     parser.add_argument("--cache-dir", type=Path, help="Where the photos are kept.")
     parser.add_argument(
+        "--vectors",
+        type=Path,
+        help="Keep each backend's vectors here, and read them back on a run "
+        "over the same photos instead of embedding again.",
+    )
+    parser.add_argument(
         "--no-video-frames",
         action="store_true",
         help="Skip the video frames (filming the photos needs ffmpeg).",
     )
     parser.add_argument("--worker", help=argparse.SUPPRESS)
+    parser.add_argument("--thresholds", help=argparse.SUPPRESS)
     parser.add_argument("--frames-dir", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--out", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
 
     if args.worker:
         _worker(args)
+        return 0
+    if args.thresholds:
+        _thresholds_worker(args.thresholds)
         return 0
 
     photos = embedding_dataset.load(args.cache_dir, limit=args.images)
@@ -777,8 +1021,9 @@ def main(argv=None):
         progress=lambda done, total: _progress("photos", done, total),
     )
     queries = embedding_dataset.usable_queries(photos)
+    tags = embedding_dataset.usable_queries(photos, embedding_dataset.TAGS)
     print(
-        f"{len(photos)} photos, {len(queries)} queries, "
+        f"{len(photos)} photos, {len(queries)} queries, {len(tags)} tags, "
         f"{min(args.duplicates, len(photos))} photos copied",
         file=sys.stderr,
     )
@@ -815,6 +1060,11 @@ def main(argv=None):
     shown = [*reports, *({**r, "label": f"{r['label']} [before]"} for r in baseline)]
     if shown:
         print(render(shown))
+    for report in reports:
+        suggested = report["tagging"]["suggested"]
+        if suggested != report["thresholds"]["tags"]:
+            print(f"\nTag thresholds fitted for {report['label']}:")
+            print(json.dumps(suggested, indent=4))
     if args.json:
         Path(args.json).write_text(
             json.dumps({"run": run, "reports": reports}, indent=2), encoding="utf-8"

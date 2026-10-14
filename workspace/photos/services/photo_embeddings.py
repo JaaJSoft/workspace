@@ -45,6 +45,7 @@ from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
 from ..indexes import PHOTO_EMBEDDINGS
 from ..models import MediaItem, PhotoEmbedding
 from .analysis import library_candidates, media_type_for
+from .auto_tags import tag_photo_safely
 from .embedding.registry import (
     embeddings_available,
     get_embedding_backend,
@@ -171,7 +172,7 @@ def embed_file(file_obj):
         )
     ):
         # Same bytes, same model: only the partition moved with the file.
-        return _move(file_obj, existing)
+        return _tag(_move(file_obj, existing))
 
     media_type = embedding_media_type(file_obj)
     embed = _embed_video if media_type == MediaItem.MediaType.VIDEO else _embed_photo
@@ -192,7 +193,16 @@ def embed_file(file_obj):
     _RESULTS.labels(
         result="embedded" if embedded else "undecodable", media_type=media_type
     ).inc()
-    return _store(file_obj, model_key, file_obj.content_hash, frames)
+    return _tag(_store(file_obj, model_key, file_obj.content_hash, frames))
+
+
+def _tag(rows):
+    """Tag the photo of freshly written *rows*, then hand them back. Here
+    rather than left to the catch-up: the photo is tagged within moments of
+    its upload, while the backend is loaded."""
+    for row in rows or ():
+        tag_photo_safely(row)
+    return rows
 
 
 @dataclass(frozen=True)
@@ -317,10 +327,14 @@ def _move(file_obj, rows):
     with transaction.atomic():
         if not _is_current(file_obj, file_obj.content_hash):
             return None
-        PhotoEmbedding.objects.filter(file_id=file_obj.pk).update(
+        # A new owner is tagged again, with their own tags; the rows of a
+        # file that kept its owner stay as tagged as they were.
+        PhotoEmbedding.objects.filter(file_id=file_obj.pk).exclude(
             owner_id=file_obj.owner_id
-        )
+        ).update(owner_id=file_obj.owner_id, auto_tagged_at=None)
         for row in rows:
+            if row.owner_id != file_obj.owner_id:
+                row.auto_tagged_at = None
             row.owner_id = file_obj.owner_id
             if row.embedding:
                 # Re-derives the partition from the row.

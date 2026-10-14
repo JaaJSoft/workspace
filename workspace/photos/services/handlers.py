@@ -1,5 +1,6 @@
 """Keep MediaItem rows, the faces found in photos and videos, their
-embeddings and their sensitive-content verdicts in step with the files.
+embeddings, the photos' automatic tags and their sensitive-content verdicts
+in step with the files.
 
 All are upload processors (files.services.processors): the upload pipeline
 runs them once an upload or a content replacement has committed, and the
@@ -21,6 +22,7 @@ from .analysis import (
     redate_from_name,
     refresh_media_item,
 )
+from .auto_tags import auto_tags_enabled, pending_auto_tags_qs, refresh_auto_tags
 from .face_analysis import (
     faces_catch_up_enabled,
     forget_faces,
@@ -141,6 +143,17 @@ register_processor(
     process=refresh_embedding,
     enabled=embeddings_catch_up_enabled,
 )
+# No applies_to: a photo is tagged by its embedding's task, once its vector
+# is stored; the catch-up tags the ones that path missed, and the photos
+# embedded before automatic tags existed.
+register_processor(
+    "auto_tags",
+    pending=pending_auto_tags_qs,
+    process=refresh_auto_tags,
+    enabled=auto_tags_enabled,
+)
+
+
 # After "photos": the verdict is written on the MediaItem row that one writes.
 register_processor(
     "sensitive",

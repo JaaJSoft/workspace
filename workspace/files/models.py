@@ -1056,9 +1056,18 @@ class Tag(models.Model):
 
 
 class FileTag(models.Model):
+    class Source(models.TextChoices):
+        MANUAL = "manual", "Manual"
+        # Placed by the photo library from what the picture shows: never an
+        # example the library learns a tag from.
+        AUTO = "auto", "Automatic"
+
     uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
     file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="file_tags")
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE, related_name="file_tags")
+    source = models.CharField(
+        max_length=10, choices=Source.choices, default=Source.MANUAL
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

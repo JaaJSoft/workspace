@@ -165,6 +165,42 @@ class ElementIconScopeTests(PlaywrightTestCase):
                     self.connect(markup), {"drawn": 1, "bystanderKept": True}
                 )
 
+    def test_a_tag_chip_draws_its_trailing_mark_after_the_label(self):
+        state = self.page.evaluate(
+            """() => {
+              const chip = document.createElement('tag-chip');
+              chip.setAttribute('name', 'Dog');
+              chip.setAttribute('trailing-icon', 'sparkles');
+              chip.setAttribute('trailing-label', 'Added automatically');
+              document.body.appendChild(chip);
+              const marked = {
+                order: Array.from(chip.children, (el) => el.tagName),
+                mark: chip.querySelector('[role="img"]')?.getAttribute('aria-label'),
+                drawn: chip.querySelectorAll('svg[data-lucide="sparkles"]').length,
+                title: chip.title,
+              };
+              chip.removeAttribute('trailing-icon');
+              return {
+                marked,
+                unmarked: {
+                  drawn: chip.querySelectorAll('svg').length,
+                  title: chip.getAttribute('title'),
+                },
+              };
+            }"""
+        )
+
+        self.assertEqual(
+            state["marked"],
+            {
+                "order": ["SPAN", "SPAN"],
+                "mark": "Added automatically",
+                "drawn": 1,
+                "title": "Added automatically",
+            },
+        )
+        self.assertEqual(state["unmarked"], {"drawn": 0, "title": None})
+
     def test_an_inline_alert_draws_only_its_own_icon(self):
         self.assertEqual(
             self.connect(

@@ -505,6 +505,7 @@ _PHOTOS_FLAGS = (
     "video_hover_preview",
     "import_by_date",
     "show_hidden",
+    "auto_tags",
 )
 _PHOTOS_CHOICES = {
     "tile_shape": ("square", "original"),

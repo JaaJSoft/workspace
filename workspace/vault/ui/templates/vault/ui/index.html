@@ -39,6 +39,7 @@
 {% endcomment %}
 {% block drawer_attrs %}
   x-data="vaultBrowser()"
+  @vault-password-changed="passwordChangeSucceeded()"
 {% endblock %}
 
 {% comment %}
@@ -95,6 +96,8 @@
               x-if, not x-show: inline-alert reads its attributes once, when
               it connects.
           {% endcomment %}
+          <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
+
           <template x-if="migrationWarning">
             <inline-alert type="info" dismissible class="mx-5 mt-4" message="Some items could not be updated to the latest encryption. They still open normally; the app will try again next time."></inline-alert>
           </template>
@@ -158,6 +161,7 @@
         {% include "vault/ui/partials/vault_dialog.html" %}
         {% include "vault/ui/partials/generator_dialog.html" %}
         {% include "vault/ui/partials/export_dialog.html" %}
+        {% include "vault/ui/partials/password_dialog.html" %}
         {% include "ui/partials/context_menu_panel.html" with items="vault/ui/partials/switcher_menu.html" open="vaultMenu.open" close="closeVaultMenu()" x="vaultMenu.x" y="vaultMenu.y" id="vault-switcher-menu" %}
       </div>
     </template>
@@ -206,5 +210,8 @@
   <script src="{% static 'vault/ui/js/vault_export_tree.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_export_interchange.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_export.js' %}"></script>
+  <script src="{% static 'ui/js/password_strength.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_password_floor.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_password.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

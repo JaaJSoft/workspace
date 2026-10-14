@@ -150,6 +150,7 @@ window.vaultBrowser = (function () {
       ...window.vaultSwitcherMixin(),
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
+      ...window.vaultPasswordDialogMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -170,6 +171,9 @@ window.vaultBrowser = (function () {
       // Set after three passes in a row that left some rows unmigrated.
       migrationWarning: false,
       migrationGeneration: 0,
+      // The session was opened by the envelope a password change replaced:
+      // the new password has not been used yet, and the old one still works.
+      unlockedWithPrevious: false,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
@@ -278,6 +282,8 @@ window.vaultBrowser = (function () {
       },
 
       afterUnlock: async function () {
+        this.passwordChangedNotice = false;
+        this.unlockedWithPrevious = window.vaultSession.openedWithPrevious();
         await this.load();
         this.startMigration();
       },
@@ -302,6 +308,7 @@ window.vaultBrowser = (function () {
 
       onLocked: function () {
         this.migrationWarning = false;
+        this.unlockedWithPrevious = false;
         this.migrationGeneration += 1;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
@@ -328,6 +335,8 @@ window.vaultBrowser = (function () {
         // Same reason, one step further out: the export dialog holds a
         // passphrase and, while it runs, a tree of decrypted entries.
         this.clearExport();
+        // And the password change holds the current and the new password.
+        this.clearPasswordDialog();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;

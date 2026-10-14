@@ -150,6 +150,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_export.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_password.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -3043,6 +3044,39 @@ test('locking takes back the password the generator drew', async () => {
 
   assert.equal(component.generatorField, null);
   assert.equal(component.generatorOpen, false);
+});
+
+test('locking closes the password change and its passwords with it', async () => {
+  const { component } = browser();
+  component.init();
+  component.openPasswordDialog();
+
+  component.onLocked();
+
+  assert.equal(component.passwordDialogOpen, false);
+});
+
+test('a change leaves its notice on the unlock form until the next unlock', async () => {
+  let previous = true;
+  const { component } = browser({ session: { openedWithPrevious: () => previous } });
+  component.init();
+  component.load = async () => {};
+  component.startMigration = () => {};
+  component.openPasswordDialog();
+
+  component.passwordChangeSucceeded();
+  component.onLocked();
+  assert.equal(component.passwordChangedNotice, true);
+
+  await component.afterUnlock();
+  assert.equal(component.passwordChangedNotice, false);
+  assert.equal(component.unlockedWithPrevious, true);
+
+  component.onLocked();
+  assert.equal(component.unlockedWithPrevious, false);
+  previous = false;
+  await component.afterUnlock();
+  assert.equal(component.unlockedWithPrevious, false);
 });
 
 test('closing the entry dialog forgets which field had its generator open', async () => {

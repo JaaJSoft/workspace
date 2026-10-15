@@ -425,6 +425,21 @@ class FileSerializer(serializers.ModelSerializer):
         if instance is not None and node_type is None:
             node_type = instance.node_type
 
+        parent = attrs.get("parent")
+        if (
+            instance is None
+            and parent is not None
+            and not FileService.can_create_in(self.context["request"].user, parent)
+        ):
+            # Same answer as a UUID that matches no row: the refusal must not
+            # reveal that someone else's folder exists.
+            message = (
+                self.fields["parent"]
+                .error_messages["does_not_exist"]
+                .format(pk_value=self.initial_data.get("parent"))
+            )
+            raise serializers.ValidationError({"parent": [message]})
+
         # Validate parent assignment via FileService
         if "parent" in attrs and instance is not None:
             try:

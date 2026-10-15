@@ -42,6 +42,11 @@ def get_sources(user=None):
     ]
 
 
+def allowed_activity_sources(user):
+    """Slugs of the activity sources whose module *user* may see."""
+    return set(activity_registry.get_all()) - hidden_module_slugs(user)
+
+
 @cached(
     key=lambda user_id, viewer_id=None: f"activity:stats:{user_id}:{viewer_id}",
     ttl=_USAGE_STATS_TTL,
@@ -55,6 +60,13 @@ def get_usage_stats(user_id, viewer_id=None):
     deterministic for its own unit tests.
     """
     return activity_registry.get_stats(user_id, viewer_id=viewer_id)
+
+
+def get_visible_usage_stats(user_id, *, viewer_id=None, visible_to):
+    """``get_usage_stats`` without the modules hidden from *visible_to*."""
+    allowed = allowed_activity_sources(visible_to)
+    stats = get_usage_stats(user_id, viewer_id=viewer_id)
+    return {slug: value for slug, value in stats.items() if slug in allowed}
 
 
 @cached(
@@ -105,12 +117,12 @@ def get_recent_events(
     """
     allowed_sources = None
     if visible_to is not None:
-        hidden = hidden_module_slugs(visible_to)
+        allowed = allowed_activity_sources(visible_to)
         if source is not None:
-            if source in hidden:
+            if source not in allowed:
                 return []
         else:
-            allowed_sources = set(activity_registry.get_all()) - hidden
+            allowed_sources = allowed
 
     if search:
         fetch_limit = limit + offset + 50

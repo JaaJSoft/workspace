@@ -6,9 +6,10 @@ from rest_framework.views import APIView
 
 from workspace.core.activity_registry import activity_registry
 from workspace.core.services.activity import (
+    allowed_activity_sources,
     get_recent_events,
     get_sources,
-    get_usage_stats,
+    get_visible_usage_stats,
     serialize_timestamps,
 )
 
@@ -53,10 +54,11 @@ class ActivityRecentView(APIView):
             source=source,
             limit=limit,
             offset=offset,
+            visible_to=request.user,
         )
         serialize_timestamps(events)
 
-        return Response({"events": events, "sources": get_sources()})
+        return Response({"events": events, "sources": get_sources(request.user)})
 
 
 class ActivityDailyCountsView(APIView):
@@ -101,6 +103,7 @@ class ActivityDailyCountsView(APIView):
             date_from,
             date_to,
             viewer_id=viewer_id,
+            allowed_sources=allowed_activity_sources(request.user),
         )
 
         return Response(
@@ -127,5 +130,7 @@ class ActivityStatsView(APIView):
             user_id = request.user.id
             viewer_id = None
 
-        stats = get_usage_stats(user_id, viewer_id=viewer_id)
+        stats = get_visible_usage_stats(
+            user_id, viewer_id=viewer_id, visible_to=request.user
+        )
         return Response(stats)

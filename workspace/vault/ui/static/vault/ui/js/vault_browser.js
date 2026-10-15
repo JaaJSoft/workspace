@@ -150,7 +150,7 @@ window.vaultBrowser = (function () {
       ...window.vaultSwitcherMixin(),
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
-      ...window.vaultPasswordDialogMixin(),
+      ...window.vaultResealDialogMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to

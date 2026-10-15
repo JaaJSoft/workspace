@@ -266,7 +266,7 @@ test('a generated password fills both fields and is followed until the user type
 
 test('the root mixin closes the dialog on lock and shows the notice after a change', () => {
   const h = harness();
-  const root = h.ctx.vaultPasswordDialogMixin();
+  const root = h.ctx.vaultResealDialogMixin();
   root.openPasswordDialog();
   assert.equal(root.passwordDialogOpen, true);
   root.passwordChangeSucceeded();

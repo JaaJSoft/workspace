@@ -358,3 +358,37 @@ class CanAccessTests(FileAuthzMixin, TestCase):
         f.deleted_at = timezone.now()
         f.save()
         self.assertFalse(FileService.can_access(self.alice, f))
+
+
+# ── can_create_in ──────────────────────────────────────────────
+
+
+class CanCreateInTests(FileAuthzMixin, TestCase):
+    def test_owner_can_create_in_own_folder(self):
+        folder = self._make_folder(self.alice)
+        self.assertTrue(FileService.can_create_in(self.alice, folder))
+
+    def test_group_member_can_create_in_group_folder(self):
+        folder = self._make_folder(self.bob, group=self.group)
+        self.assertTrue(FileService.can_create_in(self.alice, folder))
+
+    def test_unrelated_user_cannot_create(self):
+        folder = self._make_folder(self.bob)
+        self.assertFalse(FileService.can_create_in(self.alice, folder))
+
+    def test_read_write_share_cannot_create(self):
+        folder = self._make_folder(self.bob)
+        FileShare.objects.create(
+            file=folder, shared_by=self.bob, shared_with=self.alice, permission="rw"
+        )
+        self.assertFalse(FileService.can_create_in(self.alice, folder))
+
+    def test_owner_cannot_create_in_trashed_folder(self):
+        folder = self._make_folder(self.alice)
+        folder.deleted_at = timezone.now()
+        folder.save()
+        self.assertFalse(FileService.can_create_in(self.alice, folder))
+
+    def test_owner_cannot_create_under_a_file(self):
+        f = self._make_file(self.alice)
+        self.assertFalse(FileService.can_create_in(self.alice, f))

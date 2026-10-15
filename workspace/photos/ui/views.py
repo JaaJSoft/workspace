@@ -37,6 +37,7 @@ from workspace.photos.queries import (
     album_date_range,
     album_files,
     album_members,
+    cluster_person,
     face_progress,
     get_album_role,
     has_shared_photos,
@@ -521,7 +522,7 @@ def _cluster_card(cluster):
     """What a page shows of an unnamed cluster, or of one cluster alone."""
     return {
         "uuid": str(cluster.pk),
-        "person": _person_ref(cluster.person) if cluster.person_id else None,
+        "person": _person_ref(person) if (person := cluster_person(cluster)) else None,
         "clusters": [str(cluster.pk)],
         "hidden": cluster.hidden,
         "photo_count": cluster.photo_count,
@@ -1246,12 +1247,12 @@ def people(request):
     unnamed = [
         _cluster_card(cluster)
         for cluster in clusters
-        if cluster.person_id is None and cluster.hidden == show_hidden
+        if cluster_person(cluster) is None and cluster.hidden == show_hidden
     ]
     hidden = hidden_faces(request.user)
     hidden_count = (
         sum(card.hidden for card in persons)
-        + sum(c.hidden for c in clusters if c.person_id is None)
+        + sum(c.hidden for c in clusters if cluster_person(c) is None)
         + hidden.total
     )
     progress = face_progress(request.user) if enabled else None
@@ -1260,7 +1261,9 @@ def people(request):
         "named": named,
         "unnamed": unnamed,
         "people_count": len(named) + len(unnamed),
-        "unnamed_count": sum(not c.hidden for c in clusters if c.person_id is None),
+        "unnamed_count": sum(
+            not c.hidden for c in clusters if cluster_person(c) is None
+        ),
         "show_hidden": show_hidden,
         "hidden_faces": (
             {"faces": _face_items(hidden.face_ids), "total": hidden.total}

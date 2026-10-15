@@ -44,6 +44,7 @@ from django.db.models.lookups import Exact
 from workspace.files.models import File, FileShare, Tag
 from workspace.files.services import FileService
 from workspace.files.services.scanning.policy import exclude_blocked
+from workspace.people.queries import user_persons
 from workspace.photos.models import (
     Album,
     AlbumItem,
@@ -492,7 +493,9 @@ def album_date_range(files):
 
 
 def user_face_clusters(user):
-    """The user's face clusters, with ``photo_count``: live photos only.
+    """The user's face clusters, with ``photo_count``: live photos only, and
+    ``person_visible``: whether the user can still see the contact a cluster
+    is named after (read the name through ``cluster_person``).
 
     Empty while face grouping is off for the user, whatever rows a pending
     purge has not reached yet.
@@ -501,7 +504,31 @@ def user_face_clusters(user):
     if not faces_enabled(user):
         clusters = clusters.none()
     live = Q(faces__file__in=library_files(user).values("pk"))
-    return clusters.annotate(photo_count=Count("faces", filter=live))
+    return clusters.annotate(
+        photo_count=Count("faces", filter=live),
+        person_visible=Exists(user_persons(user).filter(pk=OuterRef("person_id"))),
+    )
+
+
+def named_face_clusters(user):
+    """The user's clusters named after a contact they can see."""
+    return user_face_clusters(user).filter(person_visible=True)
+
+
+def unnamed_face_clusters(user):
+    """The user's clusters named after nobody they can see."""
+    return user_face_clusters(user).filter(person_visible=False)
+
+
+def cluster_person(cluster):
+    """The contact a cluster of ``user_face_clusters`` is named after, or None.
+
+    A contact is checked when a cluster is named after it, but it can move to
+    an address book the cluster's owner is not in, or stay in a group they
+    left. The link is kept - it comes back if they regain the contact - but
+    until then the cluster is unnamed to them: no name, no avatar to write.
+    """
+    return cluster.person if cluster.person_visible else None
 
 
 def user_faces(user):

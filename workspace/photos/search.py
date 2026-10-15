@@ -13,8 +13,8 @@ from workspace.photos.queries import (
     ALL,
     MINE,
     library_files,
+    named_face_clusters,
     user_albums,
-    user_face_clusters,
 )
 from workspace.photos.services.embedding.registry import embeddings_available
 from workspace.photos.services.face_people import person_cards
@@ -80,7 +80,7 @@ def search_people(query, user, limit):
     if limit <= 0 or not needle:
         return []
     clusters = (
-        user_face_clusters(user)
+        named_face_clusters(user)
         .filter(person__search_text__contains=needle, photo_count__gt=0)
         .select_related("person")
     )

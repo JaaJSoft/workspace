@@ -17,6 +17,7 @@ function harness(overrides = {}) {
   const derived = [];
   const buffers = [];
   const zeroAtSend = [];
+  const order = [];
   const session = { locks: 0, remembered: overrides.remembered || null };
   const fresh = (n) => { const b = Uint8Array.from({ length: 4 }, () => n); buffers.push(b); return b; };
   const ctx = loadScripts(
@@ -35,6 +36,18 @@ function harness(overrides = {}) {
           ? async (fields, password) => { derived.push([fields.kdf_params, password]); return overrides.deriveUnwrapKey(fresh); }
           : async (fields, password) => { derived.push([fields.kdf_params, password]); return fresh(7); },
         openKeys: overrides.openKeys || (async () => ({ kexPriv: fresh(1), sigSeed: fresh(2) })),
+        // The contract of the real helper, pinned by account_envelope.test.js:
+        // a failed open is a VaultEnvelopeWrongPassword, an unreadable
+        // algorithm passes through untouched.
+        openWithFallback: overrides.openWithFallback || async function (envelope, password) {
+          const unwrapKey = await this.deriveUnwrapKey(envelope, password);
+          try {
+            return { opened: "current", unwrapKey, keys: await this.openKeys(unwrapKey, envelope) };
+          } catch (err) {
+            if (err && err.name === "UnsupportedAlgorithmError") throw err;
+            const wrong = new Error("wrong"); wrong.name = "VaultEnvelopeWrongPassword"; throw wrong;
+          }
+        },
         sealAndReread: overrides.sealAndReread || (async () => ({ wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig' })),
         rotateBody: (sealed, expected) => ({ ...sealed, expected_wrapped_kex_priv: expected }),
         previousOf: (envelope) => (envelope.previous_wrapped_kex_priv ? {
@@ -46,7 +59,9 @@ function harness(overrides = {}) {
       },
       vaultApi: {
         fetchEnvelope: async () => overrides.envelope || ENVELOPE,
+        confirmEnvelope: overrides.confirmEnvelope || (async (expected) => { order.push(["confirm", expected]); }),
         rotateEnvelope: overrides.rotateEnvelope || (async (body) => {
+          order.push(["rotate"]);
           posts.push(body);
           zeroAtSend.push(buffers.every((b) => b.every((byte) => byte === 0)));
           return null;
@@ -54,6 +69,7 @@ function harness(overrides = {}) {
       },
       vaultSession: {
         rememberedSecret: () => session.remembered,
+        envelopeWrites: overrides.envelopeWrites || (() => null),
         lock: () => { session.locks += 1; },
       },
       fetch: async () => ({ ok: true, text: async () => '' }),
@@ -64,7 +80,7 @@ function harness(overrides = {}) {
   const component = ctx.vaultPasswordChange();
   const events = [];
   component.$dispatch = (name) => events.push(name);
-  return { ctx, component, posts, derived, buffers, session, events, zeroAtSend };
+  return { ctx, component, posts, derived, buffers, session, events, zeroAtSend, order };
 }
 
 // Opens the floor without a network round trip: the floor's own behaviour is
@@ -311,75 +327,86 @@ test('a copied master password is named and outlives an entry password', async (
   assert.equal(ctx.vaultClipboard.state().label, 'Master password');
 });
 
-// --- a session the previous envelope opened ---------------------------------
+// --- opening the envelope the dialog replaces --------------------------------
 
-const PREVIOUS_PARAMS = { v: '1.3', m: 19456, t: 2, p: 1 };
 const WITH_PREVIOUS = {
   ...ENVELOPE,
   previous_kdf_algo: 'argon2id',
-  previous_kdf_params: PREVIOUS_PARAMS,
+  previous_kdf_params: { v: '1.3', m: 19456, t: 2, p: 1 },
   previous_wrapped_kex_priv: 'prev-kex',
   previous_wrapped_sig_priv: 'prev-sig',
 };
 
-// Opens only the previous envelope: the password typed is the older one.
-const opensPreviousOnly = async (key, fields) => {
-  if (fields.wrapped_kex_priv !== 'prev-kex') throw new Error('tag mismatch');
-  return { kexPriv: Uint8Array.of(1), sigSeed: Uint8Array.of(2) };
-};
+const unsupported = () => { const err = new Error('unknown aead'); err.name = 'UnsupportedAlgorithmError'; return err; };
+
+test('an envelope this build cannot read asks for a reload, not for the password again', async () => {
+  const h = harness({ openKeys: async () => { throw unsupported(); } });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(h.component.error, 'This vault was saved by a newer version of the app. Reload the page to update it.');
+  assert.deepStrictEqual(h.posts, []);
+});
+
+test('a derivation that broke is not blamed on the password', async () => {
+  const h = harness({ deriveUnwrapKey: () => { throw new Error('kdf params out of bounds'); } });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(h.component.error, 'The password could not be changed. Try again.');
+  assert.deepStrictEqual(h.posts, []);
+});
 
 test('the older password still changes it, against the current envelope it replaces', async () => {
-  const h = harness({ envelope: WITH_PREVIOUS, openKeys: opensPreviousOnly });
+  const h = harness({
+    envelope: WITH_PREVIOUS,
+    openWithFallback: async () => ({
+      opened: 'previous', unwrapKey: Uint8Array.of(7), keys: { kexPriv: Uint8Array.of(1), sigSeed: Uint8Array.of(2) },
+    }),
+  });
   ready(h.component);
   await h.component.submit();
   assert.equal(h.component.error, '');
-  assert.deepStrictEqual(
-    h.derived.map(([params]) => params),
-    [ENVELOPE.kdf_params, PREVIOUS_PARAMS, CURRENT.params],
-  );
-  assert.equal(h.posts.length, 1);
+  assert.deepStrictEqual(h.order, [['rotate']], 'the current envelope the previous one stood in for was confirmed');
   assert.equal(h.posts[0].expected_wrapped_kex_priv, 'old-kex');
   assert.equal(h.session.locks, 1);
 });
 
-test('a password neither envelope opens sends nothing', async () => {
-  const h = harness({ envelope: WITH_PREVIOUS, openKeys: async () => { throw new Error('tag mismatch'); } });
+test('a current envelope the dialog opened is confirmed before the rotation', async () => {
+  const h = harness({ envelope: WITH_PREVIOUS });
   ready(h.component);
   await h.component.submit();
-  assert.equal(h.component.error, 'Current password or recovery key is incorrect.');
-  assert.equal(h.derived.length, 2);
-  assert.deepStrictEqual(h.posts, []);
+  assert.deepStrictEqual(h.order, [['confirm', 'old-kex'], ['rotate']]);
 });
 
-test('an algorithm this build cannot read is the current envelope\'s answer, not a cue to fall back', async () => {
+test('without a previous envelope there is nothing to confirm', async () => {
+  const h = harness();
+  ready(h.component);
+  await h.component.submit();
+  assert.deepStrictEqual(h.order, [['rotate']]);
+});
+
+test('a refused confirm still lets the rotation through', async () => {
   const h = harness({
     envelope: WITH_PREVIOUS,
-    openKeys: async (key, fields) => {
-      if (fields.wrapped_kex_priv === 'old-kex') {
-        const err = new Error('unknown aead'); err.name = 'UnsupportedAlgorithmError'; throw err;
-      }
-      return opensPreviousOnly(key, fields);
-    },
+    confirmEnvelope: async () => { const err = new Error('throttled'); err.status = 429; throw err; },
   });
   ready(h.component);
   await h.component.submit();
-  assert.equal(h.derived.length, 1, 'the previous envelope was derived');
-  assert.deepStrictEqual(h.posts, []);
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.session.locks, 1);
 });
 
-test('a derivation that broke on the current envelope is not a cue to fall back', async () => {
-  let calls = 0;
-  const h = harness({
-    envelope: WITH_PREVIOUS,
-    deriveUnwrapKey: (fresh) => {
-      calls += 1;
-      if (calls === 1) throw new Error('kdf params out of bounds');
-      return fresh(7);
-    },
-    openKeys: opensPreviousOnly,
-  });
+test('the envelope is read only once the unlock has written it back', async () => {
+  let release;
+  const writes = new Promise((resolve) => { release = resolve; });
+  let fetched = 0;
+  const h = harness({ envelopeWrites: () => writes });
+  h.ctx.vaultApi.fetchEnvelope = async () => { fetched += 1; return ENVELOPE; };
   ready(h.component);
-  await h.component.submit();
-  assert.equal(calls, 1, 'the previous envelope was derived');
-  assert.deepStrictEqual(h.posts, []);
+  const pending = h.component.submit();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(fetched, 0, 'the envelope was read under the unlock\'s writes');
+  release();
+  await pending;
+  assert.equal(fetched, 1);
+  assert.equal(h.posts.length, 1);
 });

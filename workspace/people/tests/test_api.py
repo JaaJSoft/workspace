@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from rest_framework.test import APITestCase
 
+from workspace.ai.models import BotProfile
 from workspace.people.models import Person
 from workspace.people.services.lists import add_members, create_list
 from workspace.people.services.persons import create_person, update_person
@@ -276,6 +277,30 @@ class PersonApiTests(APITestCase):
             response.data["linked_user"]["avatar_url"],
             f"/api/v1/users/{self.bob.id}/avatar",
         )
+
+    def test_patch_linked_user_to_a_bot_is_400(self):
+        BotProfile.objects.create(user=self.bob)
+        person = create_person(owner=self.alice, display_name="Bob")
+        response = self.client.patch(
+            f"/api/v1/people/{person.uuid}",
+            {"linked_user_id": self.bob.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("linked_user_id", response.data)
+        person.refresh_from_db()
+        self.assertIsNone(person.linked_user)
+
+    def test_create_linked_to_a_bot_is_400(self):
+        BotProfile.objects.create(user=self.bob)
+        response = self.client.post(
+            "/api/v1/people",
+            {"display_name": "Bob", "linked_user_id": self.bob.id},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("linked_user_id", response.data)
+        self.assertFalse(Person.objects.filter(linked_user=self.bob).exists())
 
     def test_patch_duplicate_linked_user_is_400(self):
         create_person(owner=self.alice, display_name="Bob", linked_user=self.bob)

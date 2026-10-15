@@ -4,7 +4,12 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.calendar.models import Calendar, Event
-from workspace.calendar.services.event_scope import cancel_event, update_event
+from workspace.calendar.models_external import ExternalCalendar
+from workspace.calendar.services.event_scope import (
+    EventScopeError,
+    cancel_event,
+    update_event,
+)
 from workspace.calendar.services.recurrence_rule import apply_rule
 
 User = get_user_model()
@@ -121,3 +126,53 @@ class ScopedEditStorageInvariantsTests(TestCase):
         self.assertEqual(
             Event.objects.filter(recurrence_parent=master, is_cancelled=True).count(), 1
         )
+
+
+class MoveToExternalCalendarTests(TestCase):
+    """An event never moves into a calendar fed by an ICS subscription."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="pw")
+        self.calendar = Calendar.objects.create(name="Work", owner=self.user)
+        self.feed = Calendar.objects.create(name="Holidays", owner=self.user)
+        ExternalCalendar.objects.create(
+            calendar=self.feed, url="https://feed.test/holidays.ics"
+        )
+
+    def _event(self, rule=""):
+        event = Event(
+            calendar=self.calendar,
+            owner=self.user,
+            title="Standup",
+            start=datetime(2026, 3, 16, 9, 0, tzinfo=UTC),
+            end=datetime(2026, 3, 16, 10, 0, tzinfo=UTC),
+        )
+        apply_rule(event, rule)
+        event.save()
+        return event
+
+    def test_moving_an_event_into_an_external_calendar_is_refused(self):
+        event = self._event()
+
+        with self.assertRaises(EventScopeError) as ctx:
+            update_event(event, {"calendar_id": self.feed.pk}, self.user, scope="all")
+
+        self.assertEqual(ctx.exception.status_code, 403)
+        event.refresh_from_db()
+        self.assertEqual(event.calendar_id, self.calendar.pk)
+
+    def test_future_split_into_an_external_calendar_stays_in_the_series_calendar(
+        self,
+    ):
+        master = self._event("RRULE:FREQ=WEEKLY")
+
+        new_master = update_event(
+            master,
+            {"calendar_id": self.feed.pk},
+            self.user,
+            scope="future",
+            original_start=master.start + timedelta(weeks=2),
+        )
+
+        new_master.refresh_from_db()
+        self.assertEqual(new_master.calendar_id, self.calendar.pk)

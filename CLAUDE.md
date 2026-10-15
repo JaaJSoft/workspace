@@ -470,6 +470,9 @@ q = FileService.accessible_files_q(user)
 # Personal files only (owned, non-deleted, no group):
 qs = FileService.user_files_qs(user)
 
+# Nodes the user owns and still manages (personal + group nodes of groups they are still in), deleted_at NOT filtered:
+qs = FileService.owned_files_qs(user)
+
 # Group files only (non-deleted, from user's groups):
 qs = FileService.user_group_files_qs(user)
 

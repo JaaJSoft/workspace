@@ -1610,11 +1610,22 @@ test('editing an entry carries the fields the dialog does not edit', async () =>
   assert.ok(!('totp' in component.draft.values), 'the key is never opened for the form');
 });
 
+// A save reads what an edit carries from the stored row, so a hand-built
+// edit draft needs its row in the listing.
+function listingOf(row) {
+  return async (uuid, opts) => (opts && opts.trashed ? [] : [row]);
+}
+
+const TOTP_FIELD = { field_id: 'totp', encrypted_value: 'ct:totp' };
+
 test('a pasted authenticator key is normalized before it is sealed', async () => {
   const written = [];
   const normalized = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1')),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: (text, options) => {
         normalized.push({ text: text, label: options.label });
@@ -1646,7 +1657,10 @@ test('a pasted authenticator key is normalized before it is sealed', async () =>
 test('removing the key drops it from the write instead of carrying it', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1664,7 +1678,10 @@ test('removing the key drops it from the write instead of carrying it', async ()
 test('an untouched key is carried through an edit', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1710,7 +1727,10 @@ test('cancelling an add after a remove does not bring the key back', async () =>
   // followed carried the ciphertext through as if Remove had never happened.
   const written = [];
   const { component } = typed({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1735,7 +1755,10 @@ test('cancelling an add after a remove does not bring the key back', async () =>
 test('typing a key after a remove seals the new one', async () => {
   const written = [];
   const { component } = typed({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: (text) => 'otpauth://totp/Bank?secret=' + text,
       // Seals to its own plaintext, so the test reads which value was sealed.
@@ -1765,7 +1788,10 @@ test('typing a key after a remove seals the new one', async () => {
 test('a malformed key is refused with a message rather than saved', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1')),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: () => { throw new Error('illegal base32 character !'); },
     },

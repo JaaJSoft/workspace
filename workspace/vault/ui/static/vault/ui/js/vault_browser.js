@@ -1393,13 +1393,7 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
-        const carriedFields = {};
         const type = this.typeFor(entry.type);
-        const editable = new Set(
-          (type ? type.fields : [])
-            .filter(function (field) { return field.kind !== 'totp'; })
-            .map(function (field) { return field.field_id; }),
-        );
         try {
           for (const field of type ? type.fields : []) {
             if (field.kind === 'totp') continue;
@@ -1414,15 +1408,7 @@ window.vaultBrowser = (function () {
           return;
         }
         if (!window.vaultSession.isUnlocked()) return;
-        // Everything the dialog does not edit - the authenticator key, and any
-        // field a future type declares - travels as its ciphertext. Rebuilding
-        // the record from the form alone would delete it.
-        (row.entry_fields || []).forEach(function (field) {
-          if (!editable.has(field.field_id)) {
-            carriedFields[field.field_id] = field.encrypted_value;
-          }
-        });
-        this.draft = {
+        this.draft = Object.assign({
           uuid: entry.uuid,
           type: entry.type,
           folder: entry.folder,
@@ -1430,21 +1416,45 @@ window.vaultBrowser = (function () {
           favorite: entry.favorite,
           name: entry.name,
           notes: '',
+          values: values,
+          hasTotp: (entry.fieldIds || []).includes('totp'),
+          totpInput: null,
+          totpRemoved: false,
+          isNew: false,
+        }, this.storedEntryParts(row, entry.type));
+      },
+
+      // What an edit takes from the stored row rather than from the form. The
+      // save reads it again from the row the server now holds: a migration
+      // pass can rewrite these ciphertexts while the dialog is open, and a
+      // draft that kept the ones it opened with would put them back.
+      storedEntryParts: function (row, typeId) {
+        const type = this.typeFor(typeId);
+        const editable = new Set(
+          (type ? type.fields : [])
+            .filter(function (field) { return field.kind !== 'totp'; })
+            .map(function (field) { return field.field_id; }),
+        );
+        // Everything the dialog does not edit - the authenticator key, and any
+        // field a future type declares - travels as its ciphertext. Rebuilding
+        // the record from the form alone would delete it.
+        const carriedFields = {};
+        (row.entry_fields || []).forEach(function (field) {
+          if (!editable.has(field.field_id)) {
+            carriedFields[field.field_id] = field.encrypted_value;
+          }
+        });
+        return {
           // The row's own ciphertext, carried rather than opened: the write is
           // a full signed replacement, so a draft that dropped it would sign
           // an entry whose notes are gone.
           encryptedNotes: row.encrypted_notes || '',
-          values: values,
           carriedFields: carriedFields,
           keyVersion: row.key_version || 1,
-          hasTotp: (entry.fieldIds || []).includes('totp'),
-          totpInput: null,
-          totpRemoved: false,
           entryVersion: row.entry_version || 1,
           // The signature the save replaces, so the write can refuse to
           // re-sign a row under an algorithm marked broken.
           storedSig: row.metadata_sig,
-          isNew: false,
         };
       },
 
@@ -1470,11 +1480,21 @@ window.vaultBrowser = (function () {
         // The name is the only thing a listing shows: a row without one is a
         // row the user cannot tell from another.
         if (!name) return;
+        await this.flushDeferredReload();
+        let stored = {};
+        if (!draft.isNew) {
+          const row = this.rowFor(draft.uuid);
+          if (!row) {
+            this.error = 'This entry changed since it was opened. Close it and open it again.';
+            return;
+          }
+          stored = this.storedEntryParts(row, draft.type);
+        }
         // Three outcomes, and only one of them seals: a typed key becomes the
         // uri that will be stored, a removed one is dropped from both maps so
         // the write deletes it, and an untouched one stays in carriedFields.
         const values = Object.assign({}, draft.values);
-        const carriedFields = Object.assign({}, draft.carriedFields);
+        const carriedFields = Object.assign({}, stored.carriedFields || draft.carriedFields);
         if (draft.totpInput !== null && draft.totpInput !== undefined
             && String(draft.totpInput).trim()) {
           try {
@@ -1491,13 +1511,12 @@ window.vaultBrowser = (function () {
           delete carriedFields.totp;
           delete values.totp;
         }
-        await this.flushDeferredReload();
         this.busy = true;
         try {
           const body = await window.buildEntryWriteRequest(
             window.vaultSession,
             this.openVault,
-            Object.assign({}, draft, {
+            Object.assign({}, draft, stored, {
               name: name, values: values, carriedFields: carriedFields,
             }),
           );
@@ -1665,9 +1684,20 @@ window.vaultBrowser = (function () {
         const name = (draft.name || '').trim();
         if (!name) return;
         await this.flushDeferredReload();
+        // The signature a migration pass left on the row, not the one the
+        // dialog opened with: the pass re-signs every row it rewrites.
+        let storedSig = draft.storedSig;
+        if (draft.existing) {
+          const folder = this.folders.find(function (row) { return row.uuid === draft.uuid; });
+          if (!folder) {
+            this.error = 'This folder changed since it was opened. Close it and open it again.';
+            return;
+          }
+          storedSig = folder.metadata_sig;
+        }
         this.busy = true;
         try {
-          if (draft.existing) window.vaultResign.assertMayResign({ metadata_sig: draft.storedSig });
+          if (draft.existing) window.vaultResign.assertMayResign({ metadata_sig: storedSig });
           const body = await window.buildFolderWriteRequest(
             window.vaultSession,
             this.openVault,

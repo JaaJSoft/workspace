@@ -206,3 +206,80 @@ test('a folder deletion under a held reload reloads before it re-signs', async (
   await component.deleteFolder({ uuid: 'f-1', name: 'Bills' });
   assert.deepStrictEqual(order.slice(0, 2), ['load', 'build']);
 });
+
+// --- an edit opened before the pass rewrote its row --------------------------
+
+const LOGIN = {
+  id: 'login', label: 'Login', icon: 'key-round',
+  fields: [
+    { field_id: 'username', kind: 'text' },
+    { field_id: 'password', kind: 'secret' },
+    { field_id: 'totp', kind: 'totp' },
+  ],
+};
+
+function storedEntry(suffix) {
+  return {
+    uuid: 'e-1',
+    encrypted_notes: 'notes-' + suffix,
+    entry_fields: [
+      { field_id: 'password', encrypted_value: 'password-' + suffix },
+      { field_id: 'totp', encrypted_value: 'totp-' + suffix },
+    ],
+    key_version: 1,
+    entry_version: 1,
+    metadata_sig: 'sig-' + suffix,
+  };
+}
+
+// The dialog opened the row the pass is about to rewrite; the held reload
+// brings the rewritten one in just before the save.
+function editUnderHeldReload(rewritten) {
+  const { component, ctx } = harness(async () => ({ outcome: 'clean', wrote: false, warn: false }));
+  const built = [];
+  component.entryTypes = [LOGIN];
+  component.openVault = { uuid: VAULT_UUID };
+  component.entryRows = [storedEntry('before')];
+  component.draft = Object.assign({
+    uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false, name: 'GitHub',
+    notes: '', values: { password: 'hunter2' }, hasTotp: true, totpInput: null,
+    totpRemoved: false, isNew: false,
+  }, component.storedEntryParts(component.entryRows[0], 'login'));
+  component.reloadDeferred = true;
+  component.load = async () => { component.entryRows = rewritten ? [rewritten] : []; };
+  ctx.buildEntryWriteRequest = async (session, vault, draft) => { built.push(draft); return {}; };
+  return { component, built };
+}
+
+test('an edit saved after the pass carries the ciphertexts it left, not the ones it replaced', async () => {
+  const { component, built } = editUnderHeldReload(storedEntry('after'));
+  await component.saveEntry();
+  assert.equal(built.length, 1);
+  assert.deepStrictEqual({ ...built[0].carriedFields }, { totp: 'totp-after' });
+  assert.equal(built[0].encryptedNotes, 'notes-after');
+  assert.equal(built[0].storedSig, 'sig-after');
+  assert.equal(built[0].values.password, 'hunter2', 'the typed value was replaced');
+});
+
+test('an edit whose row the reload no longer vouches for writes nothing and says why', async () => {
+  const { component, built } = editUnderHeldReload(null);
+  await component.saveEntry();
+  assert.equal(built.length, 0);
+  assert.equal(component.error, 'This entry changed since it was opened. Close it and open it again.');
+});
+
+test('a folder rename saved after the pass checks the signature it left', async () => {
+  const { component, ctx } = harness(async () => ({ outcome: 'clean', wrote: false, warn: false }));
+  const checked = [];
+  component.openVault = { uuid: VAULT_UUID };
+  component.folders = [{ uuid: 'f-1', parent: null, position: 0, name: 'Bills', metadata_sig: 'sig-before' }];
+  component.renameFolder(component.folders[0]);
+  component.reloadDeferred = true;
+  component.load = async () => {
+    component.folders = [{ uuid: 'f-1', parent: null, position: 0, name: 'Bills', metadata_sig: 'sig-after' }];
+  };
+  ctx.vaultResign.assertMayResign = (row) => { checked.push(row.metadata_sig); };
+  ctx.buildFolderWriteRequest = async () => ({});
+  await component.saveFolder();
+  assert.deepStrictEqual(checked, ['sig-after']);
+});

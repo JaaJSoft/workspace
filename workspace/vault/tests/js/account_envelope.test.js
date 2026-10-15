@@ -140,3 +140,92 @@ test('the same value under another type is another parameter', () => {
   assert.equal(single.needsDerivation(fields({ kdf_params: { v: '1.3', m: 65536, t: 3, p: 1 } })), false);
   assert.equal(single.needsDerivation(fields({ kdf_params: { v: '1.3', m: 65536, t: 3, p: true } })), true);
 });
+
+// --- opening the current envelope, then the previous one --------------------
+
+const PREVIOUS_PARAMS = { v: '1.3', m: 19456, t: 2, p: 1 };
+const withPrevious = (over = {}) => ({
+  ...fields(),
+  uuid: 'acct',
+  previous_kdf_algo: 'argon2id',
+  previous_kdf_params: PREVIOUS_PARAMS,
+  previous_wrapped_kex_priv: '2pkx',
+  previous_wrapped_sig_priv: '2psg',
+  ...over,
+});
+const named = (name) => { const err = new Error(name); err.name = name; return err; };
+// Only the previous envelope's keys open: the password typed is the older one.
+const previousOnly = (fail = new Error('tag mismatch')) => ({
+  open: async (key, raw) => {
+    if (String.fromCharCode(...raw).startsWith('2p')) return Uint8Array.from(raw.slice(1));
+    throw fail;
+  },
+});
+const derivations = (calls) => calls.filter(([name]) => name === 'deriveAmk').map(([, params]) => params);
+
+test('the current envelope is opened when it can be', async () => {
+  const { E, calls } = harness();
+  const result = await E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1));
+  assert.equal(result.opened, 'current');
+  assert.deepStrictEqual(derivations(calls), [CURRENT.params]);
+});
+
+test('a current envelope that does not open falls back to the previous one, and zeroes its key', async () => {
+  const keys = [];
+  const { E, calls } = harness({
+    vaultCrypto: { ...previousOnly(), hkdf: async () => { const k = Uint8Array.from([9, 9]); keys.push(k); return k; } },
+  });
+  const result = await E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1));
+  assert.equal(result.opened, 'previous');
+  assert.deepStrictEqual(derivations(calls), [CURRENT.params, PREVIOUS_PARAMS]);
+  assert.deepStrictEqual(Array.from(keys[0]), [0, 0], 'the current unwrap key outlived its failed open');
+  assert.strictEqual(result.unwrapKey, keys[1]);
+});
+
+test('without a previous envelope a failed open is a wrong password', async () => {
+  const { E } = harness({ vaultCrypto: previousOnly() });
+  await assert.rejects(
+    E.openWithFallback({ ...fields(), uuid: 'acct' }, 'pw', new Uint8Array(1), new Uint8Array(1)),
+    { name: 'VaultEnvelopeWrongPassword' },
+  );
+});
+
+test('an envelope neither password opens is a wrong password', async () => {
+  const { E, calls } = harness({ vaultCrypto: { open: async () => { throw new Error('tag mismatch'); } } });
+  await assert.rejects(
+    E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1)),
+    { name: 'VaultEnvelopeWrongPassword' },
+  );
+  assert.equal(derivations(calls).length, 2);
+});
+
+test('an algorithm the current envelope names and this build cannot read never falls back', async () => {
+  const { E, calls } = harness({ vaultCrypto: previousOnly(named('UnsupportedAlgorithmError')) });
+  await assert.rejects(
+    E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1)),
+    { name: 'UnsupportedAlgorithmError' },
+  );
+  assert.equal(derivations(calls).length, 1);
+});
+
+test('a derivation that broke on the current envelope never falls back', async () => {
+  const { E, calls } = harness({
+    vaultCrypto: { ...previousOnly(), assertAccountKdf: (algo, params) => { if (params.m === 65536) throw new Error('broken'); } },
+  });
+  await assert.rejects(
+    E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1)),
+    { message: 'broken' },
+  );
+  assert.equal(derivations(calls).length, 0);
+});
+
+test('wrapped keys this build cannot read are refused before the derivation runs', async () => {
+  const { E, calls } = harness({
+    vaultCrypto: { decodeCiphertext: () => { throw named('UnsupportedAlgorithmError'); } },
+  });
+  await assert.rejects(
+    E.openWithFallback(withPrevious(), 'pw', new Uint8Array(1), new Uint8Array(1)),
+    { name: 'UnsupportedAlgorithmError' },
+  );
+  assert.equal(derivations(calls).length, 0);
+});

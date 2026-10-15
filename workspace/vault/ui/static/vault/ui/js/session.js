@@ -79,20 +79,6 @@ function refuseUnreadable(V, envelope) {
   }
 }
 
-// The same refusal for the two wrapped private keys, run on each envelope the
-// unlock tries - the current one, then the previous one - before its own
-// derivation.
-function refuseUnreadableKeys(V, fields) {
-  try {
-    V.decodeCiphertext(V.fromBase64Url(fields.wrapped_kex_priv));
-    V.decodeCiphertext(V.fromBase64Url(fields.wrapped_sig_priv));
-  } catch (err) {
-    if (err && err.name === 'UnsupportedAlgorithmError') {
-      throw VaultUnlockError('unsupported', err);
-    }
-  }
-}
-
 window.vaultSession = (function () {
   let accountUuid = null;
   let signer = null;
@@ -263,37 +249,15 @@ window.vaultSession = (function () {
         refuseUnreadable(V, envelope);
         const salt = V.fromBase64Url(envelope.kdf_salt);
 
-        // Each envelope is refused, derived and opened on its own: an
-        // algorithm this build cannot read is reported before its Argon2 runs.
-        const openEnvelope = async function (fields) {
-          refuseUnreadableKeys(V, fields);
-          unwrapKey = await window.vaultEnvelope.deriveUnwrapKey(fields, options.password, secretBytes, salt);
-          try {
-            // The tag failure here IS the wrong-password answer. No request
-            // validates it, and the server never learns whether one succeeded.
-            ({ kexPriv, sigSeed } = await window.vaultEnvelope.openKeys(unwrapKey, fields, envelope.uuid));
-          } catch (err) {
-            // Named bytes this build cannot read are not a wrong password, and
-            // saying so would send the user hunting for a typo that is not there.
-            if (err && err.name === 'UnsupportedAlgorithmError') {
-              throw VaultUnlockError('unsupported', err);
-            }
-            throw VaultUnlockError('password', err);
-          }
-        };
-
-        const previous = window.vaultEnvelope.previousOf(envelope);
-        opened = 'current';
+        // The tag failure IS the wrong-password answer. No request validates
+        // it, and the server never learns whether one succeeded.
         try {
-          await openEnvelope(envelope);
+          ({ opened, unwrapKey, keys: { kexPriv, sigSeed } } = await window.vaultEnvelope.openWithFallback(
+            envelope, options.password, secretBytes, salt
+          ));
         } catch (err) {
-          // Only the wrong-password shape falls back. An algorithm this build
-          // cannot read, or a derivation that broke, is the current
-          // envelope's answer and is never traded for the previous one's.
-          if (!previous || !(err && err.name === 'VaultUnlockError' && err.reason === 'password')) throw err;
-          zero(unwrapKey);
-          await openEnvelope(previous);
-          opened = 'previous';
+          if (err && err.name === 'VaultEnvelopeWrongPassword') throw VaultUnlockError('password', err);
+          throw err;
         }
         keysUnwrapped = true;
 

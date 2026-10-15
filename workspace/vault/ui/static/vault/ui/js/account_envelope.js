@@ -7,6 +7,15 @@
 window.vaultEnvelope = (function () {
   const FIELDS = ['kdf_algo', 'kdf_params', 'wrapped_kex_priv', 'wrapped_sig_priv'];
 
+  // A wrapped key whose tag did not verify: the wrong password or the wrong
+  // recovery key, which the same tag cannot tell apart.
+  function WrongPasswordError(cause) {
+    const error = new Error('the envelope does not open with these credentials');
+    error.name = 'VaultEnvelopeWrongPassword';
+    error.cause = cause;
+    return error;
+  }
+
   function MismatchError() {
     const error = new Error('the resealed envelope does not open to the same keys');
     error.name = 'VaultEnvelopeMismatch';
@@ -81,6 +90,52 @@ window.vaultEnvelope = (function () {
     }
   }
 
+  // Named bytes this build cannot read are refused before Argon2 runs on
+  // them. Only that answer is taken here: a value merely malformed is left to
+  // the open, which reports it where it fails.
+  function refuseUnreadableKeys(fields) {
+    const V = window.vaultCrypto;
+    try {
+      V.decodeCiphertext(V.fromBase64Url(fields.wrapped_kex_priv));
+      V.decodeCiphertext(V.fromBase64Url(fields.wrapped_sig_priv));
+    } catch (err) {
+      if (err && err.name === 'UnsupportedAlgorithmError') throw err;
+    }
+  }
+
+  async function openOne(fields, password, secretBytes, salt, accountUuid) {
+    refuseUnreadableKeys(fields);
+    const unwrapKey = await deriveUnwrapKey(fields, password, secretBytes, salt);
+    try {
+      return { unwrapKey: unwrapKey, keys: await openKeys(unwrapKey, fields, accountUuid) };
+    } catch (err) {
+      zero(unwrapKey);
+      if (err && err.name === 'UnsupportedAlgorithmError') throw err;
+      throw WrongPasswordError(err);
+    }
+  }
+
+  // The current envelope, and the previous one only when the current one did
+  // not open: a session the previous one opened has no other way in once the
+  // newer password is forgotten or its envelope is broken. An algorithm this
+  // build cannot read, or a derivation that broke, is the current envelope's
+  // answer and is never traded for the previous one's.
+  //
+  // Resolves to { opened: 'current' | 'previous', unwrapKey, keys }; the
+  // caller zeroes all three buffers. Rejects with UnsupportedAlgorithmError,
+  // VaultEnvelopeWrongPassword, or whatever else broke, untouched.
+  async function openWithFallback(envelope, password, secretBytes, salt) {
+    try {
+      const result = await openOne(envelope, password, secretBytes, salt, envelope.uuid);
+      return Object.assign(result, { opened: 'current' });
+    } catch (err) {
+      const previous = previousOf(envelope);
+      if (!previous || !(err && err.name === 'VaultEnvelopeWrongPassword')) throw err;
+      const result = await openOne(previous, password, secretBytes, salt, envelope.uuid);
+      return Object.assign(result, { opened: 'previous' });
+    }
+  }
+
   // Sealed under the current suite with the header onboarding writes, then
   // opened again: a writer that got its own output wrong must fail here, on
   // this device, rather than on the server's only copy.
@@ -121,6 +176,7 @@ window.vaultEnvelope = (function () {
     isStale: isStale,
     needsDerivation: needsDerivation,
     previousOf: previousOf,
+    openWithFallback: openWithFallback,
     deriveUnwrapKey: deriveUnwrapKey,
     openKeys: openKeys,
     sealAndReread: sealAndReread,

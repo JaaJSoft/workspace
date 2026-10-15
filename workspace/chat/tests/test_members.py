@@ -1,10 +1,14 @@
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from workspace.ai.models import BotProfile
 from workspace.chat.models import ConversationMember
 
 from .test_chat import ChatTestMixin
+
+User = get_user_model()
 
 
 class AddMembersTests(ChatTestMixin, APITestCase):
@@ -122,6 +126,44 @@ class AddMembersTests(ChatTestMixin, APITestCase):
             self.url(self.group.uuid), {"user_ids": [self.extra_user.id]}, format="json"
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def _bot(self, username, **profile):
+        bot_user = User.objects.create_user(username=username, password="pass123")
+        BotProfile.objects.create(user=bot_user, **profile)
+        return bot_user
+
+    def test_cannot_add_a_bot_the_caller_has_no_access_to(self):
+        """Adding a bot hands it to every member, so the caller must be
+        allowed to use it - the same rule as creating a conversation."""
+        private_bot = self._bot("privbot", is_public=False, created_by=self.creator)
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            self.url(self.group.uuid), {"user_ids": [private_bot.id]}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            ConversationMember.objects.filter(
+                conversation=self.group, user=private_bot
+            ).exists()
+        )
+
+    def test_can_add_a_bot_the_caller_has_access_to(self):
+        public_bot = self._bot("pubbot", is_public=True)
+        self.client.force_authenticate(self.member)
+        resp = self.client.post(
+            self.url(self.group.uuid),
+            {"user_ids": [public_bot.id, self.extra_user.id]},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            ConversationMember.objects.filter(
+                conversation=self.group,
+                user__in=[public_bot, self.extra_user],
+                left_at__isnull=True,
+            ).count(),
+            2,
+        )
 
 
 class RemoveMemberTests(ChatTestMixin, APITestCase):

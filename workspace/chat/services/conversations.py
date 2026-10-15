@@ -178,6 +178,20 @@ def is_bot_conversation(conversation_id):
     ).exists()
 
 
+def can_add_users(user, candidates):
+    """Whether *user* may bring every one of *candidates* into a conversation.
+
+    A bot in a conversation answers every member, so bringing one in hands it
+    to all of them: *user* must be allowed to use each bot they add. The
+    candidates need ``bot_profile`` selected.
+    """
+    return all(
+        candidate.bot_profile.is_accessible_by(user)
+        for candidate in candidates
+        if hasattr(candidate, "bot_profile")
+    )
+
+
 def members_allow_clear(user, active_members):
     """Whether *user* may clear a conversation whose active members are *active_members*.
 

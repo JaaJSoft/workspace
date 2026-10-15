@@ -23,6 +23,7 @@ from ..serializers import (
 )
 from ..services.conversations import (
     active_members_queryset,
+    can_add_users,
     default_group_title,
     get_active_membership,
     get_or_create_dm,
@@ -183,16 +184,11 @@ class ConversationListView(CacheControlMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check bot access permissions
-        bot_users = users.filter(bot_profile__isnull=False).select_related(
-            "bot_profile"
-        )
-        for bot_user in bot_users:
-            if not bot_user.bot_profile.is_accessible_by(request.user):
-                return Response(
-                    {"detail": "You do not have access to this bot."},
-                    status=status.HTTP_403_FORBIDDEN,
-                )
+        if not can_add_users(request.user, users):
+            return Response(
+                {"detail": "You do not have access to this bot."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # `created_members` is populated on the fresh-creation paths so the
         # response can serialize without a post-INSERT refetch. On the
@@ -407,11 +403,18 @@ class ConversationMembersView(APIView):
         ser.is_valid(raise_exception=True)
         user_ids = ser.validated_data["user_ids"]
 
-        users = User.objects.filter(id__in=user_ids, is_active=True)
+        users = User.objects.filter(id__in=user_ids, is_active=True).select_related(
+            "bot_profile"
+        )
         if users.count() != len(user_ids):
             return Response(
                 {"detail": "One or more user IDs are invalid."},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not can_add_users(request.user, users):
+            return Response(
+                {"detail": "You do not have access to this bot."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         # Batch-fetch existing memberships (1 query instead of N)

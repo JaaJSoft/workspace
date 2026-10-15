@@ -174,3 +174,34 @@ class AgentGoalCheckAccessTests(BotAccessFixture):
         self.revoke_bot(self.creator)
         self._assert_refused_and_abandoned(mock_llm, "bot_not_accessible")
 
+
+@patch("workspace.ai.harness.model.call_llm")
+class ChatResponseAccessTests(BotAccessFixture):
+    def _respond_to(self, author, mock_llm):
+        from workspace.ai.tasks.chat import generate_chat_response
+
+        mock_llm.return_value = _llm_reply("Here is your private mail.")
+
+        message = Message.objects.create(
+            conversation=self.conversation, author=author, body="@privbot my mail?"
+        )
+        return generate_chat_response(
+            str(self.conversation.pk), str(message.uuid), self.bot_user.id
+        )
+
+    def test_member_without_bot_access_gets_no_run(self, mock_llm):
+        result = self._respond_to(self.other, mock_llm)
+
+        self.assertEqual(result, {"status": "skipped", "reason": "bot_not_accessible"})
+        mock_llm.assert_not_called()
+        self.assertFalse(self.bot_messages().exists())
+        self.assertFalse(AITask.objects.filter(owner=self.bot_user).exists())
+
+    def test_access_revoked_after_the_conversation_was_set_up(self, mock_llm):
+        self.revoke_bot(self.creator)
+
+        result = self._respond_to(self.creator, mock_llm)
+
+        self.assertEqual(result, {"status": "skipped", "reason": "bot_not_accessible"})
+        mock_llm.assert_not_called()
+        self.assertFalse(self.bot_messages().exists())

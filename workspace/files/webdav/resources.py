@@ -31,6 +31,7 @@ from workspace.files.services.locking import (
     StaleContent,
     conflicting_lock,
 )
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 logger = logging.getLogger(__name__)
 
@@ -851,6 +852,10 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     collection via ``FolderResource.copy_move_single`` and visits the
     descendants one by one.
     """
+    try:
+        FileService.check_copy_allowed(file_obj)
+    except QuarantinedSource as exc:
+        raise DAVError(HTTP_FORBIDDEN, str(exc)) from exc
     content = None
     if file_obj.content:
         file_obj.content.open("rb")

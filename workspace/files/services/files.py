@@ -24,7 +24,7 @@ from .events import record_event
 from .hard_delete import hard_delete_tree
 from .processing_failures import clear_failures
 from .quota import check_write_allowed, subtree_bytes
-from .scanning.policy import exclude_blocked
+from .scanning.policy import QuarantinedSource, exclude_blocked, is_blocked
 
 
 class FilePermission(enum.IntEnum):
@@ -686,6 +686,7 @@ class FileService:
         """
         from django.core.files.base import File as DjangoFile
 
+        FileService.check_copy_allowed(source)
         with source.content.open("rb") as src:
             return FileService.update_content(
                 target,
@@ -745,7 +746,12 @@ class FileService:
 
     @staticmethod
     def copy(file_obj, target_parent, owner, *, acting_user=None):
-        """Recursively copy a file or folder to *target_parent*."""
+        """Recursively copy a file or folder to *target_parent*.
+
+        Blocked descendants of a folder are left behind; a blocked file raises
+        ``QuarantinedSource``.
+        """
+        FileService.check_copy_allowed(file_obj)
         check_write_allowed(
             owner=owner,
             group=target_parent.group if target_parent is not None else None,
@@ -885,6 +891,21 @@ class FileService:
             and parent.deleted_at is None
             and (FileService.get_permission(user, parent) or 0) >= FilePermission.EDIT
         )
+
+    @staticmethod
+    def is_group_root(file_obj):
+        """Whether *file_obj* is a group's root folder, which stays where it is."""
+        return bool(file_obj.group_id) and file_obj.parent_id is None
+
+    @staticmethod
+    def check_copy_allowed(file_obj):
+        """Raise ``QuarantinedSource`` when *file_obj*'s bytes may not be copied.
+
+        A copy is a new row with no scan verdict of its own, so a blocked
+        file copied anywhere would come back out unblocked.
+        """
+        if is_blocked(file_obj):
+            raise QuarantinedSource()
 
     @staticmethod
     def resolve_accessible_files(user, file_uuids):

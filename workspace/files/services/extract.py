@@ -119,12 +119,15 @@ def extract_zip(file_obj, dest_folder, *, acting_user):
     ``dest_folder`` may be ``None`` to extract into the user's root (no parent).
 
     Returns ``{'destination_uuid': str or None, 'files_created': int}``.
-    Raises ``ValueError`` on bad MIME, zip-slip, oversize archives, or corruption.
+    Raises ``ValueError`` on bad MIME, zip-slip, oversize archives, corruption,
+    or an entry landing in a folder the user cannot edit, and
+    ``QuarantinedSource`` when the malware policy blocks the archive.
     """
     if file_obj.node_type != File.NodeType.FILE:
         raise ValueError("Source is not a file")
     if file_obj.type not in ZIP_LABELS:
         raise ValueError("Not a ZIP archive")
+    FileService.check_copy_allowed(file_obj)
 
     max_bytes = getattr(settings, "FILES_EXTRACT_MAX_BYTES", 2 * 1024 * 1024 * 1024)
     max_entries = getattr(settings, "FILES_EXTRACT_MAX_ENTRIES", 10_000)

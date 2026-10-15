@@ -18,6 +18,7 @@ from workspace.files.services.locking import (
     StaleContent,
     conflicting_lock,
 )
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 from .models import File, FileComment
 
@@ -90,6 +91,8 @@ def content_write_refusals():
                 "content_hash": exc.current_hash,
             }
         ) from exc
+    except QuarantinedSource as exc:
+        raise PermissionDenied(str(exc)) from exc
 
 
 def ensure_replaceable(user, target):

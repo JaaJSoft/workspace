@@ -13,6 +13,7 @@ from workspace.files.serializers import (
     ensure_replaceable,
 )
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 
 class CopyMixin:
@@ -150,9 +151,12 @@ class CopyMixin:
                 serializer = self.get_serializer(annotated)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-        copied = FileService.copy(
-            file_obj, parent, request.user, acting_user=request.user
-        )
+        try:
+            copied = FileService.copy(
+                file_obj, parent, request.user, acting_user=request.user
+            )
+        except QuarantinedSource as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         # get_queryset() only spans the user's own personal files; a copy
         # landing in a group folder needs the access-aware annotation instead
         # to carry the annotations FileSerializer requires.

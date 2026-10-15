@@ -338,7 +338,9 @@ class FolderResource(DAVCollection):
         try:
             FileService.soft_delete(self._file, acting_user=self._user)
         except GroupRootFolder as exc:
-            raise DAVError(HTTP_FORBIDDEN, str(exc)) from exc
+            raise DAVError(
+                HTTP_FORBIDDEN, "A group's root folder cannot be deleted."
+            ) from exc
 
     def copy_move_single(self, dest_path, *, is_move):
         # WsgiDAV's copy/move loop visits every descendant itself, so this
@@ -862,7 +864,7 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     try:
         FileService.check_copy_allowed(file_obj)
     except QuarantinedSource as exc:
-        raise DAVError(HTTP_FORBIDDEN, str(exc)) from exc
+        raise DAVError(HTTP_FORBIDDEN, "File is quarantined.") from exc
     content = None
     if file_obj.content:
         file_obj.content.open("rb")

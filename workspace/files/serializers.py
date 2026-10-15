@@ -93,7 +93,7 @@ def content_write_refusals():
             }
         ) from exc
     except QuarantinedSource as exc:
-        raise PermissionDenied(str(exc)) from exc
+        raise PermissionDenied("File is quarantined.") from exc
 
 
 def ensure_replaceable(user, target):
@@ -447,7 +447,9 @@ class FileSerializer(serializers.ModelSerializer):
             try:
                 FileService.node_group(parent, attrs.get("group"))
             except GroupMismatch as error:
-                raise serializers.ValidationError({"group": [str(error)]}) from error
+                raise serializers.ValidationError(
+                    {"group": ["The group must be the parent folder's group."]}
+                ) from error
 
         # Validate parent assignment via FileService
         if "parent" in attrs and instance is not None:

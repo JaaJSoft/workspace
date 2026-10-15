@@ -846,7 +846,7 @@ class FileViewSet(
         try:
             FileService.soft_delete(instance, acting_user=self.request.user)
         except GroupRootFolder as exc:
-            raise PermissionDenied(str(exc)) from exc
+            raise PermissionDenied("A group's root folder cannot be deleted.") from exc
         shared_users = User.objects.filter(
             Q(received_shares__file=instance)
             | Q(groups__received_file_shares__file=instance)

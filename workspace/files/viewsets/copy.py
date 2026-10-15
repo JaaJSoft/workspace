@@ -167,8 +167,10 @@ class CopyMixin:
             copied = FileService.copy(
                 file_obj, parent, request.user, acting_user=request.user
             )
-        except QuarantinedSource as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except QuarantinedSource:
+            return Response(
+                {"detail": "File is quarantined."}, status=status.HTTP_403_FORBIDDEN
+            )
         # get_queryset() only spans the user's own personal files; a copy
         # landing in a group folder needs the access-aware annotation instead
         # to carry the annotations FileSerializer requires.

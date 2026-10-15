@@ -91,11 +91,9 @@ class SpooledUpload(UploadedFile):
     instead of copying it, and ``content_hash`` what spares a second read.
     """
 
-    def __init__(self, path, *, name, size, content_type, content_hash):
-        super().__init__(
-            open(path, "rb"), name=name, content_type=content_type, size=size
-        )
-        self._path = path
+    def __init__(self, spool, *, name, size, content_type, content_hash):
+        super().__init__(spool, name=name, content_type=content_type, size=size)
+        self._path = spool.name
         self.content_hash = content_hash
 
     def temporary_file_path(self):
@@ -272,23 +270,20 @@ def finished_upload(session):
         received = _received(session)
         if received != session.size:
             raise UploadIncomplete(received)
-        path = spool_path(session)
         try:
-            content = SpooledUpload(
-                path,
+            spool = open(spool_path(session), "rb")
+        except FileNotFoundError:
+            raise SessionGone() from None
+        with spool:
+            content_hash = _resume_hasher(session, spool, received).hexdigest()
+            spool.seek(0)
+            yield SpooledUpload(
+                spool,
                 name=session.name,
                 size=session.size,
                 content_type=session.mime_type or None,
-                content_hash="",
+                content_hash=content_hash,
             )
-        except FileNotFoundError:
-            raise SessionGone() from None
-        with content:
-            content.content_hash = _resume_hasher(
-                session, content.file, received
-            ).hexdigest()
-            content.file.seek(0)
-            yield content
 
 
 def complete(session, file_obj, *, replaced):

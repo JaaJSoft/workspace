@@ -6,7 +6,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..models import Conversation, ConversationMember, Message, MessageAttachment
-from ..services.conversations import get_active_membership, get_unread_counts
+from ..services.conversations import (
+    can_clear_conversation,
+    get_active_membership,
+    get_unread_counts,
+)
 from ..services.deletion import discard_attachment_files
 from ..services.notifications import notify_conversation_members
 
@@ -60,6 +64,11 @@ class ConversationClearView(APIView):
         membership = get_active_membership(request.user, conversation_id)
         if not membership:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        if not can_clear_conversation(request.user, conversation_id):
+            return Response(
+                {"detail": "Only a private conversation with an AI can be cleared."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         messages = Message.objects.filter(conversation_id=conversation_id)
 

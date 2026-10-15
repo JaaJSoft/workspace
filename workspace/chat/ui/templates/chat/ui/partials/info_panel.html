@@ -131,6 +131,7 @@
     </button>
     <button
       type="button"
+      x-show="activeConversation.can_clear"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="clearConversation()"
     >

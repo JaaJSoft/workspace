@@ -13,6 +13,7 @@ from .models import (
 )
 from .services.avatar import conversation_avatar_initial
 from .services.bot_tasks import can_manage_bot_task
+from .services.conversations import can_clear_conversation, members_allow_clear
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -194,6 +195,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
+    can_clear = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
@@ -220,6 +222,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "is_pinned",
             "pin_position",
             "is_bot_conversation",
+            "can_clear",
             "notification_level",
         ]
 
@@ -246,6 +249,13 @@ class ConversationListSerializer(serializers.ModelSerializer):
                     return True
             return False
         return obj.members.filter(user__bot_profile__isnull=False).exists()
+
+    def get_can_clear(self, obj) -> bool:
+        user = self.context["request"].user
+        cache = getattr(obj, "_prefetched_objects_cache", None)
+        if cache and "members" in cache:
+            return members_allow_clear(user, list(obj.members.all()))
+        return can_clear_conversation(user, obj.pk)
 
     def get_last_message(self, obj):
         # _last_message is set by the view; use sentinel to avoid fallback query

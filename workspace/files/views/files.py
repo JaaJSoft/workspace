@@ -579,7 +579,9 @@ class FileViewSet(
             self.request.user.username,
             exclude_user_id=self.request.user.pk,
         )
-        if instance.owner_id != self.request.user.pk:
+        if instance.owner_id != self.request.user.pk and FileService.can_access(
+            instance.owner, instance
+        ):
             notify(
                 recipient=instance.owner,
                 origin="files",
@@ -824,14 +826,19 @@ class FileViewSet(
                 request.user.username,
                 exclude_user_id=request.user.pk,
             )
-            notify(
-                recipient=file_obj.owner,
-                origin="files",
-                title=f'{request.user.username} edited "{file_obj.name}"',
-                url=f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files",
-                actor=request.user,
-                source=file_obj,
-            )
+            if FileService.can_access(file_obj.owner, file_obj):
+                notify(
+                    recipient=file_obj.owner,
+                    origin="files",
+                    title=f'{request.user.username} edited "{file_obj.name}"',
+                    url=(
+                        f"/files/{file_obj.parent_id}"
+                        if file_obj.parent_id
+                        else "/files"
+                    ),
+                    actor=request.user,
+                    source=file_obj,
+                )
             return Response(serializer.data)
 
     def perform_destroy(self, instance):

@@ -202,3 +202,28 @@ def revoke_share_link(file_obj, *, link_uuid, acting_user):
             },
         )
     return deleted
+
+
+def revoke_group_share_links(*, user_ids, group_ids):
+    """Delete the public links *user_ids* created on nodes of *group_ids*.
+
+    For members leaving those groups: they lose their rights on the group's
+    nodes, the nodes they created included, so a link they made there must
+    stop handing the nodes out. Returns the number of links deleted.
+    """
+    links = list(
+        FileShareLink.objects.filter(
+            created_by_id__in=user_ids, file__group_id__in=group_ids
+        ).select_related("file")
+    )
+    if not links:
+        return 0
+    FileShareLink.objects.filter(pk__in=[link.pk for link in links]).delete()
+    for link in links:
+        record_event(
+            link.file,
+            None,
+            FileEvent.Action.LINK_REVOKED,
+            {"link_uuid": str(link.uuid)},
+        )
+    return len(links)

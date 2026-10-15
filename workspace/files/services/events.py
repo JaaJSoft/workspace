@@ -104,10 +104,22 @@ def _feed_arms(viewer, exclude_actor_id):
         viewer is not None and viewer.pk != exclude_actor_id
     ):
         return [(Q(**arm), "last_event_at") for arm in arms]
-    ranked = [(Q(owner_id=exclude_actor_id), "last_foreign_event_at")]
+    if viewer is None:
+        ranked = [(Q(owner_id=exclude_actor_id), "last_foreign_event_at")]
+    else:
+        ranked = []
     for arm in arms:
-        if arm.keys() != {"owner"}:
-            ranked.append((Q(**arm) & ~Q(owner_id=exclude_actor_id), "last_event_at"))
+        if "owner" in arm:
+            ranked.append((Q(**arm), "last_foreign_event_at"))
+            continue
+        ranked.append((Q(**arm) & ~Q(owner_id=exclude_actor_id), "last_event_at"))
+        if "group_id" in arm:
+            # The viewer's own nodes in that group: the owner arm only spans
+            # personal ones, since owning a group node stops counting once its
+            # owner leaves the group.
+            ranked.append(
+                (Q(owner_id=exclude_actor_id, **arm), "last_foreign_event_at")
+            )
     return ranked
 
 

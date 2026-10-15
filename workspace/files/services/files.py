@@ -60,8 +60,10 @@ class FileService:
         """
         from workspace.projects.queries import user_project_ids
 
+        # Owning a group node grants nothing once its owner has left the
+        # group: the group branch is what covers the group nodes they own.
         return (
-            {"owner": user},
+            {"owner": user, "group__isnull": True},
             {"group__in": user.groups.all()},
             {"shares__shared_with": user},
             {"shares__shared_with_group__in": user.groups.all()},
@@ -143,6 +145,20 @@ class FileService:
         """Return a queryset of active (non-deleted) personal files owned by the user."""
         return File.objects.filter(
             owner=user, group__isnull=True, deleted_at__isnull=True
+        )
+
+    @staticmethod
+    def owned_files_qs(user):
+        """The nodes *user* owns and still manages, ``deleted_at`` not filtered.
+
+        Their personal nodes, plus the group nodes they created in groups they
+        still belong to - not those of a group they have left, which stay with
+        the group.
+        """
+        from django.db.models import Q
+
+        return File.objects.filter(
+            Q(group__isnull=True) | Q(group__in=user.groups.all()), owner=user
         )
 
     @staticmethod
@@ -805,12 +821,14 @@ class FileService:
         group_candidates = []
         share_candidates = []
         for file_obj in file_objects:
-            if file_obj.owner_id == user.id:
+            if file_obj.group_id:
+                # Ownership of a group node only counts while the owner is
+                # still in the group, so it waits for the membership lookup.
+                group_candidates.append(file_obj)
+            elif file_obj.owner_id == user.id:
                 permissions[file_obj.pk] = FilePermission.MANAGE
             elif file_obj.deleted_at is not None:
                 permissions[file_obj.pk] = None
-            elif file_obj.group_id:
-                group_candidates.append(file_obj)
             else:
                 share_candidates.append(file_obj)
 
@@ -818,7 +836,14 @@ class FileService:
             group_ids = set(user.groups.values_list("id", flat=True))
             for file_obj in group_candidates:
                 if file_obj.group_id in group_ids:
-                    permissions[file_obj.pk] = FilePermission.EDIT
+                    if file_obj.owner_id == user.id:
+                        permissions[file_obj.pk] = FilePermission.MANAGE
+                    elif file_obj.deleted_at is None:
+                        permissions[file_obj.pk] = FilePermission.EDIT
+                    else:
+                        permissions[file_obj.pk] = None
+                elif file_obj.deleted_at is not None:
+                    permissions[file_obj.pk] = None
                 else:
                     share_candidates.append(file_obj)
 

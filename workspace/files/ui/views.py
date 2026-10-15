@@ -202,10 +202,8 @@ def _build_context(request, folder=None, is_trash_view=False):
         ).name_ordered()
     elif is_trash_view:
         nodes = (
-            File.objects.filter(
-                owner=request.user,
-                deleted_at__isnull=False,
-            )
+            FileService.owned_files_qs(request.user)
+            .filter(deleted_at__isnull=False)
             .filter(Q(parent__isnull=True) | Q(parent__deleted_at__isnull=True))
             .name_ordered("-deleted_at")
         )
@@ -220,10 +218,11 @@ def _build_context(request, folder=None, is_trash_view=False):
             .name_ordered("-node_type")
         )
     elif is_recent_view:
-        nodes = File.objects.filter(
-            owner=request.user,
-            deleted_at__isnull=True,
-        ).name_ordered("-updated_at")
+        nodes = (
+            FileService.owned_files_qs(request.user)
+            .filter(deleted_at__isnull=True)
+            .name_ordered("-updated_at")
+        )
     elif current_folder:
         if current_folder.group_id:
             nodes = File.objects.filter(

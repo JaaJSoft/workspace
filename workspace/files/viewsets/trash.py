@@ -109,7 +109,9 @@ class TrashMixin:
     @action(detail=False, methods=["get"], url_path="trash")
     def trash(self, request):
         """List trashed files and folders."""
-        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        queryset = FileService.owned_files_qs(request.user).filter(
+            deleted_at__isnull=False
+        )
         queryset = FileService.annotate_for_serializer(queryset, request.user)
         queryset = self.filter_queryset(queryset)
         serializer = self.get_serializer(queryset, many=True)
@@ -146,7 +148,9 @@ class TrashMixin:
         )
         retention_days = TRASH_RETENTION_DAYS
         cutoff = timezone.now() - timedelta(days=retention_days)
-        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        queryset = FileService.owned_files_qs(request.user).filter(
+            deleted_at__isnull=False
+        )
         if not force:
             queryset = queryset.filter(deleted_at__lt=cutoff)
         # Count Files explicitly so the response reflects deleted *files*,

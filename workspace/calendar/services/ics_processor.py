@@ -1,7 +1,7 @@
 import logging
 
 import icalendar
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone as django_tz
 
 from workspace.calendar.models import Event, EventMember
@@ -12,6 +12,7 @@ from workspace.calendar.services.ics_common import (
     parse_dt_prop,
 )
 from workspace.calendar.services.timezones import normalize_all_day
+from workspace.common.logging import scrub
 from workspace.notifications.services.notifications import notify
 from workspace.users.services.settings import get_user_timezone
 
@@ -60,45 +61,66 @@ def process_calendar_emails(messages):
             logger.exception("Failed to process calendar email %s", message.pk)
 
 
+def _invitation_events(uid, user, vevent):
+    """The events of *user* created by the invitation *uid* this VEVENT's organizer sent.
+
+    The UID alone proves nothing: it travels in every copy of the invitation
+    and in the event payload, so a lookup on it would let any sender rewrite
+    or cancel an event the user created, a row synced from an external feed,
+    or another organizer's invitation. Feed rows are excluded by calendar,
+    not by ``source``: rows synced before that column existed were backfilled
+    as ICS. Several rows can match (one per calendar the invitation reached).
+    """
+    organizer = extract_email(vevent.get("ORGANIZER"))
+    if not organizer:
+        return []
+    return list(
+        Event.objects.filter(
+            ical_uid=uid,
+            owner=user,
+            source=Event.Source.ICS,
+            external_organizer__iexact=organizer,
+            calendar__external_source__isnull=True,
+        )
+    )
+
+
 def _handle_request(vevent, uid, mail_message):
     """Handle a REQUEST method VEVENT (new invitation or update)."""
-    account = mail_message.account
-    user = account.owner
+    user = mail_message.account.owner
     sequence = int(vevent.get("SEQUENCE", 0))
 
-    try:
-        existing = Event.objects.get(ical_uid=uid, owner=user)
-    except Event.DoesNotExist:
-        _create_event(vevent, uid, sequence, mail_message)
+    existing = _invitation_events(uid, user, vevent)
+    if not existing:
+        try:
+            _create_event(vevent, uid, sequence, mail_message)
+        except IntegrityError:
+            # The invitation calendar already holds this UID under another
+            # organizer: the message is not an update of it.
+            logger.info("Ignored invitation %s: UID already in use", scrub(uid))
         return
 
-    if sequence <= existing.ical_sequence:
-        return  # ignore duplicate or older sequence
-
-    _update_event(existing, vevent, sequence, mail_message)
+    for event in existing:
+        if sequence > event.ical_sequence:
+            _update_event(event, vevent, sequence, mail_message)
 
 
 def _handle_cancel(vevent, uid, mail_message):
     """Handle a CANCEL method VEVENT."""
-    account = mail_message.account
-    user = account.owner
+    user = mail_message.account.owner
 
-    try:
-        event = Event.objects.get(ical_uid=uid, owner=user)
-    except Event.DoesNotExist:
-        return
+    for event in _invitation_events(uid, user, vevent):
+        event.is_cancelled = True
+        event.save(update_fields=["is_cancelled"])
 
-    event.is_cancelled = True
-    event.save(update_fields=["is_cancelled"])
-
-    if _is_future_event(event):
-        notify(
-            recipient=user,
-            origin="calendar",
-            title=f"Cancelled: {event.title}",
-            url=f"/calendar?event={event.pk}",
-            source=event,
-        )
+        if _is_future_event(event):
+            notify(
+                recipient=user,
+                origin="calendar",
+                title=f"Cancelled: {event.title}",
+                url=f"/calendar?event={event.pk}",
+                source=event,
+            )
 
 
 @transaction.atomic

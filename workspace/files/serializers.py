@@ -13,6 +13,7 @@ from workspace.files.services._names import (
     FOLDER_NAME_TAKEN,
     NameTaken,
 )
+from workspace.files.services.files import GroupMismatch
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -442,6 +443,11 @@ class FileSerializer(serializers.ModelSerializer):
                 .format(pk_value=self.initial_data.get("parent"))
             )
             raise serializers.ValidationError({"parent": [message]})
+        if instance is None:
+            try:
+                FileService.node_group(parent, attrs.get("group"))
+            except GroupMismatch as error:
+                raise serializers.ValidationError({"group": [str(error)]}) from error
 
         # Validate parent assignment via FileService
         if "parent" in attrs and instance is not None:

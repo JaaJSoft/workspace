@@ -35,6 +35,13 @@ class GroupRootFolder(ValueError):
     """
 
 
+class GroupMismatch(ValueError):
+    """A node was asked to join a group other than its parent folder's."""
+
+    def __init__(self, message="The group must be the parent folder's group."):
+        super().__init__(message)
+
+
 class FilePermission(enum.IntEnum):
     """Permission levels for file access, ordered by capability."""
 
@@ -245,8 +252,7 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
-        if group is None and parent and parent.group_id:
-            group = parent.group
+        group = FileService.node_group(parent, group)
 
         # Before the detection and hashing passes read the stream. Not the
         # guarantee - the INSERT is - but it spares the loser of a known
@@ -316,8 +322,7 @@ class FileService:
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
         """Create a new folder record."""
-        if group is None and parent and parent.group_id:
-            group = parent.group
+        group = FileService.node_group(parent, group)
 
         _name_helpers.check_name_available(owner, parent, name, File.NodeType.FOLDER)
 
@@ -334,6 +339,20 @@ class FileService:
         FileService._ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
+
+    @staticmethod
+    def node_group(parent, group):
+        """The group a node created under *parent* belongs to.
+
+        Under a parent it is the parent's, whatever the caller asked for;
+        asking for another one raises ``GroupMismatch``. At the root it is
+        *group*, which the caller has checked membership of.
+        """
+        if parent is None:
+            return group
+        if group is not None and getattr(group, "pk", group) != parent.group_id:
+            raise GroupMismatch()
+        return parent.group
 
     @staticmethod
     def register_disk_file(

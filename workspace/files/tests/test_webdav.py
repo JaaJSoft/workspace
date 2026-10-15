@@ -426,12 +426,7 @@ class FolderResourceTests(TestCase):
         )
         other.groups.add(group)
 
-        group_folder = FileService.create_folder(
-            self.user,
-            "Shared",
-            parent=self.folder,
-            group=group,
-        )
+        group_folder = FileService.create_folder(self.user, "Shared", group=group)
         existing = FileService.create_file(
             other,
             "report.txt",
@@ -439,7 +434,7 @@ class FolderResourceTests(TestCase):
             group=group,
         )
 
-        group_res = FolderResource("/Docs/Shared", self.environ, group_folder)
+        group_res = FolderResource("/Shared", self.environ, group_folder)
         res = group_res.create_empty_resource("report.txt")
         self.assertEqual(res._file.pk, existing.pk)
         self.assertEqual(

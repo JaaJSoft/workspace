@@ -131,7 +131,7 @@ window.createUploadQueue = function createUploadQueue({
       switch (item.status) {
         case 'queued': return this.paused ? 'Paused' : 'Waiting';
         case 'uploading':
-          if (item.retrying) return `Connection lost - retrying at ${size(item.loaded)}`;
+          if (item.retrying) return `Connection lost, retrying - ${size(item.loaded)} of ${size(item.size)}`;
           // Every byte is sent: the server is still storing the file.
           if (item.size && item.loaded >= item.size) return 'Finishing up';
           return `${size(item.loaded)} of ${size(item.size)}`;

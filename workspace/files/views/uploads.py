@@ -20,7 +20,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from workspace.files.services import FilePermission, FileService, uploads
+from workspace.files.services import FileService, uploads
 from workspace.files.services.quota import check_write_allowed
 
 from ..models import File, UploadSession
@@ -46,17 +46,8 @@ def _offset_response(detail, offset, code):
 
 
 def _writable_folder(user, parent):
-    """*parent* when *user* may add files to it, else None.
-
-    Adding a file takes edit rights on the folder: its owner's, or a member's
-    of its group. A share, even read-write, only lets content be replaced.
-    """
-    if parent is None or parent.deleted_at is not None:
-        return None
-    if parent.node_type != File.NodeType.FOLDER:
-        return None
-    permission = FileService.get_permission(user, parent)
-    if permission is None or permission < FilePermission.EDIT:
+    """*parent* when *user* may add files to it, else None."""
+    if parent is None or not FileService.can_create_in(user, parent):
         return None
     return parent
 

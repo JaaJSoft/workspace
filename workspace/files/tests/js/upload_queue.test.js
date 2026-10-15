@@ -348,7 +348,7 @@ test('a row says when its upload lost the connection and is retrying', async () 
 
   requests[0].onProgress(64 * 1024 * 1024);
   requests[0].onRetrying(true);
-  assert.match(queue.statusText(item), /^Connection lost - retrying at 64\.0\sMB$/);
+  assert.match(queue.statusText(item), /^Connection lost, retrying - 64\.0\sMB of 200\.0\sMB$/);
 
   requests[0].onRetrying(false);
   assert.match(queue.statusText(item), /^64\.0\sMB of 200\.0\sMB$/);

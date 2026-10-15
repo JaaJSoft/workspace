@@ -1,4 +1,3 @@
-import re
 import uuid
 
 from django.contrib.auth import get_user_model
@@ -12,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
     notify_many,
@@ -457,6 +457,39 @@ class PollInviteView(APIView):
 # -- Public (shared link) views --
 
 
+def _voter_cookie_name(poll):
+    return f"poll_voter_{poll.share_token}"
+
+
+def _guest_voter_token(request, poll):
+    """The voter token this browser was issued for *poll*, or ''.
+
+    It only ever travels in the HttpOnly cookie set by the vote endpoint:
+    a token taken from the query string or the body would let anyone who
+    learned it read and rewrite that guest's votes.
+    """
+    voter_token = parse_uuid_or_none(request.COOKIES.get(_voter_cookie_name(poll)))
+    return str(voter_token) if voter_token else ""
+
+
+def _shared_poll_payload(poll, request, voter_token):
+    _prefetch_poll_votes(poll)
+    data = PollSerializer(
+        poll, context={"request": request, "voter_token": voter_token}
+    ).data
+    if voter_token:
+        my_votes = [
+            v
+            for v in poll._prefetched_poll_votes
+            if v.user_id is None and v.voter_token == voter_token
+        ]
+        data["my_votes"] = {str(v.slot_id): v.choice for v in my_votes}
+        if my_votes:
+            data["my_guest_name"] = my_votes[0].guest_name
+            data["my_guest_email"] = my_votes[0].guest_email
+    return data
+
+
 @extend_schema(tags=["Calendar - Polls (Public)"])
 class SharedPollView(APIView):
     permission_classes = [AllowAny]
@@ -465,23 +498,8 @@ class SharedPollView(APIView):
     @extend_schema(summary="Get poll via share link", responses=PollSerializer)
     def get(self, request, token):
         poll = get_object_or_404(_poll_detail_queryset(), share_token=token)
-        _prefetch_poll_votes(poll)
-        data = PollSerializer(poll, context={"request": request}).data
-
-        # Restore guest's previous votes via voter_token
-        voter_token = request.query_params.get(
-            "voter_token", ""
-        ) or request.COOKIES.get(f"poll_voter_{poll.share_token}", "")
-        if voter_token:
-            my_votes = [
-                v for v in poll._prefetched_poll_votes if v.voter_token == voter_token
-            ]
-            data["my_votes"] = {str(v.slot_id): v.choice for v in my_votes}
-            if my_votes:
-                data["my_guest_name"] = my_votes[0].guest_name
-                data["my_guest_email"] = my_votes[0].guest_email
-
-        return Response(data)
+        voter_token = _guest_voter_token(request, poll)
+        return Response(_shared_poll_payload(poll, request, voter_token))
 
 
 @extend_schema(tags=["Calendar - Polls (Public)"])
@@ -518,13 +536,7 @@ class SharedPollVoteView(APIView):
         ser.is_valid(raise_exception=True)
         d = ser.validated_data
 
-        # Sanitize voter_token: must be a valid UUID or we generate one
-        _uuid_re = re.compile(
-            r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-        )
-        voter_token = d.get("voter_token", "").strip()
-        if not voter_token or not _uuid_re.match(voter_token):
-            voter_token = str(uuid.uuid4())
+        voter_token = _guest_voter_token(request, poll) or str(uuid.uuid4())
 
         slot_ids = {v["slot_id"] for v in d["votes"]}
         valid_slots = set(
@@ -561,14 +573,9 @@ class SharedPollVoteView(APIView):
             )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        _prefetch_poll_votes(poll)
-        resp_data = PollSerializer(poll, context={"request": request}).data
-        resp_data["voter_token"] = voter_token
-        response = Response(resp_data)
-        # Use poll.share_token (DB-validated) instead of raw URL param
-        cookie_name = f"poll_voter_{poll.share_token}"
+        response = Response(_shared_poll_payload(poll, request, voter_token))
         response.set_cookie(
-            cookie_name,
+            _voter_cookie_name(poll),
             voter_token,
             max_age=365 * 24 * 3600,
             httponly=True,

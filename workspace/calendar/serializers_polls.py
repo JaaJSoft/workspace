@@ -14,11 +14,26 @@ class PollSlotSerializer(serializers.ModelSerializer):
 
 
 class PollVoteSerializer(serializers.ModelSerializer):
+    """A vote as anyone who can open the poll sees it.
+
+    A guest's ``voter_token`` is the only credential behind their votes and
+    ``guest_email`` is theirs alone, so neither is ever serialized here:
+    ``is_mine`` is how a caller recognizes its own votes.
+    """
+
     user = MemberUserSerializer(read_only=True)
+    is_mine = serializers.SerializerMethodField()
 
     class Meta:
         model = PollVote
-        fields = ["uuid", "slot_id", "user", "guest_name", "voter_token", "choice"]
+        fields = ["uuid", "slot_id", "user", "guest_name", "choice", "is_mine"]
+
+    def get_is_mine(self, vote):
+        if vote.user_id is not None:
+            request = self.context.get("request")
+            return request is not None and vote.user_id == request.user.id
+        voter_token = self.context.get("voter_token")
+        return bool(voter_token) and vote.voter_token == voter_token
 
 
 class PollInviteeSerializer(serializers.ModelSerializer):
@@ -57,11 +72,10 @@ class PollSerializer(serializers.ModelSerializer):
 
     def get_votes(self, obj):
         if hasattr(obj, "_prefetched_poll_votes"):
-            return PollVoteSerializer(obj._prefetched_poll_votes, many=True).data
-        votes = PollVote.objects.filter(
-            slot__poll=obj,
-        ).select_related("user")
-        return PollVoteSerializer(votes, many=True).data
+            votes = obj._prefetched_poll_votes
+        else:
+            votes = PollVote.objects.filter(slot__poll=obj).select_related("user")
+        return PollVoteSerializer(votes, many=True, context=self.context).data
 
     def get_share_url(self, obj):
         request = self.context.get("request")
@@ -158,9 +172,6 @@ class VoteSubmitSerializer(serializers.Serializer):
 class GuestVoteSubmitSerializer(serializers.Serializer):
     guest_name = serializers.CharField(max_length=100)
     guest_email = serializers.EmailField(required=False, default="", allow_blank=True)
-    voter_token = serializers.CharField(
-        max_length=36, required=False, default="", allow_blank=True
-    )
     votes = VoteItemSerializer(many=True, min_length=1)
 
 

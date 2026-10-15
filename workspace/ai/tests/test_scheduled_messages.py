@@ -278,6 +278,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.bot_profile = BotProfile.objects.create(
             user=self.bot_user,
             system_prompt="You are a test bot.",
+            is_public=True,
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM,
@@ -1000,7 +1001,7 @@ class ScheduledRunContextTests(TestCase):
         self.user = User.objects.create_user(username="ctxuser", password="pass123")
         self.bot_user = User.objects.create_user(username="ctxbot", first_name="AI")
         self.bot_profile = BotProfile.objects.create(
-            user=self.bot_user, system_prompt="You are a test bot."
+            user=self.bot_user, system_prompt="You are a test bot.", is_public=True
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM, created_by=self.user

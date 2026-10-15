@@ -5,6 +5,7 @@ import logging
 from celery import shared_task
 from django.utils import timezone
 
+from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import (
@@ -134,6 +135,21 @@ def generate_scheduled_response(self, schedule_id: str, claim_token: str | None 
         return {"status": "error", "error": "Not found"}
 
     human_user = User.objects.filter(pk=schedule.created_by_id).first()
+
+    # The run acts with the creator's data, so a creator who has since left,
+    # been deactivated or lost the bot ends the schedule for good: being
+    # added back later must not resume posts nobody re-approved.
+    refusal = run_refusal(bot_profile, human_user, conversation.pk)
+    if refusal:
+        ScheduledMessage.objects.filter(pk=schedule.pk, is_active=True).update(
+            is_active=False, updated_at=timezone.now()
+        )
+        logger.info(
+            "Scheduled message deactivated (%s): schedule=%s",
+            refusal,
+            scrub(schedule_id),
+        )
+        return {"status": "skipped", "reason": refusal}
 
     history = build_conversation_history(str(conversation.pk), bot_profile, human_user)
 

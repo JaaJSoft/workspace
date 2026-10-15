@@ -51,6 +51,40 @@ RECENT_FILES_LIMIT = getattr(settings, "RECENT_FILES_LIMIT", 25)
 RECENT_FILES_MAX_LIMIT = getattr(settings, "RECENT_FILES_MAX_LIMIT", 200)
 
 
+def duplicate_entries(instance):
+    """The ``duplicates`` an upload's answer lists: same content, same scope."""
+    return [
+        {
+            "uuid": str(dup.uuid),
+            "name": dup.name,
+            "path": dup.path,
+            "parent": str(dup.parent_id) if dup.parent_id else None,
+        }
+        for dup in find_duplicates(instance).only("uuid", "name", "path", "parent_id")
+    ]
+
+
+def announce_replaced(instance, actor):
+    """Tell live viewers and the owner that *instance* got new content."""
+    from workspace.files.sse_provider import push_file_event
+
+    push_file_event(
+        instance,
+        "file_updated",
+        actor.username,
+        exclude_user_id=actor.pk,
+    )
+    if instance.owner_id != actor.pk:
+        notify(
+            recipient=instance.owner,
+            origin="files",
+            title=f'{actor.username} edited "{instance.name}"',
+            url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
+            actor=actor,
+            source=instance,
+        )
+
+
 @extend_schema_view(
     list=extend_schema(
         summary="List files and folders",
@@ -550,49 +584,19 @@ class FileViewSet(
         instance = serializer.instance
         replaced = getattr(serializer, "replaced_existing", False)
         if replaced:
-            self._announce_replaced(instance)
+            announce_replaced(instance, request.user)
         if instance.node_type == File.NodeType.FILE:
-            data["duplicates"] = [
-                {
-                    "uuid": str(dup.uuid),
-                    "name": dup.name,
-                    "path": dup.path,
-                    "parent": str(dup.parent_id) if dup.parent_id else None,
-                }
-                for dup in find_duplicates(instance).only(
-                    "uuid", "name", "path", "parent_id"
-                )
-            ]
+            data["duplicates"] = duplicate_entries(instance)
         return Response(
             data,
             status=status.HTTP_200_OK if replaced else status.HTTP_201_CREATED,
             headers=self.get_success_headers(data),
         )
 
-    def _announce_replaced(self, instance):
-        """Tell live viewers and the owner that *instance* got new content."""
-        from workspace.files.sse_provider import push_file_event
-
-        push_file_event(
-            instance,
-            "file_updated",
-            self.request.user.username,
-            exclude_user_id=self.request.user.pk,
-        )
-        if instance.owner_id != self.request.user.pk:
-            notify(
-                recipient=instance.owner,
-                origin="files",
-                title=f'{self.request.user.username} edited "{instance.name}"',
-                url=f"/files/{instance.parent_id}" if instance.parent_id else "/files",
-                actor=self.request.user,
-                source=instance,
-            )
-
     def perform_update(self, serializer):
         serializer.save()
         if getattr(serializer, "replaced_existing", False):
-            self._announce_replaced(serializer.instance)
+            announce_replaced(serializer.instance, self.request.user)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())

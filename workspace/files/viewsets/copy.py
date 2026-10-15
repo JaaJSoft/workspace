@@ -146,7 +146,10 @@ class CopyMixin:
                     FileService.replace_content_from(
                         annotated, file_obj, acting_user=request.user
                     )
-                self._announce_replaced(annotated)
+                # views.files imports this mixin, so not at module level.
+                from workspace.files.views.files import announce_replaced
+
+                announce_replaced(annotated, request.user)
                 serializer = self.get_serializer(annotated)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 

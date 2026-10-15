@@ -156,7 +156,7 @@
           <p class="truncate text-sm" :title="item.name" x-text="item.name"></p>
           <p
             class="truncate text-xs"
-            :class="item.status === 'failed' ? 'text-error' : 'text-base-content/60'"
+            :class="item.status === 'failed' ? 'text-error' : item.retrying ? 'text-warning' : 'text-base-content/60'"
             :title="$store.uploads.statusText(item)"
             x-text="$store.uploads.statusText(item)"
           ></p>

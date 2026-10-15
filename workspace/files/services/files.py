@@ -503,6 +503,7 @@ class FileService:
         mime_type=None,
         acting_user=None,
         expected_hash=None,
+        check_quota=True,
     ):
         """Replace a file's content, updating size, MIME type and hash.
 
@@ -529,6 +530,9 @@ class FileService:
 
         Callers that pass no ``expected_hash`` keep last-write-wins against
         other writers. The lock is not theirs to opt out of.
+
+        ``check_quota=False`` is for a caller that has already checked the
+        bucket itself, as for :meth:`create_file`.
         """
         from workspace.files.services.content_hash import upload_hash
         from workspace.files.services.detection import (
@@ -537,11 +541,12 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
-        check_write_allowed(
-            owner=file_obj.owner_id,
-            group=file_obj.group_id,
-            additional_bytes=content.size - (file_obj.size or 0),
-        )
+        if check_quota:
+            check_write_allowed(
+                owner=file_obj.owner_id,
+                group=file_obj.group_id,
+                additional_bytes=content.size - (file_obj.size or 0),
+            )
 
         detection = detect_from_stream(content)
         # Honour the extension when Magika's content label is generic (a sparse

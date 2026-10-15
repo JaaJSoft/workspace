@@ -15,6 +15,10 @@
  * asks for - the next free name, the winner's content replaced, or the
  * usual refusal, shown here as skipped.
  *
+ * Large files go up in chunks through an upload session (sendFileUpload
+ * picks), which retries a failed chunk on its own and resumes from what the
+ * server holds; the queue only sees a request that takes longer.
+ *
  * `uploads-changed` is dispatched on window once the queue drains with new
  * files on the server, and after a discarded duplicate.
  */
@@ -22,7 +26,17 @@
 // the server-sent events stream already holds one.
 const MAX_IN_FLIGHT = 3;
 
-window.createUploadQueue = function createUploadQueue({ send, discard, notify, confirm }) {
+// From this size on a file goes up in chunks. Below it a cut costs little to
+// send again, and one request is cheaper than three.
+const RESUMABLE_THRESHOLD = 50 * 1024 * 1024;
+
+// Waits between attempts at one step of a chunked upload: about two minutes
+// in all, which outlasts a network switch or a laptop waking up.
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 15000, 30000, 30000, 30000];
+
+window.createUploadQueue = function createUploadQueue({
+  send, discard, notify, confirm, release = () => {},
+}) {
   // Kept out of the reactive store: Alpine would proxy them, and an XHR
   // method called through a proxy throws "Illegal invocation".
   const files = new Map();
@@ -101,6 +115,7 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
           status: skipped ? 'skipped' : 'queued',
           loaded: 0,
           error: skipped ? 'A file with this name already exists' : '',
+          retrying: false,
           outcome: '',
           savedName: '',
           uuid: null,
@@ -116,6 +131,7 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
       switch (item.status) {
         case 'queued': return this.paused ? 'Paused' : 'Waiting';
         case 'uploading':
+          if (item.retrying) return `Connection lost - retrying at ${size(item.loaded)}`;
           // Every byte is sent: the server is still storing the file.
           if (item.size && item.loaded >= item.size) return 'Finishing up';
           return `${size(item.loaded)} of ${size(item.size)}`;
@@ -215,6 +231,10 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
         if (!confirmed) return;
         this.cancelAll();
       }
+      // A failed large file keeps what it sent for a retry; nobody will retry now.
+      for (const item of this.items) {
+        if (item.status === 'failed' && files.has(item.id)) release(files.get(item.id));
+      }
       this.items = [];
       files.clear();
       this.paused = false;
@@ -290,15 +310,24 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
     _send(item) {
       item.status = 'uploading';
       item.loaded = 0;
-      const request = send(files.get(item.id), item, (loaded) => {
-        if (inFlight.get(item.id) === request) item.loaded = loaded;
-      });
+      item.retrying = false;
+      const request = send(
+        files.get(item.id),
+        item,
+        (loaded) => {
+          if (inFlight.get(item.id) === request) item.loaded = loaded;
+        },
+        (retrying) => {
+          if (inFlight.get(item.id) === request) item.retrying = retrying;
+        },
+      );
       inFlight.set(item.id, request);
       request.promise.then(
         ({ status, body }) => {
           if (inFlight.get(item.id) !== request) return;
           inFlight.delete(item.id);
           files.delete(item.id);
+          item.retrying = false;
           changedSinceIdle = true;
           item.status = 'done';
           item.uuid = body.uuid || null;
@@ -316,6 +345,7 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
           if (inFlight.get(item.id) !== request) return;
           inFlight.delete(item.id);
           item.loaded = 0;
+          item.retrying = false;
           if (error.nameCollision) {
             // The pre-check missed it (or the folder changed under us): the
             // server keeps the existing file, which is what "skip" means.
@@ -333,7 +363,11 @@ window.createUploadQueue = function createUploadQueue({ send, discard, notify, c
   };
 };
 
-window.sendFileUpload = function sendFileUpload(file, { folderId, onConflict }, onProgress) {
+window.sendFileUpload = function sendFileUpload(file, options, onProgress, onRetrying) {
+  if (file.size >= RESUMABLE_THRESHOLD) {
+    return window.sendResumableUpload(file, options, onProgress, onRetrying);
+  }
+  const { folderId, onConflict } = options;
   const xhr = new XMLHttpRequest();
   const promise = new Promise((resolve, reject) => {
     const form = new FormData();
@@ -370,6 +404,206 @@ window.sendFileUpload = function sendFileUpload(file, { folderId, onConflict }, 
   return { promise, abort: () => xhr.abort() };
 };
 
+// The upload session of each large file that went up partly, so a retry
+// resumes it. Keyed by the File the user picked: the same file object comes
+// back on a retry, and a WeakMap lets it go with the queue row.
+const resumableSessions = new WeakMap();
+
+const uploadSessionUrl = (uuid) => `/api/v1/files/uploads/${uuid}`;
+
+function uploadFailure(status, body) {
+  const error = new Error(window.fileActions.firstErrorMessage(body));
+  error.nameCollision = status === 400 && Array.isArray(body.name);
+  return error;
+}
+
+// Drops what the server holds of an upload nobody will resume.
+window.releaseFileUpload = function releaseFileUpload(file) {
+  const uuid = resumableSessions.get(file);
+  if (!uuid) return;
+  resumableSessions.delete(file);
+  fetch(uploadSessionUrl(uuid), {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': getCSRFToken() },
+  }).catch(() => {});
+};
+
+/**
+ * Sends *file* in chunks through an upload session. Same contract as
+ * sendFileUpload: `{ promise, abort }`, the promise answering what
+ * `POST /api/v1/files` would.
+ *
+ * A step that fails on the network or on a server error is tried again after
+ * a wait, *onRetrying(true)* saying so meanwhile; a chunk tried again after
+ * landing in part is answered with where the server stands, and continues
+ * from there. When the waits run out the upload fails, keeping its session
+ * for a retry from the queue.
+ */
+window.sendResumableUpload = function sendResumableUpload(
+  file, { folderId, onConflict }, onProgress, onRetrying = () => {},
+) {
+  let xhr = null;
+  let cancelWait = null;
+  let aborted = false;
+
+  const cancelled = () => Object.assign(new Error('Cancelled'), { cancelled: true });
+
+  const request = (method, url, { body = null, headers = {}, onSent } = {}) => new Promise((resolve, reject) => {
+    if (aborted) {
+      reject(cancelled());
+      return;
+    }
+    xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    xhr.setRequestHeader('X-CSRFToken', getCSRFToken());
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
+    if (onSent) xhr.upload.onprogress = (e) => onSent(e.loaded);
+    xhr.onload = () => {
+      let data = {};
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch (_) {}
+      resolve({ status: xhr.status, body: data });
+    };
+    xhr.onerror = () => reject(new Error('Network error'));
+    xhr.onabort = () => reject(cancelled());
+    xhr.send(body);
+  });
+
+  const wait = (ms) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cancelWait = null;
+      resolve();
+    }, ms);
+    cancelWait = () => {
+      clearTimeout(timer);
+      reject(cancelled());
+    };
+  });
+
+  // *send* again while the answer says to wait: a lost connection, a server
+  // error, or *busy* - the server still writing what an earlier attempt sent.
+  const persist = async (send, busy = () => false) => {
+    for (let attempt = 0; ; attempt++) {
+      let response = null;
+      let failure = null;
+      try {
+        response = await send();
+      } catch (error) {
+        if (error.cancelled) throw error;
+        failure = error;
+      }
+      const transient = failure || response.status >= 500 || response.status === 408
+        || response.status === 429 || busy(response);
+      if (!transient) {
+        onRetrying(false);
+        return response;
+      }
+      if (attempt >= RETRY_DELAYS.length) {
+        if (failure) throw failure;
+        return response;
+      }
+      onRetrying(true);
+      await wait(RETRY_DELAYS[attempt]);
+    }
+  };
+
+  const promise = (async () => {
+    let uuid = resumableSessions.get(file);
+    let offset = 0;
+    let chunkSize = 0;
+    if (uuid) {
+      const { status, body } = await persist(() => request('GET', uploadSessionUrl(uuid)));
+      if (status === 200) {
+        offset = body.completed ? file.size : body.offset;
+        chunkSize = body.chunk_size;
+      } else {
+        uuid = null;
+        resumableSessions.delete(file);
+      }
+    }
+    if (!uuid) {
+      const { status, body } = await persist(() => request('POST', '/api/v1/files/uploads', {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          parent: folderId || null,
+          on_conflict: onConflict || 'error',
+          mime_type: file.type || '',
+        }),
+      }));
+      if (status !== 201) throw uploadFailure(status, body);
+      uuid = body.uuid;
+      offset = body.offset;
+      chunkSize = body.chunk_size;
+      resumableSessions.set(file, uuid);
+      // Cancelled while the session was being opened: abort() found none to drop.
+      if (aborted) {
+        window.releaseFileUpload(file);
+        throw cancelled();
+      }
+    }
+
+    const fail = (status, body) => {
+      // Refused for good: nothing to resume.
+      window.releaseFileUpload(file);
+      return uploadFailure(status, body);
+    };
+
+    for (;;) {
+      while (offset < file.size) {
+        const start = offset;
+        const end = Math.min(start + chunkSize, file.size);
+        const { status, body } = await persist(
+          () => request('PATCH', uploadSessionUrl(uuid), {
+            headers: {
+              'Content-Type': 'application/octet-stream',
+              'Content-Range': `bytes ${start}-${end - 1}/${file.size}`,
+            },
+            body: file.slice(start, end),
+            onSent: (loaded) => onProgress(start + loaded),
+          }),
+          (response) => response.status === 409 && response.body.offset === start,
+        );
+        // 409: an earlier attempt landed after all; 400: this one was cut.
+        if (typeof body.offset === 'number' && [200, 400, 409].includes(status)) {
+          offset = body.offset;
+          onProgress(offset);
+          continue;
+        }
+        if (status >= 500 || status === 409) throw new Error('Network error');
+        throw fail(status, body);
+      }
+
+      const { status, body } = await persist(
+        () => request('POST', `${uploadSessionUrl(uuid)}/finalize`),
+        (response) => response.status === 409 && response.body.offset === file.size,
+      );
+      if (status === 200 || status === 201) {
+        resumableSessions.delete(file);
+        return { status, body };
+      }
+      if (status === 409 && typeof body.offset === 'number' && body.offset < file.size) {
+        offset = body.offset;
+        continue;
+      }
+      if (status >= 500 || status === 409) throw new Error('Network error');
+      throw fail(status, body);
+    }
+  })();
+
+  return {
+    promise,
+    abort: () => {
+      aborted = true;
+      if (cancelWait) cancelWait();
+      if (xhr) xhr.abort();
+      window.releaseFileUpload(file);
+    },
+  };
+};
+
 // Trash then purge: the discarded copy should not linger in the trash.
 window.discardFileUpload = async function discardFileUpload(uuid, name) {
   const headers = { 'X-CSRFToken': getCSRFToken() };
@@ -393,6 +627,7 @@ document.addEventListener('alpine:init', () => {
     discard: window.discardFileUpload,
     notify: (type) => window.dispatchEvent(new CustomEvent(type)),
     confirm: (options) => window.AppDialog.confirm(options),
+    release: window.releaseFileUpload,
   }));
 
   // Leaving the page aborts every request still in flight.

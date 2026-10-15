@@ -239,6 +239,7 @@
           this.fileType = fileType || '';
           this.downloadUrl = urls.download;
           this.viewerBlocked = false;
+          const wasOpen = this.$refs.dialog.open;
           this.open = true;
           // Gallery navigation re-opens over an already-open dialog: the
           // current spec makes that a no-op, but older engines throw.
@@ -246,11 +247,13 @@
             this.$refs.dialog.showModal();
           }
 
-          // Update URL with open parameter
+          // Opening adds an entry, so back closes the viewer; stepping
+          // through the gallery only rewrites it.
           if (updateUrl) {
             const url = new URL(window.location);
             url.searchParams.set('open', uuid);
-            window.history.pushState({}, '', url);
+            if (wasOpen) window.navHistory.replace(url);
+            else window.navHistory.push(url);
           }
 
           await this.loadViewerPanel(urls.viewer);
@@ -279,10 +282,10 @@
         close() {
           this.$refs.dialog.close();
 
-          // Remove open parameter from URL
           const url = new URL(window.location);
+          if (!url.searchParams.has('open')) return;
           url.searchParams.delete('open');
-          window.history.pushState({}, '', url);
+          window.navHistory.returnTo(url);
         },
 
         handleKeydown(event) {
@@ -293,7 +296,7 @@
           }
 
           // Arrow navigation — skip if focus is in an editable element
-          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+          if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.altKey) {
             const tag = document.activeElement && document.activeElement.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (document.activeElement && document.activeElement.isContentEditable) return;
@@ -379,8 +382,8 @@
             onNext: () => this.navigateNext(),
           });
 
-          // Handle browser back/forward navigation
-          this._popStateHandler = async (event) => {
+          // Back or forward: the viewer follows ?open.
+          this._restoreHandler = async () => {
             const urlParams = new URLSearchParams(window.location.search);
             const fileUuid = urlParams.get('open');
 
@@ -391,7 +394,7 @@
               this.$refs.dialog.close();
             }
           };
-          window.addEventListener('popstate', this._popStateHandler);
+          window.addEventListener('nav:restore', this._restoreHandler);
 
           // Check if there's an open parameter in URL and open it
           const urlParams = new URLSearchParams(window.location.search);

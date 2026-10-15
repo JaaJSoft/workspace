@@ -59,7 +59,7 @@
         data-parent-url="{{ parent_url }}"
         data-drop-folder="{{ drop_folder.uuid }}"
         data-drop-folder-name="{{ drop_folder.name }}"
-        x-init="$nextTick(() => window.folderNav.onNavigate($el.dataset.viewUrl))"
+        x-init="$nextTick(() => window.folderNav.onNavigate())"
       >
         <!-- Header -->
         <div class="bg-gradient-to-r from-primary to-secondary px-6 py-5">
@@ -199,6 +199,7 @@
         // the text editor focused.
         onArrowKey(event) {
           if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          if (event.altKey || event.ctrlKey || event.metaKey) return;
           const active = document.activeElement;
           const tag = active && active.tagName;
           if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;

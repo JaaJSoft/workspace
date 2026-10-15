@@ -9,9 +9,11 @@
     class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
   >
     {# Its own swap target: an album edit refreshes the counts and the cover without reloading the grid. #}
+    {# searchOpen: on a phone the description search is an icon, and opening it takes the whole header. #}
     <div
       id="photos-header"
       class="flex {% if album %}items-start{% else %}items-center{% endif %} gap-3 px-4 py-3"
+      x-data="{ searchOpen: false }"
     >
       {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
       {% if album %}
@@ -41,8 +43,30 @@
           <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
       {% else %}
-        <i data-lucide="{{ title_icon }}" class="w-5 h-5 text-module shrink-0"></i>
-        <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+        {% if ranking %}
+          {# Back to the page the ranking was asked from (an album, a person...); the timeline when it was not opened in-app. #}
+          <a
+            href="{{ timeline_url }}"
+            x-target.push="photos-nav photos-content"
+            data-nav-back
+            class="btn btn-ghost btn-sm btn-square shrink-0"
+            :class="{ 'max-sm:hidden': searchOpen }"
+            title="Back"
+            aria-label="Back"
+            data-testid="photos-ranking-back"
+          >
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+          </a>
+        {% endif %}
+        <i
+          data-lucide="{{ title_icon }}"
+          class="w-5 h-5 text-module shrink-0{% if ranking %} max-sm:hidden{% endif %}"
+          :class="{ 'max-sm:hidden': searchOpen || {{ ranking|yesno:'true,false' }} }"
+        ></i>
+        <div
+          class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3"
+          :class="{ 'max-sm:hidden': searchOpen }"
+        >
           <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
           <span class="text-sm text-base-content/60">{{ count_label }}</span>
         </div>
@@ -55,11 +79,29 @@
           x-target.push="photos-nav photos-content"
           role="search"
           class="self-center shrink-0"
+          :class="{ 'max-sm:flex-1': searchOpen }"
+          @click.outside="searchOpen = false"
+          @keydown.escape="searchOpen = false"
         >
           {% if search_scope %}<input type="hidden" name="scope" value="{{ search_scope }}" />{% endif %}
-          <label class="input input-sm flex items-center gap-2 w-32 sm:w-56">
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-square sm:hidden"
+            :class="{ hidden: searchOpen }"
+            @click="searchOpen = true; $nextTick(() => $refs.searchInput.focus())"
+            title="Describe a photo"
+            aria-label="Search photos by description"
+            data-testid="photos-search-open"
+          >
+            <i data-lucide="search" class="w-4 h-4"></i>
+          </button>
+          <label
+            class="input input-sm flex items-center gap-2 max-sm:hidden max-sm:w-full sm:w-56"
+            :class="{ 'max-sm:hidden': !searchOpen }"
+          >
             <i data-lucide="search" class="w-4 h-4 shrink-0 opacity-60"></i>
             <input
+              x-ref="searchInput"
               type="search"
               name="q"
               value="{{ search_query }}"
@@ -69,6 +111,14 @@
               aria-label="Search photos by description"
               data-testid="photos-search"
             />
+            <button
+              type="button"
+              class="sm:hidden opacity-60"
+              @click="searchOpen = false"
+              aria-label="Close the search"
+            >
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
           </label>
         </form>
       {% endif %}
@@ -89,6 +139,7 @@
         <button
           type="button"
           class="btn btn-module btn-sm gap-1 self-center"
+          :class="{ 'max-sm:hidden': searchOpen }"
           title="Import photos and videos"
           @click="pickImportFiles()"
           data-testid="photos-import"

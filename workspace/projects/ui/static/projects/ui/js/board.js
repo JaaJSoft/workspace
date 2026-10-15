@@ -540,7 +540,7 @@ function projectBoard(config) {
 
     applyFilters() {
       const next = taskFilterUrl(window.location.href, this.filters);
-      history.replaceState(null, '', next);
+      window.navHistory.replace(next);
       // Swap the task list only, never the filter bar above it: replacing
       // the bar would rebuild the open filters panel and throw away its
       // in-progress picker state (assignee search text, open dropdowns).
@@ -914,7 +914,7 @@ function projectBoard(config) {
       const url = new URL(window.location.href);
       if (!url.searchParams.has('sprint')) return;
       url.searchParams.delete('sprint');
-      history.replaceState(null, '', url.pathname + url.search);
+      window.navHistory.replace(url.pathname + url.search);
     },
 
     openSprints({ add = false } = {}) {
@@ -1024,10 +1024,14 @@ function projectBoard(config) {
       this.$refs.taskDialog.showModal();
     },
 
+    // Opening adds an entry, so back closes the panel; switching tasks in
+    // an open panel only rewrites it.
     async openTask(uuid) {
+      const wasOpen = !!this.panelTaskUuid;
       this.panelTaskUuid = uuid;
       const next = taskParamUrl(window.location.href, uuid);
-      if (next) history.pushState(null, '', next);
+      if (next && wasOpen) window.navHistory.replace(next);
+      else if (next) window.navHistory.push(next);
       await this._loadPanel(uuid);
     },
 
@@ -1054,10 +1058,17 @@ function projectBoard(config) {
     closePanel() {
       this.panelTaskUuid = null;
       const next = taskParamUrl(window.location.href, null);
-      if (next) history.replaceState(null, '', next);
+      if (next) window.navHistory.returnTo(next);
     },
 
-    onPopState() {
+    // Back or forward: the view, the filters and the panel follow the URL.
+    onRestore(event) {
+      if (event.detail.stale) {
+        event.preventDefault();
+        this.$ajax(window.location.href, { target: 'project-content' }).catch(() =>
+          window.location.reload(),
+        );
+      }
       this.filters = taskFiltersFromUrl(window.location.href);
       const path = window.location.pathname;
       this.currentView = path.endsWith('/backlog')
@@ -1087,7 +1098,7 @@ function projectBoard(config) {
       // refresh and shared links keep pointing at the open panel.
       if (!this.panelTaskUuid) return;
       const next = taskParamUrl(window.location.href, this.panelTaskUuid);
-      if (next) history.replaceState(null, '', next);
+      if (next) window.navHistory.replace(next);
     },
 
     async patchTask(uuid, patch) {

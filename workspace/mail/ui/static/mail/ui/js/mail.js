@@ -39,6 +39,7 @@ function mailApp() {
     currentPage: 1,
     totalMessages: 0,
     _messagesRequestId: 0,
+    _openingMessageUuid: null,
 
     // Add / Edit account
     newAccount: _defaultNewAccount(),
@@ -194,86 +195,21 @@ function mailApp() {
       }
       await Promise.all([...folderLoads, ...labelLoads]);
 
-      // Restore state from URL params
-      const params = new URLSearchParams(window.location.search);
-      const folderId = params.get('folder');
-      const labelId = params.get('label');
-      const msgId = params.get('message');
-
-      if (folderId) {
-        const folder = this._findFolderById(folderId);
-        if (folder) {
-          await this.selectFolder(folder);
-          if (msgId) this._openMessageById(msgId);
-        } else {
-          this.selectUnifiedInbox();
-        }
-      } else if (labelId) {
-        const label = this._findLabelById(labelId);
-        if (label) {
-          this.selectLabel(label);
-          if (msgId) this._openMessageById(msgId);
-        } else {
-          this.selectUnifiedInbox();
-        }
-      } else if (msgId) {
-        this._openMessageById(msgId);
-      } else if (this.accounts.length > 0) {
-        this.selectUnifiedInbox();
-      }
-
-      // Handle browser back/forward on mobile
-      window.addEventListener('popstate', () => {
-        const p = new URLSearchParams(window.location.search);
-        const folderId = p.get('folder');
-        const labelId = p.get('label');
-        const msgId = p.get('message');
-
-        if (msgId) {
-          this._openMessageById(msgId);
-          return;
-        }
-
-        // Clear message selection
-        this.selectedMessage = null;
-        this.messageDetail = null;
-        this.selectedMessages = [];
-        this.currentPage = 1;
-        this._resetFilters();
-
-        // Restore folder/label/unified inbox state
-        if (folderId) {
-          const folder = this._findFolderById(folderId);
-          if (folder) {
-            this.unifiedInbox = false;
-            this.selectedFolder = folder;
-            this.selectedLabel = null;
-            this.loadMessages();
-          }
-        } else if (labelId) {
-          const label = this._findLabelById(labelId);
-          if (label) {
-            this.unifiedInbox = false;
-            this.selectedLabel = label;
-            this.selectedFolder = null;
-            this.loadMessages();
-          }
-        } else {
-          this.unifiedInbox = true;
-          this.selectedFolder = null;
-          this.selectedLabel = null;
-          this.loadMessages();
-        }
+      // Back or forward: the folder or label and the open message follow the
+      // URL. Everything is rendered client-side, so an entry left by an
+      // earlier page load is rebuilt here instead of reloading the page.
+      window.addEventListener('nav:restore', (event) => {
+        if (event.detail.stale) event.preventDefault();
+        this._showUrlState({ reload: event.detail.stale });
       });
 
-      // ?compose=email@example.com — open compose with pre-filled "to"
-      const composeTo = params.get('compose');
+      const composeTo = new URLSearchParams(window.location.search).get('compose');
+      await this._showUrlState({ landing: true });
+      // Rewrites the landing entry to what is on screen: a bare ?message=
+      // gains its folder, and ?compose= is dropped.
+      window.navHistory.replace(this._mailUrl(this.selectedMessage?.uuid));
       if (composeTo) {
         this.$nextTick(() => this.showCompose({ to: composeTo }));
-        // Clean the URL
-        const url = new URL(window.location);
-        url.searchParams.delete('compose');
-        history.replaceState(null, '', url);
       }
 
       // Catch up on mail that landed while the stream was down (resumed tab,
@@ -378,15 +314,7 @@ function mailApp() {
           if (this.messageDetail) { e.preventDefault(); this.deleteMessage(this.messageDetail); }
           break;
         case 'Escape':
-          if (this.selectedMessage) {
-            if (this.isMobile()) {
-              history.back();
-            } else {
-              this.selectedMessage = null;
-              this.messageDetail = null;
-              this._updateUrl(null);
-            }
-          }
+          if (this.selectedMessage) this.closeMessage();
           break;
         case '?':
           e.preventDefault();
@@ -399,25 +327,45 @@ function mailApp() {
     },
 
     // ── URL state sync ─────────────────────────────────────
-    _updateUrl(messageUuid, {push = false} = {}) {
-      const url = new URL(window.location);
+    // The address of the list on screen (no folder nor label is the unified
+    // inbox), with the open message when given one.
+    _mailUrl(messageUuid) {
+      const url = new URL(window.location.href);
       url.search = '';
-
       if (this.selectedFolder) {
         url.searchParams.set('folder', this.selectedFolder.uuid);
       } else if (this.selectedLabel) {
         url.searchParams.set('label', this.selectedLabel.uuid);
       }
-      // unified inbox = no folder/label params (default)
+      if (messageUuid) url.searchParams.set('message', messageUuid);
+      return url.pathname + url.search;
+    },
 
-      if (messageUuid) {
-        url.searchParams.set('message', messageUuid);
-      }
+    // Shows what the URL names. Never writes history: it runs on init and on
+    // nav:restore, where the entry already holds this address.
+    async _showUrlState({ reload = false, landing = false } = {}) {
+      if (!this.accounts.length) return;
+      const params = new URLSearchParams(window.location.search);
+      const folderId = params.get('folder');
+      const labelId = params.get('label');
+      const msgId = params.get('message');
+      const folder = folderId ? this._findFolderById(folderId) : null;
+      const label = !folder && labelId ? this._findLabelById(labelId) : null;
+      // A link to a bare message lists the message's own folder, known once
+      // it is fetched. An entry mail wrote itself without a folder or label
+      // is the unified inbox.
+      const adoptFolder = landing && !!msgId && !folder && !label;
 
-      if (push) {
-        history.pushState(null, '', url);
-      } else {
-        history.replaceState(null, '', url);
+      const sameScope = !reload
+        && this.selectedFolder?.uuid === folder?.uuid
+        && this.selectedLabel?.uuid === label?.uuid
+        && this.unifiedInbox === (!folder && !label);
+      if (!adoptFolder && !sameScope) this._enterScope(folder, label);
+
+      if (!msgId) {
+        this._clearMessage();
+      } else if (reload || this.messageDetail?.uuid !== msgId) {
+        await this._openMessageById(msgId, { adoptFolder });
       }
     },
 

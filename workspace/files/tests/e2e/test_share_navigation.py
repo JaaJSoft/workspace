@@ -43,6 +43,18 @@ class SharedNavigationTests(PlaywrightTestCase):
         expect(self.page.get_by_role("link", name="readme.md")).to_be_visible()
         expect(self.page.locator("#shared-viewer")).to_have_count(0)
 
+    def test_back_to_the_first_listing_loaded_shows_it(self):
+        base = f"{self.live_server_url}/files/shared/{self.link.token}"
+        self.page.goto(base)
+
+        self.page.get_by_role("link", name="Sub").click()
+        expect(self.page.get_by_role("link", name="readme.md")).to_be_visible()
+        self.page.go_back()
+
+        expect(self.page).to_have_url(base)
+        expect(self.page.get_by_role("link", name="Sub")).to_be_visible()
+        expect(self.page.get_by_role("link", name="readme.md")).to_have_count(0)
+
     def test_navigation_buttons_move_through_the_visit(self):
         """The Back, Forward and Up buttons next to the breadcrumb drive
         the same history the links build. Their enabled state and what

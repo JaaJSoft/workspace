@@ -264,6 +264,7 @@ window.photosApp = function photosApp() {
     contentLoading: false,
 
     init() {
+      window.addEventListener('nav:restore', (e) => this._restoreSwappedView(e));
       window.addEventListener('open-properties', (e) => {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
@@ -543,6 +544,17 @@ window.photosApp = function photosApp() {
       } catch (_) {
         return false;
       }
+    },
+
+    // A back or forward onto another listing: swapped in place, as the
+    // listing was, rather than reloading the page.
+    _restoreSwappedView(event) {
+      if (!event.detail.stale) return;
+      event.preventDefault();
+      this.$ajax(window.location.href, {
+        targets: ['photos-nav', 'photos-content'],
+        focus: false,
+      }).catch(() => window.location.reload());
     },
 
     // The photos that look like this one, in the library on screen.

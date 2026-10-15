@@ -25,6 +25,9 @@ function loadNotes(embeddedPrefs) {
     // irrelevant to view resolution.
     tagsMixin: () => ({}),
     viewerPanelMixin: () => ({}),
+    URL,
+    location: new URL('http://testserver/notes'),
+    navHistory: { push: () => {}, replace: () => {}, returnTo: () => false },
   });
 }
 

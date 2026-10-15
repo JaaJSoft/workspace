@@ -9,6 +9,8 @@ Skipped unless ``E2E=1`` is set (see the base class docstring).
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 from playwright.sync_api import expect
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
@@ -57,8 +59,10 @@ class LoginPageTests(PlaywrightTestCase):
         self.page.get_by_role("button", name=re.compile("Sign In", re.I)).click()
 
         # After submit we should land on /calendar, not the LOGIN_REDIRECT_URL.
+        # The path only: the calendar writes its view into the query string.
         self.page.wait_for_url(lambda url: "/login" not in url)
-        assert self.page.url.rstrip("/").endswith("/calendar"), (
+        path = urlsplit(self.page.url).path
+        assert path.rstrip("/") == "/calendar", (
             f"expected to be redirected to /calendar, got {self.page.url}"
         )
 

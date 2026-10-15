@@ -162,18 +162,35 @@ window.mailFoldersMixin = function mailFoldersMixin() {
     },
 
     // ----- Folder selection -----
-    async selectUnifiedInbox() {
-      this.unifiedInbox = true;
-      this.selectedFolder = null;
-      this.selectedLabel = null;
-      this.selectedMessage = null;
-      this.messageDetail = null;
-      this._updateUrl(null, {push: this.isMobile()});
+    // A folder or a label is the scope of one list, not a page of its own:
+    // switching rewrites the entry on every screen size, and only opening a
+    // message adds one, so back leaves mail instead of replaying the drawer.
+    selectUnifiedInbox() {
+      return this._switchScope(null, null);
+    },
+
+    selectFolder(folder) {
+      return this._switchScope(folder, null);
+    },
+
+    _switchScope(folder, label) {
+      const loading = this._enterScope(folder, label);
+      window.navHistory.replace(this._mailUrl());
+      this._closeDrawerOnMobile();
+      return loading;
+    },
+
+    // Lists a folder, a label, or the unified inbox when both are null.
+    // Writes no history.
+    _enterScope(folder, label) {
+      this.unifiedInbox = !folder && !label;
+      this.selectedFolder = folder;
+      this.selectedLabel = label;
+      this._clearMessage();
       this.selectedMessages = [];
       this.currentPage = 1;
       this._resetFilters();
-      this._closeDrawerOnMobile();
-      await this.loadMessages();
+      return this.loadMessages();
     },
 
     getTotalInboxUnread() {
@@ -184,20 +201,6 @@ window.mailFoldersMixin = function mailFoldersMixin() {
         }
       }
       return total;
-    },
-
-    async selectFolder(folder) {
-      this.unifiedInbox = false;
-      this.selectedFolder = folder;
-      this.selectedLabel = null;
-      this.selectedMessage = null;
-      this.messageDetail = null;
-      this._updateUrl(null, {push: this.isMobile()});
-      this.selectedMessages = [];
-      this.currentPage = 1;
-      this._resetFilters();
-      this._closeDrawerOnMobile();
-      await this.loadMessages();
     },
 
     async refreshFolder() {
@@ -426,7 +429,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
           this.messages = [];
           this.selectedMessage = null;
           this.messageDetail = null;
-          this._updateUrl(null);
+          window.navHistory.replace(this._mailUrl());
         }
 
       } else {
@@ -540,7 +543,7 @@ window.mailFoldersMixin = function mailFoldersMixin() {
           this.messages = [];
           this.selectedMessage = null;
           this.messageDetail = null;
-          this._updateUrl(null);
+          window.navHistory.replace(this._mailUrl());
         }
 
       } else {

@@ -147,6 +147,36 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       await this.selectConversation(conv, updateUrl);
     },
 
+    // Steps back onto the list entry the conversation was opened from, so
+    // closing undoes the opening instead of stacking an entry.
+    closeConversation() {
+      this._hideConversation();
+      window.navHistory.returnTo('/chat');
+    },
+
+    _hideConversation() {
+      this._saveDraft();
+      this.activeConversation = null;
+    },
+
+    // Back or forward: the open conversation follows the URL. Never writes
+    // history. Everything is rendered client-side, so a stale entry is
+    // rebuilt in place rather than reloaded.
+    onRestore(event) {
+      if (event.detail.stale) event.preventDefault();
+      return this.restoreConversationFromUrl();
+    },
+
+    async restoreConversationFromUrl() {
+      const match = window.location.pathname.match(/^\/chat\/([0-9a-f-]{36})\/?$/i);
+      const uuid = match ? match[1] : null;
+      if (!uuid) {
+        this._hideConversation();
+      } else if (uuid !== this.activeConversation?.uuid) {
+        await this.selectConversationById(uuid, false);
+      }
+    },
+
     // ── Drafts ───────────────────────────────────────────────
     _saveDraft() {
       if (!this.activeConversation) return;
@@ -168,10 +198,13 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       localStorage.removeItem(`chat_draft_${convUuid || this.activeConversation?.uuid}`);
     },
 
+    // Opening from the list adds an entry, so back returns to the list;
+    // switching from an open conversation only rewrites it.
     async selectConversation(conv, updateUrl = true) {
       // Save draft of current conversation before switching
       this._saveDraft();
 
+      const wasOpen = Boolean(this.activeConversation);
       this.activeConversation = conv;
       this.hasMoreMessages = false;
       this.editingMessageUuid = null;
@@ -218,7 +251,8 @@ window.chatConversationsMixin = function chatConversationsMixin() {
       this.searchFiltersExpanded = false;
 
       if (updateUrl) {
-        history.pushState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
+        if (wasOpen) window.navHistory.replace(`/chat/${conv.uuid}`);
+        else window.navHistory.push(`/chat/${conv.uuid}`);
       }
 
       // Wait for Alpine to render the x-if="activeConversation" template
@@ -416,7 +450,7 @@ window.chatConversationsMixin = function chatConversationsMixin() {
             this.conversations.unshift(conv);
             this.refreshConversationList();
           }
-          history.replaceState({ conversationUuid: conv.uuid }, '', `/chat/${conv.uuid}`);
+          window.navHistory.replace(`/chat/${conv.uuid}`);
           await this.selectConversationById(conv.uuid, false);
         }
       } catch (e) {

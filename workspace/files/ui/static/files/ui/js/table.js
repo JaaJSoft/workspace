@@ -739,17 +739,8 @@ window.fileTableControls = function fileTableControls() {
       const ctrl = e.ctrlKey || e.metaKey;
       const key = e.key;
 
-      // Alt+Arrow navigation shortcuts (before any selection/hover checks)
-      if (e.altKey && key === 'ArrowLeft') {
-        e.preventDefault();
-        window.folderNav.back();
-        return;
-      }
-      if (e.altKey && key === 'ArrowRight') {
-        e.preventDefault();
-        window.folderNav.forward();
-        return;
-      }
+      // Alt+Up to the parent folder (Alt+Left/Right are the browser's own
+      // back and forward). Before any selection/hover checks.
       if (e.altKey && key === 'ArrowUp') {
         e.preventDefault();
         const parentUrl = document.getElementById('folder-browser')?.dataset.parentUrl;

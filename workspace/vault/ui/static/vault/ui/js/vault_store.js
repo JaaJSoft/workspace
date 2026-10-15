@@ -33,8 +33,6 @@ window.vaultStore = function vaultStore() {
     view: 'all',
     folderUuid: null,
     tagFilter: null,
-    history: [{ view: 'all', folder: null, tag: null }],
-    historyIndex: 0,
 
     search: '',
     typeFilter: 'all',
@@ -100,58 +98,39 @@ window.vaultStore = function vaultStore() {
       this.view = 'all';
       this.folderUuid = null;
       this.tagFilter = null;
-      this.history = [{ view: 'all', folder: null, tag: null }];
-      this.historyIndex = 0;
       this.selected = [];
     },
 
-    push(state) {
-      // Anything ahead of the cursor is dropped: navigating after going back
-      // starts a new future, exactly as a browser's own history does.
-      this.history = this.history.slice(0, this.historyIndex + 1);
-      this.history.push(state);
-      this.historyIndex = this.history.length - 1;
-      this.apply(state);
+    // Where the listing stands, as identifiers only: it is what a history
+    // entry keeps, and an entry outlives the lock.
+    place() {
+      return { view: this.view, folder: this.folderUuid, tag: this.tagFilter };
     },
 
-    apply(state) {
-      this.view = state.view;
-      this.folderUuid = state.folder;
-      this.tagFilter = state.tag;
+    // The browser overrides this to record the move in the browser's history;
+    // on its own the store just moves.
+    navigate(place) {
+      this.apply(place);
+    },
+
+    apply(place) {
+      this.view = place.view;
+      this.folderUuid = place.folder;
+      this.tagFilter = place.tag;
       this.selected = [];
     },
 
     openFolder(uuid) {
-      this.push({ view: 'all', folder: uuid, tag: null });
+      this.navigate({ view: 'all', folder: uuid, tag: null });
     },
 
     setView(view) {
-      this.push({ view: view, folder: null, tag: null });
+      this.navigate({ view: view, folder: null, tag: null });
     },
 
     setTagFilter(uuid) {
       const next = this.tagFilter === uuid ? null : uuid;
-      this.push({ view: 'all', folder: null, tag: next });
-    },
-
-    canGoBack() {
-      return this.historyIndex > 0;
-    },
-
-    canGoForward() {
-      return this.historyIndex < this.history.length - 1;
-    },
-
-    goBack() {
-      if (!this.canGoBack()) return;
-      this.historyIndex -= 1;
-      this.apply(this.history[this.historyIndex]);
-    },
-
-    goForward() {
-      if (!this.canGoForward()) return;
-      this.historyIndex += 1;
-      this.apply(this.history[this.historyIndex]);
+      this.navigate({ view: 'all', folder: null, tag: next });
     },
 
     canGoUp() {
@@ -160,7 +139,7 @@ window.vaultStore = function vaultStore() {
 
     goUp() {
       const folder = this.folderById(this.folderUuid);
-      this.push({
+      this.navigate({
         view: 'all',
         folder: folder ? folder.parent : null,
         tag: null,

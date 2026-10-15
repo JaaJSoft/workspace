@@ -32,6 +32,8 @@
     <script src="{% static 'ui/js/vendor/lucide/lucide.js' %}"></script>
     <script src="{% static 'ui/js/lucide.js' %}"></script>
     <script src="{% static 'ui/js/csrf.js' %}"></script>
+    {# Before Alpine: its popstate listener must run ahead of alpine-ajax's. #}
+    <script src="{% static 'ui/js/nav_history.js' %}"></script>
     <script src="{% static 'ui/js/uuid.js' %}"></script>
     <script src="{% static 'ui/js/html.js' %}"></script>
     {# Must follow html.js: highlightMatch escapes through escapeHtml. #}

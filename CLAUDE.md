@@ -1034,6 +1034,33 @@ Available `$ajax` options: `method` (default `'GET'`), `target` (id of the eleme
 
 Return the partial template directly - no JSON envelope, no wrapping. The endpoint often checks `request.headers.get('X-Alpine-Request')` so the same URL can serve the full page (browser refresh) and the fragment (alpine-ajax swap). Existing examples: `workspace/chat/ui/views.py:conversation_list_view`, `workspace/users/ui/views.py:profile_activity_feed`, `workspace/files/ui/views.py` (the `#folder-browser` branch).
 
+### Browser history - go through `navHistory`, never `history.*`
+
+`common/static/ui/js/nav_history.js` owns browser history. It is loaded in `<head>` before Alpine, wraps `pushState`/`replaceState` (alpine-ajax's `x-target.push` included) and tags every entry with the page load and the swapped content it shows. That is what lets a back or forward tell whether the page on screen still matches the entry it lands on, and a back button tell an in-app page from the outside world. Each module that hand-rolled its own history grew its own bug: content left on screen under another URL, a close that pushed an entry so back reopened the panel, a back arrow that left the app.
+
+```js
+navHistory.push(url, state)     // opening an item from a list
+navHistory.replace(url, state)  // switching items in an open panel, filters, dates, one-shot params
+navHistory.returnTo(listUrl)    // closing: steps back when the entry was pushed from listUrl, else rewrites it
+navHistory.canGoBack() / back() / canGoForward() / forward()
+
+window.addEventListener('nav:restore', (e) => {
+  // e.detail.state: what was stored with the entry; rebuild the UI from it or the URL, writing no history
+  // e.detail.stale: the content on screen belongs to another entry - refresh it and preventDefault(), or the page reloads
+});
+```
+
+```html
+<!-- Back to the previous in-app page, or the href when there is none (opened from outside) -->
+<a href="{{ fallback_url }}" x-target.push="..." data-nav-back>
+```
+
+**Rules:**
+- Never call `history.pushState`/`replaceState`/`back`/`forward`/`go` and never listen to `popstate`. `core/tests/test_nav_history_owner.py` fails on any of them outside the helper (`500.html`, which loads no script, is the one exception).
+- A restore path never writes history: the open/select/close functions it calls take a flag that skips the write. A restore that pushes cuts off the forward history; one that pushes on every back loops.
+- Opening pushes, switching replaces, closing calls `returnTo`. Closing must never push: back would reopen what was just closed.
+- The decision does not depend on the screen size: a mobile back arrow calls the same close method as the desktop close button.
+
 ### UI Partials
 
 Always use the existing UI partials located in `workspace/common/templates/ui/partials/` instead of writing inline HTML for common components.

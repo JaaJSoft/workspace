@@ -145,7 +145,14 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       // explicit "Load more" button as a fallback).
       this._setupAgendaObserver();
 
+      // Rewrite the landing address in canonical form (and without ?action),
+      // so closing a panel opened from it can step back onto it.
       const eventId = params.get('event');
+      const landing = this._buildUrlParams();
+      if (eventId && isValidUuid(eventId)) landing.set('event', eventId);
+      window.navHistory.replace(this._urlOf(landing));
+      window.addEventListener('nav:restore', (e) => this.restoreFromUrl(e));
+
       if (eventId) this.openEventById(eventId);
 
       const pollId = params.get('poll');
@@ -162,38 +169,40 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       } else if (action === 'new-poll') {
         this.$nextTick(() => { this.showPollListModal = true; this.openPollCreate(); });
       }
-      if (action) {
-        const url = new URL(window.location);
-        url.searchParams.delete('action');
-        history.replaceState(null, '', url);
+    },
+
+    // Back or forward: view, date, event panel and poll follow the URL. The
+    // calendar renders client-side, so an entry from an earlier page load is
+    // rebuilt the same way instead of reloading. Writes no history: the
+    // entry is already in place.
+    restoreFromUrl(navEvent) {
+      if (navEvent.detail.stale) navEvent.preventDefault();
+      const p = new URLSearchParams(window.location.search);
+      // Translate URL slug to internal view name (handles short slugs + legacy).
+      const view = this._viewFromUrl(p.get('view')) || this.prefs.defaultView;
+      if (view !== this.currentView) this.changeView(view, true);
+      if (view !== 'agenda') {
+        const date = p.get('date');
+        if (date) this.calendar.gotoDate(date);
+        else this.calendar.today();
+      }
+      this._syncTitle();
+
+      const evt = p.get('event');
+      if (evt && !(this.showPanel && this._panelRaw?.uuid === evt)) {
+        this.openEventById(evt, true);
+      } else if (!evt && this.showPanel) {
+        this._hidePanel();
       }
 
-      // Browser back/forward
-      window.addEventListener('popstate', () => {
-        const p = new URLSearchParams(window.location.search);
-        // Translate URL slug to internal view name (handles short slugs + legacy).
-        const view = this._viewFromUrl(p.get('view')) || this.prefs.defaultView;
-        const date = p.get('date');
-        const evt = p.get('event');
-
-        if (view !== this.currentView) {
-          this.changeView(view);
+      const poll = p.get('poll');
+      if (poll && isValidUuid(poll)) {
+        if (!(this.showPollDetailModal && this.currentPoll?.uuid === poll)) {
+          this.openPollDetail(poll, true);
         }
-        if (view !== 'agenda') {
-          if (date) {
-            this.calendar.gotoDate(date);
-          } else {
-            this.calendar.today();
-          }
-        }
-        this._syncTitle();
-
-        if (evt) {
-          this.openEventById(evt);
-        } else if (this.showPanel) {
-          this.showPanel = false;
-        }
-      });
+      } else if (this.showPollDetailModal) {
+        this.showPollDetailModal = false;
+      }
     },
 
     async fetchEvents(start, end) {
@@ -471,7 +480,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
     openCreateModal(start, end, allDay) {
       if (this.showModal) return; // prevent double-open from dateClick + select
       this.modalMode = 'create';
-      this.showPanel = false;
+      if (this.showPanel) this.closePanel();
       const defaultCal = this.ownedCalendars.find(c => !c.is_synced)?.uuid || null;
 
       // Preference controls all-day default, ignore FullCalendar's allDay flag
@@ -527,7 +536,8 @@ window.calendarEventsMixin = function calendarEventsMixin() {
 
     },
 
-    openViewPanel(event) {
+    // `restoring`: a back or forward already put the URL in place.
+    openViewPanel(event, restoring = false) {
       this.loadingEvent = false;
       this._panelRaw = event;
       const currentUserId = String(document.body.dataset.userId);
@@ -560,17 +570,28 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this._selectInviteesFrom(this.eventMembers);
       this.myInviteStatus = isOwner ? null : ((event.members || []).find(m => String(m.user?.id) === currentUserId)?.status || null);
       this.showPanel = true;
-      this._pushUrl();
-
+      if (!restoring) this._recordOpenedEvent();
     },
 
+    // Closing undoes the opening when the panel was opened from the calendar
+    // state now on screen; otherwise it rewrites the entry without ?event.
     closePanel() {
-      this.showPanel = false;
-      this._syncUrl();
+      this._hidePanel();
+      if (this.calendar) window.navHistory.returnTo(this._urlOf(this._buildUrlParams()));
     },
 
-    async openEventById(eventId) {
+    // Also drops an event still loading, so it cannot reopen the panel.
+    _hidePanel() {
+      this._eventLoad = (this._eventLoad || 0) + 1;
+      this.loadingEvent = false;
+      this.showPanel = false;
+    },
+
+    // `restoring`: the URL already names this event and its date, so neither
+    // the history nor the calendar's date moves.
+    async openEventById(eventId, restoring = false) {
       if (!isValidUuid(eventId)) return;
+      const load = this._eventLoad = (this._eventLoad || 0) + 1;
       // Clear stale panel state up-front so a 404 / network failure can't
       // leave handleEventCardAction targeting the previously opened event.
       this._panelRaw = null;
@@ -581,23 +602,23 @@ window.calendarEventsMixin = function calendarEventsMixin() {
       this.externalOrganizer = '';
       this.loadingEvent = true;
       this.showPanel = true;
+      let event = null;
       try {
         const resp = await fetch(`/api/v1/events/${eventId}`, { credentials: 'same-origin' });
-        if (resp.ok) {
-          const event = await resp.json();
-          // Navigate calendar to the event's date
-          if (this.calendar && event.start) {
-            this.calendar.gotoDate(event.start);
-            this._syncTitle();
-          }
-          this.openViewPanel(event);
-        } else {
-          this.showPanel = false;
-        }
-      } catch (e) {
-        this.showPanel = false;
-      }
+        if (resp.ok) event = await resp.json();
+      } catch (e) {}
+      if (load !== this._eventLoad) return;
       this.loadingEvent = false;
+      if (!event) {
+        this.showPanel = false;
+        if (!restoring) this._syncUrl();
+        return;
+      }
+      if (!restoring && this.calendar && event.start) {
+        this.calendar.gotoDate(event.start);
+        this._syncTitle();
+      }
+      this.openViewPanel(event, restoring);
     },
 
     openEditModal() {
@@ -748,7 +769,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
             headers: { 'X-CSRFToken': getCSRFToken() },
           });
           if (resp.ok || resp.status === 204) {
-            this.showPanel = false;
+            this.closePanel();
             this.calendar.refetchEvents();
             this.refetchAgenda();
           }
@@ -775,7 +796,7 @@ window.calendarEventsMixin = function calendarEventsMixin() {
           headers: { 'X-CSRFToken': getCSRFToken() },
         });
         if (resp.ok || resp.status === 204) {
-          this.showPanel = false;
+          this.closePanel();
           this.calendar.refetchEvents();
           this.refetchAgenda();
         }

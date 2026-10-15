@@ -77,8 +77,8 @@ window.storageAnalysis = function storageAnalysis() {
       this.search();
     },
 
-    // Mirror the analysed scope into the page URL (replaceState, so the
-    // folder browser's own history stack is left alone).
+    // Mirror the analysed scope into the page URL, rewriting the entry:
+    // browsing the analysis adds nothing to the history.
     syncUrl(analysisUrl) {
       const source = new URL(analysisUrl, window.location.origin);
       const match = source.pathname.match(/^\/files\/storage(?:\/([0-9a-f-]{36}))?$/);
@@ -91,7 +91,7 @@ window.storageAnalysis = function storageAnalysis() {
       const query = source.searchParams.get('q');
       if (query) url.searchParams.set('storage_q', query);
       else url.searchParams.delete('storage_q');
-      window.history.replaceState(window.history.state, '', url.toString());
+      window.navHistory.replace(url.toString(), window.navHistory.state());
     },
 
     clearUrl() {
@@ -100,7 +100,7 @@ window.storageAnalysis = function storageAnalysis() {
       url.searchParams.delete('storage');
       url.searchParams.delete('storage_category');
       url.searchParams.delete('storage_q');
-      window.history.replaceState(window.history.state, '', url.toString());
+      window.navHistory.replace(url.toString(), window.navHistory.state());
     },
 
     reload() {

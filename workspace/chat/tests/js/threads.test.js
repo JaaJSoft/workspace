@@ -445,7 +445,7 @@ test('switching conversations closes the thread panel', async () => {
       pageAttention: { isAttended: () => true },
       fetch: async () => ({ ok: true, json: async () => ({}) }),
       localStorage: { getItem: () => '', setItem() {}, removeItem() {} },
-      history: { pushState() {} },
+      navHistory: { push() {}, replace() {} },
       location: { pathname: '/chat' },
       URL: { revokeObjectURL() {} },
     },

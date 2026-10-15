@@ -107,17 +107,17 @@ class VaultBrowserCase(PlaywrightTestCase):
         self._onboard()
         self._unlock()
         self.page.wait_for_selector("text=All entries", timeout=30000)
-        # Put there by replaceState once the session opened, so the vault is
-        # named in the URL without the page having been loaded twice.
+        # Put there by a history rewrite once the session opened, so the vault
+        # is named in the URL without the page having been loaded twice.
         self.page.wait_for_url("**/vault/*", timeout=30000)
         self.vault_uuid = self.page.url.rstrip("/").rsplit("/", 1)[1]
 
     def _wait_for_switcher_named(self, name):
         """Wait for the switcher to name the open vault.
 
-        The postcondition worth waiting on: the URL changes first, because
-        replaceState runs before the load it precedes, and "All entries" is on
-        screen throughout since the previous vault had it too.
+        The postcondition worth waiting on: the URL changes first, because the
+        history entry is written before the load it precedes, and "All entries"
+        is on screen throughout since the previous vault had it too.
         """
         self.page.get_by_test_id("vault-switcher").get_by_text(
             name, exact=True
@@ -462,7 +462,7 @@ class VaultBrowserTests(VaultBrowserCase):
         # opens - before the vault behind it has been resolved.
         self._wait_for_switcher_named("Personal")
         # The vault is named in the address bar although the page was loaded
-        # at /vault: replaceState put it there, which is not a navigation.
+        # at /vault: a history rewrite put it there, which is not a navigation.
         self.assertRegex(self.page.url, r"/vault/[0-9a-f-]{36}$")
         self.assertEqual(
             self.page.locator("input[autocomplete='current-password']").count(), 0
@@ -533,9 +533,9 @@ class VaultBrowserTests(VaultBrowserCase):
         self.page.wait_for_selector(".modal-box input[type=text]")
         self.page.fill(".modal-box input[type=text] >> nth=0", "Work")
         self.page.click(".modal-box button:has-text('Create')")
-        # Named on the switcher, not merely named in the URL: replaceState runs
-        # before the reload it precedes, so the address bar changes while the
-        # contents are still in flight.
+        # Named on the switcher, not merely named in the URL: the history entry
+        # is written before the load it precedes, so the address bar changes
+        # while the contents are still in flight.
         self._wait_for_switcher_named("Work")
 
         self.page.click("[data-testid='vault-switcher']")

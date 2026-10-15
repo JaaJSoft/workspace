@@ -17,8 +17,10 @@ from django.core.files.uploadedfile import TemporaryUploadedFile
 from django.db import transaction
 
 from workspace.common.logging import scrub
+from workspace.common.text import caseless
 
 from ..models import File
+from ._names import sibling_nodes
 from .files import FileService
 from .quota import check_write_allowed, remaining_bytes
 
@@ -260,12 +262,17 @@ def _ensure_folder_chain(parts, folder_cache, acting_user):
             current_key = next_key
             continue
 
-        existing = File.objects.filter(
-            parent=current,
-            name=segment,
-            node_type=File.NodeType.FOLDER,
-            deleted_at__isnull=True,
-        ).first()
+        # The folder a create_folder here would collide with: at the root that
+        # is one of the user's own, never another user's or a group's.
+        existing = (
+            sibling_nodes(acting_user, current)
+            .filter(name_key=caseless(segment), node_type=File.NodeType.FOLDER)
+            .first()
+        )
+        if existing is not None and not FileService.can_create_in(
+            acting_user, existing
+        ):
+            raise ValueError("Cannot extract into a folder you cannot edit")
         if existing is None:
             existing = FileService.create_folder(
                 acting_user,

@@ -426,8 +426,19 @@ class FileSerializer(serializers.ModelSerializer):
             node_type = instance.node_type
 
         parent = attrs.get("parent")
-        if instance is None and parent is not None:
-            self._check_create_parent(parent)
+        if (
+            instance is None
+            and parent is not None
+            and not FileService.can_create_in(self.context["request"].user, parent)
+        ):
+            # Same answer as a UUID that matches no row: the refusal must not
+            # reveal that someone else's folder exists.
+            message = (
+                self.fields["parent"]
+                .error_messages["does_not_exist"]
+                .format(pk_value=self.initial_data.get("parent"))
+            )
+            raise serializers.ValidationError({"parent": [message]})
 
         # Validate parent assignment via FileService
         if "parent" in attrs and instance is not None:
@@ -486,28 +497,6 @@ class FileSerializer(serializers.ModelSerializer):
                         )
 
         return super().validate(attrs)
-
-    def _check_create_parent(self, parent):
-        """Refuse a parent the caller may not create children in.
-
-        Creating a child needs EDIT on the folder: a read-write share only
-        grants WRITE, which covers the shared file's content, not new rows
-        under it. A folder out of reach is refused with the same message as
-        a UUID that matches no row, so the answer does not reveal it exists.
-        """
-        user = self.context["request"].user
-        if (
-            parent.node_type == File.NodeType.FOLDER
-            and parent.deleted_at is None
-            and (FileService.get_permission(user, parent) or 0) >= FilePermission.EDIT
-        ):
-            return
-        message = (
-            self.fields["parent"]
-            .error_messages["does_not_exist"]
-            .format(pk_value=self.initial_data.get("parent"))
-        )
-        raise serializers.ValidationError({"parent": [message]})
 
     def create(self, validated_data):
         owner = self.context["request"].user

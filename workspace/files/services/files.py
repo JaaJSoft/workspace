@@ -849,6 +849,19 @@ class FileService:
         return FileService.get_permission(user, file_obj) is not None
 
     @staticmethod
+    def can_create_in(user, parent):
+        """Whether *user* may create a file or folder directly under *parent*.
+
+        Needs a live folder and EDIT on it: a read-write share only grants
+        WRITE, which covers the shared node's content, not new rows under it.
+        """
+        return (
+            parent.node_type == File.NodeType.FOLDER
+            and parent.deleted_at is None
+            and (FileService.get_permission(user, parent) or 0) >= FilePermission.EDIT
+        )
+
+    @staticmethod
     def resolve_accessible_files(user, file_uuids):
         """Resolve *file_uuids* to live, accessible ``File`` rows, or None.
 

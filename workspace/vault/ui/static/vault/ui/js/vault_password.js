@@ -84,6 +84,15 @@ window.vaultPasswordChange = function vaultPasswordChange() {
       return { mode: 'passphrase', words: 6 };
     },
 
+    // A generated master password is copied to be filed somewhere the vault
+    // is not - no entry holds it, and once the dialog closes nothing hands it
+    // back. The default window clears it before a password manager or a
+    // notebook is reached; the export passphrase gets the same time for the
+    // same reason.
+    masterPasswordClipboardPolicy() {
+      return { label: 'Master password', seconds: 180 };
+    },
+
     applyGeneratedPassword(value) {
       this.password = value;
       this.confirmation = value;

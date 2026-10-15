@@ -277,3 +277,30 @@ test('the root mixin closes the dialog on lock and shows the notice after a chan
   root.clearPasswordDialog();
   assert.equal(root.passwordDialogOpen, false);
 });
+
+test('a copied master password is named and outlives an entry password', async () => {
+  const clip = { value: '' };
+  const ctx = loadScripts(
+    [
+      'workspace/vault/ui/static/vault/ui/js/clipboard.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_password_floor.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_password.js',
+    ],
+    {
+      navigator: { clipboard: { writeText: async (text) => { clip.value = text; } } },
+      setInterval: () => 1,
+      clearInterval: () => {},
+    }
+  );
+  const policy = ctx.vaultPasswordChange().masterPasswordClipboardPolicy();
+
+  await ctx.vaultClipboard.copy('Password', 'entry', { transient: true });
+  const entryWindow = ctx.vaultClipboard.state().secondsLeft;
+  await ctx.vaultClipboard.copy(policy.label, 'master', { transient: true, seconds: policy.seconds });
+
+  assert.ok(
+    ctx.vaultClipboard.state().secondsLeft > entryWindow,
+    `the master password gets ${ctx.vaultClipboard.state().secondsLeft}s, an entry password ${entryWindow}s`
+  );
+  assert.equal(ctx.vaultClipboard.state().label, 'Master password');
+});

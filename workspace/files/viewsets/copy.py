@@ -67,7 +67,19 @@ class CopyMixin:
     @action(detail=True, methods=["post"], url_path="copy")
     def copy(self, request, uuid=None):
         """Copy a file or folder to a new location."""
+        from workspace.files.actions import ActionRegistry
+
         file_obj = self.get_object()
+        if not ActionRegistry.is_action_available(
+            "copy",
+            request.user,
+            file_obj,
+            permission=FileService.get_permission(request.user, file_obj),
+        ):
+            return Response(
+                {"detail": "Copying this item is not allowed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         parent_uuid = request.data.get("parent")
 
         # Resolve parent folder. Use the access-aware permission check rather

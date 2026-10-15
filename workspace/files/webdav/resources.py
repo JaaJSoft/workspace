@@ -25,7 +25,7 @@ from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
-from workspace.files.services.files import FilePermission
+from workspace.files.services.files import FilePermission, GroupRootFolder
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -335,7 +335,10 @@ class FolderResource(DAVCollection):
 
     def delete(self):
         _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
-        FileService.soft_delete(self._file, acting_user=self._user)
+        try:
+            FileService.soft_delete(self._file, acting_user=self._user)
+        except GroupRootFolder as exc:
+            raise DAVError(HTTP_FORBIDDEN, str(exc)) from exc
 
     def copy_move_single(self, dest_path, *, is_move):
         # WsgiDAV's copy/move loop visits every descendant itself, so this
@@ -816,6 +819,10 @@ def _move_to(file_obj, user, dest_path):
     _require_permission(user, file_obj, FilePermission.EDIT, "MOVE")
     if needs_move:
         _require_permission(user, dest_parent, FilePermission.EDIT, "MOVE")
+        try:
+            FileService.validate_move_target(file_obj, dest_parent, user=user)
+        except ValueError as exc:
+            raise DAVError(HTTP_FORBIDDEN, "MOVE is not allowed here") from exc
         # FileService.rename below moves the blob with a non-transactional
         # os.rename, so a refusal from move() would leave it stranded. Refuse here,
         # before anything is written.

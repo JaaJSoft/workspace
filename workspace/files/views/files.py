@@ -16,7 +16,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from workspace.common.booleans import is_truthy
@@ -27,6 +27,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
+from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
@@ -842,6 +843,10 @@ class FileViewSet(
             return Response(serializer.data)
 
     def perform_destroy(self, instance):
+        try:
+            FileService.soft_delete(instance, acting_user=self.request.user)
+        except GroupRootFolder as exc:
+            raise PermissionDenied(str(exc)) from exc
         shared_users = User.objects.filter(
             Q(received_shares__file=instance)
             | Q(groups__received_file_shares__file=instance)
@@ -859,4 +864,3 @@ class FileViewSet(
                 title=f'{self.request.user.username} deleted "{instance.name}"',
                 actor=self.request.user,
             )
-        FileService.soft_delete(instance, acting_user=self.request.user)

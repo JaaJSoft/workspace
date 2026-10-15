@@ -27,6 +27,14 @@ from .quota import check_write_allowed, subtree_bytes
 from .scanning.policy import QuarantinedSource, exclude_blocked, is_blocked
 
 
+class GroupRootFolder(ValueError):
+    """A group's root folder was asked to leave its place.
+
+    The root is the group's whole tree: moving it re-owns the subtree to the
+    mover and drops the group, trashing it takes every member's files with it.
+    """
+
+
 class FilePermission(enum.IntEnum):
     """Permission levels for file access, ordered by capability."""
 
@@ -408,6 +416,8 @@ class FileService:
         new_parent_id = new_parent.pk if new_parent else None
         if old_parent_id == new_parent_id:
             return
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be moved.")
 
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
@@ -777,6 +787,8 @@ class FileService:
     @staticmethod
     def soft_delete(file_obj, *, acting_user=None):
         """Soft-delete a file or folder (cascades to descendants)."""
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be deleted.")
         count = file_obj.soft_delete()
         record_event(
             file_obj,
@@ -969,8 +981,23 @@ class FileService:
 
     @staticmethod
     def validate_move_target(file_obj, new_parent, user=None):
-        """Raise ``ValueError`` if *new_parent* is an invalid move target."""
-        return _name_helpers.validate_move_target(file_obj, new_parent, user=user)
+        """Raise ``ValueError`` if *user* may not move *file_obj* under *new_parent*.
+
+        The target must be a folder *user* could create in. Without a user the
+        owner stands in for a personal target, and a group target is refused:
+        nothing proves a membership.
+        """
+        if new_parent is None:
+            return
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be moved.")
+        _name_helpers.validate_move_target(file_obj, new_parent)
+        if user is None:
+            if new_parent.group_id:
+                raise ValueError("You are not a member of this group.")
+            user = file_obj.owner
+        if not FileService.can_create_in(user, new_parent):
+            raise ValueError("You cannot move items into this folder.")
 
     # ------------------------------------------------------------------
     # Reading

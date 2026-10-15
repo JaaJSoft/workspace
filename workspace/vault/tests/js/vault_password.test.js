@@ -37,9 +37,15 @@ function harness(overrides = {}) {
         openKeys: overrides.openKeys || (async () => ({ kexPriv: fresh(1), sigSeed: fresh(2) })),
         sealAndReread: overrides.sealAndReread || (async () => ({ wrapped_kex_priv: 'new-kex', wrapped_sig_priv: 'new-sig' })),
         rotateBody: (sealed, expected) => ({ ...sealed, expected_wrapped_kex_priv: expected }),
+        previousOf: (envelope) => (envelope.previous_wrapped_kex_priv ? {
+          kdf_algo: envelope.previous_kdf_algo,
+          kdf_params: envelope.previous_kdf_params,
+          wrapped_kex_priv: envelope.previous_wrapped_kex_priv,
+          wrapped_sig_priv: envelope.previous_wrapped_sig_priv,
+        } : null),
       },
       vaultApi: {
-        fetchEnvelope: async () => ENVELOPE,
+        fetchEnvelope: async () => overrides.envelope || ENVELOPE,
         rotateEnvelope: overrides.rotateEnvelope || (async (body) => {
           posts.push(body);
           zeroAtSend.push(buffers.every((b) => b.every((byte) => byte === 0)));
@@ -303,4 +309,77 @@ test('a copied master password is named and outlives an entry password', async (
     `the master password gets ${ctx.vaultClipboard.state().secondsLeft}s, an entry password ${entryWindow}s`
   );
   assert.equal(ctx.vaultClipboard.state().label, 'Master password');
+});
+
+// --- a session the previous envelope opened ---------------------------------
+
+const PREVIOUS_PARAMS = { v: '1.3', m: 19456, t: 2, p: 1 };
+const WITH_PREVIOUS = {
+  ...ENVELOPE,
+  previous_kdf_algo: 'argon2id',
+  previous_kdf_params: PREVIOUS_PARAMS,
+  previous_wrapped_kex_priv: 'prev-kex',
+  previous_wrapped_sig_priv: 'prev-sig',
+};
+
+// Opens only the previous envelope: the password typed is the older one.
+const opensPreviousOnly = async (key, fields) => {
+  if (fields.wrapped_kex_priv !== 'prev-kex') throw new Error('tag mismatch');
+  return { kexPriv: Uint8Array.of(1), sigSeed: Uint8Array.of(2) };
+};
+
+test('the older password still changes it, against the current envelope it replaces', async () => {
+  const h = harness({ envelope: WITH_PREVIOUS, openKeys: opensPreviousOnly });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(h.component.error, '');
+  assert.deepStrictEqual(
+    h.derived.map(([params]) => params),
+    [ENVELOPE.kdf_params, PREVIOUS_PARAMS, CURRENT.params],
+  );
+  assert.equal(h.posts.length, 1);
+  assert.equal(h.posts[0].expected_wrapped_kex_priv, 'old-kex');
+  assert.equal(h.session.locks, 1);
+});
+
+test('a password neither envelope opens sends nothing', async () => {
+  const h = harness({ envelope: WITH_PREVIOUS, openKeys: async () => { throw new Error('tag mismatch'); } });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(h.component.error, 'Current password or recovery key is incorrect.');
+  assert.equal(h.derived.length, 2);
+  assert.deepStrictEqual(h.posts, []);
+});
+
+test('an algorithm this build cannot read is the current envelope\'s answer, not a cue to fall back', async () => {
+  const h = harness({
+    envelope: WITH_PREVIOUS,
+    openKeys: async (key, fields) => {
+      if (fields.wrapped_kex_priv === 'old-kex') {
+        const err = new Error('unknown aead'); err.name = 'UnsupportedAlgorithmError'; throw err;
+      }
+      return opensPreviousOnly(key, fields);
+    },
+  });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(h.derived.length, 1, 'the previous envelope was derived');
+  assert.deepStrictEqual(h.posts, []);
+});
+
+test('a derivation that broke on the current envelope is not a cue to fall back', async () => {
+  let calls = 0;
+  const h = harness({
+    envelope: WITH_PREVIOUS,
+    deriveUnwrapKey: (fresh) => {
+      calls += 1;
+      if (calls === 1) throw new Error('kdf params out of bounds');
+      return fresh(7);
+    },
+    openKeys: opensPreviousOnly,
+  });
+  ready(h.component);
+  await h.component.submit();
+  assert.equal(calls, 1, 'the previous envelope was derived');
+  assert.deepStrictEqual(h.posts, []);
 });

@@ -149,10 +149,27 @@ window.vaultPasswordChange = function vaultPasswordChange() {
           return;
         }
         const salt = V.fromBase64Url(envelope.kdf_salt);
+        // The previous envelope is tried as the unlock tries it: a session it
+        // opened has no other way out when the newer password is forgotten.
+        // Only a failed open falls back - an algorithm this build cannot read
+        // or a derivation that broke is the current envelope's answer. The
+        // rotation that follows still replaces only the current envelope:
+        // the server keeps an occupied previous slot as it is.
         try {
-          oldKey = await E.deriveUnwrapKey(envelope, currentPassword, secretBytes, salt);
-          if (gone()) return;
-          keys = await E.openKeys(oldKey, envelope, envelope.uuid);
+          let derived = false;
+          try {
+            oldKey = await E.deriveUnwrapKey(envelope, currentPassword, secretBytes, salt);
+            derived = true;
+            if (gone()) return;
+            keys = await E.openKeys(oldKey, envelope, envelope.uuid);
+          } catch (err) {
+            const previous = E.previousOf(envelope);
+            if (!derived || !previous || gone() || (err && err.name === 'UnsupportedAlgorithmError')) throw err;
+            if (oldKey) oldKey.fill(0);
+            oldKey = await E.deriveUnwrapKey(previous, currentPassword, secretBytes, salt);
+            if (gone()) return;
+            keys = await E.openKeys(oldKey, previous, envelope.uuid);
+          }
         } catch (err) {
           // The same tag fails for a wrong password and a wrong recovery key;
           // only a key the user typed here can be the culprit.

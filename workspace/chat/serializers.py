@@ -12,6 +12,7 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
+from .services.bot_tasks import can_manage_bot_task
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -342,6 +343,7 @@ class ReactionToggleSerializer(serializers.Serializer):
 class AgentGoalSerializer(serializers.ModelSerializer):
     bot_username = serializers.CharField(source="bot.username", read_only=True)
     bot_display_name = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
 
     class Meta:
         model = AgentGoal
@@ -361,6 +363,7 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             "check_count",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
@@ -371,12 +374,17 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             "check_count",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
 
     def get_bot_display_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+    def get_can_manage(self, obj) -> bool:
+        request = self.context.get("request")
+        return request is not None and can_manage_bot_task(request.user, obj)
 
     def validate_status(self, value):
         # Users can pause/resume a goal from the UI; closing one goes through
@@ -406,6 +414,7 @@ class AgentGoalCreateSerializer(serializers.Serializer):
 class ScheduledMessageSerializer(serializers.ModelSerializer):
     bot_username = serializers.CharField(source="bot.username", read_only=True)
     bot_display_name = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledMessage
@@ -423,6 +432,7 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
             "is_active",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
@@ -433,12 +443,17 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
             "is_active",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
 
     def get_bot_display_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+    def get_can_manage(self, obj) -> bool:
+        request = self.context.get("request")
+        return request is not None and can_manage_bot_task(request.user, obj)
 
     def validate(self, attrs):
         # ONCE schedules derive next_run_at from scheduled_at, which is non-null

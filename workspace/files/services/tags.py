@@ -41,8 +41,10 @@ def tags_with_usage(user):
     return Tag.objects.filter(owner=user).annotate(file_count=Count("file_tags"))
 
 
-def get_or_create_tag(owner, name) -> Tag | None:
+def get_or_create_tag(owner, name, icon="") -> Tag | None:
     """The owner's tag by that name, matched case-insensitively.
+
+    *icon* is only given to a tag created here: an existing one keeps its own.
 
     A tag list is a flat namespace of names, so a second 'Invoices' next to
     an existing 'invoices' would read as a duplicate in the tag picker.
@@ -54,7 +56,7 @@ def get_or_create_tag(owner, name) -> Tag | None:
     existing = Tag.objects.filter(owner=owner, name__iexact=name).first()
     if existing is not None:
         return existing
-    tag, _ = Tag.objects.get_or_create(owner=owner, name=name)
+    tag, _ = Tag.objects.get_or_create(owner=owner, name=name, defaults={"icon": icon})
     return tag
 
 

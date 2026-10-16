@@ -3,7 +3,8 @@
 Each is an Open Images label, so the embedding bench (scripts/embedding_bench.py)
 measures it on photos people verified, and calibrates the threshold it is
 placed under (``EmbeddingBackend.tag_max_distance``). The tag is created
-under its name, and a photo matched against that name in lower case.
+under its name and with its icon, and a photo matched against that name in
+lower case.
 
 Plain data, importing nothing: the bench loads this file by its path, outside
 Django.
@@ -18,6 +19,8 @@ class ClassicTag(NamedTuple):
     # The Open Images display name the bench scores it against.
     label: str
     name: str
+    # The Lucide icon the tag is created with; its owner can change it.
+    icon: str = "tag"
 
     @property
     def text(self):
@@ -26,37 +29,37 @@ class ClassicTag(NamedTuple):
 
 
 CLASSIC_TAGS = (
-    ClassicTag("Dog", "Dog"),
-    ClassicTag("Cat", "Cat"),
-    ClassicTag("Bird", "Bird"),
-    ClassicTag("Horse", "Horse"),
-    ClassicTag("Beach", "Beach"),
-    ClassicTag("Mountain", "Mountain"),
-    ClassicTag("Snow", "Snow"),
-    ClassicTag("Sea", "Sea"),
-    ClassicTag("Forest", "Forest"),
-    ClassicTag("Lake", "Lake"),
-    ClassicTag("Sunset", "Sunset"),
-    ClassicTag("Flower", "Flowers"),
-    ClassicTag("Garden", "Garden"),
-    ClassicTag("City", "City"),
-    ClassicTag("Night", "Night"),
-    ClassicTag("Car", "Car"),
-    ClassicTag("Boat", "Boat"),
-    ClassicTag("Airplane", "Airplane"),
-    ClassicTag("Bicycle", "Bicycle"),
-    ClassicTag("Meal", "Meal"),
-    ClassicTag("Cake", "Cake"),
-    ClassicTag("Cocktail", "Cocktail"),
-    ClassicTag("Baby", "Baby"),
-    ClassicTag("Child", "Child"),
-    ClassicTag("Selfie", "Selfie"),
-    ClassicTag("Wedding", "Wedding"),
-    ClassicTag("Birthday", "Birthday"),
-    ClassicTag("Party", "Party"),
-    ClassicTag("Christmas", "Christmas"),
-    ClassicTag("Skiing", "Skiing"),
-    ClassicTag("Swimming pool", "Swimming pool"),
-    ClassicTag("Screenshot", "Screenshot"),
-    ClassicTag("Document", "Document"),
+    ClassicTag("Dog", "Dog", "dog"),
+    ClassicTag("Cat", "Cat", "cat"),
+    ClassicTag("Bird", "Bird", "bird"),
+    ClassicTag("Horse", "Horse", "paw-print"),
+    ClassicTag("Beach", "Beach", "tree-palm"),
+    ClassicTag("Mountain", "Mountain", "mountain"),
+    ClassicTag("Snow", "Snow", "snowflake"),
+    ClassicTag("Sea", "Sea", "waves"),
+    ClassicTag("Forest", "Forest", "trees"),
+    ClassicTag("Lake", "Lake", "fish"),
+    ClassicTag("Sunset", "Sunset", "sunset"),
+    ClassicTag("Flower", "Flowers", "flower-2"),
+    ClassicTag("Garden", "Garden", "sprout"),
+    ClassicTag("City", "City", "building-2"),
+    ClassicTag("Night", "Night", "moon-star"),
+    ClassicTag("Car", "Car", "car"),
+    ClassicTag("Boat", "Boat", "sailboat"),
+    ClassicTag("Airplane", "Airplane", "plane"),
+    ClassicTag("Bicycle", "Bicycle", "bike"),
+    ClassicTag("Meal", "Meal", "utensils"),
+    ClassicTag("Cake", "Cake", "cake-slice"),
+    ClassicTag("Cocktail", "Cocktail", "martini"),
+    ClassicTag("Baby", "Baby", "baby"),
+    ClassicTag("Child", "Child", "toy-brick"),
+    ClassicTag("Selfie", "Selfie", "scan-face"),
+    ClassicTag("Wedding", "Wedding", "gem"),
+    ClassicTag("Birthday", "Birthday", "cake"),
+    ClassicTag("Party", "Party", "party-popper"),
+    ClassicTag("Christmas", "Christmas", "tree-pine"),
+    ClassicTag("Skiing", "Skiing", "cable-car"),
+    ClassicTag("Swimming pool", "Swimming pool", "waves-ladder"),
+    ClassicTag("Screenshot", "Screenshot", "monitor-smartphone"),
+    ClassicTag("Document", "Document", "file-text"),
 )

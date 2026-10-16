@@ -9,7 +9,7 @@ from workspace.projects.services.links import (
     delete_link,
     links_for_task,
 )
-from workspace.projects.services.members import ProjectRuleError
+from workspace.projects.services.members import ProjectRuleError, add_member
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 
@@ -158,8 +158,9 @@ class AnnotateBlockedTests(ProjectTestMixin, TestCase):
         self.blocker = create_task(self.project, self.admin, title="Blocker")
         self.blocked = create_task(self.project, self.admin, title="Blocked")
 
-    def _is_blocked(self, task):
-        return annotate_blocked(self.project.tasks.all()).get(pk=task.pk).is_blocked
+    def _is_blocked(self, task, user=None):
+        qs = annotate_blocked(self.project.tasks.all(), user or self.member)
+        return qs.get(pk=task.pk).is_blocked
 
     def test_open_blocker_marks_the_target(self):
         create_link(self.blocker, self.blocked, "blocks")
@@ -177,6 +178,22 @@ class AnnotateBlockedTests(ProjectTestMixin, TestCase):
         create_link(self.blocker, self.blocked, "relates_to")
         create_link(self.blocker, self.blocked, "duplicates")
         self.assertFalse(self._is_blocked(self.blocked))
+
+    def test_blocker_in_a_project_the_viewer_cannot_access_does_not_count(self):
+        # The panel hides this link from the member (links_for_task); the
+        # board badge must not reveal it either.
+        secret = create_project(self.admin, name="Secret")
+        hidden_blocker = create_task(secret, self.admin, title="Hidden")
+        create_link(hidden_blocker, self.blocked, "blocks")
+        self.assertFalse(self._is_blocked(self.blocked, self.member))
+        self.assertTrue(self._is_blocked(self.blocked, self.admin))
+
+    def test_blocker_in_another_accessible_project_counts(self):
+        shared = create_project(self.admin, name="Shared")
+        add_member(shared, self.member)
+        blocker = create_task(shared, self.admin, title="Elsewhere")
+        create_link(blocker, self.blocked, "blocks")
+        self.assertTrue(self._is_blocked(self.blocked, self.member))
 
 
 class CreateLinkConcurrencyTests(ProjectTestMixin, TestCase):

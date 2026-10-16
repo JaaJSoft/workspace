@@ -11,7 +11,10 @@ from django.utils import timezone
 
 from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.links import create_link
-from workspace.projects.services.projects import get_or_create_personal_project
+from workspace.projects.services.projects import (
+    create_project,
+    get_or_create_personal_project,
+)
 from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task, delete_task
 from workspace.users.services.settings import get_setting, set_setting
@@ -1005,3 +1008,12 @@ class BoardBlockedBadgeTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.blocker.save(update_fields=["status"])
         response = self._board()
         self.assertNotContains(response, "data-blocked-badge")
+
+    def test_blocker_in_a_project_the_viewer_cannot_access_shows_no_badge(self):
+        secret = create_project(self.admin, name="Secret")
+        hidden_blocker = create_task(secret, self.admin, title="Hidden")
+        create_link(hidden_blocker, self.blocker, "blocks")
+        response = self._board()
+        tasks = {t.title: t for c in response.context["columns"] for t in c["tasks"]}
+        self.assertFalse(tasks["Blocker"].is_blocked)
+        self.assertContains(response, "data-blocked-badge", count=1)

@@ -528,7 +528,8 @@ def board(request, project_uuid):
                 "subtasks", filter=Q(subtasks__done=True), distinct=True
             ),
         )
-        .order_by("position", "created_at")
+        .order_by("position", "created_at"),
+        request.user,
     )
     if project.type == Project.Type.SCRUM:
         if context["selected_sprint"] is not None:

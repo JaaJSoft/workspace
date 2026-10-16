@@ -180,11 +180,15 @@ def links_for_task(user, task):
     return items
 
 
-def annotate_blocked(qs):
+def annotate_blocked(qs, user):
     """Annotate a task queryset with ``is_blocked``: some open (not done)
-    task blocks it. Done blockers don't count - a resolved dependency no
-    longer stands in the way."""
+    task that *user* can see blocks it. Done blockers don't count - a
+    resolved dependency no longer stands in the way - and neither do
+    blockers in a project the user cannot access, which ``links_for_task``
+    hides: the badge must not reveal a link the panel does not show."""
     open_blockers = TaskLink.objects.filter(
-        type=TaskLink.Type.BLOCKS, target=OuterRef("pk")
+        type=TaskLink.Type.BLOCKS,
+        target=OuterRef("pk"),
+        source__project_id__in=user_project_ids(user),
     ).exclude(source__status__category=TaskStatus.Category.DONE)
     return qs.annotate(is_blocked=Exists(open_blockers))

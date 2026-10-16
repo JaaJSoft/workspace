@@ -390,7 +390,11 @@
               if (vote.is_mine) continue;
               const key = vote.participant;
               if (!map.has(key)) {
-                map.set(key, { key, name: vote.name, votes: {} });
+                map.set(key, {
+                  key,
+                  name: vote.name,
+                  votes: {}
+                });
               }
               map.get(key).votes[vote.slot_id] = vote.choice;
             }

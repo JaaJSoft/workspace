@@ -28,7 +28,9 @@ EVALUATED = (
     r"|@[\w.:-]+"
     r"|:[\w.:-]+"
 )
-ATTRIBUTE = re.compile(rf'\s({EVALUATED})="([^"]*)"')
+# A tag or an interpolation may carry its own double quotes ({{ x|default:"a" }})
+# without ending the attribute.
+ATTRIBUTE = re.compile(rf'\s({EVALUATED})="((?:\{{\{{.*?\}}\}}|\{{%.*?%\}}|[^"])*)"')
 DJANGO_TAG = re.compile(r"\{%.*?%\}|\{#.*?#\}")
 INTERPOLATION = re.compile(r"\{\{(.*?)\}\}")
 # A quote the browser hands to Alpine: a literal one, or the entities that
@@ -109,6 +111,12 @@ class UnescapedDetectorTests(SimpleTestCase):
     def test_quotes_in_filter_arguments_are_not_delimiters(self):
         html = "<b x-data=\"app({{ a|default:'x' }}, '{{ b|escapejs }}')\">"
         self.assertEqual(self._problems(html), [])
+
+    def test_double_quotes_inside_an_interpolation_do_not_end_the_attribute(self):
+        self.assertEqual(
+            self._problems('<b x-data="{ tab: \'{{ tab|default:"all" }}\' }">'),
+            ["is quoted without |escapejs"],
+        )
 
     def test_entity_quote_opens_a_string(self):
         self.assertEqual(

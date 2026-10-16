@@ -470,7 +470,7 @@ class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}")
         self.assertContains(resp, "Paint the shed")
-        self.assertNotContains(resp, f"openTask('{task_uuid}')")
+        self.assertNotContains(resp, f"openTask('{escapejs(task_uuid)}')")
 
     def test_overview_activity_deleted_task_still_shows_reference(self):
         task = create_task(self.project, self.admin, title="Paint the shed")
@@ -856,13 +856,17 @@ class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.board()
         self.assertContains(resp, "labelSelector(")
-        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_member_gets_the_selector_without_the_create_endpoint(self):
         self.client.force_login(self.member)
         resp = self.board()
         self.assertContains(resp, "labelSelector(")
-        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertNotContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_member_modal_section_collapses_without_labels(self):
         # Members cannot create labels, so an empty project hides the section

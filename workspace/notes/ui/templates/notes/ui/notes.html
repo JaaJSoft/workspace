@@ -26,7 +26,7 @@
 {% block main_class %}p-0 flex flex-col h-full overflow-hidden{% endblock %}
 
 {% block drawer_attrs %}
-  x-data="notesApp({ view: '{{ initial_view }}', id: '{{ initial_id }}', file: '{{ initial_file }}' })"
+  x-data="notesApp({ view: '{{ initial_view|escapejs }}', id: '{{ initial_id|escapejs }}', file: '{{ initial_file|escapejs }}' })"
   @ajax:missing="_viewerMissing($event)"
   @ajax:merge="_viewerMerge($event)"
 {% endblock %}

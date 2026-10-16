@@ -85,7 +85,7 @@
         class="loading loading-spinner loading-lg"
       ></span>
       <img
-        :src="editPreview || convertedSrc || '{{ content_url }}'"
+        :src="editPreview || convertedSrc || '{{ content_url|escapejs }}'"
         alt="{{ file.name }}"
         class="max-w-full max-h-full object-contain transition-transform duration-200"
         :style="{ transform: `scale(${zoomLevel}) rotate(${rotation}deg)` }"

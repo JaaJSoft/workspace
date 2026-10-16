@@ -9,7 +9,7 @@
         type="button"
         class="btn btn-sm btn-outline justify-start text-left normal-case h-auto min-h-8 py-1.5 items-start flex-nowrap whitespace-normal leading-snug"
         :disabled="loading"
-        @click="answer('{{ msg.uuid }}', {{ forloop.counter0 }}, '{{ opt|escapejs }}')"
+        @click="answer('{{ msg.uuid|escapejs }}', {{ forloop.counter0 }}, '{{ opt|escapejs }}')"
       >
         <span
           x-show="loading && pendingIndex === {{ forloop.counter0 }}"

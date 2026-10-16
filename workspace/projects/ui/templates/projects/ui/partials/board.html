@@ -20,7 +20,7 @@
           <button
             type="button"
             class="btn btn-module btn-sm ml-auto"
-            @click="completeSprint('{{ selected_sprint.uuid }}', '{{ selected_sprint.name|escapejs }}')"
+            @click="completeSprint('{{ selected_sprint.uuid|escapejs }}', '{{ selected_sprint.name|escapejs }}')"
           >
             <i data-lucide="flag" class="w-4 h-4"></i>
             Complete sprint
@@ -54,7 +54,7 @@
                     <button
                       type="button"
                       class="btn btn-module btn-xs"
-                      @click="startSprint('{{ s.uuid }}', '{{ s.name|escapejs }}')"
+                      @click="startSprint('{{ s.uuid|escapejs }}', '{{ s.name|escapejs }}')"
                     >
                       <i data-lucide="play" class="w-3.5 h-3.5"></i>
                       Start
@@ -88,7 +88,7 @@
             <section
               class="flex-1 min-w-72 rounded-box bg-base-200 p-3"
               data-status-uuid="{{ column.status.uuid }}"
-              {% if not sprint_read_only %} @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid }}')" {% endif %}
+              {% if not sprint_read_only %} @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ column.status.uuid|escapejs }}')" {% endif %}
             >
               <header class="flex items-center justify-between mb-2">
                 <h3 class="text-sm font-medium flex items-center gap-2">
@@ -117,7 +117,7 @@
                       type="button"
                       class="btn btn-ghost btn-xs btn-square"
                       title="New task"
-                      @click="newTask('{{ column.status.uuid }}')"
+                      @click="newTask('{{ column.status.uuid|escapejs }}')"
                     >
                       <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                     </button>

@@ -54,3 +54,20 @@ test('rejects non-string input', () => {
   assert.equal(isValidUuid(42), false);
   assert.equal(isValidUuid({}), false);
 });
+
+test('newUuid uses the browser generator where it exists', () => {
+  const withRandomUuid = loadScript('workspace/common/static/ui/js/uuid.js', {
+    crypto: { randomUUID: () => '123e4567-e89b-42d3-a456-426614174000' },
+  });
+  assert.equal(withRandomUuid.newUuid(), '123e4567-e89b-42d3-a456-426614174000');
+});
+
+test('newUuid builds a version 4 uuid where randomUUID is missing (plain HTTP)', () => {
+  // Browsers only expose randomUUID in a secure context; getRandomValues is everywhere.
+  const insecure = loadScript('workspace/common/static/ui/js/uuid.js', {
+    crypto: { getRandomValues: (bytes) => bytes.fill(0xff) },
+  });
+  const uuid = insecure.newUuid();
+  assert.equal(uuid, 'ffffffff-ffff-4fff-bfff-ffffffffffff');
+  assert.equal(insecure.isValidUuid(uuid), true);
+});

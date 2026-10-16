@@ -1012,6 +1012,45 @@ The script tag's `id` attribute is the right place for the `*-data` suffix (e.g.
 
 **Exception** - when a context variable name collides with another already in context (e.g., a view passes both a queryset of accounts and the serialized version), check whether the queryset version is actually used in the template. It is often **dead context** (the template only reads `accounts` from the JS side via the embedded script tag). If so, delete the dead key; don't keep both.
 
+### Django values inside Alpine expressions - `|escapejs` on every quoted value, a JS literal for everything else
+
+`x-data`, `x-init`, `x-show`, `x-if`, `x-for`, `x-text`, `x-html`, `x-model`, `x-effect`, `@event` and `:attr` are JavaScript, and the browser decodes HTML entities before Alpine reads them. Django's autoescape writes `&#x27;` for a quote, and by the time the expression runs it is a quote again. So a value interpolated into a JS string can close the string and append code, and autoescape does not help:
+
+```django
+{# ❌ ?folder=');alert(document.domain);// runs script #}
+x-data="notesApp({ id: '{{ initial_id }}' })"
+
+{# ✅ ' stays inside the string #}
+x-data="notesApp({ id: '{{ initial_id|escapejs }}' })"
+```
+
+We shipped this three times:
+- the notes deep link (`?folder=`);
+- the dashboard activity tab (`?source=`);
+- chat reaction badges. The emoji is a 32-character free-text field, so any conversation member could run script in everyone else's browser.
+
+CSP does not stop it: the Alpine build needs `unsafe-eval` and evaluates these attributes by design (see `settings/security.py`).
+
+What the template renders must be a valid JS literal of the right type, and nothing else:
+
+| Value | Write | Why |
+|---|---|---|
+| String (name, slug, UUID, URL, enum value) | `'{{ value\|escapejs }}'` | Every quoted value needs it, even one that "can only be a UUID". The template does not know it is one, and the next field quoted the same way may be free text |
+| Boolean | `{{ flag\|yesno:"true,false" }}` | A bare `{{ flag }}` renders `True`, which Alpine reads as an undefined variable. The result is a `ReferenceError` and a dead component, not an XSS |
+| Integer | `{{ count }}` | Only for a value that is an `int` on the server (a pk, a count, `forloop.counter`) |
+| Float | `{% localize off %}{{ value }}{% endlocalize %}` | A localized `1,5` reads as two arguments, not one number |
+| Nullable | `{{ value\|default_if_none:'null' }}` | `None` renders `None`, an undefined variable |
+| List, dict, or several fields | `{{ data\|json_script:"x-data" }}`, then `JSON.parse(...)` in JS | See the section above |
+
+**Rules:**
+
+- Every `{{ }}` inside quotes in an Alpine-evaluated attribute ends with `|escapejs` (`|safe` may follow it). Don't judge whether the value can contain a quote.
+- Never interpolate into a JS template literal (`` `/files/{{ id }}` ``). `|escapejs` leaves `${` alone, so nothing makes it safe. Use a quoted string and concatenate.
+- Validate a value read from the request in the view, before it reaches the context. That covers `request.GET` and any URL segment that is not a `<uuid:>` converter. Use `parse_uuid_or_none`, or an allowlist for enum-like params (`?view=`, `?tab=`). Escaping keeps the page safe; validating keeps garbage out of the component state.
+- Partial parameters ending in `_expr` (`model_expr`, `collapse_expr`, `show_expr`...) are code by design. The including template writes them, never a view. Never feed them a value from the context.
+
+`core/tests/test_alpine_template_escaping.py` enforces the first two rules mechanically. It walks every template and fails on two cases in an Alpine-evaluated attribute: a quoted interpolation without `|escapejs`, and any interpolation inside backticks. The type rules (booleans, floats, `None`) are not checked, because the template does not know a value's type. A wrong type fails loudly in the console rather than silently.
+
 ### Server-rendered partial swaps - use alpine-ajax, never raw `fetch`
 
 Whenever a piece of UI needs to be refreshed from a Django partial (lists, feeds, sidebars, popovers, folder trees, anything rendered server-side), **use [alpine-ajax](https://alpine-ajax.js.org)**. The library is already loaded globally in `base.html`.

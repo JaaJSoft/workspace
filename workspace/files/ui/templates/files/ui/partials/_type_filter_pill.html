@@ -9,9 +9,9 @@
 <button
   type="button"
   class="btn btn-sm rounded-full gap-1.5 font-normal{% if value == 'all' %} border-module bg-module/15 text-module{% else %} btn-outline border-base-300{% endif %}"
-  :class="{ 'border-module bg-module/15 text-module': typeFilter === '{{ value }}', 'btn-outline border-base-300': typeFilter !== '{{ value }}' }"
-  :aria-pressed="(typeFilter === '{{ value }}').toString()"
-  @click="typeFilter = '{{ value }}'"
+  :class="{ 'border-module bg-module/15 text-module': typeFilter === '{{ value|escapejs }}', 'btn-outline border-base-300': typeFilter !== '{{ value|escapejs }}' }"
+  :aria-pressed="(typeFilter === '{{ value|escapejs }}').toString()"
+  @click="typeFilter = '{{ value|escapejs }}'"
 >
   <i data-lucide="{{ icon }}" class="w-3.5 h-3.5"></i>
   {{ label }}

@@ -32,11 +32,11 @@
     <a
       class="pl-2 pr-1"
       tabindex="0"
-      @click="setView('{{ view_type }}', row.uuid, row.name)"
-      @keydown.enter.self.prevent="setView('{{ view_type }}', row.uuid, row.name)"
-      @keydown.space.self.prevent="setView('{{ view_type }}', row.uuid, row.name)"
-      @contextmenu="openCtxMenu($event, '{{ view_type }}', row)"
-      :class="activeView === '{{ view_type }}' && activeId === row.uuid ? 'group bg-module/15 text-module' : 'group'"
+      @click="setView('{{ view_type|escapejs }}', row.uuid, row.name)"
+      @keydown.enter.self.prevent="setView('{{ view_type|escapejs }}', row.uuid, row.name)"
+      @keydown.space.self.prevent="setView('{{ view_type|escapejs }}', row.uuid, row.name)"
+      @contextmenu="openCtxMenu($event, '{{ view_type|escapejs }}', row)"
+      :class="activeView === '{{ view_type|escapejs }}' && activeId === row.uuid ? 'group bg-module/15 text-module' : 'group'"
     >
       <i
         :data-lucide="row.icon || 'folder'"
@@ -47,7 +47,7 @@
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-40 hover:!opacity-100"
-        @click.stop="openCtxMenu($event, '{{ view_type }}', row)"
+        @click.stop="openCtxMenu($event, '{{ view_type|escapejs }}', row)"
       >
         <i data-lucide="ellipsis-vertical" class="w-3.5 h-3.5"></i>
       </button>

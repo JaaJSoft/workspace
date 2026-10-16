@@ -8,6 +8,7 @@ is the safety net guarding against silent regressions when wiring of
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.utils.html import escapejs
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -376,7 +377,7 @@ class PropertiesPanelEventsTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('id="file-events-list"', body)
         # The stub auto-fetches the activity endpoint via alpine-ajax on mount.
-        self.assertIn(f"/files/{self.file.uuid}/events", body)
+        self.assertIn(escapejs(f"/files/{self.file.uuid}/events"), body)
 
     def test_panel_does_not_render_events_inline(self):
         from workspace.files.services.events import record_event

@@ -75,13 +75,67 @@ def _schedule_dispatch(event):
         logger.exception("Failed to schedule dispatch for file event %s", event.uuid)
 
 
-def events_for_file(file):
-    """Return the queryset of events for *file*, newest first."""
-    return (
+# Who else holds the file and which public links reach it: the properties
+# panel lists shares and links to the file's manager only, so the timeline
+# keeps their history to them too. Dropped as a whole, never one by one, so a
+# "permission changed" or "revoked" entry never outlives the share it names.
+MANAGER_ONLY_ACTIONS = frozenset(
+    {
+        FileEvent.Action.SHARED,
+        FileEvent.Action.SHARE_PERMISSION_CHANGED,
+        FileEvent.Action.UNSHARED,
+        FileEvent.Action.LINK_CREATED,
+        FileEvent.Action.LINK_REVOKED,
+        FileEvent.Action.LINK_UPLOAD,
+    }
+)
+
+# Metadata keys only the file's manager may read: the file a copy was made from
+# belongs to whoever copied it, and may sit in their private tree. A reader is
+# told it is a copy (``copied``), not of what.
+_MANAGER_ONLY_METADATA = ("source_name", "source_uuid")
+
+
+def _is_manager(permission):
+    from .files import FilePermission
+
+    return permission is not None and permission >= FilePermission.MANAGE
+
+
+def events_for_file(file, permission):
+    """Return the events of *file* a viewer at *permission* may read, newest first.
+
+    Pair it with ``readable_events`` on the rows read, which strips what the
+    viewer may not read from each event's metadata.
+    """
+    qs = (
         FileEvent.objects.filter(file=file)
         .select_related("actor")
         .order_by("-created_at")
     )
+    if not _is_manager(permission):
+        qs = qs.exclude(action__in=MANAGER_ONLY_ACTIONS)
+    return qs
+
+
+def readable_events(events, permission):
+    """Return *events* with the metadata a viewer at *permission* may not read
+    removed. Edits the instances in memory only: never save them afterwards.
+    """
+    events = list(events)
+    if _is_manager(permission):
+        return events
+    for event in events:
+        metadata = event.metadata or {}
+        if any(key in metadata for key in _MANAGER_ONLY_METADATA):
+            event.metadata = {
+                key: value
+                for key, value in metadata.items()
+                if key not in _MANAGER_ONLY_METADATA
+            }
+            if "source_uuid" in metadata:
+                event.metadata["copied"] = True
+    return events
 
 
 # Past this many candidate files per arm, widening costs more than reading the

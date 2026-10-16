@@ -23,7 +23,7 @@ be defined before the parser reaches the markup using it, or server-rendered
 {% block body %}
   <div
     class="h-screen flex flex-col"
-    x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid }}')"
+    x-data="chatRoomApp({{ current_user_id }}, '{{ conversation_uuid|escapejs }}')"
     @ajax:missing="_onAjaxMissing($event)"
     @chat-message.window="handleSSEMessage($event.detail)"
     @ai-stream-bot_step.window="handleSSEBotStep($event.detail)"

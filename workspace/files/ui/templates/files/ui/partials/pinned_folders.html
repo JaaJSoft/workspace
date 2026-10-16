@@ -21,14 +21,14 @@ Context variables:
       data-drop-folder-name="{{ pin.folder.name }}"
       :class="[
       collapsed ? 'flex justify-center' : '',
-      draggingPinned === '{{ pin.folder.uuid }}' ? 'opacity-50' : '',
-      dragOverPinned === '{{ pin.folder.uuid }}' ? 'ring-2 ring-module/50 ring-offset-1 rounded-lg' : ''
+      draggingPinned === '{{ pin.folder.uuid|escapejs }}' ? 'opacity-50' : '',
+      dragOverPinned === '{{ pin.folder.uuid|escapejs }}' ? 'ring-2 ring-module/50 ring-offset-1 rounded-lg' : ''
     ]"
-      @dragstart="onPinnedDragStart($event, '{{ pin.folder.uuid }}')"
+      @dragstart="onPinnedDragStart($event, '{{ pin.folder.uuid|escapejs }}')"
       @dragend="onPinnedDragEnd($event)"
-      @dragover.prevent="onPinnedDragOver($event, '{{ pin.folder.uuid }}')"
-      @drop.prevent="onPinnedDrop($event, '{{ pin.folder.uuid }}')"
-      @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-pinned-folder-context-menu', { detail: { event: $event, uuid: '{{ pin.folder.uuid }}', name: '{{ pin.folder.name|escapejs }}', isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }} } }))"
+      @dragover.prevent="onPinnedDragOver($event, '{{ pin.folder.uuid|escapejs }}')"
+      @drop.prevent="onPinnedDrop($event, '{{ pin.folder.uuid|escapejs }}')"
+      @contextmenu.prevent="window.dispatchEvent(new CustomEvent('open-pinned-folder-context-menu', { detail: { event: $event, uuid: '{{ pin.folder.uuid|escapejs }}', name: '{{ pin.folder.name|escapejs }}', isFavorite: {{ pin.folder.is_favorite|yesno:'true,false' }} } }))"
     >
       {% include "files/ui/partials/_sidebar_folder_item.html" with folder=pin.folder default_icon="folder" default_color="text-warning" active_id="pinned:"|add:pin.folder.uuid show_grip=True extra_attrs='@click="if (draggingPinned) $event.preventDefault()"' %}
     </li>

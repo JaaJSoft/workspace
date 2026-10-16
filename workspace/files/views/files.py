@@ -491,12 +491,21 @@ class FileViewSet(
                 qs = qs.filter(ancestor._descendant_filter(include_self=False))
             return FileService.annotate_for_serializer(qs, self.request.user)
 
+        if self.action in {"restore", "purge"}:
+            return FileService.annotate_for_serializer(
+                FileService.restorable_files_qs(self.request.user), self.request.user
+            )
+        if self.action == "trash" or (self.action == "list" and self._is_trash_query()):
+            return FileService.annotate_for_serializer(
+                FileService.restorable_files_qs(self.request.user).filter(
+                    deleted_at__isnull=False
+                ),
+                self.request.user,
+            )
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
         queryset = FileService.annotate_for_serializer(queryset, self.request.user)
-        if self.action in {"trash"} or self._is_trash_query():
+        if self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
-        if self.action in {"restore", "purge"}:
-            return queryset
         queryset = queryset.filter(deleted_at__isnull=True)
         if self.action == "list":
             if self._is_trash_query():

@@ -186,6 +186,20 @@ class FileService:
         return File.objects.filter(FileService.owned_files_q(user))
 
     @staticmethod
+    def restorable_files_qs(user):
+        """The nodes *user* may restore or purge once trashed, ``deleted_at``
+        not filtered.
+
+        Their personal nodes, plus every node of the groups they belong to,
+        whoever trashed it: the queryset form of ``trash_permissions_bulk``.
+        """
+        from django.db.models import Q
+
+        return File.objects.filter(
+            Q(owner=user, group__isnull=True) | Q(group__in=user.groups.all())
+        )
+
+    @staticmethod
     def user_group_files_qs(user):
         """Return a queryset of active group files the user can access."""
         return File.objects.filter(
@@ -863,6 +877,27 @@ class FileService:
         of up to two per file. A file reached through both a user share and
         a group share gets the higher of the two permissions.
         """
+        return FileService._permissions_bulk(user, file_objects, in_trash=False)
+
+    @staticmethod
+    def trash_permissions_bulk(user, file_objects):
+        """``get_permissions_bulk`` as the trash sees it.
+
+        The same answer for a live node. A trashed node grants nothing to
+        anyone but its owner, except a group's: the trash is where the group
+        recovers what one of its members deleted, so every current member gets
+        EDIT on it - enough to preview, restore and purge it. A former member
+        still gets nothing.
+        """
+        return FileService._permissions_bulk(user, file_objects, in_trash=True)
+
+    @staticmethod
+    def trash_permission(user, file_obj):
+        """:meth:`trash_permissions_bulk` for one node."""
+        return FileService.trash_permissions_bulk(user, [file_obj])[file_obj.pk]
+
+    @staticmethod
+    def _permissions_bulk(user, file_objects, *, in_trash):
         from workspace.files.models import FileShare
 
         permissions = {}
@@ -886,7 +921,7 @@ class FileService:
                 if file_obj.group_id in group_ids:
                     if file_obj.owner_id == user.id:
                         permissions[file_obj.pk] = FilePermission.MANAGE
-                    elif file_obj.deleted_at is None:
+                    elif file_obj.deleted_at is None or in_trash:
                         permissions[file_obj.pk] = FilePermission.EDIT
                     else:
                         permissions[file_obj.pk] = None

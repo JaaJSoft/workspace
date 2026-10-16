@@ -602,11 +602,8 @@ def storage(request, uuid=None):
         parent_url = None
     else:
         title = folder.name
-        parent_url = (
-            f"/files/storage/{folder.parent_id}"
-            if folder.parent_id
-            else "/files/storage"
-        )
+        parent_id = analysis["folder"]["parent"]
+        parent_url = f"/files/storage/{parent_id}" if parent_id else "/files/storage"
     base_url = (
         f"/files/storage/{folder.uuid}" if folder is not None else "/files/storage"
     )

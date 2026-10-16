@@ -208,15 +208,20 @@ class FileService:
         )
 
     @staticmethod
-    def visible_path(file_obj, permission):
-        """The path of *file_obj* a viewer at *permission* may read.
+    def reads_full_path(permission):
+        """Whether a viewer at *permission* may read a node's full path.
 
-        The full path at EDIT or above - their own tree, or a group they are
-        in. Below that the node reached them through a share, and its path
-        names the owner's private folders above it: they get its name alone.
-        ``full_path_q`` is the same rule in SQL.
+        At EDIT or above - their own tree, or a group they are in. Below that
+        the node reached them through a share, and its path names the owner's
+        private folders above it. ``full_path_q`` is the same rule in SQL.
         """
-        if permission is not None and permission >= FilePermission.EDIT:
+        return permission is not None and permission >= FilePermission.EDIT
+
+    @staticmethod
+    def visible_path(file_obj, permission):
+        """The path of *file_obj* a viewer at *permission* may read: the full
+        path, or its name alone (see ``reads_full_path``)."""
+        if FileService.reads_full_path(permission):
             return file_obj.path
         return file_obj.name
 

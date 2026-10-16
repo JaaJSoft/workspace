@@ -7,9 +7,10 @@ from django.utils import timezone
 from workspace.core.activity_registry import activity_registry
 from workspace.files.services import FileService
 from workspace.projects.activity import ProjectsActivityProvider
-from workspace.projects.models import TaskEvent
+from workspace.projects.models import ProjectMember, TaskEvent
 from workspace.projects.services.file_links import link_files
 from workspace.projects.services.links import create_link
+from workspace.projects.services.members import add_member, remove_member
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 from workspace.projects.tests.base import ProjectTestMixin
@@ -154,3 +155,38 @@ class HiddenLinkEventActivityTests(ProjectTestMixin, TestCase):
             None, limit=50, viewer_id=self.admin.pk
         )
         self.assertTrue(self._names_hidden_task(events))
+
+
+class OwnActivityAfterRemovalTests(ProjectTestMixin, TestCase):
+    """A user removed from a project no longer sees it in their own feed."""
+
+    def setUp(self):
+        super().setUp()
+        self.provider = ProjectsActivityProvider()
+        create_task(self.project, self.member, title="Member work")
+        kept = create_project(self.admin, name="Kept")
+        add_member(kept, self.member)
+        create_task(kept, self.member, title="Still here")
+        remove_member(ProjectMember.objects.get(project=self.project, user=self.member))
+        self.project.name = "Renamed after removal"
+        self.project.save(update_fields=["name"])
+
+    def test_own_feed_drops_the_left_project(self):
+        events = self.provider.get_recent_events(self.member.pk, limit=50)
+        self.assertEqual([event["meta_text"] for event in events], ["Kept"])
+
+    def test_own_feed_with_self_as_viewer_drops_the_left_project(self):
+        events = self.provider.get_recent_events(
+            self.member.pk, limit=50, viewer_id=self.member.pk
+        )
+        self.assertEqual([event["meta_text"] for event in events], ["Kept"])
+
+    def test_own_daily_counts_drop_the_left_project(self):
+        today = timezone.now().date()
+        counts = self.provider.get_daily_counts(
+            self.member.pk, today - timedelta(days=1), today
+        )
+        self.assertEqual(counts.get(today), 1)
+
+    def test_own_stats_drop_the_left_project(self):
+        self.assertEqual(self.provider.get_stats(self.member.pk)["total_tasks"], 1)

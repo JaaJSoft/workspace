@@ -4,13 +4,18 @@ import os
 import shutil
 import tempfile
 import time
+from datetime import timedelta
 
-from django.test import SimpleTestCase, override_settings
+from django.contrib.auth import get_user_model
+from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from workspace.core.tasks import STALE_UPLOAD_SECONDS, purge_stale_uploads
+from workspace.files.models import UploadSession
+from workspace.files.services import uploads
 
 
-class PurgeStaleUploadsTests(SimpleTestCase):
+class PurgeStaleUploadsTests(TestCase):
     def setUp(self):
         self.spool_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.spool_dir, ignore_errors=True)
@@ -44,3 +49,16 @@ class PurgeStaleUploadsTests(SimpleTestCase):
         absent = os.path.join(self.spool_dir, "absent")
         with override_settings(FILE_UPLOAD_TEMP_DIR=absent):
             self.assertEqual(purge_stale_uploads(), 0)
+
+    def test_an_abandoned_resumable_upload_goes_with_its_spool(self):
+        user = get_user_model().objects.create_user(username="alice", password="pw")
+        session = uploads.open_session(
+            user, name="video.mp4", parent=None, size=10, on_conflict="error"
+        )[0]
+        UploadSession.objects.filter(pk=session.pk).update(
+            updated_at=timezone.now() - timedelta(seconds=STALE_UPLOAD_SECONDS + 60)
+        )
+
+        self.assertEqual(purge_stale_uploads(), 1)
+        self.assertFalse(UploadSession.objects.exists())
+        self.assertFalse(os.path.exists(uploads.spool_path(session)))

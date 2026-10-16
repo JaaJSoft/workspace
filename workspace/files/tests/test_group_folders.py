@@ -902,7 +902,7 @@ class BreadcrumbQueryCountTests(TestCase):
         ):
             self.assertEqual(crumbs[i + 1]["label"], name)
 
-    def test_group_nested_3_levels_one_query(self):
+    def test_group_nested_3_levels_two_queries(self):
         parent = None
         for i in range(3):
             parent = File.objects.create(
@@ -914,7 +914,9 @@ class BreadcrumbQueryCountTests(TestCase):
             )
 
         leaf = File.objects.get(pk=parent.pk)
-        with self.assertNumQueries(1):
+        # The viewer's membership (a non-member only sees the ancestors they
+        # can open), then 1 query for all the ancestors.
+        with self.assertNumQueries(2):
             crumbs = build_breadcrumbs(leaf, user=self.user)
         self.assertEqual(len(crumbs), 4)  # "Groups" + 3 folders
         self.assertEqual(crumbs[0]["label"], "Groups")

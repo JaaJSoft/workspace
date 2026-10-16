@@ -16,7 +16,7 @@
 {% endcomment %}
 
 <div
-  x-data="groupSelector('{{ on_select_event }}', () => ({{ local_source }}))"
+  x-data="groupSelector('{{ on_select_event|escapejs }}', () => ({{ local_source }}))"
   class="relative"
 >
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">

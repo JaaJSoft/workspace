@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from workspace.files.models import File, FileFavorite, PinnedFolder
 from workspace.files.serializers import PinnedReorderSerializer
 from workspace.files.services import FileService
+from workspace.files.services.pins import visible_pins
 
 
 class FavoritesMixin:
@@ -94,25 +95,13 @@ class FavoritesMixin:
     @action(detail=False, methods=["get"], url_path="pinned")
     def pinned(self, request):
         """List pinned folders."""
-        pinned_qs = (
-            PinnedFolder.objects.filter(
-                owner=request.user,
-                folder__deleted_at__isnull=True,
-            )
-            .select_related("folder")
-            .order_by("position", "created_at")
+        folder_ids = list(
+            visible_pins(request.user).values_list("folder_id", flat=True)
         )
-        folder_ids = [p.folder_id for p in pinned_qs]
-        # Use the access-aware filter so pinned group subfolders are included.
         # ``self.get_queryset()`` is owner-scoped (group__isnull=True) and would
         # silently drop any pinned group folder.
         queryset = FileService.annotate_for_serializer(
-            File.objects.filter(
-                FileService.accessible_files_q(request.user),
-                pk__in=folder_ids,
-                deleted_at__isnull=True,
-            ),
-            request.user,
+            File.objects.filter(pk__in=folder_ids), request.user
         )
         # Preserve pin order
         order_map = {fid: i for i, fid in enumerate(folder_ids)}

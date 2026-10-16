@@ -7,7 +7,7 @@ Params:
          second argument passed to handleMentionInput.
 {% endcomment %}
 <div
-  x-show="mentionActive && mentionField === '{{ field }}' && mentionResults.length > 0"
+  x-show="mentionActive && mentionField === '{{ field|escapejs }}' && mentionResults.length > 0"
   x-cloak
   class="absolute bottom-full left-0 right-0 mb-1 bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50"
 >

@@ -6,15 +6,19 @@ rows count.
 
 Bucket usage is computed here and nowhere else; the admin is the only other
 reader of the quota tables.
+
+A write is checked against what the bucket holds plus what open upload
+sessions have reserved in it. Usage as shown to people leaves reservations
+out: they are bytes still on their way.
 """
 
 from django.conf import settings
-from django.db.models import OuterRef, Subquery, Sum, Value
+from django.db.models import BigIntegerField, OuterRef, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.template.defaultfilters import filesizeformat
 from rest_framework.exceptions import APIException
 
-from ..models import File, GroupStorageQuota, UserStorageQuota
+from ..models import File, GroupStorageQuota, UploadSession, UserStorageQuota
 
 
 def _pk(value):
@@ -112,17 +116,53 @@ def _bucket_label(group):
     return f'The group folder "{name}"'
 
 
-def bucket_state(*, owner, group):
+def _open_sessions(*, owner, group, excluding=None):
+    sessions = UploadSession.objects.filter(completed_at__isnull=True)
+    if group is not None:
+        sessions = sessions.filter(group_id=_pk(group))
+    else:
+        sessions = sessions.filter(owner_id=_pk(owner), group__isnull=True)
+    if excluding is not None:
+        sessions = sessions.exclude(pk=_pk(excluding))
+    return sessions
+
+
+def reserved_bytes(*, owner, group, excluding=None):
+    """Bytes the open upload sessions of a bucket have declared.
+
+    *excluding* leaves one session out: the one being finalized, whose
+    reservation is the very write being checked.
+    """
+    sessions = _open_sessions(owner=owner, group=group, excluding=excluding)
+    return sessions.aggregate(total=Sum("size"))["total"] or 0
+
+
+def bucket_state(*, owner, group, excluding=None):
     """Return ``(used, limit)`` for the bucket a write would land in.
 
-    ``limit`` is ``None`` when unlimited; ``used`` is then left at 0 rather
-    than aggregated.
+    ``used`` counts the open upload sessions' reservations, *excluding* one,
+    in the same query as the files. ``limit`` is ``None`` when unlimited;
+    ``used`` is then left at 0 rather than aggregated.
     """
     if group is not None:
         limit = effective_group_quota(group)
-        return (0 if limit is None else group_usage(group)), limit
-    limit = effective_quota(owner)
-    return (0 if limit is None else personal_usage(owner)), limit
+        files = File.objects.filter(group_id=_pk(group))
+        bucket_key = "group_id"
+    else:
+        limit = effective_quota(owner)
+        files = File.objects.filter(owner_id=_pk(owner), group__isnull=True)
+        bucket_key = "owner_id"
+    if limit is None:
+        return 0, None
+    sessions = _open_sessions(owner=owner, group=group, excluding=excluding)
+    reserved = Subquery(
+        sessions.values(bucket_key).annotate(total=Sum("size")).values("total"),
+        output_field=BigIntegerField(),
+    )
+    used = files.filter(node_type=File.NodeType.FILE).aggregate(
+        total=Coalesce(Sum("size"), Value(0)) + Coalesce(reserved, Value(0))
+    )["total"]
+    return used, limit
 
 
 def remaining_bytes(*, owner, group):
@@ -172,16 +212,19 @@ def subtree_bytes(node, *, include_trashed):
     return qs.aggregate(total=Sum("size"))["total"] or 0
 
 
-def check_write_allowed(*, owner, group, additional_bytes):
+def check_write_allowed(*, owner, group, additional_bytes, excluding=None):
     """Raise ``QuotaExceeded`` when *additional_bytes* would not fit.
 
     The bucket comes from the target row, not from whoever is acting: writing
     into a teammate's file charges that file's bucket. A delta of zero or less
     is always allowed, so a shrinking file stays saveable over quota.
+
+    *excluding* is the upload session the bytes come from, whose reservation
+    they are, and which must not be counted twice.
     """
     if not additional_bytes or additional_bytes <= 0:
         return
-    used, limit = bucket_state(owner=owner, group=group)
+    used, limit = bucket_state(owner=owner, group=group, excluding=excluding)
     if limit is None or used + additional_bytes <= limit:
         return
     label = _bucket_label(group)

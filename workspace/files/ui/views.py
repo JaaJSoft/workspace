@@ -2,7 +2,7 @@ from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -20,6 +20,7 @@ from workspace.files.sensitivity import (
 )
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
+from workspace.files.services.pins import visible_pins
 from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
@@ -28,6 +29,7 @@ from workspace.files.services.storage_analysis import (
     QUERY_MAX_LENGTH,
     analyze_storage,
 )
+from workspace.files.services.tags import viewer_file_tags
 from workspace.files.views.share_links import _record_access
 from workspace.users.services.settings import get_module_settings
 
@@ -36,7 +38,6 @@ from ..models import (
     FileFavorite,
     FileShare,
     FileShareLink,
-    FileTag,
     PinnedFolder,
     Tag,
 )
@@ -51,14 +52,12 @@ SHARED_FOLDER_PAGE_SIZE = 200
 
 
 def build_breadcrumbs(folder, user=None):
-    """Build breadcrumb trail from current folder to root.
+    """Build breadcrumb trail from the root to *folder*.
 
-    Uses the denormalized ``path`` field to fetch all ancestors in a single
-    query instead of walking the parent FK chain (which costs 1 query per
-    ancestor level).
+    The ancestors are the ones *user* may see (``FileService.visible_ancestors``):
+    a folder shared with them starts its trail at the highest folder they can
+    open, under their own root rather than the group's.
     """
-    path = folder.path or folder.get_path()
-    parts = path.split("/")
 
     def _crumb(f):
         return {
@@ -70,37 +69,12 @@ def build_breadcrumbs(folder, user=None):
             "data": {"drop-folder": str(f.uuid), "drop-folder-name": f.name},
         }
 
-    if len(parts) <= 1:
-        # Root-level folder — no ancestors to fetch
-        breadcrumbs = [_crumb(folder)]
-    else:
-        # Build ancestor path prefixes: "A", "A/B", … (excluding self)
-        ancestor_paths = ["/".join(parts[:i]) for i in range(1, len(parts))]
+    permission = FileService.get_permission(user, folder) if user else None
+    ancestors = FileService.visible_ancestors(user, folder, permission) if user else []
+    breadcrumbs = [_crumb(f) for f in ancestors]
+    breadcrumbs.append(_crumb(folder))
 
-        # Scope to same owner+group to avoid cross-user path collisions
-        if folder.group_id:
-            scope = Q(group_id=folder.group_id)
-        else:
-            scope = Q(owner_id=folder.owner_id, group__isnull=True)
-
-        # Single query for ALL ancestors
-        ancestors = {
-            f.path: f
-            for f in File.objects.filter(
-                scope,
-                path__in=ancestor_paths,
-                node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=True,
-            ).only("uuid", "name", "icon", "color", "path")
-        }
-
-        breadcrumbs = [
-            _crumb(ancestors[ap]) for ap in ancestor_paths if ap in ancestors
-        ]
-        breadcrumbs.append(_crumb(folder))
-
-    # Prepend root entry
-    if folder.group_id:
+    if folder.group_id and FileService.reads_full_path(permission):
         breadcrumbs.insert(0, {"label": "Groups", "icon": "users"})
     else:
         label = user.get_full_name() or user.username if user else "My Files"
@@ -265,16 +239,7 @@ def _build_context(request, folder=None, is_trash_view=False):
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
         )
-        .prefetch_related(
-            # Scoped to the viewer's own tags: the shared-with-me listing shows
-            # other people's files, and their tags must never leak into it.
-            Prefetch(
-                "file_tags",
-                queryset=FileTag.objects.filter(tag__owner=request.user)
-                .select_related("tag")
-                .order_by(Lower("tag__name")),
-            )
-        )
+        .prefetch_related(viewer_file_tags(request.user))
     )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]
@@ -362,24 +327,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         Lower("name")
     )
 
-    # Load pinned folders + their favorite status in a single query:
-    # annotate via the FK (folder_id) rather than re-fetching the File rows.
-    pinned_folders_qs = (
-        PinnedFolder.objects.filter(
-            owner=request.user,
-            folder__deleted_at__isnull=True,
-        )
-        .select_related("folder")
-        .annotate(
-            _folder_is_favorite=Exists(
-                FileFavorite.objects.filter(
-                    owner=request.user,
-                    file_id=OuterRef("folder_id"),
-                )
-            ),
-        )
-        .order_by("position", "created_at")
-    )
+    pinned_folders_qs = visible_pins(request.user)
 
     pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
     for pin in pinned_folders_qs:
@@ -581,6 +529,7 @@ def properties(request, uuid):
         {
             "sections": render_properties_sections(request, request.user, file_obj),
             "file": file_obj,
+            "file_path": FileService.visible_path(file_obj, perm),
             "is_owner": is_owner,
             "is_favorite": is_favorite,
             "is_pinned": is_pinned,
@@ -626,11 +575,8 @@ def storage(request, uuid=None):
         parent_url = None
     else:
         title = folder.name
-        parent_url = (
-            f"/files/storage/{folder.parent_id}"
-            if folder.parent_id
-            else "/files/storage"
-        )
+        parent_id = analysis["folder"]["parent"]
+        parent_url = f"/files/storage/{parent_id}" if parent_id else "/files/storage"
     base_url = (
         f"/files/storage/{folder.uuid}" if folder is not None else "/files/storage"
     )
@@ -678,7 +624,8 @@ def events(request, uuid):
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
         raise Http404
-    if FileService.get_permission(request.user, file_obj) is None:
+    permission = FileService.get_permission(request.user, file_obj)
+    if permission is None:
         raise Http404
 
     try:
@@ -689,9 +636,9 @@ def events(request, uuid):
 
     action_filter = request.GET.get("action", "").strip()
 
-    from workspace.files.services.events import events_for_file
+    from workspace.files.services.events import events_for_file, readable_events
 
-    base_qs = events_for_file(file_obj)
+    base_qs = events_for_file(file_obj, permission)
     # The dropdown only offers filters that yield matches on this file:
     # one query for the distinct action codes, then translated to grouped
     # (category, [(value, label), ...]) tuples by the model.
@@ -703,7 +650,7 @@ def events(request, uuid):
         action_filter = ""
     grouped_actions = FileEvent.grouped_actions(only=available_action_codes)
     events_qs = base_qs.filter(action=action_filter) if action_filter else base_qs
-    file_events = list(events_qs[:events_limit])
+    file_events = readable_events(events_qs[:events_limit], permission)
     total_event_count = events_qs.count()
 
     # Pre-build the swap URLs so the template doesn't thread filter +
@@ -739,25 +686,7 @@ def events(request, uuid):
 @login_required
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
-    # Annotate is_favorite via the folder FK in the same query — avoids
-    # the previous double-fetch (one query for the join, a second one to
-    # re-load the same File rows just to attach the annotation).
-    pinned_qs = (
-        PinnedFolder.objects.filter(
-            owner=request.user,
-            folder__deleted_at__isnull=True,
-        )
-        .select_related("folder")
-        .annotate(
-            _folder_is_favorite=Exists(
-                FileFavorite.objects.filter(
-                    owner=request.user,
-                    file_id=OuterRef("folder_id"),
-                )
-            ),
-        )
-        .order_by("position", "created_at")
-    )
+    pinned_qs = visible_pins(request.user)
 
     for pin in pinned_qs:
         pin.folder.is_favorite = pin._folder_is_favorite
@@ -892,7 +821,7 @@ def file_card(request, uuid):
     """Return a compact file/note card partial for the hover popover."""
     file_obj = (
         File.objects.filter(uuid=uuid, deleted_at__isnull=True)
-        .prefetch_related("file_tags__tag")
+        .prefetch_related(viewer_file_tags(request.user))
         .first()
     )
     if not file_obj or not FileService.can_access(request.user, file_obj):

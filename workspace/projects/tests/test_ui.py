@@ -8,6 +8,7 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.html import escapejs
 
 from workspace.projects.models import Project, Task, TaskEvent
 from workspace.projects.services.links import create_link
@@ -409,7 +410,9 @@ class BacklogViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         html = response.content.decode()
         filter_bar = html.split('id="task-filters"')[1].split("</select>")[0]
-        self.assertIn("labelSelector('filter-label-selected'", filter_bar)
+        self.assertIn(
+            f"labelSelector('{escapejs('filter-label-selected')}'", filter_bar
+        )
         self.assertIn(", '')", filter_bar)
 
     def test_archived_project_backlog_has_no_bulk_controls(self):
@@ -458,7 +461,7 @@ class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         task = create_task(self.project, self.admin, title="Paint the shed")
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}")
-        self.assertContains(resp, f"openTask('{task.uuid}')")
+        self.assertContains(resp, f"openTask('{escapejs(task.uuid)}')")
 
     def test_overview_activity_deleted_task_is_not_clickable(self):
         task = create_task(self.project, self.admin, title="Paint the shed")
@@ -467,7 +470,7 @@ class OverviewActivityTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.client.get(f"/projects/{self.project.uuid}")
         self.assertContains(resp, "Paint the shed")
-        self.assertNotContains(resp, f"openTask('{task_uuid}')")
+        self.assertNotContains(resp, f"openTask('{escapejs(task_uuid)}')")
 
     def test_overview_activity_deleted_task_still_shows_reference(self):
         task = create_task(self.project, self.admin, title="Paint the shed")
@@ -836,7 +839,7 @@ class AllTasksViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         response = self.client.get(f"/projects/{self.project.uuid}/tasks")
         self.assertContains(response, "All statuses")
         for status in self.project.statuses.all():
-            self.assertContains(response, f"filters.status = '{status.uuid}'")
+            self.assertContains(response, f"filters.status = '{escapejs(status.uuid)}'")
         response = self.client.get(f"/projects/{self.project.uuid}/backlog")
         self.assertNotContains(response, "All statuses")
         response = self.client.get(f"/projects/{self.project.uuid}/board")
@@ -853,13 +856,17 @@ class BoardLabelSelectorTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.client.force_login(self.admin)
         resp = self.board()
         self.assertContains(resp, "labelSelector(")
-        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_member_gets_the_selector_without_the_create_endpoint(self):
         self.client.force_login(self.member)
         resp = self.board()
         self.assertContains(resp, "labelSelector(")
-        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertNotContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_member_modal_section_collapses_without_labels(self):
         # Members cannot create labels, so an empty project hides the section

@@ -30,6 +30,7 @@ class GenerateChatResponseTests(TestCase):
         self.bot_profile = BotProfile.objects.create(
             user=self.bot_user,
             system_prompt="You are a test bot.",
+            is_public=True,
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM,
@@ -187,6 +188,7 @@ class GenerateChatResponseWithToolsTests(TestCase):
         self.bot_profile = BotProfile.objects.create(
             user=self.bot_user,
             system_prompt="You are a test bot.",
+            is_public=True,
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM,

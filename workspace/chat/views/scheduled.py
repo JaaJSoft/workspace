@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..serializers import ScheduledMessageSerializer
+from ..services.bot_tasks import can_manage_bot_task
 from ..services.conversations import get_active_membership
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,9 @@ class ScheduledMessageListView(APIView):
             .select_related("bot")
             .order_by("next_run_at")
         )
-        serializer = ScheduledMessageSerializer(schedules, many=True)
+        serializer = ScheduledMessageSerializer(
+            schedules, many=True, context={"request": request}
+        )
         return Response(serializer.data)
 
 
@@ -77,9 +80,14 @@ class ScheduledMessageDetailView(APIView):
                 {"detail": "Scheduled message not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if not can_manage_bot_task(request.user, schedule):
+            return Response(
+                {"detail": "Only the person who scheduled this message can change it."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         serializer = ScheduledMessageSerializer(
-            schedule, data=request.data, partial=True
+            schedule, data=request.data, partial=True, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
         updated = serializer.save()
@@ -97,7 +105,9 @@ class ScheduledMessageDetailView(APIView):
                 updated.compute_next_run(user_tz=get_user_timezone(request.user))
                 updated.save(update_fields=["next_run_at", "is_active"])
 
-        return Response(ScheduledMessageSerializer(updated).data)
+        return Response(
+            ScheduledMessageSerializer(updated, context={"request": request}).data
+        )
 
     @extend_schema(summary="Deactivate a scheduled message")
     def delete(self, request, conversation_id, schedule_id):
@@ -119,6 +129,11 @@ class ScheduledMessageDetailView(APIView):
             return Response(
                 {"detail": "Scheduled message not found."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        if not can_manage_bot_task(request.user, schedule):
+            return Response(
+                {"detail": "Only the person who scheduled this message can change it."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         schedule.is_active = False

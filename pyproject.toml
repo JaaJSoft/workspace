@@ -17,7 +17,7 @@ dependencies = [
     "django-rest-knox>=5.1.0",
     "whitenoise>=6.11.0",
     "django-redis>=7.0.0",
-    "django-unfold>=0.108.0",
+    "django-unfold>=0.109.0",
     # celery
     "celery>=5.6.2",
     "redis>=8.1.0",
@@ -128,7 +128,7 @@ dev = [
     # scaffolding. Never imported by application code - workspace/common/
     # documents/office.py reads documents and depends on nothing but lxml.
     # Only ever writes: the fixtures the extractor is tested against.
-    "pypdf>=6.20.0",
+    "pypdf>=6.20.1",
     "python-docx>=1.2.0",
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",

@@ -12,6 +12,7 @@ from celery import shared_task
 from django.conf import settings
 
 from workspace.ai.harness.runner import StopReason
+from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import build_conversation_history
@@ -74,6 +75,19 @@ def generate_chat_response(
         Message.objects.filter(pk=message_id).select_related("author").first()
     )
     human_user = trigger_message.author if trigger_message else None
+
+    # Access may have been revoked after the DM or group was set up, and the
+    # run below reads the sender's private data. Refused quietly: an error
+    # reply would invite a retry that cannot succeed.
+    refusal = run_refusal(bot_profile, human_user, conversation.pk)
+    if refusal:
+        logger.info(
+            "Bot response refused (%s): conversation=%s bot=%s",
+            refusal,
+            scrub(conversation_id),
+            scrub(bot_user_id),
+        )
+        return {"status": "skipped", "reason": refusal}
 
     # Created before the history is assembled, not after: that step reads
     # every attachment in the conversation and takes minutes on an

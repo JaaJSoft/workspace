@@ -182,7 +182,7 @@ class RunAgentGoalCheckTests(TestCase):
             username="bot", first_name="AI", last_name="Bot"
         )
         self.bot_profile = BotProfile.objects.create(
-            user=self.bot_user, system_prompt="You are a test bot."
+            user=self.bot_user, system_prompt="You are a test bot.", is_public=True
         )
         self.conversation = _make_conversation(self.user, self.bot_user)
 

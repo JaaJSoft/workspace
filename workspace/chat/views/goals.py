@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ..serializers import AgentGoalCreateSerializer, AgentGoalSerializer
+from ..services.bot_tasks import can_manage_bot_task
 from ..services.conversations import get_active_membership
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ class AgentGoalListView(APIView):
             .select_related("bot")
             .order_by("next_check_at")
         )
-        serializer = AgentGoalSerializer(goals, many=True)
+        serializer = AgentGoalSerializer(goals, many=True, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
@@ -115,7 +116,10 @@ class AgentGoalListView(APIView):
             deadline=data.get("deadline"),
             next_check_at=AgentGoal.clamp_next_check(first_check),
         )
-        return Response(AgentGoalSerializer(goal).data, status=status.HTTP_201_CREATED)
+        return Response(
+            AgentGoalSerializer(goal, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 @extend_schema(tags=["Chat - Conversations"])
@@ -152,11 +156,18 @@ class AgentGoalDetailView(APIView):
                 {"detail": "Agent goal not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if not can_manage_bot_task(request.user, goal):
+            return Response(
+                {"detail": "Only the person who set this goal can change it."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        serializer = AgentGoalSerializer(goal, data=request.data, partial=True)
+        serializer = AgentGoalSerializer(
+            goal, data=request.data, partial=True, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         updated = serializer.save()
-        return Response(AgentGoalSerializer(updated).data)
+        return Response(AgentGoalSerializer(updated, context={"request": request}).data)
 
     @extend_schema(summary="Stop an agent goal (marks it abandoned)")
     def delete(self, request, conversation_id, goal_id):
@@ -176,6 +187,11 @@ class AgentGoalDetailView(APIView):
             return Response(
                 {"detail": "Agent goal not found."},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+        if not can_manage_bot_task(request.user, goal):
+            return Response(
+                {"detail": "Only the person who set this goal can change it."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         goal.status = AgentGoal.Status.ABANDONED

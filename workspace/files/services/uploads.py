@@ -287,15 +287,23 @@ def finished_upload(session):
 
 
 def complete(session, file_obj, *, replaced):
-    """Record what the session produced, which ends its reservation."""
+    """Record what the session produced, which ends its reservation.
+
+    Called inside :func:`finished_upload`: the spool is already gone, so a
+    retry that took the lock before this ran would find no bytes and no
+    answer either.
+    """
+    now = timezone.now()
     UploadSession.objects.filter(pk=session.pk).update(
-        file=file_obj,
-        replaced=replaced,
-        completed_at=timezone.now(),
-        updated_at=timezone.now(),
+        file=file_obj, replaced=replaced, completed_at=now, updated_at=now
     )
     session.file = file_obj
     session.replaced = replaced
+    session.completed_at = now
+
+
+def release(session):
+    """Drop a completed session's leftovers, once its lock is released."""
     _discard_files(session.pk)
 
 

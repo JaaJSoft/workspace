@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from datetime import timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -141,6 +142,15 @@ class OpenSessionTests(UploadSessionApiMixin, APITestCase):
 
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("name", response.data)
+
+    def test_a_dot_name_is_refused_before_any_byte_is_sent(self):
+        # The row would refuse it too, but only once the whole file is in.
+        for name in (".", ".."):
+            with self.subTest(name=name):
+                response = self._open(name=name)
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("name", response.data)
+        self.assertFalse(UploadSession.objects.exists())
 
 
 @override_settings(STORAGE_QUOTA_BYTES=100 * KB)
@@ -369,6 +379,41 @@ class FinalizeTests(UploadSessionApiMixin, APITestCase):
         self.assertEqual(again.status_code, 201, again.content)
         self.assertEqual(again.data["uuid"], first.data["uuid"])
         self.assertEqual(File.objects.filter(node_type=File.NodeType.FILE).count(), 1)
+
+    def test_completion_is_recorded_before_a_retry_can_take_the_lock(self):
+        uuid = self._open().data["uuid"]
+        self._send(uuid)
+        session = UploadSession.objects.get(pk=uuid)
+        record = uploads.complete
+        lock_was_free = []
+
+        def recording(*args, **kwargs):
+            with open(uploads._lock_path(session), "ab") as handle:
+                taken = locks.lock(handle, locks.LOCK_EX | locks.LOCK_NB)
+                if taken:
+                    locks.unlock(handle)
+            lock_was_free.append(taken)
+            return record(*args, **kwargs)
+
+        with patch.object(uploads, "complete", side_effect=recording):
+            self.assertEqual(self._finalize(uuid).status_code, 201)
+
+        self.assertEqual(lock_was_free, [False])
+
+    def test_a_retry_that_read_the_session_before_it_completed_gets_the_file(self):
+        uuid = self._open().data["uuid"]
+        self._send(uuid)
+        before = UploadSession.objects.get(pk=uuid)
+        first = self._finalize(uuid)
+
+        with patch(
+            "workspace.files.views.uploads._session_or_none",
+            side_effect=[before, UploadSession.objects.get(pk=uuid)],
+        ):
+            again = self._finalize(uuid)
+
+        self.assertEqual(again.status_code, 201, again.content)
+        self.assertEqual(again.data["uuid"], first.data["uuid"])
 
     def test_a_name_taken_during_the_transfer_is_refused_by_default(self):
         uuid = self._open().data["uuid"]

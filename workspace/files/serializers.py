@@ -109,6 +109,10 @@ def validate_node_name(value):
         raise serializers.ValidationError(
             "File and folder names must not contain a backslash."
         )
+    if value in (".", ".."):
+        raise serializers.ValidationError(
+            "File and folder names must not be '.' or '..'."
+        )
     return value
 
 

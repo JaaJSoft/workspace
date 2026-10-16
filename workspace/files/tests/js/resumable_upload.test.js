@@ -176,6 +176,19 @@ test('a chunk refused while the server still writes the last attempt waits inste
   assert.deepEqual(waits, [1000, 2000]);
 });
 
+test('a server that stays busy fails the upload once the waits run out', async () => {
+  const file = bigFile(60 * MB);
+  let busy = 20; // past the retries: the loop must give up, not start them over
+  const server = sessionServer(file, {
+    override: (xhr, state) => (xhr.method === 'PATCH' && busy-- > 0 ? [409, { offset: state.offset }] : null),
+  });
+  const { ctx, waits, fetched } = makeEnv(server.answer);
+
+  await assert.rejects(ctx.sendFileUpload(file, {}, () => {}).promise, /Network error/);
+  assert.equal(waits.length, 8);
+  assert.deepEqual(fetched, [], 'the session is kept for a retry');
+});
+
 test('when the waits run out it fails, and a retry resumes the same session', async () => {
   const file = bigFile();
   let down = true;

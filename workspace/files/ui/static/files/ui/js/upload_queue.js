@@ -567,7 +567,9 @@ window.sendResumableUpload = function sendResumableUpload(
           (response) => response.status === 409 && response.body.offset === start,
         );
         // 409: an earlier attempt landed after all; 400: this one was cut.
-        if (typeof body.offset === 'number' && [200, 400, 409].includes(status)) {
+        // A 409 at the same offset is a server still busy after every wait.
+        const moved = typeof body.offset === 'number' && !(status === 409 && body.offset === start);
+        if (moved && [200, 400, 409].includes(status)) {
           offset = body.offset;
           onProgress(offset);
           continue;

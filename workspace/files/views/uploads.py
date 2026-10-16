@@ -283,8 +283,14 @@ class UploadSessionFinalizeView(APIView):
         try:
             with uploads.finished_upload(session) as content:
                 file_obj, replaced = self._store(session, parent, content, user)
+                uploads.complete(session, file_obj, replaced=replaced)
         except uploads.SessionGone:
-            return _not_found()
+            # A finalize that ran while this request was reading the session
+            # stored the file already: answer with it.
+            session = _session_or_none(user, uuid)
+            if session is None or session.completed_at is None:
+                return _not_found()
+            return self._answer(request, session.file, replaced=session.replaced)
         except uploads.UploadIncomplete as exc:
             return _offset_response(
                 "Bytes are still missing.", exc.offset, status.HTTP_409_CONFLICT
@@ -296,7 +302,7 @@ class UploadSessionFinalizeView(APIView):
                 session.received,
                 status.HTTP_409_CONFLICT,
             )
-        uploads.complete(session, file_obj, replaced=replaced)
+        uploads.release(session)
         if replaced:
             announce_replaced(file_obj, user)
         return self._answer(request, file_obj, replaced=replaced)

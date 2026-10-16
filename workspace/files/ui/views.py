@@ -52,14 +52,12 @@ SHARED_FOLDER_PAGE_SIZE = 200
 
 
 def build_breadcrumbs(folder, user=None):
-    """Build breadcrumb trail from current folder to root.
+    """Build breadcrumb trail from the root to *folder*.
 
-    Uses the denormalized ``path`` field to fetch all ancestors in a single
-    query instead of walking the parent FK chain (which costs 1 query per
-    ancestor level).
+    The ancestors are the ones *user* may see (``FileService.visible_ancestors``):
+    a folder shared with them starts its trail at the highest folder they can
+    open, under their own root rather than the group's.
     """
-    path = folder.path or folder.get_path()
-    parts = path.split("/")
 
     def _crumb(f):
         return {
@@ -71,37 +69,12 @@ def build_breadcrumbs(folder, user=None):
             "data": {"drop-folder": str(f.uuid), "drop-folder-name": f.name},
         }
 
-    if len(parts) <= 1:
-        # Root-level folder — no ancestors to fetch
-        breadcrumbs = [_crumb(folder)]
-    else:
-        # Build ancestor path prefixes: "A", "A/B", … (excluding self)
-        ancestor_paths = ["/".join(parts[:i]) for i in range(1, len(parts))]
+    permission = FileService.get_permission(user, folder) if user else None
+    ancestors = FileService.visible_ancestors(user, folder, permission) if user else []
+    breadcrumbs = [_crumb(f) for f in ancestors]
+    breadcrumbs.append(_crumb(folder))
 
-        # Scope to same owner+group to avoid cross-user path collisions
-        if folder.group_id:
-            scope = Q(group_id=folder.group_id)
-        else:
-            scope = Q(owner_id=folder.owner_id, group__isnull=True)
-
-        # Single query for ALL ancestors
-        ancestors = {
-            f.path: f
-            for f in File.objects.filter(
-                scope,
-                path__in=ancestor_paths,
-                node_type=File.NodeType.FOLDER,
-                deleted_at__isnull=True,
-            ).only("uuid", "name", "icon", "color", "path")
-        }
-
-        breadcrumbs = [
-            _crumb(ancestors[ap]) for ap in ancestor_paths if ap in ancestors
-        ]
-        breadcrumbs.append(_crumb(folder))
-
-    # Prepend root entry
-    if folder.group_id:
+    if folder.group_id and FileService.reads_full_path(permission):
         breadcrumbs.insert(0, {"label": "Groups", "icon": "users"})
     else:
         label = user.get_full_name() or user.username if user else "My Files"

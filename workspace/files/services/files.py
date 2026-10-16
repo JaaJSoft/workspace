@@ -226,6 +226,39 @@ class FileService:
         return file_obj.name
 
     @staticmethod
+    def visible_ancestors(user, folder, permission):
+        """The live ancestor folders of *folder* that *user* may see, root first.
+
+        *permission* is the viewer's on *folder*. One who reads its full path
+        (``reads_full_path``: the owner, a group member) sees every folder
+        above it. Anyone else reached it through a share, and only keeps the
+        ancestors they can open themselves - never the owner's private folders
+        above the shared one. One query for the whole chain, through the
+        denormalized ``path``.
+        """
+        from django.db.models import Q
+
+        parts = (folder.path or folder.get_path()).split("/")
+        ancestor_paths = ["/".join(parts[:i]) for i in range(1, len(parts))]
+        if not ancestor_paths:
+            return []
+        # Scoped to the folder's tree: paths repeat across owners and groups.
+        if folder.group_id:
+            tree = Q(group_id=folder.group_id)
+        else:
+            tree = Q(owner_id=folder.owner_id, group__isnull=True)
+        ancestors = File.objects.filter(
+            tree,
+            path__in=ancestor_paths,
+            node_type=File.NodeType.FOLDER,
+            deleted_at__isnull=True,
+        ).only("uuid", "name", "icon", "color", "path")
+        if not FileService.reads_full_path(permission):
+            ancestors = ancestors.filter(FileService.accessible_files_q(user))
+        by_path = {ancestor.path: ancestor for ancestor in ancestors}
+        return [by_path[path] for path in ancestor_paths if path in by_path]
+
+    @staticmethod
     def full_path_q(user):
         """Nodes whose full path *user* may read, per ``visible_path``.
 

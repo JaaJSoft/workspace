@@ -388,14 +388,9 @@
             for (const vote of (this.poll.votes || [])) {
               // Skip current guest's votes (shown in editable "Your vote" row)
               if (vote.is_mine) continue;
-              const key = vote.user ? 'user:' + vote.user.id : 'guest:' + vote.guest_name;
+              const key = vote.participant;
               if (!map.has(key)) {
-                map.set(key, {
-                  key,
-                  name: vote.user ?
-                    (vote.user.first_name + ' ' + vote.user.last_name).trim() || vote.user.username : vote.guest_name,
-                  votes: {},
-                });
+                map.set(key, { key, name: vote.name, votes: {} });
               }
               map.get(key).votes[vote.slot_id] = vote.choice;
             }

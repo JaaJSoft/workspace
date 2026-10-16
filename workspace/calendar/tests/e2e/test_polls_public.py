@@ -11,12 +11,13 @@ files pipeline is working end-to-end.
 
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 from django.utils import timezone
 from playwright.sync_api import expect
 
-from workspace.calendar.models import Poll, PollSlot
+from workspace.calendar.models import Poll, PollSlot, PollVote
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 
 
@@ -74,3 +75,29 @@ class SharedPollVotingTests(PlaywrightTestCase):
         # Verify the vote actually landed in the DB for extra confidence
         # — this guards against the UI silently swallowing errors.
         self.assertEqual(poll.slots.first().votes.filter(choice="yes").count(), 1)
+
+    def test_participants_render_by_display_name_one_row_per_voter(self):
+        poll = self._make_open_poll(title="Offsite")
+        slot = poll.slots.first()
+        for username in ("sam1", "sam2"):
+            user = self.create_user(username=username)
+            user.first_name, user.last_name = "Sam", "Smith"
+            user.save()
+            PollVote.objects.create(slot=slot, user=user, choice="yes")
+        PollVote.objects.create(
+            slot=slot,
+            user=None,
+            voter_token=str(uuid.uuid4()),
+            guest_name="Grace",
+            choice="no",
+        )
+
+        self.page.goto(
+            f"{self.live_server_url}/calendar/polls/shared/{poll.share_token}"
+        )
+
+        expect(self.page.locator("h1")).to_have_text("Offsite")
+        rows = self.page.locator("tbody tr.hover")
+        expect(rows).to_have_count(3)
+        expect(rows.filter(has_text="Sam Smith")).to_have_count(2)
+        expect(rows.filter(has_text="Grace")).to_have_count(1)

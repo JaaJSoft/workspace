@@ -524,7 +524,7 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         self._stored_guest_vote()
         self._guest_vote(self.client, "Eve", "maybe")
         resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
-        mine = {v["guest_name"]: v["is_mine"] for v in resp.data["votes"]}
+        mine = {v["name"]: v["is_mine"] for v in resp.data["votes"]}
         self.assertEqual(mine, {"Eve": True, "Grace": False})
 
     def test_poll_payloads_never_expose_guest_tokens_or_emails(self):
@@ -539,6 +539,56 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             self.assertNotIn(vote.voter_token, body)
             self.assertNotIn(vote.guest_email, body)
             self.assertTrue(all("voter_token" not in v for v in resp.data["votes"]))
+
+    def _public_payload_fixture(self):
+        """Two same-named workspace voters, an invitee and an organizer, all with identities."""
+        self.owner.first_name, self.owner.last_name = "Olga", "Organizer"
+        self.owner.save()
+        self.voter.first_name, self.voter.last_name = "Sam", "Smith"
+        self.voter.save()
+        namesake = User.objects.create_user(
+            username="namesake",
+            email="namesake@test.com",
+            first_name="Sam",
+            last_name="Smith",
+        )
+        invitee = User.objects.create_user(
+            username="quietinvitee",
+            email="quiet@test.com",
+            first_name="Quinn",
+            last_name="Hidden",
+        )
+        PollInvitee.objects.create(poll=self.poll, user=invitee)
+        PollVote.objects.create(slot=self.slot1, user=self.voter, choice="yes")
+        PollVote.objects.create(slot=self.slot1, user=namesake, choice="no")
+        return [self.owner, self.voter, namesake, invitee]
+
+    def _assert_public_payload(self, resp, users):
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        body = resp.content.decode()
+        self.assertNotIn("invitees", resp.data)
+        self.assertNotIn("Quinn", body)
+        for user in users:
+            self.assertNotIn(f'"{user.username}"', body)
+            self.assertNotIn(user.email, body)
+        self.assertEqual(resp.data["created_by"], "Olga Organizer")
+        for vote in resp.data["votes"]:
+            self.assertNotIn("user", vote)
+        workspace_votes = [v for v in resp.data["votes"] if v["name"] == "Sam Smith"]
+        self.assertEqual(len(workspace_votes), 2)
+        self.assertEqual(len({v["participant"] for v in workspace_votes}), 2)
+
+    def test_shared_poll_shows_anonymous_visitors_only_display_names(self):
+        users = self._public_payload_fixture()
+        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        self._assert_public_payload(resp, users)
+
+    def test_guest_vote_response_shows_only_display_names(self):
+        users = self._public_payload_fixture()
+        resp = self._guest_vote(self.client, "Gina", "maybe")
+        self._assert_public_payload(resp, users)
+        mine = [v["is_mine"] for v in resp.data["votes"] if v["name"] == "Gina"]
+        self.assertEqual(mine, [True])
 
     def test_shared_get_ignores_a_voter_token_query_parameter(self):
         vote = self._stored_guest_vote()

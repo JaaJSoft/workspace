@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from workspace.core.module_registry import registry
 
@@ -107,6 +108,50 @@ class ProfileActivityVisibilityTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(mock_events.call_args.kwargs["visible_to"], self.normal)
         mock_sources.assert_called_once_with(self.normal)
+
+    def _patch_projects_provider(self):
+        from workspace.projects.activity import ProjectsActivityProvider
+
+        today = timezone.localdate()
+        for name, value in (
+            ("get_daily_counts", {today: 41}),
+            ("get_stats", {"total_tasks": 7}),
+        ):
+            patcher = patch.object(ProjectsActivityProvider, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _profiles_seen_by_normal_viewer(self):
+        self._patch_projects_provider()
+        self.client.login(username="visnorm", password="pass123")
+        for url in (
+            reverse("users_ui:profile"),
+            reverse("users_ui:profile_by_username", kwargs={"username": "visstaff"}),
+        ):
+            cache.clear()
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200)
+            yield url, resp
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_hidden_preview_module_left_out_of_usage_stats(self):
+        for url, resp in self._profiles_seen_by_normal_viewer():
+            with self.subTest(url=url):
+                self.assertNotIn("projects", resp.context["activity_stats"])
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_hidden_preview_module_left_out_of_heatmap(self):
+        for url, resp in self._profiles_seen_by_normal_viewer():
+            with self.subTest(url=url):
+                self.assertEqual(resp.context["heatmap"]["total_contributions"], 0)
+
+    @override_settings(PREVIEW_VISIBILITY="staff")
+    def test_preview_module_counted_for_a_viewer_who_can_see_it(self):
+        self._patch_projects_provider()
+        self.client.login(username="visstaff", password="pass123")
+        resp = self.client.get(reverse("users_ui:profile"))
+        self.assertEqual(resp.context["activity_stats"]["projects"], {"total_tasks": 7})
+        self.assertEqual(resp.context["heatmap"]["total_contributions"], 41)
 
 
 class ProfileHeatmapTests(TestCase):

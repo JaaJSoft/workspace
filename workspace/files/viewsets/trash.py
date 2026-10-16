@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.http import Http404
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
@@ -16,6 +17,17 @@ from workspace.files.services import FileService
 from workspace.files.services.hard_delete import hard_delete_in_batches
 
 TRASH_RETENTION_DAYS = getattr(settings, "TRASH_RETENTION_DAYS", 30)
+
+
+def _trash_action_available(action_id, user, file_obj):
+    from workspace.files.actions import ActionRegistry
+
+    return ActionRegistry.is_action_available(
+        action_id,
+        user,
+        file_obj,
+        permission=FileService.trash_permission(user, file_obj),
+    )
 
 
 class TrashMixin:
@@ -37,6 +49,8 @@ class TrashMixin:
             return Response(
                 {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
             )
+        if not _trash_action_available("restore", request.user, file_obj):
+            raise Http404
         restored = FileService.restore(file_obj, acting_user=request.user)
         return Response({"restored": restored}, status=status.HTTP_200_OK)
 
@@ -56,12 +70,17 @@ class TrashMixin:
             return Response(
                 {"detail": "Item is not in trash."}, status=status.HTTP_400_BAD_REQUEST
             )
+        if not _trash_action_available("purge", request.user, file_obj):
+            raise Http404
         FileService.hard_delete(file_obj, acting_user=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
         summary="List trashed files and folders",
-        description="Return the current user's trashed items.",
+        description=(
+            "Return the trashed items the current user may restore: their "
+            "own, and those of the groups they belong to."
+        ),
         parameters=[
             OpenApiParameter(
                 name="node_type",
@@ -78,8 +97,8 @@ class TrashMixin:
                 name="owner",
                 type=OpenApiTypes.INT,
                 description=(
-                    "Filter by owner id. Results are always limited to the "
-                    "current user."
+                    "Filter by owner id. Results are always limited to what "
+                    "the current user may restore."
                 ),
             ),
             OpenApiParameter(
@@ -109,7 +128,9 @@ class TrashMixin:
     @action(detail=False, methods=["get"], url_path="trash")
     def trash(self, request):
         """List trashed files and folders."""
-        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        queryset = FileService.restorable_files_qs(request.user).filter(
+            deleted_at__isnull=False
+        )
         queryset = FileService.annotate_for_serializer(queryset, request.user)
         queryset = self.filter_queryset(queryset)
         serializer = self.get_serializer(queryset, many=True)
@@ -118,8 +139,9 @@ class TrashMixin:
     @extend_schema(
         summary="Clean trash",
         description=(
-            "Permanently delete trashed items past retention. "
-            "Use force=true to delete all trashed items."
+            "Permanently delete the current user's own trashed items past "
+            "retention; other members' trashed group items are left alone. "
+            "Use force=true to delete all of the user's own trashed items."
         ),
         parameters=[
             OpenApiParameter(
@@ -146,7 +168,12 @@ class TrashMixin:
         )
         retention_days = TRASH_RETENTION_DAYS
         cutoff = timezone.now() - timedelta(days=retention_days)
-        queryset = File.objects.filter(owner=request.user, deleted_at__isnull=False)
+        # Only the caller's own nodes: the listing also shows the group's
+        # trashed nodes, but emptying it must not destroy what other members
+        # trashed - they purge those one at a time.
+        queryset = FileService.owned_files_qs(request.user).filter(
+            deleted_at__isnull=False
+        )
         if not force:
             queryset = queryset.filter(deleted_at__lt=cutoff)
         # Count Files explicitly so the response reflects deleted *files*,

@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -438,19 +439,43 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         self.assertEqual(vote.choice, "yes")
         self.assertIsNone(vote.user)
 
-    def test_guest_vote_returns_voter_token(self):
-        resp = self.client.post(
+    def _guest_vote(self, client, name, choice, **extra):
+        return client.post(
             f"/api/v1/polls/shared/{self.poll.share_token}/vote",
             {
-                "guest_name": "Bob",
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
+                "guest_name": name,
+                "votes": [{"slot_id": str(self.slot1.uuid), "choice": choice}],
+                **extra,
             },
             format="json",
         )
-        self.assertIn("voter_token", resp.data)
-        self.assertGreater(len(resp.data["voter_token"]), 0)
-        # Cookie should be set
-        self.assertIn(f"poll_voter_{self.poll.share_token}", resp.cookies)
+
+    def _stored_guest_vote(self, token="11111111-1111-4111-8111-111111111111"):
+        return PollVote.objects.create(
+            slot=self.slot1,
+            user=None,
+            voter_token=token,
+            guest_name="Grace",
+            guest_email="grace@private.example",
+            choice="yes",
+        )
+
+    def test_guest_vote_sets_cookie_without_echoing_the_token(self):
+        resp = self._guest_vote(self.client, "Bob", "yes")
+        cookie = resp.cookies[f"poll_voter_{self.poll.share_token}"]
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie.value, PollVote.objects.get().voter_token)
+        self.assertNotIn(cookie.value, resp.content.decode())
+
+    @override_settings(SESSION_COOKIE_SECURE=True)
+    def test_guest_cookie_is_secure_when_session_cookies_are(self):
+        resp = self._guest_vote(self.client, "Bob", "yes")
+        self.assertTrue(resp.cookies[f"poll_voter_{self.poll.share_token}"]["secure"])
+
+    @override_settings(SESSION_COOKIE_SECURE=False)
+    def test_guest_cookie_follows_an_http_deployment(self):
+        resp = self._guest_vote(self.client, "Bob", "yes")
+        self.assertFalse(resp.cookies[f"poll_voter_{self.poll.share_token}"]["secure"])
 
     def test_guest_vote_generates_token_when_empty(self):
         resp = self.client.post(
@@ -466,42 +491,20 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         vote = PollVote.objects.get(guest_name="Carol")
         self.assertGreater(len(vote.voter_token), 0)
 
-    def test_guest_vote_reuses_token(self):
-        """Same voter_token updates existing votes instead of creating new ones."""
-        token = "12345678-1234-1234-1234-123456789abc"
-        self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
-            {
-                "guest_name": "Dave",
-                "voter_token": token,
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "yes"}],
-            },
-            format="json",
-        )
-        # Vote again with same token, different choice
-        self.client.post(
-            f"/api/v1/polls/shared/{self.poll.share_token}/vote",
-            {
-                "guest_name": "Dave Updated",
-                "voter_token": token,
-                "votes": [{"slot_id": str(self.slot1.uuid), "choice": "no"}],
-            },
-            format="json",
-        )
-        votes = PollVote.objects.filter(voter_token=token)
-        self.assertEqual(votes.count(), 1)
-        self.assertEqual(votes.first().choice, "no")
-        self.assertEqual(votes.first().guest_name, "Dave Updated")
+    def test_guest_revote_updates_the_same_votes(self):
+        self._guest_vote(self.client, "Dave", "yes")
+        self._guest_vote(self.client, "Dave Updated", "no")
+        vote = PollVote.objects.get()
+        self.assertEqual(vote.choice, "no")
+        self.assertEqual(vote.guest_name, "Dave Updated")
 
     def test_guest_vote_restores_on_get(self):
-        """GET shared link with voter_token returns previous votes."""
-        token = "abcdef01-2345-6789-abcd-ef0123456789"
+        """The voter cookie brings a guest's previous votes back."""
         self.client.post(
             f"/api/v1/polls/shared/{self.poll.share_token}/vote",
             {
                 "guest_name": "Eve",
                 "guest_email": "eve@test.com",
-                "voter_token": token,
                 "votes": [
                     {"slot_id": str(self.slot1.uuid), "choice": "yes"},
                     {"slot_id": str(self.slot2.uuid), "choice": "maybe"},
@@ -509,15 +512,50 @@ class GuestVoteTests(PollTestMixin, APITestCase):
             },
             format="json",
         )
-        resp = self.client.get(
-            f"/api/v1/polls/shared/{self.poll.share_token}?voter_token={token}",
-        )
+        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn("my_votes", resp.data)
         self.assertEqual(resp.data["my_votes"][str(self.slot1.uuid)], "yes")
         self.assertEqual(resp.data["my_votes"][str(self.slot2.uuid)], "maybe")
         self.assertEqual(resp.data["my_guest_name"], "Eve")
         self.assertEqual(resp.data["my_guest_email"], "eve@test.com")
+        self.assertTrue(all(v["is_mine"] for v in resp.data["votes"]))
+
+    def test_shared_payload_marks_only_the_callers_votes_as_mine(self):
+        self._stored_guest_vote()
+        self._guest_vote(self.client, "Eve", "maybe")
+        resp = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        mine = {v["guest_name"]: v["is_mine"] for v in resp.data["votes"]}
+        self.assertEqual(mine, {"Eve": True, "Grace": False})
+
+    def test_poll_payloads_never_expose_guest_tokens_or_emails(self):
+        vote = self._stored_guest_vote()
+        self.client.force_authenticate(user=self.voter)
+        detail = self.client.get(f"/api/v1/polls/{self.poll.uuid}")
+        self.client.force_authenticate(user=None)
+        shared = self.client.get(f"/api/v1/polls/shared/{self.poll.share_token}")
+        for resp in (detail, shared):
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            body = resp.content.decode()
+            self.assertNotIn(vote.voter_token, body)
+            self.assertNotIn(vote.guest_email, body)
+            self.assertTrue(all("voter_token" not in v for v in resp.data["votes"]))
+
+    def test_shared_get_ignores_a_voter_token_query_parameter(self):
+        vote = self._stored_guest_vote()
+        resp = self.client.get(
+            f"/api/v1/polls/shared/{self.poll.share_token}",
+            {"voter_token": vote.voter_token},
+        )
+        self.assertNotIn("my_votes", resp.data)
+        self.assertNotIn("my_guest_email", resp.data)
+
+    def test_guest_cannot_overwrite_another_guests_votes_by_sending_their_token(self):
+        vote = self._stored_guest_vote()
+        self._guest_vote(self.client, "Mallory", "no", voter_token=vote.voter_token)
+        vote.refresh_from_db()
+        self.assertEqual(vote.choice, "yes")
+        self.assertEqual(vote.guest_name, "Grace")
+        self.assertEqual(PollVote.objects.filter(guest_name="Mallory").count(), 1)
 
     def test_guest_vote_get_without_token_has_no_my_votes(self):
         resp = self.client.get(

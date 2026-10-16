@@ -39,15 +39,33 @@ class NotesActivityProvider(ActivityProvider):
         viewer = get_user_model().objects.get(pk=viewer_id)
         return FileService.accessible_file_ids(viewer)
 
+    @staticmethod
+    def _is_own_view(user_id, viewer_id):
+        """Whether *user_id* is looking at their own activity: callers pass no
+        viewer for it, or the user themselves."""
+        return user_id is not None and viewer_id in (None, user_id)
+
     def _stats_visibility_filter(self, user_id, viewer_id):
-        """Restrict the File-level stats queryset to notes visible to viewer."""
-        if viewer_id is None or viewer_id == user_id:
+        """Restrict the File-level stats queryset to notes visible to viewer.
+
+        The owner's own view is no exception: the notes they created in a
+        group they have left are no longer theirs to see.
+        """
+        from workspace.files.services import FileService
+
+        if self._is_own_view(user_id, viewer_id):
+            return FileService.owned_files_q(user_id)
+        if viewer_id is None:
             return Q()
         return Q(pk__in=self._viewer_accessible_file_ids(viewer_id))
 
     def _event_visibility_filter(self, user_id, viewer_id):
         """Restrict a FileEvent queryset to events on notes visible to viewer."""
-        if viewer_id is None or viewer_id == user_id:
+        from workspace.files.services import FileService
+
+        if self._is_own_view(user_id, viewer_id):
+            return Q(file__in=FileService.owned_files_qs(user_id))
+        if viewer_id is None:
             return Q()
         return Q(file_id__in=self._viewer_accessible_file_ids(viewer_id))
 
@@ -84,13 +102,16 @@ class NotesActivityProvider(ActivityProvider):
         from django.contrib.auth import get_user_model
 
         from workspace.files.models import NOTE_FEED_Q
+        from workspace.files.services import FileService
         from workspace.files.services.events import recent_feed_events
 
-        viewer = None
-        if viewer_id is not None and viewer_id != user_id:
+        feed_q, viewer = NOTE_FEED_Q, None
+        if self._is_own_view(user_id, viewer_id):
+            feed_q &= FileService.owned_files_q(user_id)
+        elif viewer_id is not None:
             viewer = get_user_model().objects.get(pk=viewer_id)
         feed = recent_feed_events(
-            NOTE_FEED_Q,
+            feed_q,
             owner_id=user_id,
             viewer=viewer,
             exclude_actor_id=exclude_actor_id,

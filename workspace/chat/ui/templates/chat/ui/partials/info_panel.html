@@ -131,6 +131,7 @@
     </button>
     <button
       type="button"
+      x-show="activeConversation.can_clear"
       class="btn btn-ghost btn-xs gap-1 text-error hover:bg-error/10"
       @click="clearConversation()"
     >
@@ -707,6 +708,7 @@
               </div>
               <!-- Actions -->
               <div
+                x-show="goal.can_manage"
                 class="flex gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex-shrink-0"
               >
                 <button
@@ -798,6 +800,7 @@
               </div>
               <!-- Actions -->
               <div
+                x-show="sched.can_manage"
                 class="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
               >
                 <button

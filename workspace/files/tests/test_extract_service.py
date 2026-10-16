@@ -354,3 +354,55 @@ class ExtractZipServiceTests(TestCase):
         subs = File.objects.filter(parent=self.dest, name="sub", node_type="folder")
         self.assertEqual(subs.count(), 1)
         self.assertEqual(File.objects.filter(parent=subs.first()).count(), 2)
+
+
+class ExtractToRootScopeTests(TestCase):
+    """At the root, an archive's folders only merge into the extractor's own."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+
+        self.alice = User.objects.create_user(username="alice", password="pw")
+        self.bob = User.objects.create_user(username="bob", password="pw")
+        self.other = Group.objects.create(name="Other")
+        self.bob.groups.add(self.other)
+        self.bob_docs = FileService.create_folder(self.bob, "Docs")
+        self.group_root = FileService.create_folder(
+            self.bob, "OtherRoot", group=self.other
+        )
+
+    def _archive(self, entries):
+        archive = FileService.create_file(
+            self.alice,
+            "a.zip",
+            content=ContentFile(_make_zip(entries), name="a.zip"),
+            mime_type="application/zip",
+        )
+        archive.type = "zip"
+        archive.save(update_fields=["type"])
+        return archive
+
+    def test_entries_never_land_in_another_users_or_groups_root_folder(self):
+        archive = self._archive(
+            [("Docs/planted.txt", b"hi"), ("OtherRoot/Inbox/evil.txt", b"evil")]
+        )
+
+        extract_zip(archive, None, acting_user=self.alice)
+
+        planted = File.objects.get(name="planted.txt")
+        evil = File.objects.get(name="evil.txt")
+        self.assertNotEqual(planted.parent_id, self.bob_docs.pk)
+        self.assertEqual(planted.parent.owner, self.alice)
+        self.assertIsNone(planted.group_id)
+        self.assertIsNone(evil.group_id)
+        self.assertEqual(evil.parent.parent.owner, self.alice)
+        self.assertFalse(File.objects.filter(parent=self.group_root).exists())
+        self.assertFalse(File.objects.filter(parent=self.bob_docs).exists())
+
+    def test_entries_merge_into_the_extractors_own_root_folder(self):
+        own = FileService.create_folder(self.alice, "Docs")
+        archive = self._archive([("docs/mine.txt", b"mine")])
+
+        extract_zip(archive, None, acting_user=self.alice)
+
+        self.assertEqual(File.objects.get(name="mine.txt").parent_id, own.pk)

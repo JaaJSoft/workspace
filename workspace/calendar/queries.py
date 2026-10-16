@@ -64,19 +64,23 @@ def visible_calendars(user):
     return owned, subscribed
 
 
-def visible_events_q(user):
+def visible_events_q(user, calendar_ids=None):
     """Return a Q filter for events visible to the user.
 
     An event is visible if its calendar is owned/subscribed by the user,
-    or if the user is a member of the event.
+    or if the user is a member of the event. *calendar_ids* narrows the
+    calendar branch to those calendars; an id the user cannot see drops
+    out instead of widening the filter. Events the user is a member of
+    stay visible whatever the narrowing.
 
     The calendar branch goes through ``visible_calendar_ids`` - one
     indexed UNION query materialized when the Q is built - instead of two
     separate ``calendar_id__in`` subqueries OR'd together. A single
     literal ``calendar_id IN (...)`` is a predicate the planner can drive
-    the ``(calendar, ...)`` composite indexes with; the same shape the
-    range view uses.
+    the ``(calendar, ...)`` composite indexes with.
     """
-    return Q(calendar_id__in=visible_calendar_ids(user)) | Q(
-        uuid__in=member_event_ids(user)
-    )
+    cal_ids = visible_calendar_ids(user)
+    if calendar_ids is not None:
+        requested = set(calendar_ids)
+        cal_ids = [cal_id for cal_id in cal_ids if cal_id in requested]
+    return Q(calendar_id__in=cal_ids) | Q(uuid__in=member_event_ids(user))

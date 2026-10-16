@@ -99,6 +99,31 @@ class EventListTests(CalendarTestMixin, APITestCase):
         self.assertIn("Other Event", titles)
         self.assertNotIn("Team Meeting", titles)
 
+    def test_calendar_ids_cannot_reach_a_calendar_the_user_cannot_see(self):
+        Event.objects.create(
+            calendar=self.calendar,
+            title="Private Appointment",
+            start=timezone.now() + timedelta(hours=1),
+            end=timezone.now() + timedelta(hours=2),
+            owner=self.owner,
+        )
+        self.client.force_authenticate(self.member)
+        params = self._range_params()
+        params["calendar_ids"] = str(self.calendar.uuid)
+        resp = self.client.get(self.url, params)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        titles = [e["title"] for e in resp.data]
+        self.assertNotIn("Private Appointment", titles)
+        # Invited events stay listed whatever the calendar filter says.
+        self.assertIn("Team Meeting", titles)
+
+    def test_malformed_calendar_ids_is_rejected(self):
+        self.client.force_authenticate(self.owner)
+        params = self._range_params()
+        params["calendar_ids"] = f"{self.calendar.uuid},not-a-uuid"
+        resp = self.client.get(self.url, params)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_all_day_event_in_range(self):
         Event.objects.create(
             calendar=self.calendar,

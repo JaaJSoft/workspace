@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 
 from workspace.files.models import File, FileScan
 from workspace.files.search import search_files
+from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
 from workspace.files.tests.test_actions import actions_of
 
@@ -582,3 +583,117 @@ class ViewerPanelEnforcementTests(APITestCase):
         self.client.force_login(other)
         resp = self.client.get(f"/files/view/{self.file.uuid}")
         self.assertEqual(resp.status_code, 404)
+
+
+class CopyEnforcementTests(APITestCase):
+    """A copy is a new row with no scan of its own: blocked bytes stay put."""
+
+    _file = RestEnforcementTests._file
+    _folder_with_children = RestEnforcementTests._folder_with_children
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="enf", password="p")
+        self.client.force_authenticate(user=self.user)
+        self.infected = self._file("bad.txt", FileScan.Status.INFECTED, "Unit.Test")
+        self.clean = self._file("good.txt", FileScan.Status.CLEAN)
+
+    @override_settings(**BLOCKING)
+    def test_rest_copy_of_an_infected_file_is_forbidden(self):
+        resp = self.client.post(
+            f"/api/v1/files/{self.infected.uuid}/copy", {}, format="json"
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(File.objects.filter(name__startswith="bad").count(), 1)
+
+    @override_settings(**BLOCKING)
+    def test_copy_action_is_not_offered_for_an_infected_file(self):
+        resp = self.client.post(
+            "/api/v1/files/actions",
+            {"uuids": [str(self.infected.uuid), str(self.clean.uuid)]},
+            format="json",
+        )
+
+        payload = resp.json()
+        infected_ids = {a["id"] for a in actions_of(payload, str(self.infected.uuid))}
+        clean_ids = {a["id"] for a in actions_of(payload, str(self.clean.uuid))}
+        self.assertNotIn("copy", infected_ids)
+        self.assertIn("copy", clean_ids)
+
+    @override_settings(**BLOCKING)
+    def test_service_copy_of_an_infected_file_raises(self):
+        with self.assertRaisesRegex(Exception, "quarantined"):
+            FileService.copy(self.infected, None, self.user, acting_user=self.user)
+        self.assertEqual(File.objects.filter(name__startswith="bad").count(), 1)
+
+    @override_settings(**BLOCKING)
+    def test_folder_copy_leaves_infected_children_behind(self):
+        folder = self._folder_with_children()
+
+        copied = FileService.copy(folder, None, self.user, acting_user=self.user)
+
+        names = set(File.objects.filter(parent=copied).values_list("name", flat=True))
+        self.assertEqual(names, {"child_good.txt"})
+
+    @override_settings(**BLOCKING)
+    def test_replacing_content_from_an_infected_file_raises(self):
+        target = FileService.create_file(
+            self.user, "target.txt", content=ContentFile(b"clean", name="target.txt")
+        )
+
+        with self.assertRaisesRegex(Exception, "quarantined"):
+            FileService.replace_content_from(
+                target, self.infected, acting_user=self.user
+            )
+        target.refresh_from_db()
+        with target.content.open("rb") as fh:
+            self.assertEqual(fh.read(), b"clean")
+
+    @override_settings(**BLOCKING)
+    def test_webdav_copy_of_an_infected_file_is_forbidden(self):
+        from workspace.files.tests import test_webdav
+        from workspace.files.webdav.app import create_webdav_app
+
+        dav = test_webdav.WebDAVIntegrationTests()
+        dav._app = create_webdav_app()
+        dav.auth = test_webdav._basic_auth_header("enf", "p")
+
+        code, _, _ = dav._request(
+            "COPY",
+            "/bad.txt",
+            headers={"Destination": "http://testserver/dav/copied.txt"},
+        )
+
+        self.assertEqual(code, 403)
+        self.assertFalse(File.objects.filter(name="copied.txt").exists())
+
+    @override_settings(**BLOCKING)
+    def test_extracting_an_infected_archive_is_forbidden(self):
+        import io
+        import zipfile
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as zf:
+            zf.writestr("payload.txt", b"payload")
+        archive = FileService.create_file(
+            self.user,
+            "bad.zip",
+            content=ContentFile(buf.getvalue(), name="bad.zip"),
+            mime_type="application/zip",
+        )
+        File.objects.filter(pk=archive.pk).update(type="zip")
+        FileScan.objects.create(
+            file=archive,
+            status=FileScan.Status.INFECTED,
+            signature="Unit.Test",
+            scanned_at="2026-08-30T12:00:00Z",
+        )
+
+        resp = self.client.post(
+            f"/api/v1/files/{archive.uuid}/extract",
+            {"destination_uuid": None},
+            format="json",
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(File.objects.filter(name="payload.txt").exists())

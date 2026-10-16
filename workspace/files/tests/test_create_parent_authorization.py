@@ -129,3 +129,63 @@ class CreateParentAuthorizationTests(APITestCase):
             "/api/v1/files", {"name": "Top", "node_type": "folder"}, format="json"
         )
         self.assertEqual(response.status_code, 201, response.content)
+
+
+class CreateGroupMatchesParentTests(APITestCase):
+    """Under a parent, a node's group is the parent's - never another one."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pass")
+        self.team = Group.objects.create(name="Team")
+        self.other = Group.objects.create(name="Other")
+        self.alice.groups.add(self.team, self.other)
+        self.team_root = File.objects.create(
+            owner=self.alice,
+            name="TeamRoot",
+            node_type=File.NodeType.FOLDER,
+            group=self.team,
+        )
+        self.mine = File.objects.create(
+            owner=self.alice, name="Mine", node_type=File.NodeType.FOLDER
+        )
+        self.client.force_authenticate(user=self.alice)
+
+    def _create(self, parent, group, node_type="folder"):
+        data = {"name": "n", "node_type": node_type, "parent": str(parent.uuid)}
+        if group is not None:
+            data["group"] = group.pk
+        if node_type == "file":
+            data["content"] = SimpleUploadedFile("n", b"hello", "text/plain")
+            return self.client.post("/api/v1/files", data, format="multipart")
+        return self.client.post("/api/v1/files", data, format="json")
+
+    def test_another_group_than_the_parents_is_refused(self):
+        for node_type in ("folder", "file"):
+            with self.subTest(node_type=node_type):
+                response = self._create(self.team_root, self.other, node_type)
+
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("group", response.json())
+                self.assertFalse(File.objects.filter(name="n").exists())
+
+    def test_a_group_under_a_personal_parent_is_refused(self):
+        response = self._create(self.mine, self.team)
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertFalse(File.objects.filter(name="n").exists())
+
+    def test_the_parents_own_group_is_accepted(self):
+        response = self._create(self.team_root, self.team)
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get(name="n").group, self.team)
+
+    def test_without_a_parent_the_group_is_kept(self):
+        response = self.client.post(
+            "/api/v1/files",
+            {"name": "Root", "node_type": "folder", "group": self.other.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(File.objects.get(name="Root").group, self.other)

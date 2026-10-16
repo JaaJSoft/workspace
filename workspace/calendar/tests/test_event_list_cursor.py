@@ -462,6 +462,25 @@ class CursorModeFiltersTests(CursorModeMixin, APITestCase):
         titles = [e["title"] for e in resp.data["events"]]
         self.assertNotIn("ExcludedWeekly", titles)
 
+    def test_calendar_ids_of_an_unseen_calendar_list_nothing(self):
+        now = timezone.now()
+        foreign = Calendar.objects.create(name="Foreign", owner=self.other)
+        Event.objects.create(
+            calendar=foreign,
+            owner=self.other,
+            title="NotYours",
+            start=now + timedelta(days=1),
+            end=now + timedelta(days=1, hours=1),
+        )
+
+        resp = self._get_cursor(after=now, calendar_ids=str(foreign.pk))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["events"], [])
+
+    def test_malformed_calendar_ids_is_rejected(self):
+        resp = self._get_cursor(after=timezone.now(), calendar_ids="not-a-uuid")
+        self.assertEqual(resp.status_code, 400)
+
     def test_show_declined_false_excludes_declined(self):
         """An event where the user is a declined member is excluded by default."""
         now = timezone.now()

@@ -25,12 +25,13 @@ from workspace.common.logging import scrub
 from workspace.files.models import File, file_upload_path
 from workspace.files.services import FileService, quota
 from workspace.files.services.content_hash import new_hasher
-from workspace.files.services.files import FilePermission
+from workspace.files.services.files import FilePermission, GroupRootFolder
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
     conflicting_lock,
 )
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 logger = logging.getLogger(__name__)
 
@@ -334,7 +335,12 @@ class FolderResource(DAVCollection):
 
     def delete(self):
         _require_permission(self._user, self._file, FilePermission.EDIT, "DELETE")
-        FileService.soft_delete(self._file, acting_user=self._user)
+        try:
+            FileService.soft_delete(self._file, acting_user=self._user)
+        except GroupRootFolder as exc:
+            raise DAVError(
+                HTTP_FORBIDDEN, "A group's root folder cannot be deleted."
+            ) from exc
 
     def copy_move_single(self, dest_path, *, is_move):
         # WsgiDAV's copy/move loop visits every descendant itself, so this
@@ -813,8 +819,14 @@ def _move_to(file_obj, user, dest_path):
     needs_move = dest_parent != file_obj.parent
 
     _require_permission(user, file_obj, FilePermission.EDIT, "MOVE")
+    if needs_rename and FileService.is_group_root(file_obj):
+        raise DAVError(HTTP_FORBIDDEN, "A group's root folder cannot be renamed.")
     if needs_move:
         _require_permission(user, dest_parent, FilePermission.EDIT, "MOVE")
+        try:
+            FileService.validate_move_target(file_obj, dest_parent, user=user)
+        except ValueError as exc:
+            raise DAVError(HTTP_FORBIDDEN, "MOVE is not allowed here") from exc
         # FileService.rename below moves the blob with a non-transactional
         # os.rename, so a refusal from move() would leave it stranded. Refuse here,
         # before anything is written.
@@ -851,6 +863,10 @@ def _copy_as(file_obj, dest_parent, owner, new_name):
     collection via ``FolderResource.copy_move_single`` and visits the
     descendants one by one.
     """
+    try:
+        FileService.check_copy_allowed(file_obj)
+    except QuarantinedSource as exc:
+        raise DAVError(HTTP_FORBIDDEN, "File is quarantined.") from exc
     content = None
     if file_obj.content:
         file_obj.content.open("rb")

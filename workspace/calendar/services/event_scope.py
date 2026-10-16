@@ -81,13 +81,21 @@ def _truncate_series(master, cut):
     master.save(update_fields=["recurrence_rule", "is_recurring", "recurrence_until"])
 
 
+def _move_target(calendar_id, user):
+    """The calendar *user* may move an event into, or raise EventScopeError."""
+    try:
+        calendar = Calendar.objects.get(pk=calendar_id, owner=user)
+    except Calendar.DoesNotExist:
+        raise EventScopeError("Calendar not found.") from None
+    if is_external_calendar(calendar.pk):
+        raise EventScopeError("Cannot move events into an external calendar.", 403)
+    return calendar
+
+
 def _apply_fields(event, data, user):
     """Apply common field updates to an event."""
     if "calendar_id" in data:
-        try:
-            event.calendar = Calendar.objects.get(pk=data["calendar_id"], owner=user)
-        except Calendar.DoesNotExist:
-            raise EventScopeError("Calendar not found.") from None
+        event.calendar = _move_target(data["calendar_id"], user)
 
     had_recurrence = event.is_recurring
     for field in EDITABLE_FIELDS:
@@ -354,13 +362,11 @@ def _update_future_occurrences(master, data, user, original_start):
 
     if "calendar_id" in data:
         try:
-            new_master.calendar = Calendar.objects.get(
-                pk=data["calendar_id"], owner=user
-            )
+            new_master.calendar = _move_target(data["calendar_id"], user)
             new_master.save(update_fields=["calendar_id"])
-        except Calendar.DoesNotExist:
-            # Unknown calendar_id or calendar owned by someone else: keep the
-            # master's calendar instead of failing the split.
+        except EventScopeError:
+            # A calendar the event cannot move into: keep the master's
+            # calendar instead of failing the split.
             pass
 
     _copy_members(master, new_master, data, user)

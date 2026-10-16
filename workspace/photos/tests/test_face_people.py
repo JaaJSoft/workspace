@@ -11,9 +11,14 @@ from django.utils import timezone
 
 from workspace.people.models import Person
 from workspace.people.services.avatar import avatar_path
-from workspace.people.services.persons import create_person
+from workspace.people.services.persons import (
+    create_person,
+    move_to_scope,
+    update_person,
+)
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.queries import user_face_clusters
+from workspace.photos.search import search_people
 from workspace.photos.services.face_grouping import cluster_owner
 from workspace.photos.services.face_people import person_cards, person_clusters
 
@@ -506,3 +511,116 @@ class ClusterListQueryTests(FaceApiTestCase):
         )
 
         self.assertEqual(self._queries(), one_named)
+
+
+class UnreachableContactTests(FaceApiTestCase):
+    """A cluster named after a contact its owner can no longer see - moved to
+    another address book, or kept in a group the owner left - reads as
+    unnamed, and its avatar action writes nothing to that contact."""
+
+    PRIVATE_NAME = "Victim private name"
+
+    def setUp(self):
+        super().setUp()
+        self.team = Group.objects.create(name="Team")
+        self.victim = User.objects.create_user(username="victim", password="p")
+        self.user.groups.add(self.team)
+        self.victim.groups.add(self.team)
+        self.contact = create_person(group=self.team, display_name="Shared contact")
+        response = _patch(
+            self.client, f"{CLUSTERS}/{self.alice.pk}", {"person": str(self.contact.pk)}
+        )
+        self.assertEqual(response.status_code, 200)
+
+    def _move_to_victim(self):
+        move_to_scope(self.contact, owner=self.victim)
+        update_person(self.contact, display_name=self.PRIVATE_NAME)
+
+    def _cluster_json(self):
+        (cluster,) = [
+            c
+            for c in self.client.get(CLUSTERS).json()
+            if c["uuid"] == str(self.alice.pk)
+        ]
+        return cluster
+
+    def test_the_cluster_list_reads_a_moved_contact_as_unnamed(self):
+        self._move_to_victim()
+
+        cluster = self._cluster_json()
+        detail = self.client.get(f"{CLUSTERS}/{self.alice.pk}").json()
+
+        self.assertIsNone(cluster["person"])
+        self.assertIsNone(cluster["person_name"])
+        self.assertIsNone(detail["person_name"])
+
+    def test_the_cluster_list_reads_a_left_groups_contact_as_unnamed(self):
+        self.user.groups.remove(self.team)
+
+        cluster = self._cluster_json()
+
+        self.assertIsNone(cluster["person"])
+        self.assertIsNone(cluster["person_name"])
+
+    def test_the_persons_endpoint_leaves_a_moved_contact_out(self):
+        self._move_to_victim()
+
+        for params in ({}, {"contacts": "1"}):
+            body = self.client.get(PERSONS, params).content.decode()
+            self.assertNotIn(self.PRIVATE_NAME, body)
+            self.assertNotIn(str(self.contact.pk), body)
+
+    def test_the_photo_pages_read_a_moved_contact_as_unnamed(self):
+        self._move_to_victim()
+
+        for url, params in (
+            ("/photos/people", {}),
+            ("/photos/people/review", {}),
+            ("/photos", {"cluster": str(self.alice.pk)}),
+            ("/photos/people/faces", {"cluster": str(self.alice.pk)}),
+        ):
+            response = self.client.get(url, params)
+            self.assertEqual(response.status_code, 200, url)
+            self.assertNotContains(response, self.PRIVATE_NAME)
+            self.assertNotContains(response, str(self.contact.pk))
+
+    def test_the_people_page_counts_the_cluster_as_unnamed(self):
+        self._move_to_victim()
+
+        response = self.client.get("/photos/people")
+
+        self.assertEqual(response.context["named"], [])
+        self.assertIn(
+            str(self.alice.pk), [card["uuid"] for card in response.context["unnamed"]]
+        )
+
+    def test_search_does_not_find_a_moved_contact(self):
+        self._move_to_victim()
+
+        self.assertEqual(search_people("victim", self.user, 10), [])
+        self.assertEqual(search_people("shared", self.user, 10), [])
+
+    def test_the_avatar_action_refuses_a_moved_contact(self):
+        self._move_to_victim()
+
+        response = self.client.post(f"{CLUSTERS}/{self.alice.pk}/avatar")
+
+        self.assertEqual(response.status_code, 400)
+        self.contact.refresh_from_db()
+        self.assertFalse(self.contact.has_avatar)
+        self.assertFalse(default_storage.exists(avatar_path(self.contact)))
+
+    def test_the_avatar_action_refuses_a_left_groups_contact(self):
+        self.user.groups.remove(self.team)
+
+        response = self.client.post(f"{CLUSTERS}/{self.alice.pk}/avatar")
+
+        self.assertEqual(response.status_code, 400)
+        self.contact.refresh_from_db()
+        self.assertFalse(self.contact.has_avatar)
+
+    def test_rejoining_the_group_brings_the_name_back(self):
+        self.user.groups.remove(self.team)
+        self.user.groups.add(self.team)
+
+        self.assertEqual(self._cluster_json()["person_name"], "Shared contact")

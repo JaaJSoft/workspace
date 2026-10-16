@@ -343,16 +343,12 @@
           guestName: '',
           guestEmail: '',
           myVotes: {},
-          voterToken: '',
           votesRestored: false,
           voteSubmitted: false,
 
           async init() {
-            this.voterToken = localStorage.getItem('poll_voter_' + token) || '';
             try {
-              const url = '/api/v1/polls/shared/' + token +
-                (this.voterToken ? '?voter_token=' + encodeURIComponent(this.voterToken) : '');
-              const resp = await fetch(url);
+              const resp = await fetch('/api/v1/polls/shared/' + token);
               if (resp.ok) {
                 const data = await resp.json();
                 this.poll = data;
@@ -391,7 +387,7 @@
             const map = new Map();
             for (const vote of (this.poll.votes || [])) {
               // Skip current guest's votes (shown in editable "Your vote" row)
-              if (this.voterToken && !vote.user && vote.voter_token === this.voterToken) continue;
+              if (vote.is_mine) continue;
               const key = vote.user ? 'user:' + vote.user.id : 'guest:' + vote.guest_name;
               if (!map.has(key)) {
                 map.set(key, {
@@ -437,18 +433,12 @@
                 body: JSON.stringify({
                   guest_name: this.guestName,
                   guest_email: this.guestEmail,
-                  voter_token: this.voterToken,
                   votes,
                 }),
               });
               if (resp.ok) {
                 const data = await resp.json();
                 this.poll = data;
-                // Store voter token for future visits
-                if (data.voter_token) {
-                  this.voterToken = data.voter_token;
-                  localStorage.setItem('poll_voter_' + token, data.voter_token);
-                }
                 this.votesRestored = false;
                 this.voteSubmitted = true;
               }

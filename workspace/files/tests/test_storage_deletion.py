@@ -76,7 +76,9 @@ class HardDeleteStorageTests(TestCase):
         group_dir = os.path.join(settings.MEDIA_ROOT, "files", "groups", "Team")
         self.assertTrue(os.path.isdir(group_dir))
 
-        FileService.soft_delete(folder, acting_user=self.user)
+        # A group root only reaches the trash with its group, through the
+        # model method the group's pre_delete hook calls.
+        folder.soft_delete()
         FileService.hard_delete(folder, acting_user=self.user)
 
         self.assertFalse(os.path.exists(group_dir))

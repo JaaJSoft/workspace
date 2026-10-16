@@ -202,10 +202,8 @@ def _build_context(request, folder=None, is_trash_view=False):
         ).name_ordered()
     elif is_trash_view:
         nodes = (
-            File.objects.filter(
-                owner=request.user,
-                deleted_at__isnull=False,
-            )
+            FileService.restorable_files_qs(request.user)
+            .filter(deleted_at__isnull=False)
             .filter(Q(parent__isnull=True) | Q(parent__deleted_at__isnull=True))
             .name_ordered("-deleted_at")
         )
@@ -220,10 +218,11 @@ def _build_context(request, folder=None, is_trash_view=False):
             .name_ordered("-node_type")
         )
     elif is_recent_view:
-        nodes = File.objects.filter(
-            owner=request.user,
-            deleted_at__isnull=True,
-        ).name_ordered("-updated_at")
+        nodes = (
+            FileService.owned_files_qs(request.user)
+            .filter(deleted_at__isnull=True)
+            .name_ordered("-updated_at")
+        )
     elif current_folder:
         if current_folder.group_id:
             nodes = File.objects.filter(
@@ -808,13 +807,13 @@ def view_file(request, uuid):
     Returns the appropriate viewer HTML based on file MIME type.
     Used by the file viewer modal to load content via Alpine AJAX.
     """
-    # A trashed file only grants a permission to its owner, who previews it
-    # from the trash - read-only, since every write refuses a trashed row.
+    # A trashed file is previewed from the trash - read-only, since every
+    # write refuses a trashed row.
     file_obj = File.objects.select_related("locked_by").filter(uuid=uuid).first()
     if not file_obj:
         raise Http404
 
-    perm = FileService.get_permission(request.user, file_obj)
+    perm = FileService.trash_permission(request.user, file_obj)
     if perm is None:
         raise Http404
     user_can_edit = perm >= FilePermission.WRITE and file_obj.deleted_at is None

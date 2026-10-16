@@ -14,6 +14,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 from .services.notifications import _user_tag, get_unread_count
+from .services.push_subscriptions import save_push_subscription
 
 
 @extend_schema(tags=["Notifications"])
@@ -168,20 +169,17 @@ class PushSubscribeView(APIView):
         p256dh = keys.get("p256dh") if isinstance(keys, dict) else None
         auth = keys.get("auth") if isinstance(keys, dict) else None
 
-        if not endpoint or not p256dh or not auth:
+        if not all(isinstance(v, str) and v for v in (endpoint, p256dh, auth)):
             return Response(
                 {"error": "Missing required fields: endpoint, keys.p256dh, keys.auth"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        PushSubscription.objects.update_or_create(
-            endpoint=endpoint,
-            defaults={
-                "user": request.user,
-                "p256dh": p256dh,
-                "auth": auth,
-            },
-        )
+        if not save_push_subscription(request.user, endpoint, p256dh, auth):
+            return Response(
+                {"error": "This push endpoint is already registered."},
+                status=status.HTTP_409_CONFLICT,
+            )
         return Response(status=status.HTTP_201_CREATED)
 
     @extend_schema(

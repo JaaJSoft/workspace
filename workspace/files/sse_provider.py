@@ -24,7 +24,9 @@ def push_file_event(file_obj, event_type, actor_username, exclude_user_id=None):
     from workspace.projects.queries import project_users
 
     shares = FileShare.objects.filter(file=file_obj)
-    user_ids = {file_obj.owner_id}
+    # A group node's owner is reached through the group, and only while they
+    # are still in it.
+    user_ids = set() if file_obj.group_id else {file_obj.owner_id}
     user_ids.update(
         shares.filter(shared_with__isnull=False).values_list(
             "shared_with_id", flat=True

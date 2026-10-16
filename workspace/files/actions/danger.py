@@ -1,4 +1,4 @@
-from workspace.files.services import FilePermission
+from workspace.files.services import FilePermission, FileService
 
 from . import ActionRegistry
 from .base import UNRESOLVED, ActionCategory, BaseFileAction
@@ -19,6 +19,6 @@ class DeleteAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         # Cannot delete a root group folder
-        if file_obj.group_id and file_obj.parent_id is None:
+        if FileService.is_group_root(file_obj):
             return False
         return permission is not None and permission >= FilePermission.EDIT

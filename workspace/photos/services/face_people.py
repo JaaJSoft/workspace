@@ -16,6 +16,7 @@ from django.utils import timezone
 from PIL import Image
 
 from workspace.common.vectors.encoding import from_bytes
+from workspace.people.queries import reachable_person
 from workspace.people.services.avatar import save_avatar
 from workspace.people.services.persons import create_person
 
@@ -161,15 +162,25 @@ def _closest(face, clusters):
     return best
 
 
-def use_cover_as_avatar(cluster):
+class Unnamed(CorrectionError):
+    """The cluster is named after no contact the user can see."""
+
+
+def use_cover_as_avatar(user, cluster):
     """Give the cluster's person its cover face as a contact photo.
 
     Stored through the People avatar service like any upload, so People
-    keeps knowing nothing about faces.
+    keeps knowing nothing about faces. The contact must still be one *user*
+    can edit: being named after it once is no write access to it.
     """
-    if cluster.person is None or not save_face_as_avatar(
-        cluster.person, cluster.cover_id
-    ):
+    person = (
+        reachable_person(user, cluster.person_id)
+        if cluster.person_id is not None
+        else None
+    )
+    if person is None:
+        raise Unnamed
+    if not save_face_as_avatar(person, cluster.cover_id):
         raise NoCover
 
 
@@ -225,9 +236,11 @@ def person_cards(clusters):
 
     A person is hidden only when every one of their clusters is.
     """
+    from ..queries import cluster_person
+
     by_person = {}
     for cluster in clusters:
-        if cluster.person_id is not None:
+        if cluster_person(cluster) is not None:
             by_person.setdefault(cluster.person_id, []).append(cluster)
     cards = []
     for group in by_person.values():
@@ -235,7 +248,7 @@ def person_cards(clusters):
         chosen = [c for c in group if c.cover_chosen_at is not None]
         cards.append(
             PersonCard(
-                person=group[0].person,
+                person=cluster_person(group[0]),
                 clusters=tuple(group),
                 photo_count=sum(c.photo_count for c in group),
                 cover_cluster=(

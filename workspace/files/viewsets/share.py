@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.models import File, FileShare, FileShareLink
 from workspace.files.services import FileService
+from workspace.files.services.share_notifications import notify_share_targets
 from workspace.files.services.sharing import (
     create_share_link as service_create_share_link,
 )
@@ -23,15 +24,10 @@ from workspace.files.services.sharing import (
 from workspace.files.services.sharing import (
     unshare_file as service_unshare_file,
 )
-from workspace.notifications.services.notifications import notify, notify_many
 from workspace.projects.models import Project
-from workspace.projects.queries import project_users, user_project_ids
+from workspace.projects.queries import user_project_ids
 
 User = get_user_model()
-
-
-def _file_url(file_obj):
-    return f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files"
 
 
 def _parse_id(value, field):
@@ -190,13 +186,13 @@ class ShareMixin:
                 acting_user=request.user,
             )
             if created:
-                self._notify_share_targets(
-                    request,
+                notify_share_targets(
                     file_obj,
-                    target_user,
-                    target_group,
-                    target_project,
-                    f'{request.user.username} shared "{file_obj.name}" with you',
+                    target_user=target_user,
+                    target_group=target_group,
+                    target_project=target_project,
+                    actor=request.user,
+                    title=f'{request.user.username} shared "{file_obj.name}" with you',
                 )
             if permission_changed:
                 perm_label = (
@@ -204,13 +200,13 @@ class ShareMixin:
                     if permission == FileShare.Permission.READ_WRITE
                     else "read only"
                 )
-                self._notify_share_targets(
-                    request,
+                notify_share_targets(
                     file_obj,
-                    target_user,
-                    target_group,
-                    target_project,
-                    f'Permission updated to {perm_label} on "{file_obj.name}"',
+                    target_user=target_user,
+                    target_group=target_group,
+                    target_project=target_project,
+                    actor=request.user,
+                    title=f'Permission updated to {perm_label} on "{file_obj.name}"',
                 )
             return Response(
                 {"shared": True, "permission": share.permission},
@@ -230,56 +226,16 @@ class ShareMixin:
                 {"detail": "Share not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        self._notify_share_targets(
-            request,
+        notify_share_targets(
             file_obj,
-            target_user,
-            target_group,
-            target_project,
-            f'{request.user.username} revoked your access to "{file_obj.name}"',
+            target_user=target_user,
+            target_group=target_group,
+            target_project=target_project,
+            actor=request.user,
+            title=f'{request.user.username} revoked your access to "{file_obj.name}"',
             url="",
         )
         return Response({"shared": False}, status=status.HTTP_200_OK)
-
-    @staticmethod
-    def _notify_share_targets(
-        request, file_obj, target_user, target_group, target_project, title, *, url=None
-    ):
-        """Notify the user, or every active member of the group or project
-        but the actor."""
-        if url is None:
-            url = _file_url(file_obj)
-        if target_user is not None:
-            notify(
-                recipient=target_user,
-                origin="files",
-                title=title,
-                url=url,
-                actor=request.user,
-                source=file_obj,
-            )
-            return
-        if target_project is not None:
-            recipients = [
-                u
-                for u in project_users(target_project)
-                if u.is_active and u.pk != request.user.pk
-            ]
-        else:
-            recipients = list(
-                User.objects.filter(groups=target_group, is_active=True).exclude(
-                    pk=request.user.pk
-                )
-            )
-        if recipients:
-            notify_many(
-                recipients=recipients,
-                origin="files",
-                title=title,
-                url=url,
-                actor=request.user,
-                source=file_obj,
-            )
 
     @extend_schema(
         summary="List shares for a file",

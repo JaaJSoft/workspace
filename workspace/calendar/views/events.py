@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from workspace.common.mixins import CacheControlMixin
+from workspace.common.uuids import parse_uuid_or_none
 from workspace.notifications.services.notifications import (
     mark_source_read,
     mark_sources_read,
@@ -19,7 +20,7 @@ from workspace.notifications.services.notifications import (
 )
 
 from ..models import Calendar, Event, EventMember
-from ..queries import member_event_ids, visible_calendar_ids
+from ..queries import visible_calendar_ids, visible_events_q
 from ..recurrence import expand_recurring_events, make_virtual_occurrence
 from ..serializers import (
     EventCreateSerializer,
@@ -66,6 +67,19 @@ def _parse_dt(value):
         return None
 
 
+def _parse_calendar_ids(value):
+    """UUIDs of a comma-separated ``calendar_ids`` value, or None if one is malformed."""
+    ids = []
+    for raw in value.split(","):
+        if not raw.strip():
+            continue
+        cal_id = parse_uuid_or_none(raw.strip())
+        if cal_id is None:
+            return None
+        ids.append(cal_id)
+    return ids
+
+
 def _sort_instant(value):
     """Comparable UTC instant for a serialized start value.
 
@@ -81,6 +95,13 @@ def _sort_instant(value):
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+def _invalid_calendar_ids():
+    return Response(
+        {"detail": 'Invalid "calendar_ids": expected comma-separated UUIDs.'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 def _prefetch_event(qs):
@@ -170,9 +191,9 @@ class EventListView(CacheControlMixin, APIView):
         calendar_ids_param = request.query_params.get("calendar_ids")
         calendar_ids = None
         if calendar_ids_param is not None:
-            calendar_ids = [
-                c.strip() for c in calendar_ids_param.split(",") if c.strip()
-            ]
+            calendar_ids = _parse_calendar_ids(calendar_ids_param)
+            if calendar_ids is None:
+                return _invalid_calendar_ids()
 
         show_declined = request.query_params.get("show_declined", "").lower() in (
             "1",
@@ -207,19 +228,14 @@ class EventListView(CacheControlMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        user = request.user
-
-        # Filter by specific calendars or all visible
         calendar_ids_param = request.query_params.get("calendar_ids")
+        calendar_ids = None
         if calendar_ids_param is not None:
-            cal_ids = [c.strip() for c in calendar_ids_param.split(",") if c.strip()]
-        else:
-            cal_ids = visible_calendar_ids(user)
+            calendar_ids = _parse_calendar_ids(calendar_ids_param)
+            if calendar_ids is None:
+                return _invalid_calendar_ids()
 
-        # Membership goes through the id subquery, not the members__user
-        # join: ORing a joined branch with calendar_id__in blocks per-branch
-        # index use, and the join fan-out is what forced distinct() here.
-        cal_or_member = Q(calendar_id__in=cal_ids) | Q(uuid__in=member_event_ids(user))
+        cal_or_member = visible_events_q(request.user, calendar_ids)
 
         # Non-recurring events (exclude exceptions)
         non_recurring = Event.objects.filter(

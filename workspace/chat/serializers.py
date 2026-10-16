@@ -12,6 +12,8 @@ from .models import (
     Reaction,
 )
 from .services.avatar import conversation_avatar_initial
+from .services.bot_tasks import can_manage_bot_task
+from .services.conversations import can_clear_conversation, members_allow_clear
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -193,6 +195,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
     is_pinned = serializers.BooleanField(read_only=True, default=False)
     pin_position = serializers.IntegerField(read_only=True, default=None)
     is_bot_conversation = serializers.SerializerMethodField()
+    can_clear = serializers.SerializerMethodField()
     avatar_initial = serializers.SerializerMethodField()
     notification_level = serializers.CharField(
         read_only=True,
@@ -219,6 +222,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
             "is_pinned",
             "pin_position",
             "is_bot_conversation",
+            "can_clear",
             "notification_level",
         ]
 
@@ -245,6 +249,13 @@ class ConversationListSerializer(serializers.ModelSerializer):
                     return True
             return False
         return obj.members.filter(user__bot_profile__isnull=False).exists()
+
+    def get_can_clear(self, obj) -> bool:
+        user = self.context["request"].user
+        cache = getattr(obj, "_prefetched_objects_cache", None)
+        if cache and "members" in cache:
+            return members_allow_clear(user, list(obj.members.all()))
+        return can_clear_conversation(user, obj.pk)
 
     def get_last_message(self, obj):
         # _last_message is set by the view; use sentinel to avoid fallback query
@@ -342,6 +353,7 @@ class ReactionToggleSerializer(serializers.Serializer):
 class AgentGoalSerializer(serializers.ModelSerializer):
     bot_username = serializers.CharField(source="bot.username", read_only=True)
     bot_display_name = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
 
     class Meta:
         model = AgentGoal
@@ -361,6 +373,7 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             "check_count",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
@@ -371,12 +384,17 @@ class AgentGoalSerializer(serializers.ModelSerializer):
             "check_count",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
 
     def get_bot_display_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+    def get_can_manage(self, obj) -> bool:
+        request = self.context.get("request")
+        return request is not None and can_manage_bot_task(request.user, obj)
 
     def validate_status(self, value):
         # Users can pause/resume a goal from the UI; closing one goes through
@@ -406,6 +424,7 @@ class AgentGoalCreateSerializer(serializers.Serializer):
 class ScheduledMessageSerializer(serializers.ModelSerializer):
     bot_username = serializers.CharField(source="bot.username", read_only=True)
     bot_display_name = serializers.SerializerMethodField()
+    can_manage = serializers.SerializerMethodField()
 
     class Meta:
         model = ScheduledMessage
@@ -423,6 +442,7 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
             "is_active",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
@@ -433,12 +453,17 @@ class ScheduledMessageSerializer(serializers.ModelSerializer):
             "is_active",
             "bot_username",
             "bot_display_name",
+            "can_manage",
             "created_at",
             "updated_at",
         ]
 
     def get_bot_display_name(self, obj):
         return obj.bot.get_full_name() or obj.bot.username
+
+    def get_can_manage(self, obj) -> bool:
+        request = self.context.get("request")
+        return request is not None and can_manage_bot_task(request.user, obj)
 
     def validate(self, attrs):
         # ONCE schedules derive next_run_at from scheduled_at, which is non-null

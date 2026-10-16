@@ -135,3 +135,22 @@ class CallViewTests(TestCase):
         resp = self.client.post(f"/api/v1/chat/conversations/{bot_conv.uuid}/call/join")
         self.assertEqual(resp.status_code, 400)
         self.assertIsNone(calls.get_active_call(bot_conv.uuid))
+
+    def test_a_group_whose_bot_left_can_call(self):
+        """A bot that left must not keep calls disabled for the people who
+        remain."""
+        from django.utils import timezone
+
+        from workspace.ai.models import BotProfile
+
+        User = get_user_model()
+        bot = User.objects.create_user(username="leftbot", password="x")
+        BotProfile.objects.create(user=bot, is_public=True)
+        ConversationMember.objects.create(
+            conversation=self.conv, user=bot, left_at=timezone.now()
+        )
+
+        self.client.force_authenticate(self.a)
+        resp = self.client.post(self._url("/join"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNotNone(calls.get_active_call(self.conv.uuid))

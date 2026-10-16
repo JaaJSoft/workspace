@@ -134,8 +134,11 @@ window.chatBotMixin = function chatBotMixin() {
       this.botGoalDraft = { enabled: false, goal: '', title: '', first_check_at: '', deadline: '' };
     },
 
+    // Bots only answer in a direct conversation, so a group never shows the
+    // bot panels (memory, goals, schedules) even if a stale payload still
+    // lists a bot among its members.
     isBotConversation(conv) {
-      if (!conv) return false;
+      if (!conv || conv.kind === 'group') return false;
       if (conv.is_bot_conversation) return true;
       if (!conv.members) return false;
       return conv.members.some(m => this.availableBots.some(b => b.user_id === m.user.id));

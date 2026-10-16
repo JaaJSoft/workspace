@@ -8,7 +8,10 @@ response queued before the user lost access - so every run re-checks it
 when it starts.
 """
 
-from workspace.chat.services.conversations import get_active_membership
+from workspace.chat.services.conversations import (
+    bot_may_run_in,
+    get_active_membership,
+)
 
 
 def run_refusal(bot_profile, user, conversation_id) -> str | None:
@@ -23,6 +26,8 @@ def run_refusal(bot_profile, user, conversation_id) -> str | None:
         return "user_inactive"
     if get_active_membership(user, conversation_id) is None:
         return "not_a_member"
+    if not bot_may_run_in(conversation_id):
+        return "not_a_direct_conversation"
     if not bot_profile.is_accessible_by(user):
         return "bot_not_accessible"
     return None

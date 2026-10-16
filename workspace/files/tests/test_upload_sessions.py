@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import tempfile
+import uuid
 from datetime import timedelta
 from io import BytesIO
 from unittest.mock import patch
@@ -159,6 +160,35 @@ class ReservationTests(UploadSessionApiMixin, APITestCase):
         self.user = User.objects.create_user(username="alice", password="pw")
         self.client.force_authenticate(self.user)
 
+    def test_an_open_retried_with_its_uuid_reserves_once(self):
+        # The first answer was lost: the client asks again for the same session.
+        session_uuid = str(uuid.uuid4())
+        first = self._open("a.mp4", size=60 * KB, uuid=session_uuid)
+        again = self._open("a.mp4", size=60 * KB, uuid=session_uuid)
+
+        self.assertEqual(first.status_code, 201, first.content)
+        self.assertEqual(again.status_code, 200, again.content)
+        self.assertEqual(again.data["uuid"], session_uuid)
+        self.assertEqual(UploadSession.objects.count(), 1)
+        self.assertEqual(quota.reserved_bytes(owner=self.user, group=None), 60 * KB)
+
+    def test_a_uuid_another_user_holds_is_refused(self):
+        other = User.objects.create_user(username="bob", password="pw")
+        theirs, _created = uploads.open_session(
+            other,
+            name="b.mp4",
+            parent=None,
+            size=10,
+            on_conflict="error",
+            uuid=uuid.uuid4(),
+        )
+
+        response = self._open("a.mp4", size=10, uuid=str(theirs.pk))
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("uuid", response.data)
+        self.assertEqual(UploadSession.objects.get().owner, other)
+
     def test_two_sessions_cannot_together_overflow_the_quota(self):
         first = self._open("a.mp4", size=60 * KB)
         second = self._open("b.mp4", size=60 * KB)
@@ -282,7 +312,7 @@ class AppendServiceTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pw")
-        self.session = uploads.open_session(
+        self.session, _created = uploads.open_session(
             self.user,
             name="video.mp4",
             parent=None,
@@ -484,9 +514,10 @@ class PurgeExpiredTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="pw")
 
     def _session(self, name):
-        return uploads.open_session(
+        session, _created = uploads.open_session(
             self.user, name=name, parent=None, size=10, on_conflict="error"
         )
+        return session
 
     def test_an_abandoned_session_goes_with_its_spool(self):
         abandoned = self._session("old.mp4")

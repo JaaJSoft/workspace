@@ -778,6 +778,14 @@ class PinnedReorderSerializer(serializers.Serializer):
 
 
 class UploadSessionCreateSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField(
+        required=False,
+        help_text=(
+            "Identifier the client picks for the session. Opening again under "
+            "the same one answers with that session instead of a second one, so "
+            "an open whose answer was lost can be retried."
+        ),
+    )
     name = serializers.CharField(max_length=255, help_text="Name of the file.")
     parent = serializers.UUIDField(
         required=False,

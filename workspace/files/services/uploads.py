@@ -23,7 +23,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.files import locks
 from django.core.files.uploadedfile import UploadedFile
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from workspace.common.logging import scrub
@@ -54,6 +54,10 @@ _HASHER_SLOTS = 32
 
 class SessionGone(Exception):
     """The session was aborted, completed or expired, or its spool is missing."""
+
+
+class SessionTaken(Exception):
+    """The uuid a client picked for a new session belongs to someone else."""
 
 
 class SessionBusy(Exception):
@@ -143,24 +147,45 @@ def _lock_bucket(owner, group_id):
         get_user_model().objects.select_for_update().filter(pk=owner.pk).first()
 
 
-def open_session(owner, *, name, parent, size, on_conflict, mime_type=""):
+def _replayed(owner, uuid):
+    """*owner*'s session under *uuid*, None when there is none yet."""
+    existing = UploadSession.objects.filter(pk=uuid).first()
+    if existing is not None and existing.owner_id != owner.pk:
+        raise SessionTaken()
+    return existing
+
+
+def open_session(owner, *, name, parent, size, on_conflict, mime_type="", uuid=None):
     """Reserve *size* bytes in the bucket and create an empty spool.
 
-    Raises ``QuotaExceeded`` when the bucket cannot take them.
+    Returns ``(session, created)``. A client picks the session's *uuid* so
+    that an open whose answer was lost can be asked again: the session it
+    already created comes back instead of a second reservation nobody would
+    ever release. Raises ``QuotaExceeded`` when the bucket cannot take the
+    bytes, and ``SessionTaken`` when *uuid* is another user's.
     """
+    if uuid is not None and (existing := _replayed(owner, uuid)) is not None:
+        return existing, False
     group_id = parent.group_id if parent is not None else None
-    with transaction.atomic():
-        _lock_bucket(owner, group_id)
-        check_write_allowed(owner=owner, group=group_id, additional_bytes=size)
-        session = UploadSession.objects.create(
-            owner=owner,
-            parent=parent,
-            group_id=group_id,
-            name=name,
-            size=size,
-            on_conflict=on_conflict,
-            mime_type=mime_type or "",
-        )
+    try:
+        with transaction.atomic():
+            _lock_bucket(owner, group_id)
+            check_write_allowed(owner=owner, group=group_id, additional_bytes=size)
+            session = UploadSession.objects.create(
+                owner=owner,
+                parent=parent,
+                group_id=group_id,
+                name=name,
+                size=size,
+                on_conflict=on_conflict,
+                mime_type=mime_type or "",
+                **({"uuid": uuid} if uuid is not None else {}),
+            )
+    except IntegrityError:
+        # The same open, retried while the first one was still in flight.
+        if uuid is None or (existing := _replayed(owner, uuid)) is None:
+            raise
+        return existing, False
     try:
         os.makedirs(settings.FILE_UPLOAD_TEMP_DIR, exist_ok=True)
         with open(spool_path(session), "xb"):
@@ -168,7 +193,7 @@ def open_session(owner, *, name, parent, size, on_conflict, mime_type=""):
     except OSError:
         session.delete()
         raise
-    return session
+    return session, True
 
 
 def _received(session):

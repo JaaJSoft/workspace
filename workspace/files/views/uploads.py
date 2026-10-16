@@ -117,16 +117,23 @@ class UploadSessionListView(APIView):
                 except NameTaken as error:
                     raise name_taken_error(error) from error
 
-        session = uploads.open_session(
-            user,
-            name=name,
-            parent=parent,
-            size=data["size"],
-            on_conflict=on_conflict,
-            mime_type=data.get("mime_type", ""),
-        )
+        try:
+            session, created = uploads.open_session(
+                user,
+                name=name,
+                parent=parent,
+                size=data["size"],
+                on_conflict=on_conflict,
+                mime_type=data.get("mime_type", ""),
+                uuid=data.get("uuid"),
+            )
+        except uploads.SessionTaken as error:
+            raise ValidationError(
+                {"uuid": ["This identifier is already in use."]}
+            ) from error
         return Response(
-            UploadSessionSerializer(session).data, status=status.HTTP_201_CREATED
+            UploadSessionSerializer(session).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 

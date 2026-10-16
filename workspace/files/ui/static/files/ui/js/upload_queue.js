@@ -523,9 +523,13 @@ window.sendResumableUpload = function sendResumableUpload(
       }
     }
     if (!uuid) {
+      // Picked here so a retried open names the session the lost answer
+      // was about, rather than reserving the bytes a second time.
+      const requested = window.newUuid();
       const { status, body } = await persist(() => request('POST', '/api/v1/files/uploads', {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          uuid: requested,
           name: file.name,
           size: file.size,
           parent: folderId || null,
@@ -533,7 +537,7 @@ window.sendResumableUpload = function sendResumableUpload(
           mime_type: file.type || '',
         }),
       }));
-      if (status !== 201) throw uploadFailure(status, body);
+      if (status !== 201 && status !== 200) throw uploadFailure(status, body);
       uuid = body.uuid;
       offset = body.offset;
       chunkSize = body.chunk_size;

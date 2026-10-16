@@ -56,6 +56,7 @@ function makeEnv(answer) {
 
   const ctx = loadScripts(
     [
+      'workspace/common/static/ui/js/uuid.js',
       'workspace/files/ui/static/files/ui/js/file_actions.js',
       'workspace/files/ui/static/files/ui/js/upload_queue.js',
     ],
@@ -67,6 +68,7 @@ function makeEnv(answer) {
       fetch: async (url, options) => { fetched.push(`${options.method} ${url}`); return { ok: true }; },
       setTimeout: (fn, ms) => { waits.push(ms); setImmediate(fn); return waits.length; },
       clearTimeout: () => {},
+      crypto: { randomUUID: () => SESSION },
     },
   );
   return { ctx, sent, fetched, waits };
@@ -111,7 +113,7 @@ test('a large file goes up in chunks, then is finalized', async () => {
   assert.equal(result.body.uuid, 'f1');
   const opened = JSON.parse(sent[0].body);
   assert.deepEqual({ ...opened }, {
-    name: 'video.mp4', size: file.size, parent: 'folder-a', on_conflict: 'rename', mime_type: 'video/mp4',
+    uuid: SESSION, name: 'video.mp4', size: file.size, parent: 'folder-a', on_conflict: 'rename', mime_type: 'video/mp4',
   });
   assert.deepEqual(ranges(sent), [
     `bytes 0-${40 * MB - 1}/${file.size}`,
@@ -235,4 +237,23 @@ test('cancelling stops the transfer and drops the session', async () => {
   await assert.rejects(upload.promise, /Cancelled/);
   assert.equal(sent.at(-1).aborted, true);
   assert.deepEqual(fetched, [`DELETE ${SESSION_URL}`]);
+});
+
+test('an open whose answer was lost is retried under the same uuid', async () => {
+  const file = bigFile(60 * MB);
+  const opened = [];
+  const server = sessionServer(file, {
+    override: (xhr) => {
+      if (xhr.method !== 'POST' || xhr.url !== '/api/v1/files/uploads') return null;
+      opened.push(JSON.parse(xhr.body).uuid);
+      // The first open lands on the server; its answer never comes back.
+      return opened.length === 1 ? 'network' : [200, { uuid: SESSION, offset: 0, chunk_size: 40 * MB }];
+    },
+  });
+  const { ctx } = makeEnv(server.answer);
+
+  const result = await ctx.sendFileUpload(file, {}, () => {}).promise;
+
+  assert.equal(result.status, 201);
+  assert.deepEqual(opened, [SESSION, SESSION], 'both attempts name the same session');
 });

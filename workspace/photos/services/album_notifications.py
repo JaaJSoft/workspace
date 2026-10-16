@@ -96,6 +96,18 @@ def notify_removed(share, *, acting_user):
     )
 
 
+def notify_revoked(share):
+    """Tell everyone *share* reached that it went with its maker's right to
+    share the album (``album_revocation``)."""
+    notify_many(
+        recipients=share_recipients(share, exclude=share.shared_by),
+        origin="photos",
+        icon="book-image",
+        title=f'The album "{share.album.title}" is no longer shared with you',
+        actor=share.shared_by,
+    )
+
+
 _ROLE_VERBS = {
     AlbumShare.Role.VIEWER: "browse its photos",
     AlbumShare.Role.CONTRIBUTOR: "browse it and add your own photos",

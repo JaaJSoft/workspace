@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from ..models import Album, AlbumLink, AlbumShare
 from .album_notifications import notify_removed, notify_role_changed, notify_shared
+from .album_revocation import revoke_lapsed_sharing
 from .albums import remove_items as remove_album_items
 
 
@@ -33,7 +34,8 @@ def share_album(album, *, role, acting_user, user=None, group=None, project=None
     Returns ``(share, created)``. The people the share reaches are told,
     on creation as on a role change. Members only hear about photos added
     after their invitation: the first share starts the album's
-    notification clock.
+    notification clock. A role change that costs someone the right to share
+    the album revokes what they handed out there (``album_revocation``).
     """
     target = _target_filter(user=user, group=group, project=project)
     with transaction.atomic():
@@ -46,6 +48,7 @@ def share_album(album, *, role, acting_user, user=None, group=None, project=None
         if changed:
             share.role = role
             share.save(update_fields=["role"])
+            revoke_lapsed_sharing(album_ids={album.pk})
         if album.notified_at is None:
             Album.objects.filter(pk=album.pk, notified_at__isnull=True).update(
                 notified_at=timezone.now()
@@ -62,6 +65,8 @@ def unshare_album(album, *, acting_user, user=None, group=None, project=None):
 
     What they contributed stays: an item is served while its contributor
     can share the file, member or not (see ``queries.vouched_items_q``).
+    The links and shares made by people who could share the album only
+    through this share go with it (``album_revocation``).
     """
     target = _target_filter(user=user, group=group, project=project)
     share = (
@@ -71,7 +76,9 @@ def unshare_album(album, *, acting_user, user=None, group=None, project=None):
     )
     if share is None:
         return False
-    share.delete()
+    with transaction.atomic():
+        share.delete()
+        revoke_lapsed_sharing(album_ids={album.pk})
     notify_removed(share, acting_user=acting_user)
     return True
 
@@ -80,6 +87,8 @@ def leave_album(album, user, *, remove_items=False):
     """Give up *user*'s own share of *album*; returns whether they had one.
 
     With *remove_items* the photos they added leave the album with them.
+    The links and shares they made there go unless another share still lets
+    them share the album (``album_revocation``).
     """
     with transaction.atomic():
         deleted, _ = AlbumShare.objects.filter(album=album, shared_with=user).delete()
@@ -88,6 +97,8 @@ def leave_album(album, user, *, remove_items=False):
                 album,
                 album.items.filter(added_by=user).values_list("file_id", flat=True),
             )
+        if deleted:
+            revoke_lapsed_sharing(album_ids={album.pk})
     return bool(deleted)
 
 

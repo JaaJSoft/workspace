@@ -11,11 +11,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from workspace.core.services.activity import (
+    allowed_activity_sources,
     annotate_time_ago,
     get_daily_counts,
     get_recent_events,
     get_sources,
     get_usage_stats,
+    get_visible_usage_stats,
 )
 from workspace.users.banner_palettes import BANNER_PALETTES, gradient_from_palette_value
 from workspace.users.services import avatar as avatar_service
@@ -41,7 +43,7 @@ class WorkspaceLoginView(LoginView):
         return ctx
 
 
-def _build_heatmap_data(user_id, viewer_id=None):
+def _build_heatmap_data(user_id, viewer_id=None, allowed_sources=None):
     """Build contribution heatmap grid data for the last 12 months."""
     today = timezone.localdate()
     # Go back ~12 months (52 weeks)
@@ -55,6 +57,7 @@ def _build_heatmap_data(user_id, viewer_id=None):
         date_from,
         date_to,
         viewer_id=viewer_id,
+        allowed_sources=allowed_sources,
     )
 
     # Compute quantile thresholds from non-zero values
@@ -185,8 +188,14 @@ def profile_view(request, username=None):
     user_id = profile_user.id
     viewer_id = None if is_own_profile else request.user.id
 
-    stats = get_usage_stats(user_id, viewer_id=viewer_id)
-    heatmap = _build_heatmap_data(user_id, viewer_id=viewer_id)
+    stats = get_visible_usage_stats(
+        user_id, viewer_id=viewer_id, visible_to=request.user
+    )
+    heatmap = _build_heatmap_data(
+        user_id,
+        viewer_id=viewer_id,
+        allowed_sources=allowed_activity_sources(request.user),
+    )
 
     # Profile fields — single query for all three keys instead of one per get_setting
     profile_settings = get_module_settings(profile_user, "profile")

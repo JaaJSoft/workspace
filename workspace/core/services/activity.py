@@ -69,23 +69,31 @@ def get_visible_usage_stats(user_id, *, viewer_id=None, visible_to):
     return {slug: value for slug, value in stats.items() if slug in allowed}
 
 
-@cached(
-    key=lambda user_id, date_from, date_to, viewer_id=None: (
-        f"activity:daily:{user_id}:{viewer_id}:{date_from}:{date_to}"
-    ),
-    ttl=_USAGE_STATS_TTL,
-)
-def get_daily_counts(user_id, date_from, date_to, viewer_id=None):
+def _daily_counts_key(
+    user_id, date_from, date_to, viewer_id=None, allowed_sources=None
+):
+    sources = "*" if allowed_sources is None else ",".join(sorted(allowed_sources))
+    return f"activity:daily:{user_id}:{viewer_id}:{date_from}:{date_to}:{sources}"
+
+
+@cached(key=_daily_counts_key, ttl=_USAGE_STATS_TTL)
+def get_daily_counts(user_id, date_from, date_to, viewer_id=None, allowed_sources=None):
     """Return per-day activity counts for *user_id*, cached for a short TTL.
 
     Backs the profile heatmap, where the registry fans out one 12-month
     aggregate query per provider on every render. Same rationale and TTL as
     ``get_usage_stats``: purely informational, worst-case staleness is the
     TTL. The dates are part of the key, so the daily window shift naturally
-    misses the previous day's entry.
+    misses the previous day's entry. The counts are summed across providers
+    and cannot be narrowed afterwards, so *allowed_sources* is part of the
+    key too.
     """
     return activity_registry.get_daily_counts(
-        user_id, date_from, date_to, viewer_id=viewer_id
+        user_id,
+        date_from,
+        date_to,
+        viewer_id=viewer_id,
+        allowed_sources=allowed_sources,
     )
 
 

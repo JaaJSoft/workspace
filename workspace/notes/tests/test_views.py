@@ -27,6 +27,30 @@ class NotesIndexViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["initial_view"], "all")
 
+    def test_query_values_cannot_break_out_of_the_alpine_expression(self):
+        # The values land inside a JS string in an x-data attribute: the
+        # browser decodes &#x27; back to a quote before Alpine evaluates it.
+        payload = "');alert(document.domain);//"
+        for param in ("folder", "tag", "file"):
+            with self.subTest(param=param):
+                resp = self.client.get("/notes", {param: payload})
+                self.assertEqual(resp.status_code, 200)
+                self.assertNotIn("alert(document.domain)", resp.content.decode())
+
+    def test_malformed_ids_are_dropped(self):
+        resp = self.client.get("/notes", {"folder": "not-a-uuid", "file": "x'y"})
+        self.assertEqual(resp.context["initial_id"], "")
+        self.assertEqual(resp.context["initial_file"], "")
+
+    def test_valid_ids_are_kept(self):
+        folder = "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b"
+        file = "0198a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a6c"
+        resp = self.client.get(
+            "/notes", {"view": "folder", "folder": folder, "file": file}
+        )
+        self.assertEqual(resp.context["initial_id"], folder)
+        self.assertEqual(resp.context["initial_file"], file)
+
     def test_sidebar_partial_carries_the_swap_target_id(self):
         # The sidebar refresh swaps this response into the page via
         # alpine-ajax, which removes the target element outright when an OK

@@ -137,6 +137,12 @@ def _ensure_default_folders(user):
     return prefs, changed
 
 
+def _uuid_param(request, name):
+    """The query param *name* as a canonical UUID string, or "" when absent or malformed."""
+    value = parse_uuid_or_none(request.GET.get(name))
+    return str(value) if value else ""
+
+
 @login_required
 @ensure_csrf_cookie
 def index(request):
@@ -165,8 +171,10 @@ def index(request):
         default_view = notes_prefs.get("defaultView")
         view = default_view if default_view in allowed_views else "all"
     context["initial_view"] = view
-    context["initial_id"] = request.GET.get("folder") or request.GET.get("tag") or ""
-    context["initial_file"] = request.GET.get("file", "")
+    context["initial_id"] = _uuid_param(request, "folder") or _uuid_param(
+        request, "tag"
+    )
+    context["initial_file"] = _uuid_param(request, "file")
     context["notes_prefs"] = notes_prefs
 
     return render(request, "notes/ui/notes.html", context)

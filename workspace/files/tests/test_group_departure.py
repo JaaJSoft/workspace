@@ -3,7 +3,7 @@
 Ownership used to grant MANAGE whatever the node, so a removed member kept
 reading, downloading, sharing and creating inside the group folders they had
 created - and through them, everything the remaining members put there later.
-Their public links on the group's nodes are revoked as they leave.
+Their public links and shares on the group's nodes are revoked as they leave.
 """
 
 import importlib
@@ -16,11 +16,19 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
-from workspace.files.models import FILE_FEED_Q, File, FileShareLink
+from workspace.files.models import (
+    FILE_FEED_Q,
+    File,
+    FileEvent,
+    FileShare,
+    FileShareLink,
+)
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.events import recent_feed_events
-from workspace.files.services.sharing import create_share_link
+from workspace.files.services.sharing import create_share_link, share_file
 from workspace.files.tests import test_webdav
+from workspace.notifications.models import Notification
+from workspace.projects.services.projects import create_project
 
 User = get_user_model()
 
@@ -232,16 +240,118 @@ class PublicLinkRevocationTests(_DepartureFixture, APITestCase):
         self.assertEqual(FileShareLink.objects.count(), 3)
 
 
-class FormerMemberLinkMigrationTests(_DepartureFixture, TestCase):
-    """Links made by members who left before revocation existed."""
+class ShareRevocationTests(_DepartureFixture, TestCase):
+    def setUp(self):
+        self._fixture()
+        self.carol = User.objects.create_user(username="carol", password="pass123")
+        self.friends = Group.objects.create(name="Friends")
+        self.carol.groups.add(self.friends)
+        self.project = create_project(self.carol, name="Site")
+        rw = FileShare.Permission.READ_WRITE
+        self.to_user, _, _ = share_file(
+            self.alice_note,
+            target_user=self.carol,
+            permission=rw,
+            acting_user=self.alice,
+        )
+        self.to_group, _, _ = share_file(
+            self.bob_secret,
+            target_group=self.friends,
+            permission=rw,
+            acting_user=self.alice,
+        )
+        self.to_project, _, _ = share_file(
+            self.alice_note,
+            target_project=self.project,
+            permission=rw,
+            acting_user=self.alice,
+        )
+        mine = FileService.create_file(
+            self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
+        )
+        self.personal, _, _ = share_file(
+            mine, target_user=self.carol, permission=rw, acting_user=self.alice
+        )
+        self.bobs, _, _ = share_file(
+            self.bob_secret, target_user=self.carol, permission=rw, acting_user=self.bob
+        )
+        Notification.objects.all().delete()
+
+    def _assert_only_alices_group_shares_revoked(self):
+        remaining = set(FileShare.objects.values_list("pk", flat=True))
+        self.assertEqual(remaining, {self.personal.pk, self.bobs.pk})
+        self.assertIsNone(FileService.get_permission(self.carol, self.alice_note))
+
+    def test_removing_the_user_from_the_group_revokes_their_shares_there(self):
+        self.alice.groups.remove(self.team)
+
+        self._assert_only_alices_group_shares_revoked()
+
+    def test_removing_the_member_from_the_group_side_revokes_them_too(self):
+        self.team.user_set.remove(self.alice)
+
+        self._assert_only_alices_group_shares_revoked()
+
+    def test_clearing_the_users_groups_revokes_them(self):
+        self.alice.groups.clear()
+
+        self._assert_only_alices_group_shares_revoked()
+
+    def test_resetting_the_users_groups_revokes_them(self):
+        self.alice.groups.set([self.friends])
+
+        self._assert_only_alices_group_shares_revoked()
+
+    def test_clearing_the_group_revokes_every_members_shares(self):
+        self.team.user_set.clear()
+
+        remaining = set(FileShare.objects.values_list("pk", flat=True))
+        self.assertEqual(remaining, {self.personal.pk})
+
+    def test_shares_survive_a_membership_that_stays(self):
+        other = Group.objects.create(name="Other")
+        self.alice.groups.add(other)
+        self.alice.groups.remove(other)
+
+        self.assertEqual(FileShare.objects.count(), 5)
+
+    def test_each_revocation_is_recorded_and_notified_like_an_unshare(self):
+        self.alice.groups.remove(self.team)
+
+        unshared = FileEvent.objects.filter(action=FileEvent.Action.UNSHARED)
+        self.assertEqual(
+            sorted((e.file_id, e.actor_id) for e in unshared),
+            sorted(
+                [
+                    (self.alice_note.pk, None),
+                    (self.alice_note.pk, None),
+                    (self.bob_secret.pk, None),
+                ]
+            ),
+        )
+        self.assertIn(
+            {
+                "shared_with_group_id": self.friends.pk,
+                "shared_with_group_name": "Friends",
+            },
+            [e.metadata for e in unshared],
+        )
+        notified = Notification.objects.filter(recipient=self.carol)
+        self.assertEqual(notified.count(), 3)
+        self.assertTrue(all(n.actor_id == self.alice.pk for n in notified))
+        self.assertFalse(Notification.objects.exclude(recipient=self.carol).exists())
+
+
+class FormerMemberSharingMigrationTests(_DepartureFixture, TestCase):
+    """Links and shares made by members who left before revocation existed."""
 
     class _SchemaEditor:
         class connection:
             alias = "default"
 
-    def test_the_migration_revokes_a_former_members_group_links_only(self):
+    def test_the_migration_revokes_a_former_members_group_sharing_only(self):
         migration = importlib.import_module(
-            "workspace.files.migrations.0070_revoke_former_member_share_links"
+            "workspace.files.migrations.0070_revoke_former_member_shares"
         )
         self._fixture()
         stale = create_share_link(self.alice_sub, acting_user=self.alice)
@@ -249,11 +359,31 @@ class FormerMemberLinkMigrationTests(_DepartureFixture, TestCase):
             FileService.create_folder(self.alice, "Mine"), acting_user=self.alice
         )
         member = create_share_link(self.root, acting_user=self.bob)
+        carol = User.objects.create_user(username="carol", password="pass123")
+        stale_share, _, _ = share_file(
+            self.alice_note, target_user=carol, permission="ro", acting_user=self.alice
+        )
+        personal_share, _, _ = share_file(
+            FileService.create_file(
+                self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
+            ),
+            target_user=carol,
+            permission="ro",
+            acting_user=self.alice,
+        )
+        member_share, _, _ = share_file(
+            self.bob_secret, target_user=carol, permission="ro", acting_user=self.bob
+        )
         # Left without the hook running, as before it existed.
         User.groups.through.objects.filter(user=self.alice, group=self.team).delete()
 
-        migration.revoke_former_member_links(apps, self._SchemaEditor)
+        migration.revoke_former_member_sharing(apps, self._SchemaEditor)
 
         remaining = set(FileShareLink.objects.values_list("pk", flat=True))
         self.assertEqual(remaining, {personal.pk, member.pk})
         self.assertFalse(FileShareLink.objects.filter(pk=stale.pk).exists())
+        self.assertEqual(
+            set(FileShare.objects.values_list("pk", flat=True)),
+            {personal_share.pk, member_share.pk},
+        )
+        self.assertFalse(FileShare.objects.filter(pk=stale_share.pk).exists())

@@ -227,3 +227,32 @@ def revoke_group_share_links(*, user_ids, group_ids):
             {"link_uuid": str(link.uuid)},
         )
     return len(links)
+
+
+def revoke_group_shares(*, user_ids, group_ids):
+    """Delete the shares *user_ids* made on nodes of *group_ids*.
+
+    For members leaving those groups, like ``revoke_group_share_links``: a
+    share they made there would keep handing the node to its target. Returns
+    the deleted shares, their file and target loaded, for the caller to notify.
+    """
+    shares = list(
+        FileShare.objects.filter(
+            shared_by_id__in=user_ids, file__group_id__in=group_ids
+        ).select_related(
+            "file",
+            "shared_by",
+            "shared_with",
+            "shared_with_group",
+            "shared_with_project",
+        )
+    )
+    if not shares:
+        return []
+    FileShare.objects.filter(pk__in=[share.pk for share in shares]).delete()
+    for share in shares:
+        _, payload = _share_target(
+            share.shared_with, share.shared_with_group, share.shared_with_project
+        )
+        record_event(share.file, None, FileEvent.Action.UNSHARED, payload)
+    return shares

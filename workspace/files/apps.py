@@ -135,12 +135,12 @@ class FilesConfig(AppConfig):
         from django.contrib.auth import get_user_model
         from django.db.models.signals import m2m_changed
 
-        from workspace.files.signals import revoke_links_on_group_leave
+        from workspace.files.signals import revoke_sharing_on_group_leave
 
         m2m_changed.connect(
-            revoke_links_on_group_leave,
+            revoke_sharing_on_group_leave,
             sender=get_user_model().groups.through,
-            dispatch_uid="files_revoke_links_on_group_leave",
+            dispatch_uid="files_revoke_sharing_on_group_leave",
         )
 
         # Register Prometheus metrics + storage-bytes collector.

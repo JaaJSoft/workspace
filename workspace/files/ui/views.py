@@ -653,7 +653,8 @@ def events(request, uuid):
     file_obj = File.objects.filter(uuid=uuid, deleted_at__isnull=True).first()
     if not file_obj:
         raise Http404
-    if FileService.get_permission(request.user, file_obj) is None:
+    permission = FileService.get_permission(request.user, file_obj)
+    if permission is None:
         raise Http404
 
     try:
@@ -664,9 +665,9 @@ def events(request, uuid):
 
     action_filter = request.GET.get("action", "").strip()
 
-    from workspace.files.services.events import events_for_file
+    from workspace.files.services.events import events_for_file, readable_events
 
-    base_qs = events_for_file(file_obj)
+    base_qs = events_for_file(file_obj, permission)
     # The dropdown only offers filters that yield matches on this file:
     # one query for the distinct action codes, then translated to grouped
     # (category, [(value, label), ...]) tuples by the model.
@@ -678,7 +679,7 @@ def events(request, uuid):
         action_filter = ""
     grouped_actions = FileEvent.grouped_actions(only=available_action_codes)
     events_qs = base_qs.filter(action=action_filter) if action_filter else base_qs
-    file_events = list(events_qs[:events_limit])
+    file_events = readable_events(events_qs[:events_limit], permission)
     total_event_count = events_qs.count()
 
     # Pre-build the swap URLs so the template doesn't thread filter +

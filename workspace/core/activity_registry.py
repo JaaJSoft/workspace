@@ -107,9 +107,12 @@ class ActivityRegistry:
         date_to: date,
         *,
         viewer_id: int | None = None,
+        allowed_sources: set[str] | None = None,
     ) -> dict[date, int]:
         merged: dict[date, int] = defaultdict(int)
         for info in self._providers.values():
+            if allowed_sources is not None and info.slug not in allowed_sources:
+                continue
             try:
                 provider = info.provider_cls()
                 for day, count in provider.get_daily_counts(

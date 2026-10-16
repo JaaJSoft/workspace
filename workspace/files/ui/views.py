@@ -556,6 +556,7 @@ def properties(request, uuid):
         {
             "sections": render_properties_sections(request, request.user, file_obj),
             "file": file_obj,
+            "file_path": FileService.visible_path(file_obj, perm),
             "is_owner": is_owner,
             "is_favorite": is_favorite,
             "is_pinned": is_pinned,

@@ -208,9 +208,33 @@ class FileService:
         )
 
     @staticmethod
+    def visible_path(file_obj, permission):
+        """The path of *file_obj* a viewer at *permission* may read.
+
+        The full path at EDIT or above - their own tree, or a group they are
+        in. Below that the node reached them through a share, and its path
+        names the owner's private folders above it: they get its name alone.
+        ``full_path_q`` is the same rule in SQL.
+        """
+        if permission is not None and permission >= FilePermission.EDIT:
+            return file_obj.path
+        return file_obj.name
+
+    @staticmethod
+    def full_path_q(user):
+        """Nodes whose full path *user* may read, per ``visible_path``.
+
+        Those they reach at EDIT or above: their personal nodes and every node
+        of the groups they are in.
+        """
+        from django.db.models import Q
+
+        return Q(owner=user, group__isnull=True) | Q(group__in=user.groups.all())
+
+    @staticmethod
     def annotate_for_serializer(queryset, user):
         """Prepare a File queryset for ``FileSerializer``."""
-        from django.db.models import Exists, OuterRef
+        from django.db.models import BooleanField, Exists, ExpressionWrapper, OuterRef
 
         from workspace.files.models import FileFavorite, FileShare, PinnedFolder
         from workspace.files.services.scanning.policy import with_scan
@@ -231,6 +255,9 @@ class FileService:
                         node_type=File.NodeType.FOLDER,
                         deleted_at__isnull=True,
                     )
+                ),
+                full_path_visible=ExpressionWrapper(
+                    FileService.full_path_q(user), output_field=BooleanField()
                 ),
             ).prefetch_related(viewer_file_tags(user))
         )

@@ -55,7 +55,7 @@ class TimelineVisibilityTests(APITestCase):
         self.hr = Group.objects.create(name="HR-confidential")
 
         private = FileService.create_folder(self.alice, "MedicalPrivate")
-        source = FileService.create_file(
+        self.source = source = FileService.create_file(
             self.alice,
             "Secret-source.md",
             parent=private,
@@ -108,6 +108,7 @@ class TimelineVisibilityTests(APITestCase):
                     self.assertNotIn(trace, html)
                 self.assertIn("renamed", html)
                 self.assertIn("copied from", html)
+                self.assertIn("another file", html)
 
                 data = self._api(self.bob)
                 actions = [event["action"] for event in data["results"]]
@@ -115,7 +116,10 @@ class TimelineVisibilityTests(APITestCase):
                 self.assertEqual(data["count"], 2)
                 created = data["results"][-1]
                 self.assertNotIn("source_name", created["metadata"])
+                self.assertEqual(created["metadata"], {"copied": True})
                 self.assertNotIn("Secret-source.md", str(data))
+                self.assertNotIn(str(self.source.uuid), str(data))
+                self.assertNotIn(str(self.source.uuid), html)
 
     def test_the_action_filter_offers_no_sharing_action_to_a_recipient(self):
         html = self._html(self.bob, action=FileEvent.Action.SHARED)
@@ -158,3 +162,4 @@ class TimelineVisibilityTests(APITestCase):
         self.assertLessEqual({"link_created", "link_revoked"}, actions)
         created = data["results"][-1]
         self.assertEqual(created["metadata"]["source_name"], "Secret-source.md")
+        self.assertEqual(created["metadata"]["source_uuid"], str(self.source.uuid))

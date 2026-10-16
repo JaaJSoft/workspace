@@ -90,9 +90,10 @@ MANAGER_ONLY_ACTIONS = frozenset(
     }
 )
 
-# Metadata keys only the file's manager may read: the name of the file a copy
-# was made from belongs to whoever copied it, and may sit in their private tree.
-_MANAGER_ONLY_METADATA = ("source_name",)
+# Metadata keys only the file's manager may read: the file a copy was made from
+# belongs to whoever copied it, and may sit in their private tree. A reader is
+# told it is a copy (``copied``), not of what.
+_MANAGER_ONLY_METADATA = ("source_name", "source_uuid")
 
 
 def _is_manager(permission):
@@ -132,6 +133,8 @@ def readable_events(events, permission):
                 for key, value in metadata.items()
                 if key not in _MANAGER_ONLY_METADATA
             }
+            if "source_uuid" in metadata:
+                event.metadata["copied"] = True
     return events
 
 

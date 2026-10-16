@@ -174,14 +174,14 @@ class ReservationTests(UploadSessionApiMixin, APITestCase):
 
     def test_a_uuid_another_user_holds_is_refused(self):
         other = User.objects.create_user(username="bob", password="pw")
-        theirs, _created = uploads.open_session(
+        theirs = uploads.open_session(
             other,
             name="b.mp4",
             parent=None,
             size=10,
             on_conflict="error",
             uuid=uuid.uuid4(),
-        )
+        )[0]
 
         response = self._open("a.mp4", size=10, uuid=str(theirs.pk))
 
@@ -312,13 +312,13 @@ class AppendServiceTests(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="pw")
-        self.session, _created = uploads.open_session(
+        self.session = uploads.open_session(
             self.user,
             name="video.mp4",
             parent=None,
             size=len(DATA),
             on_conflict="error",
-        )
+        )[0]
 
     def _finish(self):
         with uploads.finished_upload(self.session) as content:
@@ -514,9 +514,9 @@ class PurgeExpiredTests(TestCase):
         self.user = User.objects.create_user(username="alice", password="pw")
 
     def _session(self, name):
-        session, _created = uploads.open_session(
+        session = uploads.open_session(
             self.user, name=name, parent=None, size=10, on_conflict="error"
-        )
+        )[0]
         return session
 
     def test_an_abandoned_session_goes_with_its_spool(self):

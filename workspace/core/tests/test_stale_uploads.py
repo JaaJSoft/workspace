@@ -52,9 +52,9 @@ class PurgeStaleUploadsTests(TestCase):
 
     def test_an_abandoned_resumable_upload_goes_with_its_spool(self):
         user = get_user_model().objects.create_user(username="alice", password="pw")
-        session, _created = uploads.open_session(
+        session = uploads.open_session(
             user, name="video.mp4", parent=None, size=10, on_conflict="error"
-        )
+        )[0]
         UploadSession.objects.filter(pk=session.pk).update(
             updated_at=timezone.now() - timedelta(seconds=STALE_UPLOAD_SECONDS + 60)
         )

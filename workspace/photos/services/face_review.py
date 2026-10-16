@@ -24,7 +24,7 @@ from workspace.common.vectors.encoding import from_bytes
 
 from ..indexes import FACE_EMBEDDINGS
 from ..models import Face
-from ..queries import user_face_clusters, user_faces
+from ..queries import named_face_clusters, unnamed_face_clusters, user_faces
 from .face_grouping import LOW_QUALITY, max_distance
 from .face_people import person_cards
 
@@ -85,9 +85,7 @@ def _unit(blob):
 
 
 def _unnamed_clusters(user):
-    return user_face_clusters(user).filter(
-        person__isnull=True, hidden=False, photo_count__gt=0
-    )
+    return unnamed_face_clusters(user).filter(hidden=False, photo_count__gt=0)
 
 
 def unnamed_count(user):
@@ -144,9 +142,7 @@ def _suggester(user):
     were taken out of.
     """
     clusters = list(
-        user_face_clusters(user)
-        .filter(person__isnull=False, photo_count__gt=0)
-        .select_related("person")
+        named_face_clusters(user).filter(photo_count__gt=0).select_related("person")
     )
     # A centroid of another size (a backend switch not rebuilt yet) has no
     # direction to compare.
@@ -189,8 +185,8 @@ def doubtful_faces(user):
     """
     clusters = {
         cluster.pk: cluster
-        for cluster in user_face_clusters(user)
-        .filter(person__isnull=False, hidden=False, photo_count__gt=0)
+        for cluster in named_face_clusters(user)
+        .filter(hidden=False, photo_count__gt=0)
         .select_related("person")
     }
     centroids = {pk: _unit(c.centroid) for pk, c in clusters.items()}

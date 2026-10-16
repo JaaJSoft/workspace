@@ -75,6 +75,10 @@ def _correction(fn, *args, **kwargs):
         raise ValidationError(
             {"detail": "This person has no face picture to use yet."}
         ) from None
+    except face_people.Unnamed:
+        raise ValidationError(
+            {"detail": "Name this group after a contact first."}
+        ) from None
 
 
 def _person(user, uuid, field):
@@ -174,6 +178,8 @@ class FaceClusterViewSet(
                 else None
             )
             _correction(face_people.link_cluster, cluster, person)
+        # Re-read: ``person_visible`` was computed for the name it had.
+        serializer.instance = self.get_queryset().get(pk=cluster.pk)
 
     def perform_destroy(self, instance):
         face_corrections.ungroup(instance)
@@ -238,7 +244,7 @@ class FaceClusterViewSet(
     @action(detail=True, methods=["post"])
     def avatar(self, request, pk=None):
         cluster = self.get_object()
-        _correction(face_people.use_cover_as_avatar, cluster)
+        _correction(face_people.use_cover_as_avatar, request.user, cluster)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(

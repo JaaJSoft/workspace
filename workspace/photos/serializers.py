@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from .models import Album, Face, FaceCluster
+from .queries import cluster_person
 
 
 class AlbumSerializer(serializers.Serializer):
@@ -112,7 +113,14 @@ class FaceClusterSerializer(serializers.ModelSerializer):
         return _crop_url(cluster.cover_id)
 
     def get_person_name(self, cluster) -> str | None:
-        return cluster.person.display_name if cluster.person_id else None
+        person = cluster_person(cluster)
+        return person.display_name if person is not None else None
+
+    def to_representation(self, cluster):
+        data = super().to_representation(cluster)
+        if cluster_person(cluster) is None:
+            data["person"] = None
+        return data
 
 
 class FaceClusterCreateSerializer(serializers.Serializer):

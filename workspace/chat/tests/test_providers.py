@@ -1,7 +1,7 @@
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.chat.models import Conversation, Message
+from workspace.chat.models import Conversation, ConversationMember, Message
 
 from .test_chat import ChatTestMixin
 
@@ -66,11 +66,12 @@ class ChatActivityProviderTests(ChatTestMixin, TestCase):
 
     def test_recent_events_limit_and_offset(self):
         for i in range(5):
-            Conversation.objects.create(
+            group = Conversation.objects.create(
                 kind=Conversation.Kind.GROUP,
                 title=f"Group {i}",
                 created_by=self.creator,
             )
+            ConversationMember.objects.create(conversation=group, user=self.creator)
         events = self.provider.get_recent_events(self.creator.id, limit=2, offset=1)
         self.assertEqual(len(events), 2)
 

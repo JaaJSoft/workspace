@@ -6,15 +6,29 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class ChatActivityProvider(ActivityProvider):
+    @staticmethod
+    def _visible_conversation_ids(user_id, viewer_id):
+        """The conversations the reader of this feed is in, or None for no filter.
+
+        The reader is the viewer, or the user themselves on their own view: a
+        group they created and then left is no longer theirs to see.
+        """
+        from workspace.chat.services.conversations import user_conversation_ids
+
+        reader_id = viewer_id if viewer_id is not None else user_id
+        if reader_id is None:
+            return None
+        return user_conversation_ids(reader_id)
+
     def _base_qs(self, user_id, viewer_id):
         from workspace.chat.models import Conversation
-        from workspace.chat.services.conversations import user_conversation_ids
 
         qs = Conversation.objects.filter(kind=Conversation.Kind.GROUP)
         if user_id is not None:
             qs = qs.filter(created_by_id=user_id)
-        if viewer_id is not None and viewer_id != user_id:
-            qs = qs.filter(pk__in=user_conversation_ids(viewer_id))
+        visible = self._visible_conversation_ids(user_id, viewer_id)
+        if visible is not None:
+            qs = qs.filter(pk__in=visible)
         return qs
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
@@ -63,11 +77,8 @@ class ChatActivityProvider(ActivityProvider):
 
     def get_stats(self, user_id, *, viewer_id=None):
         from workspace.chat.models import ConversationMember, Message
-        from workspace.chat.services.conversations import user_conversation_ids
 
-        visible_convs = None
-        if viewer_id is not None and viewer_id != user_id:
-            visible_convs = user_conversation_ids(viewer_id)
+        visible_convs = self._visible_conversation_ids(user_id, viewer_id)
 
         conv_filter = {}
         if user_id is not None:

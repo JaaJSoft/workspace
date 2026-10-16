@@ -1,6 +1,7 @@
 from datetime import date
 
 from django.test import TestCase
+from django.utils.html import escapejs
 
 from workspace.projects.services.tasks import create_task
 
@@ -67,10 +68,12 @@ class BoardEpicTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         self.assertContains(resp, 'placeholder="Filter by epic"')
         html = resp.content.decode()
         filter_bar = html.split('id="task-filters"')[1].split('id="task-collection"')[0]
-        self.assertIn("labelSelector('filter-epic-selected'", filter_bar)
+        self.assertIn(f"labelSelector('{escapejs('filter-epic-selected')}'", filter_bar)
         # The filter picker must not offer epic creation, even to admins:
         # the x-data call ends with an empty create URL.
-        epic_picker = filter_bar.split("labelSelector('filter-epic-selected'")[1]
+        epic_picker = filter_bar.split(
+            f"labelSelector('{escapejs('filter-epic-selected')}'"
+        )[1]
         call_args = epic_picker.split('"\n')[0]
         self.assertIn(", ''", call_args)
         self.assertNotIn(f"/api/v1/projects/{self.project.uuid}/epics", call_args)

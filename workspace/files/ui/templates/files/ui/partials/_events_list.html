@@ -25,7 +25,7 @@ Loaded by:
     <select
       class="select select-bordered select-xs w-full my-2"
       aria-label="Filter activity by action"
-      x-on:change="$ajax(`/files/{{ file.uuid }}/events?action=${encodeURIComponent($event.target.value)}`, { target: 'file-events-list' })"
+      x-on:change="$ajax('/files/{{ file.uuid|escapejs }}/events?action=' + encodeURIComponent($event.target.value), { target: 'file-events-list' })"
     >
       <option value="" {% if not action_filter %}selected{% endif %}>All actions</option>
       {% for category, actions in grouped_actions %}

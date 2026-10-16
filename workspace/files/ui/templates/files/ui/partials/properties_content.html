@@ -19,7 +19,7 @@ Context:
 <div id="properties-content">
   <div
     class="p-4 space-y-5"
-    x-data="iconPicker('{{ file.uuid }}', '{{ file.icon|default:"folder" }}', '{{ file.color|default:"text-warning" }}', '/api/v1/files/', function() { window.dispatchEvent(new CustomEvent('pinned-folders-changed')); window.dispatchEvent(new CustomEvent('folder-icons-changed')); {% if file.group_id %}window.dispatchEvent(new CustomEvent('group-folders-changed'));{% endif %} })"
+    x-data="iconPicker('{{ file.uuid|escapejs }}', '{{ file.icon|default:"folder"|escapejs }}', '{{ file.color|default:"text-warning"|escapejs }}', '/api/v1/files/', function() { window.dispatchEvent(new CustomEvent('pinned-folders-changed')); window.dispatchEvent(new CustomEvent('folder-icons-changed')); {% if file.group_id %}window.dispatchEvent(new CustomEvent('group-folders-changed'));{% endif %} })"
   >
     <!-- Icon + Name (centered, like chat avatar) -->
     <div class="flex flex-col items-center text-center gap-2">
@@ -133,7 +133,7 @@ Context:
       <div class="divider my-0 text-xs text-base-content/40">Tags</div>
       <div
         class="flex flex-wrap items-center gap-1.5"
-        x-init="selectedFile = { uuid: '{{ file.uuid }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
+        x-init="selectedFile = { uuid: '{{ file.uuid|escapejs }}', tags: JSON.parse(document.getElementById('properties-tags-data').textContent) }"
       >
         <template x-for="t in (selectedFile ? selectedFile.tags : [])" :key="t.uuid">
           <tag-chip :name="t.name" :color="t.color" :icon="t.icon" :trailing-icon="t.source === 'auto' ? 'sparkles' : null" trailing-label="Added automatically from what the photo shows"></tag-chip>
@@ -333,7 +333,7 @@ Context:
       <div x-show="!loading">
         <div
           id="file-events-list"
-          x-init="$ajax('/files/{{ file.uuid }}/events', { target: 'file-events-list' })"
+          x-init="$ajax('/files/{{ file.uuid|escapejs }}/events', { target: 'file-events-list' })"
         ></div>
       </div>
     </div>

@@ -50,7 +50,7 @@ Params:
     {% endif %}
     {% for s in statuses %}
       <span
-        x-show="{{ model_expr }} === '{{ s.uuid }}'"
+        x-show="{{ model_expr }} === '{{ s.uuid|escapejs }}'"
         x-cloak
         class="flex items-center gap-2 min-w-0"
       >
@@ -94,10 +94,10 @@ Params:
           <button
             type="button"
             class="flex w-full min-w-0 items-center gap-2 rounded"
-            :class="{{ model_expr }} === '{{ s.uuid }}' ? 'active' : ''"
+            :class="{{ model_expr }} === '{{ s.uuid|escapejs }}' ? 'active' : ''"
             role="menuitemradio"
-            :aria-checked="{{ model_expr }} === '{{ s.uuid }}'"
-            @click="{{ model_expr }} = '{{ s.uuid }}'; open = false; {{ on_change|default:'' }}"
+            :aria-checked="{{ model_expr }} === '{{ s.uuid|escapejs }}'"
+            @click="{{ model_expr }} = '{{ s.uuid|escapejs }}'; open = false; {{ on_change|default:'' }}"
           >
             <span
               class="w-2.5 h-2.5 rounded-full border border-base-300 shrink-0"

@@ -10,7 +10,7 @@ menus without a reload.
   <dialog id="sprints-dialog" class="modal" @close="refreshContent()">
     <div
       class="modal-box max-w-xl flex flex-col gap-3"
-      x-data="projectSprints({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+      x-data="projectSprints({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
       @sprint-add.window="openAdd()"
     >
       <div class="flex items-start justify-between gap-3">

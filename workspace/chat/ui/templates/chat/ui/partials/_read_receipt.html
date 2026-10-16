@@ -9,8 +9,8 @@
         open = !open;
         if (open && !loaded) {
           loading = true;
-          $ajax('/chat/{{ conversation_uuid }}/messages/{{ message_uuid }}/readers', {
-            target: 'readers-popover-{{ message_uuid }}',
+          $ajax('/chat/{{ conversation_uuid|escapejs }}/messages/{{ message_uuid|escapejs }}/readers', {
+            target: 'readers-popover-{{ message_uuid|escapejs }}',
           });
         }
       "

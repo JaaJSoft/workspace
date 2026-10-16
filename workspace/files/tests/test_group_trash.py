@@ -109,7 +109,7 @@ class GroupTrashTests(APITestCase):
         keys = {
             key.split("#")[0] for key in response.json()["files"][str(self.loose.uuid)]
         }
-        self.assertTrue({"restore", "purge"} <= keys)
+        self.assertLessEqual({"restore", "purge"}, keys)
 
     def test_a_member_previews_it_from_the_trash(self):
         self.client.force_login(self.alice)

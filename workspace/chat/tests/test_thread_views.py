@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
@@ -65,7 +67,24 @@ class ThreadMessagesViewTests(TestCase):
 
     def test_a_non_member_cannot_read_a_thread(self):
         self.client.force_login(self.mallory)
-        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
+
+    def test_a_thread_elsewhere_answers_like_one_that_does_not_exist(self):
+        """No existence oracle: a root in a conversation the caller is not in
+        and an unknown root get the same answer."""
+        self.client.force_login(self.mallory)
+        unknown = reverse("chat_ui:thread_messages", kwargs={"root_uuid": uuid.uuid4()})
+        self.assertEqual(
+            self.client.get(self.url).status_code,
+            self.client.get(unknown).status_code,
+        )
+
+    def test_a_member_who_left_cannot_read_a_thread(self):
+        ConversationMember.objects.filter(
+            conversation=self.conversation, user=self.alice
+        ).update(left_at=timezone.now())
+        self.client.force_login(self.alice)
+        self.assertEqual(self.client.get(self.url).status_code, 404)
 
     def test_the_panel_drops_the_quote_of_the_root_it_already_shows(self):
         self.client.force_login(self.alice)

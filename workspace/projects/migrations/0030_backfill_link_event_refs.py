@@ -9,6 +9,7 @@ renamed or reused since. An event left unpaired keeps a null ``from_ref`` and
 is hidden from every feed.
 """
 
+from collections import defaultdict
 from datetime import timedelta
 
 from django.db import migrations
@@ -36,9 +37,7 @@ def backfill_link_event_refs(apps, schema_editor):
     db = schema_editor.connection.alias
     events = list(
         TaskEvent.objects.using(db)
-        .filter(
-            type__in=_LINK_TYPES, from_ref__isnull=True, task_number__isnull=False
-        )
+        .filter(type__in=_LINK_TYPES, from_ref__isnull=True, task_number__isnull=False)
         .order_by("created_at", "uuid")
         .values(
             "uuid",
@@ -51,17 +50,24 @@ def backfill_link_event_refs(apps, schema_editor):
             "created_at",
         )
     )
+    # A pair shares its type and actor, so each bucket is scanned on its own
+    # and one actor's burst of links does not lengthen anyone else's scan.
+    buckets = defaultdict(list)
+    for event in events:
+        buckets[event["type"], event["actor_id"]].append(event)
     partner = {}
-    for index, event in enumerate(events):
-        if event["uuid"] in partner:
-            continue
-        for other in events[index + 1 :]:
-            if other["created_at"] - event["created_at"] > _PAIR_WINDOW:
-                break
-            if other["uuid"] not in partner and _is_pair(event, other):
-                partner[event["uuid"]] = other
-                partner[other["uuid"]] = event
-                break
+    for bucket in buckets.values():
+        for index, event in enumerate(bucket):
+            if event["uuid"] in partner:
+                continue
+            for other_index in range(index + 1, len(bucket)):
+                other = bucket[other_index]
+                if other["created_at"] - event["created_at"] > _PAIR_WINDOW:
+                    break
+                if other["uuid"] not in partner and _is_pair(event, other):
+                    partner[event["uuid"]] = other
+                    partner[other["uuid"]] = event
+                    break
     TaskEvent.objects.using(db).bulk_update(
         [
             TaskEvent(uuid=uuid, from_ref=other["project_id"], to_ref=other["task_id"])

@@ -92,3 +92,20 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
         backfill_link_event_refs(apps, _SchemaEditor())
 
         self.assertEqual(self._refs(self.task), before)
+
+    def test_two_actors_linking_at_the_same_instant_each_get_their_own_pair(self):
+        other = create_task(self.project, self.admin, title="Other")
+        third = create_task(self.secret, self.admin, title="Third")
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        create_link(third, other, "blocks", actor=self.member)
+        self._simulate_legacy_state()
+        moment = TaskEvent.objects.filter(type__in=_LINK_TYPES).earliest("created_at")
+        TaskEvent.objects.filter(type__in=_LINK_TYPES).update(
+            created_at=moment.created_at
+        )
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(self.secret.uuid, self.hidden.uuid)})
+        self.assertEqual(self._refs(other), {(self.secret.uuid, third.uuid)})
+        self.assertEqual(self._refs(third), {(self.project.uuid, other.uuid)})

@@ -20,8 +20,9 @@ from workspace.files.services.locking import (
     conflicting_lock,
 )
 from workspace.files.services.scanning.policy import QuarantinedSource
+from workspace.files.services.uploads import CHUNK_SIZE
 
-from .models import File, FileComment
+from .models import File, FileComment, UploadSession
 
 
 class FileLocked(APIException):
@@ -102,6 +103,21 @@ def ensure_replaceable(user, target):
     if permission is None or permission < FilePermission.WRITE:
         raise PermissionDenied("You cannot replace the existing file.")
     ensure_unlocked(user, target)
+
+
+def validate_node_name(value):
+    """Refuse the path separators a name would be split on downstream."""
+    if "/" in value:
+        raise serializers.ValidationError("File and folder names must not contain '/'.")
+    if "\\" in value:
+        raise serializers.ValidationError(
+            "File and folder names must not contain a backslash."
+        )
+    if value in (".", ".."):
+        raise serializers.ValidationError(
+            "File and folder names must not be '.' or '..'."
+        )
+    return value
 
 
 def _require_annotation(obj, name):
@@ -382,15 +398,7 @@ class FileSerializer(serializers.ModelSerializer):
         ]
 
     def validate_name(self, value):
-        if "/" in value:
-            raise serializers.ValidationError(
-                "File and folder names must not contain '/'."
-            )
-        if "\\" in value:
-            raise serializers.ValidationError(
-                "File and folder names must not contain a backslash."
-            )
-        return value
+        return validate_node_name(value)
 
     def validate(self, attrs):
         # A request knob, never a model attribute: pop it before the
@@ -767,3 +775,76 @@ class PinnedReorderSerializer(serializers.Serializer):
         if len(set(parsed)) != len(parsed):
             raise serializers.ValidationError("Duplicate UUIDs in order.")
         return parsed
+
+
+class UploadSessionCreateSerializer(serializers.Serializer):
+    uuid = serializers.UUIDField(
+        required=False,
+        help_text=(
+            "Identifier the client picks for the session. Opening again under "
+            "the same one answers with that session instead of a second one, so "
+            "an open whose answer was lost can be retried."
+        ),
+    )
+    name = serializers.CharField(max_length=255, help_text="Name of the file.")
+    parent = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Folder the file goes in; omitted for the root.",
+    )
+    size = serializers.IntegerField(
+        min_value=1, help_text="Size of the whole file in bytes."
+    )
+    on_conflict = serializers.ChoiceField(
+        choices=UploadSession.OnConflict.choices,
+        default=UploadSession.OnConflict.ERROR,
+        help_text=(
+            "What finalizing does when the name is taken, as on a regular "
+            "upload: 'error', 'rename' or 'replace'."
+        ),
+    )
+    mime_type = serializers.CharField(
+        max_length=100,
+        required=False,
+        allow_blank=True,
+        help_text="Media type the client declares for the file.",
+    )
+
+    def validate_name(self, value):
+        return validate_node_name(value)
+
+
+class UploadSessionSerializer(serializers.ModelSerializer):
+    offset = serializers.IntegerField(
+        source="received",
+        help_text="Bytes received so far: where the next chunk starts.",
+    )
+    chunk_size = serializers.SerializerMethodField(
+        help_text="Bytes the client should send per chunk."
+    )
+    completed = serializers.SerializerMethodField(
+        help_text="True once the session was finalized."
+    )
+
+    class Meta:
+        model = UploadSession
+        fields = [
+            "uuid",
+            "name",
+            "parent",
+            "size",
+            "offset",
+            "chunk_size",
+            "on_conflict",
+            "completed",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    @extend_schema_field(OpenApiTypes.INT)
+    def get_chunk_size(self, obj):
+        return CHUNK_SIZE
+
+    @extend_schema_field(OpenApiTypes.BOOL)
+    def get_completed(self, obj):
+        return obj.completed_at is not None

@@ -139,8 +139,9 @@ class TrashMixin:
     @extend_schema(
         summary="Clean trash",
         description=(
-            "Permanently delete trashed items past retention. "
-            "Use force=true to delete all trashed items."
+            "Permanently delete the current user's own trashed items past "
+            "retention; other members' trashed group items are left alone. "
+            "Use force=true to delete all of the user's own trashed items."
         ),
         parameters=[
             OpenApiParameter(
@@ -167,7 +168,10 @@ class TrashMixin:
         )
         retention_days = TRASH_RETENTION_DAYS
         cutoff = timezone.now() - timedelta(days=retention_days)
-        queryset = FileService.restorable_files_qs(request.user).filter(
+        # Only the caller's own nodes: the listing also shows the group's
+        # trashed nodes, but emptying it must not destroy what other members
+        # trashed - they purge those one at a time.
+        queryset = FileService.owned_files_qs(request.user).filter(
             deleted_at__isnull=False
         )
         if not force:

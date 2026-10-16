@@ -85,11 +85,20 @@ class GroupTrashTests(APITestCase):
         self.assertEqual([n["name"] for n in trashed.json()], ["loose.txt"])
         self.assertEqual([n.name for n in ui.context["nodes"]], ["loose.txt"])
 
-    def test_emptying_the_trash_purges_what_it_lists(self):
+    def test_emptying_the_trash_leaves_other_members_nodes(self):
+        mine = FileService.create_file(
+            self.alice,
+            "mine.txt",
+            parent=self.root,
+            content=ContentFile(b"mine", name="mine.txt"),
+        )
+        FileService.soft_delete(mine, acting_user=self.alice)
+
         response = self.client.delete("/api/v1/files/trash/clean?force=true")
 
         self.assertEqual(response.json()["deleted"], 1)
-        self.assertFalse(File.objects.filter(pk=self.loose.pk).exists())
+        self.assertFalse(File.objects.filter(pk=mine.pk).exists())
+        self.assertTrue(File.objects.filter(pk=self.loose.pk).exists())
 
     def test_the_action_registry_offers_restore_and_purge(self):
         response = self.client.post(

@@ -279,7 +279,7 @@ Context (built by files.ui.views.storage):
               type="button"
               class="btn btn-ghost btn-xs btn-square text-error"
               title="Move to trash"
-              @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')"
+              @click="trashFile('{{ f.uuid|escapejs }}', '{{ f.name|escapejs }}')"
               :disabled="busy"
             >
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
@@ -327,7 +327,7 @@ Context (built by files.ui.views.storage):
                     type="button"
                     class="btn btn-ghost btn-xs btn-square text-error ml-auto"
                     title="Move to trash"
-                    @click="trashFile('{{ f.uuid }}', '{{ f.name|escapejs }}')"
+                    @click="trashFile('{{ f.uuid|escapejs }}', '{{ f.name|escapejs }}')"
                     :disabled="busy"
                   >
                     <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>

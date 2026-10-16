@@ -164,9 +164,9 @@
         {% for pid, p in banner_palettes.items %}
           <button
             type="button"
-            @click="selectPreset('{{ pid }}')"
+            @click="selectPreset('{{ pid|escapejs }}')"
             class="h-10 rounded-lg border-2 transition-all hover:scale-105 cursor-pointer"
-            :class="currentId === '{{ pid }}' ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'"
+            :class="currentId === '{{ pid|escapejs }}' ? 'border-primary ring-2 ring-primary/30' : 'border-base-300'"
             style="background: linear-gradient(135deg, {{ p.from }}, {{ p.via }}, {{ p.to }})"
             title="{{ p.label }}"
           ></button>

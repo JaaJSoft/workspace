@@ -19,7 +19,7 @@
 {% endcomment %}
 
 <div
-  x-data="userSelector('{{ on_select_event }}'{% if local_source %}, () => ({{ local_source }}){% endif %})"
+  x-data="userSelector('{{ on_select_event|escapejs }}'{% if local_source %}, () => ({{ local_source }}){% endif %})"
   class="relative"
 >
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">

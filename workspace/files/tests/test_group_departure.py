@@ -14,8 +14,10 @@ from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.files.activity import FilesActivityProvider
 from workspace.files.models import (
     FILE_FEED_Q,
     File,
@@ -127,6 +129,59 @@ class OwnerPermissionTests(_DepartureFixture, TestCase):
 
         self.assertIn(self.alice_note.pk, {event.file_id for event in before})
         self.assertNotIn(self.alice_note.pk, {event.file_id for event in after})
+
+
+class OwnActivityTests(_DepartureFixture, TestCase):
+    """A former member's own feed, heatmap and stats drop their group nodes."""
+
+    def setUp(self):
+        self._fixture()
+        self.mine = FileService.create_file(
+            self.alice, "mine.txt", content=ContentFile(b"x", name="mine.txt")
+        )
+        self.provider = FilesActivityProvider()
+        self.today = timezone.localdate()
+
+    def _own_views(self):
+        """Every way a user reads their own activity: no viewer, or themselves."""
+        return (None, self.alice.pk)
+
+    def _described(self, viewer_id):
+        return {
+            event["description"]
+            for event in self.provider.get_recent_events(
+                self.alice.pk, limit=50, viewer_id=viewer_id
+            )
+        }
+
+    def _counted(self, viewer_id):
+        return sum(
+            self.provider.get_daily_counts(
+                self.alice.pk, self.today, self.today, viewer_id=viewer_id
+            ).values()
+        )
+
+    def test_a_member_sees_their_group_nodes(self):
+        for viewer_id in self._own_views():
+            with self.subTest(viewer_id=viewer_id):
+                self.assertEqual(self._described(viewer_id), {"alice.txt", "mine.txt"})
+                self.assertEqual(self._counted(viewer_id), 2)
+                self.assertEqual(
+                    self.provider.get_stats(self.alice.pk, viewer_id=viewer_id),
+                    {"total_files": 2},
+                )
+
+    def test_a_former_member_no_longer_sees_them(self):
+        self.alice.groups.remove(self.team)
+
+        for viewer_id in self._own_views():
+            with self.subTest(viewer_id=viewer_id):
+                self.assertEqual(self._described(viewer_id), {"mine.txt"})
+                self.assertEqual(self._counted(viewer_id), 1)
+                self.assertEqual(
+                    self.provider.get_stats(self.alice.pk, viewer_id=viewer_id),
+                    {"total_files": 1},
+                )
 
 
 class FormerMemberApiTests(_DepartureFixture, APITestCase):

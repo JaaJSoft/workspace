@@ -163,6 +163,19 @@ class FileService:
         )
 
     @staticmethod
+    def owned_files_q(user):
+        """``owned_files_qs`` as a Q, for a query that already reads ``File``.
+
+        *user* may be a user or a user id: the filter needs no row of theirs.
+        """
+        from django.contrib.auth.models import Group
+        from django.db.models import Q
+
+        return Q(owner=user) & (
+            Q(group__isnull=True) | Q(group__in=Group.objects.filter(user=user))
+        )
+
+    @staticmethod
     def owned_files_qs(user):
         """The nodes *user* owns and still manages, ``deleted_at`` not filtered.
 
@@ -170,11 +183,7 @@ class FileService:
         still belong to - not those of a group they have left, which stay with
         the group.
         """
-        from django.db.models import Q
-
-        return File.objects.filter(
-            Q(group__isnull=True) | Q(group__in=user.groups.all()), owner=user
-        )
+        return File.objects.filter(FileService.owned_files_q(user))
 
     @staticmethod
     def user_group_files_qs(user):

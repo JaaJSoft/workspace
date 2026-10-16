@@ -15,7 +15,7 @@
   <body class="min-h-screen bg-base-200 flex flex-col">
     <div
       class="flex-1 max-w-4xl mx-auto w-full p-4 sm:p-6"
-      x-data="sharedPoll('{{ share_token }}')"
+      x-data="sharedPoll('{{ share_token|escapejs }}')"
     >
 
       <template x-if="loading">

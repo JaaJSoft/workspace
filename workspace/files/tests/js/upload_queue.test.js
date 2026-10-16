@@ -12,13 +12,14 @@ function makeQueue({ discardOk = true, confirmAnswer = true } = {}) {
   const notified = [];
   const confirms = [];
   const discarded = [];
+  const released = [];
   const ctx = loadScripts(
     ['workspace/common/static/ui/js/filesize.js', 'workspace/files/ui/static/files/ui/js/upload_queue.js'],
     { document: { addEventListener: () => {} } },
   );
   const queue = ctx.createUploadQueue({
-    send: (file, { folderId, onConflict }, onProgress) => {
-      const request = { file, folderId, onConflict, onProgress, aborted: false };
+    send: (file, { folderId, onConflict }, onProgress, onRetrying) => {
+      const request = { file, folderId, onConflict, onProgress, onRetrying, aborted: false };
       request.promise = new Promise((resolve, reject) => {
         request.resolve = resolve;
         request.reject = reject;
@@ -33,8 +34,9 @@ function makeQueue({ discardOk = true, confirmAnswer = true } = {}) {
     discard: async (uuid) => { discarded.push(uuid); return discardOk; },
     notify: (type) => notified.push(type),
     confirm: async (options) => { confirms.push(options); return confirmAnswer; },
+    release: (file) => released.push(file.name),
   });
-  return { queue, requests, notified, confirms, discarded };
+  return { queue, requests, notified, confirms, discarded, released };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -337,4 +339,35 @@ test('every failed upload can be retried at once, leaving cancelled ones alone',
   assert.equal(queue.failedCount, 0);
   assert.deepEqual(statuses(queue), ['a.jpg:uploading', 'b.jpg:cancelled', 'c.jpg:uploading']);
   assert.equal(requests[3].folderId, 'f', 'a retried file keeps its folder');
+});
+
+test('a row says when its upload lost the connection and is retrying', async () => {
+  const { queue, requests } = makeQueue();
+  queue.add([{ file: file('video.mp4', 200 * 1024 * 1024) }]);
+  const [item] = queue.items;
+
+  requests[0].onProgress(64 * 1024 * 1024);
+  requests[0].onRetrying(true);
+  assert.match(queue.statusText(item), /^Connection lost, retrying - 64\.0\sMB of 200\.0\sMB$/);
+
+  requests[0].onRetrying(false);
+  assert.match(queue.statusText(item), /^64\.0\sMB of 200\.0\sMB$/);
+
+  requests[0].onRetrying(true);
+  requests[0].reject(new Error('Network error'));
+  await settle();
+  assert.equal(item.retrying, false);
+  assert.equal(queue.statusText(item), 'Network error');
+});
+
+test('closing the panel releases what failed uploads kept for a retry', async () => {
+  const { queue, requests, released } = makeQueue();
+  queue.add([{ file: file('a.mp4') }, { file: file('b.mp4') }]);
+  requests[0].reject(new Error('Network error'));
+  requests[1].resolve({ status: 201, body: { uuid: 'u1', name: 'b.mp4' } });
+  await settle();
+
+  await queue.close();
+
+  assert.deepEqual(released, ['a.mp4']);
 });

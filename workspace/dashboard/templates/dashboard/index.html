@@ -158,7 +158,7 @@
       <div>
         <div
           class="card bg-base-100 shadow border border-base-300"
-          x-data="{ activityTab: '{{ activity_tab|default:"all" }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }"
+          x-data="{ activityTab: '{{ activity_tab|default:"all"|escapejs }}', activitySearch: '', searchOpen: false, get feedUrl() { let u = '{% url 'dashboard:activity_feed' %}'; let p = []; if (this.activityTab !== 'all') p.push('source=' + this.activityTab); if (this.activitySearch) p.push('q=' + encodeURIComponent(this.activitySearch)); return p.length ? u + '?' + p.join('&') : u; } }"
           @ajax:before="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedSkeleton.innerHTML"
           @ajax:error="$el.querySelector('#dashboard-activity').innerHTML = $refs.feedFailed.innerHTML"
         >

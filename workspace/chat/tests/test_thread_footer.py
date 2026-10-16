@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
 from django.urls import reverse
+from django.utils.html import escapejs
 
 from workspace.chat.models import Conversation, ConversationMember, Message
 from workspace.chat.services.rendering import render_message_body
@@ -56,7 +57,7 @@ class ThreadFooterTests(TestCase):
         html = self.client.get(self.url).content.decode()
         self.assertIn('data-testid="thread-footer"', html)
         self.assertIn("3 replies", html)
-        self.assertIn(f"openThread('{root.uuid}')", html)
+        self.assertIn(f"openThread('{escapejs(root.uuid)}')", html)
 
     def test_a_single_reply_is_not_pluralised(self):
         self._root(1)
@@ -88,7 +89,7 @@ class ThreadFooterTests(TestCase):
 
         self.assertIn("View thread", html)
         # Both the root's count and the reply's link point at the same thread.
-        self.assertEqual(html.count(f"openThread('{root.uuid}')"), 2)
+        self.assertEqual(html.count(f"openThread('{escapejs(root.uuid)}')"), 2)
 
     def test_a_reply_hidden_from_the_flow_adds_no_link(self):
         root = self._root(1)

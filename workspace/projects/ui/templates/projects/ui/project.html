@@ -27,11 +27,11 @@
 
 {% block drawer_attrs %}
   x-data="projectBoard({
-  apiBase: '/api/v1/projects/{{ project.uuid }}',
+  apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}',
   projectBase: '{% url 'projects_ui:project' project.uuid %}',
   writable: {{ writable|yesno:'true,false' }},
-  view: '{{ view }}',
-  initialTask: '{{ panel_task.uuid }}',
+  view: '{{ view|escapejs }}',
+  initialTask: '{{ panel_task.uuid|escapejs }}',
   })"
   @nav:restore.window="onRestore($event)"
   @keydown.window="handleKeydown($event)"

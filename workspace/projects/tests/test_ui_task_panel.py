@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.html import escapejs
 
 from workspace.files.services import FileService
 from workspace.projects.models import Label
@@ -110,13 +111,17 @@ class TaskPanelViewTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(self.url)
         self.assertContains(resp, 'id="panel-labels-data"')
         self.assertContains(resp, "labelSelector(")
-        self.assertContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_member_gets_the_selector_without_the_create_endpoint(self):
         self.client.force_login(self.member)
         resp = self.client.get(self.url)
         self.assertContains(resp, "labelSelector(")
-        self.assertNotContains(resp, f"/api/v1/projects/{self.project.uuid}/labels")
+        self.assertNotContains(
+            resp, escapejs(f"/api/v1/projects/{self.project.uuid}/labels")
+        )
 
     def test_labels_section_hidden_for_member_when_project_has_none(self):
         self.label.delete()

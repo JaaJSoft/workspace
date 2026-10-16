@@ -1,6 +1,6 @@
 <!-- Autocomplete dropdown for {{ field }} -->
 <div
-  x-show="_acIsOpen('{{ field }}')"
+  x-show="_acIsOpen('{{ field|escapejs }}')"
   x-cloak
   role="listbox"
   class="absolute left-0 right-0 top-full mt-1 z-50 bg-base-100 rounded-lg shadow-lg ring-1 ring-base-300 max-h-80 overflow-y-auto py-1"
@@ -18,7 +18,7 @@
         :aria-selected="idx === _autocomplete.highlight"
         class="flex items-center gap-3 w-full px-3 cursor-pointer transition-colors"
         :class="[idx === _autocomplete.highlight ? 'bg-base-200' : 'hover:bg-base-200/50', row.first ? 'py-1.5' : 'pb-1.5 -mt-0.5']"
-        @mousedown.prevent="_acSelect(row, '{{ field }}')"
+        @mousedown.prevent="_acSelect(row, '{{ field|escapejs }}')"
         @mouseenter="_autocomplete.highlight = idx"
       >
         <div class="w-8 shrink-0">

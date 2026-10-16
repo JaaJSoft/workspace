@@ -509,6 +509,8 @@ class FileService:
         old_name = file_obj.name
         if old_name == new_name:
             return file_obj
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be renamed.")
 
         _name_helpers.check_name_available(
             file_obj.owner,

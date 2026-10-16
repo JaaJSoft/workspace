@@ -108,6 +108,13 @@ class GroupRootServiceTests(_GroupRootFixture, TestCase):
             FileService.soft_delete(self.root, acting_user=self.alice)
         self._assert_untouched()
 
+    def test_rename_refuses_the_group_root(self):
+        with self.assertRaises(ValueError):
+            FileService.rename(self.root, "Renamed", acting_user=self.alice)
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.name, "TeamRoot")
+        self._assert_untouched()
+
 
 class GroupRootWebDAVTests(_GroupRootFixture, TestCase):
     _request = test_webdav.WebDAVIntegrationTests._request
@@ -131,4 +138,14 @@ class GroupRootWebDAVTests(_GroupRootFixture, TestCase):
         code, _, _ = self._request("DELETE", "/TeamRoot")
 
         self.assertEqual(code, 403)
+        self._assert_untouched()
+
+    def test_a_member_cannot_rename_the_group_root(self):
+        code, _, _ = self._request(
+            "MOVE", "/TeamRoot", headers={"Destination": f"{DAV}/Renamed"}
+        )
+
+        self.assertEqual(code, 403)
+        self.root.refresh_from_db()
+        self.assertEqual(self.root.name, "TeamRoot")
         self._assert_untouched()

@@ -819,6 +819,8 @@ def _move_to(file_obj, user, dest_path):
     needs_move = dest_parent != file_obj.parent
 
     _require_permission(user, file_obj, FilePermission.EDIT, "MOVE")
+    if needs_rename and FileService.is_group_root(file_obj):
+        raise DAVError(HTTP_FORBIDDEN, "A group's root folder cannot be renamed.")
     if needs_move:
         _require_permission(user, dest_parent, FilePermission.EDIT, "MOVE")
         try:

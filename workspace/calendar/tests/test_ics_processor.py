@@ -6,6 +6,7 @@ from django.core.files.base import ContentFile
 from django.test import TestCase
 
 from workspace.calendar.models import Calendar, Event, EventMember
+from workspace.calendar.models_external import ExternalCalendar
 from workspace.calendar.services.ics_processor import process_calendar_email
 from workspace.mail.models import MailAccount, MailAttachment, MailFolder, MailMessage
 
@@ -333,3 +334,75 @@ class PastEventNoNotificationTest(ICSProcessorMixin, TestCase):
         self.assertTrue(event.is_cancelled)
         # No notification at all
         mock_notify.assert_not_called()
+
+
+@patch(
+    "workspace.calendar.services.ics_processor.django_tz.now", return_value=BEFORE_EVENT
+)
+@patch("workspace.calendar.services.ics_processor.notify")
+class InvitationMatchingTest(ICSProcessorMixin, TestCase):
+    """An incoming iTIP message only reaches the invitation its organizer sent."""
+
+    UID = "evt-abc-123@example.com"
+
+    def _receive(self, ics_data, uid):
+        process_calendar_email(self._create_mail_with_ics(ics_data, uid=uid))
+
+    def _event(self, calendar, **kwargs):
+        return Event.objects.create(
+            calendar=calendar,
+            owner=self.user,
+            title="Mine",
+            start=datetime(2026, 3, 1, 14, tzinfo=UTC),
+            end=datetime(2026, 3, 1, 15, tzinfo=UTC),
+            ical_uid=self.UID,
+            external_organizer="alice@example.com",
+            **kwargs,
+        )
+
+    def test_request_without_organizer_creates_nothing(self, *_mocks):
+        self._receive(
+            ICS_REQUEST.replace("ORGANIZER;CN=Alice:mailto:alice@example.com\r\n", ""),
+            uid=1,
+        )
+        self.assertFalse(Event.objects.filter(ical_uid=self.UID).exists())
+
+    def test_cancel_from_another_organizer_is_ignored(self, *_mocks):
+        self._receive(ICS_REQUEST, uid=1)
+        self._receive(ICS_CANCEL.replace("alice@example.com", "mallory@evil.test"), 2)
+        self.assertFalse(Event.objects.get(ical_uid=self.UID).is_cancelled)
+
+    def test_update_from_another_organizer_is_ignored(self, *_mocks):
+        self._receive(ICS_REQUEST, uid=1)
+        self._receive(ICS_UPDATE.replace("alice@example.com", "mallory@evil.test"), 2)
+        event = Event.objects.get(ical_uid=self.UID)
+        self.assertEqual(event.title, "Sprint Review")
+        self.assertEqual(event.ical_sequence, 0)
+
+    def test_cancel_leaves_an_event_the_user_created_alone(self, *_mocks):
+        event = self._event(Calendar.objects.create(name="Work", owner=self.user))
+        self._receive(ICS_CANCEL, uid=1)
+        event.refresh_from_db()
+        self.assertFalse(event.is_cancelled)
+
+    def test_update_leaves_an_external_feed_event_alone(self, *_mocks):
+        feed = Calendar.objects.create(name="Feed", owner=self.user)
+        ExternalCalendar.objects.create(calendar=feed, url="https://feed.test/a.ics")
+        # Rows synced before Event.source existed were backfilled as ICS.
+        event = self._event(feed, source=Event.Source.ICS)
+        self._receive(ICS_UPDATE, uid=1)
+        event.refresh_from_db()
+        self.assertEqual(event.title, "Mine")
+        self.assertEqual(event.ical_sequence, 0)
+
+    def test_cancel_reaches_every_copy_of_the_invitation(self, *_mocks):
+        self._receive(ICS_REQUEST, uid=1)
+        self._event(
+            Calendar.objects.create(name="Elsewhere", owner=self.user),
+            source=Event.Source.ICS,
+        )
+        self._receive(ICS_CANCEL, uid=2)
+        cancelled = Event.objects.filter(ical_uid=self.UID).values_list(
+            "is_cancelled", flat=True
+        )
+        self.assertEqual(list(cancelled), [True, True])

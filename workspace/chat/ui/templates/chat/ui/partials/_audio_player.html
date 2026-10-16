@@ -11,7 +11,7 @@
 <div
   data-part="audio"
   class="flex flex-col gap-1 rounded-lg px-2.5 py-2 w-64 sm:w-80 max-w-full min-w-0 {% if is_own %}bg-module/15{% else %}bg-base-300/50{% endif %}"
-  x-data="chatAudioPlayer('{{ att.uuid }}', {% localize off %}{{ att.duration_seconds|default_if_none:'null' }}{% endlocalize %})"
+  x-data="chatAudioPlayer('{{ att.uuid|escapejs }}', {% localize off %}{{ att.duration_seconds|default_if_none:'null' }}{% endlocalize %})"
 >
 
   <audio
@@ -93,7 +93,7 @@
     <button
       type="button"
       class="btn btn-ghost btn-xs btn-square flex-shrink-0"
-      @click="saveAttachmentToFiles('{{ att.uuid }}')"
+      @click="saveAttachmentToFiles('{{ att.uuid|escapejs }}')"
       title="Save to Files"
     >
       <i data-lucide="folder-down" class="w-3.5 h-3.5"></i>

@@ -1,7 +1,7 @@
 <div
   id="backlog"
   class="w-full flex flex-col gap-3"
-  {% if backlog_status %} data-status-uuid="{{ backlog_status.uuid }}" @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ backlog_status.uuid }}')" {% endif %}
+  {% if backlog_status %} data-status-uuid="{{ backlog_status.uuid }}" @dragover.prevent="onDragOver($event)" @drop.prevent="onDrop($event, '{{ backlog_status.uuid|escapejs }}')" {% endif %}
 >
   {% if project.type == "scrum" %}
     {# Same switcher component as the board's, scoping the list instead of the columns. #}
@@ -17,7 +17,7 @@
       <button
         type="button"
         class="btn btn-module btn-sm shrink-0"
-        @click="newTask('{{ backlog_status.uuid }}')"
+        @click="newTask('{{ backlog_status.uuid|escapejs }}')"
       >
         <i data-lucide="plus" class="w-4 h-4"></i>
         New task
@@ -55,7 +55,7 @@
               <li>
                 <button
                   type="button"
-                  @click="sendSelectedToSprint('{{ sprint.uuid }}'); document.activeElement.blur()"
+                  @click="sendSelectedToSprint('{{ sprint.uuid|escapejs }}'); document.activeElement.blur()"
                 >
                   <span class="truncate flex-1">{{ sprint.name }}</span>
                   {% if sprint.state == "active" %}

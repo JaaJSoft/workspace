@@ -9,7 +9,7 @@ from django.utils import timezone
 from workspace.files.services import FileService
 from workspace.projects.models import Label
 from workspace.projects.services.file_links import link_files
-from workspace.projects.services.links import create_link
+from workspace.projects.services.links import create_link, delete_link
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.subtasks import create_subtask
 from workspace.projects.services.tasks import create_task
@@ -330,6 +330,48 @@ class TaskPanelLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
         resp = self.client.get(self.url)
         self.assertNotIn("link", resp.context["panel_action_ids"])
         self.assertNotContains(resp, 'x-model="linkRel"')
+
+
+class TaskPanelLinkEventsTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):
+    """A link to a task of a project the viewer cannot access is hidden from
+    the panel's links; its events must not name that task either."""
+
+    def setUp(self):
+        super().setUp()
+        self.task = create_task(self.project, self.admin, title="Anchor")
+        self.secret = create_project(self.admin, name="Secret")
+        self.hidden = create_task(self.secret, self.admin, title="Hidden")
+        self.url = f"/projects/{self.project.uuid}/tasks/{self.task.uuid}/panel"
+
+    def _labels(self, user):
+        self.client.force_login(user)
+        resp = self.client.get(self.url)
+        self.assertEqual(resp.status_code, 200)
+        return [event["label"] for event in resp.context["panel_events"]]
+
+    def test_events_of_a_hidden_link_are_dropped(self):
+        link = create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        delete_link(link, actor=self.admin)
+        labels = self._labels(self.member)
+        self.assertFalse(
+            any(self.hidden.reference in label for label in labels), labels
+        )
+        self.assertNotIn("Link added", labels)
+        self.assertNotIn("Link removed", labels)
+
+    def test_viewer_with_access_to_both_ends_sees_the_reference(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        self.assertIn(
+            f"Link added: is blocked by {self.hidden.reference}",
+            self._labels(self.admin),
+        )
+
+    def test_same_project_link_events_stay_visible(self):
+        other = create_task(self.project, self.admin, title="Sibling")
+        create_link(other, self.task, "blocks", actor=self.admin)
+        self.assertIn(
+            f"Link added: is blocked by {other.reference}", self._labels(self.member)
+        )
 
 
 class TaskPanelFileLinksTests(SettingsCleanupMixin, ProjectTestMixin, TestCase):

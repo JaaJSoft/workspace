@@ -1,10 +1,10 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Case, F, IntegerField, Value, When
+from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
 
-from .models import Project, ProjectMember, Task, TaskStatus
+from .models import Project, ProjectMember, Task, TaskEvent, TaskStatus
 
 # CharField priorities don't sort by urgency ('high' < 'urgent' alphabetically),
 # so ordering needs an explicit rank. Lower rank = more urgent.
@@ -46,6 +46,26 @@ def user_project_ids(user, *, role=None):
         .values_list("uuid", flat=True)
     )
     return list(member_ids.union(group_ids).order_by())
+
+
+_LINK_EVENT_TYPES = (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED)
+
+
+def visible_task_events_q(user):
+    """Q filter on TaskEvent: the events *user* may read.
+
+    An event is readable in a project the user can access. A link event also
+    names the task at the other end of the link (its reference in
+    ``to_value``), so it additionally needs that task's project - recorded in
+    ``from_ref`` - to be accessible: the same rule ``links_for_task`` applies
+    to the live link, whose existence must not leak. A link event whose other
+    end was never resolved (``from_ref`` null) is hidden from everyone, since
+    nobody can tell who may read it.
+    """
+    project_ids = user_project_ids(user)
+    return Q(project_id__in=project_ids) & (
+        ~Q(type__in=_LINK_EVENT_TYPES) | Q(from_ref__in=project_ids)
+    )
 
 
 def personal_project_ids(user):

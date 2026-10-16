@@ -1,0 +1,94 @@
+from datetime import timedelta
+from importlib import import_module
+
+from django.apps import apps
+from django.db import connection
+from django.test import TestCase
+
+from workspace.projects.models import TaskEvent
+from workspace.projects.services.links import create_link, delete_link
+from workspace.projects.services.projects import create_project
+from workspace.projects.services.tasks import create_task
+
+from .base import ProjectTestMixin
+
+backfill_link_event_refs = import_module(
+    "workspace.projects.migrations.0030_backfill_link_event_refs"
+).backfill_link_event_refs
+
+_LINK_TYPES = (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED)
+
+
+class _SchemaEditor:
+    connection = connection
+
+
+class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
+    """The backfill runs on the final schema: blanking the refs simulates
+    link history written before they were recorded."""
+
+    def setUp(self):
+        super().setUp()
+        self.secret = create_project(self.admin, name="Secret")
+        self.task = create_task(self.project, self.admin, title="Visible")
+        self.hidden = create_task(self.secret, self.admin, title="Hidden")
+
+    def _simulate_legacy_state(self):
+        TaskEvent.objects.filter(type__in=_LINK_TYPES).update(
+            from_ref=None, to_ref=None
+        )
+
+    def _refs(self, task):
+        return set(
+            task.events.filter(type__in=_LINK_TYPES).values_list("from_ref", "to_ref")
+        )
+
+    def test_pairs_both_ends_of_each_link(self):
+        link = create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        delete_link(link, actor=self.member)
+        self._simulate_legacy_state()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(self.secret.uuid, self.hidden.uuid)})
+        self.assertEqual(self._refs(self.hidden), {(self.project.uuid, self.task.uuid)})
+
+    def test_survives_a_renamed_key_and_a_deleted_task(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        self.secret.key = "ZZZ"
+        self.secret.save(update_fields=["key"])
+        self.hidden.delete()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(self.secret.uuid, None)})
+
+    def test_an_event_without_its_partner_stays_unresolved(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        self.hidden.events.filter(type__in=_LINK_TYPES).delete()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(None, None)})
+
+    def test_events_far_apart_are_not_paired(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        event = self.hidden.events.get(type=TaskEvent.Type.LINKED)
+        TaskEvent.objects.filter(pk=event.pk).update(
+            created_at=event.created_at + timedelta(minutes=5)
+        )
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(None, None)})
+
+    def test_recorded_refs_are_left_alone(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        before = self._refs(self.task)
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), before)

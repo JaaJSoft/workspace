@@ -78,6 +78,22 @@ class CreateLinkTests(ProjectTestMixin, TestCase):
         self.assertEqual(event_b.from_value, "is blocked by")
         self.assertEqual(event_b.to_value, self.task_a.reference)
 
+    def test_link_events_record_the_other_end(self):
+        other_project = create_project(self.admin, name="Elsewhere")
+        remote = create_task(other_project, self.admin, title="Remote")
+        link = create_link(self.task_a, remote, "relates_to", actor=self.admin)
+        delete_link(link, actor=self.admin)
+        for event in self.task_a.events.filter(
+            type__in=(TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED)
+        ):
+            self.assertEqual(event.from_ref, other_project.uuid)
+            self.assertEqual(event.to_ref, remote.uuid)
+        for event in remote.events.filter(
+            type__in=(TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED)
+        ):
+            self.assertEqual(event.from_ref, self.project.uuid)
+            self.assertEqual(event.to_ref, self.task_a.uuid)
+
     def test_delete_link_records_unlinked_events(self):
         link = create_link(self.task_a, self.task_b, "duplicates", actor=self.admin)
         delete_link(link, actor=self.admin)

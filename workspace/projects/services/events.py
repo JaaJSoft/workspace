@@ -1,4 +1,5 @@
 from ..models import TaskEvent, TaskStatus
+from ..queries import visible_task_events_q
 
 
 def record_task_event(
@@ -42,9 +43,12 @@ def move_event_type(to_status):
     return TaskEvent.Type.MOVED
 
 
-def events_for_project(project, limit=15):
-    """Newest-first events for the project overview card."""
-    return project.task_events.select_related("actor", "project")[:limit]
+def events_for_project(user, project, limit=15):
+    """Newest-first events of *project* that *user* may read, for the
+    project overview card."""
+    return project.task_events.filter(visible_task_events_q(user)).select_related(
+        "actor", "project"
+    )[:limit]
 
 
 def serialize_task_event(ev):
@@ -99,6 +103,8 @@ def serialize_task_event(ev):
     elif ev.type in (TaskEvent.Type.LINKED, TaskEvent.Type.UNLINKED):
         # from_value holds the direction label ("blocks", "is blocked by"),
         # to_value the other end's reference, both snapshotted at link time.
+        # Feeds filter with visible_task_events_q, which drops the event when
+        # the viewer cannot access the other end's project.
         if ev.from_value and ev.to_value:
             label = f"{ev.short_label}: {ev.from_value} {ev.to_value}"
     elif ev.type in (TaskEvent.Type.FILE_LINKED, TaskEvent.Type.FILE_UNLINKED):

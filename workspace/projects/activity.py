@@ -6,19 +6,27 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class ProjectsActivityProvider(ActivityProvider):
-    def _visibility_filter(self, user_id, viewer_id):
-        """Q filter on TaskEvent restricting to projects the viewer can access."""
+    def _event_visibility_filter(self, user_id, viewer_id):
+        """Q filter on TaskEvent restricting to the events the viewer may read."""
+        from workspace.projects.queries import visible_task_events_q
+
         if viewer_id is None or viewer_id == user_id:
             return Q()
-        return Q(project_id__in=self._viewer_project_ids(viewer_id))
+        return visible_task_events_q(self._viewer(viewer_id))
 
-    def _viewer_project_ids(self, viewer_id):
-        from django.contrib.auth import get_user_model
-
+    def _task_visibility_filter(self, user_id, viewer_id):
+        """Q filter on Task restricting to projects the viewer can access."""
         from workspace.projects.queries import user_project_ids
 
-        viewer = get_user_model().objects.get(pk=viewer_id)
-        return user_project_ids(viewer)
+        if viewer_id is None or viewer_id == user_id:
+            return Q()
+        return Q(project_id__in=user_project_ids(self._viewer(viewer_id)))
+
+    @staticmethod
+    def _viewer(viewer_id):
+        from django.contrib.auth import get_user_model
+
+        return get_user_model().objects.get(pk=viewer_id)
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.projects.models import TaskEvent
@@ -30,7 +38,7 @@ class ProjectsActivityProvider(ActivityProvider):
         )
         if user_id is not None:
             qs = qs.filter(actor_id=user_id)
-        qs = qs.filter(self._visibility_filter(user_id, viewer_id))
+        qs = qs.filter(self._event_visibility_filter(user_id, viewer_id))
         rows = (
             qs.annotate(day=TruncDate("created_at"))
             .values("day")
@@ -50,7 +58,7 @@ class ProjectsActivityProvider(ActivityProvider):
         if exclude_actor_id is not None:
             qs = qs.exclude(actor_id=exclude_actor_id)
         qs = (
-            qs.filter(self._visibility_filter(user_id, viewer_id))
+            qs.filter(self._event_visibility_filter(user_id, viewer_id))
             .select_related("actor", "project")
             .order_by("-created_at")[offset : offset + limit]
         )
@@ -72,7 +80,7 @@ class ProjectsActivityProvider(ActivityProvider):
         qs = Task.objects.all()
         if user_id is not None:
             qs = qs.filter(created_by_id=user_id)
-        qs = qs.filter(self._visibility_filter(user_id, viewer_id))
+        qs = qs.filter(self._task_visibility_filter(user_id, viewer_id))
         agg = qs.aggregate(
             total_tasks=Count("pk"),
             completed_tasks=Count("pk", filter=Q(completed_at__isnull=False)),

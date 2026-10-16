@@ -9,6 +9,8 @@ from workspace.files.services import FileService
 from workspace.projects.activity import ProjectsActivityProvider
 from workspace.projects.models import TaskEvent
 from workspace.projects.services.file_links import link_files
+from workspace.projects.services.links import create_link
+from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 from workspace.projects.tests.base import ProjectTestMixin
 
@@ -108,3 +110,47 @@ class ProjectsActivityProviderTests(ProjectTestMixin, TestCase):
             self.admin.pk, limit=5, viewer_id=self.member.pk
         )
         self.assertEqual(seen_by_member[0]["label"], "File linked: spec.md")
+
+
+class HiddenLinkEventActivityTests(ProjectTestMixin, TestCase):
+    """The admin links a Website task to a task of a project the member is
+    not in: the member's feeds must not name that task."""
+
+    def setUp(self):
+        super().setUp()
+        self.provider = ProjectsActivityProvider()
+        self.task = create_task(self.project, self.admin, title="Visible work")
+        secret = create_project(self.admin, name="Secret")
+        self.hidden = create_task(secret, self.admin, title="Hidden")
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+
+    def _names_hidden_task(self, events):
+        return any(self.hidden.reference in event["label"] for event in events)
+
+    def test_global_feed_drops_the_hidden_link_event(self):
+        events = self.provider.get_recent_events(
+            None, limit=50, viewer_id=self.member.pk
+        )
+        self.assertTrue(events)
+        self.assertFalse(self._names_hidden_task(events))
+        self.assertNotIn("Link added", [event["label"] for event in events])
+
+    def test_profile_feed_drops_the_hidden_link_event(self):
+        events = self.provider.get_recent_events(
+            self.admin.pk, limit=50, viewer_id=self.member.pk
+        )
+        self.assertFalse(self._names_hidden_task(events))
+
+    def test_daily_counts_skip_the_hidden_link_event(self):
+        today = timezone.now().date()
+        counts = self.provider.get_daily_counts(
+            self.admin.pk, today - timedelta(days=1), today, viewer_id=self.member.pk
+        )
+        # Only the Website task's creation; neither link event.
+        self.assertEqual(counts.get(today), 1)
+
+    def test_viewer_with_access_to_both_ends_sees_the_reference(self):
+        events = self.provider.get_recent_events(
+            None, limit=50, viewer_id=self.admin.pk
+        )
+        self.assertTrue(self._names_hidden_task(events))

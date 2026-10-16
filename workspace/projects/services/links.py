@@ -116,6 +116,9 @@ def _record_link_events(link, event_type, actor):
 
     The direction label and the other end's reference are snapshotted in the
     value fields, so the entry stays readable after either task is deleted.
+    The other end's identity goes in the ref fields - its project in
+    ``from_ref``, the task in ``to_ref`` - so a feed can tell whether its
+    viewer may read that reference (``visible_task_events_q``).
     """
     forward, backward = LINK_LABELS[TaskLink.Type(link.type)]
     for task, label, other in (
@@ -128,6 +131,8 @@ def _record_link_events(link, event_type, actor):
             actor=actor,
             from_value=label,
             to_value=other.reference,
+            from_ref=other.project_id,
+            to_ref=other.pk,
         )
 
 

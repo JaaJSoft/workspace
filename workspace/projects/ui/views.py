@@ -26,6 +26,7 @@ from workspace.projects.queries import (
     get_project_role,
     project_users,
     user_project_ids,
+    visible_task_events_q,
 )
 from workspace.projects.serializers import TaskAttachmentSerializer
 from workspace.projects.services.analytics import (
@@ -125,7 +126,7 @@ def overview(request, project_uuid):
     epics = list(epics_with_progress(project))
     context["open_epics"] = [e for e in epics if not e.is_closed]
     context["closed_epic_count"] = len([e for e in epics if e.is_closed])
-    context["recent_events"] = events_for_project(project)
+    context["recent_events"] = events_for_project(request.user, project)
     return _render_project_view(request, context)
 
 
@@ -321,7 +322,9 @@ def _render_project_view(request, context):
 def _task_panel_context(user, project, role, task, *, members=None):
     events = [
         serialize_task_event(ev)
-        for ev in task.events.select_related("actor", "project")[:20]
+        for ev in task.events.filter(visible_task_events_q(user)).select_related(
+            "actor", "project"
+        )[:20]
     ]
     for event in events:
         event["source_color"] = registry.get("projects").color

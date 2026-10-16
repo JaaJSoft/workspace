@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from workspace.calendar.upcoming import get_upcoming_for_user
 from workspace.core.services.activity import (
+    allowed_activity_sources,
     annotate_time_ago,
     get_recent_events,
     get_sources,
@@ -176,6 +177,8 @@ def tasks_fragment(request):
 def activity_feed(request):
     """Activity feed partial (or full page if not Alpine AJAX)."""
     source = request.GET.get("source")
+    if source not in allowed_activity_sources(request.user):
+        source = None
     tab = source or "all"
 
     try:

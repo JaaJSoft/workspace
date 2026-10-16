@@ -1,3 +1,5 @@
+import html
+import re
 from dataclasses import replace
 from datetime import UTC
 from unittest.mock import patch
@@ -977,6 +979,59 @@ class ActivityFeedViewTests(TestCase):
         mock_ctx.return_value = {"modules": []}
         resp = self.client.get("/dashboard/activity", {"offset": "abc"})
         self.assertEqual(resp.status_code, 200)
+
+
+class ActivityFeedSourceParamTests(TestCase):
+    """``?source=`` lands in the feed URLs and inside the Alpine ``x-data``
+    expression of the full page, where the browser decodes HTML entities
+    before Alpine evaluates the attribute as JavaScript."""
+
+    PAYLOAD = "');alert(document.domain);//"
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="srcuser", password="pass123")
+        self.client.login(username="srcuser", password="pass123")
+
+    def tearDown(self):
+        cache.clear()
+
+    def _activity_tab_literal(self, resp):
+        match = re.search(r'x-data="\{ activityTab: (.*?), activitySearch', resp.text)
+        self.assertIsNotNone(match)
+        return html.unescape(match.group(1))
+
+    def test_unknown_source_falls_back_to_all_on_full_page(self):
+        resp = self.client.get("/dashboard/activity", {"source": self.PAYLOAD})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context["activity_tab"], "all")
+        self.assertEqual(self._activity_tab_literal(resp), "'all'")
+        self.assertNotIn("alert(document.domain)", resp.text)
+
+    @patch("workspace.dashboard.views._get_activity_context")
+    def test_unknown_source_falls_back_to_all_in_feed_partial(self, mock_activity):
+        mock_activity.return_value = {}
+        resp = self.client.get(
+            "/dashboard/activity",
+            {"source": self.PAYLOAD},
+            HTTP_X_ALPINE_REQUEST="true",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(mock_activity.call_args.kwargs["source"])
+
+    def test_known_source_is_kept(self):
+        resp = self.client.get("/dashboard/activity", {"source": "chat"})
+        self.assertEqual(self._activity_tab_literal(resp), "'chat'")
+
+    def test_tab_is_rendered_as_a_single_js_string_literal(self):
+        with patch(
+            "workspace.dashboard.views.allowed_activity_sources",
+            return_value={self.PAYLOAD},
+        ):
+            resp = self.client.get("/dashboard/activity", {"source": self.PAYLOAD})
+        self.assertEqual(
+            self._activity_tab_literal(resp),
+            "'\\u0027)\\u003Balert(document.domain)\\u003B//'",
+        )
 
 
 # ── upcoming_fragment view ──────────────────────────────────────

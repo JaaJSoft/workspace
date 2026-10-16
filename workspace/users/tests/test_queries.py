@@ -4,7 +4,11 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from workspace.ai.models import BotProfile
-from workspace.users.queries import active_user_with_email, search_people
+from workspace.users.queries import (
+    active_user_with_email,
+    pickable_users,
+    search_people,
+)
 
 User = get_user_model()
 
@@ -96,3 +100,13 @@ class ActiveUserWithEmailTests(TestCase):
     def test_blank_matches_nobody(self):
         User.objects.create_user(username="blank", password="pass")
         self.assertIsNone(active_user_with_email(""))
+
+
+class PickableUsersTests(TestCase):
+    def test_active_humans_only(self):
+        alice = User.objects.create_user(username="alice", password="pass")
+        User.objects.create_user(username="gone", password="pass", is_active=False)
+        bot = User.objects.create_user(username="helper", password="pass")
+        BotProfile.objects.create(user=bot)
+
+        self.assertEqual(list(pickable_users()), [alice])

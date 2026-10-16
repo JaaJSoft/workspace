@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from rest_framework.test import APITestCase
 
+from workspace.ai.models import BotProfile
 from workspace.people.models import Person
 from workspace.people.queries import person_with_email
 from workspace.people.services.persons import create_person, promote_to_person
@@ -215,6 +216,13 @@ class PromoteApiTests(APITestCase):
         self.carol.save()
         response = self.client.post(URL, {"user_id": self.carol.pk}, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_refuses_bot_account(self):
+        BotProfile.objects.create(user=self.carol)
+        response = self.client.post(URL, {"user_id": self.carol.pk}, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("user_id", response.data)
+        self.assertFalse(Person.objects.filter(linked_user=self.carol).exists())
 
     def test_anonymous_refused(self):
         self.client.force_authenticate(None)

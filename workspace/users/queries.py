@@ -8,6 +8,15 @@ DEFAULT_SEARCH_LIMIT = 10
 MAX_SEARCH_LIMIT = 50
 
 
+def pickable_users():
+    """Accounts a person can be picked from: active and not a bot.
+
+    An assistant is never the colleague, contact or member a picker is after,
+    so anything that takes a user id from a picker validates it against this.
+    """
+    return get_user_model().objects.filter(is_active=True, bot_profile__isnull=True)
+
+
 def search_people(
     query, requesting_user=None, limit=DEFAULT_SEARCH_LIMIT, *, with_email=False
 ):
@@ -19,13 +28,12 @@ def search_people(
     *with_email* also matches the email and drops users who have none: what a
     recipient picker needs, since it can only offer an address.
     """
-    User = get_user_model()
     match = (
         Q(username__icontains=query)
         | Q(first_name__icontains=query)
         | Q(last_name__icontains=query)
     )
-    qs = User.objects.filter(is_active=True, bot_profile__isnull=True)
+    qs = pickable_users()
     if with_email:
         match |= Q(email__icontains=query)
         qs = qs.exclude(email="")
@@ -40,9 +48,4 @@ def active_user_with_email(email):
     email = (email or "").strip()
     if not email:
         return None
-    return (
-        get_user_model()
-        .objects.filter(email__iexact=email, is_active=True, bot_profile__isnull=True)
-        .order_by("pk")
-        .first()
-    )
+    return pickable_users().filter(email__iexact=email).order_by("pk").first()

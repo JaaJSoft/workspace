@@ -1,13 +1,12 @@
-from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from workspace.users.queries import pickable_users
+
 from .models import ADDRESS_TYPES, EMAIL_TYPES, PHONE_TYPES, Person, PersonList
 from .services.persons import create_person, move_to_scope, update_person
-
-User = get_user_model()
 
 SCOPE_MINE = "mine"
 SCOPE_GROUP_PREFIX = "group:"
@@ -105,7 +104,7 @@ class PersonSerializer(serializers.ModelSerializer):
     linked_user = LinkedUserSerializer(read_only=True)
     linked_user_id = serializers.PrimaryKeyRelatedField(
         source="linked_user",
-        queryset=User.objects.filter(is_active=True),
+        queryset=pickable_users(),
         allow_null=True,
         required=False,
         write_only=True,
@@ -266,7 +265,7 @@ class PersonPromoteSerializer(serializers.Serializer):
     )
     user_id = serializers.PrimaryKeyRelatedField(
         source="account",
-        queryset=User.objects.filter(is_active=True),
+        queryset=pickable_users(),
         required=False,
     )
 

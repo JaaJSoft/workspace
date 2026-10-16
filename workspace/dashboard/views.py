@@ -178,7 +178,10 @@ def activity_feed(request):
     source = request.GET.get("source")
     tab = source or "all"
 
-    offset = int(request.GET.get("offset", 0))
+    try:
+        offset = max(0, int(request.GET.get("offset", 0)))
+    except TypeError, ValueError:
+        offset = 0
     search = request.GET.get("q", "").strip() or None
     append = offset > 0
 

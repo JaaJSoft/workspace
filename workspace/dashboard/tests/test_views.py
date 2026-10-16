@@ -957,6 +957,27 @@ class ActivityFeedViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         mock_ctx.assert_not_called()
 
+    @patch("workspace.dashboard.views._get_activity_context")
+    def test_malformed_or_negative_offset_falls_back_to_first_page(self, mock_activity):
+        mock_activity.return_value = {}
+        for raw in ("abc", "", "1.5", "-10"):
+            with self.subTest(offset=raw):
+                mock_activity.reset_mock()
+                resp = self.client.get(
+                    "/dashboard/activity",
+                    {"offset": raw},
+                    HTTP_X_ALPINE_REQUEST="true",
+                )
+                self.assertEqual(resp.status_code, 200)
+                self.assertEqual(mock_activity.call_args.kwargs["offset"], 0)
+                self.assertTemplateUsed(resp, "core/partials/activity_feed.html")
+
+    @patch("workspace.dashboard.views._build_dashboard_context")
+    def test_malformed_offset_on_full_page_renders(self, mock_ctx):
+        mock_ctx.return_value = {"modules": []}
+        resp = self.client.get("/dashboard/activity", {"offset": "abc"})
+        self.assertEqual(resp.status_code, 200)
+
 
 # ── upcoming_fragment view ──────────────────────────────────────
 

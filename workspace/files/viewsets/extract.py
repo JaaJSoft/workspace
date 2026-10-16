@@ -16,6 +16,7 @@ from workspace.files.services.extract import (
     ArchiveTooManyEntriesError,
     extract_zip,
 )
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +89,10 @@ class ExtractMixin:
 
         try:
             result = extract_zip(file_obj, dest, acting_user=request.user)
+        except QuarantinedSource:
+            return Response(
+                {"detail": "File is quarantined."}, status=status.HTTP_403_FORBIDDEN
+            )
         except ArchiveTooLargeError as e:
             logger.info(
                 "Extract rejected (too large) for %s: %s",

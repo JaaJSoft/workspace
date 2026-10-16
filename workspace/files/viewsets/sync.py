@@ -13,7 +13,7 @@ from rest_framework.response import Response
 
 from workspace.common.logging import scrub
 from workspace.files.models import File
-from workspace.files.services import FileService
+from workspace.files.services import FilePermission, FileService
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ class SyncMixin:
         )
         if not file_obj:
             return Response(status=status.HTTP_404_NOT_FOUND)
+        # Taking or clearing the lock fences writers out, so it takes a right
+        # to write - as for a WebDAV LOCK or a WOPI one. Reading it does not.
+        if (
+            request.method != "GET"
+            and (FileService.get_permission(request.user, file_obj) or 0)
+            < FilePermission.WRITE
+        ):
+            return Response(status=status.HTTP_403_FORBIDDEN)
 
         now = timezone.now()
 

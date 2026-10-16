@@ -266,3 +266,53 @@ class NotesActivityProviderTests(TestCase):
         # Stats count current notes only - the trashed one is excluded.
         stats = self.provider.get_stats(self.alice.id)
         self.assertEqual(stats["total_notes"], 2)
+
+
+class FormerMemberOwnActivityTests(TestCase):
+    """A former member's own notes feed, heatmap and stats drop the notes they
+    created in the group they left."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+        from django.core.files.base import ContentFile
+
+        from workspace.files.services import FileService
+
+        self.alice = User.objects.create_user(username="alice", password="pass123")
+        bob = User.objects.create_user(username="bob", password="pass123")
+        self.team = Group.objects.create(name="Team")
+        self.alice.groups.add(self.team)
+        bob.groups.add(self.team)
+        root = FileService.create_folder(bob, "TeamRoot", group=self.team)
+        for name, parent in (("team.md", root), ("mine.md", None)):
+            FileService.create_file(
+                self.alice,
+                name,
+                parent=parent,
+                content=ContentFile(b"# note", name=name),
+                mime_type="text/markdown",
+            )
+        self.provider = NotesActivityProvider()
+        self.today = timezone.localdate()
+
+    def tearDown(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_own_views_skip_the_notes_of_a_group_they_left(self):
+        self.alice.groups.remove(self.team)
+
+        for viewer_id in (None, self.alice.pk):
+            with self.subTest(viewer_id=viewer_id):
+                events = self.provider.get_recent_events(
+                    self.alice.pk, limit=50, viewer_id=viewer_id
+                )
+                counts = self.provider.get_daily_counts(
+                    self.alice.pk, self.today, self.today, viewer_id=viewer_id
+                )
+                stats = self.provider.get_stats(self.alice.pk, viewer_id=viewer_id)
+
+                self.assertEqual({e["description"] for e in events}, {"mine.md"})
+                self.assertEqual(sum(counts.values()), 1)
+                self.assertEqual(stats["total_notes"], 1)

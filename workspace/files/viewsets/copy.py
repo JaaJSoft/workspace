@@ -13,6 +13,7 @@ from workspace.files.serializers import (
     ensure_replaceable,
 )
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 
 class CopyMixin:
@@ -66,7 +67,19 @@ class CopyMixin:
     @action(detail=True, methods=["post"], url_path="copy")
     def copy(self, request, uuid=None):
         """Copy a file or folder to a new location."""
+        from workspace.files.actions import ActionRegistry
+
         file_obj = self.get_object()
+        if not ActionRegistry.is_action_available(
+            "copy",
+            request.user,
+            file_obj,
+            permission=FileService.get_permission(request.user, file_obj),
+        ):
+            return Response(
+                {"detail": "Copying this item is not allowed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         parent_uuid = request.data.get("parent")
 
         # Resolve parent folder. Use the access-aware permission check rather
@@ -150,9 +163,14 @@ class CopyMixin:
                 serializer = self.get_serializer(annotated)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-        copied = FileService.copy(
-            file_obj, parent, request.user, acting_user=request.user
-        )
+        try:
+            copied = FileService.copy(
+                file_obj, parent, request.user, acting_user=request.user
+            )
+        except QuarantinedSource:
+            return Response(
+                {"detail": "File is quarantined."}, status=status.HTTP_403_FORBIDDEN
+            )
         # get_queryset() only spans the user's own personal files; a copy
         # landing in a group folder needs the access-aware annotation instead
         # to carry the annotations FileSerializer requires.

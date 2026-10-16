@@ -106,7 +106,7 @@ class ActionsMixin:
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        permissions = FileService.get_permissions_bulk(request.user, file_objects)
+        permissions = FileService.trash_permissions_bulk(request.user, file_objects)
         # Read once for the whole batch rather than once per file.
         journal_folder = journal_folder_id(request.user)
 

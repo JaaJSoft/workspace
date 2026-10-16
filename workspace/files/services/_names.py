@@ -274,11 +274,12 @@ def available_file_name(owner, parent, name, *, avoiding=()):
     )
 
 
-def validate_move_target(file_obj, new_parent, user=None):
-    """Raise ``ValueError`` if *new_parent* is an invalid move target."""
-    if new_parent is None:
-        return
+def validate_move_target(file_obj, new_parent):
+    """Raise ``ValueError`` if *new_parent* would put a folder inside itself.
 
+    The structural half of ``FileService.validate_move_target``, which also
+    decides whether the caller may write there.
+    """
     if file_obj.node_type == File.NodeType.FOLDER:
         if new_parent.pk == file_obj.pk:
             raise ValueError("Cannot move a folder into itself.")
@@ -286,11 +287,3 @@ def validate_move_target(file_obj, new_parent, user=None):
         parent_path = new_parent.path or new_parent.get_path()
         if parent_path.startswith(f"{file_path}/"):
             raise ValueError("Cannot move a folder into one of its descendants.")
-
-    if new_parent.group_id:
-        if not user or not user.groups.filter(id=new_parent.group_id).exists():
-            raise ValueError("You are not a member of this group.")
-    else:
-        effective_user_id = user.id if user else file_obj.owner_id
-        if new_parent.owner_id != effective_user_id:
-            raise ValueError("Cannot move to a folder owned by another user.")

@@ -966,3 +966,55 @@ class ConcurrentWriteTests(APITestCase):
         self.assertTrue(fired, "the competing lock never ran")
         self.assertEqual(resp.status_code, status.HTTP_423_LOCKED)
         self.assertEqual(self._content(), b"first")
+
+
+class LockNeedsWriteAccessTests(APITestCase):
+    """Taking or clearing a lock takes a right to write the file."""
+
+    def setUp(self):
+        self.owner = User.objects.create_user(username="owner", password="pass123")
+        self.reader = User.objects.create_user(username="reader", password="pass123")
+        self.file = FileService.create_file(
+            self.owner, "doc.txt", content=ContentFile(b"v1", name="doc.txt")
+        )
+        FileShare.objects.create(
+            file=self.file,
+            shared_by=self.owner,
+            shared_with=self.reader,
+            permission=FileShare.Permission.READ_ONLY,
+        )
+        self.url = f"/api/v1/files/{self.file.uuid}/lock"
+
+    def test_a_read_only_recipient_cannot_lock_the_owner_out(self):
+        self.client.force_authenticate(self.reader)
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.file.refresh_from_db()
+        self.assertIsNone(self.file.locked_by_id)
+        self.client.force_authenticate(self.owner)
+        write = self.client.patch(
+            f"/api/v1/files/{self.file.uuid}", {"name": "renamed.txt"}, format="json"
+        )
+        self.assertEqual(write.status_code, status.HTTP_200_OK, write.content)
+
+    def test_a_read_only_recipient_cannot_clear_a_lock(self):
+        File.objects.filter(pk=self.file.pk).update(
+            locked_by=self.owner,
+            locked_at=timezone.now() - timedelta(minutes=10),
+            lock_expires_at=timezone.now() - timedelta(minutes=5),
+        )
+        self.client.force_authenticate(self.reader)
+
+        response = self.client.delete(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.file.refresh_from_db()
+        self.assertEqual(self.file.locked_by_id, self.owner.pk)
+
+    def test_a_read_only_recipient_still_sees_the_lock_state(self):
+        self.client.force_authenticate(self.reader)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

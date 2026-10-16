@@ -24,7 +24,22 @@ from .events import record_event
 from .hard_delete import hard_delete_tree
 from .processing_failures import clear_failures
 from .quota import check_write_allowed, subtree_bytes
-from .scanning.policy import exclude_blocked
+from .scanning.policy import QuarantinedSource, exclude_blocked, is_blocked
+
+
+class GroupRootFolder(ValueError):
+    """A group's root folder was asked to leave its place.
+
+    The root is the group's whole tree: moving it re-owns the subtree to the
+    mover and drops the group, trashing it takes every member's files with it.
+    """
+
+
+class GroupMismatch(ValueError):
+    """A node was asked to join a group other than its parent folder's."""
+
+    def __init__(self, message="The group must be the parent folder's group."):
+        super().__init__(message)
 
 
 class FilePermission(enum.IntEnum):
@@ -60,8 +75,10 @@ class FileService:
         """
         from workspace.projects.queries import user_project_ids
 
+        # Owning a group node grants nothing once its owner has left the
+        # group: the group branch is what covers the group nodes they own.
         return (
-            {"owner": user},
+            {"owner": user, "group__isnull": True},
             {"group__in": user.groups.all()},
             {"shares__shared_with": user},
             {"shares__shared_with_group__in": user.groups.all()},
@@ -146,6 +163,43 @@ class FileService:
         )
 
     @staticmethod
+    def owned_files_q(user):
+        """``owned_files_qs`` as a Q, for a query that already reads ``File``.
+
+        *user* may be a user or a user id: the filter needs no row of theirs.
+        """
+        from django.contrib.auth.models import Group
+        from django.db.models import Q
+
+        return Q(owner=user) & (
+            Q(group__isnull=True) | Q(group__in=Group.objects.filter(user=user))
+        )
+
+    @staticmethod
+    def owned_files_qs(user):
+        """The nodes *user* owns and still manages, ``deleted_at`` not filtered.
+
+        Their personal nodes, plus the group nodes they created in groups they
+        still belong to - not those of a group they have left, which stay with
+        the group.
+        """
+        return File.objects.filter(FileService.owned_files_q(user))
+
+    @staticmethod
+    def restorable_files_qs(user):
+        """The nodes *user* may restore or purge once trashed, ``deleted_at``
+        not filtered.
+
+        Their personal nodes, plus every node of the groups they belong to,
+        whoever trashed it: the queryset form of ``trash_permissions_bulk``.
+        """
+        from django.db.models import Q
+
+        return File.objects.filter(
+            Q(owner=user, group__isnull=True) | Q(group__in=user.groups.all())
+        )
+
+    @staticmethod
     def user_group_files_qs(user):
         """Return a queryset of active group files the user can access."""
         return File.objects.filter(
@@ -221,8 +275,7 @@ class FileService:
         )
         from workspace.files.services.filetype import pin_viewer_for_upload
 
-        if group is None and parent and parent.group_id:
-            group = parent.group
+        group = FileService.node_group(parent, group)
 
         # Before the detection and hashing passes read the stream. Not the
         # guarantee - the INSERT is - but it spares the loser of a known
@@ -292,8 +345,7 @@ class FileService:
         owner, name, parent=None, *, icon=None, color=None, group=None, acting_user=None
     ):
         """Create a new folder record."""
-        if group is None and parent and parent.group_id:
-            group = parent.group
+        group = FileService.node_group(parent, group)
 
         _name_helpers.check_name_available(owner, parent, name, File.NodeType.FOLDER)
 
@@ -310,6 +362,20 @@ class FileService:
         FileService._ensure_folder_on_storage(folder)
         record_event(folder, acting_user or owner, FileEvent.Action.CREATED)
         return folder
+
+    @staticmethod
+    def node_group(parent, group):
+        """The group a node created under *parent* belongs to.
+
+        Under a parent it is the parent's, whatever the caller asked for;
+        asking for another one raises ``GroupMismatch``. At the root it is
+        *group*, which the caller has checked membership of.
+        """
+        if parent is None:
+            return group
+        if group is not None and getattr(group, "pk", group) != parent.group_id:
+            raise GroupMismatch()
+        return parent.group
 
     @staticmethod
     def register_disk_file(
@@ -392,6 +458,8 @@ class FileService:
         new_parent_id = new_parent.pk if new_parent else None
         if old_parent_id == new_parent_id:
             return
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be moved.")
 
         new_group = new_parent.group if new_parent else None
         old_group = file_obj.group
@@ -464,6 +532,8 @@ class FileService:
         old_name = file_obj.name
         if old_name == new_name:
             return file_obj
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be renamed.")
 
         _name_helpers.check_name_available(
             file_obj.owner,
@@ -670,6 +740,7 @@ class FileService:
         """
         from django.core.files.base import File as DjangoFile
 
+        FileService.check_copy_allowed(source)
         with source.content.open("rb") as src:
             return FileService.update_content(
                 target,
@@ -729,7 +800,12 @@ class FileService:
 
     @staticmethod
     def copy(file_obj, target_parent, owner, *, acting_user=None):
-        """Recursively copy a file or folder to *target_parent*."""
+        """Recursively copy a file or folder to *target_parent*.
+
+        Blocked descendants of a folder are left behind; a blocked file raises
+        ``QuarantinedSource``.
+        """
+        FileService.check_copy_allowed(file_obj)
         check_write_allowed(
             owner=owner,
             group=target_parent.group if target_parent is not None else None,
@@ -755,6 +831,8 @@ class FileService:
     @staticmethod
     def soft_delete(file_obj, *, acting_user=None):
         """Soft-delete a file or folder (cascades to descendants)."""
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be deleted.")
         count = file_obj.soft_delete()
         record_event(
             file_obj,
@@ -799,18 +877,41 @@ class FileService:
         of up to two per file. A file reached through both a user share and
         a group share gets the higher of the two permissions.
         """
+        return FileService._permissions_bulk(user, file_objects, in_trash=False)
+
+    @staticmethod
+    def trash_permissions_bulk(user, file_objects):
+        """``get_permissions_bulk`` as the trash sees it.
+
+        The same answer for a live node. A trashed node grants nothing to
+        anyone but its owner, except a group's: the trash is where the group
+        recovers what one of its members deleted, so every current member gets
+        EDIT on it - enough to preview, restore and purge it. A former member
+        still gets nothing.
+        """
+        return FileService._permissions_bulk(user, file_objects, in_trash=True)
+
+    @staticmethod
+    def trash_permission(user, file_obj):
+        """:meth:`trash_permissions_bulk` for one node."""
+        return FileService.trash_permissions_bulk(user, [file_obj])[file_obj.pk]
+
+    @staticmethod
+    def _permissions_bulk(user, file_objects, *, in_trash):
         from workspace.files.models import FileShare
 
         permissions = {}
         group_candidates = []
         share_candidates = []
         for file_obj in file_objects:
-            if file_obj.owner_id == user.id:
+            if file_obj.group_id:
+                # Ownership of a group node only counts while the owner is
+                # still in the group, so it waits for the membership lookup.
+                group_candidates.append(file_obj)
+            elif file_obj.owner_id == user.id:
                 permissions[file_obj.pk] = FilePermission.MANAGE
             elif file_obj.deleted_at is not None:
                 permissions[file_obj.pk] = None
-            elif file_obj.group_id:
-                group_candidates.append(file_obj)
             else:
                 share_candidates.append(file_obj)
 
@@ -818,7 +919,14 @@ class FileService:
             group_ids = set(user.groups.values_list("id", flat=True))
             for file_obj in group_candidates:
                 if file_obj.group_id in group_ids:
-                    permissions[file_obj.pk] = FilePermission.EDIT
+                    if file_obj.owner_id == user.id:
+                        permissions[file_obj.pk] = FilePermission.MANAGE
+                    elif file_obj.deleted_at is None or in_trash:
+                        permissions[file_obj.pk] = FilePermission.EDIT
+                    else:
+                        permissions[file_obj.pk] = None
+                elif file_obj.deleted_at is not None:
+                    permissions[file_obj.pk] = None
                 else:
                     share_candidates.append(file_obj)
 
@@ -860,6 +968,21 @@ class FileService:
             and parent.deleted_at is None
             and (FileService.get_permission(user, parent) or 0) >= FilePermission.EDIT
         )
+
+    @staticmethod
+    def is_group_root(file_obj):
+        """Whether *file_obj* is a group's root folder, which stays where it is."""
+        return bool(file_obj.group_id) and file_obj.parent_id is None
+
+    @staticmethod
+    def check_copy_allowed(file_obj):
+        """Raise ``QuarantinedSource`` when *file_obj*'s bytes may not be copied.
+
+        A copy is a new row with no scan verdict of its own, so a blocked
+        file copied anywhere would come back out unblocked.
+        """
+        if is_blocked(file_obj):
+            raise QuarantinedSource()
 
     @staticmethod
     def resolve_accessible_files(user, file_uuids):
@@ -923,8 +1046,23 @@ class FileService:
 
     @staticmethod
     def validate_move_target(file_obj, new_parent, user=None):
-        """Raise ``ValueError`` if *new_parent* is an invalid move target."""
-        return _name_helpers.validate_move_target(file_obj, new_parent, user=user)
+        """Raise ``ValueError`` if *user* may not move *file_obj* under *new_parent*.
+
+        The target must be a folder *user* could create in. Without a user the
+        owner stands in for a personal target, and a group target is refused:
+        nothing proves a membership.
+        """
+        if new_parent is None:
+            return
+        if FileService.is_group_root(file_obj):
+            raise GroupRootFolder("A group's root folder cannot be moved.")
+        _name_helpers.validate_move_target(file_obj, new_parent)
+        if user is None:
+            if new_parent.group_id:
+                raise ValueError("You are not a member of this group.")
+            user = file_obj.owner
+        if not FileService.can_create_in(user, new_parent):
+            raise ValueError("You cannot move items into this folder.")
 
     # ------------------------------------------------------------------
     # Reading

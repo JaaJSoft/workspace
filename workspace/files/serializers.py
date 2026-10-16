@@ -13,11 +13,13 @@ from workspace.files.services._names import (
     FOLDER_NAME_TAKEN,
     NameTaken,
 )
+from workspace.files.services.files import GroupMismatch
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
     conflicting_lock,
 )
+from workspace.files.services.scanning.policy import QuarantinedSource
 
 from .models import File, FileComment
 
@@ -90,6 +92,8 @@ def content_write_refusals():
                 "content_hash": exc.current_hash,
             }
         ) from exc
+    except QuarantinedSource as exc:
+        raise PermissionDenied("File is quarantined.") from exc
 
 
 def ensure_replaceable(user, target):
@@ -439,6 +443,13 @@ class FileSerializer(serializers.ModelSerializer):
                 .format(pk_value=self.initial_data.get("parent"))
             )
             raise serializers.ValidationError({"parent": [message]})
+        if instance is None:
+            try:
+                FileService.node_group(parent, attrs.get("group"))
+            except GroupMismatch as error:
+                raise serializers.ValidationError(
+                    {"group": ["The group must be the parent folder's group."]}
+                ) from error
 
         # Validate parent assignment via FileService
         if "parent" in attrs and instance is not None:

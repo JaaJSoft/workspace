@@ -16,7 +16,7 @@ from drf_spectacular.utils import (
     extend_schema_view,
 )
 from rest_framework import status, viewsets
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from workspace.common.booleans import is_truthy
@@ -27,6 +27,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.filters import FileSearchFilter
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.content_hash import find_duplicates
+from workspace.files.services.files import GroupRootFolder
 from workspace.files.services.locking import conflicting_lock, precondition_hash
 from workspace.notifications.services.notifications import notify, notify_many
 
@@ -490,12 +491,21 @@ class FileViewSet(
                 qs = qs.filter(ancestor._descendant_filter(include_self=False))
             return FileService.annotate_for_serializer(qs, self.request.user)
 
+        if self.action in {"restore", "purge"}:
+            return FileService.annotate_for_serializer(
+                FileService.restorable_files_qs(self.request.user), self.request.user
+            )
+        if self.action == "trash" or (self.action == "list" and self._is_trash_query()):
+            return FileService.annotate_for_serializer(
+                FileService.restorable_files_qs(self.request.user).filter(
+                    deleted_at__isnull=False
+                ),
+                self.request.user,
+            )
         queryset = File.objects.filter(owner=self.request.user, group__isnull=True)
         queryset = FileService.annotate_for_serializer(queryset, self.request.user)
-        if self.action in {"trash"} or self._is_trash_query():
+        if self._is_trash_query():
             return queryset.filter(deleted_at__isnull=False)
-        if self.action in {"restore", "purge"}:
-            return queryset
         queryset = queryset.filter(deleted_at__isnull=True)
         if self.action == "list":
             if self._is_trash_query():
@@ -579,7 +589,9 @@ class FileViewSet(
             self.request.user.username,
             exclude_user_id=self.request.user.pk,
         )
-        if instance.owner_id != self.request.user.pk:
+        if instance.owner_id != self.request.user.pk and FileService.can_access(
+            instance.owner, instance
+        ):
             notify(
                 recipient=instance.owner,
                 origin="files",
@@ -824,17 +836,26 @@ class FileViewSet(
                 request.user.username,
                 exclude_user_id=request.user.pk,
             )
-            notify(
-                recipient=file_obj.owner,
-                origin="files",
-                title=f'{request.user.username} edited "{file_obj.name}"',
-                url=f"/files/{file_obj.parent_id}" if file_obj.parent_id else "/files",
-                actor=request.user,
-                source=file_obj,
-            )
+            if FileService.can_access(file_obj.owner, file_obj):
+                notify(
+                    recipient=file_obj.owner,
+                    origin="files",
+                    title=f'{request.user.username} edited "{file_obj.name}"',
+                    url=(
+                        f"/files/{file_obj.parent_id}"
+                        if file_obj.parent_id
+                        else "/files"
+                    ),
+                    actor=request.user,
+                    source=file_obj,
+                )
             return Response(serializer.data)
 
     def perform_destroy(self, instance):
+        try:
+            FileService.soft_delete(instance, acting_user=self.request.user)
+        except GroupRootFolder as exc:
+            raise PermissionDenied("A group's root folder cannot be deleted.") from exc
         shared_users = User.objects.filter(
             Q(received_shares__file=instance)
             | Q(groups__received_file_shares__file=instance)
@@ -852,4 +873,3 @@ class FileViewSet(
                 title=f'{self.request.user.username} deleted "{instance.name}"',
                 actor=self.request.user,
             )
-        FileService.soft_delete(instance, acting_user=self.request.user)

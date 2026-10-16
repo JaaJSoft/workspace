@@ -17,6 +17,13 @@ from django.db.models import F, Q
 from ...models import FileScan
 
 
+class QuarantinedSource(Exception):
+    """The policy denies the bytes a copy or an extraction would read."""
+
+    def __init__(self, message="File is quarantined."):
+        super().__init__(message)
+
+
 def scan_enabled():
     """True when the malware scanning feature is switched on."""
     return bool(getattr(settings, "FILES_MALWARE_SCAN_ENABLED", False))

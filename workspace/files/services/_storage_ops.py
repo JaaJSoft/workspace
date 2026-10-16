@@ -433,6 +433,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
     """
     # Imported here because _names imports from this module.
     from ._names import insert_node, insert_node_keeping_both
+    from .scanning.policy import exclude_blocked
 
     copied = File(
         owner=owner,
@@ -492,7 +493,8 @@ def copy_node(node, parent, owner, _sibling_names=None):
     if node.node_type == File.NodeType.FOLDER:
         # The folder was just created - no children yet, so start empty.
         child_names = set()
-        for child in File.objects.filter(parent=node, deleted_at__isnull=True):
+        children = File.objects.filter(parent=node, deleted_at__isnull=True)
+        for child in exclude_blocked(children):
             copy_node(child, copied, owner, child_names)
 
     return copied

@@ -185,7 +185,7 @@ class ScheduleMessageParams(BaseModel):
 
 
 class CancelScheduleParams(BaseModel):
-    schedule_id: str = Field(description="UUID of the schedule to cancel.")
+    schedule_id: uuid_lib.UUID = Field(description="UUID of the schedule to cancel.")
 
 
 class CreateAgentGoalParams(BaseModel):
@@ -1428,23 +1428,21 @@ schedules with a similar prompt — update or cancel the old one instead of crea
 Call this when the user wants to stop or remove a previously scheduled message."""
         from .models import ScheduledMessage
 
-        schedule_id = args.schedule_id.strip()
-        if not schedule_id:
-            raise ToolError("schedule_id is required")
-
         try:
             schedule = ScheduledMessage.objects.get(
-                uuid=schedule_id,
+                uuid=args.schedule_id,
                 conversation_id=conversation_id,
                 bot=bot,
                 is_active=True,
             )
         except ScheduledMessage.DoesNotExist:
-            raise ToolError(f"no active schedule found with id {schedule_id}") from None
+            raise ToolError(
+                f"no active schedule found with id {args.schedule_id}"
+            ) from None
 
         schedule.is_active = False
         schedule.save(update_fields=["is_active", "updated_at"])
-        return f"Cancelled schedule {schedule_id}."
+        return f"Cancelled schedule {args.schedule_id}."
 
     @tool(
         badge_icon="\U0001f4cb",

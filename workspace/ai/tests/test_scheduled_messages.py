@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import time, timedelta
 from unittest.mock import MagicMock, patch
@@ -278,6 +279,7 @@ class GenerateScheduledResponseTests(TestCase):
         self.bot_profile = BotProfile.objects.create(
             user=self.bot_user,
             system_prompt="You are a test bot.",
+            is_public=True,
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM,
@@ -966,6 +968,35 @@ class ScheduleToolTests(TestCase):
         schedule.refresh_from_db()
         self.assertFalse(schedule.is_active)
 
+    def _execute_cancel(self, schedule_id):
+        from workspace.ai.harness.model import ToolCall
+        from workspace.ai.tool_registry import tool_registry
+
+        call = ToolCall(
+            id="c1",
+            name="cancel_schedule",
+            arguments=json.dumps({"schedule_id": schedule_id}),
+        )
+        return tool_registry.execute(
+            call, self.user, self.bot_user, self.conv_id, self.context
+        )
+
+    def test_cancel_schedule_malformed_id_is_a_tool_failure(self):
+        from workspace.ai.tool_registry import parse_tool_failure
+
+        failure = parse_tool_failure(self._execute_cancel("not-a-uuid"))
+
+        self.assertIsNotNone(failure)
+        self.assertIn("invalid arguments", failure["reason"])
+
+    def test_cancel_schedule_unknown_id_is_a_tool_failure(self):
+        from workspace.ai.tool_registry import parse_tool_failure
+
+        failure = parse_tool_failure(self._execute_cancel(str(uuid.uuid4())))
+
+        self.assertIsNotNone(failure)
+        self.assertIn("no active schedule", failure["reason"])
+
     def test_list_schedules_empty(self):
         result = self._call("list_schedules", {})
         self.assertIn("No active schedules", result)
@@ -1000,7 +1031,7 @@ class ScheduledRunContextTests(TestCase):
         self.user = User.objects.create_user(username="ctxuser", password="pass123")
         self.bot_user = User.objects.create_user(username="ctxbot", first_name="AI")
         self.bot_profile = BotProfile.objects.create(
-            user=self.bot_user, system_prompt="You are a test bot."
+            user=self.bot_user, system_prompt="You are a test bot.", is_public=True
         )
         self.conversation = Conversation.objects.create(
             kind=Conversation.Kind.DM, created_by=self.user

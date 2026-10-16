@@ -7,6 +7,7 @@ from celery import shared_task
 from django.utils import timezone
 
 from workspace.ai.metrics import AI_AGENT_CHECKINS
+from workspace.ai.services.bot_access import run_refusal
 from workspace.ai.services.bot_runs import build_bot_runner
 from workspace.ai.services.chat_summary import maybe_dispatch_summary_update
 from workspace.ai.services.conversation_history import (
@@ -212,6 +213,21 @@ def run_agent_goal_check(self, goal_id: str, claim_token: str | None = None):
         return {"status": "error", "error": "Not found"}
 
     human_user = User.objects.filter(pk=goal.created_by_id).first()
+
+    # Same rule as scheduled messages: the check-in works with the creator's
+    # data, so losing the conversation, the account or the bot ends the goal.
+    refusal = run_refusal(bot_profile, human_user, conversation.pk)
+    if refusal:
+        now = timezone.now()
+        AgentGoal.objects.filter(pk=goal.pk, status=AgentGoal.Status.ACTIVE).update(
+            status=AgentGoal.Status.ABANDONED,
+            outcome="Stopped: the user who set this goal can no longer use this bot here.",
+            closed_at=now,
+            updated_at=now,
+        )
+        logger.info("Agent goal abandoned (%s): goal=%s", refusal, scrub(goal_id))
+        return {"status": "skipped", "reason": refusal}
+
     user_tz = get_user_timezone(human_user or goal.created_by)
 
     history = build_conversation_history(str(conversation.pk), bot_profile, human_user)

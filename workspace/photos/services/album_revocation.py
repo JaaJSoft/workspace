@@ -104,7 +104,9 @@ def revoke_lapsed_sharing(*, album_ids=None, user_ids=None):
         revoked_links += deleted
         revoked_shares += len(gone)
         for share in gone:
-            notify_revoked(share)
+            transaction.on_commit(
+                lambda share=share: notify_revoked(share), robust=True
+            )
         if not gone:
             return revoked_links, revoked_shares
         album_ids, user_ids = {share.album_id for share in gone}, None

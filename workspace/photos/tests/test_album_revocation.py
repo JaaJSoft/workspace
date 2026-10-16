@@ -75,7 +75,8 @@ class LosingAShareTests(RevocationTestCase):
         self.share(VIEWER, by=self.bob, user=self.carol)
         Notification.objects.all().delete()
 
-        unshare_album(self.album, acting_user=self.owner, user=self.bob)
+        with self.captureOnCommitCallbacks(execute=True):
+            unshare_album(self.album, acting_user=self.owner, user=self.bob)
 
         self.assertRevoked(bobs_link)
         self.assertKept(owners_link)
@@ -85,6 +86,21 @@ class LosingAShareTests(RevocationTestCase):
             "no longer shared with you",
             Notification.objects.get(recipient=self.carol).title,
         )
+
+    def test_the_revocation_notice_waits_for_the_commit(self):
+        # Sent inside the transaction, the notice would reach people whose
+        # share survives a rollback of the change that revoked it.
+        self.share()
+        self.share(VIEWER, by=self.bob, user=self.carol)
+        Notification.objects.all().delete()
+
+        with self.captureOnCommitCallbacks(execute=False) as callbacks:
+            unshare_album(self.album, acting_user=self.owner, user=self.bob)
+
+        self.assertFalse(Notification.objects.filter(recipient=self.carol).exists())
+        for callback in callbacks:
+            callback()
+        self.assertTrue(Notification.objects.filter(recipient=self.carol).exists())
 
     def test_photos_added_later_never_reach_a_removed_managers_link(self):
         self.share()

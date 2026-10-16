@@ -20,6 +20,7 @@ from workspace.files.sensitivity import (
 )
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
+from workspace.files.services.pins import visible_pins
 from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
 from workspace.files.services.scanning.policy import with_scan
@@ -362,24 +363,7 @@ def _build_context(request, folder=None, is_trash_view=False):
         Lower("name")
     )
 
-    # Load pinned folders + their favorite status in a single query:
-    # annotate via the FK (folder_id) rather than re-fetching the File rows.
-    pinned_folders_qs = (
-        PinnedFolder.objects.filter(
-            owner=request.user,
-            folder__deleted_at__isnull=True,
-        )
-        .select_related("folder")
-        .annotate(
-            _folder_is_favorite=Exists(
-                FileFavorite.objects.filter(
-                    owner=request.user,
-                    file_id=OuterRef("folder_id"),
-                )
-            ),
-        )
-        .order_by("position", "created_at")
-    )
+    pinned_folders_qs = visible_pins(request.user)
 
     pinned_folder_ids = [p.folder_id for p in pinned_folders_qs]
     for pin in pinned_folders_qs:
@@ -739,25 +723,7 @@ def events(request, uuid):
 @login_required
 def pinned_folders(request):
     """Return pinned folders partial for Alpine AJAX loading."""
-    # Annotate is_favorite via the folder FK in the same query — avoids
-    # the previous double-fetch (one query for the join, a second one to
-    # re-load the same File rows just to attach the annotation).
-    pinned_qs = (
-        PinnedFolder.objects.filter(
-            owner=request.user,
-            folder__deleted_at__isnull=True,
-        )
-        .select_related("folder")
-        .annotate(
-            _folder_is_favorite=Exists(
-                FileFavorite.objects.filter(
-                    owner=request.user,
-                    file_id=OuterRef("folder_id"),
-                )
-            ),
-        )
-        .order_by("position", "created_at")
-    )
+    pinned_qs = visible_pins(request.user)
 
     for pin in pinned_qs:
         pin.folder.is_favorite = pin._folder_is_favorite

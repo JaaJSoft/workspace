@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -465,6 +466,16 @@ class GuestVoteTests(PollTestMixin, APITestCase):
         self.assertTrue(cookie["httponly"])
         self.assertEqual(cookie.value, PollVote.objects.get().voter_token)
         self.assertNotIn(cookie.value, resp.content.decode())
+
+    @override_settings(SESSION_COOKIE_SECURE=True)
+    def test_guest_cookie_is_secure_when_session_cookies_are(self):
+        resp = self._guest_vote(self.client, "Bob", "yes")
+        self.assertTrue(resp.cookies[f"poll_voter_{self.poll.share_token}"]["secure"])
+
+    @override_settings(SESSION_COOKIE_SECURE=False)
+    def test_guest_cookie_follows_an_http_deployment(self):
+        resp = self._guest_vote(self.client, "Bob", "yes")
+        self.assertFalse(resp.cookies[f"poll_voter_{self.poll.share_token}"]["secure"])
 
     def test_guest_vote_generates_token_when_empty(self):
         resp = self.client.post(

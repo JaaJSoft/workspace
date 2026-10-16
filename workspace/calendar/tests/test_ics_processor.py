@@ -360,6 +360,13 @@ class InvitationMatchingTest(ICSProcessorMixin, TestCase):
             **kwargs,
         )
 
+    def test_request_without_organizer_creates_nothing(self, *_mocks):
+        self._receive(
+            ICS_REQUEST.replace("ORGANIZER;CN=Alice:mailto:alice@example.com\r\n", ""),
+            uid=1,
+        )
+        self.assertFalse(Event.objects.filter(ical_uid=self.UID).exists())
+
     def test_cancel_from_another_organizer_is_ignored(self, *_mocks):
         self._receive(ICS_REQUEST, uid=1)
         self._receive(ICS_CANCEL.replace("alice@example.com", "mallory@evil.test"), 2)

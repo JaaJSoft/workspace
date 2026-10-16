@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.db import transaction
@@ -580,5 +581,9 @@ class SharedPollVoteView(APIView):
             max_age=365 * 24 * 3600,
             httponly=True,
             samesite="Lax",
+            # The token is the only credential behind the guest's votes: it
+            # follows the session cookie, HTTPS-only unless the deployment
+            # serves plain HTTP.
+            secure=settings.SESSION_COOKIE_SECURE,
         )
         return response

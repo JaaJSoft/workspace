@@ -92,6 +92,11 @@ def _handle_request(vevent, uid, mail_message):
 
     existing = _invitation_events(uid, user, vevent)
     if not existing:
+        if not extract_email(vevent.get("ORGANIZER")):
+            # iTIP requires an ORGANIZER on a REQUEST, and an event created
+            # without one could never be matched by a later update or cancel.
+            logger.info("Ignored invitation %s: no organizer", scrub(uid))
+            return
         try:
             _create_event(vevent, uid, sequence, mail_message)
         except IntegrityError:

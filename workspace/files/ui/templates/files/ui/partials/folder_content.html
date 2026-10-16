@@ -117,8 +117,8 @@
                       <input
                         type="checkbox"
                         class="checkbox checkbox-xs checkbox-module"
-                        :checked="hasTagFilter('{{ tag.uuid }}')"
-                        @change="toggleTagFilter('{{ tag.uuid }}')"
+                        :checked="hasTagFilter('{{ tag.uuid|escapejs }}')"
+                        @change="toggleTagFilter('{{ tag.uuid|escapejs }}')"
                       />
                       <i
                         data-lucide="{{ tag.icon|default:'tag' }}"
@@ -443,8 +443,8 @@
             <tag-chip class="shrink-0" size="sm" removable :name="typeFilterLabel()" :icon="typeFilterIcon()" @remove="typeFilter = 'all'"></tag-chip>
           </template>
           {% for tag in listing_tags %}
-            <template x-if="hasTagFilter('{{ tag.uuid }}')">
-              <tag-chip class="shrink-0" name="{{ tag.name }}" color="{{ tag.color }}" icon="{{ tag.icon }}" size="sm" removable @remove="toggleTagFilter('{{ tag.uuid }}')"></tag-chip>
+            <template x-if="hasTagFilter('{{ tag.uuid|escapejs }}')">
+              <tag-chip class="shrink-0" name="{{ tag.name }}" color="{{ tag.color }}" icon="{{ tag.icon }}" size="sm" removable @remove="toggleTagFilter('{{ tag.uuid|escapejs }}')"></tag-chip>
             </template>
           {% endfor %}
           <button
@@ -938,7 +938,7 @@
               type="button"
               class="btn btn-ghost btn-xs btn-square -my-1 -mr-2"
               title="Folder properties"
-              @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid }}', nodeType: 'folder' } }))"
+              @click="window.dispatchEvent(new CustomEvent('open-properties', { detail: { uuid: '{{ current_folder.uuid|escapejs }}', nodeType: 'folder' } }))"
             >
               <i data-lucide="info" class="w-3.5 h-3.5"></i>
             </button>

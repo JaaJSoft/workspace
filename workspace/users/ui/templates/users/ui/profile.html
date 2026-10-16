@@ -136,7 +136,7 @@
             {% endif %}
             <span
               class="flex items-center gap-1.5"
-              x-data="{ get status() { return $store.presence.statusOf({{ profile_user.id }}) }, lastSeen: {% if last_seen %}'{{ last_seen|date:'c' }}'{% else %}null{% endif %} }"
+              x-data="{ get status() { return $store.presence.statusOf({{ profile_user.id }}) }, lastSeen: {% if last_seen %}'{{ last_seen|date:'c'|escapejs }}'{% else %}null{% endif %} }"
             >
               <span
                 class="w-2 h-2 rounded-full flex-shrink-0"
@@ -264,7 +264,7 @@
                       <div
                         class="aspect-square rounded-sm cursor-pointer {% if day.level == 0 %}bg-base-300/50{% elif day.level == 1 %}bg-primary/20{% elif day.level == 2 %}bg-primary/40{% elif day.level == 3 %}bg-primary/60{% else %}bg-primary{% endif %}"
                         aria-label="{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}"
-                        @mouseenter="tooltip = '{{ day.count }} contribution{{ day.count|pluralize }} on {{ day.date }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
+                        @mouseenter="tooltip = '{{ day.count|escapejs }} contribution{{ day.count|pluralize|escapejs }} on {{ day.date|escapejs }}'; showTooltip = true; tooltipX = $event.clientX; tooltipY = $event.clientY"
                         @mouseleave="showTooltip = false"
                       ></div>
                     {% endfor %}

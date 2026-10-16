@@ -10,6 +10,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase
+from django.utils.html import escapejs
 
 from workspace.files.models import File
 from workspace.photos.models import Album
@@ -167,7 +168,9 @@ class AlbumViewerPanelTests(AlbumPageTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            f"/api/v1/photos/albums/{self.album.uuid}/files/{self.photo.uuid}/content",
+            escapejs(
+                f"/api/v1/photos/albums/{self.album.uuid}/files/{self.photo.uuid}/content"
+            ),
             response.content.decode(),
         )
 

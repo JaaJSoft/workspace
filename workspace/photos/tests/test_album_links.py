@@ -14,6 +14,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import TestCase
 from django.utils import timezone
+from django.utils.html import escapejs
 
 from workspace.files.models import File
 from workspace.files.services.sharing import share_file
@@ -347,7 +348,9 @@ class PublicPageTests(LinkTestCase):
 
         html = response.content.decode()
         self.assertEqual(response.status_code, 200)
-        self.assertIn(f"{PUBLIC}/{self.link.token}/files/{middle.uuid}/content", html)
+        self.assertIn(
+            escapejs(f"{PUBLIC}/{self.link.token}/files/{middle.uuid}/content"), html
+        )
         self.assertIn(f"photo={self.photos[2].uuid}", html)
         self.assertIn(f"photo={self.photos[0].uuid}", html)
         self.assertIn("2 / 3", html)

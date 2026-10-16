@@ -127,7 +127,7 @@ kubectl apply -f ingress.yaml
 | `DJANGO_LOG_LEVEL`     | `INFO`                          | Django log level                          |
 | `TRASH_RETENTION_DAYS` | `30`                            | Days before trashed files are purged      |
 | `MEDIA_ROOT`           | `/app/data`                     | Root directory for user files and uploads |
-| `FILE_UPLOAD_TEMP_DIR` | `MEDIA_ROOT/tmp/uploads`      | Where an upload is spooled while it arrives. Keep it on the `MEDIA_ROOT` volume: storing the upload is then a rename instead of a full copy |
+| `FILE_UPLOAD_TEMP_DIR` | `MEDIA_ROOT/tmp/uploads`      | Where an upload is spooled while it arrives, and where resumable uploads keep their chunks. Keep it on the `MEDIA_ROOT` volume: storing the upload is then a rename instead of a full copy, and every web replica sees the chunks the others received |
 | `METRICS_USER`         | `prometheus`                    | HTTP Basic user for `/metrics` (password in `secrets.yaml`) |
 | `WEBPUSH_VAPID_PUBLIC_KEY` | *(empty)*                  | VAPID public key (base64url)              |
 | `WEBPUSH_VAPID_MAILTO` | *(empty)*                       | Contact email for VAPID claims (`mailto:…`) |

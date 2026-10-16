@@ -11,6 +11,7 @@ Upload, organize, and preview files with a full-featured file explorer.
 - **Folder hierarchy** - Nested folders with breadcrumb navigation and path tracking
 - **Multiple views** - Grid (mosaic) and list views with customizable columns
 - **Drag & drop** - Upload files and move items between folders
+- **Resumable uploads** - A large upload cut by the network picks up where it stopped
 - **Built-in viewers** - Preview PDF, Markdown, images, video, audio, and code files inline
 - **Office documents** - View and edit DOCX/XLSX/PPTX in the browser through a self-hosted WOPI editor (Collabora, OnlyOffice)
 - **Favorites & Recent** - Star files for quick access, track recently opened items
@@ -26,6 +27,33 @@ Upload, organize, and preview files with a full-featured file explorer.
 - **Folder download** - Download entire folders as ZIP archives
 - **WebDAV** - Access files from any WebDAV-compatible client
 - **File locking & comments** - Lock files to prevent concurrent edits, add comments
+
+## Resumable uploads
+
+From 50 MB on, the browser sends a file in 16 MB chunks through an upload
+session instead of one request. A chunk lost to the network (a laptop going to
+sleep, a phone switching networks) is sent again after a wait, and the upload
+continues from the bytes the server already holds. When the waits run out
+(about two minutes), the row fails and its Retry button resumes the same
+upload; closing the upload panel drops it.
+
+Each request carries one chunk, so uploads also go through a reverse proxy that
+caps the size of a request body, such as Cloudflare's 100 MB on its free plan.
+It is not faster on a healthy network: the same bytes travel, in more requests.
+
+- The size of the file counts against the storage quota from the moment the
+  upload starts, so two large uploads cannot each pass the check and together
+  overflow it.
+- Chunks are written to `FILE_UPLOAD_TEMP_DIR` and hashed as they arrive. When
+  the last one is in, the file is renamed into place, as for a regular upload.
+  With several web replicas the directory has to be on a volume they share,
+  which it is by default (under `MEDIA_ROOT`).
+- An upload untouched for a day is deleted with what it received, by the
+  nightly cleanup of abandoned upload files.
+
+The API is `POST /api/v1/files/uploads` (open), `PATCH .../uploads/<uuid>` with
+`Content-Range` (append), `GET` (offset to resume from), `POST .../finalize`
+and `DELETE` (abort); the OpenAPI schema documents each of them.
 
 ## Content search
 

@@ -109,3 +109,27 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
         self.assertEqual(self._refs(self.task), {(self.secret.uuid, self.hidden.uuid)})
         self.assertEqual(self._refs(other), {(self.secret.uuid, third.uuid)})
         self.assertEqual(self._refs(third), {(self.project.uuid, other.uuid)})
+
+    def test_events_with_more_than_one_possible_partner_stay_unresolved(self):
+        # Task numbers repeat across projects: four first tasks (all #1)
+        # linked by one actor at once all name each other's number, so
+        # nothing tells which events belong together.
+        tasks = [
+            create_task(create_project(self.admin, name=name), self.admin, title=name)
+            for name in ("Alpha", "Beta", "Gamma", "Delta")
+        ]
+        create_link(tasks[0], tasks[1], "blocks", actor=self.admin)
+        create_link(tasks[2], tasks[3], "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        moment = TaskEvent.objects.filter(type__in=_LINK_TYPES).earliest("created_at")
+        # Interleave the two links' events so a first-match scan meets the
+        # wrong partner first.
+        for offset, task in enumerate((tasks[0], tasks[2], tasks[1], tasks[3])):
+            task.events.filter(type__in=_LINK_TYPES).update(
+                created_at=moment.created_at + timedelta(milliseconds=offset)
+            )
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        for task in tasks:
+            self.assertEqual(self._refs(task), {(None, None)}, task.project.name)

@@ -57,17 +57,22 @@ def backfill_link_event_refs(apps, schema_editor):
         buckets[event["type"], event["actor_id"]].append(event)
     partner = {}
     for bucket in buckets.values():
+        candidates = defaultdict(list)
         for index, event in enumerate(bucket):
-            if event["uuid"] in partner:
-                continue
             for other_index in range(index + 1, len(bucket)):
                 other = bucket[other_index]
                 if other["created_at"] - event["created_at"] > _PAIR_WINDOW:
                     break
-                if other["uuid"] not in partner and _is_pair(event, other):
-                    partner[event["uuid"]] = other
-                    partner[other["uuid"]] = event
-                    break
+                if _is_pair(event, other):
+                    candidates[event["uuid"]].append(other)
+                    candidates[other["uuid"]].append(event)
+        # Task numbers repeat across projects, so two links made at once can
+        # each name the other's numbers. Guessing would record the wrong
+        # project and open the event to the wrong readers: an event whose
+        # partner is not unambiguous stays unresolved, hidden from everyone.
+        for uuid, matches in candidates.items():
+            if len(matches) == 1 and len(candidates[matches[0]["uuid"]]) == 1:
+                partner[uuid] = matches[0]
     TaskEvent.objects.using(db).bulk_update(
         [
             TaskEvent(uuid=uuid, from_ref=other["project_id"], to_ref=other["task_id"])

@@ -223,4 +223,4 @@ _KDF_DIRECT = 0
 def check_envelope_ciphertext(raw: bytes) -> None:
     check_current_ciphertext(raw, key_version=0)
     if raw[2] != _KDF_DIRECT:
-        raise UnsupportedCiphertext("an envelope ciphertext uses the direct kdf")
+        raise UnsupportedCiphertext("envelope ciphertext does not use the direct kdf")

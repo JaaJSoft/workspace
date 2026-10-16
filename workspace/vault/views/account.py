@@ -254,7 +254,7 @@ class AccountConfirmView(CacheControlMixin, APIView):
             "envelope that was opened."
         ),
         request=AccountConfirmSerializer,
-        responses={204: None},
+        responses={204: None, 404: None},
     )
     @sensitive_variables()
     def post(self, request):

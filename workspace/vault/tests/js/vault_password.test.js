@@ -296,7 +296,7 @@ test('the root mixin closes the dialog on lock and shows the notice after a chan
   assert.equal(root.passwordChangedNotice, true);
   root.openPasswordDialog();
   assert.equal(root.passwordChangedNotice, false);
-  root.clearPasswordDialog();
+  root.closePasswordDialog();
   assert.equal(root.passwordDialogOpen, false);
 });
 
@@ -384,15 +384,16 @@ test('without a previous envelope there is nothing to confirm', async () => {
   assert.deepStrictEqual(h.order, [['rotate']]);
 });
 
-test('a refused confirm still lets the rotation through', async () => {
+test('a refused confirm stops before the rotation', async () => {
   const h = harness({
     envelope: WITH_PREVIOUS,
     confirmEnvelope: async () => { const err = new Error('throttled'); err.status = 429; throw err; },
   });
   ready(h.component);
   await h.component.submit();
-  assert.equal(h.posts.length, 1);
-  assert.equal(h.session.locks, 1);
+  assert.equal(h.posts.length, 0);
+  assert.equal(h.session.locks, 0);
+  assert.equal(h.component.error, 'The password could not be changed. Try again.');
 });
 
 test('the envelope is read only once the unlock has written it back', async () => {

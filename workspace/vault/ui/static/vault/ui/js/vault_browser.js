@@ -360,7 +360,7 @@ window.vaultBrowser = (function () {
         // passphrase and, while it runs, a tree of decrypted entries.
         this.clearExport();
         // And the password change holds the current and the new password.
-        this.clearPasswordDialog();
+        this.closePasswordDialog();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;

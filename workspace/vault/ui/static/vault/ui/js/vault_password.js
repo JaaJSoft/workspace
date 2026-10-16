@@ -20,6 +20,8 @@ window.vaultResealDialogMixin = function vaultResealDialogMixin() {
       this.passwordDialogOpen = true;
     },
 
+    // The notice survives a lock on purpose: the lock that follows a change
+    // is what puts it on screen.
     closePasswordDialog() {
       this.passwordDialogOpen = false;
     },
@@ -30,12 +32,6 @@ window.vaultResealDialogMixin = function vaultResealDialogMixin() {
     passwordChangeSucceeded() {
       this.passwordDialogOpen = false;
       this.passwordChangedNotice = true;
-    },
-
-    // The notice survives a lock on purpose: the lock that follows a change
-    // is what puts it on screen.
-    clearPasswordDialog() {
-      this.passwordDialogOpen = false;
     },
   };
 };
@@ -201,12 +197,14 @@ window.vaultPasswordChange = function vaultPasswordChange() {
         // is what the previous slot should keep through this rotation. Left
         // unconfirmed (the unlock's confirm lost to a throttle or a closed
         // tab), the slot would keep a password the user changed away from two
-        // rotations ago. A refused confirm only leaves the older slot in place.
+        // rotations ago - so a refused confirm stops here rather than rotate
+        // away the password being replaced and keep that older one.
         if (opened === 'current' && E.previousOf(envelope)) {
           try {
             await window.vaultApi.confirmEnvelope(envelope.wrapped_kex_priv);
           } catch (err) {
-            /* the rotation still goes ahead against the current envelope */
+            if (!gone()) this.error = 'The password could not be changed. Try again.';
+            return;
           }
           if (gone()) return;
         }

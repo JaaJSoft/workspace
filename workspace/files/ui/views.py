@@ -2,7 +2,7 @@ from urllib.parse import quote, urlencode
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db.models import Exists, OuterRef, Prefetch, Q
+from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
@@ -29,6 +29,7 @@ from workspace.files.services.storage_analysis import (
     QUERY_MAX_LENGTH,
     analyze_storage,
 )
+from workspace.files.services.tags import viewer_file_tags
 from workspace.files.views.share_links import _record_access
 from workspace.users.services.settings import get_module_settings
 
@@ -37,7 +38,6 @@ from ..models import (
     FileFavorite,
     FileShare,
     FileShareLink,
-    FileTag,
     PinnedFolder,
     Tag,
 )
@@ -266,16 +266,7 @@ def _build_context(request, folder=None, is_trash_view=False):
             is_pinned=Exists(pinned_subquery),
             is_shared=Exists(is_shared_subquery),
         )
-        .prefetch_related(
-            # Scoped to the viewer's own tags: the shared-with-me listing shows
-            # other people's files, and their tags must never leak into it.
-            Prefetch(
-                "file_tags",
-                queryset=FileTag.objects.filter(tag__owner=request.user)
-                .select_related("tag")
-                .order_by(Lower("tag__name")),
-            )
-        )
+        .prefetch_related(viewer_file_tags(request.user))
     )
     if is_recent_view:
         nodes = nodes[:RECENT_FILES_LIMIT]
@@ -858,7 +849,7 @@ def file_card(request, uuid):
     """Return a compact file/note card partial for the hover popover."""
     file_obj = (
         File.objects.filter(uuid=uuid, deleted_at__isnull=True)
-        .prefetch_related("file_tags__tag")
+        .prefetch_related(viewer_file_tags(request.user))
         .first()
     )
     if not file_obj or not FileService.can_access(request.user, file_obj):

@@ -214,6 +214,7 @@ class FileService:
 
         from workspace.files.models import FileFavorite, FileShare, PinnedFolder
         from workspace.files.services.scanning.policy import with_scan
+        from workspace.files.services.tags import viewer_file_tags
 
         return with_scan(
             queryset.annotate(
@@ -231,7 +232,7 @@ class FileService:
                         deleted_at__isnull=True,
                     )
                 ),
-            ).prefetch_related("file_tags__tag")
+            ).prefetch_related(viewer_file_tags(user))
         )
 
     # ------------------------------------------------------------------

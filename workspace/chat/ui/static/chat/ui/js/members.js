@@ -87,7 +87,7 @@ window.chatMembersMixin = function chatMembersMixin() {
 
 
     async clearConversation() {
-      if (!this.activeConversation) return;
+      if (!this.activeConversation?.can_clear) return;
       const ok = await AppDialog.confirm({
         title: 'Clear conversation',
         message: 'This will permanently delete all messages and media in this conversation. This cannot be undone.',

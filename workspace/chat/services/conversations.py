@@ -178,6 +178,40 @@ def is_bot_conversation(conversation_id):
     ).exists()
 
 
+def can_add_users(user, candidates):
+    """Whether *user* may bring every one of *candidates* into a conversation.
+
+    A bot in a conversation answers every member, so bringing one in hands it
+    to all of them: *user* must be allowed to use each bot they add. The
+    candidates need ``bot_profile`` selected.
+    """
+    return all(
+        candidate.bot_profile.is_accessible_by(user)
+        for candidate in candidates
+        if hasattr(candidate, "bot_profile")
+    )
+
+
+def members_allow_clear(user, active_members):
+    """Whether *user* may clear a conversation whose active members are *active_members*.
+
+    Clearing hard-deletes every message for everyone, so it is reserved to a
+    private chat with a bot: at least one bot, and *user* as the only person.
+    The members need ``user__bot_profile`` selected (``active_members_queryset``).
+    """
+    human_ids = [
+        m.user_id for m in active_members if not hasattr(m.user, "bot_profile")
+    ]
+    has_bot = len(human_ids) < len(active_members)
+    return has_bot and human_ids == [user.id]
+
+
+def can_clear_conversation(user, conversation_id):
+    """Whether *user* may clear every message of *conversation_id*."""
+    members = list(active_members_queryset().filter(conversation_id=conversation_id))
+    return members_allow_clear(user, members)
+
+
 @transaction.atomic
 def get_or_create_dm(user, other_user):
     """Get or create a DM conversation between two users.

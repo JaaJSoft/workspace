@@ -1,8 +1,12 @@
+import json
+import re
 from datetime import timedelta
+from html import unescape
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.template import Context, Template
 from django.test import TestCase
 from django.utils import timezone
 
@@ -113,3 +117,38 @@ class QuickReactionsServiceTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         # Cache was invalidated, so the freshly-used emoji now leads the list.
         self.assertEqual(quick_reactions_for(self.alice)[0], "🔥")
+
+
+class ReactionBadgeEscapingTests(TestCase):
+    """A reaction's emoji is free text and lands inside the badge's JS handler."""
+
+    # The browser decodes HTML entities before Alpine evaluates the attribute,
+    # so the handler must still be a single call once &#x27; is a quote again.
+    HANDLER = re.compile(r"toggleReaction\('((?:[^'\\]|\\.)*)', '((?:[^'\\]|\\.)*)'\)")
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pw")
+        self.bob = User.objects.create_user(username="bob", password="pw")
+        conv = Conversation.objects.create(
+            kind=Conversation.Kind.GROUP, created_by=self.alice
+        )
+        self.msg = Message.objects.create(conversation=conv, author=self.bob, body="x")
+
+    def _handler(self):
+        html = Template("{% load chat_tags %}{% render_reactions msg user %}").render(
+            Context({"msg": self.msg, "user": self.bob})
+        )
+        return unescape(re.search(r'@click="([^"]*)"', html).group(1))
+
+    def test_emoji_cannot_break_out_of_the_handler(self):
+        payload = "');alert(1);//"
+        Reaction.objects.create(message=self.msg, user=self.alice, emoji=payload)
+        match = self.HANDLER.fullmatch(self._handler())
+        self.assertIsNotNone(match, self._handler())
+        self.assertEqual(json.loads(f'"{match.group(1)}"'), str(self.msg.uuid))
+        self.assertEqual(json.loads(f'"{match.group(2)}"'), payload)
+
+    def test_plain_emoji_round_trips(self):
+        Reaction.objects.create(message=self.msg, user=self.alice, emoji="👍")
+        match = self.HANDLER.fullmatch(self._handler())
+        self.assertEqual(json.loads(f'"{match.group(2)}"'), "👍")

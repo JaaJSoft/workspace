@@ -124,7 +124,7 @@ class ReactionBadgeEscapingTests(TestCase):
 
     # The browser decodes HTML entities before Alpine evaluates the attribute,
     # so the handler must still be a single call once &#x27; is a quote again.
-    HANDLER = re.compile(r"toggleReaction\('([^']*)', '((?:[^'\\]|\\.)*)'\)")
+    HANDLER = re.compile(r"toggleReaction\('((?:[^'\\]|\\.)*)', '((?:[^'\\]|\\.)*)'\)")
 
     def setUp(self):
         self.alice = User.objects.create_user(username="alice", password="pw")
@@ -145,7 +145,7 @@ class ReactionBadgeEscapingTests(TestCase):
         Reaction.objects.create(message=self.msg, user=self.alice, emoji=payload)
         match = self.HANDLER.fullmatch(self._handler())
         self.assertIsNotNone(match, self._handler())
-        self.assertEqual(match.group(1), str(self.msg.uuid))
+        self.assertEqual(json.loads(f'"{match.group(1)}"'), str(self.msg.uuid))
         self.assertEqual(json.loads(f'"{match.group(2)}"'), payload)
 
     def test_plain_emoji_round_trips(self):

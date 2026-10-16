@@ -20,8 +20,8 @@
       class="dropdown dropdown-end ml-auto"
       x-data="projectNotificationLevel({
       url: '{% url 'project-notification-level' project.uuid %}',
-      override: '{{ notification_level.override }}',
-      moduleLevel: '{{ notification_level.module_level }}',
+      override: '{{ notification_level.override|escapejs }}',
+      moduleLevel: '{{ notification_level.module_level|escapejs }}',
       })"
       @projects-notify-level-changed.window="moduleLevel = $event.detail.level"
     >

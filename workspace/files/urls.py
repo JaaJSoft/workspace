@@ -14,6 +14,11 @@ from .views.share_links import (
 )
 from .views.tags import FileTagView, TagViewSet
 from .views.thumbnails import GenerateThumbnailsView
+from .views.uploads import (
+    UploadSessionFinalizeView,
+    UploadSessionListView,
+    UploadSessionView,
+)
 from .views.wopi import WopiFileContentsView, WopiFileView
 
 router = SimpleRouter(trailing_slash=False)
@@ -25,6 +30,23 @@ urlpatterns = [
         "api/v1/files/sensitive",
         SensitiveFilesView.as_view(),
         name="files-sensitive",
+    ),
+    # Ahead of the router, whose file detail route would take "uploads" for
+    # a file's id.
+    path(
+        "api/v1/files/uploads",
+        UploadSessionListView.as_view(),
+        name="file-upload-sessions",
+    ),
+    path(
+        "api/v1/files/uploads/<uuid:uuid>",
+        UploadSessionView.as_view(),
+        name="file-upload-session",
+    ),
+    path(
+        "api/v1/files/uploads/<uuid:uuid>/finalize",
+        UploadSessionFinalizeView.as_view(),
+        name="file-upload-session-finalize",
     ),
     path(
         "api/v1/files/shared/<str:token>",

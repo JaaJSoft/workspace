@@ -22,24 +22,24 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
 <li
   id="conv-item-{{ conv.uuid }}"
   class="list-none group/conv"
-  {% if pinned %} draggable="true" data-conversation-uuid="{{ conv.uuid }}" @dragstart="onPinnedDragStart($event, '{{ conv.uuid }}')" @dragend="onPinnedDragEnd($event)" @dragover.prevent="onPinnedDragOver($event, '{{ conv.uuid }}')" @drop.prevent="onPinnedDrop($event, '{{ conv.uuid }}')" :class="dragOverPinned === '{{ conv.uuid }}' ? 'border-t-2 border-module' : ''" {% endif %}
-  @contextmenu="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}'{% if pinned %}, true{% endif %})"
+  {% if pinned %} draggable="true" data-conversation-uuid="{{ conv.uuid }}" @dragstart="onPinnedDragStart($event, '{{ conv.uuid|escapejs }}')" @dragend="onPinnedDragEnd($event)" @dragover.prevent="onPinnedDragOver($event, '{{ conv.uuid|escapejs }}')" @drop.prevent="onPinnedDrop($event, '{{ conv.uuid|escapejs }}')" :class="dragOverPinned === '{{ conv.uuid|escapejs }}' ? 'border-t-2 border-module' : ''" {% endif %}
+  @contextmenu="openConvContextMenu($event, '{{ conv.uuid|escapejs }}', '{{ conv.kind|escapejs }}'{% if pinned %}, true{% endif %})"
 >
   <button
     type="button"
     class="flex items-center w-full rounded-lg transition-colors"
     :class="[
       collapsed ? 'justify-center w-10 h-10 px-0 mx-auto' : (chatPrefs.compactConversationList ? 'gap-1.5 py-0.5 px-2' : 'gap-3 p-2'),
-      activeConversation?.uuid === '{{ conv.uuid }}' ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
+      activeConversation?.uuid === '{{ conv.uuid|escapejs }}' ? 'bg-module/15 text-module hover:bg-module/25' : 'text-base-content/70 hover:bg-base-content/5 hover:text-module'
     ]"
-    @click="selectConversationById('{{ conv.uuid }}')"
+    @click="selectConversationById('{{ conv.uuid|escapejs }}')"
     :title="collapsed ? '{{ conv.display_name|escapejs }}' : ''"
   >
     <div class="relative flex-shrink-0 flex">
-      <conversation-avatar kind="{{ conv.kind }}" uuid="{{ conv.uuid }}" name="{{ conv.display_name }}" initials="{{ conv.avatar_initial }}" {% if conv.has_avatar %}has-avatar{% endif %} {% if conv.other_user %}user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" presence{% endif %} size="sm" :size="(!collapsed && chatPrefs.compactConversationList) ? 'xs' : 'sm'" :active="activeConversation?.uuid === '{{ conv.uuid }}'"></conversation-avatar>
+      <conversation-avatar kind="{{ conv.kind }}" uuid="{{ conv.uuid }}" name="{{ conv.display_name }}" initials="{{ conv.avatar_initial }}" {% if conv.has_avatar %}has-avatar{% endif %} {% if conv.other_user %}user-id="{{ conv.other_user.id }}" username="{{ conv.other_user.username }}" presence{% endif %} size="sm" :size="(!collapsed && chatPrefs.compactConversationList) ? 'xs' : 'sm'" :active="activeConversation?.uuid === '{{ conv.uuid|escapejs }}'"></conversation-avatar>
       <div
         class="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-module rounded-full border-2 border-base-200"
-        x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)"
+        x-show="collapsed && (conversations.find(c => c.uuid === '{{ conv.uuid|escapejs }}')?.unread_count > 0)"
         x-cloak
       ></div>
     </div>
@@ -48,12 +48,12 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
         <span class="font-medium text-sm truncate flex items-center gap-1">
           {{ conv.display_name }}
           <span
-            x-show="titleRegeneratingUuid === '{{ conv.uuid }}'"
+            x-show="titleRegeneratingUuid === '{{ conv.uuid|escapejs }}'"
             x-cloak
             class="loading loading-spinner loading-xs text-secondary flex-shrink-0"
           ></span>
           <span
-            x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.is_bot_conversation"
+            x-show="conversations.find(c => c.uuid === '{{ conv.uuid|escapejs }}')?.is_bot_conversation"
             x-cloak
             class="text-secondary flex-shrink-0"
             title="AI Bot"
@@ -73,7 +73,7 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
           {% endif %}
           <span
             class="w-2 h-2 bg-module rounded-full flex-shrink-0"
-            x-show="chatPrefs.compactConversationList && (conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0)"
+            x-show="chatPrefs.compactConversationList && (conversations.find(c => c.uuid === '{{ conv.uuid|escapejs }}')?.unread_count > 0)"
             x-cloak
           ></span>
         </span>
@@ -83,7 +83,7 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
           >{{ conv.time_ago }}</span>
           <span
             class="hidden group-hover/conv:inline-flex btn btn-ghost btn-xs btn-square min-h-0 h-5 w-5"
-            @click.stop="openConvContextMenu($event, '{{ conv.uuid }}', '{{ conv.kind }}'{% if pinned %}, true{% endif %})"
+            @click.stop="openConvContextMenu($event, '{{ conv.uuid|escapejs }}', '{{ conv.kind|escapejs }}'{% if pinned %}, true{% endif %})"
             title="More options"
           >
             <i data-lucide="ellipsis" class="w-3.5 h-3.5"></i>
@@ -97,7 +97,7 @@ refreshes (refreshConversationItems in conversations.js) — keep it stable.
         <span class="text-xs text-base-content/50 truncate">{{ conv.last_message_preview }}</span>
         <span
           class="w-2 h-2 bg-module rounded-full flex-shrink-0"
-          x-show="conversations.find(c => c.uuid === '{{ conv.uuid }}')?.unread_count > 0"
+          x-show="conversations.find(c => c.uuid === '{{ conv.uuid|escapejs }}')?.unread_count > 0"
           x-cloak
         ></span>
       </div>

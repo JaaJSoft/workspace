@@ -12,7 +12,7 @@ Params:
 {% endcomment %}
 <div
   class="space-y-3"
-  x-data="commentsComponent('{{ list_url }}', {{ current_user_id }}, {{ can_comment|yesno:"true,false" }})"
+  x-data="commentsComponent('{{ list_url|escapejs }}', {{ current_user_id }}, {{ can_comment|yesno:"true,false" }})"
 >
   <div x-show="loading" class="flex justify-center py-4">
     <span class="loading loading-spinner loading-sm"></span>

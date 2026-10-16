@@ -5,12 +5,12 @@ send-to-board slot (the all-tasks list is selectable but not
 reorderable).{% endcomment %}
 <li
   class="flex items-center gap-3 px-3 py-2 hover:bg-base-200/60 select-none {% if writable and not row_readonly %}cursor-grab{% endif %}"
-  :class="dragging === '{{ task.uuid }}' && 'opacity-50'"
+  :class="dragging === '{{ task.uuid|escapejs }}' && 'opacity-50'"
   data-task-uuid="{{ task.uuid }}"
   {% if writable and not row_readonly %}draggable="true"{% endif %}
-  @dragstart="onDragStart($event, '{{ task.uuid }}')"
+  @dragstart="onDragStart($event, '{{ task.uuid|escapejs }}')"
   @dragend="onDragEnd()"
-  @click="openTask('{{ task.uuid }}')"
+  @click="openTask('{{ task.uuid|escapejs }}')"
 >
   {% if selectable %}
     <input
@@ -18,8 +18,8 @@ reorderable).{% endcomment %}
       class="checkbox checkbox-sm shrink-0"
       @click.stop
       aria-label="Select task"
-      :checked="isSelected('{{ task.uuid }}')"
-      @change="toggleSelect('{{ task.uuid }}')"
+      :checked="isSelected('{{ task.uuid|escapejs }}')"
+      @change="toggleSelect('{{ task.uuid|escapejs }}')"
     />
   {% endif %}
   {# items-baseline, not items-center: box-centering the 12px mono reference #}
@@ -91,7 +91,7 @@ reorderable).{% endcomment %}
         type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
         title="Send to current sprint"
-        @click.stop="sendToBoard('{{ task.uuid }}')"
+        @click.stop="sendToBoard('{{ task.uuid|escapejs }}')"
       >
         <i data-lucide="timer" class="w-5 h-5"></i>
       </button>
@@ -100,7 +100,7 @@ reorderable).{% endcomment %}
         type="button"
         class="btn btn-ghost btn-sm btn-square shrink-0"
         title="Send to board"
-        @click.stop="sendToBoard('{{ task.uuid }}')"
+        @click.stop="sendToBoard('{{ task.uuid|escapejs }}')"
       >
         <i data-lucide="arrow-right-circle" class="w-5 h-5"></i>
       </button>

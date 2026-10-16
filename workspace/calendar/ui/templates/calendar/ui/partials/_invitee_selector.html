@@ -9,7 +9,10 @@
   Icons inside the x-for rows are inline SVG: lucide.createIcons() does not
   process nodes Alpine clones out of a template, so data-lucide would render blank.
 {% endcomment %}
-<div x-data="inviteeSelector('{{ on_select_event }}')" class="relative">
+<div
+  x-data="inviteeSelector('{{ on_select_event|escapejs }}')"
+  class="relative"
+>
   <label class="input input-sm input-bordered flex items-center gap-2 w-full">
     <i data-lucide="user-plus" class="w-4 h-4 opacity-60 shrink-0"></i>
     <input

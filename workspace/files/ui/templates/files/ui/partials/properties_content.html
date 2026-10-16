@@ -7,6 +7,7 @@ into the properties panel.
 
 Context:
 - file: File object
+- file_path: the path the viewer may read (the name alone for a share recipient)
 - is_favorite: boolean
 - is_pinned: boolean (for folders)
 - children_count: int (for folders)
@@ -68,7 +69,7 @@ Context:
     <div class="space-y-2 text-sm">
       <div class="flex items-center gap-2 text-base-content/60">
         <i data-lucide="map-pin" class="w-3.5 h-3.5 flex-shrink-0"></i>
-        <span class="font-mono text-xs truncate">/{{ file.path }}</span>
+        <span class="font-mono text-xs truncate">/{{ file_path }}</span>
       </div>
       {% if file.node_type == "file" %}
         <div class="flex items-center gap-2 text-base-content/60">

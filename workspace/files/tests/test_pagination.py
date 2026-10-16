@@ -116,7 +116,7 @@ class FileListPaginationTests(TestCase):
         selects = [
             q["sql"]
             for q in ctx.captured_queries
-            if "files_file" in q["sql"] and "ORDER BY" in q["sql"]
+            if 'FROM "files_file"' in q["sql"] and "ORDER BY" in q["sql"]
         ]
         self.assertTrue(selects, "no ordered query against files_file was issued")
         order_by = selects[-1].rsplit("ORDER BY", 1)[1]

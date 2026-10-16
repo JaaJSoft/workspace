@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
 
-from workspace.files.models import File, FileTag, Tag
+from workspace.files.models import File, FileFavorite, FileShare, FileTag, Tag
 
 User = get_user_model()
 
@@ -46,3 +46,51 @@ class FileCardViewTests(TestCase):
     def test_card_404_for_missing(self):
         resp = self.client.get(f"/files/{uuid_lib.uuid4()}/card")
         self.assertEqual(resp.status_code, 404)
+
+
+class FileCardTagScopeTests(TestCase):
+    """Tags are private to their owner: a recipient's card must not list them."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="pw")
+        self.bob = User.objects.create_user(username="bob", password="pw")
+        self.doc = File.objects.create(
+            owner=self.alice,
+            name="note.md",
+            node_type=File.NodeType.FILE,
+            type="markdown",
+            content=ContentFile(b"# t\n\nhello", name="note.md"),
+        )
+        FileShare.objects.create(
+            file=self.doc, shared_with=self.bob, shared_by=self.alice, permission="ro"
+        )
+        tag = Tag.objects.create(owner=self.alice, name="alice-private-tag")
+        FileTag.objects.create(file=self.doc, tag=tag)
+
+    def test_recipient_card_hides_the_owners_tags(self):
+        self.client.force_login(self.bob)
+
+        resp = self.client.get(f"/files/{self.doc.uuid}/card")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "note.md")
+        self.assertNotContains(resp, "alice-private-tag")
+
+    def test_owner_card_still_shows_them(self):
+        self.client.force_login(self.alice)
+
+        resp = self.client.get(f"/files/{self.doc.uuid}/card")
+
+        self.assertContains(resp, "alice-private-tag")
+
+    def test_recipient_api_listing_hides_the_owners_tags(self):
+        FileFavorite.objects.create(owner=self.bob, file=self.doc)
+        self.client.force_login(self.bob)
+
+        resp = self.client.get("/api/v1/files", {"favorites": "true"})
+
+        self.assertEqual(resp.status_code, 200)
+        items = resp.json()
+        items = items.get("results", items) if isinstance(items, dict) else items
+        self.assertEqual([item["name"] for item in items], ["note.md"])
+        self.assertEqual(items[0]["tags"], [])

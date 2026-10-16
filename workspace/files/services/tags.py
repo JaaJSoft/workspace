@@ -1,7 +1,8 @@
 """Tag collection operations: usage counts, lookup by name, merge, purge."""
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Prefetch
+from django.db.models.functions import Lower
 
 from ..models import FileTag, Tag
 
@@ -14,6 +15,20 @@ class TagMergeError(ValueError):
     def __init__(self, code):
         super().__init__(code)
         self.code = code
+
+
+def viewer_file_tags(user):
+    """Prefetch of ``file_tags`` holding only *user*'s own tags, by name.
+
+    Tags are private to their owner, but a file reaches other people through
+    shares and groups: an unscoped prefetch would show them the owner's tags.
+    """
+    return Prefetch(
+        "file_tags",
+        queryset=FileTag.objects.filter(tag__owner=user)
+        .select_related("tag")
+        .order_by(Lower("tag__name")),
+    )
 
 
 def tags_with_usage(user):

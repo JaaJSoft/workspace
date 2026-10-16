@@ -80,6 +80,22 @@ class StorageScope:
 
     user: object
     folder: File | None
+    # The viewer's permission on ``folder``, which decides the paths they may
+    # read (``FileService.reads_full_path``). The personal root is their own.
+    permission: int | None = None
+
+    @property
+    def full_paths(self):
+        from .files import FileService
+
+        return self.folder is None or FileService.reads_full_path(self.permission)
+
+    @property
+    def query_field(self):
+        """The column a search matches: the path, or the name alone when the
+        path names folders the viewer may not read - a search on the path
+        would let them probe for those names."""
+        return "path" if self.full_paths else "name"
 
     @property
     def group(self):
@@ -217,16 +233,17 @@ def subfolder_breakdown(scope):
     return entries
 
 
-def _file_entry(f, query=None):
+def _file_entry(scope, f, query=None):
+    path = f.path if scope.full_paths else f.name
     return {
         "uuid": str(f.uuid),
         "name": f.name,
-        "path": f.path,
+        "path": path,
         "size": f.size or 0,
         "type": f.type,
         "category": f.category,
         "parent": str(f.parent_id) if f.parent_id else None,
-        "matches": bool(query) and query.lower() in (f.path or "").lower(),
+        "matches": bool(query) and query.lower() in (path or "").lower(),
     }
 
 
@@ -237,11 +254,11 @@ def largest_files(scope, *, category=None, query=None, limit=LARGEST_FILES_LIMIT
     if category:
         qs = qs.filter(category=category)
     if query:
-        qs = qs.filter(path__icontains=query)
+        qs = qs.filter(**{f"{scope.query_field}__icontains": query})
     qs = qs.order_by("-size", "name").only(
         "uuid", "name", "path", "size", "type", "category", "parent"
     )[:limit]
-    return [_file_entry(f, query) for f in qs]
+    return [_file_entry(scope, f, query) for f in qs]
 
 
 def duplicate_groups(scope, *, query=None, limit=DUPLICATE_GROUPS_LIMIT):
@@ -264,7 +281,7 @@ def duplicate_groups(scope, *, query=None, limit=DUPLICATE_GROUPS_LIMIT):
     )
     if query:
         groups = groups.annotate(
-            matching=Count("pk", filter=Q(path__icontains=query))
+            matching=Count("pk", filter=Q(**{f"{scope.query_field}__icontains": query}))
         ).filter(matching__gt=0)
     groups = list(
         groups.annotate(wasted=F("size") * (F("copies") - 1)).order_by(
@@ -294,7 +311,7 @@ def duplicate_groups(scope, *, query=None, limit=DUPLICATE_GROUPS_LIMIT):
         )
     )
     for f in copies:
-        keys[(f.content_hash, f.size)].append(_file_entry(f, query))
+        keys[(f.content_hash, f.size)].append(_file_entry(scope, f, query))
     return [
         {
             "content_hash": g["content_hash"],
@@ -346,8 +363,11 @@ def analyze_storage(user, folder=None, *, category=None, query=None):
     narrow the largest-files list (and *query* the duplicate groups); the
     totals, categories and sub-folders always describe the whole subtree.
     """
+    from .files import FileService
+
     query = (query or "").strip()[:QUERY_MAX_LENGTH] or None
-    scope = StorageScope(user=user, folder=folder)
+    permission = None if folder is None else FileService.get_permission(user, folder)
+    scope = StorageScope(user=user, folder=folder, permission=permission)
     totals = _totals(_files(scope))
     folder_count = (
         File.objects.filter(scope.tree_q(), node_type=File.NodeType.FOLDER)
@@ -360,8 +380,13 @@ def analyze_storage(user, folder=None, *, category=None, query=None):
             {
                 "uuid": str(folder.uuid),
                 "name": folder.name,
-                "path": folder.path,
-                "parent": str(folder.parent_id) if folder.parent_id else None,
+                "path": FileService.visible_path(folder, permission),
+                # Above a shared root sits the owner's private tree.
+                "parent": (
+                    str(folder.parent_id)
+                    if folder.parent_id and scope.full_paths
+                    else None
+                ),
                 "group": folder.group.name if folder.group_id else None,
             }
             if folder is not None

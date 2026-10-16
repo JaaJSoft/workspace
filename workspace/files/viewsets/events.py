@@ -7,7 +7,11 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from workspace.files.services.events import events_for_file, serialize_event
+from workspace.files.services.events import (
+    events_for_file,
+    readable_events,
+    serialize_event,
+)
 
 DEFAULT_EVENTS_LIMIT = 50
 MAX_EVENTS_LIMIT = 200
@@ -50,7 +54,7 @@ class EventsMixin:
     def events(self, request, uuid=None):
         """List events for a single file - shared users included."""
         try:
-            file_obj, _perm = self._resolve_file_with_access(uuid)
+            file_obj, perm = self._resolve_file_with_access(uuid)
         except Http404:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -65,9 +69,9 @@ class EventsMixin:
         limit = max(1, min(limit, MAX_EVENTS_LIMIT))
         offset = max(0, offset)
 
-        qs = events_for_file(file_obj)
+        qs = events_for_file(file_obj, perm)
         total = qs.count()
-        events = list(qs[offset : offset + limit])
+        events = readable_events(qs[offset : offset + limit], perm)
 
         return Response(
             {

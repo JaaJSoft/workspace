@@ -161,6 +161,13 @@ class FileSerializer(serializers.ModelSerializer):
         help_text="True when the file has been shared with at least one user."
     )
     tags = serializers.SerializerMethodField(help_text="Tags assigned to this file.")
+    path = serializers.SerializerMethodField(
+        help_text=(
+            "Slash-separated path from the root of the owner's tree or the "
+            "group folder. A node that only reached the user through a share "
+            "carries its name alone: the folders above it are not theirs."
+        )
+    )
     has_children = serializers.SerializerMethodField(
         help_text="True when a folder contains child folders (folders only)."
     )
@@ -373,6 +380,12 @@ class FileSerializer(serializers.ModelSerializer):
             return False
         return bool(_require_annotation(obj, "is_pinned"))
 
+    @extend_schema_field(OpenApiTypes.STR)
+    def get_path(self, obj):
+        if _require_annotation(obj, "full_path_visible"):
+            return obj.path
+        return obj.name
+
     @extend_schema_field(OpenApiTypes.BOOL)
     def get_is_shared(self, obj):
         return bool(_require_annotation(obj, "is_shared"))
@@ -571,6 +584,8 @@ class FileSerializer(serializers.ModelSerializer):
         instance.is_pinned = False
         instance.is_shared = False
         instance.has_children = False
+        # Its creator owns it, in their own tree or a group they are in.
+        instance.full_path_visible = True
         return instance
 
     def _replace_existing(self, target, validated_data):

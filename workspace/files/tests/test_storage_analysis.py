@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.files.actions import ActionRegistry
-from workspace.files.models import File
+from workspace.files.models import File, FileShare
 from workspace.files.services import FilePermission
 from workspace.files.services.storage_analysis import (
     CATEGORY_SLICES,
@@ -421,3 +421,84 @@ class AnalyzeStorageActionTests(_TreeMixin, TestCase):
                 permission=FilePermission.MANAGE,
             )
         )
+
+
+class SharedFolderPathTests(APITestCase):
+    """A share recipient analysing a shared folder reads names, not the owner's
+    folders above it - in the figures, the search and the duplicate list."""
+
+    def setUp(self):
+        self.alice = User.objects.create_user(username="alice", password="x")
+        self.bob = User.objects.create_user(username="bob", password="x")
+        private = _folder(self.alice, "MedicalPrivate")
+        self.shared = _folder(self.alice, "Shared", parent=private)
+        sub = _folder(self.alice, "sub", parent=self.shared)
+        _file(self.alice, "big.bin", self.shared, size=500, hash="h1")
+        _file(self.alice, "deep.txt", sub, size=500, hash="h1")
+
+    def _share(self, permission):
+        FileShare.objects.update_or_create(
+            file=self.shared,
+            shared_with=self.bob,
+            defaults={"shared_by": self.alice, "permission": permission},
+        )
+
+    def test_recipient_api_reads_names_only(self):
+        for permission in ("ro", "rw"):
+            with self.subTest(permission=permission):
+                self._share(permission)
+                self.client.force_authenticate(self.bob)
+
+                data = self.client.get(
+                    f"/api/v1/files/{self.shared.uuid}/storage"
+                ).json()
+
+                self.assertEqual(data["folder"]["path"], "Shared")
+                self.assertIsNone(data["folder"]["parent"])
+                self.assertEqual(
+                    [f["path"] for f in data["largest_files"]],
+                    ["big.bin", "deep.txt"],
+                )
+                self.assertEqual(
+                    sorted(f["path"] for f in data["duplicates"][0]["files"]),
+                    ["big.bin", "deep.txt"],
+                )
+                self.assertNotIn("MedicalPrivate", str(data))
+
+    def test_recipient_search_does_not_match_the_owners_folders(self):
+        self._share("ro")
+        self.client.force_authenticate(self.bob)
+        url = f"/api/v1/files/{self.shared.uuid}/storage"
+
+        probe = self.client.get(url, {"q": "MedicalPrivate"}).json()
+        self.assertEqual(probe["largest_files"], [])
+        self.assertEqual(probe["duplicates"], [])
+
+        found = self.client.get(url, {"q": "deep"}).json()
+        self.assertEqual([f["name"] for f in found["largest_files"]], ["deep.txt"])
+        self.assertTrue(found["largest_files"][0]["matches"])
+
+    def test_recipient_partial_shows_no_owner_path(self):
+        self._share("ro")
+        self.client.force_login(self.bob)
+
+        resp = self.client.get(f"/files/storage/{self.shared.uuid}")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "deep.txt")
+        self.assertNotContains(resp, "MedicalPrivate")
+
+    def test_owner_reads_the_full_paths(self):
+        self.client.force_authenticate(self.alice)
+
+        data = self.client.get(f"/api/v1/files/{self.shared.uuid}/storage").json()
+
+        self.assertEqual(data["folder"]["path"], "MedicalPrivate/Shared")
+        self.assertIn(
+            "MedicalPrivate/Shared/sub/deep.txt",
+            [f["path"] for f in data["largest_files"]],
+        )
+        probe = self.client.get(
+            f"/api/v1/files/{self.shared.uuid}/storage", {"q": "MedicalPrivate"}
+        ).json()
+        self.assertEqual(len(probe["largest_files"]), 2)

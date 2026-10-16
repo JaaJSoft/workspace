@@ -5,6 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from workspace.files.models import File, FileEvent
+from workspace.files.services import FilePermission
 from workspace.files.services.events import (
     events_for_file,
     record_event,
@@ -153,7 +154,7 @@ class EventsForFileTests(TestCase):
         record_event(self.file, self.user, FileEvent.Action.RENAMED)
         record_event(self.other_file, self.user, FileEvent.Action.CREATED)
 
-        events = list(events_for_file(self.file))
+        events = list(events_for_file(self.file, FilePermission.MANAGE))
 
         self.assertEqual(len(events), 2)
         self.assertTrue(all(e.file == self.file for e in events))
@@ -163,7 +164,7 @@ class EventsForFileTests(TestCase):
         second = record_event(self.file, self.user, FileEvent.Action.RENAMED)
         third = record_event(self.file, self.user, FileEvent.Action.SHARED)
 
-        events = list(events_for_file(self.file))
+        events = list(events_for_file(self.file, FilePermission.MANAGE))
 
         self.assertEqual([e.pk for e in events], [third.pk, second.pk, first.pk])
 

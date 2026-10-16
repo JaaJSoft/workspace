@@ -507,16 +507,20 @@ def conversation_messages_view(request, conversation_uuid):
 @login_required
 def thread_messages_view(request, root_uuid):
     """Partial: a thread's root message followed by its replies."""
+    # Scoped to the caller's conversations so a root elsewhere answers the
+    # same 404 as one that does not exist.
     root = (
-        Message.objects.filter(uuid=root_uuid, thread_root__isnull=True)
+        Message.objects.filter(
+            uuid=root_uuid,
+            thread_root__isnull=True,
+            conversation_id__in=user_conversation_ids(request.user),
+        )
         .select_related("author", "author__bot_profile", "conversation")
         .prefetch_related(_ai_usage_prefetch())
         .first()
     )
     if root is None:
         raise Http404
-    if not get_active_membership(request.user, root.conversation_id):
-        return HttpResponseForbidden()
 
     # Live replies only: the counters on the root (recount_thread) count live
     # replies, and the panel must show the number the footer advertises.

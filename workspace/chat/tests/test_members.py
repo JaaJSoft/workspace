@@ -133,21 +133,21 @@ class AddMembersTests(ChatTestMixin, APITestCase):
         return bot_user
 
     def test_cannot_add_a_bot_the_caller_has_no_access_to(self):
-        """Adding a bot hands it to every member, so the caller must be
-        allowed to use it - the same rule as creating a conversation."""
         private_bot = self._bot("privbot", is_public=False, created_by=self.creator)
         self.client.force_authenticate(self.member)
         resp = self.client.post(
             self.url(self.group.uuid), {"user_ids": [private_bot.id]}, format="json"
         )
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(
             ConversationMember.objects.filter(
                 conversation=self.group, user=private_bot
             ).exists()
         )
 
-    def test_can_add_a_bot_the_caller_has_access_to(self):
+    def test_cannot_add_a_bot_to_a_group_even_one_the_caller_may_use(self):
+        """A bot in a group shows one member's tool results to all of them,
+        so bots only live in a direct conversation - nobody may add one."""
         public_bot = self._bot("pubbot", is_public=True)
         self.client.force_authenticate(self.member)
         resp = self.client.post(
@@ -155,14 +155,30 @@ class AddMembersTests(ChatTestMixin, APITestCase):
             {"user_ids": [public_bot.id, self.extra_user.id]},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
+            resp.data["detail"], "Bots can only be in a direct conversation."
+        )
+        self.assertFalse(
             ConversationMember.objects.filter(
-                conversation=self.group,
-                user__in=[public_bot, self.extra_user],
-                left_at__isnull=True,
-            ).count(),
-            2,
+                conversation=self.group, user__in=[public_bot, self.extra_user]
+            ).exists()
+        )
+
+    def test_a_bot_that_left_cannot_be_brought_back(self):
+        public_bot = self._bot("pubbot", is_public=True)
+        ConversationMember.objects.create(
+            conversation=self.group, user=public_bot, left_at=timezone.now()
+        )
+        self.client.force_authenticate(self.creator)
+        resp = self.client.post(
+            self.url(self.group.uuid), {"user_ids": [public_bot.id]}, format="json"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIsNotNone(
+            ConversationMember.objects.get(
+                conversation=self.group, user=public_bot
+            ).left_at
         )
 
 

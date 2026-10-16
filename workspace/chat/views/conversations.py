@@ -24,6 +24,7 @@ from ..serializers import (
 from ..services.conversations import (
     active_members_queryset,
     can_add_users,
+    can_join_group,
     default_group_title,
     get_active_membership,
     get_or_create_dm,
@@ -35,6 +36,8 @@ from ..services.threads import mark_conversation_threads_read
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+BOTS_ONLY_IN_DIRECT_CONVERSATIONS = "Bots can only be in a direct conversation."
 
 
 def _trigger_bot_response(conversation_id, message, sender):
@@ -184,6 +187,11 @@ class ConversationListView(CacheControlMixin, APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if len(member_ids) > 1 and not can_join_group(users):
+            return Response(
+                {"detail": BOTS_ONLY_IN_DIRECT_CONVERSATIONS},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not can_add_users(request.user, users):
             return Response(
                 {"detail": "You do not have access to this bot."},
@@ -409,6 +417,11 @@ class ConversationMembersView(APIView):
         if users.count() != len(user_ids):
             return Response(
                 {"detail": "One or more user IDs are invalid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not can_join_group(users):
+            return Response(
+                {"detail": BOTS_ONLY_IN_DIRECT_CONVERSATIONS},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not can_add_users(request.user, users):

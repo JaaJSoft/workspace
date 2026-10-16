@@ -166,15 +166,42 @@ def is_active_member(user_id, conversation_id):
 
 
 def is_bot_conversation(conversation_id):
-    """Whether the conversation includes an AI bot member.
+    """Whether the conversation includes an active AI bot member.
 
-    Used to disable features that make no sense with a bot, such as calls.
+    Used to disable features that make no sense with a bot, such as calls. A
+    bot that has left does not count: the people remaining can still call.
     """
     from ..models import ConversationMember
 
     return ConversationMember.objects.filter(
         conversation_id=conversation_id,
+        left_at__isnull=True,
         user__bot_profile__isnull=False,
+    ).exists()
+
+
+def can_join_group(candidates):
+    """Whether every one of *candidates* may be a member of a group conversation.
+
+    A bot runs its tools with the identity of whoever addressed it, and the
+    raw tool results and the history it replays are shown to every member: in
+    a group, one member's mail, files or calendar would reach all the others.
+    Bots therefore only talk in a direct conversation with one person. The
+    candidates need ``bot_profile`` selected.
+    """
+    return not any(hasattr(candidate, "bot_profile") for candidate in candidates)
+
+
+def bot_may_run_in(conversation_id):
+    """Whether a bot may answer in *conversation_id*: only in a direct one.
+
+    The run-time half of ``can_join_group``, for work queued or scheduled
+    before bots were kept out of groups.
+    """
+    from ..models import Conversation
+
+    return Conversation.objects.filter(
+        pk=conversation_id, kind=Conversation.Kind.DM
     ).exists()
 
 

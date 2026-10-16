@@ -155,6 +155,33 @@ class ChatActivityProviderTests(TestCase):
         for e in events:
             self.assertNotEqual(e["label"], "DM created")
 
+    # ── a group the user left ─────────────────────────────
+
+    def _alice_leaves_group2(self):
+        ConversationMember.objects.filter(
+            conversation=self.alice_group2, user=self.alice
+        ).update(left_at=timezone.now())
+
+    def test_own_profile_drops_a_group_the_user_left(self):
+        """Leaving a group ends what the creator sees of it, its current
+        title included - on their own profile as on anyone else's."""
+        self._alice_leaves_group2()
+        today = self.ts.date()
+
+        for viewer_id in (None, self.alice.id):
+            with self.subTest(viewer_id=viewer_id):
+                events = self.provider.get_recent_events(
+                    self.alice.id, viewer_id=viewer_id
+                )
+                self.assertEqual([e["description"] for e in events], ["Alice Group 1"])
+                counts = self.provider.get_daily_counts(
+                    self.alice.id, today, today, viewer_id=viewer_id
+                )
+                self.assertEqual(counts.get(today, 0), 1)
+                stats = self.provider.get_stats(self.alice.id, viewer_id=viewer_id)
+                self.assertEqual(stats["active_conversations"], 1)
+                self.assertEqual(stats["total_messages"], 2)
+
     # ── get_stats ─────────────────────────────────────────
 
     def test_stats_own_profile(self):

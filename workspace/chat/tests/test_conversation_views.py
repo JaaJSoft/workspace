@@ -330,6 +330,38 @@ class ConversationCreateViewTests(ChatTestMixin, APITestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_rejects_a_group_with_a_bot_among_the_members(self):
+        """Bots only live in a direct conversation: in a group, the tool
+        results of whoever addressed the bot would reach every member."""
+        bot = User.objects.create_user(username="group-bot", password="p")
+        BotProfile.objects.create(user=bot, is_public=True)
+
+        self.client.force_authenticate(self.creator)
+        resp = self.client.post(
+            self.URL,
+            {"member_ids": [self.extra_user.id, bot.id], "title": "With a bot"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            resp.data["detail"], "Bots can only be in a direct conversation."
+        )
+        self.assertFalse(Conversation.objects.filter(title="With a bot").exists())
+
+    def test_rejects_a_group_of_the_caller_and_a_bot(self):
+        """Listing oneself next to the bot makes a group, not the bot DM."""
+        bot = User.objects.create_user(username="self-bot", password="p")
+        BotProfile.objects.create(user=bot, is_public=True)
+
+        self.client.force_authenticate(self.creator)
+        resp = self.client.post(
+            self.URL,
+            {"member_ids": [self.creator.id, bot.id], "title": "Me and a bot"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Conversation.objects.filter(title="Me and a bot").exists())
+
     # ── Group ─────────────────────────────────────────────────
 
     def test_creates_group_with_multiple_members(self):

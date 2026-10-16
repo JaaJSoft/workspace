@@ -26,7 +26,7 @@ def _llm_reply(content):
 
 
 class BotAccessFixture(TestCase):
-    """A group with a private bot that the creator reaches through a group."""
+    """A direct conversation with a private bot the creator reaches through a group."""
 
     def setUp(self):
         self.creator = User.objects.create_user(username="creator", password="x")
@@ -38,13 +38,23 @@ class BotAccessFixture(TestCase):
         self.team = Group.objects.create(name="bot-users")
         self.bot_profile.allowed_groups.add(self.team)
         self.creator.groups.add(self.team)
-        self.conversation = Conversation.objects.create(
-            kind=Conversation.Kind.GROUP, created_by=self.creator, title="g"
+        self.conversation = self._conversation(
+            Conversation.Kind.DM, self.creator, self.bot_user
         )
-        for member in (self.creator, self.other, self.bot_user):
-            ConversationMember.objects.create(
-                conversation=self.conversation, user=member
-            )
+
+    def _conversation(self, kind, *members):
+        conversation = Conversation.objects.create(
+            kind=kind, created_by=members[0], title="g"
+        )
+        for member in members:
+            ConversationMember.objects.create(conversation=conversation, user=member)
+        return conversation
+
+    def make_group(self):
+        """Swap the conversation for a group of the creator, another person and the bot."""
+        self.conversation = self._conversation(
+            Conversation.Kind.GROUP, self.creator, self.other, self.bot_user
+        )
 
     def tearDown(self):
         cache.clear()
@@ -78,6 +88,11 @@ class RunRefusalTests(BotAccessFixture):
         )
         self.assertEqual(
             run_refusal(self.bot_profile, self.other, self.conversation.pk),
+            "not_a_member",
+        )
+        self.revoke_bot(self.creator)
+        self.assertEqual(
+            run_refusal(self.bot_profile, self.creator, self.conversation.pk),
             "bot_not_accessible",
         )
         self.leave(self.creator)
@@ -90,6 +105,13 @@ class RunRefusalTests(BotAccessFixture):
         self.assertEqual(
             run_refusal(self.bot_profile, self.creator, self.conversation.pk),
             "user_inactive",
+        )
+
+    def test_a_group_is_refused_even_to_a_creator_allowed_to_use_the_bot(self):
+        self.make_group()
+        self.assertEqual(
+            run_refusal(self.bot_profile, self.creator, self.conversation.pk),
+            "not_a_direct_conversation",
         )
 
 
@@ -133,6 +155,10 @@ class ScheduledResponseAccessTests(BotAccessFixture):
         self.revoke_bot(self.creator)
         self._assert_refused_and_deactivated(mock_llm, "bot_not_accessible")
 
+    def test_a_schedule_in_a_group_is_ended(self, mock_llm):
+        self.make_group()
+        self._assert_refused_and_deactivated(mock_llm, "not_a_direct_conversation")
+
 
 @patch("workspace.ai.harness.model.call_llm")
 class AgentGoalCheckAccessTests(BotAccessFixture):
@@ -174,6 +200,10 @@ class AgentGoalCheckAccessTests(BotAccessFixture):
         self.revoke_bot(self.creator)
         self._assert_refused_and_abandoned(mock_llm, "bot_not_accessible")
 
+    def test_a_goal_in_a_group_is_abandoned(self, mock_llm):
+        self.make_group()
+        self._assert_refused_and_abandoned(mock_llm, "not_a_direct_conversation")
+
 
 @patch("workspace.ai.harness.model.call_llm")
 class ChatResponseAccessTests(BotAccessFixture):
@@ -189,10 +219,18 @@ class ChatResponseAccessTests(BotAccessFixture):
             str(self.conversation.pk), str(message.uuid), self.bot_user.id
         )
 
-    def test_member_without_bot_access_gets_no_run(self, mock_llm):
-        result = self._respond_to(self.other, mock_llm)
+    def test_a_group_gets_no_run_even_for_a_member_allowed_to_use_the_bot(
+        self, mock_llm
+    ):
+        """In a group the tool results of the creator's mail would be shown
+        to every other member."""
+        self.make_group()
 
-        self.assertEqual(result, {"status": "skipped", "reason": "bot_not_accessible"})
+        result = self._respond_to(self.creator, mock_llm)
+
+        self.assertEqual(
+            result, {"status": "skipped", "reason": "not_a_direct_conversation"}
+        )
         mock_llm.assert_not_called()
         self.assertFalse(self.bot_messages().exists())
         self.assertFalse(AITask.objects.filter(owner=self.bot_user).exists())

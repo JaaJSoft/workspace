@@ -16,9 +16,9 @@ def resync_conversation_members(conversation):
     """
     from ..models import ConversationMember
 
-    # Bots join only via explicit member selection, where per-user access
-    # (bot_profile.is_accessible_by) is enforced; group sync has no viewer
-    # to check against, so bot users are never auto-joined through groups.
+    # A bot never belongs to a group conversation (can_join_group): a bot
+    # user in an attached group is not covered, so an existing bot row is
+    # deactivated rather than kept.
     covered = set(
         User.objects.filter(
             groups__in=conversation.groups.all(),

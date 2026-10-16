@@ -13,7 +13,11 @@ from .models import (
 )
 from .services.avatar import conversation_avatar_initial
 from .services.bot_tasks import can_manage_bot_task
-from .services.conversations import can_clear_conversation, members_allow_clear
+from .services.conversations import (
+    can_clear_conversation,
+    is_bot_conversation,
+    members_allow_clear,
+)
 
 
 class MemberUserSerializer(serializers.Serializer):
@@ -248,7 +252,7 @@ class ConversationListSerializer(serializers.ModelSerializer):
                 if hasattr(member.user, "bot_profile"):
                     return True
             return False
-        return obj.members.filter(user__bot_profile__isnull=False).exists()
+        return is_bot_conversation(obj.pk)
 
     def get_can_clear(self, obj) -> bool:
         user = self.context["request"].user

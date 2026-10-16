@@ -1487,3 +1487,58 @@ class GroupStorageQuota(models.Model):
     def __str__(self):
         limit = "unlimited" if self.quota_bytes is None else f"{self.quota_bytes} bytes"
         return f"{self.group}: {limit}"
+
+
+class UploadSession(models.Model):
+    """A file uploaded in chunks, held in a spool file until it is finalized.
+
+    The declared ``size`` counts against the bucket from the moment the
+    session opens until it completes or goes away (``quota.reserved_bytes``),
+    so sessions that each fit cannot together overflow it. ``received`` is
+    the length of the spool that is final: bytes past it are a chunk that
+    never finished, and the next append overwrites them.
+
+    A completed session keeps pointing at the file it produced, so a client
+    whose finalize answer was lost gets the same answer again rather than a
+    404 for an upload that went through.
+    """
+
+    class OnConflict(models.TextChoices):
+        ERROR = "error", "Error"
+        RENAME = "rename", "Rename"
+        REPLACE = "replace", "Replace"
+
+    uuid = models.UUIDField(
+        primary_key=True, editable=False, unique=True, default=uuid_v7_or_v4
+    )
+    owner = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="upload_sessions"
+    )
+    parent = models.ForeignKey(
+        File, on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    # The bucket the reservation is charged to, copied from the parent so the
+    # quota sum needs no join.
+    group = models.ForeignKey(
+        "auth.Group", on_delete=models.CASCADE, null=True, blank=True, related_name="+"
+    )
+    name = models.CharField(max_length=255)
+    size = models.BigIntegerField(validators=[MinValueValidator(0)])
+    received = models.BigIntegerField(default=0)
+    on_conflict = models.CharField(
+        max_length=7, choices=OnConflict.choices, default=OnConflict.ERROR
+    )
+    # The media type the browser declared, which detection cannot always
+    # reconstruct (an audio-only MP4 container).
+    mime_type = models.CharField(max_length=100, blank=True, default="")
+    file = models.ForeignKey(
+        File, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    replaced = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Moved by every chunk: what the expiry sweep measures inactivity from.
+    updated_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"{self.name}: {self.received}/{self.size}"

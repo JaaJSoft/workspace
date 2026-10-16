@@ -18,7 +18,7 @@
       id="settings-general"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
       x-data="projectSettingsGeneral({
-               apiBase: '/api/v1/projects/{{ project.uuid }}',
+               apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}',
                writable: {% if writable %}true{% else %}false{% endif %},
              })"
     >
@@ -129,7 +129,7 @@
       <section
         id="settings-members"
         class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-        x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+        x-data="projectMembers({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
         @project-member-selected.window="addMember($event.detail.user)"
       >
         <div>
@@ -146,7 +146,7 @@
         <div
           id="settings-group"
           class="flex flex-col gap-2"
-          x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+          x-data="projectGroupAccess({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
           @project-group-selected.window="addGroup($event.detail.group)"
         >
           <template x-if="error">
@@ -250,8 +250,8 @@
         id="settings-board-model"
         class="rounded-box bg-base-200 p-4 flex flex-col gap-3 xl:col-span-2"
         x-data="projectBoardModel({
-                 apiBase: '/api/v1/projects/{{ project.uuid }}',
-                 current: '{{ project.type }}',
+                 apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}',
+                 current: '{{ project.type|escapejs }}',
                  writable: {% if writable %}true{% else %}false{% endif %},
                })"
       >
@@ -272,9 +272,9 @@
             <button
               type="button"
               class="rounded-box border p-3 text-left flex items-start gap-3 disabled:cursor-default"
-              :class="type === '{{ option.value }}' ? 'border-module bg-module/10' : 'border-base-300 bg-base-100 hover:border-module/50'"
-              :disabled="busy || !writable || type === '{{ option.value }}'"
-              @click="convertTo('{{ option.value }}')"
+              :class="type === '{{ option.value|escapejs }}' ? 'border-module bg-module/10' : 'border-base-300 bg-base-100 hover:border-module/50'"
+              :disabled="busy || !writable || type === '{{ option.value|escapejs }}'"
+              @click="convertTo('{{ option.value|escapejs }}')"
             >
               <i
                 data-lucide="{{ option.icon }}"
@@ -285,14 +285,14 @@
                   {{ option.label }}
                   <span
                     class="badge badge-module badge-sm"
-                    x-show="type === '{{ option.value }}'"
+                    x-show="type === '{{ option.value|escapejs }}'"
                     x-cloak
                   >Current</span>
                 </span>
                 <span class="text-sm text-base-content/60">{{ option.description }}</span>
                 <span
                   class="text-sm text-module font-medium"
-                  x-show="type !== '{{ option.value }}' && writable"
+                  x-show="type !== '{{ option.value|escapejs }}' && writable"
                   x-cloak
                 >Convert to {{ option.label|lower }}</span>
               </span>
@@ -305,7 +305,7 @@
     <section
       id="settings-columns"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-      x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+      x-data="projectColumns({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
     >
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
@@ -466,7 +466,7 @@
     <section
       id="settings-epics"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-      x-data="projectEpics({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+      x-data="projectEpics({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
     >
       <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h3 class="font-semibold flex items-center gap-2 shrink-0">
@@ -761,7 +761,7 @@
     <section
       id="settings-labels"
       class="rounded-box bg-base-200 p-4 flex flex-col gap-3"
-      x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid }}' })"
+      x-data="projectLabels({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}' })"
     >
       <div class="flex items-center justify-between">
         <h3 class="font-semibold flex items-center gap-2">
@@ -933,7 +933,7 @@
       <section
         id="settings-danger"
         class="rounded-box border border-error/30 bg-error/5 p-4 flex flex-col gap-3 xl:col-span-2"
-        x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid }}', projectName: '{{ project.name|escapejs }}' })"
+        x-data="projectSettingsDanger({ apiBase: '/api/v1/projects/{{ project.uuid|escapejs }}', projectName: '{{ project.name|escapejs }}' })"
       >
         <h3 class="font-semibold flex items-center gap-2 text-error">
           <i data-lucide="triangle-alert" class="w-4 h-4"></i>

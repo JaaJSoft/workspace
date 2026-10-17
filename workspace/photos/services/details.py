@@ -12,6 +12,7 @@ from workspace.files.services.details import current_media_info
 from workspace.files.services.thumbnails.generation import VIDEO_LABELS
 
 from ..models import MediaItem
+from .location_map import location_map
 
 # Below this, a shutter speed reads as a fraction of a second ("1/4 s",
 # "1/120 s"); from it up, as a decimal ("0.3 s", "2 s"), the way cameras
@@ -202,7 +203,8 @@ def is_section_visible(user, file_obj):
 
 
 def section_context(user, file_obj):
-    return {"photo": photo_details(current_photo_item(file_obj))}
+    item = current_photo_item(file_obj)
+    return {"photo": photo_details(item), "map": location_map(user, item)}
 
 
 def is_video_section_visible(user, file_obj):

@@ -410,3 +410,36 @@ html:has(> body.overflow-hidden.h-dvh) {
 [data-blur-sensitive]:not([data-reveal-sensitive-in-viewer]) .sensitive-veiled {
   display: none !important;
 }
+
+/* The photo location map (photos/ui/js/photo_map.js): Leaflet's chrome in the
+   theme's colours, so its controls do not glare white in a dark theme. Scoped
+   under [data-photo-map] to outrank leaflet.css, which loads after this file. */
+[data-photo-map] .leaflet-container {
+  background: oklch(var(--b2));
+  font: inherit;
+}
+[data-photo-map] .leaflet-bar {
+  border-color: oklch(var(--b3));
+}
+[data-photo-map] .leaflet-bar a {
+  background-color: oklch(var(--b1));
+  color: oklch(var(--bc));
+  border-bottom-color: oklch(var(--b3));
+}
+[data-photo-map] .leaflet-bar a:hover,
+[data-photo-map] .leaflet-bar a:focus {
+  background-color: oklch(var(--b2));
+}
+[data-photo-map] .leaflet-bar a.leaflet-disabled {
+  background-color: oklch(var(--b1));
+  color: oklch(var(--bc) / 0.3);
+}
+[data-photo-map] .leaflet-control-attribution {
+  background: oklch(var(--b1) / 0.85);
+  color: oklch(var(--bc) / 0.7);
+  font-size: 10px;
+}
+[data-photo-map] .leaflet-control-attribution a {
+  color: inherit;
+  text-decoration: underline;
+}

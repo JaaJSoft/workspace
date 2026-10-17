@@ -3,8 +3,8 @@
  *
  * A copy, not a bundle: identical bytes are what let a *_bundle.test.js check
  * an artifact against the digest the published build carries. Libraries that
- * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide, heic-to)
- * and plain data files go through here; everything else is an esbuild entry.
+ * ship a self-contained global build (FullCalendar, luxon, Cropper, Lucide, heic-to,
+ * Leaflet) and plain data files go through here; everything else is an esbuild entry.
  *
  * The one edit is a trailing sourceMappingURL comment. collectstatic's
  * manifest storage resolves that reference at deploy time and fails the whole
@@ -12,8 +12,8 @@
  *
  * Usage: node vendor-copy.mjs <set> [<set>...]
  */
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, extname } from 'node:path';
 
 const WORKSPACE = '../../workspace';
 
@@ -55,6 +55,23 @@ const SETS = {
       `${WORKSPACE}/files/ui/static/files/ui/js/vendor/heic-to/heic-to.js`,
     ],
   ],
+  // The map of a photo's location in the properties panel. leaflet.css points
+  // at its images by relative url(), which collectstatic resolves: they must
+  // sit next to it.
+  leaflet: [
+    [
+      'node_modules/leaflet/dist/leaflet.js',
+      `${WORKSPACE}/photos/ui/static/photos/ui/js/vendor/leaflet/leaflet.js`,
+    ],
+    [
+      'node_modules/leaflet/dist/leaflet.css',
+      `${WORKSPACE}/photos/ui/static/photos/ui/css/vendor/leaflet/leaflet.css`,
+    ],
+    ...['layers.png', 'layers-2x.png', 'marker-icon.png'].map((image) => [
+      `node_modules/leaflet/dist/images/${image}`,
+      `${WORKSPACE}/photos/ui/static/photos/ui/css/vendor/leaflet/images/${image}`,
+    ]),
+  ],
   'emoji-data': [
     [
       'node_modules/emoji-picker-element-data/en/emojibase/data.json',
@@ -62,6 +79,9 @@ const SETS = {
     ],
   ],
 };
+
+// Copied as bytes: reading them as text would mangle them.
+const BINARY_EXTENSIONS = new Set(['.png']);
 
 // `//# sourceMappingURL=x.map` in JS, `/*# sourceMappingURL=x.map */` in CSS.
 const SOURCE_MAP_COMMENT = /\r?\n(?:\/\/# sourceMappingURL=\S*|\/\*# sourceMappingURL=\S* \*\/)\r?\n?$/;
@@ -75,9 +95,13 @@ for (const name of requested) {
   const files = SETS[name];
   if (!files) throw new Error(`unknown set "${name}"; sets: ${Object.keys(SETS).join(', ')}`);
   for (const [source, target] of files) {
-    const published = readFileSync(source, 'utf8');
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, published.replace(SOURCE_MAP_COMMENT, '\n'));
+    if (BINARY_EXTENSIONS.has(extname(source))) {
+      copyFileSync(source, target);
+    } else {
+      const published = readFileSync(source, 'utf8');
+      writeFileSync(target, published.replace(SOURCE_MAP_COMMENT, '\n'));
+    }
     console.log(`vendored ${source} -> ${target}`);
   }
 }

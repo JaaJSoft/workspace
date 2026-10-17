@@ -52,6 +52,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "auto_tags": True,
+                "show_map": False,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,
@@ -68,6 +69,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "import_by_date": True,
             "show_hidden": True,
             "auto_tags": False,
+            "show_map": True,
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -81,6 +83,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
         self.assertIs(prefs["import_by_date"], True)
         self.assertIs(prefs["show_hidden"], True)
         self.assertIs(prefs["auto_tags"], False)
+        self.assertIs(prefs["show_map"], True)
 
     def test_the_blur_is_a_core_setting(self):
         set_setting(self.user, "core", "sensitive_blur", "off")
@@ -123,6 +126,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
             "import_by_date": "yes",
             "show_hidden": 1,
             "auto_tags": "no",
+            "show_map": "true",
         }.items():
             set_setting(self.user, "photos", key, value)
 
@@ -137,6 +141,7 @@ class DisplayPreferencesTests(PreferencesTestCase):
                 "import_by_date": False,
                 "show_hidden": False,
                 "auto_tags": True,
+                "show_map": False,
                 "sensitive_blur": "standard",
                 "reveal_sensitive_on_hover": False,
                 "reveal_sensitive_in_viewer": False,

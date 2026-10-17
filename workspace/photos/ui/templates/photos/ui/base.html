@@ -1,8 +1,12 @@
 {% extends photos_shell|default:"base_with_navbar.html" %}
 
-{% load static %}
+{% load static properties_section_assets %}
 
 {% block title %}Photos - Workspace{% endblock %}
+
+{% block extra_head %}
+  {% properties_section_stylesheets %}
+{% endblock %}
 
 {% comment %}
   The module shell every Photos page shares: the sidebar, the properties
@@ -36,6 +40,7 @@
   :data-selecting="selection.length > 0"
   @ajax:missing="keepMissingTarget($event)"
   @ajax:merged="onMerged($event)"
+  @photo-map-preference.window="photoPrefs.show_map = $event.detail.enabled"
 {% endblock %}
 
 {% block drawer_sidebar %}
@@ -199,6 +204,7 @@
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
+  {% properties_section_scripts %}
   <script src="{% static 'files/ui/js/tags.js' %}"></script>
   {# The share modal's link password generator, as on the Files page. #}
   <script src="{% static 'ui/js/password_wordlist.js' %}"></script>

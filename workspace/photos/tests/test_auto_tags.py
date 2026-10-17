@@ -202,7 +202,7 @@ class VocabularyTests(TestCase):
         # The bundle names each icon in PascalCase: tree-palm is TreePalm.
         bundle = (
             settings.BASE_DIR / "workspace/common/static/ui/js/vendor/lucide/lucide.js"
-        ).read_text()
+        ).read_text(encoding="utf-8")
         for tag in CLASSIC_TAGS:
             with self.subTest(tag=tag.name):
                 self.assertNotEqual(tag.icon, "tag")

@@ -235,6 +235,56 @@ class FrameScoreTests(SimpleTestCase):
         self.assertIsNone(bench.score_frames(vectors, np.zeros((1, 3)), []))
 
 
+class VideoTagScoreTests(SimpleTestCase):
+    def test_photos_are_dealt_into_videos_of_distinct_scenes(self):
+        videos = bench.video_groups(np.arange(10), 3)
+
+        self.assertEqual(videos.shape, (3, 3))
+        # Each photo in one video at most; the one left over in none.
+        self.assertEqual(len(set(videos.ravel())), 9)
+        np.testing.assert_array_equal(videos, bench.video_groups(np.arange(10), 3))
+
+    def test_a_video_lies_at_its_closest_key_frame_or_its_mean(self):
+        frames = np.array([_direction(0), _direction(60)])
+        tags = np.array([_direction(0)])
+        matrix = bench.distances(tags, frames)
+        videos = np.array([[0, 1]])
+
+        closest = bench.video_distances(matrix, tags, frames, videos, "closest")
+        mean = bench.video_distances(matrix, tags, frames, videos, "mean")
+
+        self.assertAlmostEqual(closest[0, 0], 0.0)
+        # The mean of the two points 30 degrees from the tag.
+        self.assertAlmostEqual(mean[0, 0], 1 - np.cos(np.radians(30)))
+
+    def test_a_video_shows_a_tag_one_of_its_scenes_shows(self):
+        # Eight dogs then eight cats, "dog" pointing at the dogs.
+        frames = np.array([_direction(i) for i in range(8)] + [_direction(90)] * 8)
+        tags = np.array([_direction(3)])
+        relevant = np.array([[True] * 8 + [False] * 8])
+        thresholds = {"tags": {"dog": 0.01}, "video_tags": {"dog": 0.01}}
+
+        report = bench.score_video_tags(tags, frames, relevant, ["dog"], thresholds)
+
+        self.assertEqual(report["closest_1"]["precision"], 1.0)
+        self.assertEqual(report["photos_1"]["recall"], 1.0)
+        # Every video of three scenes holding a dog is a right one.
+        self.assertEqual(report["closest_3"]["precision"], 1.0)
+        self.assertEqual(report["at_threshold"]["labels"], 1)
+        self.assertEqual(set(report["suggested"]), {"dog"})
+
+    def test_a_tag_the_photos_table_leaves_out_is_left_out_of_videos(self):
+        frames = np.array([_direction(i) for i in range(8)] + [_direction(90)] * 8)
+        tags = np.array([_direction(3)])
+        relevant = np.array([[True] * 8 + [False] * 8])
+        thresholds = {"tags": {}, "video_tags": {}}
+
+        report = bench.score_video_tags(tags, frames, relevant, ["dog"], thresholds)
+
+        self.assertEqual(report["suggested"], {})
+        self.assertEqual(report["closest_3"]["per_photo"], 0.0)
+
+
 @requires_ffmpeg
 class FilmTests(SimpleTestCase):
     def test_a_filmed_photo_comes_back_as_two_frames_of_its_size(self):

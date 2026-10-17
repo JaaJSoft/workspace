@@ -28,6 +28,10 @@ and scores what comes out against what people verified the photos show:
   reads a video's key frames. Whether the duplicate threshold still finds a
   photo's own frame, and two frames of one shot; then search by description
   and similar photos over the frames instead of the photos.
+- **Automatic tags on videos**: the frames dealt into videos of several
+  scenes, each tag placed from the closest key frame or from their mean,
+  at the photos' table or at one fitted on frames; and the video table to
+  ship.
 - **Cost**: time to load the models, CPU time per photo and per query (one
   thread unless PHOTOS_ONNX_THREADS says otherwise), the weights on disk and
   the memory the process grew to.
@@ -141,6 +145,8 @@ CLIP_FPS = 30
 CLIP_ZOOM = 0.04
 CLIP_CRF = 30
 FRAME_NUMBERS = (15, 45)
+# Scenes in the videos the automatic tags are measured on.
+VIDEO_SCENES = (1, 3, 6)
 
 
 def _ffmpeg(*args):
@@ -528,6 +534,83 @@ def score_frames(vectors, relevant, labels):
     }
 
 
+def video_groups(columns, scenes, seed=0):
+    """The photos *columns* dealt into videos of *scenes* key frames, the
+    frame of a different photo each: a scene change between any two."""
+    order = np.random.default_rng(seed).permutation(np.asarray(columns))
+    usable = len(order) // scenes * scenes
+    return order[:usable].reshape(-1, scenes)
+
+
+def video_distances(frame_matrix, tag_vectors, frames, videos, rule):
+    """Each tag's distance to each video of *videos* (key frame indexes, a
+    row each): its closest key frame, or the mean of its key frames."""
+    if rule == "closest":
+        return frame_matrix[:, videos].min(axis=2)
+    return distances(tag_vectors, unit(unit(frames)[videos].mean(axis=1)))
+
+
+def score_video_tags(tag_vectors, frames, relevant, names, thresholds):
+    """The classic tags placed on videos from their key frames, a filmed
+    photo's frame standing for each scene.
+
+    On videos of VIDEO_SCENES scenes, each tag placed from the closest of the
+    video's key frames at the photos' table, from the closest at a table
+    fitted on frames, and from the mean of the key frames at that table. A
+    fitted table only holds the tags of the photos' table: a tag no
+    threshold separates on sharp photos is not one the model tells apart,
+    and the frames, filmed from the same photos, are no new evidence. It is
+    scored held out: the videos dealt from one half of the photos, at the
+    table fitted on the other half's frames. A video shows a tag when one of
+    its scenes does. Then the backend's own video table, on the frames it
+    was fitted on, and the table to ship, fitted on every frame.
+    """
+    frame_matrix = distances(tag_vectors, frames)
+
+    def table(name):
+        return np.array([thresholds[name].get(n, np.nan) for n in names])
+
+    photo_table, video_table = table("tags"), table("video_tags")
+
+    def fit(columns):
+        fitted = calibrate(frame_matrix[:, columns], relevant[:, columns])
+        return np.where(np.isnan(photo_table), np.nan, fitted)
+
+    every = np.ones(frame_matrix.shape[1], dtype=bool)
+    report = {
+        "at_threshold": tag_scores(frame_matrix <= video_table[:, None], relevant)
+        | {
+            "labels": float(np.count_nonzero(~np.isnan(video_table))),
+            "of": len(names),
+        },
+        "suggested": {
+            name: round(float(t), 3)
+            for name, t in zip(names, fit(every), strict=True)
+            if not np.isnan(t)
+        },
+    }
+    even = np.arange(frame_matrix.shape[1]) % 2 == 0
+    halves = ((even, ~even), (~even, even))
+    fitted = [fit(columns) for columns, _ in halves]
+    rules = {
+        "photos": ("closest", [photo_table, photo_table]),
+        "closest": ("closest", fitted),
+        "mean": ("mean", fitted),
+    }
+    for scenes in VIDEO_SCENES:
+        for name, (rule, tables) in rules.items():
+            tagged, truth = [], []
+            for (_fit, applied), limits in zip(halves, tables, strict=True):
+                videos = video_groups(np.flatnonzero(applied), scenes)
+                matrix = video_distances(
+                    frame_matrix, tag_vectors, frames, videos, rule
+                )
+                tagged.append(matrix <= limits[:, None])
+                truth.append(relevant[:, videos].any(axis=2))
+            report[f"{name}_{scenes}"] = tag_scores(np.hstack(tagged), np.hstack(truth))
+    return report
+
+
 def score(vectors, photos, queries, tags):
     """The report of one backend's run, from what it embedded."""
     wanted = [frozenset(q.labels) for q in queries]
@@ -555,6 +638,15 @@ def score(vectors, photos, queries, tags):
             vectors["tags"], images, tagged, [t.text for t in tags], thresholds
         )
         if tags
+        else None,
+        "video_tagging": score_video_tags(
+            vectors["tags"],
+            vectors["frames"],
+            tagged,
+            [t.text for t in tags],
+            thresholds,
+        )
+        if tags and len(vectors["frames"])
         else None,
     }
 
@@ -778,6 +870,7 @@ def _thresholds(registry):
         "duplicate": registry.duplicate_max_distance(),
         "description": registry.description_max_distance(),
         "tags": registry.tag_thresholds(),
+        "video_tags": registry.video_tag_thresholds(),
     }
 
 
@@ -883,6 +976,29 @@ ROWS = (
         (f"  from {count} tagged photos", f"tagging.examples_{count}", "tags")
         for count in EXAMPLES
     ),
+    ("Automatic tags on videos", None, None),
+    *(
+        row
+        for scenes in VIDEO_SCENES
+        for row in (
+            (
+                f"  {scenes} scene{'s' if scenes > 1 else ''}, photos' table",
+                f"video_tagging.photos_{scenes}",
+                "tags",
+            ),
+            (
+                "    closest frame, frames' table",
+                f"video_tagging.closest_{scenes}",
+                "tags",
+            ),
+            (
+                "    mean of the frames, frames' table",
+                f"video_tagging.mean_{scenes}",
+                "tags",
+            ),
+        )
+    ),
+    ("  at its video table (fitted here)", "video_tagging.at_threshold", "tags"),
     ("Cost", None, None),
     ("  load (s)", "cost.load_s", "num"),
     ("  CPU per photo (ms)", "cost.image_ms", "num"),
@@ -1065,6 +1181,10 @@ def main(argv=None):
         if suggested != report["thresholds"]["tags"]:
             print(f"\nTag thresholds fitted for {report['label']}:")
             print(json.dumps(suggested, indent=4))
+        video = report["video_tagging"]
+        if video and video["suggested"] != report["thresholds"]["video_tags"]:
+            print(f"\nVideo tag thresholds fitted for {report['label']}:")
+            print(json.dumps(video["suggested"], indent=4))
     if args.json:
         Path(args.json).write_text(
             json.dumps({"run": run, "reports": reports}, indent=2), encoding="utf-8"

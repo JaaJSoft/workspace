@@ -44,6 +44,9 @@ DOCUMENT_LABELS = frozenset(
     }
 )
 
+# The largest value a PositiveIntegerField holds on every backend.
+_MAX_PAGE_COUNT = 2**31 - 1
+
 _TEXT_FIELDS = ("title", "author", "subject", "keywords")
 _MAX_LENGTHS = {
     name: DocumentInfo._meta.get_field(name).max_length for name in _TEXT_FIELDS
@@ -95,7 +98,11 @@ def document_fields(document):
         **{
             name: getattr(document, name)[: _MAX_LENGTHS[name]] for name in _TEXT_FIELDS
         },
-        "page_count": document.page_count or None,
+        # Whatever the producer wrote: a count the column cannot hold is
+        # dropped rather than failing the write of every other property.
+        "page_count": (
+            document.page_count if 0 < document.page_count <= _MAX_PAGE_COUNT else None
+        ),
         "created": document.created,
         "modified": document.modified,
     }

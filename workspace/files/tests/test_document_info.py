@@ -11,7 +11,12 @@ from django.urls import reverse
 from django.utils import timezone
 from pypdf import PdfWriter
 
-from workspace.common.tests.office_fixtures import make_docx, make_xlsx
+from workspace.common.tests.office_fixtures import (
+    ODT,
+    make_docx,
+    make_odf,
+    make_xlsx,
+)
 from workspace.common.tests.pdf_fixtures import make_pdf
 from workspace.files.models import DocumentInfo, File, FileScan, ProcessingFailure
 from workspace.files.services import FileService
@@ -93,6 +98,24 @@ class ReadDocumentInfoTests(DocumentInfoTestCase):
         self.assertEqual(
             (info.title, info.author, info.page_count), ("Kernel notes", "Linus", 3)
         )
+
+    def test_a_page_count_the_column_cannot_hold_is_dropped(self):
+        # The count is whatever the producer wrote: a negative or 64-bit one
+        # must not cost the document the rest of its properties.
+        for declared in ("-3", "99999999999"):
+            with self.subTest(declared=declared):
+                f = self._upload(
+                    f"forged{declared}.odt",
+                    make_odf(
+                        ODT,
+                        ["body"],
+                        properties={"title": "Forged", "page_count": declared},
+                    ),
+                )
+
+                info = read_document_info(f)
+
+                self.assertEqual((info.title, info.page_count), ("Forged", None))
 
     def test_a_spreadsheet_has_no_page_count(self):
         f = self._upload(

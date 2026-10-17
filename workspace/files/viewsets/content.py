@@ -21,6 +21,7 @@ from workspace.common.uuids import parse_uuid_or_none
 from workspace.files.metrics import FILES_DOWNLOAD_BYTES
 from workspace.files.models import File, FileScan
 from workspace.files.services import FileService
+from workspace.files.services.image_edits import downloads_edited, render_edited
 from workspace.files.services.scanning.policy import (
     blocked_reason,
     blocked_statuses,
@@ -69,6 +70,18 @@ def _build_zip_stream(entries):
             size=file_obj.size or None,
         )
     return zs
+
+
+def edited_download_response(file_obj):
+    """*file_obj*, rotated and cropped as its edit shows it, as an attachment."""
+    from django.http import HttpResponse
+
+    data, content_type, name = render_edited(file_obj)
+    response = HttpResponse(data, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{safe_filename(name)}"'
+    response["Cache-Control"] = "private, no-cache"
+    FILES_DOWNLOAD_BYTES.inc(len(data))
+    return response
 
 
 class ContentMixin:
@@ -280,6 +293,11 @@ class ContentMixin:
         blocked = self._quarantine_response(file_obj)
         if blocked is not None:
             return blocked
+
+        # A rotated or cropped image downloads as it is shown. Its ETag would
+        # name the original bytes, so the 304 below must not answer for it.
+        if file_obj.node_type == File.NodeType.FILE and downloads_edited(file_obj):
+            return edited_download_response(file_obj)
 
         # Short-circuit: return 304 if ETag matches (single files only)
         if file_obj.node_type == File.NodeType.FILE:

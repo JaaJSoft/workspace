@@ -15,13 +15,8 @@ The browser applies the same geometry for the viewer
 """
 
 import hashlib
-import logging
-
-from workspace.common.logging import scrub
 
 from .raster_formats import RASTER_LABELS
-
-logger = logging.getLogger(__name__)
 
 ROTATIONS = (0, 90, 180, 270)
 # The narrowest crop side, as a fraction of the image: below it a handle drag
@@ -167,14 +162,18 @@ def save_image_edit(file_obj, edit, *, acting_user):
     The write is conditional, like a content write: it refuses a row someone
     else holds the lock on (LockConflict), and a row whose bytes changed since
     *file_obj* was read (StaleContent) - the crop was drawn on those bytes.
-    The thumbnail is redrawn before returning: the caller is waiting to see it.
-    ``updated_at`` stays: it dates the bytes, which the content endpoint's
-    ETag (and so every cached copy of the original) is built on.
+
+    The thumbnail is left pending (``has_thumbnail=False``) and redrawn by a
+    task, which announces it when done; the hourly catch-up redraws it if the
+    task is lost. ``updated_at`` stays: it dates the bytes, which the content
+    endpoint's ETag (and so every cached copy of the original) is built on.
     """
+    from django.db import transaction
+
     from workspace.files.models import File
 
+    from ..tasks import redraw_edited_thumbnail
     from .locking import LockConflict, StaleContent, conflicting_lock, unlocked_for_q
-    from .thumbnails.generation import refresh_thumbnail
 
     claimed = (
         File.objects.filter(
@@ -183,7 +182,7 @@ def save_image_edit(file_obj, edit, *, acting_user):
             content_hash=file_obj.content_hash,
         )
         .filter(unlocked_for_q(acting_user))
-        .update(image_edit=edit)
+        .update(image_edit=edit, has_thumbnail=False)
     )
     if not claimed:
         current = (
@@ -194,12 +193,73 @@ def save_image_edit(file_obj, edit, *, acting_user):
             raise LockConflict(holder)
         raise StaleContent(current.content_hash if current else "")
     file_obj.image_edit = edit
-
-    try:
-        refresh_thumbnail(file_obj)
-    except Exception:
-        # The edit stands without a fresh thumbnail; the tile keeps the old one.
-        logger.warning(
-            "Could not redraw the thumbnail of %s", scrub(file_obj.uuid), exc_info=True
-        )
+    file_obj.has_thumbnail = False
+    uuid = str(file_obj.pk)
+    transaction.on_commit(lambda: redraw_edited_thumbnail.delay(uuid))
     return file_obj
+
+
+# What a download of an edited image is encoded as: its own format when Pillow
+# writes it, JPEG otherwise (HEIC, a multi-picture JPEG). A GIF loses its
+# animation to the transpose, so it comes out as a PNG.
+_DOWNLOAD_FORMATS = {
+    "JPEG": ("JPEG", "image/jpeg", None),
+    "MPO": ("JPEG", "image/jpeg", "jpg"),
+    "PNG": ("PNG", "image/png", None),
+    "WEBP": ("WEBP", "image/webp", None),
+    "TIFF": ("TIFF", "image/tiff", None),
+    "BMP": ("BMP", "image/bmp", None),
+    "GIF": ("PNG", "image/png", "png"),
+}
+_DOWNLOAD_FALLBACK = ("JPEG", "image/jpeg", "jpg")
+_EXIF_ORIENTATION = 0x0112
+DOWNLOAD_JPEG_QUALITY = 95
+
+
+def render_edited(file_obj):
+    """*file_obj*'s image as its edit shows it, for a download.
+
+    Returns ``(bytes, content_type, filename)``. The metadata comes along -
+    the EXIF block with its orientation reset, since the pixels are turned
+    now, and the colour profile - so the copy still knows when and where it
+    was taken. The filename changes extension only when the format does.
+    """
+    from io import BytesIO
+
+    from PIL import Image, ImageOps
+
+    with file_obj.content.open("rb") as fh:
+        img = Image.open(fh)
+        source_format = img.format
+        exif = img.getexif()
+        icc_profile = img.info.get("icc_profile")
+        img = apply_edit(ImageOps.exif_transpose(img), file_obj.image_edit)
+
+    pil_format, content_type, extension = _DOWNLOAD_FORMATS.get(
+        source_format, _DOWNLOAD_FALLBACK
+    )
+    if pil_format == "JPEG" and img.mode not in ("RGB", "L", "CMYK"):
+        img = img.convert("RGB")
+    options = {}
+    if exif:
+        exif[_EXIF_ORIENTATION] = 1
+        options["exif"] = exif.tobytes()
+    if icc_profile:
+        options["icc_profile"] = icc_profile
+    if pil_format in ("JPEG", "WEBP"):
+        options["quality"] = DOWNLOAD_JPEG_QUALITY
+    buffer = BytesIO()
+    img.save(buffer, format=pil_format, **options)
+
+    name = file_obj.name
+    if extension:
+        stem, dot, _ = name.rpartition(".")
+        name = f"{stem if dot else name}.{extension}"
+    return buffer.getvalue(), content_type, name
+
+
+def downloads_edited(file_obj):
+    """Whether a download of *file_obj* is its edited rendering."""
+    return bool(getattr(file_obj, "image_edit", None)) and can_edit_type(
+        getattr(file_obj, "type", "")
+    )

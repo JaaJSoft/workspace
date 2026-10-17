@@ -3,6 +3,7 @@
   x-data="fileViewerModal()"
   @ajax:missing="_viewerMissing($event)"
   @viewer-editing="panelEditing = $event.detail"
+  @viewer-download="downloadOverride = $event.detail"
   @ajax:merge="_viewerMerge($event)"
 >
   <dialog x-ref="dialog" class="modal" @close="_onDialogClose()">
@@ -29,7 +30,7 @@
              request, but a live-looking button on the refusal screen would
              contradict it. -->
         <a
-          :href="downloadUrl"
+          :href="downloadOverride || downloadUrl"
           download
           class="btn btn-ghost btn-sm btn-square"
           title="Download file"
@@ -149,6 +150,9 @@
         // viewer dispatches viewer-editing): an arrow key or a swipe would
         // drop the drawing, and the arrows would cover the crop handles.
         panelEditing: false,
+        // Where the panel wants the download to come from instead (an edited
+        // image, rendered as shown); null for the raw bytes.
+        downloadOverride: null,
 
         _getViewableFiles() {
           const rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
@@ -248,6 +252,7 @@
           this.downloadUrl = urls.download;
           this.viewerBlocked = false;
           this.panelEditing = false;
+          this.downloadOverride = null;
           const wasOpen = this.$refs.dialog.open;
           this.open = true;
           // Gallery navigation re-opens over an already-open dialog: the
@@ -289,6 +294,7 @@
           this.downloadUrl = '';
           this.viewerBlocked = false;
           this.panelEditing = false;
+          this.downloadOverride = null;
           this.viewerError = null;
         },
 

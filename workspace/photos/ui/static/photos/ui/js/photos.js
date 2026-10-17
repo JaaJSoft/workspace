@@ -23,6 +23,11 @@ const PHOTO_ACTIONS = [
 // photos_filters.tile_aspect clamps it.
 const PHOTOS_TILE_ASPECT_RANGE = [0.5, 2.5];
 
+// Tiles of photos just rotated or cropped, by uuid, until the new thumbnail
+// is drawn (a task does it): what the save answered, and whether the
+// thumbnail is there yet. Either can come first.
+const photosTileEdits = new Map();
+
 // The file actions the selection offers, when the registry offers them as
 // bulk actions on every selected photo.
 const PHOTO_BULK_ACTIONS = ['toggle_favorite', 'toggle_sensitive', 'download', 'delete'];
@@ -278,9 +283,16 @@ window.photosApp = function photosApp() {
         this._refresh(['photos-nav', 'photos-header']);
       });
       window.addEventListener('rename-item', (e) => this.renamePhoto(e.detail.uuid, e.detail.name));
-      // Rotated or cropped in the viewer: the tile follows without a reload.
+      // Rotated or cropped in the viewer: the tile follows without a reload,
+      // once its new thumbnail is drawn.
+      window.addEventListener('image-edit-saving', (e) => photosTileEdits.set(e.detail.uuid, {}));
       window.addEventListener('image-edited', (e) => {
-        this._showTileEdit(e.detail.uuid, e.detail.imageEdit, e.detail.version);
+        const { uuid, imageEdit, version, thumbnailReady } = e.detail;
+        this._noteTileEdit(uuid, { edit: imageEdit, version, ready: thumbnailReady });
+      });
+      window.addEventListener('sse:files.processing_settled', (e) => {
+        const uuid = e.detail && e.detail.file_uuid;
+        if (photosTileEdits.has(uuid)) this._noteTileEdit(uuid, { ready: true });
       });
       // Tag counts in the sidebar follow assignments made from the panel.
       window.addEventListener('tags-changed', () => {
@@ -811,11 +823,28 @@ window.photosApp = function photosApp() {
     },
 
     async _sendImageEdit(uuid, method, url, body) {
+      photosTileEdits.set(uuid, {});
       try {
         const data = await photosJson(method, url, body);
-        this._showTileEdit(uuid, data.image_edit, data.version);
+        this._noteTileEdit(uuid, {
+          edit: data.image_edit, version: data.version, ready: data.thumbnail_ready,
+        });
       } catch (_) {
+        photosTileEdits.delete(uuid);
         window.AppAlert.error('The photo could not be edited');
+      }
+    },
+
+    // Merges what is known of a tile's pending edit, and shows it once both
+    // the edit and its thumbnail are in.
+    _noteTileEdit(uuid, news) {
+      const known = photosTileEdits.get(uuid) || {};
+      const pending = { ...known, ...news, ready: !!(known.ready || news.ready) };
+      if (pending.ready && 'version' in pending) {
+        photosTileEdits.delete(uuid);
+        this._showTileEdit(uuid, pending.edit, pending.version);
+      } else {
+        photosTileEdits.set(uuid, pending);
       }
     },
 

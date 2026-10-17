@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from workspace.files.models import File
 from workspace.files.serializers import (
     FileContentStale,
     ImageEditSerializer,
@@ -21,8 +22,10 @@ from workspace.files.services.locking import LockConflict, StaleContent
 _EDIT_RESPONSES = {
     200: OpenApiResponse(
         description=(
-            "The edit now shown (`image_edit`, null when back to the original) "
-            "and the token the thumbnail URL carries for it (`version`)."
+            "The edit now shown (`image_edit`, null when back to the original), "
+            "the token the thumbnail URL carries for it (`version`), and whether "
+            "that thumbnail is drawn yet (`thumbnail_ready`; otherwise a "
+            "`processing_settled` event follows)."
         )
     ),
     400: OpenApiResponse(description="Invalid rotation or crop."),
@@ -55,8 +58,20 @@ class ImageEditMixin:
             return Response(locked_payload(exc.holder), status=423)
         except StaleContent:
             raise FileContentStale() from None
+        # The redraw may already be done: it runs in-process where Celery is
+        # eager, and a worker can be quick. Otherwise the client waits for
+        # the processing_settled event.
+        thumbnail_ready = (
+            File.objects.filter(pk=file_obj.pk)
+            .values_list("has_thumbnail", flat=True)
+            .first()
+        )
         return Response(
-            {"image_edit": file_obj.image_edit, "version": edit_version(edit)}
+            {
+                "image_edit": file_obj.image_edit,
+                "version": edit_version(edit),
+                "thumbnail_ready": bool(thumbnail_ready),
+            }
         )
 
     @extend_schema(

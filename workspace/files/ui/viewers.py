@@ -262,6 +262,16 @@ class ImageViewer(BaseViewer):
         context["start_editing"] = context["image_edit_available"] and is_truthy(
             request.GET.get("edit")
         )
+        # The modal's download button reads the raw bytes (the content
+        # endpoint, which trashed files are previewed through); an edited
+        # image downloads as it is shown instead. Files' viewer only: an album
+        # names its own download, which applies the edit already.
+        context["edited_download_url"] = (
+            f"/api/v1/files/{self.file.uuid}/download"
+            if getattr(self, "_permission", None) is not None
+            and getattr(self.file, "deleted_at", None) is None
+            else ""
+        )
         return context
 
     def _image_edit_available(self, request):

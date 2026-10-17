@@ -24,6 +24,7 @@ from workspace.common.uuids import (
     UuidBatchError,
     parse_uuid_batch,
 )
+from workspace.files.services.image_edits import downloads_edited
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_SIZES,
     parse_thumbnail_size,
@@ -75,6 +76,12 @@ def content_response(request, file_obj, *, attachment=False):
     video can seek and a download resume."""
     if not file_obj.content:
         return Response(status=status.HTTP_404_NOT_FOUND)
+    # A download is the photo as everyone sees it; inline, the viewer applies
+    # the edit itself.
+    if attachment and downloads_edited(file_obj):
+        from workspace.files.viewsets.content import edited_download_response
+
+        return edited_download_response(file_obj)
     try:
         handle = file_obj.content.open("rb")
     except OSError:

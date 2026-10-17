@@ -3,7 +3,7 @@
 <div
   class="flex flex-col h-full"
   x-data="imageViewerData()"
-  x-effect="$dispatch('viewer-editing', editing)"
+  x-effect="_announce()"
 >
   {{ image_edit|json_script:"image-viewer-edit-data" }}
   <!-- Toolbar -->
@@ -442,6 +442,7 @@
     const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
     const imageEditAvailable = {{ image_edit_available|yesno:"true,false" }};
     const openInEditMode = {{ start_editing|yesno:"true,false" }};
+    const editedDownloadUrl = '{{ edited_download_url|escapejs }}';
     // The stage's p-4 padding, and the room the crop handles stick out into.
     const STAGE_PADDING = 16;
     const HANDLE_ROOM = 12;
@@ -569,6 +570,14 @@
         if (this.convertedSrc) URL.revokeObjectURL(this.convertedSrc);
         if (this._resizeObserver) this._resizeObserver.disconnect();
         if (this._endCropDrag) this._endCropDrag();
+      },
+
+      // Tells the hosting modal what the viewer holds: an edit in progress
+      // locks its gallery navigation, and an edited image downloads through
+      // the endpoint that renders the edit.
+      _announce() {
+        this.$dispatch('viewer-editing', this.editing);
+        this.$dispatch('viewer-download', this.edit && editedDownloadUrl ? editedDownloadUrl : null);
       },
 
       _measure() {
@@ -733,6 +742,11 @@
           });
         }
         this.saving = true;
+        window.dispatchEvent(new CustomEvent('image-edit-saving', {
+          detail: {
+            uuid: fileUuid
+          },
+        }));
         try {
           const resp = await fetch('/api/v1/files/' + fileUuid + '/image-edit', request);
           if (!resp.ok) {
@@ -747,7 +761,8 @@
             detail: {
               uuid: fileUuid,
               imageEdit: data.image_edit,
-              version: data.version
+              version: data.version,
+              thumbnailReady: data.thumbnail_ready
             },
           }));
           window.dispatchEvent(new CustomEvent('files-changed'));

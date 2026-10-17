@@ -3,6 +3,7 @@
 import hashlib
 import io
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
@@ -10,6 +11,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
+from django.utils.html import escapejs
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -30,6 +32,7 @@ from workspace.files.services.thumbnails.generation import (
     generate_thumbnail,
     get_thumbnail_path,
 )
+from workspace.files.tasks import redraw_edited_thumbnail
 from workspace.files.templatetags.file_filters import thumbnail_url
 
 User = get_user_model()
@@ -197,17 +200,35 @@ class ImageEditApiTests(ImageEditTestMixin, APITestCase):
     def _put(self, body):
         return self.client.put(self._url(), body, format="json")
 
-    def test_put_stores_the_edit_and_redraws_the_thumbnail(self):
+    def _put_and_redraw(self, body):
+        """PUT *body*, then run the redraw task it queued on commit."""
+        with self.captureOnCommitCallbacks(execute=True) as callbacks:
+            resp = self._put(body)
+        self.assertEqual(len(callbacks), 1)
+        return resp
+
+    def test_put_stores_the_edit_and_queues_the_thumbnail(self):
         digest = self._blob_digest(self.file)
 
-        resp = self._put(
-            {
-                "rotation": 90,
-                "crop": {"x": 0, "y": 0, "width": 1, "height": 0.5},
-            }
-        )
+        with self.captureOnCommitCallbacks() as callbacks:
+            resp = self._put(
+                {
+                    "rotation": 90,
+                    "crop": {"x": 0, "y": 0, "width": 1, "height": 0.5},
+                }
+            )
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Nothing is drawn in the request: the thumbnail is pending until the
+        # task queued on commit runs.
+        self.assertFalse(resp.data["thumbnail_ready"])
+        self.file.refresh_from_db()
+        self.assertFalse(self.file.has_thumbnail)
+        with patch("workspace.files.sse_provider.push_file_event") as push:
+            for callback in callbacks:
+                callback()
+        push.assert_called_once()
+        self.assertEqual(push.call_args.args[1], "processing_settled")
         expected = {
             "rotation": 90,
             "crop": {"x": 0, "y": 0, "width": 1, "height": 0.5},
@@ -216,14 +237,16 @@ class ImageEditApiTests(ImageEditTestMixin, APITestCase):
         self.assertEqual(resp.data["version"], edit_version(expected))
         self.file.refresh_from_db()
         self.assertEqual(self.file.image_edit, expected)
+        self.assertTrue(self.file.has_thumbnail)
         # Turned to 1000 x 2000, then the top half kept: a square.
         self.assertEqual(_stored_size(get_thumbnail_path(self.file.uuid)), (512, 512))
         self.assertEqual(self._blob_digest(self.file), digest)
 
     def test_delete_reverts_to_the_original(self):
-        self._put({"rotation": 270})
+        self._put_and_redraw({"rotation": 270})
 
-        resp = self.client.delete(self._url())
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.delete(self._url())
 
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertIsNone(resp.data["image_edit"])
@@ -435,6 +458,12 @@ class ImageViewerEditTests(ImageEditTestMixin, TestCase):
         )
         self.assertIn("const openInEditMode = false;", html)
 
+    def test_an_edited_image_downloads_through_the_rendering_endpoint(self):
+        html = self._html(self.owner)
+
+        url = escapejs(f"/api/v1/files/{self.file.uuid}/download")
+        self.assertIn(f"const editedDownloadUrl = '{url}';", html)
+
     def test_edit_in_the_query_opens_in_edit_mode(self):
         self.assertIn("const openInEditMode = true;", self._html(self.owner, "?edit=1"))
 
@@ -451,3 +480,107 @@ class ImageViewerEditTests(ImageEditTestMixin, TestCase):
         self.assertNotIn('data-testid="image-edit-start"', html)
         self.assertIn("const openInEditMode = false;", html)
         self.assertIn('{"rotation": 90}', html)
+
+
+class RedrawTaskTests(ImageEditTestMixin, TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="redraw", password="p")
+        self.file = self._photo(self.user)
+
+    def test_a_file_whose_thumbnail_is_drawn_is_left_alone(self):
+        File.objects.filter(pk=self.file.pk).update(has_thumbnail=True)
+
+        with patch("workspace.files.sse_provider.push_file_event") as push:
+            result = redraw_edited_thumbnail.apply(args=[str(self.file.pk)]).get()
+
+        self.assertEqual(result, {"status": "skipped"})
+        push.assert_not_called()
+
+    def test_a_pending_thumbnail_is_drawn_with_the_edit(self):
+        File.objects.filter(pk=self.file.pk).update(
+            has_thumbnail=False, image_edit={"rotation": 90}
+        )
+
+        with patch("workspace.files.sse_provider.push_file_event"):
+            result = redraw_edited_thumbnail.apply(args=[str(self.file.pk)]).get()
+
+        self.assertEqual(result, {"status": "ok"})
+        self.file.refresh_from_db()
+        self.assertTrue(self.file.has_thumbnail)
+        self.assertEqual(_stored_size(get_thumbnail_path(self.file.uuid)), (256, 512))
+
+
+class EditedDownloadTests(ImageEditTestMixin, APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="dl", password="p")
+        self.file = self._photo(self.user)
+        self.client.force_authenticate(self.user)
+
+    def _download(self):
+        resp = self.client.get(f"/api/v1/files/{self.file.uuid}/download")
+        body = (
+            b"".join(resp.streaming_content)
+            if hasattr(resp, "streaming_content")
+            else resp.content
+        )
+        return resp, body
+
+    def test_an_unedited_image_downloads_its_original_bytes(self):
+        resp, body = self._download()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(hashlib.sha256(body).hexdigest(), self._blob_digest(self.file))
+
+    def test_an_edited_image_downloads_as_it_is_shown(self):
+        File.objects.filter(pk=self.file.pk).update(
+            image_edit={
+                "rotation": 90,
+                "crop": {"x": 0, "y": 0, "width": 1, "height": 0.5},
+            }
+        )
+
+        resp, body = self._download()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp["Content-Type"], "image/jpeg")
+        self.assertIn('filename="photo.jpg"', resp["Content-Disposition"])
+        img = Image.open(io.BytesIO(body))
+        # 2000 x 1000 turned is 1000 x 2000; the top half is the red one.
+        self.assertEqual(img.size, (1000, 1000))
+        self.assertTrue(_close(img.convert("RGB").getpixel((500, 500)), RED))
+
+    def test_the_metadata_comes_along_with_the_orientation_reset(self):
+        source = _halves((200, 100))
+        exif = source.getexif()
+        exif[0x0112] = 6  # stored sideways: shown turned clockwise
+        exif[0x010F] = "Camera maker"
+        buf = io.BytesIO()
+        source.save(buf, format="JPEG", exif=exif.tobytes())
+        FileService.update_content(self.file, ContentFile(buf.getvalue(), name="p.jpg"))
+        File.objects.filter(pk=self.file.pk).update(image_edit={"rotation": 90})
+
+        resp, body = self._download()
+
+        img = Image.open(io.BytesIO(body))
+        # EXIF turns it once, the edit a second time: upside down, landscape.
+        self.assertEqual(img.size, (200, 100))
+        self.assertEqual(img.getexif()[0x0112], 1)
+        self.assertEqual(img.getexif()[0x010F], "Camera maker")
+        self.assertTrue(_close(img.convert("RGB").getpixel((150, 50)), RED))
+
+    def test_a_gif_loses_its_animation_and_comes_out_as_png(self):
+        from workspace.files.services.image_edits import render_edited
+
+        buf = io.BytesIO()
+        _halves().save(buf, format="GIF")
+        FileService.update_content(
+            self.file, ContentFile(buf.getvalue(), name="anim.gif")
+        )
+        self.file.refresh_from_db()
+        self.file.name = "anim.gif"
+        self.file.image_edit = {"rotation": 180}
+
+        data, content_type, name = render_edited(self.file)
+
+        self.assertEqual((content_type, name), ("image/png", "anim.png"))
+        self.assertEqual(Image.open(io.BytesIO(data)).format, "PNG")

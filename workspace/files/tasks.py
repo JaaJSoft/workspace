@@ -12,6 +12,7 @@ from django.utils import timezone
 from workspace.common.logging import scrub
 from workspace.common.task_priority import (
     BACKGROUND_PRIORITY,
+    INTERACTIVE_PRIORITY,
     LOW_PRIORITY,
     NORMAL_PRIORITY,
 )
@@ -259,6 +260,41 @@ def catch_up_file(self, name, file_uuid, reanalyze=False):
     except File.DoesNotExist, ValidationError, ValueError, TypeError:
         return {"status": "skipped"}
     return {"status": "ok" if run_processor(processor, file_obj) else "skipped"}
+
+
+@shared_task(
+    name="files.redraw_edited_thumbnail",
+    priority=INTERACTIVE_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def redraw_edited_thumbnail(self, file_uuid):
+    """Draw the thumbnail of an image just rotated or cropped, then tell its
+    open listings (``processing_settled``) so they fetch it.
+
+    Interactive: the person who saved the edit is looking at the tile. The
+    edit left the file without a thumbnail (``has_thumbnail=False``), which is
+    what makes the hourly catch-up redraw it if this task is lost.
+    """
+    from django.core.exceptions import ValidationError
+
+    from workspace.files.models import File
+    from workspace.files.services.processors import get_processor, run_processor
+    from workspace.files.services.thumbnails.generation import pending_thumbnails_qs
+
+    from .sse_provider import push_file_event
+
+    try:
+        file_obj = pending_thumbnails_qs().get(uuid=file_uuid)
+    except File.DoesNotExist, ValidationError, ValueError, TypeError:
+        return {"status": "skipped"}
+    stored = run_processor(get_processor("thumbnails"), file_obj)
+    try:
+        push_file_event(file_obj, "processing_settled", None)
+    except Exception:
+        logger.exception("Could not announce the thumbnail of %s", scrub(file_obj.uuid))
+    return {"status": "ok" if stored else "failed"}
 
 
 @shared_task(

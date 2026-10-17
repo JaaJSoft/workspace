@@ -58,7 +58,7 @@ def give_auto_tags_their_icon(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("photos", "0020_photo_auto_tagged_at"),
+        ("photos", "0021_revoke_lapsed_album_sharing"),
         ("files", "0071_upload_session"),
     ]
 

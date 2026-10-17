@@ -13,7 +13,7 @@ from workspace.files.models import FileTag, Tag
 from .images import jpeg_bytes, upload
 
 # Migration module names are not valid identifiers, so import by string.
-migration = importlib.import_module("workspace.photos.migrations.0021_auto_tag_icons")
+migration = importlib.import_module("workspace.photos.migrations.0022_auto_tag_icons")
 
 User = get_user_model()
 

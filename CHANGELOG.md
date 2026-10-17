@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.43.0 - Uploads & Privacy
+
+### Highlights
+
+Uploads are faster and no longer start over when your connection drops, and big folders open in a fraction of the time. Your workspace is also more secure, with stricter permissions across the apps.
+
+### Files
+
+- A large upload interrupted by the network now picks up where it stopped instead of sending the whole file again. Very large files also get through networks that used to reject them.
+- Several files now upload at the same time instead of one after the other, so a folder full of small files goes up much faster. The end of a large upload is quicker too, and the panel says "Finishing up" instead of showing a full bar that looks stuck.
+- When an upload runs into many name conflicts, you can apply your answer to all the remaining ones at once instead of answering a dialog per file. The upload panel also gains "Keep all", "Discard all" and "Retry all".
+- Large folders open about twice as fast, and a folder where many files carry tags no longer freezes the browser.
+- Folders full of pictures are lighter in the mosaic view: thumbnails load at the size they are shown, and ticking a checkbox responds instantly even with thousands of items.
+- Files in the trash show their thumbnails again and can be opened to check their content before restoring them.
+- On a phone, the folder header no longer runs the breadcrumb under the New button: the folder name and its action now sit on their own line.
+
+### Chat
+
+- The message box now shows your formatting as you type: bold looks bold, lists look like lists, and the toolbar buttons and shortcuts switch a style on and off. Prefer writing the markdown yourself? One click on the toolbar switches back, and the choice is remembered.
+
+### WebDAV
+
+- Mounted drives show your real storage space, instead of the free space of your own computer's disk. Saving a document repeatedly from an editor no longer eats into your quota with every save.
+
+### People
+
+- Searching contacts no longer depends on accents: "helene" finds "Hélène", in People, in the search palette and when writing an email.
+
+### Reliability
+
+- The workspace stays responsive with many tabs open, and pages no longer hang while heavy work runs in the background on small servers.
+- Pages full of thumbnails no longer push the server to run out of memory.
+
+### Fixes
+
+- Sorting in the mosaic view of Files works again: tiles follow the sort you pick.
+- The status bar at the bottom of Files keeps the same height when you open a subfolder.
+
 ## 0.42.0 - Featherweight
 
 ### Highlights

@@ -24,21 +24,51 @@
           <i data-lucide="calendar" class="w-4 h-4 text-base-content/60"></i>
           Date &amp; time
         </legend>
-        <div class="join w-full" role="radiogroup" aria-label="Date and time">
-          <template
-            x-for="choice in [['keep', 'Keep'], ['shift', 'Shift'], ['set', 'Set'], ['restore', 'From file']]"
-            :key="choice[0]"
+        <div
+          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          role="radiogroup"
+          aria-label="Date and time"
+        >
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'keep' }"
+            :aria-checked="captureDialog.dateMode === 'keep'"
+            @click="captureDialog.dateMode = 'keep'"
           >
-            <button
-              type="button"
-              role="radio"
-              class="btn btn-sm join-item flex-1"
-              :class="{ 'btn-active btn-module': captureDialog.dateMode === choice[0] }"
-              :aria-checked="captureDialog.dateMode === choice[0]"
-              @click="captureDialog.dateMode = choice[0]"
-              x-text="choice[1]"
-            ></button>
-          </template>
+            Keep
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'shift' }"
+            :aria-checked="captureDialog.dateMode === 'shift'"
+            @click="captureDialog.dateMode = 'shift'"
+          >
+            Shift
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'set' }"
+            :aria-checked="captureDialog.dateMode === 'set'"
+            @click="captureDialog.dateMode = 'set'"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'restore' }"
+            :aria-checked="captureDialog.dateMode === 'restore'"
+            @click="captureDialog.dateMode = 'restore'"
+          >
+            From file
+          </button>
         </div>
 
         <div x-show="captureDialog.dateMode === 'shift'" x-cloak class="space-y-2">
@@ -127,21 +157,51 @@
           <i data-lucide="map-pin" class="w-4 h-4 text-base-content/60"></i>
           Location
         </legend>
-        <div class="join w-full" role="radiogroup" aria-label="Location">
-          <template
-            x-for="choice in [['keep', 'Keep'], ['set', 'Set'], ['clear', 'Remove'], ['restore', 'From file']]"
-            :key="choice[0]"
+        <div
+          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          role="radiogroup"
+          aria-label="Location"
+        >
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'keep' }"
+            :aria-checked="captureDialog.locationMode === 'keep'"
+            @click="captureDialog.locationMode = 'keep'"
           >
-            <button
-              type="button"
-              role="radio"
-              class="btn btn-sm join-item flex-1"
-              :class="{ 'btn-active btn-module': captureDialog.locationMode === choice[0] }"
-              :aria-checked="captureDialog.locationMode === choice[0]"
-              @click="captureDialog.locationMode = choice[0]"
-              x-text="choice[1]"
-            ></button>
-          </template>
+            Keep
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'set' }"
+            :aria-checked="captureDialog.locationMode === 'set'"
+            @click="captureDialog.locationMode = 'set'"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'clear' }"
+            :aria-checked="captureDialog.locationMode === 'clear'"
+            @click="captureDialog.locationMode = 'clear'"
+          >
+            Remove
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'restore' }"
+            :aria-checked="captureDialog.locationMode === 'restore'"
+            @click="captureDialog.locationMode = 'restore'"
+          >
+            From file
+          </button>
         </div>
 
         <div

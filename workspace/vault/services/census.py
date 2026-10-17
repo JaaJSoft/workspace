@@ -193,6 +193,7 @@ def _grouped(queryset, column, length, marks):
         .annotate(rows=Count("pk"))
         .values_list("h", "rows")
     ):
+        # A NULL column - an empty previous envelope - counts nothing.
         for mark in marks(head or ""):
             counts[mark] += rows
     return counts
@@ -213,6 +214,8 @@ def census(using: str = "default") -> Counter:
         (EntryField, "encrypted_value", ciphertext_marks),
         (AccountIdentity, "wrapped_kex_priv", ciphertext_marks),
         (AccountIdentity, "wrapped_sig_priv", ciphertext_marks),
+        (AccountIdentity, "previous_wrapped_kex_priv", ciphertext_marks),
+        (AccountIdentity, "previous_wrapped_sig_priv", ciphertext_marks),
         (AccountIdentity, "kex_public", pubkey_marks),
         (AccountIdentity, "sig_public", pubkey_marks),
         (AccountIdentity, "sig_over_kex_pub", signature_marks),
@@ -229,11 +232,13 @@ def census(using: str = "default") -> Counter:
     ):
         for mark in hpke_marks(suite):
             counts[mark] += rows
-    for algo, rows in (
-        AccountIdentity.objects.using(using)
-        .values("kdf_algo")
-        .annotate(rows=Count("pk"))
-        .values_list("kdf_algo", "rows")
-    ):
-        counts[("kdf", algo)] += rows
+    for column in ("kdf_algo", "previous_kdf_algo"):
+        for algo, rows in (
+            AccountIdentity.objects.using(using)
+            .exclude(**{f"{column}__isnull": True})
+            .values(column)
+            .annotate(rows=Count("pk"))
+            .values_list(column, "rows")
+        ):
+            counts[("kdf", algo)] += rows
     return counts

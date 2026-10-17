@@ -38,6 +38,11 @@ function harness(overrides = {}) {
   const secretBytes = Uint8Array.from({ length: 32 }, (_, i) => i + 65);
   const vaultKeyRaw = Uint8Array.from({ length: 32 }, (_, i) => i + 129);
   const storage = new Map();
+  // The envelope the fetch stub serves, mutable after the harness is built so
+  // a test can edit a field the overrides could not reach.
+  const envelope = { ...(overrides.envelope || ENVELOPE) };
+  // Every request, as [method, url, parsed body].
+  const requests = [];
 
   const crypto = {
     // The recomputed signing public key. Equal to what the envelope carries
@@ -69,6 +74,8 @@ function harness(overrides = {}) {
     hkdf: async () => { calls.push('hkdf'); return Uint8Array.from([13, 14]); },
     open: async (key, raw, ad) => {
       calls.push(`open:${ad}`);
+      // What the seal stub produced reads back as the bytes it sealed.
+      if (raw.length > 0 && raw[0] === 2) return raw.slice(1);
       // Lets a test fail only the second open (the signing key) while the
       // first (the key-exchange key) still succeeds and lands in kexPriv -
       // the partial-failure shape the wrong-password catch must still cover.
@@ -82,12 +89,17 @@ function harness(overrides = {}) {
     importSigner: async () => { calls.push('importSigner'); return { sign: async () => new Uint8Array(1) }; },
     hpkeRecipient: async () => { calls.push('hpkeRecipient'); return { open: async () => vaultKeyRaw }; },
     canonicalCbor: () => new Uint8Array(2),
+    CURRENT_SUITE: { kdf: { algo: 'argon2id', params: { v: '1.3', m: 65536, t: 3, p: 2 } } },
+    KDF_DIRECT: 0,
+    isCurrent: () => true,
+    seal: async (key, plaintext, ad) => { calls.push(`seal:${ad}`); return Uint8Array.from([2, ...plaintext]); },
     ...(overrides.vaultCrypto || {}),
   };
 
   const ctx = loadScripts(
     [
       'workspace/vault/ui/static/vault/ui/js/api.js',
+      'workspace/vault/ui/static/vault/ui/js/account_envelope.js',
       'workspace/vault/ui/static/vault/ui/js/session.js',
     ],
     {
@@ -105,13 +117,19 @@ function harness(overrides = {}) {
       setInterval: () => 1,
       clearInterval: () => {},
       Date: globalThis.Date,
-      fetch: overrides.fetch
-        || (async () => ({ ok: true, status: 200, json: async () => ENVELOPE })),
+      fetch: overrides.fetch || (async (url, init = {}) => {
+        const method = init.method || 'GET';
+        requests.push([method, url, init.body === undefined ? undefined : JSON.parse(init.body)]);
+        const status = overrides.answer ? overrides.answer(method, url) : 200;
+        const isEnvelope = method === 'GET' && url.endsWith('/envelope');
+        return { ok: status < 400, status, json: async () => (isEnvelope ? envelope : null) };
+      }),
       ...overrides.globals,
     }
   );
   return {
-    ctx, calls, amk, kexPriv, sigSeed, secretBytes, vaultKeyRaw, storage, session: ctx.vaultSession,
+    ctx, calls, amk, kexPriv, sigSeed, secretBytes, vaultKeyRaw, storage, envelope, requests,
+    session: ctx.vaultSession,
   };
 }
 
@@ -793,6 +811,248 @@ test('setting the delay on a locked session does not open one', async () => {
   assert.equal(h.session.secondsUntilLock(), 0);
 });
 
+// The previous envelope a rotation keeps until the current one has opened.
+const PREVIOUS = {
+  previous_kdf_algo: 'argon2id',
+  previous_kdf_params: { v: '1.3', m: 65536, t: 3, p: 2 },
+  previous_wrapped_kex_priv: 'cHJldi1rZXg',
+  previous_wrapped_sig_priv: 'cHJldi1zaWc',
+};
+
+test('a wrong password on the current envelope falls back to the previous one', async () => {
+  const opened = [];
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    vaultCrypto: {
+      open: async (key, raw, ad) => {
+        const text = String.fromCharCode(...raw);
+        opened.push(text);
+        // The stub decodes base64url as raw characters: the current envelope's
+        // two values are exactly ENVELOPE's.
+        if (text === ENVELOPE.wrapped_kex_priv || text === ENVELOPE.wrapped_sig_priv) {
+          throw new Error('tag mismatch');
+        }
+        return String(ad).startsWith('kex') ? h.kexPriv : h.sigSeed;
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.session.isUnlocked(), true);
+  assert.equal(h.session.openedWithPrevious(), true);
+  assert.deepStrictEqual(opened, [ENVELOPE.wrapped_kex_priv, PREVIOUS.previous_wrapped_kex_priv, PREVIOUS.previous_wrapped_sig_priv]);
+  await h.session.envelopeWrites();
+  assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
+});
+
+test('a stale current envelope that only the previous one stands in for is never resealed', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    vaultCrypto: {
+      open: async (key, raw, ad) => {
+        const text = String.fromCharCode(...raw);
+        if (text === ENVELOPE.wrapped_kex_priv || text === ENVELOPE.wrapped_sig_priv) {
+          throw new Error('tag mismatch');
+        }
+        return String(ad).startsWith('kex') ? h.kexPriv : h.sigSeed;
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.session.openedWithPrevious(), true);
+  // One derivation per envelope tried, none for a reseal under the current suite.
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 2);
+  assert.equal(h.calls.some((c) => String(c).startsWith('seal:')), false);
+  await h.session.envelopeWrites();
+  assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
+});
+
+test('the first attempt of a fallback leaves no unwrap key behind', async () => {
+  const unwrapKeys = [];
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    vaultCrypto: {
+      hkdf: async () => { const key = Uint8Array.from([13, 14]); unwrapKeys.push(key); return key; },
+      open: async (key, raw, ad) => {
+        if (String.fromCharCode(...raw) === ENVELOPE.wrapped_kex_priv) throw new Error('tag mismatch');
+        return String(ad).startsWith('kex') ? h.kexPriv : h.sigSeed;
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(unwrapKeys.length, 2);
+  for (const key of unwrapKeys) assert.deepStrictEqual(Array.from(key), [0, 0]);
+  assert.ok(h.secretBytes.every((byte) => byte === 0));
+});
+
+test('no previous envelope: a wrong password stays a wrong password', async () => {
+  const h = harness({ failOpen: 'kex' });
+  await assert.rejects(h.session.unlock({ password: 'pw', secretText: SECRET }), (e) => e.reason === 'password');
+});
+
+test('a substituted key never falls back to the previous envelope', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    vaultCrypto: { equalBytes: () => false },
+  });
+  await assert.rejects(h.session.unlock({ password: 'pw', secretText: SECRET }), (e) => e.reason === 'substituted-key');
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 1);
+});
+
+test('a current envelope this build cannot read never falls back', async () => {
+  const unsupported = Object.assign(new Error('aead 7'), { name: 'UnsupportedAlgorithmError' });
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    vaultCrypto: { open: async () => { throw unsupported; } },
+  });
+  await assert.rejects(
+    h.session.unlock({ password: 'pw', secretText: SECRET }),
+    (e) => e.reason === 'unsupported' && e.cause === unsupported
+  );
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 1);
+});
+
+test('a previous envelope this build cannot read is unsupported, not a wrong password', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    failOpen: 'kex',
+    vaultCrypto: {
+      assertAccountKdf: (algo, params) => {
+        if (params.m === 1) {
+          const err = new Error('kdf'); err.name = 'UnsupportedAlgorithmError'; throw err;
+        }
+      },
+    },
+  });
+  h.envelope.previous_kdf_params = { v: '1.3', m: 1, t: 1, p: 1 };
+  await assert.rejects(h.session.unlock({ password: 'pw', secretText: SECRET }), (e) => e.reason === 'unsupported');
+});
+
+test('opening the current envelope while a previous one exists confirms it', async () => {
+  const h = harness({ envelope: { ...ENVELOPE, ...PREVIOUS } });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.session.openedWithPrevious(), false);
+  await h.session.envelopeWrites();
+  const posts = h.requests.filter((r) => r[0] === 'POST');
+  assert.deepStrictEqual(posts.map((r) => r[1]), ['/api/v1/vault/account/confirm']);
+  assert.deepStrictEqual(posts[0][2], { wrapped_kex_priv: ENVELOPE.wrapped_kex_priv });
+});
+
+test('a current envelope with nothing to do sends nothing', async () => {
+  const h = harness();
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  await h.session.envelopeWrites();
+  assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
+  assert.equal(h.calls.some((c) => String(c).startsWith('seal:')), false);
+});
+
+test('a stale envelope is resealed, reread and sent after the session committed', async () => {
+  const h = harness({ vaultCrypto: { isCurrent: (axis, id) => !(axis === 'format' && id === 1), decodeCiphertext: () => ({ formatVersion: 1, aeadId: 1 }) } });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.calls.filter((c) => String(c).startsWith('seal:')).length, 2);
+  // Only one derivation: the format alone is stale, the unwrap key is reused.
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 1);
+  await h.session.envelopeWrites();
+  const posts = h.requests.filter((r) => r[0] === 'POST');
+  assert.deepStrictEqual(posts.map((r) => r[1]), ['/api/v1/vault/account/rotate']);
+  assert.equal(posts[0][2].expected_wrapped_kex_priv, ENVELOPE.wrapped_kex_priv);
+  assert.deepStrictEqual(Array.from(h.kexPriv), new Array(32).fill(0));
+  assert.deepStrictEqual(Array.from(h.sigSeed), new Array(32).fill(0));
+});
+
+test('stale params derive a second time, under the current suite', async () => {
+  const derived = [];
+  const unwrapKeys = [];
+  const h = harness({
+    envelope: { ...ENVELOPE, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    vaultCrypto: {
+      deriveAmk: async (args) => { derived.push({ ...args.params }); return Uint8Array.from([1, 2]); },
+      hkdf: async () => { const key = Uint8Array.from([13, 14]); unwrapKeys.push(key); return key; },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.deepStrictEqual(derived, [
+    { v: '1.3', m: 16384, t: 1, p: 1 },
+    { v: '1.3', m: 65536, t: 3, p: 2 },
+  ]);
+  // The unlock's unwrap key and the reseal's: neither outlives the unlock.
+  for (const key of unwrapKeys) assert.deepStrictEqual(Array.from(key), [0, 0]);
+  await h.session.envelopeWrites();
+  const posts = h.requests.filter((r) => r[0] === 'POST');
+  assert.deepStrictEqual(posts[0][2].kdf_params, { v: '1.3', m: 65536, t: 3, p: 2 });
+});
+
+test('a stale envelope opened by a substituted key is never resealed', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    vaultCrypto: { equalBytes: () => false },
+  });
+  await assert.rejects(h.session.unlock({ password: 'pw', secretText: SECRET }), (e) => e.reason === 'substituted-key');
+  assert.equal(h.calls.filter((c) => c === 'deriveAmk').length, 1);
+  assert.equal(h.calls.some((c) => String(c).startsWith('seal:')), false);
+});
+
+test('confirm goes before the re-wrap', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  await h.session.envelopeWrites();
+  assert.deepStrictEqual(
+    h.requests.filter((r) => r[0] === 'POST').map((r) => r[1]),
+    ['/api/v1/vault/account/confirm', '/api/v1/vault/account/rotate'],
+  );
+});
+
+test('a 409 on the re-wrap is dropped silently and leaves the session open', async () => {
+  const h = harness({
+    envelope: { ...ENVELOPE, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    answer: (method) => (method === 'POST' ? 409 : 200),
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  await h.session.envelopeWrites();
+  assert.equal(h.requests.filter((r) => r[0] === 'POST').length, 1);
+  assert.equal(h.session.isUnlocked(), true);
+});
+
+test('a reseal that does not reread sends nothing and still unlocks', async () => {
+  let reads = 0;
+  const h = harness({
+    envelope: { ...ENVELOPE, kdf_params: { v: '1.3', m: 16384, t: 1, p: 1 } },
+    vaultCrypto: {
+      open: async (key, raw, ad) => {
+        reads += 1;
+        if (reads > 2) return Uint8Array.from([0]);
+        return String(ad).startsWith('kex') ? h.kexPriv : h.sigSeed;
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  await h.session.envelopeWrites();
+  assert.equal(h.session.isUnlocked(), true);
+  assert.deepStrictEqual(h.requests.filter((r) => r[0] === 'POST'), []);
+});
+
+test('locking forgets which envelope opened the session', async () => {
+  // The same stub as the fallback test: the current envelope's keys fail, the
+  // previous envelope's open.
+  const h = harness({
+    envelope: { ...ENVELOPE, ...PREVIOUS },
+    vaultCrypto: {
+      open: async (key, raw, ad) => {
+        const text = String.fromCharCode(...raw);
+        if (text === ENVELOPE.wrapped_kex_priv || text === ENVELOPE.wrapped_sig_priv) {
+          throw new Error('tag mismatch');
+        }
+        return String(ad).startsWith('kex') ? Uint8Array.from({ length: 32 }, () => 1) : Uint8Array.from({ length: 32 }, () => 2);
+      },
+    },
+  });
+  await h.session.unlock({ password: 'pw', secretText: SECRET });
+  assert.equal(h.session.openedWithPrevious(), true);
+  h.session.lock();
+  assert.equal(h.session.openedWithPrevious(), false);
+});
+
 // The entry keys the export walks the account with. Deriving one is an HPKE
 // open plus an HKDF, and `hkdf` is already recorded by the harness, so the
 // count of derivations is readable without touching the stubs.
@@ -1024,7 +1284,12 @@ function fixture() {
 
 function realSession(envelope) {
   const ctx = loadScripts(
-    ['workspace/vault/ui/static/vault/ui/js/api.js', BUNDLE, 'workspace/vault/ui/static/vault/ui/js/session.js'],
+    [
+      'workspace/vault/ui/static/vault/ui/js/api.js',
+      BUNDLE,
+      'workspace/vault/ui/static/vault/ui/js/account_envelope.js',
+      'workspace/vault/ui/static/vault/ui/js/session.js',
+    ],
     {
       ...BUNDLE_GLOBALS,
       getCSRFToken: () => 'csrf',

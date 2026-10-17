@@ -108,6 +108,8 @@ window.vaultReader = (function () {
       uuid: row.uuid,
       parent: row.parent,
       position: row.position,
+      // Kept so a rename can ask whether this signature may be re-signed.
+      metadata_sig: row.metadata_sig,
       name: await openText(V, key, row.encrypted_name, V.AD.folderFieldAd(row.uuid, NAME_FIELD)),
     };
   }

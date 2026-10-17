@@ -147,10 +147,145 @@ id, so the rework needs no data migration.
 ### Retiring an algorithm
 
 1. Mark the id `superseded` and ship. Every client rewrites what it can open and verify the next time its owner unlocks; the server lists what is left (`GET /api/v1/vault/migration`) and counts it (`manage.py vault_suite_census`).
-2. Wait until the census shows zero rows for that id. There is no fixed delay: an account that never comes back keeps the count above zero.
+2. Wait until the census shows zero rows for that id. There is no fixed delay: an account that never comes back keeps the count above zero. The census counts the previous account envelope (see below) exactly like the current one, so an id can be dropped only once nothing is left for it there either: an unconfirmed previous envelope still sealed under the retired id holds the retirement back.
 3. Only then remove the id from the manifest. `manage.py migrate` runs the `vault.E001` check first and refuses while any stored row still carries an id the manifest no longer declares.
 
 A superseded **signature** id carries `"resign": true | false`. `false` means the algorithm is considered broken: rows signed under it are never re-signed, because re-signing would turn a forgery into a valid signature. The migration on unlock leaves them as they are, and removing a tag or a folder that one of them carries is refused rather than re-signing it. The reader still opens them like any other row for as long as the manifest declares the id.
+
+## The account envelope
+
+The envelope is the four `AccountIdentity` columns the password protects:
+`kdf_algo`, `kdf_params`, `wrapped_kex_priv` and `wrapped_sig_priv`. It seals the
+two private keys through which every vault key wrap passes, so an envelope that
+cannot be opened loses the whole account, every vault at once. The salt and the
+public keys are never rewritten: a new salt would orphan every wrap.
+
+### The previous envelope
+
+Four nullable columns, `previous_kdf_algo`, `previous_kdf_params`,
+`previous_wrapped_kex_priv` and `previous_wrapped_sig_priv`, hold **the last
+envelope an unlock proved**: one that was opened and passed every check
+(recomputed signature key against the served one, attestation of `kex_public`).
+The invariant:
+
+- the four columns are all null or all set, and a database constraint holds
+  that;
+- they are set exactly when the current envelope has not yet been proved. Once
+  an unlock opens the current one, the previous is cleared;
+- the previous is never replaced by an envelope that no unlock has opened.
+  Overwriting it with an unproved one would destroy the only copy known to be
+  good.
+
+Only two endpoints write these columns, and nothing else writes the envelope of
+an active identity.
+
+### Re-wrapping on unlock
+
+An unlock opens the current envelope. When it is stale, the client rewrites it
+under the current suite, at that same unlock, so that an account that never
+changes its password does not stay under a retired format or weak parameters
+forever. An envelope is stale when its KDF is not `current`, its KDF parameters
+differ from the current ones, or either ciphertext carries a `superseded` format
+or AEAD.
+
+- **Which key seals.** If only the format or the AEAD is stale, the unwrap key
+  that just opened the envelope is reused. If the derivation is stale, the client
+  derives once more under the current KDF and parameters (same password, same
+  secret key, same salt), at the cost of one extra derivation, once.
+- **Sealed before the session commits.** Only non-extractable keys may outlive an
+  unlock, and the raw private keys are zeroed when it ends, so the new
+  ciphertexts are produced while the raw keys are still in hand: current format
+  and AEAD, direct KDF, key version 0, same associated data.
+- **Reopened before anything is sent.** The client opens the two new ciphertexts
+  with the same key and compares them byte for byte to what it just opened. A
+  difference abandons the re-wrap, sends nothing, and does not fail the unlock.
+- **Sent after, never awaited.** Once the session is committed, the page shows
+  the vault without waiting. A conflict, a network error or a refusal is dropped
+  silently, and the next unlock tries again. Opening never depends on the write.
+
+The unlock tries the current envelope first. Only an authentication failure,
+which looks like a wrong password, falls back to the previous one. Every other
+failure (unsupported algorithm, substituted key, wrong identity) is final: the
+previous envelope is not a second chance against a substitution. A wrong
+password therefore costs two derivations while a previous envelope exists.
+
+**An unlock opened by the previous envelope writes nothing.** Re-wrapping from it
+would overwrite the current envelope, after a password change the new
+password's, with one sealed under the old password. The session opens, a banner
+says the previous password was used, and the current envelope takes over the
+first time it is used.
+
+What leaves the client after an unlock:
+
+| Opened by | Previous set | Current stale | Sent |
+|---|---|---|---|
+| current | no | no | nothing |
+| current | no | yes | rotate |
+| current | yes | no | confirm |
+| current | yes | yes | confirm, then rotate |
+| previous | - | - | nothing |
+
+`confirm` goes before `rotate`, so that the current envelope, just proved,
+becomes the previous when the rewrite lands, rather than leaving an older
+previous in place.
+
+### The two endpoints
+
+`POST /api/v1/vault/account/rotate` writes an envelope. It takes the four
+columns plus `expected_wrapped_kex_priv`, the value of the current envelope the
+client read.
+
+- The KDF must be the manifest's `current` one and the parameters must equal its
+  current parameters. An envelope is always written under the current suite;
+  there is no rotation to a superseded one. Otherwise 400.
+- Both ciphertexts must be under the current format and AEAD, direct KDF, key
+  version 0. Otherwise 400.
+- The write is a single conditional `UPDATE` on the caller's active identity
+  where `wrapped_kex_priv` still equals `expected_wrapped_kex_priv`. No row
+  written: 409. The envelope changed since the client read it, for instance in
+  another tab.
+- When the previous is empty, the same `UPDATE` moves the current envelope into
+  the previous columns. When it is set, only the current is replaced and the
+  previous is left alone. One statement decides both, so no read in between can
+  act on a stale state. No active identity: 404. The response has no body.
+
+`POST /api/v1/vault/account/confirm` takes `wrapped_kex_priv`, the current
+envelope the client just opened, and clears the four previous columns where the
+current envelope still equals it. If it moved (another tab re-wrapped), nothing
+is cleared, since the new current envelope is not the one that was proved. The
+answer is 204 whether or not a row changed, because the operation is idempotent.
+No active identity: 404.
+
+`GET /api/v1/vault/account/envelope` also serves the four `previous_*` values,
+null when empty. The field names `previous_wrapped_*` and `expected_wrapped_*`
+are redacted from logs and error reports like the `wrapped_*` ones.
+
+### Changing the password
+
+The change is a rotation through the same endpoint, from a dialog in the sidebar.
+The client derives with the current password and opens the current envelope
+(never the previous: that would rewrite the current envelope from an older one),
+derives under the new password, seals both keys, **reopens and compares them**,
+zeroes the raw material, and sends `rotate` with the envelope it read. Nothing is
+sent when the current password is wrong or the comparison fails. A 409 asks the
+user to reload. On success the session locks and asks for the new password, whose
+unlock opens the current envelope and sends `confirm`.
+
+The new password must meet the onboarding floor: 12 code points after NFC, a
+zxcvbn score of 3 or more, and the breach check.
+
+The cost, accepted: from the rotation until the next unlock, the previous
+envelope still opens with the **old** password. Someone holding a copy of the
+database, the old password **and** the secret key could open the account in that
+window. The secret key is still required, and the screen locks straight after the
+rotation, so the window lasts about one unlock. In exchange, a rotation whose new
+envelope turns out unusable cannot lock the user out of their account. The same
+trade-off applies when parameters are raised: until confirmed, the previous
+envelope stays attackable offline at the cost of the old parameters.
+
+A user opened by the previous envelope who has forgotten the current password
+cannot choose another through the dialog, which starts from the current
+envelope.
 
 ## The export archive
 

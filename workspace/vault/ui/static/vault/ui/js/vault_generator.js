@@ -62,8 +62,9 @@ window.vaultGeneratorMixin = function vaultGeneratorMixin() {
     },
 
     // The label and the clearing window belong to the host. This mixin serves
-    // the entry dialog, the standalone generator and the export dialog, and
-    // only the last of those copies something no vault can hand back.
+    // the entry dialog, the standalone generator, the export dialog and the
+    // master password dialog, and only the last two copy something no vault
+    // can hand back.
     async copyGenerated(value, options) {
       const policy = options || {};
       // Copying is the only way a value drawn here leaves the dialog, and

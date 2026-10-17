@@ -24,6 +24,9 @@ class SensitiveNameTests(TestCase):
             "secret_key",
             "session_key",
             "wrapped_kex_priv",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
+            "expected_wrapped_kex_priv",
             "encrypted_name",
         ):
             with self.subTest(name=name):

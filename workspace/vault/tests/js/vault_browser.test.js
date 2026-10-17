@@ -150,6 +150,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_switcher.js',
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_export.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_password.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -1609,11 +1610,22 @@ test('editing an entry carries the fields the dialog does not edit', async () =>
   assert.ok(!('totp' in component.draft.values), 'the key is never opened for the form');
 });
 
+// A save reads what an edit carries from the stored row, so a hand-built
+// edit draft needs its row in the listing.
+function listingOf(row) {
+  return async (uuid, opts) => (opts && opts.trashed ? [] : [row]);
+}
+
+const TOTP_FIELD = { field_id: 'totp', encrypted_value: 'ct:totp' };
+
 test('a pasted authenticator key is normalized before it is sealed', async () => {
   const written = [];
   const normalized = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1')),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: (text, options) => {
         normalized.push({ text: text, label: options.label });
@@ -1631,7 +1643,7 @@ test('a pasted authenticator key is normalized before it is sealed', async () =>
     uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
     name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
     hasTotp: false, totpInput: 'JBSWY3DPEHPK3PXP', totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written.length, 1);
@@ -1645,7 +1657,10 @@ test('a pasted authenticator key is normalized before it is sealed', async () =>
 test('removing the key drops it from the write instead of carrying it', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1654,7 +1669,7 @@ test('removing the key drops it from the write instead of carrying it', async ()
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: true,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.ok(!('totp' in written[0].fields), 'a removed key must not be carried');
@@ -1663,7 +1678,10 @@ test('removing the key drops it from the write instead of carrying it', async ()
 test('an untouched key is carried through an edit', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1672,7 +1690,7 @@ test('an untouched key is carried through an edit', async () => {
     name: 'Renamed', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written[0].fields.totp, 'ct:totp');
@@ -1709,7 +1727,10 @@ test('cancelling an add after a remove does not bring the key back', async () =>
   // followed carried the ciphertext through as if Remove had never happened.
   const written = [];
   const { component } = typed({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
   });
   component.init();
   await component.load();
@@ -1718,7 +1739,7 @@ test('cancelling an add after a remove does not bring the key back', async () =>
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   assert.equal(component.totpFieldState(), 'set');
   component.removeTotp();
@@ -1734,7 +1755,10 @@ test('cancelling an add after a remove does not bring the key back', async () =>
 test('typing a key after a remove seals the new one', async () => {
   const written = [];
   const { component } = typed({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1', { entry_fields: [TOTP_FIELD] })),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: (text) => 'otpauth://totp/Bank?secret=' + text,
       // Seals to its own plaintext, so the test reads which value was sealed.
@@ -1749,7 +1773,7 @@ test('typing a key after a remove seals the new one', async () => {
     name: 'Bank', notes: '', values: {},
     carriedFields: { totp: 'ct:totp' }, keyVersion: 1,
     hasTotp: true, totpInput: null, totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   component.removeTotp();
   component.startTotpEntry();
@@ -1764,7 +1788,10 @@ test('typing a key after a remove seals the new one', async () => {
 test('a malformed key is refused with a message rather than saved', async () => {
   const written = [];
   const { component } = browser({
-    api: { updateEntry: async (uuid, body) => { written.push(body); return {}; } },
+    api: {
+      listEntries: listingOf(entryWith('e-1')),
+      updateEntry: async (uuid, body) => { written.push(body); return {}; },
+    },
     crypto: {
       normalizeTotpInput: () => { throw new Error('illegal base32 character !'); },
     },
@@ -1775,7 +1802,7 @@ test('a malformed key is refused with a message rather than saved', async () => 
     uuid: 'e-1', type: 'login', folder: null, tags: [], favorite: false,
     name: 'Bank', notes: '', values: {}, carriedFields: {}, keyVersion: 1,
     hasTotp: false, totpInput: 'nope!', totpRemoved: false,
-    entryVersion: 1, isNew: false,
+    entryVersion: 1, isNew: false, storedSig: 'sig',
   };
   await component.saveEntry();
   assert.equal(written.length, 0, 'nothing is written');
@@ -3045,6 +3072,39 @@ test('locking takes back the password the generator drew', async () => {
   assert.equal(component.generatorOpen, false);
 });
 
+test('locking closes the password change and its passwords with it', async () => {
+  const { component } = browser();
+  component.init();
+  component.openPasswordDialog();
+
+  component.onLocked();
+
+  assert.equal(component.passwordDialogOpen, false);
+});
+
+test('a change leaves its notice on the unlock form until the next unlock', async () => {
+  let previous = true;
+  const { component } = browser({ session: { openedWithPrevious: () => previous } });
+  component.init();
+  component.load = async () => {};
+  component.startMigration = () => {};
+  component.openPasswordDialog();
+
+  component.passwordChangeSucceeded();
+  component.onLocked();
+  assert.equal(component.passwordChangedNotice, true);
+
+  await component.afterUnlock();
+  assert.equal(component.passwordChangedNotice, false);
+  assert.equal(component.unlockedWithPrevious, true);
+
+  component.onLocked();
+  assert.equal(component.unlockedWithPrevious, false);
+  previous = false;
+  await component.afterUnlock();
+  assert.equal(component.unlockedWithPrevious, false);
+});
+
 test('closing the entry dialog forgets which field had its generator open', async () => {
   // generatorField outlives the dialog otherwise, and the next entry opened -
   // an edit of an existing one included - mounts the panel unasked, drawing a
@@ -3170,4 +3230,72 @@ test('losing the last vault forgets the rows the reader rejected too', async () 
   component.vaultUuid = null;
   await component.load();
   assert.deepStrictEqual(Array.from(component.unverifiedEntryRows), []);
+});
+
+// --- a signature algorithm marked broken ------------------------------------
+
+// 'CQ' decodes to a first byte naming suite 9, the one this stub refuses.
+const BROKEN_SUITE = {
+  fromBase64Url: (value) => (value === 'AQ' ? Uint8Array.of(1) : value === 'CQ' ? Uint8Array.of(9) : value),
+  mayResign: (id) => id !== 9,
+};
+
+test('renaming a folder signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = browser({
+    crypto: BROKEN_SUITE,
+    api: {
+      listFolders: async () => [
+        { uuid: 'f-1', vault: VAULT_UUID, parent: null, position: 0,
+          encrypted_name: 'ct', metadata_sig: 'CQ' },
+      ],
+      updateFolder: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  component.renameFolder(component.folders[0]);
+  component.folderDraft.name = 'Bills';
+  await component.saveFolder();
+  assert.equal(written.length, 0);
+  assert.equal(component.error, 'This folder could not be verified. It was left untouched.');
+});
+
+test('editing an entry signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = typed({
+    crypto: BROKEN_SUITE,
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { metadata_sig: 'CQ' })],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+      updateEntry: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  await component.saveEntry();
+  assert.equal(written.length, 0);
+  assert.equal(component.error, 'This entry could not be verified. It was left untouched.');
+});
+
+test('favouriting an entry signed under a broken algorithm writes nothing and says why', async () => {
+  const written = [];
+  const { component } = browser({
+    crypto: BROKEN_SUITE,
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { metadata_sig: 'CQ' })],
+      updateEntry: async (uuid, body) => { written.push(body); return body; },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.applyTo('favorite', [component.entries[0]]);
+  assert.equal(written.length, 0);
+  assert.equal(
+    component.error,
+    'An entry could not be verified. It was left untouched, and so were the ones after it.',
+  );
 });

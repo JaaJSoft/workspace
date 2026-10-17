@@ -36,6 +36,14 @@ class AccountIdentity(models.Model):
     wrapped_kex_priv = models.TextField()
     wrapped_sig_priv = models.TextField()
     sig_over_kex_pub = models.TextField()
+    # The last envelope an unlock proved, kept while the current one has not
+    # opened yet. All four or none: a half-written previous envelope could not
+    # be derived, and it is the only copy of the private keys a faulty writer
+    # has not touched. Only the rotate and confirm endpoints write them.
+    previous_kdf_algo = models.CharField(max_length=16, null=True, blank=True)
+    previous_kdf_params = models.JSONField(null=True, blank=True)
+    previous_wrapped_kex_priv = models.TextField(null=True, blank=True)
+    previous_wrapped_sig_priv = models.TextField(null=True, blank=True)
     state = models.CharField(
         max_length=16, choices=State.choices, default=State.PENDING
     )
@@ -44,6 +52,25 @@ class AccountIdentity(models.Model):
 
     class Meta:
         verbose_name_plural = "account identities"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        previous_kdf_algo__isnull=True,
+                        previous_kdf_params__isnull=True,
+                        previous_wrapped_kex_priv__isnull=True,
+                        previous_wrapped_sig_priv__isnull=True,
+                    )
+                    | models.Q(
+                        previous_kdf_algo__isnull=False,
+                        previous_kdf_params__isnull=False,
+                        previous_wrapped_kex_priv__isnull=False,
+                        previous_wrapped_sig_priv__isnull=False,
+                    )
+                ),
+                name="vault_identity_previous_all_or_nothing",
+            )
+        ]
 
     def __str__(self):
         return f"Vault identity of {self.user_id}"

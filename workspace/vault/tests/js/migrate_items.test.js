@@ -30,7 +30,7 @@ function setup() {
     btoa: globalThis.btoa,
     atob: globalThis.atob,
   });
-  for (const file of ['entry_write', 'folder_write', 'tag_write', 'vault_update', 'migrate_items']) {
+  for (const file of ['entry_write', 'folder_write', 'tag_write', 'vault_update', 'vault_resign', 'migrate_items']) {
     loadScript(JS + file + '.js', {}, ctx);
   }
   vm.runInContext(`
@@ -128,6 +128,7 @@ test('an entry signs what a fresh write of the same record signs', async () => {
   const written = await ctx.buildEntryWriteRequest(session, vault, {
     uuid: ENTRY, type: 'login', folder: FOLDER, tags: [TAG, ACCOUNT], favorite: true,
     entryVersion: 2, name: 'GitHub', notes: 'n', values: { password: 'hunter2', username: 'jc' },
+    isNew: true,
   });
   const expected = signed.pop();
   assert.deepStrictEqual(plainJson(migrated), plainJson(expected));

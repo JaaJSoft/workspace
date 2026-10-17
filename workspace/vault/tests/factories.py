@@ -32,6 +32,14 @@ def sealed(label: str, format_version: int = 2, key_version: int = 1) -> str:
     return to_base64url(header + bytes(12) + label.encode().ljust(16, b"\0"))
 
 
+def sealed_envelope(label: str, format_version: int = 2) -> str:
+    """A sealed account private key as onboarding writes it: direct KDF, key
+    version zero, because the unwrap key seals it with no per-value derivation
+    in between."""
+    header = bytes([format_version, 1, 0, 0, 0, 12])
+    return to_base64url(header + bytes(12) + label.encode().ljust(16, b"\0"))
+
+
 def make_account(username="owner", password="pw"):
     """A user with an active vault identity, and the private key behind it."""
     user = User.objects.create_user(username=username, password=password)

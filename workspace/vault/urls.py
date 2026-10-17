@@ -29,6 +29,11 @@ urlpatterns = [
         name="vault-account-rotate",
     ),
     path(
+        "api/v1/vault/account/confirm",
+        account.AccountConfirmView.as_view(),
+        name="vault-account-confirm",
+    ),
+    path(
         "api/v1/vault/vaults",
         vaults.VaultListView.as_view(),
         name="vault-list",

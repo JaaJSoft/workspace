@@ -14,6 +14,7 @@ window.buildVaultUpdateRequest = async function buildVaultUpdateRequest(
   vault,
   changes,
 ) {
+  window.vaultResign.assertMayResign(vault);
   const V = window.vaultCrypto;
   const next = Object.assign(
     {

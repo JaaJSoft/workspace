@@ -61,8 +61,11 @@ a model: what a model has to beat.
 | threshold / margin | The pair fitted on every library: what a backend would ship as its default |
 | CPU ms / crop | Embedding CPU time per torso, one thread unless `--onnx-threads` says otherwise |
 
-The same is broken down by head size, at 95% precision. `--json` writes
-everything, and `--compare` prints the differences with an earlier report.
+The same is broken down at 95% precision by head size, by the photo's light
+and by the time it was taken. A photo is *dark* when the median value (HSV)
+of its pixels is under 0.25, *dim* under 0.45, *bright* above; it is taken in
+the *evening* from 19:00 to 05:00, local time. `--json` writes everything,
+and `--compare` prints the differences with an earlier report.
 
 The shares are of the torsos with a candidate, and other `--window` or
 `--burst` values change how many there are. Two such runs compare by the
@@ -113,6 +116,16 @@ By head size, named at 95%:
 | 48-96 px | 1,199 | 78.7% | 19.3% (95.7%) | 20.4% (93.0%) | 20.9% (98.0%) | 10.4% (92.0%) |
 | 96 px and up | 837 | 84.2% | 26.8% (96.9%) | 26.9% (92.4%) | 29.2% (97.1%) | 12.7% (98.1%) |
 
+By the photo's light and the time it was taken, named at 95%:
+
+| Photo | Torsos | Anchored | CLIP ViT-B/32 | SigLIP 2 | Jina CLIP v1 | histogram |
+|---|---|---|---|---|---|---|
+| dark | 334 | 78.1% | 24.3% (96.3%) | 24.9% (95.2%) | 27.8% (97.8%) | 15.3% (96.1%) |
+| dim | 939 | 74.9% | 23.0% (95.4%) | 22.7% (93.9%) | 23.5% (97.7%) | 11.3% (92.5%) |
+| bright | 1,450 | 74.1% | 13.0% (93.1%) | 14.1% (84.8%) | 13.8% (95.5%) | 5.3% (94.8%) |
+| evening | 639 | 66.4% | 8.9% (89.5%) | 8.1% (80.8%) | 7.7% (91.8%) | 2.5% (75.0%) |
+| day | 2,084 | 77.5% | 20.5% (95.3%) | 21.5% (91.5%) | 22.3% (97.4%) | 10.5% (95.4%) |
+
 ### Which anchors
 
 The same vectors, other candidates. Each column has its own number of torsos
@@ -141,6 +154,14 @@ them anchors; 1,804 torsos have a candidate.
 | heads 96 px and up, at 95% | 23.6% (97.1%) | 27.4% (94.8%) | 17.4% (96.1%) | 0.8% (90.9%) |
 | CPU ms / crop | 134 | 498 | 496 | 3 |
 
+| Photo, named at 95% | Torsos | Anchored | CLIP ViT-B/32 | SigLIP 2 | Jina CLIP v1 | histogram |
+|---|---|---|---|---|---|---|
+| dark | 187 | 85.0% | 31.0% (96.6%) | 36.9% (98.6%) | 18.2% (97.1%) | 2.1% (100%) |
+| dim | 666 | 81.4% | 21.2% (96.5%) | 25.2% (95.8%) | 16.2% (96.3%) | 0.9% (100%) |
+| bright | 951 | 79.3% | 15.1% (95.8%) | 18.6% (89.8%) | 11.1% (94.3%) | 0.2% (50.0%) |
+| evening | 401 | 72.6% | 7.5% (93.3%) | 10.2% (90.2%) | 3.2% (76.9%) | 0.0% |
+| day | 1,403 | 83.0% | 22.3% (96.5%) | 26.6% (94.1%) | 16.7% (96.6%) | 0.9% (91.7%) |
+
 ## Reading the results
 
 - **Clothing names about one person in five, without their face.** At 95%
@@ -164,6 +185,15 @@ them anchors; 1,804 torsos have a candidate.
 - **People with small heads are out of reach.** Under 48 px, at most 6%
   are named, at 55-79% precision: the torso is too small to show anything.
   An appearance needs a minimum size, as faces do.
+- **Darkness is not what fails; evenings are.** Dark photos are named
+  better than bright ones (24-28% against 13-14% at 500 px), at both sizes.
+  Photos taken in the evening are named less than half as often as daytime
+  ones, at a lower precision (81-92% at 500 px, where 95% was aimed). Fewer of their
+  people have an anchor around (66% against 78%), and a threshold of their
+  own does not help: fitted on the evening photos alone, no threshold names
+  20 of them at 95% for CLIP or SigLIP 2, and the one fitted on half of
+  them holds 65-79% on the other half. The party photos this was meant for
+  are where the signal is weakest.
 - **A window of hours comes close to the album.** PIPA's albums are Flickr
   albums, mostly one event each: what an event table would try to find.
   Six hours around each photo, with nothing to cut, name 3 to 7% fewer
@@ -184,8 +214,16 @@ them anchors; 1,804 torsos have a candidate.
   are torsos seen from the front, since PIPA does not say who faces away. A
   printed front and a plain back, a jacket open on one side, make the real
   case harder than this.
-- **Few night photos.** PIPA's albums are mostly daylight: weddings,
-  conventions, family days. Colour-lit party photos, where a face fails most,
-  are the case left to check on a real evening.
+- **Photos people chose to share.** PIPA's evening photos are the ones
+  their authors put on Flickr: sharper and better lit than what a phone
+  keeps from a party. Photos under coloured spotlights are rare in it.
 - **The anchors are right.** Every anchor is named after the person it is;
   in the app, a face in the wrong group passes its mistake on.
+- **Whether a library can judge itself.** The faces a library already
+  named are labels it has for free: hiding each one's face and checking
+  whether its torso finds its own name would tell, library by library,
+  whether to make suggestions at all. PIPA is too small to say whether
+  that estimate holds: its 25 libraries name a median of 5 torsos each at
+  95%, and an estimate from the earlier half of a library's photos predicts
+  nothing about the later half (a correlation from -0.3 to 0.65, over the
+  4 to 8 libraries with enough names on both sides).

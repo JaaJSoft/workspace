@@ -18,12 +18,13 @@ named in the photo.
   margin over the next person name, with what they get right. Both are fitted
   on half the libraries and scored on the other half, then the halves swap;
   the pair fitted on every library is what a backend would ship.
+- The same by head size, by how dark the photo is and by whether it was
+  taken in the evening, and the CPU time per crop (one thread unless
+  --onnx-threads says otherwise).
 
 A torso is one person in one photo, so the shares are of the torsos with a
 candidate. Other --window or --burst values change that number: two such runs
 compare by the torsos named, not by the shares.
-- The same by head size, and the CPU time per crop (one thread unless
-  --onnx-threads says otherwise).
 
 ``histogram`` is no backend: a colour histogram of the crop, what a model has
 to beat.
@@ -76,9 +77,14 @@ TORSO_HEIGHT = 3
 # a third of it is the shoulders and the chest.
 MIN_VISIBLE = 1 / 3
 MIN_SIDE = 8
+# A photo's light: the median value (HSV) of its pixels, from 0 to 1.
+LIGHT_BUCKETS = ((0.25, "dark"), (0.45, "dim"), (None, "bright"))
+# Local capture time, from EVENING_FROM to EVENING_TO o'clock.
+EVENING_FROM = 19
+EVENING_TO = 5
 TARGETS = (0.90, 0.95, 0.98)
-# The target the by-size table is read at.
-SIZE_TARGET = 0.95
+# The target the breakdowns are read at.
+BREAKDOWN_TARGET = 0.95
 _THRESHOLDS = np.round(np.arange(0.0, 1.0005, 0.005), 3)
 _MARGINS = (0.0, 0.01, 0.02, 0.03, 0.05, 0.08)
 # A point naming fewer people than this is fitted on chance.
@@ -103,6 +109,8 @@ class Torso:
     head: float
     # (left, top, right, bottom), px of the image.
     box: tuple[int, int, int, int]
+    # The photo's LIGHT_BUCKETS label.
+    light: str
 
 
 def torso_box(head, width, height):
@@ -123,11 +131,28 @@ def torso_box(head, width, height):
     return round(left), round(top), round(right), round(bottom)
 
 
-def torsos_of(photos):
+def light_of(path):
+    """The LIGHT_BUCKETS label of the photo at *path*."""
+    with Image.open(path) as img:
+        values = np.asarray(img.convert("RGB").convert("HSV").resize((64, 64)))
+    light = float(np.median(values[..., 2])) / 255
+    return next(
+        label for ceiling, label in LIGHT_BUCKETS if ceiling is None or light < ceiling
+    )
+
+
+def time_of_day(taken):
+    if taken.hour >= EVENING_FROM or taken.hour < EVENING_TO:
+        return "evening"
+    return "day"
+
+
+def torsos_of(photos, paths):
     """The torsos of *photos*' annotated people, photo by photo."""
     out = []
     for photo in photos:
         taken = datetime.fromisoformat(photo.taken) if photo.taken else None
+        light = light_of(paths[photo.photo_id])
         for face in photo.faces:
             box = torso_box(face.box, photo.width, photo.height)
             if box is not None:
@@ -140,6 +165,7 @@ def torsos_of(photos):
                         identity=face.identity,
                         head=face.box[3],
                         box=box,
+                        light=light,
                     )
                 )
     return out
@@ -251,7 +277,9 @@ class Answer:
 
     # The library's rank, which half of the bench it is in.
     library: int
-    bucket: str
+    size: str
+    light: str
+    time: str
     nearest: float
     # How much further the nearest anchor of anyone else is.
     margin: float
@@ -290,7 +318,9 @@ def answers(torsos, vectors, named, libraries, *, window, burst):
         out.append(
             Answer(
                 library=libraries[query.library],
-                bucket=size_bucket(query.head),
+                size=size_bucket(query.head),
+                light=query.light,
+                time=time_of_day(query.taken),
                 nearest=float(distances[order[0]]),
                 margin=2.0
                 if runner_up is None
@@ -352,12 +382,19 @@ def held_out(answers, target):
     return accepted
 
 
+# (report key, Answer field, title, labels in their order)
+BREAKDOWNS = (
+    ("by_size", "size", "Head size", tuple(size_bucket(low) for low in SIZE_BUCKETS)),
+    ("by_light", "light", "Photo light", tuple(label for _, label in LIGHT_BUCKETS)),
+    ("by_time", "time", "Taken", ("evening", "day")),
+)
+
+
 def score(answers):
     """The report of one backend's answers."""
     right = np.array([a.right for a in answers], dtype=bool)
     anchored = np.array([a.anchored for a in answers], dtype=bool)
     majority = np.array([a.majority_right for a in answers], dtype=bool)
-    buckets = np.array([a.bucket for a in answers])
     report = {
         "torsos": len(answers),
         "anchored": _share(anchored),
@@ -365,7 +402,7 @@ def score(answers):
         "majority_right": _share(majority[anchored]),
         "named": {},
     }
-    at_size_target = None
+    at_breakdown_target = None
     for target in TARGETS:
         accepted = held_out(answers, target)
         report["named"][f"{target:.2f}"] = {
@@ -374,18 +411,22 @@ def score(answers):
             "precision": _share(right[accepted]),
             "fitted": fit(answers, target),
         }
-        if target == SIZE_TARGET:
-            at_size_target = accepted
-    report["by_size"] = {}
-    for bucket in (size_bucket(low) for low in SIZE_BUCKETS):
-        here = buckets == bucket
-        report["by_size"][bucket] = {
-            "torsos": int(here.sum()),
-            "anchored": _share(anchored[here]),
-            "nearest_right": _share(right[here & anchored]),
-            "named": _share(at_size_target[here]),
-            "precision": _share(right[here & at_size_target]),
-        }
+        if target == BREAKDOWN_TARGET:
+            at_breakdown_target = accepted
+    for key, field, _title, labels in BREAKDOWNS:
+        values = np.array([getattr(a, field) for a in answers])
+        report[key] = {}
+        for label in labels:
+            here = values == label
+            named = here & at_breakdown_target
+            report[key][label] = {
+                "torsos": int(here.sum()),
+                "anchored": _share(anchored[here]),
+                "nearest_right": _share(right[here & anchored]),
+                "named": _share(at_breakdown_target[here]),
+                "count": int(named.sum()),
+                "precision": _share(right[named]),
+            }
     return report
 
 
@@ -453,22 +494,26 @@ def render(report, baseline=None):
         lines.append(f"{label:<30}" + "".join(cells))
     lines += [
         "",
-        f"By head size, at {SIZE_TARGET:.0%} precision: named (precision held out)",
-        f"{'':<12}{'torsos':>8}{'anchored':>10}"
-        + "".join(f"{key:>{width + 4}}" for key in keys),
+        f"At {BREAKDOWN_TARGET:.0%} precision: named (precision held out)",
     ]
-    first = report["backends"][keys[0]]["by_size"]
-    for bucket, row in first.items():
-        cells = []
-        for key in keys:
-            cell = report["backends"][key]["by_size"][bucket]
-            cells.append(
-                f"{_format(cell['named'], 'pct')} ({_format(cell['precision'], 'pct')})"
+    for breakdown, _field, title, labels in BREAKDOWNS:
+        lines += [
+            "",
+            f"{title:<12}{'torsos':>8}{'anchored':>10}"
+            + "".join(f"{key:>{width + 4}}" for key in keys),
+        ]
+        first = report["backends"][keys[0]][breakdown]
+        for label in labels:
+            cells = []
+            for key in keys:
+                cell = report["backends"][key][breakdown][label]
+                named = _format(cell["named"], "pct")
+                cells.append(f"{named} ({_format(cell['precision'], 'pct')})")
+            row = first[label]
+            lines.append(
+                f"{label:<12}{row['torsos']:>8}{_format(row['anchored'], 'pct'):>10}"
+                + "".join(f"{cell:>{width + 4}}" for cell in cells)
             )
-        lines.append(
-            f"{bucket:<12}{row['torsos']:>8}{_format(row['anchored'], 'pct'):>10}"
-            + "".join(f"{cell:>{width + 4}}" for cell in cells)
-        )
     return "\n".join(lines)
 
 
@@ -592,7 +637,7 @@ def main():
         json.loads(args.compare.read_text(encoding="utf-8")) if args.compare else None
     )
     photos, paths, libraries = load(args, cache_dir)
-    torsos = torsos_of(photos)
+    torsos = torsos_of(photos, paths)
     named = named_by_face(photos)
     rendition = photo_dataset.LARGE_SIZE if args.full_size else 500
     if any(key != HISTOGRAM for key in keys):

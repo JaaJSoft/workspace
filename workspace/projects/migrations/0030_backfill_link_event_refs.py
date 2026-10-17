@@ -4,9 +4,9 @@ A link event names the task at the other end of the link only by its
 reference string, so a feed cannot tell whether its viewer may read it. Both
 ends' events are written back to back by the same call, each naming the
 other's number: pairing them recovers the other end's project (and task, when
-it still exists) without trusting the reference's key, which may have been
-renamed or reused since. An event left unpaired keeps a null ``from_ref`` and
-is hidden from every feed.
+it still exists). A key may have been renamed since, so it only has to match on
+one end of a pair. An event left unpaired keeps a null ``from_ref`` and is
+hidden from every feed.
 """
 
 from collections import defaultdict
@@ -19,22 +19,52 @@ _LINK_TYPES = ("linked", "unlinked")
 _PAIR_WINDOW = timedelta(seconds=2)
 
 
+# The direction label each end of a link records, as (source, target).
+# Inlined: a migration must not depend on the live services module.
+_LINK_LABELS = (
+    ("blocks", "is blocked by"),
+    ("duplicates", "is duplicated by"),
+    ("relates to", "relates to"),
+)
+
+
 def _names(event, other):
     return event["to_value"].rpartition("-")[2] == str(other["task_number"])
 
 
-def _is_pair(event, other):
+def _opposite_ends(event, other):
+    labels = (event["from_value"], other["from_value"])
+    return any(labels in (pair, pair[::-1]) for pair in _LINK_LABELS)
+
+
+def _names_project(event, other, keys):
+    return event["to_value"].rpartition("-")[0] == keys.get(other["project_id"])
+
+
+def _is_pair(event, other, keys):
+    """Whether *event* and *other* can be the two ends of one link.
+
+    Numbers repeat across projects, so they alone do not tie two events: the
+    ends must also carry the two labels of one link type, and at least one of
+    them must still name the other's project by its current key (a key renamed
+    since breaks one end, never both). Two events whose own partners were
+    deleted with their project fail the key check.
+    """
     return (
         other["type"] == event["type"]
         and other["actor_id"] == event["actor_id"]
         and _names(event, other)
         and _names(other, event)
+        and _opposite_ends(event, other)
+        and (_names_project(event, other, keys) or _names_project(other, event, keys))
     )
 
 
 def backfill_link_event_refs(apps, schema_editor):
     TaskEvent = apps.get_model("projects", "TaskEvent")
+    Project = apps.get_model("projects", "Project")
     db = schema_editor.connection.alias
+    keys = dict(Project.objects.using(db).values_list("uuid", "key"))
     events = list(
         TaskEvent.objects.using(db)
         .filter(type__in=_LINK_TYPES, from_ref__isnull=True, task_number__isnull=False)
@@ -46,6 +76,7 @@ def backfill_link_event_refs(apps, schema_editor):
             "task_number",
             "actor_id",
             "type",
+            "from_value",
             "to_value",
             "created_at",
         )
@@ -63,7 +94,7 @@ def backfill_link_event_refs(apps, schema_editor):
                 other = bucket[other_index]
                 if other["created_at"] - event["created_at"] > _PAIR_WINDOW:
                     break
-                if _is_pair(event, other):
+                if _is_pair(event, other, keys):
                     candidates[event["uuid"]].append(other)
                     candidates[other["uuid"]].append(event)
         # Task numbers repeat across projects, so two links made at once can

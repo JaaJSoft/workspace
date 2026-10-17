@@ -110,10 +110,10 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
         self.assertEqual(self._refs(other), {(self.secret.uuid, third.uuid)})
         self.assertEqual(self._refs(third), {(self.project.uuid, other.uuid)})
 
-    def test_events_with_more_than_one_possible_partner_stay_unresolved(self):
+    def test_interleaved_links_with_repeated_numbers_pair_their_own_ends(self):
         # Task numbers repeat across projects: four first tasks (all #1)
-        # linked by one actor at once all name each other's number, so
-        # nothing tells which events belong together.
+        # linked by one actor at once all name each other's number. The keys
+        # in the references tell the two links apart.
         tasks = [
             create_task(create_project(self.admin, name=name), self.admin, title=name)
             for name in ("Alpha", "Beta", "Gamma", "Delta")
@@ -131,5 +131,44 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
 
         backfill_link_event_refs(apps, _SchemaEditor())
 
-        for task in tasks:
-            self.assertEqual(self._refs(task), {(None, None)}, task.project.name)
+        for task, partner in zip(
+            tasks, (tasks[1], tasks[0], tasks[3], tasks[2]), strict=True
+        ):
+            self.assertEqual(
+                self._refs(task), {(partner.project_id, partner.pk)}, task.title
+            )
+
+    def test_two_orphans_are_not_paired_with_each_other(self):
+        # Each link loses one side when its project is deleted (events
+        # cascade with their project). The two survivors name each other's
+        # number, but nothing else ties them: they must stay unresolved.
+        alpha, beta, gamma, delta = (
+            create_task(create_project(self.admin, name=name), self.admin, title=name)
+            for name in ("Alpha", "Beta", "Gamma", "Delta")
+        )
+        create_link(alpha, beta, "blocks", actor=self.admin)
+        create_link(gamma, delta, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        beta.project.delete()
+        delta.project.delete()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(alpha), {(None, None)})
+        self.assertEqual(self._refs(gamma), {(None, None)})
+
+    def test_orphans_on_opposite_sides_are_not_paired_either(self):
+        alpha, beta, gamma, delta = (
+            create_task(create_project(self.admin, name=name), self.admin, title=name)
+            for name in ("Alpha", "Beta", "Gamma", "Delta")
+        )
+        create_link(alpha, beta, "blocks", actor=self.admin)
+        create_link(delta, gamma, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        beta.project.delete()
+        delta.project.delete()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(alpha), {(None, None)})
+        self.assertEqual(self._refs(gamma), {(None, None)})

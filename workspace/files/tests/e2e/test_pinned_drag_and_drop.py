@@ -208,6 +208,54 @@ class PinnedFoldersDragAndDropTests(PlaywrightTestCase):
             "drop did not persist a PinnedFolder row"
         )
 
+    def test_pinning_a_folder_when_another_is_already_pinned(self):
+        """Every pinned entry is also a move target, and the pin zone
+        steps back over one. Once a folder was pinned the list filled the
+        whole zone, the drop hint only appeared once the pointer was off
+        the entries, so nothing could be pinned anymore - and a drop on
+        the existing pin moved the folder into it instead.
+        """
+        pinned = self.make_folder("Archive")
+        folder = self.make_folder("Reports")
+        PinnedFolder.objects.create(owner=self.user, folder=pinned, position=0)
+        self.login_as(self.user)
+        self.page.goto(f"{self.live_server_url}/files")
+
+        row = self.page.locator(f"tr[data-uuid='{folder.uuid}']")
+        expect(row).to_be_visible()
+        hint = self.page.get_by_text("Drop to pin folder")
+        expect(hint).to_be_hidden()
+
+        src = row.bounding_box()
+        self.page.mouse.move(src["x"] + src["width"] / 2, src["y"] + src["height"] / 2)
+        self.page.mouse.down()
+        self.page.mouse.move(
+            src["x"] + src["width"] / 2,
+            src["y"] + src["height"] / 2 + 8,
+            steps=5,
+        )
+        expect(hint).to_be_visible()
+        dst = hint.bounding_box()
+        self.page.mouse.move(
+            dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2, steps=20
+        )
+        self.page.mouse.move(
+            dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2 + 2, steps=3
+        )
+        self.page.mouse.up()
+
+        expect(
+            self.page.locator(
+                f"li.pinned-folder-item[data-pinned-uuid='{folder.uuid}']"
+            )
+        ).to_be_visible()
+        expect(hint).to_be_hidden()
+        assert PinnedFolder.objects.filter(owner=self.user, folder=folder).exists()
+        folder.refresh_from_db()
+        assert folder.parent_id is None, (
+            "the drop moved the folder instead of pinning it"
+        )
+
     def test_grabbing_the_folder_name_drags_the_row_not_the_link(self):
         """The folder name is an anchor, and anchors are draggable by
         default — so grabbing the name used to start a *link* drag

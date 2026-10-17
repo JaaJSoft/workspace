@@ -2,6 +2,10 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
   return {
     dragOver: false,
     dragCounter: 0,
+    // A pinnable folder is being dragged anywhere on the page. The drop hint
+    // shows from dragstart: every pinned entry is a move target, so once one
+    // exists the hint is the only place left to drop a pin.
+    pinDragActive: false,
     pinnedCount: 0,
     // For reordering pinned folders
     draggingPinned: null,
@@ -14,6 +18,12 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
 
       window.addEventListener('pinned-folders-changed', () => this.refreshPinnedSection());
       window.addEventListener('group-folders-changed', () => this.refreshGroupFoldersSection());
+
+      // Bubble phase: the row's own dragstart has set the payload by now.
+      window.addEventListener('dragstart', (e) => {
+        this.pinDragActive = !!e.dataTransfer && e.dataTransfer.types.includes('application/x-pin-folder');
+      });
+      window.addEventListener('dragend', () => { this.pinDragActive = false; });
 
       // Listen for pinned folder context menu events
       window.addEventListener('open-pinned-folder-context-menu', (e) => {
@@ -85,6 +95,7 @@ window.pinnedFoldersSection = function pinnedFoldersSection() {
     async onDrop(event) {
       this.dragOver = false;
       this.dragCounter = 0;
+      this.pinDragActive = false;
       if (this._overFolderTarget(event)) return;
       const raw = event.dataTransfer.getData('application/x-pin-folder');
       if (!raw) return;

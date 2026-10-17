@@ -95,9 +95,13 @@ for (const name of requested) {
   const files = SETS[name];
   if (!files) throw new Error(`unknown set "${name}"; sets: ${Object.keys(SETS).join(', ')}`);
   for (const [source, target] of files) {
-    const published = readFileSync(source, 'utf8');
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, published.replace(SOURCE_MAP_COMMENT, '\n'));
+    if (BINARY_EXTENSIONS.has(extname(source))) {
+      copyFileSync(source, target);
+    } else {
+      const published = readFileSync(source, 'utf8');
+      writeFileSync(target, published.replace(SOURCE_MAP_COMMENT, '\n'));
+    }
     console.log(`vendored ${source} -> ${target}`);
   }
 }

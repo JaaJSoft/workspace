@@ -1,5 +1,6 @@
-"""Automatic tags (services/auto_tags.py), on the fake backend: a photo's
-vector is its colour, and "red" is the text a red photo lies on."""
+"""Automatic tags (services/auto_tags.py), on the fake backend: a photo's or
+a key frame's vector is its colour, and "red" is the text a red photo lies
+on."""
 
 from unittest.mock import patch
 
@@ -17,11 +18,23 @@ from workspace.photos.models import PhotoEmbedding
 from workspace.photos.services import auto_tags, photo_embeddings
 from workspace.photos.services.auto_tags import pending_auto_tags_qs, refresh_auto_tags
 from workspace.photos.services.embedding.fake import FakeEmbeddingBackend
+from workspace.photos.services.embedding.local import (
+    ClipVitB32Backend,
+    JinaClipV1Backend,
+    Siglip2BaseBackend,
+)
 from workspace.photos.services.photo_embeddings import embed_file
 from workspace.photos.services.tag_vocabulary import CLASSIC_TAGS, ClassicTag
 from workspace.users.services.settings import set_setting
 
-from .embeddings import BLUE, DARK_RED, RED, embeddings_on, library_photo
+from .embeddings import (
+    BLUE,
+    DARK_RED,
+    RED,
+    embeddings_on,
+    library_photo,
+    library_video,
+)
 from .images import jpeg_bytes, upload
 
 User = get_user_model()
@@ -32,6 +45,8 @@ _COLOUR_VOCABULARY = (
     ClassicTag("Red", "Red", "flame"),
     ClassicTag("Blue", "Blue", "droplet"),
 )
+# Between the fake backend's video (0.05) and photo (0.1) thresholds of red.
+_PALE_RED = (170, 0, 0)
 
 
 def _tags(photo):
@@ -171,16 +186,60 @@ class ClassicTagTests(AutoTagTestCase):
             {"alice", "bob"},
         )
 
-    def test_a_video_key_frame_is_never_tagged(self):
-        red = library_photo(self.user, "red.jpg", RED, embed=False)
-        with patch.object(photo_embeddings, "tag_photo_safely"):
-            (row,) = embed_file(red)
-        PhotoEmbedding.objects.filter(pk=row.pk).update(timestamp=1.0)
-        row.refresh_from_db()
+    def test_a_video_is_tagged_from_any_of_its_key_frames(self):
+        video = library_video(self.user, "clip.webm", [(0.0, BLUE), (4.0, RED)])
 
-        self.assertTrue(auto_tags.tag_photo(row))
+        self.assertEqual(_tags(video), {("Red", FileTag.Source.AUTO)})
+        self.assertFalse(
+            PhotoEmbedding.objects.filter(
+                file=video, auto_tagged_at__isnull=True
+            ).exists()
+        )
+        self.assertNotIn(video, pending_auto_tags_qs())
 
-        self.assertEqual(_tags(red), set())
+    def test_a_video_has_its_own_thresholds(self):
+        # Past the video table's red, within the photo table's.
+        photo = library_photo(self.user, "red.jpg", _PALE_RED)
+        video = library_video(self.user, "clip.webm", [(0.0, _PALE_RED)])
+
+        self.assertEqual(_tags(photo), {("Red", FileTag.Source.AUTO)})
+        self.assertEqual(_tags(video), set())
+
+    @patch.object(FakeEmbeddingBackend, "video_tag_thresholds", {})
+    def test_a_backend_without_a_video_table_tags_no_video(self):
+        video = library_video(self.user, "clip.webm", [(0.0, RED)])
+
+        self.assertEqual(_tags(video), set())
+        self.assertNotIn(video, pending_auto_tags_qs())
+
+    def test_the_catch_up_tags_a_video_once(self):
+        with patch.object(photo_embeddings, "tag_file_safely"):
+            video = library_video(self.user, "clip.webm", [(0.0, RED), (4.0, BLUE)])
+
+        pending = list(get_processor("auto_tags").pending_files())
+        for file_obj in pending:
+            refresh_auto_tags(file_obj)
+
+        self.assertEqual(pending, [video])
+        self.assertEqual(_tags(video), {("Red", FileTag.Source.AUTO)})
+        self.assertFalse(pending_auto_tags_qs().exists())
+
+    def test_a_tag_taken_off_a_video_never_comes_back(self):
+        video = library_video(self.user, "clip.webm", [(0.0, RED)])
+        FileTag.objects.filter(file=video).delete()
+
+        for file_obj in get_processor("auto_tags").pending_files():
+            refresh_auto_tags(file_obj)
+
+        self.assertEqual(_tags(video), set())
+
+    def test_a_video_with_no_key_frame_is_settled_untagged(self):
+        video = library_video(self.user, "clip.webm", [])
+
+        self.assertEqual(_tags(video), set())
+        row = PhotoEmbedding.objects.get(file=video)
+        self.assertTrue(auto_tags.tag_file(row))
+        self.assertNotIn(video, pending_auto_tags_qs())
 
     def test_a_tagging_failure_leaves_the_embedding_stored(self):
         red = upload(self.user, "red.jpg", jpeg_bytes(color=RED))
@@ -197,6 +256,16 @@ class VocabularyTests(TestCase):
         self.assertEqual(len(names), len(set(names)))
         for tag in CLASSIC_TAGS:
             self.assertLessEqual(len(tag.name), 100)
+
+    def test_every_backend_table_names_classic_tags(self):
+        texts = {tag.text for tag in CLASSIC_TAGS}
+        for backend in (ClipVitB32Backend, Siglip2BaseBackend, JinaClipV1Backend):
+            with self.subTest(backend=backend.key):
+                self.assertLessEqual(set(backend.tag_thresholds), texts)
+                # A tag the photos' table leaves out is never placed on a video.
+                self.assertLessEqual(
+                    set(backend.video_tag_thresholds), set(backend.tag_thresholds)
+                )
 
     def test_every_classic_tag_has_an_icon_the_vendored_lucide_build_draws(self):
         # The bundle names each icon in PascalCase: tree-palm is TreePalm.

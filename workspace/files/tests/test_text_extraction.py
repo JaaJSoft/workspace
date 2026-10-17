@@ -24,6 +24,7 @@ from workspace.files.services.detection import get_all_labels
 from workspace.files.services.text_extraction import (
     BODY_CAP,
     extract_text,
+    file_text,
     is_indexable,
 )
 
@@ -46,6 +47,40 @@ class ExtractTextTests(TestCase):
     def test_markdown_body_is_extracted(self):
         f = self._file("note.md", "text/markdown", b"# Title\n\nThe kraken sleeps.")
         self.assertIn("kraken", extract_text(f))
+
+    def test_a_documents_properties_lead_its_searchable_body(self):
+        payload = make_docx(
+            ["the kraken sleeps"],
+            properties={
+                "title": "Sea monsters",
+                "author": "Herman Melville",
+                "subject": "Cephalopods",
+                "keywords": "squid, deep",
+            },
+        )
+        f = self._file("monsters.docx", extraction.DOCX, payload)
+
+        lines = extract_text(f).splitlines()
+
+        self.assertEqual(
+            lines[:4], ["Sea monsters", "Herman Melville", "Cephalopods", "squid, deep"]
+        )
+        self.assertIn("kraken", lines[-1])
+
+    def test_a_scan_is_searchable_by_its_properties_alone(self):
+        writer = PdfWriter(clone_from=io.BytesIO(make_pdf([""])))
+        writer.add_metadata({"/Title": "Scanned invoice"})
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        f = self._file("scan.pdf", "application/pdf", buffer.getvalue())
+
+        self.assertEqual(extract_text(f), "Scanned invoice")
+
+    def test_a_readers_text_leaves_the_properties_out(self):
+        payload = make_docx(["the kraken sleeps"], properties={"author": "Melville"})
+        f = self._file("monsters.docx", extraction.DOCX, payload)
+
+        self.assertNotIn("Melville", file_text(f, max_chars=1000))
 
     def test_plain_text_is_extracted(self):
         f = self._file("a.txt", "text/plain", b"quarterly revenue")

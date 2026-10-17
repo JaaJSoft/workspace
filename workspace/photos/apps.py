@@ -42,7 +42,9 @@ class PhotosConfig(AppConfig):
         from workspace.photos.services import handlers  # noqa: F401
         from workspace.photos.services.details import (
             is_section_visible,
+            is_video_section_visible,
             section_context,
+            video_section_context,
         )
         from workspace.photos.services.sensitive_photos import (
             mark_sensitive,
@@ -115,6 +117,20 @@ class PhotosConfig(AppConfig):
                 template="photos/ui/partials/properties_section.html",
                 is_visible=is_section_visible,
                 get_context=section_context,
+                scripts=(
+                    "photos/ui/js/vendor/leaflet/leaflet.js",
+                    "photos/ui/js/photo_map.js",
+                ),
+                stylesheets=("photos/ui/css/vendor/leaflet/leaflet.css",),
+            )
+        )
+        properties_section_registry.register(
+            PropertiesSection(
+                slug="video",
+                label="Video",
+                template="photos/ui/partials/properties_video_section.html",
+                is_visible=is_video_section_visible,
+                get_context=video_section_context,
             )
         )
 

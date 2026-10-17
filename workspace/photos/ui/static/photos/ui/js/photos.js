@@ -270,6 +270,8 @@ window.photosApp = function photosApp() {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
+      // A contributed section of the panel changed what it renders.
+      window.addEventListener('properties-section-changed', () => this.reloadPropertiesPanel());
       // Members came or went: the header's faces and the sidebar's groups.
       window.addEventListener('album-shares-changed', () => {
         this._refresh(['photos-nav', 'photos-header']);
@@ -397,6 +399,8 @@ window.photosApp = function photosApp() {
           // ?type= shows and every link of the page, which leave out
           // whatever equals the default.
           if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
+          // The open panel's Photo section renders the map, or the offer.
+          if (key === 'show_map') this.reloadPropertiesPanel();
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;

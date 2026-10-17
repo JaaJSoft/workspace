@@ -53,6 +53,45 @@ rights on it (the owner, or a member of the group whose folder holds it). It
 never touches the file itself, and it survives the file being read again or
 renamed. `POST /api/v1/photos/capture-details` does the same from the API.
 
+## Location map
+
+A photo carrying a GPS position shows its coordinates in its properties panel,
+with a link to OpenStreetMap. The instance can also show a small map with a pin
+at the spot, drawn from raster tiles of a server it names. A muted basemap
+suits a single pin far better than a full-detail one; Esri's Light Gray and
+Dark Gray Canvas, for example, with the dark one drawn under a dark theme:
+
+```bash
+PHOTOS_MAP_TILE_URL='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+PHOTOS_MAP_TILE_URL_DARK='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+PHOTOS_MAP_TILE_ATTRIBUTION='Tiles &copy; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+```
+
+Mind the `{y}/{x}` order Esri uses. These two styles stop at zoom 16, the
+level the map opens at: zooming in further shows no more detail. Read the
+provider's terms before going live; most hosted basemaps want an account or an
+API key in the URL for production use.
+
+There is no default server. Every map opened sends the photo's position to the
+tile server, so pick one whose privacy and usage policy fit the instance: a
+self-hosted one, or a provider you have an agreement with.
+`tile.openstreetmap.org` is not meant for this; its
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
+forbids heavy use. The attribution is shown on the map and is required by
+every provider; HTML is allowed. Without a tile URL and an attribution there is
+no map.
+
+Each user turns the map on, from **Show on a map** in the panel or from the
+Photos preferences, which name the servers the location goes to. The map only
+changes what the viewer's own browser fetches: a photo shared or published
+through a link still carries its GPS position in the original.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `PHOTOS_MAP_TILE_URL` | empty | The tile server's URL template (`{z}`, `{x}`, `{y}`, optionally `{s}` and `{r}`). |
+| `PHOTOS_MAP_TILE_URL_DARK` | empty | The same map in a dark style, drawn under a dark theme. Without it, every theme gets the one above. |
+| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map, for both styles. |
+
 ## Similar photos and search by description
 
 One image embedding per photo, and one per key frame of a video - a vector
@@ -197,7 +236,7 @@ ones. After changing the setting:
 
 ### Automatic tags
 
-Each embedded photo is tagged with what it shows, from a vocabulary of 33
+Each embedded photo and video is tagged with what it shows, from a vocabulary of 33
 classic tags (`workspace/photos/services/tag_vocabulary.py`: dog, beach,
 snow, cake, wedding, screenshot...). The tags are the owner's ordinary file
 tags: an existing tag of the same name is reused (case-insensitively), a
@@ -211,14 +250,18 @@ properties panel marks them with a sparkle.
   photos it never saw. SigLIP 2 places 24 of the 33 tags and finds about a
   third of the photos each one describes; CLIP places 13. The `remote`
   backend has no table, so it places none until one is measured.
-- A photo is tagged once, after it is embedded: a tag its owner takes off
-  stays off. A new version of the photo, or a new model, tags it again.
-- Only personal photos: a tag belongs to its owner, and a group folder's
-  photo is never tagged. Videos are not tagged either: the thresholds are
-  fitted on photos, and a tag drawn from any of a video's key frames would be
-  wrong far more often.
+- A video is tagged from its key frames, at a table of its own
+  (`video_tag_thresholds`), fitted on photos filmed and compressed as a
+  phone video: a tag lands when the closest of its key frames is under the
+  tag's threshold. Same 90% held out; a few points of recall less than a
+  photo. Only the tags the photo table places.
+- A photo or video is tagged once, after it is embedded: a tag its owner
+  takes off stays off. A new version of the file, or a new model, tags it
+  again.
+- Only personal files: a tag belongs to its owner, and a group folder's
+  photo or video is never tagged.
 - Users turn it off with *Tag photos automatically* in the Photos
-  preferences; the photos embedded meanwhile are not tagged later.
+  preferences; the photos and videos embedded meanwhile are not tagged later.
 - The tagging runs in the worker right after the embedding, and the hourly
   catch-up (`python manage.py catch_up auto_tags`) tags the photos embedded
   before it existed. It embeds the vocabulary once per model, which loads the

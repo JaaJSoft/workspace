@@ -506,6 +506,7 @@ _PHOTOS_FLAGS = (
     "import_by_date",
     "show_hidden",
     "auto_tags",
+    "show_map",
 )
 _PHOTOS_CHOICES = {
     "tile_shape": ("square", "original"),

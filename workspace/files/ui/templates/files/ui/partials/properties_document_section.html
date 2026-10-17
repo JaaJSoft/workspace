@@ -1,0 +1,71 @@
+{% comment %}
+The Document section of the Files properties panel (registered in
+FilesConfig.ready(), rendered by files.properties_sections).
+
+Context: document, the file's current files.models.DocumentInfo.
+{% endcomment %}
+<div class="space-y-2 text-sm">
+  {% if document.title %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-document-detail="title"
+    >
+      <i data-lucide="heading" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words font-medium text-base-content/80">{{ document.title }}</span>
+    </div>
+  {% endif %}
+  {% if document.author %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-document-detail="author"
+    >
+      <i data-lucide="user-pen" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words">{{ document.author }}</span>
+    </div>
+  {% endif %}
+  {% if document.subject %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-document-detail="subject"
+    >
+      <i data-lucide="text" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words">{{ document.subject }}</span>
+    </div>
+  {% endif %}
+  {% if document.keywords %}
+    <div
+      class="flex items-start gap-2 text-base-content/60"
+      data-document-detail="keywords"
+    >
+      <i data-lucide="tags" class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+      <span class="min-w-0 break-words">{{ document.keywords }}</span>
+    </div>
+  {% endif %}
+  {% if document.page_count %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-document-detail="pages"
+    >
+      <i data-lucide="files" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>{{ document.page_count }} page{{ document.page_count|pluralize }}</span>
+    </div>
+  {% endif %}
+  {% if document.created %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-document-detail="written"
+    >
+      <i data-lucide="file-pen-line" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>Written {{ document.created|date:"N j, Y" }}</span>
+    </div>
+  {% endif %}
+  {% if document.modified %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-document-detail="saved"
+    >
+      <i data-lucide="save" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>Last saved {{ document.modified|date:"N j, Y" }}</span>
+    </div>
+  {% endif %}
+</div>

@@ -113,6 +113,14 @@
     </div>
     {% include "ui/partials/pref_toggle.html" with label="Show in the viewer without asking" state="photoPrefs.reveal_sensitive_in_viewer" change="savePhotoPref('reveal_sensitive_in_viewer', $event.target.checked)" accent="toggle-module" %}
   </div>
+  {% if map_available %}
+    <div data-testid="photos-pref-show-map">
+      {% include "ui/partials/pref_toggle.html" with label="Show locations on a map" state="photoPrefs.show_map" change="savePhotoPref('show_map', $event.target.checked)" accent="toggle-module" %}
+      <p class="text-xs text-base-content/50 mt-1">
+        In a photo's properties. The map is loaded from {{ map_server }}, which then receives the location of each photo you open.
+      </p>
+    </div>
+  {% endif %}
   {% include "ui/partials/pref_toggle.html" with label="Show Hidden in the sidebar" state="photoPrefs.show_hidden" change="savePhotoPref('show_hidden', $event.target.checked)" accent="toggle-module" %}
   <div>
     <label class="text-sm text-base-content/60 block mb-1">Hidden folders</label>

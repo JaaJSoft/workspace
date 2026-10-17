@@ -161,3 +161,15 @@ PHOTOS_SENSITIVE_BACKEND = os.getenv("PHOTOS_SENSITIVE_BACKEND", "falconsai_vit"
 PHOTOS_SENSITIVE_MAX_FILE_BYTES = int(
     os.getenv("PHOTOS_SENSITIVE_MAX_FILE_BYTES", str(64 * 1024 * 1024))
 )
+
+# The map under a photo's coordinates in its properties panel: the tile
+# server's URL template ({z}/{x}/{y}, optionally {s} and {r}) and the
+# attribution its usage policy requires, shown on the map (HTML allowed, e.g.
+# '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>
+# contributors'). No map unless both are set: there is no default server, the
+# tile server learns the location of every photo whose map is opened.
+PHOTOS_MAP_TILE_URL = os.getenv("PHOTOS_MAP_TILE_URL", "").strip()
+PHOTOS_MAP_TILE_ATTRIBUTION = os.getenv("PHOTOS_MAP_TILE_ATTRIBUTION", "").strip()
+# Optional: the same map in a dark style, drawn under a dark theme (e.g. Esri's
+# Dark Gray Canvas next to Light Gray). Shares the attribution above.
+PHOTOS_MAP_TILE_URL_DARK = os.getenv("PHOTOS_MAP_TILE_URL_DARK", "").strip()

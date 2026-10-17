@@ -73,6 +73,7 @@ from workspace.photos.services.face_review import (
 )
 from workspace.photos.services.hidden import hidden_folder_data
 from workspace.photos.services.import_folder import import_folder, import_folder_data
+from workspace.photos.services.location_map import map_available, tile_server
 from workspace.photos.services.photo_embeddings import (
     MAX_QUERY_LENGTH,
     QueryEmbeddingUnavailable,
@@ -596,6 +597,8 @@ def _render_page(request, template, context):
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
         context["scope_choices"] = _scope_choices(request.user)
+        context["map_available"] = map_available()
+        context["map_server"] = tile_server()
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
     if swap:

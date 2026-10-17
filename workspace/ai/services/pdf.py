@@ -1,5 +1,6 @@
 """Text extraction from PDF documents fetched by the web tools."""
 
+import dataclasses
 import logging
 import re
 
@@ -39,11 +40,4 @@ def extract_pdf(data: bytes, *, max_chars: int = MAX_CHARS) -> ExtractedDocument
         # with nothing to show is genuinely locked.
         raise ValueError("PDF is password-protected")
     text = _BLANK_RUN_RE.sub("\n\n", _TRAILING_SPACE_RE.sub("\n", document.text))
-    return ExtractedDocument(
-        text=text.strip(),
-        title=document.title,
-        date=document.date,
-        page_count=document.page_count,
-        encrypted=document.encrypted,
-        truncated=document.truncated,
-    )
+    return dataclasses.replace(document, text=text.strip())

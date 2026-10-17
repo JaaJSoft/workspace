@@ -61,7 +61,33 @@ def is_indexable(mime_type):
 
 
 def file_text(file_obj, *, max_chars):
-    """Plain text of *file_obj*'s content, or None when there is none.
+    """Plain text of *file_obj*'s content, or None when there is none."""
+    document = _read_document(file_obj, max_chars=max_chars)
+    return (document.text or None) if document else None
+
+
+def extract_text(file_obj):
+    """The searchable body of a file, bounded to what the index accepts.
+
+    A document's own properties come first: searching an author's name or a
+    report's title finds it, and a scan with no text layer is still findable
+    by them.
+    """
+    document = _read_document(file_obj, max_chars=BODY_CAP)
+    if document is None:
+        return None
+    parts = (
+        document.title,
+        document.author,
+        document.subject,
+        document.keywords,
+        document.text,
+    )
+    return "\n".join(part for part in parts if part)[:BODY_CAP] or None
+
+
+def _read_document(file_obj, *, max_chars):
+    """*file_obj*'s content as an ExtractedDocument, or None.
 
     The catch is deliberately broad: the parser is pointed at whatever a user
     chose to upload, and every way one of these files can be unreadable -
@@ -77,17 +103,12 @@ def file_text(file_obj, *, max_chars):
     try:
         with file_obj.content.open("rb") as fh:
             data = fh.read(MAX_DOCUMENT_BYTES)
-        return extract_document(data, max_chars=max_chars).text or None
+        return extract_document(data, max_chars=max_chars)
     except Exception as exc:
         logger.info(
             "No text extracted from file %s: %s", scrub(file_obj.pk), scrub(exc)
         )
         return None
-
-
-def extract_text(file_obj):
-    """The searchable body of a file, bounded to what the index accepts."""
-    return file_text(file_obj, max_chars=BODY_CAP)
 
 
 def _looks_indexable(file_obj):

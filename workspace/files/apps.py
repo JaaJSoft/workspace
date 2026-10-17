@@ -159,6 +159,8 @@ class FilesConfig(AppConfig):
         # for the register_processor and @on_file_event side effects).
         from workspace.files.services import (  # noqa: F401
             content_hash,
+            details,
+            document_info,
             link_events,
             media_info,
             processors,
@@ -166,6 +168,8 @@ class FilesConfig(AppConfig):
         )
         from workspace.files.services.scanning import scan_events  # noqa: F401
         from workspace.files.services.thumbnails import handlers  # noqa: F401
+
+        details.register_properties_sections()
 
         # The actions register on import, and this is their menu order: each
         # category has to stay contiguous. Imported here rather than lazily so

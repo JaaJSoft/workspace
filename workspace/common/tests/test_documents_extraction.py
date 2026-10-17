@@ -9,6 +9,7 @@ import io
 import pathlib
 import shutil
 import tempfile
+from datetime import UTC, datetime
 
 from django.test import SimpleTestCase
 from pypdf import PdfWriter
@@ -170,6 +171,114 @@ class PdfTests(SimpleTestCase):
         # document; the pages themselves open.
         payload = self._rewritten(make_pdf(["Readable"]), encrypt="")
         self.assertIn("Readable", extract_document(payload, max_chars=CAP).text)
+
+
+class PropertiesTests(SimpleTestCase):
+    """What a document declares about itself, next to its text."""
+
+    def test_word_properties(self):
+        payload = make_docx(
+            ["body"],
+            properties={
+                "title": "Analytical Engine",
+                "author": "Ada Lovelace",
+                "subject": "Engines",
+                "keywords": "math, engine",
+                "created": datetime(2024, 5, 1, 12, 0),
+                "modified": datetime(2024, 6, 2, 8, 30),
+            },
+        )
+        document = extract_document(payload, max_chars=CAP)
+
+        self.assertEqual(
+            (document.title, document.author, document.subject, document.keywords),
+            ("Analytical Engine", "Ada Lovelace", "Engines", "math, engine"),
+        )
+        self.assertEqual(document.created, datetime(2024, 5, 1, 12, 0, tzinfo=UTC))
+        self.assertEqual(document.modified, datetime(2024, 6, 2, 8, 30, tzinfo=UTC))
+        self.assertEqual(document.page_count, 1)
+
+    def test_spreadsheet_properties(self):
+        payload = make_xlsx(
+            properties={
+                "title": "Budget",
+                "creator": "Grace Hopper",
+                "subject": "Finance",
+                "keywords": "q3",
+            }
+        )
+        document = extract_document(payload, max_chars=CAP)
+
+        self.assertEqual(
+            (document.title, document.author, document.subject, document.keywords),
+            ("Budget", "Grace Hopper", "Finance", "q3"),
+        )
+
+    def test_opendocument_properties(self):
+        payload = make_odf(
+            F_ODT,
+            ["body"],
+            properties={
+                "title": "Frequency hopping",
+                "creator": "Hedy Lamarr",
+                "subject": "Radio",
+                "keywords": "spread, spectrum",
+                "created": "2024-05-01T12:00:00",
+                "page_count": "4",
+            },
+        )
+        document = extract_document(payload, max_chars=CAP)
+
+        self.assertEqual(
+            (document.title, document.author, document.subject, document.keywords),
+            ("Frequency hopping", "Hedy Lamarr", "Radio", "spread, spectrum"),
+        )
+        self.assertEqual(document.page_count, 4)
+        # OpenDocument dates carry no offset.
+        self.assertEqual(document.created, datetime(2024, 5, 1, 12, 0, tzinfo=UTC))
+
+    def test_pdf_properties(self):
+        writer = PdfWriter(clone_from=io.BytesIO(make_pdf(["a", "b"])))
+        writer.add_metadata(
+            {
+                "/Title": "Kernel notes",
+                "/Author": "Linus",
+                "/Subject": "Kernels",
+                "/Keywords": "os, c",
+                "/CreationDate": "D:20240501120000+02'00'",
+                "/ModDate": "D:20240601120000Z",
+            }
+        )
+        buffer = io.BytesIO()
+        writer.write(buffer)
+        document = extract_document(buffer.getvalue(), max_chars=CAP)
+
+        # Tika lists a PDF's keywords before its subject; the two stay apart.
+        self.assertEqual(
+            (document.title, document.author, document.subject, document.keywords),
+            ("Kernel notes", "Linus", "Kernels", "os, c"),
+        )
+        self.assertEqual(document.created, datetime(2024, 5, 1, 10, 0, tzinfo=UTC))
+        self.assertEqual(document.modified, datetime(2024, 6, 1, 12, 0, tzinfo=UTC))
+        self.assertEqual(document.page_count, 2)
+
+    def test_a_document_without_properties_reads_empty(self):
+        document = extract_document(make_pdf(["body"]), max_chars=CAP)
+
+        self.assertEqual(
+            (document.title, document.author, document.subject, document.keywords),
+            ("", "", "", ""),
+        )
+        self.assertIsNone(document.modified)
+
+    def test_properties_survive_a_zero_text_ceiling(self):
+        payload = make_docx(
+            ["the kraken sleeps"] * 500, properties={"author": "Ada Lovelace"}
+        )
+        document = extract_document(payload, max_chars=0)
+
+        self.assertEqual(document.text, "")
+        self.assertEqual(document.author, "Ada Lovelace")
 
 
 class BoundsTests(SimpleTestCase):

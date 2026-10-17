@@ -1,0 +1,40 @@
+{% load file_filters %}
+{% comment %}
+The Video section of the Files properties panel (registered in
+PhotosConfig.ready(), rendered by files.properties_sections).
+
+Context: video, a photos.services.details.VideoDetails.
+{% endcomment %}
+<div class="space-y-2 text-sm">
+  {% if video.dimensions %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-video-detail="dimensions"
+    >
+      <i data-lucide="ruler" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>{{ video.dimensions }}</span>
+    </div>
+  {% endif %}
+  {% if video.duration %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-video-detail="duration"
+    >
+      <i data-lucide="timer" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>{{ video.duration|media_duration }}</span>
+    </div>
+  {% endif %}
+  {% if video.video_codec or video.audio_codec %}
+    <div
+      class="flex items-center gap-2 text-base-content/60"
+      data-video-detail="codecs"
+    >
+      <i data-lucide="film" class="w-3.5 h-3.5 flex-shrink-0"></i>
+      <span>
+        {% if video.video_codec %}{{ video.video_codec|codec_name }}{% endif %}
+        {% if video.video_codec and video.audio_codec %}<span class="text-base-content/40">·</span>{% endif %}
+        {% if video.audio_codec %}{{ video.audio_codec|codec_name }}{% endif %}
+      </span>
+    </div>
+  {% endif %}
+</div>

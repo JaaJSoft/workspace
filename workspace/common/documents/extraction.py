@@ -16,6 +16,7 @@ rather than sliced afterwards.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,9 +55,19 @@ MAX_DOCUMENT_BYTES = 64 * 1024 * 1024
 _PROBE_CHARS = 64
 
 _NPAGES = "xmpTPg:NPages"
+_PAGE_COUNT = "meta:page-count"
+_SLIDE_COUNT = "meta:slide-count"
 _TITLE = "dc:title"
+_CREATOR = "dc:creator"
 _CREATED = "dcterms:created"
+_MODIFIED = "dcterms:modified"
 _ENCRYPTED = "pdf:encrypted"
+# Tika folds a document's subject and its keywords into one dc:subject list,
+# in no reliable order (the keywords come first for a PDF, last for a docx).
+# The format-specific keys keep them apart.
+_SUBJECTS = "dc:subject"
+_SUBJECT_KEYS = ("cp:subject", "pdf:docinfo:subject")
+_KEYWORD_KEYS = ("meta:keyword", "pdf:docinfo:keywords")
 
 
 @dataclass(frozen=True)
@@ -69,6 +80,11 @@ class ExtractedDocument:
     page_count: int
     encrypted: bool
     truncated: bool
+    author: str
+    subject: str
+    keywords: str
+    created: datetime | None
+    modified: datetime | None
 
 
 def extract_document(data: bytes, *, max_chars: int) -> ExtractedDocument:
@@ -97,15 +113,21 @@ def extract_document(data: bytes, *, max_chars: int) -> ExtractedDocument:
     text = text.strip()
     truncated = len(text) > max_chars
     text = text[:max_chars]
+    keywords = _first_of(metadata, _KEYWORD_KEYS)
     return ExtractedDocument(
         text=text,
         title=_first(metadata, _TITLE),
         # Tika normalises every date it can parse to ISO 8601, so the calendar
         # day is the first ten characters of whatever the producer wrote.
         date=_first(metadata, _CREATED)[:10],
-        page_count=_as_int(_first(metadata, _NPAGES)),
+        page_count=_as_int(_first_of(metadata, (_NPAGES, _PAGE_COUNT, _SLIDE_COUNT))),
         encrypted=_first(metadata, _ENCRYPTED).lower() == "true",
         truncated=truncated,
+        author=_first(metadata, _CREATOR),
+        subject=_first_of(metadata, _SUBJECT_KEYS) or _subject(metadata, keywords),
+        keywords=keywords,
+        created=_as_datetime(_first(metadata, _CREATED)),
+        modified=_as_datetime(_first(metadata, _MODIFIED)),
     )
 
 
@@ -141,6 +163,30 @@ def _first(metadata, key: str) -> str:
     """Tika reports every field as a list, even the ones that cannot repeat."""
     values = metadata.get(key) or []
     return str(values[0]).strip() if values else ""
+
+
+def _first_of(metadata, keys) -> str:
+    return next((value for key in keys if (value := _first(metadata, key))), "")
+
+
+def _subject(metadata, keywords: str) -> str:
+    """The dc:subject entry that is not the keywords, for the formats with
+    no subject key of their own (docx, xlsx, pptx)."""
+    for value in metadata.get(_SUBJECTS) or []:
+        value = str(value).strip()
+        if value and value != keywords:
+            return value
+    return ""
+
+
+def _as_datetime(value: str) -> datetime | None:
+    """An aware datetime, or None. OpenDocument dates carry no offset, and
+    are read as UTC."""
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _as_int(value: str) -> int:

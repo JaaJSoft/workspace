@@ -113,10 +113,11 @@
             {% include "files/ui/partials/pinned_folders.html" %}
             <!-- Drop hint when dragging (expanded only) -->
             <div
-              x-show="dragOver && !collapsed"
+              x-show="pinDragActive && !collapsed"
               x-cloak
               x-transition
-              class="text-xs text-module font-medium text-center py-4 border-2 border-dashed border-module/40 rounded-lg mt-2 bg-module/10"
+              class="text-xs text-module font-medium text-center py-4 border-2 border-dashed rounded-lg mt-2 transition-colors"
+              :class="{ 'border-module bg-module/20': dragOver, 'border-module/40 bg-module/10': !dragOver }"
             >
               <i data-lucide="pin" class="w-4 h-4 inline-block mb-1"></i>
               <br />

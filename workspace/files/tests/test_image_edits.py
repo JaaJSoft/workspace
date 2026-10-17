@@ -549,6 +549,27 @@ class EditedDownloadTests(ImageEditTestMixin, APITestCase):
         self.assertEqual(img.size, (1000, 1000))
         self.assertTrue(_close(img.convert("RGB").getpixel((500, 500)), RED))
 
+    def test_an_image_past_the_pixel_cap_downloads_its_original(self):
+        File.objects.filter(pk=self.file.pk).update(image_edit={"rotation": 90})
+
+        with patch("workspace.files.services.image_edits.DOWNLOAD_MAX_PIXELS", 1000):
+            resp, body = self._download()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(hashlib.sha256(body).hexdigest(), self._blob_digest(self.file))
+
+    def test_an_image_that_cannot_be_decoded_downloads_its_original(self):
+        broken = b"\xff\xd8 not a jpeg"
+        FileService.update_content(self.file, ContentFile(broken, name="photo.jpg"))
+        File.objects.filter(pk=self.file.pk).update(
+            image_edit={"rotation": 90}, type="jpeg"
+        )
+
+        resp, body = self._download()
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(body, broken)
+
     def test_the_metadata_comes_along_with_the_orientation_reset(self):
         source = _halves((200, 100))
         exif = source.getexif()

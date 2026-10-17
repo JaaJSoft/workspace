@@ -73,10 +73,14 @@ def _build_zip_stream(entries):
 
 
 def edited_download_response(file_obj):
-    """*file_obj*, rotated and cropped as its edit shows it, as an attachment."""
+    """*file_obj*, rotated and cropped as its edit shows it, as an attachment;
+    None when it cannot be rendered, and the caller serves the original."""
     from django.http import HttpResponse
 
-    data, content_type, name = render_edited(file_obj)
+    rendered = render_edited(file_obj)
+    if rendered is None:
+        return None
+    data, content_type, name = rendered
     response = HttpResponse(data, content_type=content_type)
     response["Content-Disposition"] = f'attachment; filename="{safe_filename(name)}"'
     response["Cache-Control"] = "private, no-cache"
@@ -297,7 +301,9 @@ class ContentMixin:
         # A rotated or cropped image downloads as it is shown. Its ETag would
         # name the original bytes, so the 304 below must not answer for it.
         if file_obj.node_type == File.NodeType.FILE and downloads_edited(file_obj):
-            return edited_download_response(file_obj)
+            response = edited_download_response(file_obj)
+            if response is not None:
+                return response
 
         # Short-circuit: return 304 if ETag matches (single files only)
         if file_obj.node_type == File.NodeType.FILE:

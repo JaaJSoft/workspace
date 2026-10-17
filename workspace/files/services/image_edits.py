@@ -214,10 +214,15 @@ _DOWNLOAD_FORMATS = {
 _DOWNLOAD_FALLBACK = ("JPEG", "image/jpeg", "jpg")
 _EXIF_ORIENTATION = 0x0112
 DOWNLOAD_JPEG_QUALITY = 95
+# The largest image a download renders, in pixels: the whole image is decoded
+# in the request, about 4 bytes a pixel and as much again for the turn.
+# Past it the download is the original, as for an image Pillow cannot read.
+DOWNLOAD_MAX_PIXELS = 50_000_000
 
 
 def render_edited(file_obj):
-    """*file_obj*'s image as its edit shows it, for a download.
+    """*file_obj*'s image as its edit shows it, for a download, or None when
+    it is too large to render (DOWNLOAD_MAX_PIXELS) or cannot be decoded.
 
     Returns ``(bytes, content_type, filename)``. The metadata comes along -
     the EXIF block with its orientation reset, since the pixels are turned
@@ -228,12 +233,18 @@ def render_edited(file_obj):
 
     from PIL import Image, ImageOps
 
-    with file_obj.content.open("rb") as fh:
-        img = Image.open(fh)
-        source_format = img.format
-        exif = img.getexif()
-        icc_profile = img.info.get("icc_profile")
-        img = apply_edit(ImageOps.exif_transpose(img), file_obj.image_edit)
+    try:
+        with file_obj.content.open("rb") as fh:
+            img = Image.open(fh)
+            # The header only: nothing is decoded before the size is known.
+            if img.width * img.height > DOWNLOAD_MAX_PIXELS:
+                return None
+            source_format = img.format
+            exif = img.getexif()
+            icc_profile = img.info.get("icc_profile")
+            img = apply_edit(ImageOps.exif_transpose(img), file_obj.image_edit)
+    except Image.DecompressionBombError, OSError, ValueError:
+        return None
 
     pil_format, content_type, extension = _DOWNLOAD_FORMATS.get(
         source_format, _DOWNLOAD_FALLBACK

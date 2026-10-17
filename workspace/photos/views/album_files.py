@@ -81,7 +81,9 @@ def content_response(request, file_obj, *, attachment=False):
     if attachment and downloads_edited(file_obj):
         from workspace.files.viewsets.content import edited_download_response
 
-        return edited_download_response(file_obj)
+        response = edited_download_response(file_obj)
+        if response is not None:
+            return response
     try:
         handle = file_obj.content.open("rb")
     except OSError:

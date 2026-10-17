@@ -109,9 +109,27 @@ class RecordTaskEventTests(ProjectTestMixin, TestCase):
             record_task_event(self.task, type=TaskEvent.Type.MOVED, actor=None)
         record_task_event(other_task, type=TaskEvent.Type.CREATED, actor=None)
 
-        events = list(events_for_project(self.project, limit=2))
+        events = list(events_for_project(self.admin, self.project, limit=2))
         self.assertEqual(len(events), 2)
         self.assertTrue(all(e.project_id == self.project.uuid for e in events))
+
+    def test_events_for_project_drop_a_link_to_a_hidden_project(self):
+        from workspace.projects.services.links import create_link
+        from workspace.projects.services.projects import create_project
+
+        secret = create_project(self.admin, name="Secret")
+        hidden = create_task(secret, self.admin, title="Hidden")
+        create_link(hidden, self.task, "blocks", actor=self.admin)
+
+        def link_events(user):
+            return [
+                e
+                for e in events_for_project(user, self.project, limit=50)
+                if e.type == TaskEvent.Type.LINKED
+            ]
+
+        self.assertEqual(link_events(self.member), [])
+        self.assertEqual(len(link_events(self.admin)), 1)
 
 
 class CreateTaskEventTests(ProjectTestMixin, TestCase):

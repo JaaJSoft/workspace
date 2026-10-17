@@ -731,10 +731,13 @@ class TaskEvent(models.Model):
     # the task row is gone.
     from_value = models.CharField(max_length=100, blank=True, default="")
     to_value = models.CharField(max_length=100, blank=True, default="")
-    # Identity of the entity named in from_value/to_value (a sprint today).
-    # Names are for display; a report matching on them would mistake a
-    # renamed or reused name for another sprint. Null when the side names
-    # nothing and on history written before the field existed.
+    # Identity of the entity named in from_value/to_value (a sprint, a file,
+    # the task at the other end of a link). Names are for display; a report
+    # matching on them would mistake a renamed or reused name for another
+    # sprint. Null when the side names nothing and on history written before
+    # the field existed. A link event, whose from_value is a direction label
+    # naming nothing, keeps the other task's project in from_ref: that is
+    # what decides who may read the reference, and it outlives the task.
     from_ref = models.UUIDField(null=True, blank=True)
     to_ref = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

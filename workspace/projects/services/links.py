@@ -116,6 +116,9 @@ def _record_link_events(link, event_type, actor):
 
     The direction label and the other end's reference are snapshotted in the
     value fields, so the entry stays readable after either task is deleted.
+    The other end's identity goes in the ref fields - its project in
+    ``from_ref``, the task in ``to_ref`` - so a feed can tell whether its
+    viewer may read that reference (``visible_task_events_q``).
     """
     forward, backward = LINK_LABELS[TaskLink.Type(link.type)]
     for task, label, other in (
@@ -128,6 +131,8 @@ def _record_link_events(link, event_type, actor):
             actor=actor,
             from_value=label,
             to_value=other.reference,
+            from_ref=other.project_id,
+            to_ref=other.pk,
         )
 
 
@@ -175,11 +180,15 @@ def links_for_task(user, task):
     return items
 
 
-def annotate_blocked(qs):
+def annotate_blocked(qs, user):
     """Annotate a task queryset with ``is_blocked``: some open (not done)
-    task blocks it. Done blockers don't count - a resolved dependency no
-    longer stands in the way."""
+    task that *user* can see blocks it. Done blockers don't count - a
+    resolved dependency no longer stands in the way - and neither do
+    blockers in a project the user cannot access, which ``links_for_task``
+    hides: the badge must not reveal a link the panel does not show."""
     open_blockers = TaskLink.objects.filter(
-        type=TaskLink.Type.BLOCKS, target=OuterRef("pk")
+        type=TaskLink.Type.BLOCKS,
+        target=OuterRef("pk"),
+        source__project_id__in=user_project_ids(user),
     ).exclude(source__status__category=TaskStatus.Category.DONE)
     return qs.annotate(is_blocked=Exists(open_blockers))

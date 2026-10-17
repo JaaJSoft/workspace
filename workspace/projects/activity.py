@@ -6,19 +6,41 @@ from workspace.core.activity_registry import ActivityProvider
 
 
 class ProjectsActivityProvider(ActivityProvider):
-    def _visibility_filter(self, user_id, viewer_id):
-        """Q filter on TaskEvent restricting to projects the viewer can access."""
-        if viewer_id is None or viewer_id == user_id:
-            return Q()
-        return Q(project_id__in=self._viewer_project_ids(viewer_id))
+    @staticmethod
+    def _scoping_user(user_id, viewer_id):
+        """The user whose access scopes the feed: the viewer, or the user
+        themselves on their own view (callers pass no viewer for it). None
+        only for an unscoped, system-wide query.
 
-    def _viewer_project_ids(self, viewer_id):
+        The own view is no exception: a project the user was removed from is
+        no longer theirs to see, under its current name or otherwise.
+        """
         from django.contrib.auth import get_user_model
 
+        scoping_id = user_id if viewer_id is None else viewer_id
+        if scoping_id is None:
+            return None
+        # The access helpers only read the pk: an unsaved stub spares a user
+        # fetch on every provider call (the dashboard makes several).
+        return get_user_model()(pk=scoping_id)
+
+    def _event_visibility_filter(self, user_id, viewer_id):
+        """Q filter on TaskEvent restricting to the events the scoping user may read."""
+        from workspace.projects.queries import visible_task_events_q
+
+        scoping_user = self._scoping_user(user_id, viewer_id)
+        if scoping_user is None:
+            return Q()
+        return visible_task_events_q(scoping_user)
+
+    def _task_visibility_filter(self, user_id, viewer_id):
+        """Q filter on Task restricting to projects the scoping user can access."""
         from workspace.projects.queries import user_project_ids
 
-        viewer = get_user_model().objects.get(pk=viewer_id)
-        return user_project_ids(viewer)
+        scoping_user = self._scoping_user(user_id, viewer_id)
+        if scoping_user is None:
+            return Q()
+        return Q(project_id__in=user_project_ids(scoping_user))
 
     def get_daily_counts(self, user_id, date_from, date_to, *, viewer_id=None):
         from workspace.projects.models import TaskEvent
@@ -30,7 +52,7 @@ class ProjectsActivityProvider(ActivityProvider):
         )
         if user_id is not None:
             qs = qs.filter(actor_id=user_id)
-        qs = qs.filter(self._visibility_filter(user_id, viewer_id))
+        qs = qs.filter(self._event_visibility_filter(user_id, viewer_id))
         rows = (
             qs.annotate(day=TruncDate("created_at"))
             .values("day")
@@ -50,7 +72,7 @@ class ProjectsActivityProvider(ActivityProvider):
         if exclude_actor_id is not None:
             qs = qs.exclude(actor_id=exclude_actor_id)
         qs = (
-            qs.filter(self._visibility_filter(user_id, viewer_id))
+            qs.filter(self._event_visibility_filter(user_id, viewer_id))
             .select_related("actor", "project")
             .order_by("-created_at")[offset : offset + limit]
         )
@@ -72,7 +94,7 @@ class ProjectsActivityProvider(ActivityProvider):
         qs = Task.objects.all()
         if user_id is not None:
             qs = qs.filter(created_by_id=user_id)
-        qs = qs.filter(self._visibility_filter(user_id, viewer_id))
+        qs = qs.filter(self._task_visibility_filter(user_id, viewer_id))
         agg = qs.aggregate(
             total_tasks=Count("pk"),
             completed_tasks=Count("pk", filter=Q(completed_at__isnull=False)),

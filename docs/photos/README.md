@@ -591,9 +591,11 @@ the review, never applied on their own, and a photo is shown under the person
 once the user said yes. A person already named in the photo is never
 suggested, nor one the user said it is not.
 
-The thresholds are fitted per embedding model on the face bench's libraries
-(scripts/appearance_bench.py measures the method), for about 95% precision:
-there, about one person in five without a usable face gets a suggestion.
+The thresholds are fitted per embedding model on the face bench's libraries,
+on torsos cut from the detector's boxes, for at least 90% precision on any
+part of them: there, a quarter to a third of the people with a named person
+nearby get a suggestion (36% with SigLIP 2), right 97 to 98% of the time.
+scripts/appearance_bench.py measures the method itself.
 The `remote` backend has none: with it nobody is found by their body, and no
 picture of a person leaves the server.
 

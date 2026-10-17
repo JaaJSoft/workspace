@@ -134,6 +134,11 @@ class ClipVitB32Backend(LocalBackend):
     similar_max_distance = 0.25
     duplicate_max_distance = 0.075
     description_max_distance = 0.765
+    # On the face bench's libraries, 25% of the torsos with a named person
+    # nearby get a suggestion, right 98% of the time (88% on the smaller
+    # libraries alone).
+    appearance_max_distance = 0.12
+    appearance_margin = 0.08
     tag_thresholds = {
         "dog": 0.759,
         "cat": 0.737,
@@ -192,6 +197,11 @@ class Siglip2BaseBackend(LocalBackend):
     similar_max_distance = 0.3
     duplicate_max_distance = 0.07
     description_max_distance = 0.92
+    # On the face bench's libraries, 36% of the torsos with a named person
+    # nearby get a suggestion, right 97% of the time (94% on the smaller
+    # libraries alone).
+    appearance_max_distance = 0.15
+    appearance_margin = 0.08
     tag_thresholds = {
         "dog": 0.926,
         "cat": 0.901,
@@ -266,6 +276,11 @@ class JinaClipV1Backend(LocalBackend):
     similar_max_distance = 0.3
     duplicate_max_distance = 0.085
     description_max_distance = 0.89
+    # On the face bench's libraries, 29% of the torsos with a named person
+    # nearby get a suggestion, right 98% of the time (93% on the smaller
+    # libraries alone).
+    appearance_max_distance = 0.14
+    appearance_margin = 0.08
     tag_thresholds = {
         "dog": 0.889,
         "cat": 0.84,

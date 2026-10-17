@@ -48,11 +48,12 @@ class EmbeddingBackend(abc.ABC):
     # People found by their body: the nearest torso of a named person within
     # a few hours suggests who someone is when it is under
     # `appearance_max_distance` and nearer than anybody else's by
-    # `appearance_margin`. Fitted for 95% precision on the face bench's
-    # libraries, on torsos cut from the person detector's boxes. None: not
-    # calibrated, and nobody is suggested that way - a remote model.
+    # `appearance_margin`. Fitted on the face bench's libraries, on torsos cut
+    # from the person detector's boxes, for at least 90% precision on any
+    # part of them. None: not calibrated, and nobody is suggested that way -
+    # a remote model.
     appearance_max_distance: float | None = None
-    appearance_margin: float = 0.05
+    appearance_margin: float = 0.08
 
     @property
     def model_key(self):

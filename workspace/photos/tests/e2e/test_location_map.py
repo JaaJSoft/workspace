@@ -50,6 +50,7 @@ INSTRUMENT_LEAFLET = """() => {
 @override_settings(
     PHOTOS_MAP_TILE_URL=f"https://{TILE_HOST}/{{z}}/{{x}}/{{y}}.png",
     PHOTOS_MAP_TILE_ATTRIBUTION="Test tiles",
+    PHOTOS_MAP_TILE_URL_DARK="",
 )
 class PhotoLocationMapTests(PlaywrightTestCase):
     def setUp(self):

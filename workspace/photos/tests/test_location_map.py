@@ -18,8 +18,16 @@ ATTRIBUTION = '&copy; <a href="https://example.test/copyright">Example</a>\'s ma
 CONFIGURED = override_settings(
     PHOTOS_MAP_TILE_URL=TILE_URL, PHOTOS_MAP_TILE_ATTRIBUTION=ATTRIBUTION
 )
+# The tests start from an instance with no map, whatever the .env says:
+# CONFIGURED and the per-test overrides then apply on top.
+UNCONFIGURED = override_settings(
+    PHOTOS_MAP_TILE_URL="",
+    PHOTOS_MAP_TILE_URL_DARK="",
+    PHOTOS_MAP_TILE_ATTRIBUTION="",
+)
 
 
+@UNCONFIGURED
 class LocationMapTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
@@ -88,6 +96,7 @@ class LocationMapTests(TestCase):
         self.assertEqual(tile_server(), "tiles.example.test")
 
 
+@UNCONFIGURED
 class LocationMapPanelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")
@@ -174,6 +183,7 @@ class LocationMapPanelTests(TestCase):
         self.assertNotIn("data-photo-map", html)
 
 
+@UNCONFIGURED
 class LocationMapPagesTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="alice", password="p")

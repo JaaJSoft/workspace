@@ -85,6 +85,88 @@ class PollSerializer(serializers.ModelSerializer):
         return path
 
 
+def public_display_name(user):
+    """The name a workspace user goes by on a page anyone with the link can open."""
+    return user.get_full_name() or user.username
+
+
+class PublicPollVoteSerializer(serializers.ModelSerializer):
+    """A vote as an anonymous visitor of the share link sees it.
+
+    The voter is reduced to a display name: no user id, username or email.
+    ``participant`` groups one voter's votes into a row; it is an ordinal
+    assigned per payload (``participant_keys`` in the context), so it says
+    nothing about who the voter is in the workspace.
+    """
+
+    name = serializers.SerializerMethodField()
+    participant = serializers.SerializerMethodField()
+    is_mine = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PollVote
+        fields = ["uuid", "slot_id", "participant", "name", "choice", "is_mine"]
+
+    def get_name(self, vote):
+        if vote.user_id is not None:
+            return public_display_name(vote.user)
+        return vote.guest_name
+
+    def get_participant(self, vote):
+        return self.context["participant_keys"][_voter_identity(vote)]
+
+    def get_is_mine(self, vote):
+        voter_token = self.context.get("voter_token")
+        return (
+            vote.user_id is None
+            and bool(voter_token)
+            and vote.voter_token == voter_token
+        )
+
+
+def _voter_identity(vote):
+    if vote.user_id is not None:
+        return ("user", vote.user_id)
+    return ("guest", vote.voter_token or vote.guest_name)
+
+
+class PublicPollSerializer(serializers.ModelSerializer):
+    """A poll as served on its public share link, to visitors who may not have an account.
+
+    Unlike ``PollSerializer`` it carries no invitee list and names workspace
+    users by display name only.
+    """
+
+    created_by = serializers.SerializerMethodField()
+    slots = PollSlotSerializer(many=True, read_only=True)
+    votes = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Poll
+        fields = [
+            "uuid",
+            "title",
+            "description",
+            "created_by",
+            "status",
+            "chosen_slot_id",
+            "slots",
+            "votes",
+        ]
+
+    def get_created_by(self, obj):
+        return public_display_name(obj.created_by)
+
+    def get_votes(self, obj):
+        votes = obj._prefetched_poll_votes
+        identities = dict.fromkeys(_voter_identity(vote) for vote in votes)
+        participant_keys = {
+            identity: f"p{index}" for index, identity in enumerate(identities, start=1)
+        }
+        context = {**self.context, "participant_keys": participant_keys}
+        return PublicPollVoteSerializer(votes, many=True, context=context).data
+
+
 class PollListSerializer(serializers.ModelSerializer):
     created_by = MemberUserSerializer(read_only=True)
     participant_count = serializers.SerializerMethodField()

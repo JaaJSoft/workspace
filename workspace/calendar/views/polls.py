@@ -28,6 +28,7 @@ from ..serializers_polls import (
     PollListSerializer,
     PollSerializer,
     PollUpdateSerializer,
+    PublicPollSerializer,
     VoteSubmitSerializer,
 )
 
@@ -473,11 +474,9 @@ def _guest_voter_token(request, poll):
     return str(voter_token) if voter_token else ""
 
 
-def _shared_poll_payload(poll, request, voter_token):
+def _shared_poll_payload(poll, voter_token):
     _prefetch_poll_votes(poll)
-    data = PollSerializer(
-        poll, context={"request": request, "voter_token": voter_token}
-    ).data
+    data = PublicPollSerializer(poll, context={"voter_token": voter_token}).data
     if voter_token:
         my_votes = [
             v
@@ -496,11 +495,11 @@ class SharedPollView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    @extend_schema(summary="Get poll via share link", responses=PollSerializer)
+    @extend_schema(summary="Get poll via share link", responses=PublicPollSerializer)
     def get(self, request, token):
         poll = get_object_or_404(_poll_detail_queryset(), share_token=token)
         voter_token = _guest_voter_token(request, poll)
-        return Response(_shared_poll_payload(poll, request, voter_token))
+        return Response(_shared_poll_payload(poll, voter_token))
 
 
 @extend_schema(tags=["Calendar - Polls (Public)"])
@@ -517,7 +516,7 @@ class SharedPollVoteView(APIView):
     @extend_schema(
         summary="Submit guest votes",
         request=GuestVoteSubmitSerializer,
-        responses=PollSerializer,
+        responses=PublicPollSerializer,
     )
     def post(self, request, token):
         poll = get_object_or_404(Poll, share_token=token, status=Poll.Status.OPEN)
@@ -574,7 +573,7 @@ class SharedPollVoteView(APIView):
             )
 
         poll = _poll_detail_queryset().get(uuid=poll.uuid)
-        response = Response(_shared_poll_payload(poll, request, voter_token))
+        response = Response(_shared_poll_payload(poll, voter_token))
         response.set_cookie(
             _voter_cookie_name(poll),
             voter_token,

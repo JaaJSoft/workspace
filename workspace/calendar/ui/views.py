@@ -12,7 +12,11 @@ from workspace.calendar.models import (
     PollInvitee,
     PollVote,
 )
-from workspace.calendar.queries import visible_calendars, visible_events_q
+from workspace.calendar.queries import (
+    visible_calendar_ids,
+    visible_calendars,
+    visible_events_q,
+)
 from workspace.calendar.serializers import CalendarSerializer
 from workspace.users.services.settings import get_setting
 
@@ -104,6 +108,13 @@ def event_card(request, event_id):
 
     is_owner = event.owner_id == request.user.id
     is_external = hasattr(event.calendar, "external_source")
+    # An invitee reaches the event through its membership, not the calendar:
+    # the organizer's calendar name and colour are not theirs to see.
+    calendar = (
+        event.calendar
+        if event.calendar_id in visible_calendar_ids(request.user)
+        else None
+    )
     membership = next((m for m in members if m.user_id == request.user.id), None)
     invite_status = membership.status if membership and not is_owner else None
 
@@ -112,6 +123,7 @@ def event_card(request, event_id):
         "calendar/ui/partials/event_card.html",
         {
             "event": event,
+            "calendar": calendar,
             "attendees": attendees,
             "is_owner": is_owner,
             "is_external": is_external,

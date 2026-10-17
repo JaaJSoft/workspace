@@ -18,6 +18,10 @@ named in the photo.
   margin over the next person name, with what they get right. Both are fitted
   on half the libraries and scored on the other half, then the halves swap;
   the pair fitted on every library is what a backend would ship.
+
+A torso is one person in one photo, so the shares are of the torsos with a
+candidate. Other --window or --burst values change that number: two such runs
+compare by the torsos named, not by the shares.
 - The same by head size, and the CPU time per crop (one thread unless
   --onnx-threads says otherwise).
 
@@ -355,7 +359,7 @@ def score(answers):
     majority = np.array([a.majority_right for a in answers], dtype=bool)
     buckets = np.array([a.bucket for a in answers])
     report = {
-        "people": len(answers),
+        "torsos": len(answers),
         "anchored": _share(anchored),
         "nearest_right": _share(right[anchored]),
         "majority_right": _share(majority[anchored]),
@@ -366,6 +370,7 @@ def score(answers):
         accepted = held_out(answers, target)
         report["named"][f"{target:.2f}"] = {
             "named": _share(accepted),
+            "count": int(accepted.sum()),
             "precision": _share(right[accepted]),
             "fitted": fit(answers, target),
         }
@@ -375,7 +380,7 @@ def score(answers):
     for bucket in (size_bucket(low) for low in SIZE_BUCKETS):
         here = buckets == bucket
         report["by_size"][bucket] = {
-            "people": int(here.sum()),
+            "torsos": int(here.sum()),
             "anchored": _share(anchored[here]),
             "nearest_right": _share(right[here & anchored]),
             "named": _share(at_size_target[here]),
@@ -393,7 +398,7 @@ def _share(flags):
 
 def _rows():
     rows = [
-        ("People with an anchor around", ("people",), "int"),
+        ("Torsos with a candidate", ("torsos",), "int"),
         ("Anchored", ("anchored",), "pct"),
         ("Nearest anchor right", ("nearest_right",), "pct"),
         ("  most photographed instead", ("majority_right",), "pct"),
@@ -402,6 +407,7 @@ def _rows():
         key = f"{target:.2f}"
         rows += [
             (f"Named at {target:.0%} precision", ("named", key, "named"), "pct"),
+            ("  torsos named", ("named", key, "count"), "int"),
             ("  precision held out", ("named", key, "precision"), "pct"),
             ("  threshold / margin", ("named", key, "fitted"), "point"),
         ]
@@ -441,14 +447,14 @@ def render(report, baseline=None):
                 if baseline
                 else None
             )
-            if kind in ("pct", "ms") and _format(before, kind) not in ("-", cell):
+            if kind != "point" and _format(before, kind) not in ("-", cell):
                 cell += f" ({_delta(value, before, kind)})"
             cells.append(f"{cell:>{width}}")
         lines.append(f"{label:<30}" + "".join(cells))
     lines += [
         "",
         f"By head size, at {SIZE_TARGET:.0%} precision: named (precision held out)",
-        f"{'':<12}{'people':>8}{'anchored':>10}"
+        f"{'':<12}{'torsos':>8}{'anchored':>10}"
         + "".join(f"{key:>{width + 4}}" for key in keys),
     ]
     first = report["backends"][keys[0]]["by_size"]
@@ -460,7 +466,7 @@ def render(report, baseline=None):
                 f"{_format(cell['named'], 'pct')} ({_format(cell['precision'], 'pct')})"
             )
         lines.append(
-            f"{bucket:<12}{row['people']:>8}{_format(row['anchored'], 'pct'):>10}"
+            f"{bucket:<12}{row['torsos']:>8}{_format(row['anchored'], 'pct'):>10}"
             + "".join(f"{cell:>{width + 4}}" for cell in cells)
         )
     return "\n".join(lines)

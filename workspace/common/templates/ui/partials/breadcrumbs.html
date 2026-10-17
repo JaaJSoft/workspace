@@ -15,6 +15,9 @@
     - collapse: if True, collapse middle items into a dropdown when over threshold
     - collapse_after: number of items before collapsing (default: 4)
     - separator: "chevron" (default), "slash", "dot" or "arrow"
+    - mobile_compact: if True, below the sm breakpoint the first crumb shows
+      only its icon and the last crumb is hidden - for a page whose title
+      already names the current location
 
   Example:
     {% include "ui/partials/breadcrumbs.html" with breadcrumbs=breadcrumbs x_target="content" %}

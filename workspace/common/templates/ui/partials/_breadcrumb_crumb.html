@@ -1,0 +1,30 @@
+{% comment %}
+  One crumb of ui/partials/breadcrumbs.html. Every crumb may shrink: its
+  label truncates (full text in the title) so a deep trail never pushes the
+  row wider than its container.
+{% endcomment %}
+{% if item.url %}
+  <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 min-w-0 hover:opacity-70" title="{{ item.label }}"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
+    {% if item.icon %}
+      <i
+        data-lucide="{{ item.icon }}"
+        class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
+      ></i>
+    {% endif %}
+    <span
+      class="truncate{% if mobile_compact and forloop.first and item.icon %} max-sm:sr-only{% endif %}"
+    >{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}</span>
+  </a>
+{% else %}
+  <span class="flex items-center gap-1 min-w-0" title="{{ item.label }}">
+    {% if item.icon %}
+      <i
+        data-lucide="{{ item.icon }}"
+        class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
+      ></i>
+    {% endif %}
+    <span
+      class="truncate{% if mobile_compact and forloop.first and item.icon %} max-sm:sr-only{% endif %}"
+    >{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}</span>
+  </span>
+{% endif %}

@@ -46,14 +46,10 @@ def give_auto_tags_their_icon(apps, schema_editor):
     FileTag = apps.get_model("files", "FileTag")
     db = schema_editor.connection.alias
     auto_tag_ids = FileTag.objects.using(db).filter(source="auto").values("tag_id")
-    tags = Tag.objects.using(db).filter(icon="", uuid__in=auto_tag_ids)
-    batch = []
-    for tag in tags.iterator():
-        icon = _ICONS.get(tag.name.lower())
-        if icon:
-            tag.icon = icon
-            batch.append(tag)
-    Tag.objects.using(db).bulk_update(batch, ["icon"], batch_size=500)
+    for name, icon in _ICONS.items():
+        Tag.objects.using(db).filter(
+            name__iexact=name, icon="", uuid__in=auto_tag_ids
+        ).update(icon=icon)
 
 
 class Migration(migrations.Migration):

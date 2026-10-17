@@ -34,6 +34,35 @@ must come first; a name giving only the day reads as noon on that day.
 Renaming such a file moves it on the timeline, so an undated scan can be filed
 by renaming it. A date read from the file itself always wins over the name.
 
+## Location map
+
+A photo carrying a GPS position shows its coordinates in its properties panel,
+with a link to OpenStreetMap. The instance can also show a small map with a pin
+at the spot, drawn from raster tiles of a server it names:
+
+```bash
+PHOTOS_MAP_TILE_URL=https://tiles.example.org/{z}/{x}/{y}.png
+PHOTOS_MAP_TILE_ATTRIBUTION='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+```
+
+There is no default server. Every map opened sends the photo's position to the
+tile server, so pick one whose privacy and usage policy fit the instance: a
+self-hosted one, or a provider you have an agreement with.
+`tile.openstreetmap.org` is not meant for this; its
+[tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
+forbids heavy use. The attribution is shown on the map and is required by
+every provider; HTML is allowed. Without both settings there is no map.
+
+Each user turns the map on, from **Show on a map** in the panel or from the
+Photos preferences, which name the server the location goes to. The map only
+changes what the viewer's own browser fetches: a photo shared or published
+through a link still carries its GPS position in the original.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `PHOTOS_MAP_TILE_URL` | empty | The tile server's URL template (`{z}`, `{x}`, `{y}`, optionally `{s}` and `{r}`). |
+| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map. |
+
 ## Similar photos and search by description
 
 One image embedding per photo, and one per key frame of a video - a vector

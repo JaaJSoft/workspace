@@ -1,8 +1,10 @@
+{% load l10n %}
 {% comment %}
 The Photo section of the Files properties panel (registered in
 PhotosConfig.ready(), rendered by files.properties_sections).
 
-Context: photo, a photos.services.details.PhotoDetails.
+Context: photo, a photos.services.details.PhotoDetails; map, a
+photos.services.location_map.LocationMap or None.
 {% endcomment %}
 <div class="space-y-2 text-sm">
   {% if photo.taken_at %}
@@ -81,5 +83,46 @@ Context: photo, a photos.services.details.PhotoDetails.
         </a>
       </div>
     </div>
+    {% if map.enabled %}
+      {% localize off %}
+        <div
+          x-data="photoMap({ tileUrl: '{{ map.tile_url|escapejs }}', attribution: '{{ map.attribution|escapejs }}', latitude: {{ map.latitude }}, longitude: {{ map.longitude }}, zoom: {{ map.zoom }} })"
+          data-photo-map
+        >
+          <div
+            x-ref="canvas"
+            class="h-40 rounded-box overflow-hidden border border-base-300 isolate bg-base-200"
+            data-testid="photo-map"
+          ></div>
+          <button
+            type="button"
+            class="link link-hover text-xs text-base-content/50 mt-1 hover:text-module"
+            :disabled="savingMapPreference"
+            @click="setShowMap(false)"
+          >
+            Hide the map
+          </button>
+        </div>
+      {% endlocalize %}
+    {% elif map %}
+      <div
+        x-data="photoMapPreference()"
+        class="rounded-box bg-base-200 px-3 py-2 space-y-1"
+        data-photo-map-offer
+      >
+        <button
+          type="button"
+          class="btn btn-xs btn-ghost gap-1 -ml-2 hover:text-module"
+          :disabled="savingMapPreference"
+          @click="setShowMap(true)"
+        >
+          <i data-lucide="map" class="w-3.5 h-3.5"></i>
+          Show on a map
+        </button>
+        <p class="text-xs text-base-content/50">
+          The map is loaded from {{ map.server }}, which then receives the location of each photo you open.
+        </p>
+      </div>
+    {% endif %}
   {% endif %}
 </div>

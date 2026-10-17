@@ -117,6 +117,11 @@ class PhotosConfig(AppConfig):
                 template="photos/ui/partials/properties_section.html",
                 is_visible=is_section_visible,
                 get_context=section_context,
+                scripts=(
+                    "photos/ui/js/vendor/leaflet/leaflet.js",
+                    "photos/ui/js/photo_map.js",
+                ),
+                stylesheets=("photos/ui/css/vendor/leaflet/leaflet.css",),
             )
         )
         properties_section_registry.register(

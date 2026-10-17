@@ -39,6 +39,10 @@ class PropertiesSection:
     # Extra template context, next to ``file`` and ``user``. Only called for
     # a visible section.
     get_context: Callable = field(default=_no_context)
+    # Static paths every page hosting the panel loads up front: the section
+    # is swapped in later, and a <script> arriving with it would not run.
+    scripts: tuple[str, ...] = ()
+    stylesheets: tuple[str, ...] = ()
 
 
 class PropertiesSectionRegistry:

@@ -19,6 +19,7 @@ from workspace.people.services.persons import (
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.queries import user_face_clusters
 from workspace.photos.search import search_people
+from workspace.photos.services.face_corrections import start_cluster
 from workspace.photos.services.face_grouping import cluster_owner
 from workspace.photos.services.face_people import person_cards, person_clusters
 
@@ -117,6 +118,20 @@ class NamingTests(FaceApiTestCase):
         )
         bob_in_pair.refresh_from_db()
         self.assertEqual(bob_in_pair.assignment, Face.Assignment.DUPLICATE)
+
+    def test_a_cluster_folded_away_whole_by_its_name_answers_no_content(self):
+        # Its only face is in pair.png, where Alice already is: naming it
+        # after her folds that face and the emptied cluster goes.
+        self.alice.person = self.alice_contact
+        self.alice.save(update_fields=["person"])
+        lone = start_cluster(self.face("pair.png", self.bob))
+
+        response = _patch(
+            self.client, f"{CLUSTERS}/{lone.pk}", {"person": str(self.alice_contact.pk)}
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(FaceCluster.objects.filter(pk=lone.pk).exists())
 
     def test_deleting_the_contact_leaves_the_cluster_unnamed(self):
         self.alice.person = self.alice_contact

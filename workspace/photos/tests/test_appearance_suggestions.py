@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.photos.models import Face
 from workspace.photos.services.appearance_suggestions import (
     suggest_around,
     suggest_owner,
@@ -75,6 +76,61 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
 
         self.assertIsNone(self.suggestion(back))
 
+    def test_someone_unnamed_dressed_alike_is_a_rival_too(self):
+        self.anchor(self.lea, RED)
+        stranger = photo_at(self.user, "stranger.jpg", 2)
+        named_face(self.user, stranger, None)
+        seen(self.user, stranger, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_someone_whose_face_is_in_no_group_is_a_rival_too(self):
+        self.anchor(self.lea, RED)
+        stranger = photo_at(self.user, "stranger.jpg", 2)
+        face = named_face(self.user, stranger, None)
+        Face.objects.filter(pk=face.pk).update(cluster=None)
+        seen(self.user, stranger, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_someone_with_a_face_too_blurred_to_group_is_asked_about(self):
+        self.anchor(self.lea, RED)
+        blurred = photo_at(self.user, "blurred.jpg", 1)
+        face = named_face(self.user, blurred, None)
+        Face.objects.filter(pk=face.pk).update(cluster=None, quality=0.2)
+        back = seen(self.user, blurred, RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_dressed_like_an_unnamed_group_suggests_nobody(self):
+        stranger = photo_at(self.user, "stranger.jpg")
+        named_face(self.user, stranger, None)
+        seen(self.user, stranger, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_a_person_is_suggested_once_per_photo_for_the_nearest(self):
+        self.anchor(self.lea, RED)
+        group = photo_at(self.user, "group.jpg", 1)
+        near = seen(self.user, group, RED)
+        further = seen(self.user, group, (240, 0, 0), box=(0.6, 0.1, 0.3, 0.8))
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(near), self.lea.pk)
+        self.assertIsNone(self.suggestion(further))
+
     def test_two_clusters_of_one_person_are_no_rivals(self):
         self.anchor(self.lea, RED)
         other_look = photo_at(self.user, "lea-2.jpg", 2)
@@ -137,6 +193,16 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         suggest_owner(self.user.pk)
         # Lea's face was someone else's: nobody names that top any more.
         anchor.file.faces.all().delete()
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_someone_whose_face_got_a_group_loses_their_suggestion(self):
+        self.anchor(self.lea, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+        suggest_owner(self.user.pk)
+        named_face(self.user, back.file, None)
 
         suggest_owner(self.user.pk)
 

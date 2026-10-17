@@ -583,13 +583,19 @@ each person wide enough to show their clothes is embedded with the photo
 embedding model. No other model is involved: faces keep theirs, everything
 else uses the photo model.
 
-People keep their clothes for a few hours, and only that long: a person no
-named face accounts for is suggested as the named person whose torso, on
-another photo taken within 6 hours, is the nearest - when it is close enough
-and clearly closer than anybody else's. The suggestions are asked about in
-the review, never applied on their own, and a photo is shown under the person
-once the user said yes. A person already named in the photo is never
-suggested, nor one the user said it is not.
+People keep their clothes for a few hours, and only that long: a person seen
+without a face, or with one too blurred to recognize anyone by, is suggested
+as the named person whose torso, on another photo taken within 6 hours, is
+the nearest - when it is close enough and clearly closer than anybody
+else's. Everybody whose face can tell who they are counts as somebody there,
+named or not: someone dressed like an unnamed group, or like a face the face
+review asks about, is suggested as nobody. Without that, in a library where
+few people are named, the stranger sitting by a named person would take
+their name. A person is suggested once per photo, and never when the photo
+already shows them, nor when the user said it is not them.
+
+The suggestions are asked about in the review, never applied on their own,
+and a photo is shown under the person once the user said yes.
 
 The thresholds are fitted per embedding model on the face bench's libraries,
 on torsos cut from the detector's boxes, for at least 90% precision on any

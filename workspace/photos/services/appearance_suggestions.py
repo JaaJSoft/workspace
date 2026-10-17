@@ -1,11 +1,18 @@
 """Suggest who the people found by their body are, from what they wear.
 
-People keep their clothes for a few hours. A person no named face accounts
-for is suggested as the named person whose torso, in another photo taken
-within WINDOW of theirs, is the nearest: when it is near enough (the
+People keep their clothes for a few hours. A person no grouped face
+accounts for is suggested as the named person whose torso, in another photo
+taken within WINDOW of theirs, is the nearest: when it is near enough (the
 backend's ``appearance_max_distance``) and nearer than anybody else's by the
-backend's ``appearance_margin``. The anchors are the people a face names,
-and those the user confirmed.
+backend's ``appearance_margin``. The anchors are the people whose face is
+in a named group, and those the user confirmed.
+
+Everyone whose face can tell who they are is somebody, named or not: an
+unnamed group, a face the face review asks about. They are never suggested,
+but someone dressed like one of them is not suggested as anybody else
+either - in a library where few people are named, the stranger sitting by a
+named person would otherwise take their name. The people asked about are
+those seen without a face, or with one too poor to recognize anyone by.
 
 Only ever a suggestion: the review asks, and a photo is the person's once
 the user says yes (``Appearance.person``).
@@ -21,12 +28,14 @@ from datetime import datetime, timedelta
 
 import numpy as np
 from django.contrib.auth import get_user_model
+from django.db.models import F, Q
 
 from workspace.common.vectors.encoding import from_bytes
 
 from ..models import Appearance, Face, MediaItem
-from ..queries import library_files, named_face_clusters
+from ..queries import library_files, user_face_clusters
 from .embedding.registry import get_embedding_backend
+from .face_grouping import LOW_QUALITY
 from .face_preferences import faces_enabled
 
 # How far apart two photos may be taken for clothes to tell who is who.
@@ -82,7 +91,7 @@ def _suggest(user, start=None, end=None):
     seen = _read(user, backend.model_key, start, end)
     if not seen:
         return 0
-    named, in_photo = _named_by_faces(user, seen, start, end)
+    named, in_photo = _known_by_faces(user, seen, start, end)
     for item in seen:
         if item.person_id is not None:
             named[item.pk] = item.person_id
@@ -100,7 +109,16 @@ def _suggest(user, start=None, end=None):
     )
     times = [item.taken for item in anchors]
     vectors = {}
-    changed = 0
+    # Whoever is no longer asked about loses the suggestion they had: their
+    # face got a group, or the user hid them.
+    asked = {item.pk for item in queries}
+    answers = [
+        (item, None)
+        for item in seen
+        if item.suggested_id is not None
+        and item.pk not in asked
+        and (start is None or start <= item.taken <= end)
+    ]
     for batch in itertools.batched(queries, _BATCH, strict=False):
         window = anchors[
             bisect_left(times, batch[0].taken - WINDOW) : bisect_right(
@@ -121,8 +139,29 @@ def _suggest(user, start=None, end=None):
                 threshold,
                 backend.appearance_margin,
             )
-            changed += _write(query, suggestion)
-    return changed
+            answers.append((query, suggestion))
+    return sum(_write(query, suggestion) for query, suggestion in _once(answers))
+
+
+def _once(answers):
+    """*answers* with each person suggested once per photo, for the nearest
+    of the people there: a person is in a photo once."""
+    nearest = {}
+    for query, suggestion in answers:
+        if suggestion is not None:
+            key = (query.file_id, suggestion[0])
+            if key not in nearest or suggestion[1] < nearest[key][1]:
+                nearest[key] = (query.pk, suggestion[1])
+    return [
+        (
+            query,
+            suggestion
+            if suggestion is not None
+            and nearest[query.file_id, suggestion[0]][0] == query.pk
+            else None,
+        )
+        for query, suggestion in answers
+    ]
 
 
 def _by_time(item):
@@ -170,14 +209,33 @@ def _read(user, model_key, start, end):
     ]
 
 
-def _named_by_faces(user, seen, start, end):
-    """({appearance pk: person id} for the people a named face accounts for,
-    {file id: the persons its named faces show})."""
-    persons = dict(
-        named_face_clusters(user).filter(hidden=False).values_list("pk", "person_id")
-    )
-    faces = Face.objects.filter(owner=user, cluster__in=list(persons)).exclude(
-        assignment__in=(Face.Assignment.HIDDEN, Face.Assignment.DUPLICATE)
+def _known_by_faces(user, seen, start, end):
+    """({appearance pk: who} for the people whose face was seen,
+    {file id: the persons its named faces show}).
+
+    Who is the person a visible group is named after; ("cluster", its uuid)
+    for an unnamed or hidden group, and ("face", its uuid) for a face in no
+    group that is good enough for the face review to ask about: somebody,
+    but nobody to suggest. A blurred face in no group says nothing.
+    """
+    who = {
+        pk: person_id if person_visible and not hidden else ("cluster", pk)
+        for pk, person_id, person_visible, hidden in user_face_clusters(
+            user
+        ).values_list("pk", "person_id", "person_visible", "hidden")
+    }
+    # A duplicate stands for someone another face of the photo shows.
+    faces = (
+        Face.objects.filter(owner=user)
+        .filter(
+            Q(cluster__isnull=False)
+            | ~Q(assignment=Face.Assignment.AUTO)
+            | Q(quality__gte=LOW_QUALITY)
+        )
+        .exclude(assignment=Face.Assignment.DUPLICATE)
+        # Grouped faces first: they claim the body under them before an
+        # ungrouped face nearby does.
+        .order_by(F("cluster").asc(nulls_last=True), "pk")
     )
     if start is not None:
         faces = faces.filter(
@@ -187,14 +245,15 @@ def _named_by_faces(user, seen, start, end):
     for item in seen:
         by_file[item.file_id].append(item)
     named, in_photo = {}, defaultdict(set)
-    for file_id, x, y, w, h, cluster_id in faces.values_list(
-        "file_id", "box_x", "box_y", "box_width", "box_height", "cluster_id"
+    for pk, file_id, x, y, w, h, cluster_id in faces.values_list(
+        "pk", "file_id", "box_x", "box_y", "box_width", "box_height", "cluster_id"
     ):
-        person_id = persons[cluster_id]
-        in_photo[file_id].add(person_id)
+        key = who.get(cluster_id, ("face", pk))
+        if not isinstance(key, tuple):
+            in_photo[file_id].add(key)
         owner = _wearer((x + w / 2, y + h / 2), by_file.get(file_id, ()), named)
         if owner is not None:
-            named[owner.pk] = person_id
+            named[owner.pk] = key
     return named, in_photo
 
 
@@ -246,6 +305,9 @@ def _nearest(query, window, named, in_photo, vectors, threshold, margin):
     distances = 1 - np.stack([vectors[item.pk] for item in candidates]) @ vector
     order = np.argsort(distances, kind="stable")
     best = named[candidates[order[0]].pk]
+    if isinstance(best, tuple):
+        # Dressed like someone whose name the user has not given.
+        return None
     nearest = float(distances[order[0]])
     rival = next(
         (float(distances[i]) for i in order if named[candidates[i].pk] != best),

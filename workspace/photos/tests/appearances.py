@@ -84,10 +84,12 @@ def contact(owner, name):
     return create_person(owner=owner, display_name=name)
 
 
-def named_face(owner, photo, person, *, box=(0.15, 0.12, 0.1, 0.12)):
+def named_face(owner, photo, person, *, box=(0.15, 0.12, 0.1, 0.12), cluster=None):
     """A face of *person* in *photo*: by default where the head of the person
-    ``seen`` puts in it is."""
-    cluster = FaceCluster.objects.filter(owner=owner, person=person).first()
+    ``seen`` puts in it is. With *person* None, a face of *cluster*, or of a
+    new unnamed one."""
+    if cluster is None and person is not None:
+        cluster = FaceCluster.objects.filter(owner=owner, person=person).first()
     if cluster is None:
         cluster = FaceCluster.objects.create(owner=owner, person=person)
     x, y, w, h = box

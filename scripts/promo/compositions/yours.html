@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Promo - yours</title>
+</head>
+<body>
+  <template id="yours">
+    <div id="yours-root" data-composition-id="yours" data-width="1920" data-height="1080">
+      <style>
+        #yours-root { position: absolute; inset: 0; }
+        .yours .panel { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 36px; background: var(--mc); opacity: 0; }
+        .yours .panel-icon { width: 190px; height: 190px; color: #fff; }
+        .yours .panel-icon svg { width: 100%; height: 100%; stroke-width: 1.6; }
+        .yours .panel .slam { font-size: 170px; text-align: center; }
+        @media (orientation: portrait) {
+          .yours .panel .slam { font-size: 110px; }
+          .yours .panel-icon { width: 170px; height: 170px; }
+        }
+      </style>
+      <div class="scene yours on-colour">
+        <div class="panel" style="--mc: #312e81"><div class="panel-icon"><i data-lucide="server"></i></div><div class="slam">Self-hosted.</div></div>
+        <div class="panel" style="--mc: #047857"><div class="panel-icon"><i data-lucide="git-fork"></i></div><div class="slam">Open source.</div></div>
+        <div class="panel" style="--mc: #be185d"><div class="panel-icon"><i data-lucide="shield-check"></i></div><div class="slam"><div class="ln">Your data,</div><div class="ln"><em>your rules.</em></div></div></div>
+      </div>
+      <script>
+        (() => {
+          // kinetic-beat-slam over the breakdown: three claims on full-bleed
+          // colour, hard cuts every other beat, the last one swelling with
+          // the riser into the drop.
+          const { $$, at, end } = window.promo.scene("yours");
+          const { slam, pop } = window.promo;
+          const tl = gsap.timeline({ paused: true });
+          const panels = $$(".panel");
+          const beats = [0, 2, 4];
+          const kinds = ["scale", "rise", "left"];
+          panels.forEach((panel, i) => {
+            tl.set(panel, { opacity: 1 }, at(beats[i]));
+            if (i) tl.set(panels[i - 1], { opacity: 0 }, at(beats[i]));
+            slam(tl, panel.querySelector(".slam"), at(beats[i]), kinds[i]);
+            pop(tl, panel.querySelector(".panel-icon"), at(beats[i]), { rotation: i % 2 ? 16 : -16, duration: 0.4 });
+          });
+          const lines = $$(".panel:last-child .ln");
+          slam(tl, lines[1], at(5), "rise");
+          tl.to(panels[panels.length - 1], { scale: 1.12, duration: end - at(6), ease: "power2.in" }, at(6));
+          window.__timelines["yours"] = tl;
+        })();
+      </script>
+    </div>
+  </template>
+</body>
+</html>

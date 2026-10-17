@@ -48,7 +48,7 @@ FILES_FTS = DerivedFulltextIndex(
 # Raise when extract_text() starts reading something it did not before (a new
 # format, a larger cap): every document built by an older version becomes
 # pending, and the catch-up re-extracts the library on its own.
-EXTRACTOR_VERSION = 1
+EXTRACTOR_VERSION = 2
 
 
 def build_document(file_obj):

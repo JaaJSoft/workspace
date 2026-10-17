@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
+from workspace.files.models import MediaInfo
 from workspace.files.services import FileService
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import MediaItem
@@ -225,3 +226,54 @@ class PhotoPropertiesSectionTests(TestCase):
         self.client.force_login(bob)
 
         self.assertIn('data-properties-section="photo"', self._panel(f))
+
+
+class VideoPropertiesSectionTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="alice", password="p")
+        self.client.force_login(self.user)
+
+    def _panel(self, file_obj):
+        response = self.client.get(
+            reverse("files_ui:properties", kwargs={"uuid": file_obj.uuid})
+        )
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def _detail(self, html, detail):
+        match = re.search(
+            rf'data-video-detail="{detail}"\s*>(.*?)</div>', html, re.DOTALL
+        )
+        return " ".join(re.sub(r"<[^>]+>", " ", match[1]).split())
+
+    def test_dimensions_next_to_duration_and_codecs(self):
+        f = make_video(self.user, "clip.webm", None, width=1920, height=1080)
+        MediaInfo.objects.filter(file=f).update(audio_codec="opus")
+
+        html = self._panel(f)
+
+        self.assertIn('data-properties-section="video"', html)
+        self.assertEqual(self._detail(html, "dimensions"), "1920 × 1080")
+        self.assertEqual(self._detail(html, "duration"), "0:03")
+        self.assertEqual(self._detail(html, "codecs"), "VP9 · Opus")
+
+    def test_duration_and_codecs_before_the_library_analyzed_it(self):
+        f = make_video(self.user, "clip.webm", None, width=1920, height=1080)
+        MediaItem.objects.filter(file=f).delete()
+
+        html = self._panel(f)
+
+        self.assertNotIn('data-video-detail="dimensions"', html)
+        self.assertEqual(self._detail(html, "duration"), "0:03")
+
+    def test_rows_describing_replaced_bytes_are_not_shown(self):
+        f = make_video(self.user, "clip.webm", None, width=1920, height=1080)
+        MediaItem.objects.filter(file=f).update(content_hash="0" * 64)
+        MediaInfo.objects.filter(file=f).update(content_hash="0" * 64)
+
+        self.assertNotIn('data-properties-section="video"', self._panel(f))
+
+    def test_hidden_for_a_photo(self):
+        f = make_photo(self.user, "a.jpg", None, width=640, height=480)
+
+        self.assertNotIn('data-properties-section="video"', self._panel(f))

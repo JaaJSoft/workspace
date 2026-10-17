@@ -17,9 +17,12 @@ Upload, organize, and preview files with a full-featured file explorer.
 - **Favorites & Recent** - Star files for quick access, track recently opened items
 - **Trash** - Soft delete with configurable retention period before permanent removal
 - **Thumbnails** - Auto-generated thumbnails for image files
-- **Search** - Full-text search over file names and, for text formats
-  (Markdown, plain text, CSV, HTML, JSON, XML, source code), file contents;
-  filter by type and sort
+- **Search** - Full-text search over file names and, for text formats and
+  documents (PDF, office files), file contents and the title and author a
+  document declares; filter by type and sort
+- **Document properties** - Title, author, subject, keywords, page count and
+  authoring dates of PDFs and office files in the properties panel; length,
+  codecs and (for videos) dimensions of audio and video files
 - **Tags** - Create and assign tags to organize files across folders
 - **Sharing** - Share files with specific users or via public links with optional password protection and expiration
 - **Pinned folders** - Pin frequently used folders to the sidebar
@@ -57,9 +60,12 @@ and `DELETE` (abort); the OpenAPI schema documents each of them.
 
 ## Content search
 
-Files are searchable by name and, for text formats, by what is written inside them:
-Markdown, plain text, CSV, HTML, JSON, XML and source code. Anything else - PDFs, office
-documents, images, archives - stays searchable by name.
+Files are searchable by name and, for text formats and documents, by what is written
+inside them: Markdown, plain text, CSV, HTML, JSON, XML, source code, PDFs and office
+documents. A document is also found by the properties it declares about itself - its
+title, author, subject and keywords - so searching an author's name finds what they
+wrote, and a scanned PDF with no text layer stays findable by its title. Anything else -
+images, archives - stays searchable by name.
 
 The index holds only the extracted words, never a copy of the file: the blob on disk
 remains the single copy of the content. Files are indexed as they are created, renamed or
@@ -70,6 +76,18 @@ files per pass:
 
 ```bash
 python manage.py catch_up search_index
+```
+
+## Document properties
+
+The properties panel of a PDF or an office file shows what the document says about
+itself: title, author, subject, keywords, page count, and the dates it was written and
+last saved. They are read after the upload, off the request, and stored next to the file;
+a document that cannot be parsed is simply shown without them. Documents uploaded before
+the feature existed are read by the hourly catch-up, or all at once with:
+
+```bash
+python manage.py catch_up documents
 ```
 
 ## Office Documents

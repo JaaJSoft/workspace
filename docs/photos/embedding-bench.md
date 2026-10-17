@@ -137,6 +137,21 @@ which is what tells a video's key frames apart: within it, the second frame
 is dropped. Search by description and similar photos then run with the
 frames in place of the photos.
 
+**Automatic tags on videos.** The frames are dealt, in a fixed random order,
+into videos of 1, 3 and 6 key frames (`VIDEO_SCENES`), each the frame of a
+different photo: a scene change between any two, the case where a video's
+key frames are the most draws at a mistake. A video shows a tag when one of
+its scenes does. Each tag is placed three ways: from the video's closest
+key frame at the photos' table; from the closest key frame at a table
+fitted on frames (as the photos' one, `TAG_FIT_PRECISION`, and only for the
+tags the photos' table holds: the frames come from the same photos, so they
+are no evidence for a tag no threshold separates on them); and from the mean
+of the key frames at that table. The fitted tables are scored held out, the
+videos of one half of the photos at the table of the other half's frames.
+*At its video table* is the backend's `video_tag_thresholds` on single
+frames, the ones it was fitted on. The bench prints the table to ship
+after the photos' one.
+
 **Cost.** Time to load both encoders, CPU time per photo and per query (one
 thread: `PHOTOS_ONNX_THREADS`), the weights on disk, and how much the process
 grew. CPU time, not wall time: it is what a Raspberry Pi pays, whatever the
@@ -179,6 +194,41 @@ above: a frame it misses still comes first among the similar photos, while a
 looser threshold would group moments of different days. Two frames of one
 shot a second apart are always within it (a median distance of 0.01): a still
 or slowly moving shot is one key frame.
+
+Automatic tags need a table of their own on videos, and are placed from the
+closest key frame. Held out, on 1,971 photos filmed:
+
+| Model | Photos, one per tag | Videos of 1 / 3 / 6 scenes, closest frame | Mean of the frames, 3 / 6 scenes |
+|---|---|---|---|
+| SigLIP 2 | P 90% R 35% | P 91% / 92% / 92%, R 31-32% | P 90% R 1% / R 0% |
+| CLIP ViT-B/32 | P 86% R 14% | P 93% / 94% / 96%, R 10-11% | P 55% / 43% |
+| Jina CLIP v1 | P 89% R 33% | P 91% / 91% / 92%, R 28-30% | P 100% R 0% / R 0% |
+
+A frame costs a few points of recall, not precision: the video tables are
+fitted on frames to the same 97%, and hold 90% held out as the photos' do.
+The photos' own table on frames keeps 89-97%, but on the photos it was
+fitted on, so it says little.
+
+More scenes do not cost precision with the closest frame. A video of six
+scenes has six chances at a wrong tag, and six at a right one: a tag on any
+scene is a right answer. What would cost it is several frames of the same
+moment, each a draw at the same mistake. The library keeps none: a key frame
+within the near-duplicate distance of one already kept is dropped
+(`video_key_frames.py`).
+
+The mean of the key frames fails on every model, each its own way. The mean
+of unit vectors pointing in different directions is shorter than one, and
+scaled back to unit length it moves closer to every text at once with CLIP
+(a tag on 1.4 videos in 6 scenes, more than half of them wrong), further from
+every one with SigLIP 2 and Jina CLIP (nothing tagged). A threshold fitted on
+one frame means nothing on a mean.
+
+The bench's clips are photos filmed in a single shot: they measure what
+compression costs, and model the scene changes with frames of different
+photos; a real video's scenes are of one place and one day, which no
+number here measures. The rule places a tag found on a single key frame:
+a dog crossing a long beach video is tagged *Dog*. A tag on a video means
+it shows the thing, not that it is about it.
 
 Open Images labels are complete for the labels verified on a photo, not for
 every label: a photo may show a dog nobody asked about, and count as a wrong

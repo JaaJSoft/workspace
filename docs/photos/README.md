@@ -178,7 +178,7 @@ ones. After changing the setting:
 
 ### Automatic tags
 
-Each embedded photo is tagged with what it shows, from a vocabulary of 33
+Each embedded photo and video is tagged with what it shows, from a vocabulary of 33
 classic tags (`workspace/photos/services/tag_vocabulary.py`: dog, beach,
 snow, cake, wedding, screenshot...). The tags are the owner's ordinary file
 tags: an existing tag of the same name is reused (case-insensitively), a
@@ -192,14 +192,18 @@ properties panel marks them with a sparkle.
   photos it never saw. SigLIP 2 places 24 of the 33 tags and finds about a
   third of the photos each one describes; CLIP places 13. The `remote`
   backend has no table, so it places none until one is measured.
-- A photo is tagged once, after it is embedded: a tag its owner takes off
-  stays off. A new version of the photo, or a new model, tags it again.
-- Only personal photos: a tag belongs to its owner, and a group folder's
-  photo is never tagged. Videos are not tagged either: the thresholds are
-  fitted on photos, and a tag drawn from any of a video's key frames would be
-  wrong far more often.
+- A video is tagged from its key frames, at a table of its own
+  (`video_tag_thresholds`), fitted on photos filmed and compressed as a
+  phone video: a tag lands when the closest of its key frames is under the
+  tag's threshold. Same 90% held out; a few points of recall less than a
+  photo. Only the tags the photo table places.
+- A photo or video is tagged once, after it is embedded: a tag its owner
+  takes off stays off. A new version of the file, or a new model, tags it
+  again.
+- Only personal files: a tag belongs to its owner, and a group folder's
+  photo or video is never tagged.
 - Users turn it off with *Tag photos automatically* in the Photos
-  preferences; the photos embedded meanwhile are not tagged later.
+  preferences; the photos and videos embedded meanwhile are not tagged later.
 - The tagging runs in the worker right after the embedding, and the hourly
   catch-up (`python manage.py catch_up auto_tags`) tags the photos embedded
   before it existed. It embeds the vocabulary once per model, which loads the

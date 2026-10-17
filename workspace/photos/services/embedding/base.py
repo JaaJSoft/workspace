@@ -39,6 +39,9 @@ class EmbeddingBackend(abc.ABC):
     # is one the model does not tell apart well enough; none by default, a
     # remote model being uncalibrated.
     tag_thresholds: dict = {}
+    # The same on a video, from the closest of its key frames: a compressed,
+    # often blurred frame, and several draws a video.
+    video_tag_thresholds: dict = {}
 
     @property
     def model_key(self):

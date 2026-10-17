@@ -458,6 +458,7 @@ one inherits its group and its confirmation.
 | `PHOTOS_FACES_MAX_PER_PHOTO` | `40` | The most confident faces kept per photo. |
 | `PHOTOS_FACES_MAX_DISTANCE` | backend's own | Cosine distance under which two faces count as one person (0.58 for SFace, 0.6 for AdaFace and ArcFace). |
 | `PHOTOS_FACES_CLUSTER_PENDING` | `50` | Ungrouped faces that trigger a grouping run before the nightly one. |
+| `PHOTOS_APPEARANCES_ENABLED` | `true` | Find people by their body too, where photos are embedded with a local model (*People without a usable face*). |
 | `PHOTOS_FACES_VIDEO_DECODE_SIZE` | `1280` | Longest side, in px, of the video frames detection runs on. |
 | `PHOTOS_FACES_VIDEO_INTERVAL` | `2` | Seconds between two sampled frames at least (more in a long video, so the frames cover all of it). |
 | `PHOTOS_FACES_VIDEO_MAX_FRAMES` | `60` | The most frames sampled from one video. |
@@ -553,6 +554,10 @@ answered the same way whatever it holds:
   grouped (clear ones only: the blurred crowd behind a subject would bury the
   rest), with the named person they look like when there is one - never the
   one they were taken out of.
+- **People wearing a named person's clothes** (*Is this Léa?*): people found
+  without a usable face whose clothes match Léa's on a photo taken the same
+  day, nearest first (see *People without a usable face* below). Saying yes
+  puts the photo under Léa; saying no never suggests her for them again.
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
@@ -566,6 +571,45 @@ after a keyboard answer). Enter takes the guess, or the highlighted contact
 once the list is open; the arrows open and walk the contacts, Tab and
 Shift+Tab move between cards, Alt+H hides, Escape closes the contacts then
 clears the name. Clicking a face hands the keyboard back to its card.
+
+### People without a usable face
+
+Faces miss whoever is seen from behind, turned away, too far or too blurred.
+Where the instance also embeds photos (*Similar photos and search by
+description*), the face analysis is followed by a second pass that finds
+people by their body: a person detector (NanoDet-Plus, OpenCV Zoo,
+Apache-2.0, 3.8 MB, about 25 ms per photo) boxes everyone, and the torso of
+each person wide enough to show their clothes is embedded with the photo
+embedding model. No other model is involved: faces keep theirs, everything
+else uses the photo model.
+
+People keep their clothes for a few hours, and only that long: a person seen
+without a face, or with one too blurred to recognize anyone by, is suggested
+as the named person whose torso, on another photo taken within 6 hours, is
+the nearest - when it is close enough and clearly closer than anybody
+else's. Everybody whose face can tell who they are counts as somebody there,
+named or not: someone dressed like an unnamed group, or like a face the face
+review asks about, is suggested as nobody. Without that, in a library where
+few people are named, the stranger sitting by a named person would take
+their name. A person is suggested once per photo, and never when the photo
+already shows them, nor when the user said it is not them.
+
+The suggestions are asked about in the review, never applied on their own,
+and a photo is shown under the person once the user said yes.
+
+The thresholds are fitted per embedding model on the face bench's libraries,
+on torsos cut from the detector's boxes, for at least 90% precision on any
+part of them: there, a quarter to a third of the people with a named person
+nearby get a suggestion (36% with SigLIP 2), right 97 to 98% of the time.
+scripts/appearance_bench.py measures the method itself.
+The `remote` backend has none: with it nobody is found by their body, and no
+picture of a person leaves the server.
+
+It is part of face grouping: the same opt-in, the same personal photos (not
+videos), the same purge when the user turns it off. Each photo costs the
+detector and one embedding per person found: `PHOTOS_APPEARANCES_ENABLED=0`
+leaves it out on a host without the CPU to spare. Photos analyzed before it
+existed are read by the hourly catch-up (`manage.py catch_up appearances`).
 
 ### Correcting several faces at once
 

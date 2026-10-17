@@ -7,6 +7,7 @@ from .views import (
     album_links,
     album_sharing,
     albums,
+    appearances,
     faces,
     hidden,
     import_folder,
@@ -169,6 +170,21 @@ urlpatterns = [
         "api/v1/photos/faces/<uuid:pk>/crop",
         faces.FaceCropView.as_view(),
         name="photos-face-crop",
+    ),
+    path(
+        "api/v1/photos/appearances/batch",
+        appearances.AppearanceBatchView.as_view(),
+        name="photos-appearance-batch",
+    ),
+    path(
+        "api/v1/photos/appearances/undo",
+        appearances.AppearanceUndoView.as_view(),
+        name="photos-appearance-undo",
+    ),
+    path(
+        "api/v1/photos/appearances/<uuid:pk>/crop",
+        appearances.AppearanceCropView.as_view(),
+        name="photos-appearance-crop",
     ),
     path(
         "api/v1/photos/frames/<uuid:pk>",

@@ -253,6 +253,9 @@ def cluster_owner(owner_id):
         refresh_clusters(
             FaceCluster.objects.filter(owner_id=owner_id).values_list("pk", flat=True)
         )
+        from .appearance_suggestions import suggest_owner
+
+        suggest_owner(owner_id)
         return created
     finally:
         cache.delete(running)

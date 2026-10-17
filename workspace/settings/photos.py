@@ -54,6 +54,13 @@ PHOTOS_FACES_MAX_DISTANCE = (
 # without waiting for the nightly one.
 PHOTOS_FACES_CLUSTER_PENDING = int(os.getenv("PHOTOS_FACES_CLUSTER_PENDING", "50"))
 
+# People found by their body as well as their face, and named after what they
+# wear when their face was seen nearby: for the people seen from behind, too
+# far or too blurred for a face. Needs face grouping and a local embedding
+# backend (PHOTOS_EMBEDDINGS_ENABLED); costs each photo a person detector and
+# one embedding per person. Off here for a host without the CPU to spare.
+PHOTOS_APPEARANCES_ENABLED = env_bool("PHOTOS_APPEARANCES_ENABLED", True)
+
 # Videos are read for faces from frames sampled at scene changes, and at least
 # every PHOTOS_FACES_VIDEO_INTERVAL seconds (more sparsely in a long video, so
 # the frames cover all of it), at most PHOTOS_FACES_VIDEO_MAX_FRAMES of them,

@@ -22,6 +22,11 @@ from .analysis import (
     redate_from_name,
     refresh_media_item,
 )
+from .appearances import (
+    appearances_catch_up_enabled,
+    pending_appearances_qs,
+    refresh_appearances,
+)
 from .auto_tags import auto_tags_enabled, pending_auto_tags_qs, refresh_auto_tags
 from .face_analysis import (
     faces_catch_up_enabled,
@@ -151,6 +156,17 @@ register_processor(
     pending=pending_auto_tags_qs,
     process=refresh_auto_tags,
     enabled=auto_tags_enabled,
+)
+
+
+# No applies_to: a photo is read for its people by its face task's follow-up
+# (face_analysis.analyze_faces); the catch-up reads the ones that path missed,
+# and the photos analyzed before people were found by their body.
+register_processor(
+    "appearances",
+    pending=pending_appearances_qs,
+    process=refresh_appearances,
+    enabled=appearances_catch_up_enabled,
 )
 
 

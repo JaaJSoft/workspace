@@ -59,7 +59,7 @@
           :class="isExcluded(card, face.uuid) ? 'ring-error/60' : 'ring-transparent hover:ring-error/40 focus-visible:ring-module'"
           :aria-pressed="isExcluded(card, face.uuid)"
           :title="isExcluded(card, face.uuid) ? 'Put back' : 'Not them: leave out'"
-          :aria-label="isExcluded(card, face.uuid) ? 'Left out face, put back' : 'Face, leave out'"
+          :aria-label="isExcluded(card, face.uuid) ? 'Left out, put back' : (card.kind === 'outfit' ? 'Person, leave out' : 'Face, leave out')"
           @click="toggleExcluded(card, face.uuid); keepKeyboard(card)"
         >
           <img
@@ -216,7 +216,7 @@
       type="button"
       class="btn btn-ghost btn-sm gap-1"
       :disabled="saving !== null || !keptCount(card)"
-      :title="card.kind === 'cluster' ? 'Nobody to name: leave this person out of People' : 'Nobody to name: hide these faces'"
+      :title="card.kind === 'cluster' ? 'Nobody to name: leave this person out of People' : (card.kind === 'outfit' ? 'Nobody to name: hide these people' : 'Nobody to name: hide these faces')"
       @click="hideCard(card)"
     >
       <i data-lucide="eye-off" class="w-4 h-4"></i>

@@ -7,6 +7,9 @@ what similar photos, near-duplicates and search by description all read.
 
 It is not a way to recognize people: a whole-picture vector says what the
 scene is, not who is in it. Identity is the face pipeline's (detection/).
+Only within a few hours does the vector of someone's torso, what they wear,
+point at who they are: the people found by their body lean on it to suggest
+a name (services/appearance_suggestions.py), never to give one.
 """
 
 from __future__ import annotations
@@ -42,6 +45,15 @@ class EmbeddingBackend(abc.ABC):
     # The same on a video, from the closest of its key frames: a compressed,
     # often blurred frame, and several draws a video.
     video_tag_thresholds: dict = {}
+    # People found by their body: the nearest torso of a named person within
+    # a few hours suggests who someone is when it is under
+    # `appearance_max_distance` and nearer than anybody else's by
+    # `appearance_margin`. Fitted on the face bench's libraries, on torsos cut
+    # from the person detector's boxes, for at least 90% precision on any
+    # part of them. None: not calibrated, and nobody is suggested that way -
+    # a remote model.
+    appearance_max_distance: float | None = None
+    appearance_margin: float = 0.08
 
     @property
     def model_key(self):

@@ -183,10 +183,12 @@ def analyze_faces(file_obj):
     ).inc()
     _DETECTED.inc(len(faces))
 
+    from .appearances import queue_appearances
     from .face_grouping import assign_faces, maybe_queue_clustering
 
     assign_faces(file_obj.owner_id, [face.pk for face in faces])
     maybe_queue_clustering(file_obj.owner_id)
+    queue_appearances(file_obj)
     return faces
 
 
@@ -476,7 +478,9 @@ def _delete_crops(names):
 
 
 def forget_faces(file_obj):
-    """Drop the faces and the analysis of a file that left its owner's library."""
+    """Drop the faces, the people found by their body and the analyses of a
+    file that left its owner's library."""
+    from .appearances import forget_appearances
     from .face_grouping import refresh_clusters
 
     with transaction.atomic():
@@ -485,4 +489,5 @@ def forget_faces(file_obj):
         for face in faces:
             face.delete()
         FaceAnalysis.objects.filter(file_id=file_obj.pk).delete()
+        forget_appearances(file_obj)
     refresh_clusters(clusters)

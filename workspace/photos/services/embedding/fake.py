@@ -42,6 +42,9 @@ class FakeEmbeddingBackend(EmbeddingBackend):
     description_max_distance = 0.5
     tag_thresholds = {"red": 0.1}
     video_tag_thresholds = {"red": 0.05}
+    # The same clothes are the same colour; a red and a dark red top are two.
+    appearance_max_distance = 0.05
+    appearance_margin = 0.02
 
     def embed_image(self, image):
         mean = np.asarray(image.convert("RGB"), dtype=np.float64).mean(axis=(0, 1))

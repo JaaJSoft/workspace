@@ -12,7 +12,7 @@ from django.db import transaction
 
 from workspace.common.logging import scrub
 
-from ..models import Face, FaceAnalysis, FaceCluster
+from ..models import Appearance, AppearanceAnalysis, Face, FaceAnalysis, FaceCluster
 
 logger = logging.getLogger(__name__)
 
@@ -20,24 +20,33 @@ _BATCH = 500
 
 
 def purge_owner_faces(owner_id):
-    """Delete *owner_id*'s faces, clusters, analyses and crops; return the face count."""
+    """Delete *owner_id*'s faces, the people found by their body, clusters,
+    analyses and crops; return the face count."""
+    deleted = _delete_all(Face, owner_id)
+    _delete_all(Appearance, owner_id)
+    FaceCluster.objects.filter(owner_id=owner_id).delete()
+    FaceAnalysis.objects.filter(owner_id=owner_id).delete()
+    AppearanceAnalysis.objects.filter(owner_id=owner_id).delete()
+    transaction.on_commit(lambda: _sweep_crops(owner_id))
+    return deleted
+
+
+def _delete_all(model, owner_id):
     deleted = 0
     while True:
         batch = list(
-            Face.objects.filter(owner_id=owner_id).values_list("pk", flat=True)[:_BATCH]
+            model.objects.filter(owner_id=owner_id).values_list("pk", flat=True)[
+                :_BATCH
+            ]
         )
         if not batch:
-            break
+            return deleted
         with transaction.atomic():
-            # Instance deletes: the post_delete receiver drops each face's
+            # Instance deletes: the post_delete receivers drop each row's
             # vector and its crop (photos/signals.py).
-            for face in Face.objects.filter(pk__in=batch):
-                face.delete()
+            for row in model.objects.filter(pk__in=batch):
+                row.delete()
         deleted += len(batch)
-    FaceCluster.objects.filter(owner_id=owner_id).delete()
-    FaceAnalysis.objects.filter(owner_id=owner_id).delete()
-    transaction.on_commit(lambda: _sweep_crops(owner_id))
-    return deleted
 
 
 def _sweep_crops(owner_id):

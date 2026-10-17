@@ -49,6 +49,7 @@ from workspace.photos.models import (
     Album,
     AlbumItem,
     AlbumShare,
+    Appearance,
     Face,
     FaceCluster,
     HiddenFile,
@@ -538,6 +539,22 @@ def user_faces(user):
     return Face.objects.filter(owner=user, file__in=library_files(user).values("pk"))
 
 
+def user_appearances(user):
+    """The people found by their body the user may see and answer for: those
+    of their live photos."""
+    if not faces_enabled(user):
+        return Appearance.objects.none()
+    return Appearance.objects.filter(
+        owner=user, file__in=library_files(user).values("pk")
+    )
+
+
+def confirmed_appearance_files(user, person):
+    """The ids of the user's photos where they said a person found by their
+    body is *person*, as a subquery."""
+    return user_appearances(user).filter(person=person, hidden=False).values("file_id")
+
+
 def cluster_photos(user, cluster):
     """The live photos of the user's library holding a face of *cluster*."""
     return library_files(user).filter(faces__cluster=cluster)
@@ -547,14 +564,11 @@ def person_photos(user, person):
     """The live photos of the user's library showing *person*, through any
     of the user's clusters named after them. Another user's clusters of the
     same contact are theirs alone."""
-    return (
-        library_files(user)
-        .filter(
-            faces__cluster__in=user_face_clusters(user)
-            .filter(person=person)
-            .values("pk")
-        )
-        .distinct()
+    faces = Face.objects.filter(
+        cluster__in=user_face_clusters(user).filter(person=person).values("pk")
+    ).values("file_id")
+    return library_files(user).filter(
+        Q(pk__in=faces) | Q(pk__in=confirmed_appearance_files(user, person))
     )
 
 

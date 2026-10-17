@@ -4,7 +4,7 @@ from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import BadRequest
-from django.db.models import F
+from django.db.models import F, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -28,7 +28,7 @@ from workspace.files.ui.viewers import (
 )
 from workspace.notifications.services.notifications import mark_source_read
 from workspace.people.queries import reachable_person
-from workspace.photos.models import Album, Face, MediaItem
+from workspace.photos.models import Album, Appearance, Face, MediaItem
 from workspace.photos.queries import (
     ALL,
     MINE,
@@ -38,6 +38,7 @@ from workspace.photos.queries import (
     album_files,
     album_members,
     cluster_person,
+    confirmed_appearance_files,
     face_progress,
     get_album_role,
     has_shared_photos,
@@ -57,6 +58,7 @@ from workspace.photos.services.album_cards import (
     shared_album_cards,
 )
 from workspace.photos.services.album_links import find_link, has_access, record_view
+from workspace.photos.services.appearance_review import outfit_suggestions
 from workspace.photos.services.embedding.registry import embeddings_available
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
@@ -274,8 +276,16 @@ def _filtered_library(user, scope, favorites, tag, who=None, hidden=False):
     if tag is not None:
         files = files.filter(file_tags__tag=tag)
     if who is not None:
-        # A photo is never in two clusters of one person: no duplicates.
-        files = files.filter(faces__cluster__in=[c.pk for c in who.clusters])
+        shown = Q(
+            pk__in=Face.objects.filter(cluster__in=[c.pk for c in who.clusters]).values(
+                "file_id"
+            )
+        )
+        if who.person is not None:
+            # And the photos where the user said someone found by their body
+            # is them.
+            shown |= Q(pk__in=confirmed_appearance_files(user, who.person))
+        files = files.filter(shown)
     return files
 
 
@@ -1338,7 +1348,30 @@ def _face_items(face_ids):
 # Cards the review page holds at once; the next ones come after a reload.
 REVIEW_CARDS = 30
 # Among cards of the same weight, the named people's doubts first.
-_REVIEW_ORDER = {"check": 0, "cluster": 1, "loose": 2}
+_REVIEW_ORDER = {"check": 0, "outfit": 1, "cluster": 2, "loose": 3}
+
+
+def _appearance_items(appearance_ids):
+    """What a review card shows of each of *appearance_ids*, in that order:
+    the torso, and the photo it was found in, for the tile to open it."""
+    rows = {
+        row[0]: row
+        for row in Appearance.objects.filter(pk__in=appearance_ids).values_list(
+            "pk", "file_id", "file__name", "file__type"
+        )
+    }
+    return [
+        {
+            "uuid": str(pk),
+            "crop_url": reverse("photos-appearance-crop", kwargs={"pk": pk}),
+            "file": str(rows[pk][1]),
+            "file_name": rows[pk][2],
+            "file_type": rows[pk][3],
+            "timestamp": None,
+        }
+        for pk in appearance_ids
+        if pk in rows
+    ]
 
 
 def _review_cards(user):
@@ -1377,6 +1410,22 @@ def _review_cards(user):
                 "weight": doubts.total,
             }
         )
+    for outfits in outfit_suggestions(user):
+        person = _person_summary(outfits.card)
+        cards.append(
+            {
+                "kind": "outfit",
+                "key": f"outfit-{person['uuid']}",
+                "cluster": None,
+                "guess": person,
+                "cover_url": person["cover_url"],
+                "url": _url_with({"person": person["uuid"]}),
+                "photo_count": person["photo_count"],
+                "total": outfits.total,
+                "appearance_ids": outfits.appearance_ids,
+                "weight": outfits.total,
+            }
+        )
     for group in unassigned_groups(user):
         cards.append(
             {
@@ -1402,12 +1451,22 @@ def _review_cards(user):
     cards = cards[:REVIEW_CARDS]
     faces = {
         UUID(item["uuid"]): item
-        for item in _face_items([pk for card in cards for pk in card["face_ids"]])
+        for item in _face_items(
+            [pk for card in cards for pk in card.get("face_ids", ())]
+        )
+    }
+    faces |= {
+        UUID(item["uuid"]): item
+        for item in _appearance_items(
+            [pk for card in cards for pk in card.get("appearance_ids", ())]
+        )
     }
     for card in cards:
-        face_ids = card.pop("face_ids")
+        # An outfit card's tiles are people found by their body: the page
+        # lays them out as it does faces.
+        ids = card.pop("face_ids", None) or card.pop("appearance_ids", ())
         del card["weight"]
-        card["faces"] = [faces[pk] for pk in face_ids if pk in faces]
+        card["faces"] = [faces[pk] for pk in ids if pk in faces]
     return {"cards": cards, "to_name": to_name, "to_check": to_check}
 
 

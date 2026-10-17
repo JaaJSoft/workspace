@@ -601,3 +601,99 @@ class PhotoEmbedding(models.Model):
 
     def __str__(self):
         return f"PhotoEmbedding: {self.file_id}"
+
+
+class AppearanceAnalysis(models.Model):
+    """That a photo was read for the people in it: which bytes, by which
+    embedding model, for whom.
+
+    A photo with nobody in it gets a row too, so the catch-up does not read
+    it again every hour. Any mismatch with the file (new bytes, another owner,
+    another model, an older pipeline) makes it pending again.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="appearance_analysis"
+    )
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    # The embedding backend's model key: vectors of two models are of two
+    # spaces, never compared.
+    model = models.CharField(max_length=128)
+    version = models.PositiveSmallIntegerField()
+    appearance_count = models.PositiveSmallIntegerField(default=0)
+    analyzed_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"AppearanceAnalysis: {self.file_id}"
+
+
+class Appearance(models.Model):
+    """One person found in one photo of its owner's library by their body,
+    face or no face: what they wear names them within a few hours of a photo
+    where their face did (services/appearance_suggestions.py).
+
+    Part of face grouping: the same opt-in, the same purge.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.ForeignKey(File, on_delete=models.CASCADE, related_name="appearances")
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="+"
+    )
+    # The person's box, as fractions of the photo as displayed, like a face's.
+    box_x = models.FloatField()
+    box_y = models.FloatField()
+    box_width = models.FloatField()
+    box_height = models.FloatField()
+    detector_score = models.FloatField()
+    # The torso under the head, in the space of the model its analysis
+    # records: unit length, float32.
+    embedding = models.BinaryField(null=True, blank=True)
+    # Storage path of the WebP of the torso, shown in the review.
+    crop = models.CharField(max_length=255, blank=True, default="")
+    # Who the user said it is: the photo is theirs from then on.
+    person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Who the same clothes nearby say it is, until the user answers.
+    suggested_person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    suggestion_distance = models.FloatField(null=True, blank=True)
+    # Who the user said it is not: never suggested again.
+    rejected_person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    # Nobody the user cares about: never suggested again.
+    hidden = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["owner", "person"], name="appearance_owner_person_idx"
+            ),
+            models.Index(
+                fields=["owner", "suggested_person"],
+                name="appearance_suggestion_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Appearance: {self.uuid}"

@@ -1,4 +1,5 @@
-"""Download and verify the weights of a face backend ahead of its first use.
+"""Download and verify the weights of a face backend ahead of its first use,
+with the person detector that finds people by their body.
 
 The pipeline downloads them on its own the first time it runs; this is for
 an image that ships them (the Dockerfile's face-models stage) or a worker
@@ -7,12 +8,17 @@ without internet access at run time.
 
 from django.core.management.base import BaseCommand, CommandError
 
+from workspace.photos.services.detection.nanodet import NANODET
 from workspace.photos.services.detection.registry import (
     MisconfiguredBackend,
     backend_keys,
     get_face_backend,
 )
-from workspace.photos.services.detection.weights import WeightsError, model_path
+from workspace.photos.services.detection.weights import (
+    WeightsError,
+    ensure,
+    model_path,
+)
 
 
 class Command(BaseCommand):
@@ -39,3 +45,7 @@ class Command(BaseCommand):
                 raise CommandError(f"{backend.key}: {exc}") from exc
             for model in backend.models:
                 self.stdout.write(f"{backend.key}: {model_path(model)}")
+        try:
+            self.stdout.write(f"people: {ensure(NANODET)}")
+        except WeightsError as exc:
+            raise CommandError(str(exc)) from exc

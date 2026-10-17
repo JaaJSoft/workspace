@@ -341,14 +341,30 @@ class HealthTests(SimpleTestCase):
             self.assertTrue(get_face_backend(key).health().ok, key)
 
 
+_ENSURE = "workspace.photos.management.commands.download_face_models.ensure"
+
+
 class DownloadCommandTests(SimpleTestCase):
-    def test_downloads_the_configured_backend(self):
-        with patch.object(YuNetSFaceBackend, "prepare") as prepare:
+    def test_downloads_the_configured_backend_and_the_person_detector(self):
+        with (
+            patch.object(YuNetSFaceBackend, "prepare") as prepare,
+            patch(_ENSURE, return_value="/models/nanodet.onnx") as ensure,
+        ):
             out = StringIO()
             call_command("download_face_models", stdout=out)
 
         prepare.assert_called_once()
+        ensure.assert_called_once()
         self.assertIn("face_detection_yunet_2023mar.onnx", out.getvalue())
+        self.assertIn("people: /models/nanodet.onnx", out.getvalue())
+
+    def test_a_failed_person_detector_download_fails_the_command(self):
+        with (
+            patch.object(YuNetSFaceBackend, "prepare"),
+            patch(_ENSURE, side_effect=weights.WeightsError("hash")),
+            self.assertRaises(CommandError),
+        ):
+            call_command("download_face_models")
 
     @override_settings(PHOTOS_FACE_BACKEND="nope")
     def test_an_unknown_backend_fails(self):

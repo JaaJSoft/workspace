@@ -64,6 +64,33 @@ def _analyze_pending(file_uuid):
         analyze_faces(file_obj)
 
 
+@shared_task(
+    name="photos.analyze_appearances",
+    priority=LOW_PRIORITY,
+    bind=True,
+    max_retries=0,
+    ignore_result=True,
+)
+def analyze_photo_appearances(self, file_uuid):
+    """Find the people of one photo by their body, unless they are already
+    up to date. Below its faces: those name people, these only suggest.
+
+    max_retries=0 for the reason analyze_photo_faces gives.
+    """
+    from workspace.common.uuids import parse_uuid_or_none
+
+    from .services.appearances import analyze_appearances, pending_appearances_qs
+
+    file_obj = (
+        pending_appearances_qs()
+        .select_related("owner")
+        .filter(uuid=parse_uuid_or_none(file_uuid))
+        .first()
+    )
+    if file_obj is not None:
+        analyze_appearances(file_obj)
+
+
 def face_analysis_task(file_type):
     """The task that reads a pending file of content label *file_type*."""
     from workspace.files.services.thumbnails.generation import VIDEO_LABELS
@@ -223,21 +250,26 @@ def cluster_all_faces():
     """
     from workspace.files.models import File
 
-    from .models import Face
+    from .models import Appearance, Face
     from .services.face_analysis import forget_faces
     from .services.face_preferences import faces_available, opted_in_owner_ids
     from .services.face_purge import purge_owner_faces
 
     opted_in = opted_in_owner_ids()
-    for owner_id in (
-        Face.objects.exclude(owner_id__in=opted_in)
+    for owner_id in {
+        *Face.objects.exclude(owner_id__in=opted_in)
         .values_list("owner_id", flat=True)
-        .distinct()
-    ):
+        .distinct(),
+        *Appearance.objects.exclude(owner_id__in=opted_in)
+        .values_list("owner_id", flat=True)
+        .distinct(),
+    }:
         purge_owner_faces(owner_id)
     for file_obj in File.objects.filter(
-        Q(group__isnull=False) | ~Q(owner_id=F("faces__owner_id")),
-        faces__isnull=False,
+        Q(faces__isnull=False)
+        & (Q(group__isnull=False) | ~Q(owner_id=F("faces__owner_id")))
+        | Q(appearances__isnull=False)
+        & (Q(group__isnull=False) | ~Q(owner_id=F("appearances__owner_id")))
     ).distinct():
         forget_faces(file_obj)
     if not faces_available():

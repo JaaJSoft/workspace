@@ -1054,3 +1054,94 @@ test('a batch toast offers Undo when something changed, nothing otherwise', () =
   assert.deepEqual(Array.from(ctx.faceBatchActions(['tok']), (a) => a.label), ['Undo']);
   assert.deepEqual(Array.from(ctx.faceBatchActions([])), []);
 });
+
+const APPEARANCES = '/api/v1/photos/appearances/batch';
+const appearancesDone = (body) => ({ done: body.appearances, skipped: [], undo: `t-${body.action}` });
+const outfitCard = (...uuids) => ({ key: 'outfit-n', kind: 'outfit', guess: NINA, faces: faces(...uuids), total: uuids.length });
+
+test('an outfit card asks about the person the clothes suggest', () => {
+  const { component } = reviewPage({ cards: [outfitCard('a1', 'a2')] });
+  const card = component.cards[0];
+
+  assert.equal(component.question(card), 'Is this Nina Petit?');
+  assert.equal(component.subtitle(card), '2 people wearing their clothes on photos taken the same day');
+  assert.equal(component.guessLabel(card), "Yes, it's Nina Petit");
+  assert.equal(component.guessHint(card), 'Confirms 2 people');
+});
+
+test('saying yes to an outfit card confirms the people kept and sets the others apart', async () => {
+  const { component, requests, alerts } = reviewPage({
+    cards: [outfitCard('a1', 'a2')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'a2');
+
+  await component.pickGuess(card);
+
+  assert.deepEqual(requests.map((r) => [r.url, r.body]), [
+    [APPEARANCES, { action: 'confirm', appearances: ['a1'] }],
+    [APPEARANCES, { action: 'reject', appearances: ['a2'] }],
+  ]);
+  assert.equal(alerts[0].message, '1 person confirmed');
+  assert.equal(alerts[0].options.actions.length, 1);
+});
+
+test('an outfit card puts the people kept with another contact, and offers no new one', async () => {
+  const { component, requests } = reviewPage({
+    cards: [outfitCard('a1')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  const card = component.cards[0];
+  component.typeName(card, 'Léa');
+
+  assert.deepEqual(Array.from(component.options(card), (o) => o.kind), []);
+  await component.pick(card, { kind: 'person', person: NOAH });
+
+  assert.deepEqual(requests.map((r) => r.body), [{ action: 'assign', appearances: ['a1'], person: 'o' }]);
+});
+
+test('hiding an outfit card hides its people', async () => {
+  const { component, requests, alerts } = reviewPage({
+    cards: [outfitCard('a1', 'a2')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+
+  await component.hideCard(component.cards[0]);
+
+  assert.deepEqual(requests.map((r) => r.body), [{ action: 'hide', appearances: ['a1', 'a2'] }]);
+  assert.equal(alerts[0].message, '2 people hidden');
+});
+
+test('the undo of an outfit answer goes to the appearances, last batch first', async () => {
+  const { component, requests, alerts, events } = reviewPage({
+    cards: [outfitCard('a1', 'a2')],
+    responses: { [APPEARANCES]: appearancesDone, '/api/v1/photos/appearances/undo': { restored: 1 } },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'a2');
+  await component.pickGuess(card);
+  requests.length = 0;
+
+  await alerts[0].options.actions[0].onClick();
+
+  assert.deepEqual(requests.map((r) => [r.url, r.body]), [
+    ['/api/v1/photos/appearances/undo', { token: 't-reject' }],
+    ['/api/v1/photos/appearances/undo', { token: 't-confirm' }],
+  ]);
+  assert.equal(alerts.at(-1).message, '2 people put back');
+  assert.deepEqual(events, ['photos-faces-changed']);
+});
+
+test('an outfit answer says why people were left as they were', () => {
+  const { ctx } = reviewPage();
+
+  assert.equal(
+    ctx.outfitMessage('assign', { done: [], skipped: [{ appearance: 'a', reason: 'no_face' }] }, 'Noah'),
+    '1 person left as they were: no photo shows their face yet',
+  );
+  assert.equal(
+    ctx.outfitMessage('confirm', { done: ['a'], skipped: [{ appearance: 'b', reason: 'already_in_photo' }] }),
+    '1 person confirmed. 1 person left as they were: they are already in that photo',
+  );
+});

@@ -18,7 +18,7 @@ from workspace.projects.models import Project, ProjectMember
 from workspace.users.models import UserSetting
 
 from .indexes import FACE_EMBEDDINGS, PHOTO_EMBEDDINGS
-from .models import Face, MediaItem, PhotoEmbedding
+from .models import Appearance, Face, MediaItem, PhotoEmbedding
 from .services.album_revocation import revoke_lapsed_sharing
 from .services.face_preferences import FACES_ENABLED, MODULE
 from .services.photo_embeddings import delete_frames
@@ -35,6 +35,15 @@ def drop_face_derivatives(sender, instance, using, **kwargs):
     rolled-back delete must still find it.
     """
     drop_vector(FACE_EMBEDDINGS, instance.pk, using=using)
+    if instance.crop:
+        name = instance.crop
+        transaction.on_commit(lambda: _delete_crop(name), using=using)
+
+
+@receiver(post_delete, sender=Appearance)
+def drop_appearance_crop(sender, instance, using, **kwargs):
+    """A deleted appearance takes its crop with it, once the delete commits,
+    as a face does."""
     if instance.crop:
         name = instance.crop
         transaction.on_commit(lambda: _delete_crop(name), using=using)

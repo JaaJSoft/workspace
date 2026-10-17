@@ -6,7 +6,7 @@ embedding bench, names those it tells apart well enough and how close a
 photo's vector must lie to the tag name's. A tag the table leaves out is
 never placed by that backend. Each lands as a FileTag of source AUTO on the
 owner's own Tag of that name (matched case-insensitively, created on first
-use).
+use with the classic tag's icon).
 
 A photo is tagged once, after it is embedded (``PhotoEmbedding.auto_tagged_at``,
 reset with every new vector): a tag its owner took off stays off. Videos are
@@ -78,12 +78,12 @@ def vocabulary():
 
 
 def tags_for(vector):
-    """The names of the classic tags *vector* (unit length) shows."""
+    """The classic tags *vector* (unit length) shows."""
     tags, vectors, thresholds = vocabulary()
     if not tags:
         return []
     under = (1.0 - vectors @ vector) <= thresholds
-    return [tag.name for tag, hit in zip(tags, under, strict=True) if hit]
+    return [tag for tag, hit in zip(tags, under, strict=True) if hit]
 
 
 def tag_photo(row):
@@ -105,8 +105,11 @@ def tag_photo(row):
         and auto_tags(file_obj.owner)
     )
     if taggable:
-        names = tags_for(from_bytes(row.embedding, PHOTO_EMBEDDINGS.dims))
-        tags = {get_or_create_tag(file_obj.owner, name) for name in names}
+        classic_tags = tags_for(from_bytes(row.embedding, PHOTO_EMBEDDINGS.dims))
+        tags = {
+            get_or_create_tag(file_obj.owner, tag.name, icon=tag.icon)
+            for tag in classic_tags
+        }
         # A tag the file already carries, by hand or not, keeps its row.
         FileTag.objects.bulk_create(
             [

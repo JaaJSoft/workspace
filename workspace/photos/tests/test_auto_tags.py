@@ -3,6 +3,7 @@ vector is its colour, and "red" is the text a red photo lies on."""
 
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.core.cache import cache
@@ -27,7 +28,10 @@ User = get_user_model()
 
 # A vocabulary the fake backend can see: colours. Its table recognizes red
 # alone (FakeEmbeddingBackend.tag_thresholds).
-_COLOUR_VOCABULARY = (ClassicTag("Red", "Red"), ClassicTag("Blue", "Blue"))
+_COLOUR_VOCABULARY = (
+    ClassicTag("Red", "Red", "flame"),
+    ClassicTag("Blue", "Blue", "droplet"),
+)
 
 
 def _tags(photo):
@@ -77,13 +81,20 @@ class ClassicTagTests(AutoTagTestCase):
             other = library_photo(self.user, "other.jpg", BLUE)
         self.assertEqual(_tags(other), set())
 
+    def test_a_tag_is_created_with_the_classic_tags_icon(self):
+        library_photo(self.user, "red.jpg", RED)
+
+        self.assertEqual(Tag.objects.get(owner=self.user, name="Red").icon, "flame")
+
     def test_the_owners_tag_of_that_name_is_reused(self):
-        mine = Tag.objects.create(owner=self.user, name="red")
+        mine = Tag.objects.create(owner=self.user, name="red", icon="heart")
 
         red = library_photo(self.user, "red.jpg", RED)
 
         self.assertEqual(_tags(red), {("red", FileTag.Source.AUTO)})
         self.assertEqual(list(Tag.objects.filter(owner=self.user)), [mine])
+        mine.refresh_from_db()
+        self.assertEqual(mine.icon, "heart")
 
     def test_a_tag_put_by_hand_stays_manual(self):
         red = library_photo(self.user, "red.jpg", RED, embed=False)
@@ -186,3 +197,14 @@ class VocabularyTests(TestCase):
         self.assertEqual(len(names), len(set(names)))
         for tag in CLASSIC_TAGS:
             self.assertLessEqual(len(tag.name), 100)
+
+    def test_every_classic_tag_has_an_icon_the_vendored_lucide_build_draws(self):
+        # The bundle names each icon in PascalCase: tree-palm is TreePalm.
+        bundle = (
+            settings.BASE_DIR / "workspace/common/static/ui/js/vendor/lucide/lucide.js"
+        ).read_text(encoding="utf-8")
+        for tag in CLASSIC_TAGS:
+            with self.subTest(tag=tag.name):
+                self.assertNotEqual(tag.icon, "tag")
+                pascal = "".join(part.capitalize() for part in tag.icon.split("-"))
+                self.assertRegex(bundle, rf"\b{pascal}\b")

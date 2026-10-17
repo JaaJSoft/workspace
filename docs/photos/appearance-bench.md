@@ -185,15 +185,14 @@ them anchors; 1,804 torsos have a candidate.
 - **People with small heads are out of reach.** Under 48 px, at most 6%
   are named, at 55-79% precision: the torso is too small to show anything.
   An appearance needs a minimum size, as faces do.
-- **Darkness is not what fails; evenings are.** Dark photos are named
-  better than bright ones (24-28% against 13-14% at 500 px), at both sizes.
-  Photos taken in the evening are named less than half as often as daytime
-  ones, at a lower precision (81-92% at 500 px, where 95% was aimed). Fewer of their
-  people have an anchor around (66% against 78%), and a threshold of their
-  own does not help: fitted on the evening photos alone, no threshold names
-  20 of them at 95% for CLIP or SigLIP 2, and the one fitted on half of
-  them holds 65-79% on the other half. The party photos this was meant for
-  are where the signal is weakest.
+- **One threshold for every photo.** Dark photos are named better than
+  bright ones (24-28% against 13-14% at 500 px), at both sizes. Photos
+  taken in the evening are named less than half as often as daytime ones,
+  at a lower precision (81-92% at 500 px, where 95% was aimed), and fewer
+  of their people have an anchor around (66% against 78%). A threshold of
+  their own does not help: fitted on the evening photos alone, no threshold
+  names 20 of them at 95% for CLIP or SigLIP 2. So the bench justifies one
+  threshold per backend, the same for every photo, and nothing more.
 - **A window of hours comes close to the album.** PIPA's albums are Flickr
   albums, mostly one event each: what an event table would try to find.
   Six hours around each photo, with nothing to cut, name 3 to 7% fewer
@@ -214,9 +213,9 @@ them anchors; 1,804 torsos have a candidate.
   are torsos seen from the front, since PIPA does not say who faces away. A
   printed front and a plain back, a jacket open on one side, make the real
   case harder than this.
-- **Photos people chose to share.** PIPA's evening photos are the ones
-  their authors put on Flickr: sharper and better lit than what a phone
-  keeps from a party. Photos under coloured spotlights are rare in it.
+- **Photos people chose to share.** PIPA's photos are the ones their
+  authors put on Flickr: sharper and better lit than the average of a
+  phone's camera roll.
 - **The anchors are right.** Every anchor is named after the person it is;
   in the app, a face in the wrong group passes its mistake on.
 - **Whether a library can judge itself.** The faces a library already

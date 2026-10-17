@@ -43,22 +43,9 @@ gh pr view <n> --json title,body -q '.title + "\n" + (.body | split("## Changes"
 - **Behaviour changes are announced as such**, with the reason, when something disappears or stops working the way it used to (for example, bots removed from group conversations). A user who loses something must find out why here.
 - Highlights: 1-2 sentences, no list. Title: 2-4 words on the release's theme.
 
-## 5. Security fixes: stay vague
-
-Access-control, XSS or leak fixes go in **one short `### Privacy & Security` section** made of 1-2 general bullets. Don't list each gap: the changelog is public, and a precise list of what used to leak tells someone exactly what to try on an instance that hasn't upgraded yet.
-
-```markdown
-<!-- ✅ -->
-- Your workspace is more secure. Sharing, group folders, calendars and projects now respect permissions more strictly, so everyone sees and changes only what they are allowed to.
-
-<!-- ❌ -->
-- Members of a group can no longer move, rename or trash the group's main folder.
-- Guests of a poll keep their votes to themselves.
-```
-
 The Highlights follow the same rule: "more secure, with stricter permissions", never "closes gaps that let people see what was not theirs".
 
-## 6. Check before handing over
+## 5. Check before handing over
 
 - No em-dash or en-dash anywhere in the entry (`grep -n "[—–]" CHANGELOG.md`).
 - No preview module named, including in the Highlights.

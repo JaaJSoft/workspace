@@ -4,29 +4,11 @@
     <ul class="flex items-center flex-nowrap min-w-0 bc-sep {{ sep_class }}">
       {% if collapse and breadcrumbs|length|gt:threshold %}
         {% for item in breadcrumbs %}
-          {% if forloop.first %}
-            <li class="flex items-center shrink-0">
-              {% if item.url %}
-                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                </a>
-              {% else %}
-                <span class="flex items-center gap-1">
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                </span>
-              {% endif %}
+          {% if forloop.first or forloop.last %}
+            <li
+              class="flex items-center min-w-0{% if mobile_compact and forloop.last and not forloop.first %} max-sm:hidden{% endif %}"
+            >
+              {% include "ui/partials/_breadcrumb_crumb.html" %}
             </li>
           {% elif forloop.revcounter == 2 %}
             <li class="flex items-center shrink-0">
@@ -72,87 +54,19 @@
                 </ul>
               </div>
             </li>
-            <li class="flex items-center shrink-0">
-              {% if item.url %}
-                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                </a>
-              {% else %}
-                <span class="flex items-center gap-1">
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                </span>
-              {% endif %}
-            </li>
-          {% elif forloop.last %}
-            <li class="flex items-center min-w-0">
-              {% if item.url %}
-                <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70 min-w-0"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  <span class="truncate">
-                    {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                  </span>
-                </a>
-              {% else %}
-                <span class="flex items-center gap-1 min-w-0">
-                  {% if item.icon %}
-                    <i
-                      data-lucide="{{ item.icon }}"
-                      class="w-4 h-4 shrink-0 {% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                    ></i>
-                  {% endif %}
-                  <span class="truncate">
-                    {% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}
-                  </span>
-                </span>
-              {% endif %}
+            <li
+              class="flex items-center min-w-0{% if mobile_compact and forloop.last and not forloop.first %} max-sm:hidden{% endif %}"
+            >
+              {% include "ui/partials/_breadcrumb_crumb.html" %}
             </li>
           {% endif %}
         {% endfor %}
       {% else %}
         {% for item in breadcrumbs %}
           <li
-            class="flex items-center {% if forloop.last %}min-w-0{% else %}shrink-0{% endif %}"
+            class="flex items-center min-w-0{% if mobile_compact and forloop.last and not forloop.first %} max-sm:hidden{% endif %}"
           >
-            {% if item.url %}
-              <a href="{{ item.url }}"{% for k, v in item.data.items %} data-{{ k }}="{{ v }}"{% endfor %} class="flex items-center gap-1 hover:opacity-70 {% if forloop.last %}min-w-0{% endif %}"{% if x_target %}{% if x_target_history == "push" %} x-target.push="{{ x_target }}"{% elif x_target_history == "replace" %} x-target.replace="{{ x_target }}"{% else %} x-target="{{ x_target }}"{% endif %}{% endif %}>
-                {% if item.icon %}
-                  <i
-                    data-lucide="{{ item.icon }}"
-                    class="w-4 h-4 {% if forloop.last %}shrink-0 {% endif %}{% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                  ></i>
-                {% endif %}
-                {% if forloop.last %}<span class="truncate">{% endif %}{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}{% if forloop.last %}</span>{% endif %}
-              </a>
-            {% else %}
-              <span
-                class="flex items-center gap-1 {% if forloop.last %}min-w-0{% endif %}"
-              >
-                {% if item.icon %}
-                  <i
-                    data-lucide="{{ item.icon }}"
-                    class="w-4 h-4 {% if forloop.last %}shrink-0 {% endif %}{% if item.icon_color %}{{ item.icon_color }}{% endif %}"
-                  ></i>
-                {% endif %}
-                {% if forloop.last %}<span class="truncate">{% endif %}{% if item.code %}<code>{{ item.label }}</code>{% else %}{{ item.label }}{% endif %}{% if forloop.last %}</span>{% endif %}
-              </span>
-            {% endif %}
+            {% include "ui/partials/_breadcrumb_crumb.html" %}
           </li>
         {% endfor %}
       {% endif %}

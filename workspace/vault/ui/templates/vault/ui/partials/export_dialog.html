@@ -179,7 +179,7 @@
                   >A generated passphrase is recommended: press the dice, or type your own.</span>
                   <span
                     class="text-success"
-                    x-show="passphraseState() === 'generated' && !exportGeneratorOpen"
+                    x-show="passphraseState() === 'generated' && !exportGeneratorOpen && passphraseStrongEnough()"
                   >Generated passphrase applied. Show or copy it, and keep it with your emergency kit.</span>
                   {% comment %}
                     Reopened over an applied phrase, the panel draws at once and
@@ -192,9 +192,28 @@
                   >The field follows the generator: the passphrase shown below is the one that will seal the archive.</span>
                   <span
                     class="text-base-content/60"
-                    x-show="passphraseState() === 'typed'"
+                    x-show="passphraseState() === 'typed' && passphraseStrongEnough()"
                   >Your own passphrase: confirm it below.</span>
+                  <span
+                    class="text-warning"
+                    data-testid="export-passphrase-too-weak"
+                    x-show="passphraseState() === 'typed' && !passphraseStrongEnough()"
+                  >At least 12 characters, and strong enough to resist guessing: nothing else protects this file.</span>
+                  <span
+                    class="text-warning"
+                    data-testid="export-generated-too-weak"
+                    x-show="passphraseState() === 'generated' && !passphraseStrongEnough()"
+                  >Too weak to protect an archive on its own: raise it to Strong in the generator.</span>
                 </p>
+
+                {% comment %}
+                  The meter measures only a phrase a human typed: a generated one
+                  carries the panel's exact count, which an estimate could only
+                  contradict.
+                {% endcomment %}
+                <div @strength-change="exportStrengthChanged($event.detail)">
+                  {% include "ui/partials/password_strength.html" with password_expr="exportSource === 'typed' ? exportPassphrase : ''" visible_expr="exportSource === 'typed'" %}
+                </div>
 
                 {% comment %}
                   Outside the panel: the field's own Copy reports a refused write
@@ -225,8 +244,8 @@
                 <template x-if="exportGeneratorOpen">
                   <div
                     class="mt-2"
-                    @password-apply="applyGeneratedPassphrase($event.detail.value)"
-                    @password-regenerate="trackGeneratedPassphrase($event.detail.value)"
+                    @password-apply="applyGeneratedPassphrase($event.detail.value, $event.detail.bits)"
+                    @password-regenerate="trackGeneratedPassphrase($event.detail.value, $event.detail.bits)"
                     @password-copy="copyGenerated($event.detail.value, exportClipboardPolicy())"
                   >
                     {% include "ui/partials/password_generator.html" with deps_expr="generatorDeps()" pinned_expr="exportGeneratorOptions()" show_apply=True %}

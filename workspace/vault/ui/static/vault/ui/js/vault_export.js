@@ -1,6 +1,16 @@
 // The vault's export dialog. What belongs here is what knows about this
 // module: which passphrase protects the archive, what the user is told before
 // a plaintext file is built, and when both go away.
+
+// The floor an archive passphrase must clear. The archive is attacked offline
+// for as long as the file exists with nothing but this phrase in front of it,
+// so the floor is never lower than the account's, which also has a secret key
+// behind it. A generated phrase is held to the panel's own "Strong" band; a
+// typed one to the account password's length and estimated strength.
+const EXPORT_MIN_GENERATED_BITS = 70;
+const EXPORT_MIN_TYPED_LENGTH = 12;
+const EXPORT_MIN_TYPED_SCORE = 3;
+
 window.vaultExportMixin = function vaultExportMixin() {
   return {
     exportOpen: false,
@@ -10,6 +20,10 @@ window.vaultExportMixin = function vaultExportMixin() {
     // 'generated' means the panel drew it and its strength is known exactly.
     // 'typed' means a human chose it, and nothing here can measure that.
     exportSource: 'generated',
+    // The panel's count for the phrase it drew, and the meter's score for one
+    // a human typed. Each is only read under its own source.
+    exportGeneratedBits: 0,
+    exportTypedScore: null,
     exportOwnPhraseAck: false,
     exportProgress: 0,
     exportBusy: false,
@@ -42,9 +56,8 @@ window.vaultExportMixin = function vaultExportMixin() {
     // it has no secret key behind it, so the passphrase is the whole of its
     // strength, and the file can be attacked offline for as long as it exists.
     // Eight words off the 1296-word list is ~82 bits, well past the 70 the
-    // panel calls Strong. It raises the opening draw; it is not a floor - the
-    // sliders still go down, and a typed phrase is measured by nothing at all,
-    // which is what the confirmation and the acknowledgement stand in for.
+    // panel calls Strong. It raises the opening draw; the floor is
+    // passphraseStrongEnough, which refuses a draw the sliders took below it.
     exportGeneratorOptions() {
       return { mode: 'passphrase', words: 8 };
     },
@@ -104,9 +117,10 @@ window.vaultExportMixin = function vaultExportMixin() {
     // object spread copies values - a getter would be evaluated once, at
     // spread time, and frozen at whatever the state was then.
     // Use fills the field and folds the panel away, as in the entry dialog.
-    applyGeneratedPassphrase(value) {
+    applyGeneratedPassphrase(value, bits) {
       this.exportPassphrase = value;
       this.exportConfirm = value;
+      this.exportGeneratedBits = bits || 0;
       this.exportSource = 'generated';
       this.exportFollowsPanel = true;
       this.exportGeneratorOpen = false;
@@ -123,10 +137,19 @@ window.vaultExportMixin = function vaultExportMixin() {
     // Only while the phrase is still the panel's: one the user typed is
     // theirs, and a field Use never filled would be armed with a phrase the
     // user never took.
-    trackGeneratedPassphrase(value) {
+    trackGeneratedPassphrase(value, bits) {
       if (!this.exportFollowsPanel) return;
       this.exportPassphrase = value;
       this.exportConfirm = value;
+      this.exportGeneratedBits = bits || 0;
+    },
+
+    // The meter under the field owns the estimate and reports it here. Named
+    // apart from the password dialog's handler: both mixins are spread into
+    // the same component. Anything short of a landed estimate is an
+    // unmeasured phrase, which the floor refuses.
+    exportStrengthChanged(detail) {
+      this.exportTypedScore = detail && detail.status === 'ready' ? detail.score : null;
     },
 
     toggleExportGenerator() {
@@ -190,19 +213,27 @@ window.vaultExportMixin = function vaultExportMixin() {
         + 'so they were not written to the file. They are still in your account.';
     },
 
-    // The archive is attacked offline for as long as the file exists, with
-    // nothing but this phrase in front of it - the account also has a 32-byte
-    // secret key, and an export has none. The counterweight is on this side.
-    //
-    // A generated phrase carries a known count, drawn by the panel from a
-    // request entropyBits can actually measure, so it needs nothing further.
-    // A phrase a human chose cannot be measured at all - entropy is a property
-    // of the process that produced it, not of the string - so instead of
-    // showing an invented number we ask for a confirmation (the field is
-    // masked, and a typo locks the archive forever) and a deliberate
-    // acknowledgement.
-    passphraseAccepted() {
+    // A generated phrase carries an exact count, drawn by the panel from a
+    // request entropyBits can measure. A typed one cannot be measured - entropy
+    // is a property of the process that produced it, not of the string - so it
+    // is held to the estimate the account password is held to, in code points
+    // after NFC like the account floor.
+    passphraseStrongEnough() {
       if (!this.exportPassphrase) return false;
+      if (this.exportSource === 'generated') {
+        return this.exportGeneratedBits >= EXPORT_MIN_GENERATED_BITS;
+      }
+      return (
+        Array.from(this.exportPassphrase.normalize('NFC')).length >= EXPORT_MIN_TYPED_LENGTH
+        && this.exportTypedScore !== null
+        && this.exportTypedScore >= EXPORT_MIN_TYPED_SCORE
+      );
+    },
+
+    // A typed phrase also needs a confirmation - the field is masked, and a
+    // typo locks the archive forever - and a deliberate acknowledgement.
+    passphraseAccepted() {
+      if (!this.passphraseStrongEnough()) return false;
       if (this.exportSource === 'generated') return true;
       return this.exportPassphrase === this.exportConfirm && this.exportOwnPhraseAck;
     },
@@ -324,6 +355,8 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportPassphrase = '';
       this.exportConfirm = '';
       this.exportSource = 'generated';
+      this.exportGeneratedBits = 0;
+      this.exportTypedScore = null;
       this.exportFollowsPanel = false;
       this.exportOwnPhraseAck = false;
       this.exportProgress = 0;

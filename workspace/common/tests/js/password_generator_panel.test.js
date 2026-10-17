@@ -135,6 +135,18 @@ test('applying hands the value to the host', () => {
   assert.equal(dispatched[0].detail.value, drawn);
 });
 
+test('every announced draw carries its entropy, for a host that keeps a floor', () => {
+  // The count is a property of the request the panel drew from; the host only
+  // ever sees the string, from which it cannot be recovered.
+  const { panel, dispatched } = makePanel();
+  panel.init();
+  assert.ok(panel.bits > 0);
+  assert.equal(dispatched[0].detail.bits, panel.bits);
+  dispatched.length = 0;
+  panel.apply();
+  assert.equal(dispatched[0].detail.bits, panel.bits);
+});
+
 test('copying asks the host to copy rather than touching the clipboard itself', () => {
   // The host owns the clipboard: in a vault it is the one with the clearing
   // timer, elsewhere it is the plain browser one.

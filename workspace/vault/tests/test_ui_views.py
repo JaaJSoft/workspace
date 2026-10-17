@@ -166,11 +166,15 @@ class ExportDialogWiringTests(SimpleTestCase):
 
     def test_the_export_dialog_listens_to_every_generator_event(self):
         html = self.render()
+        # The count travels with the value: the archive floor is read from it.
         self.assertIn(
-            '@password-apply="applyGeneratedPassphrase($event.detail.value)"', html
+            '@password-apply="applyGeneratedPassphrase($event.detail.value, '
+            '$event.detail.bits)"',
+            html,
         )
         self.assertIn(
-            '@password-regenerate="trackGeneratedPassphrase($event.detail.value)"',
+            '@password-regenerate="trackGeneratedPassphrase($event.detail.value, '
+            '$event.detail.bits)"',
             html,
         )
         self.assertIn(

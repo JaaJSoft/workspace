@@ -239,7 +239,9 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
 
     openVaultDialog: function (mode, vault) {
       this.closeVaultMenu();
-      this.vaultDialog = { vault: vault, mode: mode, name: vault.name };
+      this.vaultDialog = {
+        vault: vault, mode: mode, name: vault.name, description: vault.description || '',
+      };
       // The picker's markup works in CSS classes; the signed metadata holds
       // the bare role. Converting at the edges is what lets the shared partial
       // be reused without widening what the server accepts.
@@ -269,15 +271,19 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       if (!name) return;
       this.busy = true;
       try {
-        const body = await window.buildVaultUpdateRequest(
-          window.vaultSession,
-          await this.reloadedVault(dialog.vault),
-          {
-            name: name,
-            icon: this.selectedIcon,
-            color: String(this.selectedColor).replace(/^text-/, ''),
-          }
-        );
+        const vault = await this.reloadedVault(dialog.vault);
+        const changes = {
+          name: name,
+          icon: this.selectedIcon,
+          color: String(this.selectedColor).replace(/^text-/, ''),
+        };
+        // Only a description the user changed is re-sealed: the appearance
+        // dialog never shows one, and an untouched one is carried as it is.
+        const description = (dialog.description || '').trim();
+        if (dialog.mode === 'rename' && description !== (vault.description || '')) {
+          changes.description = description;
+        }
+        const body = await window.buildVaultUpdateRequest(window.vaultSession, vault, changes);
         await window.vaultApi.updateVault(dialog.vault.uuid, body);
         this.closeVaultDialog();
         await this.load();

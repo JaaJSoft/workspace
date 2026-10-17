@@ -15,7 +15,7 @@
           class="w-5 h-5 text-module"
         ></i>
         <span
-          x-text="vaultDialog.mode === 'rename' ? 'Rename vault' : 'Icon and colour'"
+          x-text="vaultDialog.mode === 'rename' ? 'Name and description' : 'Icon and colour'"
         ></span>
       </h3>
 
@@ -27,6 +27,20 @@
           autocomplete="off"
           spellcheck="false"
           x-model="vaultDialog.name"
+        />
+      </label>
+
+      <label class="form-control mt-3" x-show="vaultDialog.mode === 'rename'">
+        <span class="label-text">
+          Description <span class="text-base-content/40">(optional)</span>
+        </span>
+        <input
+          type="text"
+          class="input input-bordered input-sm w-full"
+          placeholder="A short description…"
+          autocomplete="off"
+          spellcheck="false"
+          x-model="vaultDialog.description"
         />
       </label>
 

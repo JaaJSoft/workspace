@@ -40,6 +40,7 @@ from ..viewsets.copy import CopyMixin
 from ..viewsets.events import EventsMixin
 from ..viewsets.extract import ExtractMixin
 from ..viewsets.favorites import FavoritesMixin
+from ..viewsets.image_edit import ImageEditMixin
 from ..viewsets.share import ShareMixin
 from ..viewsets.storage import StorageMixin
 from ..viewsets.sync import SyncMixin
@@ -288,6 +289,7 @@ class FileViewSet(
     ContentMixin,
     TrashMixin,
     FavoritesMixin,
+    ImageEditMixin,
     SyncMixin,
     ShareMixin,
     StorageMixin,

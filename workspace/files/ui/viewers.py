@@ -241,6 +241,7 @@ class ImageViewer(BaseViewer):
     def get_context(self, request) -> dict:
         from django.conf import settings
 
+        from workspace.common.booleans import is_truthy
         from workspace.files.models import FileFavorite
 
         context = super().get_context(request)
@@ -256,7 +257,23 @@ class ImageViewer(BaseViewer):
             context["user_can_edit"]
             and FileFavorite.objects.filter(owner=request.user, file=self.file).exists()
         )
+        context["image_edit"] = getattr(self.file, "image_edit", None)
+        context["image_edit_available"] = self._image_edit_available(request)
+        context["start_editing"] = context["image_edit_available"] and is_truthy(
+            request.GET.get("edit")
+        )
         return context
+
+    def _image_edit_available(self, request):
+        """Whether the registry lets the viewer rotate and crop the file. Only
+        the Files viewer passes the permission it resolved (``_permission``);
+        the other hosts show an attachment or an album's copy, never edit it."""
+        from workspace.files.actions import ActionRegistry
+
+        permission = getattr(self, "_permission", None)
+        return permission is not None and ActionRegistry.is_action_available(
+            "edit_image", request.user, self.file, permission=permission
+        )
 
     def render(self, request) -> str:
         """Render image viewer with zoom/rotate controls."""

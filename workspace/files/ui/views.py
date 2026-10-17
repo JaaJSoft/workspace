@@ -20,6 +20,7 @@ from workspace.files.sensitivity import (
 )
 from workspace.files.services import FilePermission, FileService
 from workspace.files.services.filetype import get_color, get_icon, get_viewer_by_slug
+from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.files.services.pins import visible_pins
 from workspace.files.services.public_links import resolve_within, scope_q
 from workspace.files.services.quota import usage_percent
@@ -808,6 +809,7 @@ def view_file(request, uuid):
     # Render viewer with user_can_edit override
     viewer = ViewerClass(file_obj)
     viewer._user_can_edit = user_can_edit
+    viewer._permission = perm
     viewer._lock_info = lock_info
     html = veil_sensitive(
         viewer.render(request), sensitive_level(file_obj), blur_preference(request.user)
@@ -1009,8 +1011,11 @@ def _shared_folder_listing_context(link, current, request, access_token, view_mo
                     )
                 ),
                 "thumbnail_url": (
-                    _shared_action_url(
-                        token, "/thumbnail", access_token, file=node.uuid
+                    versioned_thumbnail_url(
+                        _shared_action_url(
+                            token, "/thumbnail", access_token, file=node.uuid
+                        ),
+                        node,
                     )
                     if node.has_thumbnail
                     else None

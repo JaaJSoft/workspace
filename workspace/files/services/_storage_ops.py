@@ -447,6 +447,7 @@ def copy_node(node, parent, owner, _sibling_names=None):
         type=node.type,
         category=node.category,
         viewer=node.viewer,
+        image_edit=node.image_edit,
         icon=node.icon,
         color=node.color,
     )

@@ -67,6 +67,7 @@ class ActionRegistryTests(TestCase):
             "cut",
             "copy",
             "paste_into",
+            "edit_image",
             "extract",
             "properties",
             "analyze_storage",

@@ -6,6 +6,7 @@ from django.utils.html import conditional_escape, format_html_join
 from django.utils.safestring import mark_safe
 
 from workspace.files.sensitivity import DEFAULT_BLUR, blur_from
+from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_MAX_SIZE,
     THUMBNAIL_SIZES,
@@ -67,7 +68,7 @@ def thumbnail_url(file_obj):
     """The authenticated API URL for *file_obj*'s thumbnail, or '' without one."""
     if not getattr(file_obj, "has_thumbnail", False):
         return ""
-    return f"/api/v1/files/{file_obj.uuid}/thumbnail"
+    return versioned_thumbnail_url(f"/api/v1/files/{file_obj.uuid}/thumbnail", file_obj)
 
 
 @register.filter

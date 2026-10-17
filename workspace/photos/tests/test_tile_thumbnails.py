@@ -82,3 +82,44 @@ class TimelineTileSizesTests(TestCase):
         expected = "auto, (min-width: 640px) 256px, calc((100vw - 24px) / 3)"
         self.assertEqual(self._sizes(first), [expected])
         self.assertEqual(self._sizes(appended), [expected])
+
+
+class EditedTileTests(TestCase):
+    """A rotated or cropped photo's tile shows the edit, not the original."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="editor", password="p")
+        self.client.force_login(self.user)
+        self.photo = make_photo(
+            self.user,
+            "wide.jpg",
+            datetime(2024, 7, 14, 12, tzinfo=UTC),
+            width=3000,
+            height=2000,
+        )
+        File.objects.filter(pk=self.photo.pk).update(
+            has_thumbnail=True, image_edit={"rotation": 90}
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def test_the_tile_takes_the_turned_shape_and_a_url_of_its_own(self):
+        html = self.client.get("/photos").content.decode()
+
+        start = html.index(f'data-uuid="{self.photo.uuid}"')
+        tile = html[html.rindex("<div", 0, start) : html.index("</button>", start)]
+        self.assertIn("--tile-aspect: 0.6667", tile)
+        self.assertIn('data-width="3000"', tile)
+        self.assertRegex(tile, r"/thumbnail\?v=[0-9a-f]{12}&amp;size=128 ")
+
+    def test_srcset_reads_the_turned_size(self):
+        turned = SimpleNamespace(
+            media_item=SimpleNamespace(width=3000, height=2000),
+            image_edit={"crop": {"x": 0, "y": 0, "width": 0.5, "height": 1}},
+        )
+
+        # 1500 x 2000 once cropped: the short side is the width.
+        self.assertEqual(
+            tile_srcset("/t", turned), "/t?size=128 96w, /t?size=256 192w, /t 384w"
+        )

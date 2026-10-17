@@ -15,9 +15,13 @@ const PHOTOS_SWAP_TARGETS = [
 // user may run on a given file; this only drops the ones that mean nothing on
 // a timeline (cut, paste, pin, extract...).
 const PHOTO_ACTIONS = [
-  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties', 'rename',
-  'toggle_sensitive', 'delete',
+  'view', 'edit_image', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties',
+  'rename', 'toggle_sensitive', 'delete',
 ];
+
+// The widest and the tallest a tile gets in the "original" shape, as
+// photos_filters.tile_aspect clamps it.
+const PHOTOS_TILE_ASPECT_RANGE = [0.5, 2.5];
 
 // The file actions the selection offers, when the registry offers them as
 // bulk actions on every selected photo.
@@ -68,7 +72,7 @@ const ALBUM_MENU_ACTIONS = [
 // with every row a photo of one's own can show (file actions, albums,
 // similar photos, faces).
 const PHOTOS_MENU_WIDTH = 224;
-const PHOTOS_MENU_HEIGHT = 460;
+const PHOTOS_MENU_HEIGHT = 540;
 
 // The rule a menu row carries when it opens a group.
 const PHOTOS_MENU_RULE = 'mt-0.5 pt-0.5 border-t border-base-300';
@@ -274,6 +278,10 @@ window.photosApp = function photosApp() {
         this._refresh(['photos-nav', 'photos-header']);
       });
       window.addEventListener('rename-item', (e) => this.renamePhoto(e.detail.uuid, e.detail.name));
+      // Rotated or cropped in the viewer: the tile follows without a reload.
+      window.addEventListener('image-edited', (e) => {
+        this._showTileEdit(e.detail.uuid, e.detail.imageEdit, e.detail.version);
+      });
       // Tag counts in the sidebar follow assignments made from the panel.
       window.addEventListener('tags-changed', () => {
         this._refresh(['photos-nav']);
@@ -687,6 +695,7 @@ window.photosApp = function photosApp() {
       const { photo, actions } = this.ctxMenu;
       if (!photo || actions === null) return [];
       const has = (id) => actions.some((a) => a.id === id);
+      const ctxAction = (id) => actions.find((a) => a.id === id);
       const own = !photo.albumScoped;
       const inLibrary = own && !this.hiddenView;
       const cluster = !!this.currentCluster();
@@ -695,6 +704,11 @@ window.photosApp = function photosApp() {
           (has('view') || photo.albumScoped) && 'open',
           inLibrary && this.embeds(photo.mediaType) && 'similar',
           inLibrary && this.facesEnabled() && 'faces',
+        ],
+        [
+          has('edit_image') && 'edit_image',
+          has('edit_image') && 'rotate_image',
+          has('edit_image') && ctxAction('edit_image')?.state?.is_edited && 'revert_image',
         ],
         [
           has('toggle_favorite') && 'toggle_favorite',
@@ -776,6 +790,65 @@ window.photosApp = function photosApp() {
           this.trashPhoto(photo.uuid, photo.name);
           break;
       }
+    },
+
+    // ── Rotate and crop ─────────────────────────────────
+
+    editPhoto(photo) {
+      window.dispatchEvent(new CustomEvent('open-file-viewer', {
+        detail: { uuid: photo.uuid, name: photo.name, type: photo.type, edit: true },
+      }));
+    },
+
+    // A quarter turn clockwise from the menu, the photo's crop turning with it.
+    rotatePhoto(uuid) {
+      return this._sendImageEdit(uuid, 'POST', `/api/v1/files/${uuid}/image-edit/rotate`,
+        { quarter_turns: 1 });
+    },
+
+    revertPhoto(uuid) {
+      return this._sendImageEdit(uuid, 'DELETE', `/api/v1/files/${uuid}/image-edit`);
+    },
+
+    async _sendImageEdit(uuid, method, url, body) {
+      try {
+        const data = await photosJson(method, url, body);
+        this._showTileEdit(uuid, data.image_edit, data.version);
+      } catch (_) {
+        window.AppAlert.error('The photo could not be edited');
+      }
+    },
+
+    // Points the tile at the thumbnail of `edit` (named by `version`, the
+    // token its URL carries) and gives it the shape the edit shows at.
+    _showTileEdit(uuid, edit, version) {
+      this._forgetActions([uuid]);
+      const tile = this._tile(uuid);
+      if (!tile) return;
+      const width = Number(tile.dataset.width);
+      const height = Number(tile.dataset.height);
+      const shown = width && height ? window.imageEdit.shownSize(width, height, edit) : null;
+      if (shown) {
+        const [low, high] = PHOTOS_TILE_ASPECT_RANGE;
+        const aspect = Math.min(Math.max(shown.width / shown.height, low), high);
+        tile.style.setProperty('--tile-aspect', aspect.toFixed(4));
+      }
+      const img = tile.querySelector('img[srcset]');
+      if (!img) return;
+      const ratio = shown ? Math.max(shown.width, shown.height) / Math.min(shown.width, shown.height) : 1;
+      const versioned = (src) => {
+        const url = new URL(src, window.location.origin);
+        if (version) url.searchParams.set('v', version);
+        else url.searchParams.delete('v');
+        return url.pathname + url.search;
+      };
+      // Each candidate is described by its short side, as tile_srcset does.
+      img.srcset = img.srcset.split(',').map((candidate) => {
+        const src = versioned(candidate.trim().split(/\s+/)[0]);
+        const size = Number(new URL(src, window.location.origin).searchParams.get('size')) || 512;
+        return `${src} ${Math.max(1, Math.round(size / ratio))}w`;
+      }).join(', ');
+      img.src = versioned(img.getAttribute('src'));
     },
 
     // ── Actions ─────────────────────────────────────────

@@ -146,6 +146,11 @@ window.contextMenu = function contextMenu() {
             detail: { uuid: nd.uuid, name: nd.name, type: nd.fileType }
           }));
           break;
+        case 'edit_image':
+          window.dispatchEvent(new CustomEvent('open-file-viewer', {
+            detail: { uuid: nd.uuid, name: nd.name, type: nd.fileType, edit: true }
+          }));
+          break;
         case 'open':
           window.folderNav.navigateTo(`/files/${nd.uuid}`);
           break;

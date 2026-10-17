@@ -21,6 +21,7 @@ from workspace.files.sensitivity import (
     sensitive_level,
 )
 from workspace.files.services.filetype import get_viewer_by_slug
+from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.files.ui.viewers import (
     ViewerRegistry,
     render_viewer_panel,
@@ -1058,8 +1059,9 @@ def _shared_tiles(link, access_token, photos):
     """Point each photo of a linked album's page at its thumbnail and at the
     page that shows it, both through the link."""
     for photo in photos:
-        photo.shared_thumbnail_url = _link_url(
-            "photo-album-link-thumbnail", link, access_token, photo.uuid
+        photo.shared_thumbnail_url = versioned_thumbnail_url(
+            _link_url("photo-album-link-thumbnail", link, access_token, photo.uuid),
+            photo,
         )
         photo.shared_view_url = _link_url(
             "photos_ui:shared_album", link, access_token, photo=photo.uuid

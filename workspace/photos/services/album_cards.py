@@ -7,6 +7,7 @@ from django.db.models.functions import Lower
 from django.urls import reverse
 
 from workspace.files.models import File
+from workspace.files.services.image_edits import versioned_thumbnail_url
 
 from ..queries import album_roles, album_summaries, own_albums, shared_albums
 
@@ -24,8 +25,11 @@ class AlbumCard:
         member, whether or not they can open the file in Files."""
         if self.cover is None or not self.cover.has_thumbnail:
             return ""
-        return reverse(
-            "photo-album-file-thumbnail", args=[self.album.uuid, self.cover.uuid]
+        return versioned_thumbnail_url(
+            reverse(
+                "photo-album-file-thumbnail", args=[self.album.uuid, self.cover.uuid]
+            ),
+            self.cover,
         )
 
     @property
@@ -51,7 +55,7 @@ def album_cards(user, albums):
     cover_ids = {s["cover_id"] for s in summaries.values() if s["cover_id"]}
     covers = (
         File.objects.select_related("media_item")
-        .only("uuid", "has_thumbnail", "media_item__sensitive_level")
+        .only("uuid", "has_thumbnail", "image_edit", "media_item__sensitive_level")
         .in_bulk(cover_ids)
     )
     return [

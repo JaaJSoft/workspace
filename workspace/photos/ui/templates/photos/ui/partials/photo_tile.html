@@ -21,6 +21,9 @@
   to open. data-removable says whether the viewer may take a photo out of
   the album on screen.
 
+  data-width and data-height are the photo's size before any rotation or
+  crop, which a tile edited in place reshapes itself from (_showTileEdit).
+
   On a ranked page (similar photos, search by description) a video shows
   the moment that matched: its key frame's picture (file.match_frame_url)
   in place of the poster, its time (file.match_at) in the badge, and data-at,
@@ -45,6 +48,8 @@
   data-display-name="{{ file.name }}"
   data-file-type="{{ file.type }}"
   data-media-type="{{ file.media_item.media_type }}"
+  data-width="{{ file.media_item.width|default_if_none:'' }}"
+  data-height="{{ file.media_item.height|default_if_none:'' }}"
   data-sensitive="{{ file.media_item.sensitive_level }}"
   data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
   data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"

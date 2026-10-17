@@ -707,6 +707,7 @@ class FileService:
                 file_type, mime_type or getattr(content, "content_type", None)
             ),
             "has_thumbnail": False,
+            "image_edit": None,
             "processing_status": File.ProcessingStatus.PENDING,
             "updated_at": timezone.now(),
         }
@@ -793,6 +794,7 @@ class FileService:
             "content_hash": "",
             "size": None,
             "has_thumbnail": False,
+            "image_edit": None,
             "processing_status": File.ProcessingStatus.READY,
             "updated_at": timezone.now(),
         }
@@ -855,6 +857,7 @@ class FileService:
             "type": detection.label,
             "category": detection.group or "unknown",
             "has_thumbnail": False,
+            "image_edit": None,
             "processing_status": File.ProcessingStatus.PENDING,
             "updated_at": timezone.now(),
         }

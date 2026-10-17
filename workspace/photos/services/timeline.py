@@ -42,6 +42,7 @@ from django.utils import timezone
 from workspace.files.actions import ActionRegistry
 from workspace.files.models import FileFavorite
 from workspace.files.services import FileService
+from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.photos.models import AlbumItem
 
 PAGE_SIZE = 60
@@ -258,7 +259,9 @@ def _album_urls(album, photo, download):
     *download* is False."""
     args = [album.uuid, photo.uuid]
     return {
-        "thumbnail": reverse("photo-album-file-thumbnail", args=args),
+        "thumbnail": versioned_thumbnail_url(
+            reverse("photo-album-file-thumbnail", args=args), photo
+        ),
         "viewer": reverse("photos_ui:album_viewer", args=args),
         "content": reverse("photo-album-file-content", args=args),
         "download": reverse("photo-album-file-download", args=args) if download else "",

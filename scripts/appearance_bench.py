@@ -412,20 +412,22 @@ def _rows():
 def render(report, baseline=None):
     keys = list(report["backends"])
     width = max(14, *(len(key) + 2 for key in keys))
-    lines = [
+    if baseline is not None:
+        # Room for the " (+12.3 pt)" after each value.
+        width += 11
+    header = (
         f"{report['torsos']} torsos in {report['photos']} photos at "
         f"{report['rendition']} px, {report['anchors']} of them anchors; "
         f"candidates within {report['window_hours']:g} h, at least "
-        f"{report['burst_minutes']:g} min apart",
-        "",
-    ]
+        f"{report['burst_minutes']:g} min apart"
+    )
+    lines = [header, ""]
     if baseline is not None and any(
         baseline.get(name) != report[name]
         for name in ("rendition", "torsos", "window_hours", "burst_minutes")
     ):
         lines[-1:] = [
-            "The earlier run saw other photos or other candidates: the two do "
-            "not compare.",
+            "The earlier run saw other photos or candidates: they do not compare.",
             "",
         ]
     lines.append(f"{'':<30}" + "".join(f"{key:>{width}}" for key in keys))
@@ -439,7 +441,7 @@ def render(report, baseline=None):
                 if baseline
                 else None
             )
-            if before is not None and before != value and kind in ("pct", "ms"):
+            if kind in ("pct", "ms") and _format(before, kind) not in ("-", cell):
                 cell += f" ({_delta(value, before, kind)})"
             cells.append(f"{cell:>{width}}")
         lines.append(f"{label:<30}" + "".join(cells))
@@ -486,8 +488,11 @@ def _format(value, kind):
 
 
 def _delta(value, before, kind):
-    diff = value - before
-    return f"{100 * diff:+.1f} pt" if kind == "pct" else f"{diff:+.0f}"
+    # From the rounded values, so the difference is the one between the two
+    # numbers shown.
+    if kind == "pct":
+        return f"{round(100 * value, 1) - round(100 * before, 1):+.1f} pt"
+    return f"{round(value) - round(before):+d}"
 
 
 # -- running -----------------------------------------------------------------

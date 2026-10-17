@@ -235,10 +235,24 @@ class EventDetailTests(CalendarTestMixin, APITestCase):
         resp = self.client.get(self.url(self.event.uuid))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
 
-    def test_get_event_no_access(self):
+    def test_get_event_no_access_looks_like_a_missing_event(self):
         self.client.force_authenticate(self.outsider)
         resp = self.client.get(self.url(self.event.uuid))
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        missing = self.client.get(self.url(uuid.uuid4()))
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(resp.data, missing.data)
+
+    def test_outsider_write_looks_like_a_missing_event(self):
+        self.client.force_authenticate(self.outsider)
+        put = self.client.put(
+            self.url(self.event.uuid), {"title": "Hacked"}, format="json"
+        )
+        delete = self.client.delete(self.url(self.event.uuid))
+        self.assertEqual(put.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(delete.status_code, status.HTTP_404_NOT_FOUND)
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.title, "Team Meeting")
+        self.assertFalse(self.event.is_cancelled)
 
     def test_get_nonexistent_event(self):
         self.client.force_authenticate(self.owner)

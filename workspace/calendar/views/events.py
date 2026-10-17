@@ -20,7 +20,7 @@ from workspace.notifications.services.notifications import (
 )
 
 from ..models import Calendar, Event, EventMember
-from ..queries import visible_calendar_ids, visible_events_q
+from ..queries import visible_events_q
 from ..recurrence import expand_recurring_events, make_virtual_occurrence
 from ..serializers import (
     EventCreateSerializer,
@@ -338,18 +338,14 @@ class EventDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def _get_event(self, event_id, user):
-        event = _prefetch_event(Event.objects.filter(pk=event_id)).first()
+        """The event if *user* can see it; an event they cannot see answers
+        the same 404 as one that does not exist."""
+        event = _prefetch_event(
+            Event.objects.filter(visible_events_q(user), pk=event_id)
+        ).first()
         if not event:
             return None, Response(
                 {"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND
-            )
-        # Members are already prefetched by _prefetch_event; iterate the
-        # cached list instead of issuing a redundant .filter().exists().
-        is_member = any(m.user_id == user.id for m in event.members.all())
-        cal_ids = visible_calendar_ids(user)
-        if event.calendar_id not in cal_ids and not is_member:
-            return None, Response(
-                {"detail": "No access."}, status=status.HTTP_403_FORBIDDEN
             )
         return event, None
 

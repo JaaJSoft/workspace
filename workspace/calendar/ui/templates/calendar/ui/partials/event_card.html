@@ -2,12 +2,12 @@
 <div class="p-3 w-72">
   <div class="flex items-start gap-3 mb-2">
     <span
-      class="w-3 h-3 rounded-full bg-{{ event.calendar.color }} flex-shrink-0 mt-1"
+      class="w-3 h-3 rounded-full bg-{{ calendar.color|default:'primary' }} flex-shrink-0 mt-1"
     ></span>
     <div class="min-w-0 flex-1">
       <div class="font-semibold text-sm truncate">{{ event.title }}</div>
       <div class="text-xs text-base-content/50 flex items-center gap-1">
-        {{ event.calendar.name }}
+        {% if calendar %}{{ calendar.name }}{% endif %}
         {% if event.is_recurring %}
           <i data-lucide="repeat" class="w-3 h-3 opacity-60"></i>
         {% endif %}
@@ -33,10 +33,13 @@
       </div>
     {% endif %}
     {% if is_external %}
-      <div class="flex items-center gap-1.5 truncate">
-        <i data-lucide="globe" class="w-3 h-3 flex-shrink-0"></i>
-        <span class="truncate">{{ event.external_organizer|default:event.calendar.name }}</span>
-      </div>
+      {% firstof event.external_organizer calendar.name as organizer %}
+      {% if organizer %}
+        <div class="flex items-center gap-1.5 truncate">
+          <i data-lucide="globe" class="w-3 h-3 flex-shrink-0"></i>
+          <span class="truncate">{{ organizer }}</span>
+        </div>
+      {% endif %}
     {% elif event.owner %}
       <div class="flex items-center gap-1.5 truncate">
         <i data-lucide="user" class="w-3 h-3 flex-shrink-0"></i>

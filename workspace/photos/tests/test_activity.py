@@ -3,6 +3,7 @@
 from datetime import UTC, date, datetime, timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.core.cache import cache
 from django.test import TestCase
 from django.utils import timezone
@@ -11,8 +12,8 @@ from workspace.core.activity_registry import activity_registry
 from workspace.files.models import File
 from workspace.files.services.sharing import share_file
 from workspace.photos.activity import PhotosActivityProvider
-from workspace.photos.models import AlbumItem
-from workspace.photos.services.album_sharing import share_album
+from workspace.photos.models import Album, AlbumItem
+from workspace.photos.services.album_sharing import share_album, unshare_album
 from workspace.photos.services.albums import add_items, create_album
 
 from .images import make_photo
@@ -101,6 +102,41 @@ class PhotosActivityTests(TestCase):
             len(self.provider.get_recent_events(self.owner.pk, viewer_id=self.bob.pk)),
             2,
         )
+
+    def test_ones_own_feed_drops_an_album_one_was_removed_from(self):
+        add_items(
+            self.album, [make_photo(self.bob, "bob.jpg", _at(15))], added_by=self.bob
+        )
+        self.assertEqual(len(self.provider.get_recent_events(self.bob.pk)), 1)
+
+        unshare_album(self.album, acting_user=self.owner, user=self.bob)
+        self.album.title = "Renamed after bob left"
+        self.album.save(update_fields=["title"])
+
+        for viewer_id in (None, self.bob.pk):
+            with self.subTest(viewer_id=viewer_id):
+                self.assertEqual(
+                    self.provider.get_recent_events(self.bob.pk, viewer_id=viewer_id),
+                    [],
+                )
+        today = timezone.localdate()
+        self.assertEqual(self.provider.get_daily_counts(self.bob.pk, today, today), {})
+
+    def test_ones_own_feed_drops_the_album_of_a_group_one_left(self):
+        team = Group.objects.create(name="Team")
+        self.bob.groups.add(team)
+        group_album = Album.objects.create(owner=self.bob, group=team, title="Team")
+        add_items(
+            group_album, [make_photo(self.bob, "t.jpg", _at(15))], added_by=self.bob
+        )
+        share_album(
+            group_album, role="viewer", acting_user=self.bob, user=self.outsider
+        )
+        self.assertEqual(len(self.provider.get_recent_events(self.bob.pk)), 2)
+
+        self.bob.groups.remove(team)
+
+        self.assertEqual(self.provider.get_recent_events(self.bob.pk), [])
 
     def test_daily_counts(self):
         today = timezone.localdate()

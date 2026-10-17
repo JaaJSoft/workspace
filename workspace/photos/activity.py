@@ -1,9 +1,9 @@
 """Album activity for the activity feed: albums shared, photos added.
 
 An addition is one event per album, contributor and day, never one per
-photo: adding a trip's three hundred photos is one thing done. Someone
-looking at another user's activity only sees the albums they can open
-themselves.
+photo: adding a trip's three hundred photos is one thing done. Every
+reader, the user on their own feed included, only sees the albums they can
+open themselves.
 """
 
 from django.db.models import Count, Max, Q
@@ -25,17 +25,29 @@ def _count_label(count):
 
 
 class PhotosActivityProvider(ActivityProvider):
+    @staticmethod
+    def _is_own_view(user_id, viewer_id):
+        """Whether *user_id* is looking at their own activity: callers pass no
+        viewer for it, or the user themselves."""
+        return user_id is not None and viewer_id in (None, user_id)
+
     def _album_filter(self, user_id, viewer_id, field="album_id"):
-        """Rows about albums the viewer can open; all of them when the
-        viewer is looking at their own activity."""
-        if viewer_id is None or viewer_id == user_id:
+        """Rows about albums the reader can open: the viewer, or the user
+        themselves on their own feed, which drops the albums they were
+        removed from or left with a group. Unfiltered for the feed of
+        everyone read by nobody in particular."""
+        if self._is_own_view(user_id, viewer_id):
+            reader_id = user_id
+        elif viewer_id is None:
             return Q()
+        else:
+            reader_id = viewer_id
         from django.contrib.auth import get_user_model
 
         from workspace.photos.queries import user_albums
 
-        viewer = get_user_model().objects.get(pk=viewer_id)
-        return Q(**{f"{field}__in": user_albums(viewer).values("pk")})
+        reader = get_user_model().objects.get(pk=reader_id)
+        return Q(**{f"{field}__in": user_albums(reader).values("pk")})
 
     def _shares(self, user_id, viewer_id, exclude_actor_id=None):
         from workspace.photos.models import AlbumShare

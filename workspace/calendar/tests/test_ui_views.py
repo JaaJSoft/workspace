@@ -179,3 +179,59 @@ class EventCardMembersTests(TestCase):
             2,
             f"expected 2 member queries, got {len(member_queries)}",
         )
+
+
+class EventCardCalendarVisibilityTests(TestCase):
+    """An invitee must not learn the name or colour of the organizer's calendar."""
+
+    def setUp(self):
+        from django.utils import timezone
+
+        from workspace.calendar.models import CalendarSubscription, Event, EventMember
+
+        self.owner = User.objects.create_user(username="organizer", password="pass123")
+        self.invitee = User.objects.create_user(username="invitee", password="pass123")
+        self.subscriber = User.objects.create_user(
+            username="subscriber", password="pass123"
+        )
+        self.cal = Calendar.objects.create(
+            name="Therapy sessions", color="secondary", owner=self.owner
+        )
+        CalendarSubscription.objects.create(calendar=self.cal, user=self.subscriber)
+        self.event = Event.objects.create(
+            calendar=self.cal,
+            title="Sync",
+            owner=self.owner,
+            start=timezone.now(),
+            end=timezone.now(),
+        )
+        EventMember.objects.create(event=self.event, user=self.invitee)
+
+    def _card(self, username):
+        self.client.login(username=username, password="pass123")
+        resp = self.client.get(f"/calendar/events/{self.event.pk}/card")
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode()
+
+    def test_invitee_sees_neither_calendar_name_nor_colour(self):
+        html = self._card("invitee")
+        self.assertIn("Sync", html)
+        self.assertNotIn("Therapy sessions", html)
+        self.assertNotIn("secondary", html)
+
+    def test_owner_and_subscriber_see_the_calendar(self):
+        for username in ("organizer", "subscriber"):
+            with self.subTest(username=username):
+                html = self._card(username)
+                self.assertIn("Therapy sessions", html)
+                self.assertIn("bg-secondary", html)
+
+    def test_invitee_of_an_external_calendar_event_does_not_see_the_feed_name(self):
+        from workspace.calendar.models_external import ExternalCalendar
+
+        ExternalCalendar.objects.create(
+            calendar=self.cal, url="https://example.com/a.ics"
+        )
+        html = self._card("invitee")
+        self.assertNotIn("Therapy sessions", html)
+        self.assertIn("Therapy sessions", self._card("organizer"))

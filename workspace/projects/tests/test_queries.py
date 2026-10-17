@@ -5,13 +5,21 @@ from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.utils import timezone
 
-from workspace.projects.models import Project, ProjectMember, Task, TaskStatus
+from workspace.projects.models import (
+    Project,
+    ProjectMember,
+    Task,
+    TaskEvent,
+    TaskStatus,
+)
 from workspace.projects.queries import (
     assigned_open_tasks,
     get_project_role,
     project_users,
     user_project_ids,
+    visible_task_events_q,
 )
+from workspace.projects.services.links import create_link
 from workspace.projects.services.projects import create_project
 from workspace.projects.services.tasks import create_task
 
@@ -317,3 +325,37 @@ class AssignedOpenTasksTests(TestCase):
             for task in tasks:
                 _ = task.reference
                 _ = task.status.name
+
+
+class VisibleTaskEventsQTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="admin1", password="pass123")
+        self.member = User.objects.create_user(username="member1", password="pass123")
+        self.project = create_project(self.admin, name="Website")
+        ProjectMember.objects.create(project=self.project, user=self.member)
+        self.secret = create_project(self.admin, name="Secret")
+        self.task = create_task(self.project, self.admin, title="Visible")
+        self.hidden = create_task(self.secret, self.admin, title="Hidden")
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+
+    def _visible(self, user):
+        return TaskEvent.objects.filter(visible_task_events_q(user))
+
+    def test_events_of_inaccessible_projects_are_excluded(self):
+        self.assertFalse(self._visible(self.member).filter(project=self.secret))
+
+    def test_link_event_needs_the_other_ends_project(self):
+        visible = self._visible(self.member)
+        self.assertFalse(visible.filter(type=TaskEvent.Type.LINKED))
+        self.assertTrue(visible.filter(type=TaskEvent.Type.CREATED, task=self.task))
+
+    def test_link_event_is_visible_with_access_to_both_ends(self):
+        self.assertEqual(
+            self._visible(self.admin).filter(type=TaskEvent.Type.LINKED).count(), 2
+        )
+
+    def test_unresolved_link_event_is_hidden_from_everyone(self):
+        TaskEvent.objects.filter(type=TaskEvent.Type.LINKED).update(
+            from_ref=None, to_ref=None
+        )
+        self.assertFalse(self._visible(self.admin).filter(type=TaskEvent.Type.LINKED))

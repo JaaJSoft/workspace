@@ -53,16 +53,25 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
         self.assertEqual(self._refs(self.task), {(self.secret.uuid, self.hidden.uuid)})
         self.assertEqual(self._refs(self.hidden), {(self.project.uuid, self.task.uuid)})
 
-    def test_survives_a_renamed_key_and_a_deleted_task(self):
+    def test_survives_a_deleted_task(self):
         create_link(self.hidden, self.task, "blocks", actor=self.admin)
         self._simulate_legacy_state()
-        self.secret.key = "ZZZ"
-        self.secret.save(update_fields=["key"])
         self.hidden.delete()
 
         backfill_link_event_refs(apps, _SchemaEditor())
 
         self.assertEqual(self._refs(self.task), {(self.secret.uuid, None)})
+
+    def test_a_renamed_key_leaves_the_pair_unresolved(self):
+        create_link(self.hidden, self.task, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        self.secret.key = "ZZZ"
+        self.secret.save(update_fields=["key"])
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(self.task), {(None, None)})
+        self.assertEqual(self._refs(self.hidden), {(None, None)})
 
     def test_an_event_without_its_partner_stays_unresolved(self):
         create_link(self.hidden, self.task, "blocks", actor=self.admin)
@@ -167,6 +176,25 @@ class BackfillLinkEventRefsTests(ProjectTestMixin, TestCase):
         self._simulate_legacy_state()
         beta.project.delete()
         delta.project.delete()
+
+        backfill_link_event_refs(apps, _SchemaEditor())
+
+        self.assertEqual(self._refs(alpha), {(None, None)})
+        self.assertEqual(self._refs(gamma), {(None, None)})
+
+    def test_orphans_are_not_paired_through_a_reused_key(self):
+        alpha, beta, gamma, delta = (
+            create_task(create_project(self.admin, name=name), self.admin, title=name)
+            for name in ("Alpha", "Beta", "Gamma", "Delta")
+        )
+        create_link(alpha, beta, "blocks", actor=self.admin)
+        create_link(delta, gamma, "blocks", actor=self.admin)
+        self._simulate_legacy_state()
+        freed_key = beta.project.key
+        beta.project.delete()
+        delta.project.delete()
+        gamma.project.key = freed_key
+        gamma.project.save(update_fields=["key"])
 
         backfill_link_event_refs(apps, _SchemaEditor())
 

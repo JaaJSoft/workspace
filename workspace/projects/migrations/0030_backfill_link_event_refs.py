@@ -4,8 +4,7 @@ A link event names the task at the other end of the link only by its
 reference string, so a feed cannot tell whether its viewer may read it. Both
 ends' events are written back to back by the same call, each naming the
 other's number: pairing them recovers the other end's project (and task, when
-it still exists). A key may have been renamed since, so it only has to match on
-one end of a pair. An event left unpaired keeps a null ``from_ref`` and is
+it still exists). An event left unpaired keeps a null ``from_ref`` and is
 hidden from every feed.
 """
 
@@ -45,10 +44,11 @@ def _is_pair(event, other, keys):
     """Whether *event* and *other* can be the two ends of one link.
 
     Numbers repeat across projects, so they alone do not tie two events: the
-    ends must also carry the two labels of one link type, and at least one of
-    them must still name the other's project by its current key (a key renamed
-    since breaks one end, never both). Two events whose own partners were
-    deleted with their project fail the key check.
+    ends must also carry the two labels of one link type, and each must still
+    name the other's project by its current key. Keys can be renamed and a
+    deleted project's key reused, so a match on one end alone can tie two
+    events whose own partners were deleted; a pair whose key was renamed since
+    stays unresolved instead.
     """
     return (
         other["type"] == event["type"]
@@ -56,7 +56,8 @@ def _is_pair(event, other, keys):
         and _names(event, other)
         and _names(other, event)
         and _opposite_ends(event, other)
-        and (_names_project(event, other, keys) or _names_project(other, event, keys))
+        and _names_project(event, other, keys)
+        and _names_project(other, event, keys)
     )
 
 

@@ -178,8 +178,30 @@ class FaceClusterViewSet(
                 else None
             )
             _correction(face_people.link_cluster, cluster, person)
-        # Re-read: ``person_visible`` was computed for the name it had.
-        serializer.instance = self.get_queryset().get(pk=cluster.pk)
+        # Re-read: ``person_visible`` was computed for the name it had. None
+        # when naming folded every face away and the emptied cluster went.
+        serializer.instance = self.get_queryset().filter(pk=cluster.pk).first()
+
+    @extend_schema(
+        responses={
+            200: FaceClusterSerializer,
+            204: OpenApiResponse(
+                description=(
+                    "Named after someone already in each of its photos, the "
+                    "cluster was folded into theirs and is gone."
+                )
+            ),
+        }
+    )
+    def partial_update(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            self.get_object(), data=request.data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if serializer.instance is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(serializer.data)
 
     def perform_destroy(self, instance):
         face_corrections.ungroup(instance)

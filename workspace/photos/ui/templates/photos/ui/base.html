@@ -183,6 +183,7 @@
   {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/selection_menu.html" open="selectionMenu.open" close="closeSelectionMenu()" x="selectionMenu.x" y="selectionMenu.y" id="photos-selection-menu" %}
   {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/album_menu.html" open="albumMenu.open" close="albumMenu.open = false" x="albumMenu.x" y="albumMenu.y" id="photos-album-menu" %}
   {% include "photos/ui/partials/album_picker.html" %}
+  {% include "photos/ui/partials/capture_details_dialog.html" %}
   {% include "files/ui/partials/rename_dialog.html" %}
   {% include "files/ui/partials/share_modal.html" %}
   {% include "photos/ui/partials/album_share_modal.html" %}
@@ -209,6 +210,7 @@
   <script src="{% static 'photos/ui/js/import.js' %}"></script>
   <script src="{% static 'photos/ui/js/faces.js' %}"></script>
   <script src="{% static 'photos/ui/js/hidden.js' %}"></script>
+  <script src="{% static 'photos/ui/js/capture_details.js' %}"></script>
   <script src="{% static 'photos/ui/js/album_share.js' %}"></script>
   <script src="{% static 'photos/ui/js/timeline_sentinel.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>

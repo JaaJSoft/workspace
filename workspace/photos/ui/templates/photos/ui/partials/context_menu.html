@@ -64,6 +64,9 @@ the album allows (through the album), and the album rows.
   <template x-if="ctxShows('rename')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('rename')" icon="pencil" label="Rename" click="runCtxAction(ctxAction('rename'))" only %}
   </template>
+  <template x-if="ctxShows('edit_details')">
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('edit_details')" icon="calendar-clock" label="Edit date & location" click="closeCtxMenu(); openCaptureDialog([ctxMenu.photo.uuid])" only %}
+  </template>
   <template x-if="ctxShows('properties')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('properties')" icon="info" label="Properties" click="runCtxAction(ctxAction('properties'))" only %}
   </template>

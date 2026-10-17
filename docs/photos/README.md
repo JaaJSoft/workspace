@@ -34,6 +34,25 @@ must come first; a name giving only the day reads as noon on that day.
 Renaming such a file moves it on the timeline, so an undated scan can be filed
 by renaming it. A date read from the file itself always wins over the name.
 
+### Correcting dates and places
+
+**Edit date & location**, in a photo's menu or on a selection, corrects a whole
+batch at once:
+
+- **Shift** moves every date by the same amount, later or earlier: a camera on
+  the wrong clock, or left on the home timezone during a trip. Photos without a
+  date are left as they are.
+- **Set** dates them on one day, at one time or each keeping its own (noon for
+  photos without a date): a pile of scanned prints.
+- **Set** a location from coordinates, or from a link copied from OpenStreetMap
+  or Google Maps; **Remove** takes a wrong position off.
+- **From file** hands the date or the location back to what the file says.
+
+A correction is what everyone who can open the photo sees, so it takes edit
+rights on it (the owner, or a member of the group whose folder holds it). It
+never touches the file itself, and it survives the file being read again or
+renamed. `POST /api/v1/photos/capture-details` does the same from the API.
+
 ## Similar photos and search by description
 
 One image embedding per photo, and one per key frame of a video - a vector

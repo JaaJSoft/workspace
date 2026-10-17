@@ -3,6 +3,8 @@
   the listing while something is selected; outside #photos-content, which a
   navigation replaces (and the selection with it, see onMerged).
 
+  Edit date & location follows each tile's data-can-edit-details.
+
   The file actions (favorite, download, trash) stay in place and are
   disabled until the registry has answered for every selected photo, then
   for good when one of them does not offer it (selectionAllows). The same
@@ -93,6 +95,18 @@
         x-show="!selectionFavoriteAdds()"
         x-cloak
       ></i>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Edit date & location"
+      aria-label="Edit date and location"
+      x-show="!selectionAlbumScoped()"
+      :disabled="!selectionEditsDetails()"
+      @click="openCaptureDialog(selection)"
+      data-testid="photos-edit-details-selection"
+    >
+      <i data-lucide="calendar-clock" class="w-4 h-4"></i>
     </button>
     <button
       type="button"

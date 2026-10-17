@@ -63,6 +63,7 @@ class LocationMapTests(TestCase):
 
         self.assertTrue(drawn.enabled)
         self.assertEqual(drawn.tile_url, TILE_URL)
+        self.assertEqual(drawn.tile_url_dark, "")
         self.assertEqual(drawn.attribution, ATTRIBUTION)
         self.assertEqual((drawn.latitude, drawn.longitude), (48.8584, 2.2945))
 
@@ -71,6 +72,20 @@ class LocationMapTests(TestCase):
     )
     def test_server_named_without_the_subdomain_placeholder(self):
         self.assertEqual(tile_server(), "tile.example.test")
+
+    @CONFIGURED
+    @override_settings(
+        PHOTOS_MAP_TILE_URL_DARK="https://dark.example.test/{z}/{x}/{y}.png"
+    )
+    def test_a_dark_style_on_another_host_is_named_too(self):
+        self.assertEqual(tile_server(), "tiles.example.test and dark.example.test")
+
+    @CONFIGURED
+    @override_settings(
+        PHOTOS_MAP_TILE_URL_DARK="https://tiles.example.test/dark/{z}/{x}/{y}.png"
+    )
+    def test_a_dark_style_on_the_same_host_is_named_once(self):
+        self.assertEqual(tile_server(), "tiles.example.test")
 
 
 class LocationMapPanelTests(TestCase):
@@ -127,7 +142,19 @@ class LocationMapPanelTests(TestCase):
         # escapejs keeps the attribution's quote inside its JS string.
         self.assertIn("Example\\u003C/a\\u003E\\u0027s maps", html)
         self.assertIn("latitude: 48.8584, longitude: 2.2945, zoom: 16", html)
+        self.assertIn("tileUrlDark: ''", html)
         self.assertNotIn("data-photo-map-offer", html)
+
+    @CONFIGURED
+    @override_settings(
+        PHOTOS_MAP_TILE_URL_DARK="https://dark.example.test/{z}/{x}/{y}.png"
+    )
+    def test_map_with_a_dark_style(self):
+        set_setting(self.user, "photos", "show_map", True)
+
+        html = self._panel()
+
+        self.assertIn("tileUrlDark: 'https://dark.example.test/{z}/{x}/{y}.png'", html)
 
     @CONFIGURED
     @override_settings(LANGUAGE_CODE="fr", USE_THOUSAND_SEPARATOR=True)

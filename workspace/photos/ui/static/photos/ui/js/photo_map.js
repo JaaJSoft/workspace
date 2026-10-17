@@ -38,11 +38,22 @@ window.photoMapPreference = function photoMapPreference() {
   };
 };
 
+// daisyUI declares a color-scheme on every theme: no list of dark themes to
+// keep in sync with the theme picker.
+function photoMapIsDark() {
+  return getComputedStyle(document.documentElement).colorScheme === 'dark';
+}
+
 window.photoMap = function photoMap(config) {
   // Kept out of the component's data: Alpine would wrap the Leaflet objects
   // in reactive proxies, which breaks them.
   let map = null;
+  let tiles = null;
+  let shownUrl = null;
   let resizeObserver = null;
+  let themeObserver = null;
+
+  const tileUrl = () => (config.tileUrlDark && photoMapIsDark() ? config.tileUrlDark : config.tileUrl);
 
   return {
     ...window.photoMapPreference(),
@@ -53,7 +64,8 @@ window.photoMap = function photoMap(config) {
       // No wheel zoom: scrolling the panel would zoom the map instead.
       map = L.map(this.$refs.canvas, { scrollWheelZoom: false }).setView(position, config.zoom);
       map.attributionControl.setPrefix(false);
-      L.tileLayer(config.tileUrl, { attribution: config.attribution, maxZoom: 19 }).addTo(map);
+      shownUrl = tileUrl();
+      tiles = L.tileLayer(shownUrl, { attribution: config.attribution, maxZoom: 19 }).addTo(map);
       L.marker(position, {
         icon: L.divIcon({
           html: PHOTO_MAP_PIN,
@@ -67,11 +79,24 @@ window.photoMap = function photoMap(config) {
       // The panel slides open around the section, after Leaflet measured it.
       resizeObserver = new ResizeObserver(() => map && map.invalidateSize());
       resizeObserver.observe(this.$refs.canvas);
+      if (config.tileUrlDark) {
+        // The theme toggle and the preferences page switch it in place.
+        themeObserver = new MutationObserver(() => {
+          const url = tileUrl();
+          if (!tiles || url === shownUrl) return;
+          shownUrl = url;
+          tiles.setUrl(url);
+        });
+        themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      }
     },
 
     destroy() {
       if (resizeObserver) resizeObserver.disconnect();
+      if (themeObserver) themeObserver.disconnect();
       resizeObserver = null;
+      themeObserver = null;
+      tiles = null;
       if (map) map.remove();
       map = null;
     },

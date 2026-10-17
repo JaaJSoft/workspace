@@ -86,7 +86,7 @@ photos.services.location_map.LocationMap or None.
     {% if map.enabled %}
       {% localize off %}
         <div
-          x-data="photoMap({ tileUrl: '{{ map.tile_url|escapejs }}', attribution: '{{ map.attribution|escapejs }}', latitude: {{ map.latitude }}, longitude: {{ map.longitude }}, zoom: {{ map.zoom }} })"
+          x-data="photoMap({ tileUrl: '{{ map.tile_url|escapejs }}', tileUrlDark: '{{ map.tile_url_dark|escapejs }}', attribution: '{{ map.attribution|escapejs }}', latitude: {{ map.latitude }}, longitude: {{ map.longitude }}, zoom: {{ map.zoom }} })"
           data-photo-map
         >
           <div

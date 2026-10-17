@@ -19,10 +19,11 @@ MAP_ZOOM = 16
 
 @dataclass(frozen=True)
 class LocationMap:
-    # The host of the tile server, named to the user before they opt in.
+    # The host of each tile server, named to the user before they opt in.
     server: str
     enabled: bool
     tile_url: str = ""
+    tile_url_dark: str = ""
     attribution: str = ""
     latitude: float | None = None
     longitude: float | None = None
@@ -35,9 +36,13 @@ def map_available():
 
 
 def tile_server():
-    """The tile server's host, without the ``{s}`` subdomain placeholder."""
-    host = urlsplit(settings.PHOTOS_MAP_TILE_URL).hostname or ""
-    return host.removeprefix("{s}.")
+    """The tile servers' hosts, without the ``{s}`` subdomain placeholder:
+    "a.example" or, with a dark style elsewhere, "a.example and b.example"."""
+    urls = (settings.PHOTOS_MAP_TILE_URL, settings.PHOTOS_MAP_TILE_URL_DARK)
+    hosts = dict.fromkeys(
+        (urlsplit(url).hostname or "").removeprefix("{s}.") for url in urls if url
+    )
+    return " and ".join(host for host in hosts if host)
 
 
 def location_map(user, item):
@@ -51,6 +56,7 @@ def location_map(user, item):
         server=tile_server(),
         enabled=True,
         tile_url=settings.PHOTOS_MAP_TILE_URL,
+        tile_url_dark=settings.PHOTOS_MAP_TILE_URL_DARK,
         attribution=settings.PHOTOS_MAP_TILE_ATTRIBUTION,
         latitude=item.latitude,
         longitude=item.longitude,

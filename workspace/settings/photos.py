@@ -170,3 +170,6 @@ PHOTOS_SENSITIVE_MAX_FILE_BYTES = int(
 # tile server learns the location of every photo whose map is opened.
 PHOTOS_MAP_TILE_URL = os.getenv("PHOTOS_MAP_TILE_URL", "").strip()
 PHOTOS_MAP_TILE_ATTRIBUTION = os.getenv("PHOTOS_MAP_TILE_ATTRIBUTION", "").strip()
+# Optional: the same map in a dark style, drawn under a dark theme (e.g. Esri's
+# Dark Gray Canvas next to Light Gray). Shares the attribution above.
+PHOTOS_MAP_TILE_URL_DARK = os.getenv("PHOTOS_MAP_TILE_URL_DARK", "").strip()

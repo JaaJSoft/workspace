@@ -146,3 +146,30 @@ class PhotoLocationMapTests(PlaywrightTestCase):
         expect(content.locator("[data-photo-map-offer]")).to_be_visible()
         expect(self.page.locator(".leaflet-container")).to_have_count(0)
         self.assertEqual(self.page.evaluate("window.__liveMaps"), 0)
+
+    @override_settings(
+        PHOTOS_MAP_TILE_URL_DARK=f"https://{TILE_HOST}/dark/{{z}}/{{x}}/{{y}}.png"
+    )
+    def test_the_dark_style_follows_the_theme(self):
+        set_setting(self.user, "photos", "show_map", True)
+        set_setting(self.user, "core", "theme", "dark")
+        self._open_photos()
+
+        content = self._open_properties(self.paris)
+
+        expect(content.locator(".leaflet-tile-loaded").first).to_be_attached()
+        self.assertTrue(self.tile_requests)
+        self.assertTrue(all("/dark/" in url for url in self.tile_requests))
+
+        # The theme toggle switches the page in place: no reload, same map.
+        self.tile_requests.clear()
+        self.page.evaluate(
+            "document.documentElement.setAttribute('data-theme', 'light')"
+        )
+
+        expect(
+            content.locator(f".leaflet-tile-loaded[src^='https://{TILE_HOST}/1']")
+        ).not_to_have_count(0)
+        self.assertTrue(self.tile_requests)
+        self.assertFalse(any("/dark/" in url for url in self.tile_requests))
+        self.assertEqual(self.page.evaluate("window.__liveMaps"), 1)

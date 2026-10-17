@@ -38,12 +38,20 @@ by renaming it. A date read from the file itself always wins over the name.
 
 A photo carrying a GPS position shows its coordinates in its properties panel,
 with a link to OpenStreetMap. The instance can also show a small map with a pin
-at the spot, drawn from raster tiles of a server it names:
+at the spot, drawn from raster tiles of a server it names. A muted basemap
+suits a single pin far better than a full-detail one; Esri's Light Gray and
+Dark Gray Canvas, for example, with the dark one drawn under a dark theme:
 
 ```bash
-PHOTOS_MAP_TILE_URL=https://tiles.example.org/{z}/{x}/{y}.png
-PHOTOS_MAP_TILE_ATTRIBUTION='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+PHOTOS_MAP_TILE_URL='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+PHOTOS_MAP_TILE_URL_DARK='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+PHOTOS_MAP_TILE_ATTRIBUTION='Tiles &copy; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 ```
+
+Mind the `{y}/{x}` order Esri uses. These two styles stop at zoom 16, the
+level the map opens at: zooming in further shows no more detail. Read the
+provider's terms before going live; most hosted basemaps want an account or an
+API key in the URL for production use.
 
 There is no default server. Every map opened sends the photo's position to the
 tile server, so pick one whose privacy and usage policy fit the instance: a
@@ -51,17 +59,19 @@ self-hosted one, or a provider you have an agreement with.
 `tile.openstreetmap.org` is not meant for this; its
 [tile usage policy](https://operations.osmfoundation.org/policies/tiles/)
 forbids heavy use. The attribution is shown on the map and is required by
-every provider; HTML is allowed. Without both settings there is no map.
+every provider; HTML is allowed. Without a tile URL and an attribution there is
+no map.
 
 Each user turns the map on, from **Show on a map** in the panel or from the
-Photos preferences, which name the server the location goes to. The map only
+Photos preferences, which name the servers the location goes to. The map only
 changes what the viewer's own browser fetches: a photo shared or published
 through a link still carries its GPS position in the original.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `PHOTOS_MAP_TILE_URL` | empty | The tile server's URL template (`{z}`, `{x}`, `{y}`, optionally `{s}` and `{r}`). |
-| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map. |
+| `PHOTOS_MAP_TILE_URL_DARK` | empty | The same map in a dark style, drawn under a dark theme. Without it, every theme gets the one above. |
+| `PHOTOS_MAP_TILE_ATTRIBUTION` | empty | The attribution shown on the map, for both styles. |
 
 ## Similar photos and search by description
 

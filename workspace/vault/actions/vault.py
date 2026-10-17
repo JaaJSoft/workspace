@@ -16,7 +16,7 @@ from .base import ActionCategory, BaseVaultTargetAction
 @VaultTargetActionRegistry.register
 class RenameVaultAction(BaseVaultTargetAction):
     id = "rename"
-    label = "Rename"
+    label = "Name and description"
     icon = "pencil"
     category = ActionCategory.EDIT
 

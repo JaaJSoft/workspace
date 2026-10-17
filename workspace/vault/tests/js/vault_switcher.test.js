@@ -265,6 +265,37 @@ test('saving the dialog writes the bare role, not the css class', async () => {
   assert.equal(component.loaded, 1);
 });
 
+test('the rename dialog gives a vault its description', async () => {
+  // A vault made by onboarding is created without one, and this dialog is
+  // the only screen that can add it afterwards.
+  const { component, bodies } = switcher();
+  component.openVaultDialog('rename', VAULT);
+  assert.equal(component.vaultDialog.description, '');
+  component.vaultDialog.description = '  Bank and cards  ';
+  await component.saveVaultDialog();
+  assert.equal(bodies.length, 1);
+  assert.equal(bodies[0].description, 'Bank and cards');
+});
+
+test('an untouched description is carried rather than re-sealed', async () => {
+  const described = { ...VAULT, description: 'Bank and cards' };
+  const { component, bodies } = switcher({ component: { vaults: [described, OTHER] } });
+  component.openVaultDialog('rename', described);
+  component.vaultDialog.name = 'Money';
+  await component.saveVaultDialog();
+  assert.equal(bodies[0].name, 'Money');
+  assert.equal('description' in bodies[0], false);
+});
+
+test('the appearance dialog never touches the description', async () => {
+  const described = { ...VAULT, description: 'Bank and cards' };
+  const { component, bodies } = switcher({ component: { vaults: [described, OTHER] } });
+  component.openVaultDialog('set_appearance', described);
+  component.vaultDialog.description = '';
+  await component.saveVaultDialog();
+  assert.equal('description' in bodies[0], false);
+});
+
 test('a blank name is never written', async () => {
   const { component, calls } = switcher();
   component.openVaultDialog('rename', VAULT);

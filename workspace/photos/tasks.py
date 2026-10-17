@@ -1,5 +1,5 @@
 """Celery tasks of the photos module: faces, photo and video embeddings,
-sensitive content, and filing imports by date."""
+sensitive content, filing imports by date, and reading files again."""
 
 import logging
 
@@ -293,3 +293,17 @@ def notify_album_additions(album_uuid):
     from workspace.photos.services.album_notifications import announce_additions
 
     announce_additions(album_uuid)
+
+
+@shared_task(name="photos.reread_media", priority=NORMAL_PRIORITY, ignore_result=True)
+def reread_media(file_uuids):
+    """Read the photos and videos *file_uuids* again, once a correction by
+    hand was dropped: their own metadata dates and places them again."""
+    from workspace.files.models import File
+
+    from .services.analysis import analyze_media
+
+    read = 0
+    for file_obj in File.objects.alive().filter(uuid__in=file_uuids).iterator():
+        read += analyze_media(file_obj) is not None
+    return read

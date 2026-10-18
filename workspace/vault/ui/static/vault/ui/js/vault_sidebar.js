@@ -11,31 +11,28 @@
 // preferences - is inherited from the page's component, which is this one's
 // ancestor.
 window.vaultSidebar = function vaultSidebar() {
-  const KEY = 'vault.sidebar.collapsed';
+  const NARROW = '(max-width: 1023px)';
+
+  const preferred = window.sidebarPreference.initial();
 
   return {
-    collapsed: false,
+    // What the user chose, kept apart from what is on screen: a narrow
+    // window forces the rail without that becoming the preference, and
+    // widening again has to know what to go back to.
+    preferred: preferred,
+    // The drawer stays open at every width, so below `lg` the sidebar is the
+    // icon rail and nothing else; above it, the preference the server sized
+    // the <aside> with.
+    collapsed: window.matchMedia(NARROW).matches || preferred,
 
-    // Below this the sidebar is the icon rail and nothing else: the drawer
-    // stays open at every width, so a narrow screen narrows it instead of
-    // taking it away.
     isNarrow() {
-      return window.matchMedia('(max-width: 1023px)').matches;
+      return window.matchMedia(NARROW).matches;
     },
 
     init() {
-      try {
-        this.collapsed = window.localStorage.getItem(KEY) === 'true';
-      } catch (err) {
-        // Private browsing and a blocked-storage setting both throw on read.
-        this.collapsed = false;
-      }
-      if (this.isNarrow()) this.collapsed = true;
-      window
-        .matchMedia('(max-width: 1023px)')
-        .addEventListener('change', (event) => {
-          if (event.matches) this.collapsed = true;
-        });
+      window.matchMedia(NARROW).addEventListener('change', (event) => {
+        this.collapsed = event.matches || this.preferred;
+      });
     },
 
     toggleCollapse() {
@@ -43,11 +40,8 @@ window.vaultSidebar = function vaultSidebar() {
       // nothing rather than producing a sidebar wider than the content.
       if (this.isNarrow()) return;
       this.collapsed = !this.collapsed;
-      try {
-        window.localStorage.setItem(KEY, String(this.collapsed));
-      } catch (err) {
-        /* the preference simply does not survive the reload */
-      }
+      this.preferred = this.collapsed;
+      window.sidebarPreference.save('vault', this.collapsed);
     },
   };
 };

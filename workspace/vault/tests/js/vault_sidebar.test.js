@@ -5,85 +5,71 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { loadScript } = require('../../../common/tests/js/loader');
 
-function sidebar(store, narrow = false) {
+function sidebar({ initial = false, narrow = false } = {}) {
+  const saved = [];
+  const listeners = [];
+  const media = {
+    matches: narrow,
+    addEventListener(type, listener) { listeners.push(listener); },
+  };
+  // Resizing across the breakpoint, as the browser reports it.
+  const resize = (toNarrow) => {
+    media.matches = toNarrow;
+    listeners.forEach((listener) => listener({ matches: toNarrow }));
+  };
   const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/vault_sidebar.js', {
-    localStorage: store,
-    matchMedia: () => ({ matches: narrow, addEventListener() {} }),
-  });
-  return ctx.vaultSidebar();
-}
-
-function memory() {
-  return {
-    values: {},
-    getItem(key) {
-      return Object.prototype.hasOwnProperty.call(this.values, key) ? this.values[key] : null;
+    matchMedia: () => media,
+    sidebarPreference: {
+      initial: () => initial,
+      save: (module, collapsed) => saved.push([module, collapsed]),
     },
-    setItem(key, value) { this.values[key] = String(value); },
-  };
+  });
+  const instance = ctx.vaultSidebar();
+  instance.init();
+  return { instance, saved, resize };
 }
 
-test('the collapse survives a reload', () => {
-  const store = memory();
-  const first = sidebar(store);
-  first.init();
-  assert.equal(first.collapsed, false);
-  first.toggleCollapse();
-  assert.equal(first.collapsed, true);
-
-  const second = sidebar(store);
-  second.init();
-  assert.equal(second.collapsed, true);
+test('a wide screen opens on the preference the server painted', () => {
+  assert.equal(sidebar({ initial: false }).instance.collapsed, false);
+  assert.equal(sidebar({ initial: true }).instance.collapsed, true);
 });
 
-test('the two vault screens share one key', () => {
-  // Collapsing on the listing and finding it expanded inside a vault would
-  // read as the setting not having been kept.
-  const store = memory();
-  const instance = sidebar(store);
-  instance.init();
-  instance.toggleCollapse();
-  assert.equal(store.values['vault.sidebar.collapsed'], 'true');
-});
-
-test('storage that refuses to be read leaves the sidebar open, not broken', () => {
-  const denied = {
-    getItem() { throw new Error('denied'); },
-    setItem() { throw new Error('denied'); },
-  };
-  const instance = sidebar(denied);
-  instance.init();
-  assert.equal(instance.collapsed, false);
+test('a toggle is written back as the vault module setting', () => {
+  // The server sizes the <aside> from this setting, so it is what the next
+  // page paints with.
+  const { instance, saved } = sidebar();
   instance.toggleCollapse();
   assert.equal(instance.collapsed, true);
+  instance.toggleCollapse();
+  assert.equal(instance.collapsed, false);
+  assert.deepEqual(saved.map((call) => Array.from(call)), [['vault', true], ['vault', false]]);
 });
 
 test('a narrow screen narrows the sidebar instead of taking it away', () => {
   // The drawer stays open at every width, so the rail is the shape that fits.
-  const instance = sidebar(memory(), true);
-  instance.init();
-  assert.equal(instance.collapsed, true);
+  assert.equal(sidebar({ initial: false, narrow: true }).instance.collapsed, true);
 });
 
 test('the control does nothing while the rail is the only shape that fits', () => {
-  const store = memory();
-  const instance = sidebar(store, true);
-  instance.init();
+  const { instance, saved } = sidebar({ narrow: true });
   instance.toggleCollapse();
   assert.equal(instance.collapsed, true);
   // And the narrow state is not written down as a preference: widening the
   // window must give back the sidebar the user actually chose.
-  assert.equal(store.values['vault.sidebar.collapsed'], undefined);
+  assert.equal(saved.length, 0);
 });
 
-test('a wide screen restores what was chosen', () => {
-  const store = memory();
-  const wide = sidebar(store, false);
-  wide.init();
-  wide.toggleCollapse();
-  assert.equal(store.values['vault.sidebar.collapsed'], 'true');
+test('widening the window again gives back the sidebar the user chose', () => {
+  const { instance, resize } = sidebar({ initial: false });
+  resize(true);
+  assert.equal(instance.collapsed, true);
+  resize(false);
+  assert.equal(instance.collapsed, false);
+});
 
-  const narrow = sidebar(store, true);
-  narrow.init();
-  assert.equal(narrow.collapsed, true);
+test('a collapsed preference stays collapsed across a resize', () => {
+  const { instance, resize } = sidebar({ initial: true });
+  resize(true);
+  resize(false);
+  assert.equal(instance.collapsed, true);
 });

@@ -20,6 +20,7 @@ page: the JS suite reads the mixin's state without ever mounting the dialog, so
 none of them can be established there.
 """
 
+import hashlib
 import re
 
 from ..reference import archive
@@ -401,6 +402,69 @@ class ExportWalkTests(VaultBrowserCase):
         # claim: everything before it stops at the suggested filename.
         tree = self._open_the_downloaded_archive(download.value, KNOWN_PASSPHRASE)
         self._assert_the_seeded_entry_is_in(tree)
+
+    def test_a_typed_passphrase_too_easy_to_guess_never_seals_an_archive(self):
+        """Confirmed and acknowledged, a weak phrase still leaves Export shut.
+
+        The floor reads the strength meter's estimate through an event, which
+        the unit suite stands in for by hand: only a rendered dialog shows the
+        meter's verdict actually reaching it.
+        """
+        self._seeded_vault()
+        self._open_export()
+        run = self.page.locator("[data-testid='export-run']")
+        weak = "password1234"
+
+        self.page.fill("#export-passphrase", weak)
+        self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
+        self.page.fill("#export-confirm", weak)
+        self.page.check("[data-testid='export-own-phrase-ack']")
+        self.page.get_by_test_id("export-passphrase-too-weak").wait_for(timeout=10000)
+        # The meter has landed an estimate, so the closed button is the
+        # floor's verdict and not a lookup still in flight.
+        self.page.wait_for_function(
+            """() => window.Alpine.$data(
+                document.querySelector('[x-data="vaultBrowser()"]')
+            ).exportTypedScore !== null""",
+            timeout=15000,
+        )
+        self.assertTrue(run.is_disabled(), "a guessable phrase enabled Export")
+
+        # Typed again, the strong phrase is acknowledged afresh: the tick
+        # spoke for the weak one.
+        self.page.fill("#export-passphrase", KNOWN_PASSPHRASE)
+        self.page.fill("#export-confirm", KNOWN_PASSPHRASE)
+        self.page.check("[data-testid='export-own-phrase-ack']")
+        self.page.wait_for_selector(
+            "[data-testid='export-run']:not([disabled])", timeout=15000
+        )
+        self.assertFalse(
+            self.page.get_by_test_id("export-passphrase-too-weak").is_visible(),
+            "the refusal stayed on screen over a phrase the floor accepts",
+        )
+
+    def test_a_typed_passphrase_from_the_breach_corpus_never_seals_an_archive(self):
+        """The account floor refuses a breached password; the archive too."""
+        breached = "correct horse battery staple, again"
+        suffix = hashlib.sha1(breached.encode()).hexdigest().upper()[5:]
+        # On the context: the lookup leaves through the service worker, which
+        # page.route does not see.
+        self.context.route(
+            "https://api.pwnedpasswords.com/range/*",
+            lambda route: route.fulfill(status=200, body=f"{suffix}:3912\n"),
+        )
+        self._seeded_vault()
+        self._open_export()
+
+        self.page.fill("#export-passphrase", breached)
+        self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
+        self.page.fill("#export-confirm", breached)
+        self.page.check("[data-testid='export-own-phrase-ack']")
+        self.page.get_by_test_id("export-passphrase-breached").wait_for(timeout=15000)
+        self.assertTrue(
+            self.page.locator("[data-testid='export-run']").is_disabled(),
+            "a breached phrase enabled Export",
+        )
 
     def test_the_interchange_export_warns_before_it_builds_anything(self):
         """The plaintext format asks first, and going back builds nothing."""

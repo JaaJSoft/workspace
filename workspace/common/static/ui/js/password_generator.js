@@ -347,7 +347,7 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps, pinned) {
       // value: a host that put an earlier draw in a field is holding one the
       // panel no longer shows, and only the host knows whether that field is
       // still the panel's to write.
-      this.$dispatch('password-regenerate', { value: this.value });
+      this.$dispatch('password-regenerate', { value: this.value, bits: this.bits });
     },
 
     clear() {
@@ -394,7 +394,7 @@ window.passwordGeneratorPanel = function passwordGeneratorPanel(deps, pinned) {
 
     apply() {
       if (!this.value) return;
-      this.$dispatch('password-apply', { value: this.value });
+      this.$dispatch('password-apply', { value: this.value, bits: this.bits });
     },
 
     copy() {

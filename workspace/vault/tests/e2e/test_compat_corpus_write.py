@@ -382,7 +382,9 @@ class CorpusWriteWalk(VaultBrowserCase):
         self.page.get_by_role("button", name="New tag").click()
         self.page.fill(".modal-box input[type=text]", name)
         self.page.click(".modal-box button:has-text('Create')")
-        self.page.wait_for_selector("aside tag-chip", timeout=30000)
+        self.page.wait_for_selector(
+            f"aside button[aria-pressed]:has-text('{name}')", timeout=30000
+        )
 
     def _wear_tag(self, entry_name, tag_name):
         self.page.click(f"tbody tr:has-text('{entry_name}')")

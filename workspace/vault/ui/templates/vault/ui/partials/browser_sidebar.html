@@ -10,8 +10,8 @@
   <label for="vault-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
 
   <aside
-    class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300"
-    :class="collapsed ? 'w-16' : 'w-72'"
+    class="bg-base-200 h-full border-r border-base-300 flex flex-col transition-all duration-300 w-16{% if not workspace_sidebar_collapsed %} lg:w-72{% endif %}"
+    :class="{ 'lg:w-72': !collapsed }"
   >
     <div class="border-b border-base-300 py-3 px-3 relative">
       <div
@@ -97,17 +97,28 @@
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
         </button>
       </div>
-      <ul class="space-y-1" x-show="!collapsed">
+      {% comment %}
+        The rows of files/ui/partials/tag_sidebar_section.html, on the rhythm
+        of the drawer items above: the tag's colour on its icon, and on the
+        whole row once it is the filter. The palette is 6-digit hex, so '1a'
+        is a 10% alpha; a tag with no colour falls back to the module tint.
+      {% endcomment %}
+      <ul class="space-y-0.5" x-show="!collapsed">
         <template x-for="tag in tags" :key="tag.uuid">
           <li class="flex items-center gap-1 group">
             <button
               type="button"
-              class="flex-1 flex items-center gap-2 p-2 rounded-lg text-left min-w-0"
-              :class="tagFilter === tag.uuid ? 'bg-base-300/60 font-medium' : 'hover:bg-base-300/40'"
+              class="flex-1 flex items-center gap-3 p-2 rounded-lg text-left text-base min-w-0 transition-colors"
+              :class="tagFilter === tag.uuid ? (tag.color ? '' : 'bg-module/15 text-module') : 'text-base-content/70 hover:bg-base-300/50'"
+              :style="tagFilter === tag.uuid && tag.color ? { backgroundColor: tag.color + '1a', color: tag.color } : {}"
+              :aria-pressed="tagFilter === tag.uuid ? 'true' : 'false'"
               @click="setTagFilter(tag.uuid)"
             >
-              <tag-chip :name="tag.name" :color="tag.color" size="sm"></tag-chip>
-              <span class="opacity-40 text-sm ml-auto" x-text="tagCount(tag.uuid)"></span>
+              <span class="inline-flex flex-shrink-0" :style="{ color: tag.color || '' }">
+                <i data-lucide="tag" class="w-5 h-5"></i>
+              </span>
+              <span class="truncate flex-1" x-text="tag.name"></span>
+              <span class="opacity-50 text-sm" x-text="tagCount(tag.uuid)"></span>
             </button>
             <button
               type="button"

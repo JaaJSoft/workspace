@@ -54,7 +54,9 @@ class VaultBrowserCase(PlaywrightTestCase):
         super().setUp()
         self.user = self.create_user(username="owner", email="owner@example.com")
         self.login_as(self.user)
-        self.page.route(
+        # On the context, not the page: the lookup leaves through the service
+        # worker base.html registers, and page.route never sees it.
+        self.context.route(
             CORPUS_ROUTE,
             lambda route: route.fulfill(
                 status=200, body="0000000000000000000000000000000000000:1\n"
@@ -431,7 +433,9 @@ class VaultBrowserTests(VaultBrowserCase):
         self.page.get_by_role("button", name="New tag").click()
         self.page.fill(".modal-box input[type=text]", "Banking")
         self.page.click(".modal-box button:has-text('Create')")
-        self.page.wait_for_selector("aside tag-chip", timeout=30000)
+        self.page.wait_for_selector(
+            "aside button[aria-pressed]:has-text('Banking')", timeout=30000
+        )
 
         self.assertNotIn(
             "Banking",

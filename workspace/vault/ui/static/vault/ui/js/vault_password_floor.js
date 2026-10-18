@@ -3,8 +3,60 @@
 // least three from a landed estimate, and absence from the breach corpus. No
 // composition rules. The server cannot check any of it - it never sees the
 // password - so this is the only place it is enforced.
+//
+// The archive passphrase of an export is held to the same criteria, so they
+// live here once, as plain functions, rather than in each form that asks.
 const VAULT_MIN_PASSWORD_LENGTH = 12;
 const VAULT_MIN_PASSWORD_SCORE = 3;
+
+window.vaultPasswordFloor = {
+  // Code points after NFC, not UTF-16 units: someone who typed twelve
+  // characters typed twelve characters, whatever the encoding costs.
+  longEnough(password) {
+    return Array.from((password || '').normalize('NFC')).length >= VAULT_MIN_PASSWORD_LENGTH;
+  },
+
+  // Only a landed estimate counts: an estimator that never loaded must not
+  // vouch for a password it could not measure.
+  strongEnough(score) {
+    return score !== null && score !== undefined && score >= VAULT_MIN_PASSWORD_SCORE;
+  },
+
+  // 'found', 'clean', or 'unavailable' when the lookup could not run.
+  //
+  // k-anonymity: only the first five hex characters of the SHA-1 leave the
+  // device, and the answer is a list of suffixes we match locally. The
+  // password itself never crosses the network.
+  async lookupBreach(password) {
+    try {
+      // SHA-1 through WebCrypto rather than through the bundle: the corpus
+      // is indexed by it, and adding a hash nobody else needs would spend
+      // the main bundle's byte budget on one caller.
+      const bytes = new TextEncoder().encode(password);
+      const digest = Array.from(
+        new Uint8Array(await crypto.subtle.digest('SHA-1', bytes))
+      )
+        .map(function (byte) {
+          return byte.toString(16).padStart(2, '0');
+        })
+        .join('')
+        .toUpperCase();
+      const prefix = digest.slice(0, 5);
+      const suffix = digest.slice(5);
+      const response = await fetch(
+        'https://api.pwnedpasswords.com/range/' + prefix
+      );
+      if (!response.ok) throw new Error('breach lookup failed');
+      const body = await response.text();
+      const found = body.split('\n').some(function (line) {
+        return line.split(':')[0].trim().toUpperCase() === suffix;
+      });
+      return found ? 'found' : 'clean';
+    } catch (err) {
+      return 'unavailable';
+    }
+  },
+};
 
 window.vaultPasswordFloorMixin = function vaultPasswordFloorMixin() {
   return {
@@ -20,17 +72,12 @@ window.vaultPasswordFloorMixin = function vaultPasswordFloorMixin() {
     // its own stale estimates on its side.
     generation: 0,
 
-    // Code points after NFC, not UTF-16 units: someone who typed twelve
-    // characters typed twelve characters, whatever the encoding costs.
     passwordLongEnough() {
-      return (
-        Array.from(this.password.normalize('NFC')).length >=
-        VAULT_MIN_PASSWORD_LENGTH
-      );
+      return window.vaultPasswordFloor.longEnough(this.password);
     },
 
     passwordStrongEnough() {
-      return this.score !== null && this.score >= VAULT_MIN_PASSWORD_SCORE;
+      return window.vaultPasswordFloor.strongEnough(this.score);
     },
 
     // A lookup that could not run is not a password that was found: an
@@ -91,9 +138,6 @@ window.vaultPasswordFloorMixin = function vaultPasswordFloorMixin() {
       this.score = detail && detail.status === 'ready' ? detail.score : null;
     },
 
-    // k-anonymity: only the first five hex characters of the SHA-1 leave the
-    // device, and the answer is a list of suffixes we match locally. The
-    // password itself never crosses the network.
     async checkBreachCorpus() {
       const generation = this.generation;
       if (!this.password) {
@@ -101,35 +145,9 @@ window.vaultPasswordFloorMixin = function vaultPasswordFloorMixin() {
         return;
       }
       this.breachStatus = 'checking';
-      try {
-        // SHA-1 through WebCrypto rather than through the bundle: the corpus
-        // is indexed by it, and adding a hash nobody else needs would spend
-        // the main bundle's byte budget on one caller.
-        const bytes = new TextEncoder().encode(this.password);
-        const digest = Array.from(
-          new Uint8Array(await crypto.subtle.digest('SHA-1', bytes))
-        )
-          .map(function (byte) {
-            return byte.toString(16).padStart(2, '0');
-          })
-          .join('')
-          .toUpperCase();
-        const prefix = digest.slice(0, 5);
-        const suffix = digest.slice(5);
-        const response = await fetch(
-          'https://api.pwnedpasswords.com/range/' + prefix
-        );
-        if (!response.ok) throw new Error('breach lookup failed');
-        const body = await response.text();
-        const found = body.split('\n').some(function (line) {
-          return line.split(':')[0].trim().toUpperCase() === suffix;
-        });
-        if (generation !== this.generation) return;
-        this.breachStatus = found ? 'found' : 'clean';
-      } catch (err) {
-        if (generation !== this.generation) return;
-        this.breachStatus = 'unavailable';
-      }
+      const status = await window.vaultPasswordFloor.lookupBreach(this.password);
+      if (generation !== this.generation) return;
+      this.breachStatus = status;
     },
   };
 };

@@ -289,3 +289,24 @@ class FaceBatchSerializer(serializers.Serializer):
 
 class FaceUndoSerializer(serializers.Serializer):
     token = serializers.CharField(max_length=64)
+
+
+class AppearanceBatchSerializer(serializers.Serializer):
+    ACTIONS = ("confirm", "reject", "hide", "assign")
+
+    appearances = serializers.ListField(
+        child=serializers.UUIDField(), allow_empty=False, max_length=500
+    )
+    action = serializers.ChoiceField(choices=ACTIONS)
+    person = serializers.UUIDField(
+        required=False,
+        help_text="confirm and reject: the person the review suggested; "
+        "assign: the contact these people are, whose face is in the library.",
+    )
+
+    def validate(self, data):
+        if (data["action"] == "hide") == bool(data.get("person")):
+            raise serializers.ValidationError(
+                "confirm, reject and assign take a person, hide does not."
+            )
+        return data

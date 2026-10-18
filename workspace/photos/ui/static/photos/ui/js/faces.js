@@ -1164,6 +1164,7 @@ window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
 // otherwise left as they were: either way they come back on a later card.
 function reviewSteps(card, kept, left, answer) {
   const steps = [];
+  if (card.kind === 'outfit') return outfitSteps(card, kept, left, answer);
   if (card.kind === 'cluster') {
     // The whole cluster is named, its faces past the card's included.
     if (left.length) steps.push({ batch: { action: 'reject', faces: left } });
@@ -1186,6 +1187,75 @@ function reviewSteps(card, kept, left, answer) {
     steps.push({ batch: { action: 'assign', faces: kept, ...target } });
   }
   return steps;
+}
+
+// The same for a card of people found by their body, whom their clothes say
+// are its guess: their tiles are not faces, and go to their own batch.
+function outfitSteps(card, kept, left, answer) {
+  const steps = [];
+  if (answer.hide) {
+    if (kept.length) steps.push({ appearances: { action: 'hide', appearances: kept } });
+    return steps;
+  }
+  if (answer.person === card.guess.uuid) {
+    // The person the card showed: the server skips anyone suggested someone
+    // else since the page loaded.
+    const person = card.guess.uuid;
+    if (kept.length) steps.push({ appearances: { action: 'confirm', appearances: kept, person } });
+    if (left.length) steps.push({ appearances: { action: 'reject', appearances: left, person } });
+    return steps;
+  }
+  if (kept.length) {
+    steps.push({ appearances: { action: 'assign', appearances: kept, person: answer.person } });
+  }
+  return steps;
+}
+
+function peopleCount(count) {
+  return `${count} ${count === 1 ? 'person' : 'people'}`;
+}
+
+const OUTFIT_DONE = {
+  confirm: 'confirmed',
+  reject: 'set apart',
+  hide: 'hidden',
+};
+
+// What the toast says once an outfit card's answer is back.
+function outfitMessage(action, result, target) {
+  const done = result.done.length;
+  const skipped = result.skipped.length;
+  let message = '';
+  if (done) {
+    message = action === 'assign' && target
+      ? `${peopleCount(done)} put with ${target}`
+      : `${peopleCount(done)} ${OUTFIT_DONE[action] || 'answered'}`;
+  }
+  if (skipped) {
+    const reasons = new Set(result.skipped.map((s) => s.reason));
+    let why = '';
+    if (reasons.size === 1 && reasons.has('already_in_photo')) why = ': they are already in that photo';
+    else if (reasons.size === 1 && reasons.has('no_face')) why = ': no photo shows their face yet';
+    const left = `${peopleCount(skipped)} left as they were${why}`;
+    message = message ? `${message}. ${left}` : left;
+  }
+  return message;
+}
+
+// Puts an outfit card's answer back; the photosApp() root reloads the page
+// on the event, as for faces. Last batch first.
+async function undoOutfitAnswer(tokens) {
+  try {
+    let restored = 0;
+    for (const token of tokens.slice().reverse()) {
+      const result = await facesRequest(`${FACES_API}/appearances/undo`, { method: 'POST', body: { token } });
+      restored += result.restored;
+    }
+    window.AppAlert.success(`${peopleCount(restored)} put back`, { duration: 2500 });
+  } catch (err) {
+    window.AppAlert.error(err.message || 'Could not undo');
+  }
+  window.dispatchEvent(new CustomEvent('photos-faces-changed'));
 }
 
 // The review page: every group of faces waiting for an answer, one card each
@@ -1268,28 +1338,38 @@ window.facesReview = function facesReview() {
 
     // ── What a card says ────────────────────────────────
 
+    // Doubts and outfits both ask about one named person.
+    asksAboutGuess(card) {
+      return card.kind === 'check' || card.kind === 'outfit';
+    },
+
     question(card) {
-      return card.kind === 'check' ? `Is this ${card.guess.name}?` : 'Who is this?';
+      return this.asksAboutGuess(card) ? `Is this ${card.guess.name}?` : 'Who is this?';
     },
 
     subtitle(card) {
       if (card.kind === 'cluster') return `${photoCount(card.photo_count)}, grouped by likeness`;
       if (card.kind === 'check') return `${faceCount(card.total)} put with them without being sure`;
+      if (card.kind === 'outfit') return `${peopleCount(card.total)} wearing their clothes on photos taken the same day`;
       return card.total === 1 ? '1 face in no group' : `${card.total} look-alike faces in no group`;
     },
 
     guessLabel(card) {
       if (!card.guess) return '';
       const name = card.guess.name;
-      if (card.kind !== 'check') return `It's ${name}`;
+      if (!this.asksAboutGuess(card)) return `It's ${name}`;
       return this.keptCount(card) ? `Yes, it's ${name}` : `None of them is ${name}`;
     },
 
     guessHint(card) {
-      if (card.kind !== 'check') return 'Looks like them';
+      if (!this.asksAboutGuess(card)) return 'Looks like them';
       const kept = this.keptCount(card);
-      if (!kept) return 'Takes them out of the group';
       const left = card.excluded.length;
+      if (card.kind === 'outfit') {
+        if (!kept) return 'Never suggests them again';
+        return left ? `Confirms ${peopleCount(kept)}, not the ${left} left out` : `Confirms ${peopleCount(kept)}`;
+      }
+      if (!kept) return 'Takes them out of the group';
       return left ? `Confirms ${faceCount(kept)}, takes ${left} out` : `Confirms ${faceCount(kept)}`;
     },
 
@@ -1299,10 +1379,20 @@ window.facesReview = function facesReview() {
       return this.position === card.key;
     },
 
-    // The typed name and the contacts found are the active card's only.
+    // The typed name and the contacts found are the active card's only. An
+    // outfit card only offers people with a face in the library: a person's
+    // photos are listed through their faces, and a new contact has none.
     options(card) {
       const query = this.isActive(card) ? this.query : '';
-      return reviewOptions(query, this.results, card.guess);
+      const options = reviewOptions(query, this.results, card.guess);
+      if (card.kind !== 'outfit') return options;
+      return options.filter((o) => o.kind === 'person' && o.person.photo_count > 0);
+    },
+
+    noOptionsLabel(card) {
+      return card.kind === 'outfit'
+        ? 'Nobody with a face in your photos has this name.'
+        : 'No contact yet: type a name to add one to People.';
     },
 
     // The contacts the picker lists: the guess has its own button.
@@ -1318,9 +1408,9 @@ window.facesReview = function facesReview() {
     },
 
     // Every face left out of a person's doubtful ones is still an answer
-    // about them: none of these is them.
+    // about them: none of these is them. The same for an outfit card.
     guessRejectsAll(card) {
-      return card.kind === 'check' && this.keptCount(card) === 0;
+      return this.asksAboutGuess(card) && this.keptCount(card) === 0;
     },
 
     canAnswer(card) {
@@ -1493,10 +1583,13 @@ window.facesReview = function facesReview() {
       this.saving = card.key;
       try {
         for (const step of reviewSteps(card, kept, left, answer)) {
-          if (step.batch) {
-            const result = await facesRequest(`${FACES_API}/faces/batch`, { method: 'POST', body: step.batch });
+          if (step.batch || step.appearances) {
+            const [url, body] = step.batch
+              ? [`${FACES_API}/faces/batch`, step.batch]
+              : [`${FACES_API}/appearances/batch`, step.appearances];
+            const result = await facesRequest(url, { method: 'POST', body });
             if (result.undo) undo.push(result.undo);
-            if (!main) main = { action: step.batch.action, body: step.batch, result };
+            if (!main) main = { action: body.action, body, result };
           } else if (step.cluster.hidden) {
             await facesRequest(`${FACES_API}/clusters/${card.cluster}`, { method: 'PATCH', body: step.cluster });
           } else {
@@ -1541,8 +1634,13 @@ window.facesReview = function facesReview() {
         return;
       }
       if (!main) return;
-      const message = faceBatchMessage(main.action, main.result, answer.name);
-      const actions = faceBatchActions(undo);
+      const outfit = card.kind === 'outfit';
+      const message = outfit
+        ? outfitMessage(main.action, main.result, answer.name)
+        : faceBatchMessage(main.action, main.result, answer.name);
+      const actions = outfit
+        ? (undo.length ? [{ label: 'Undo', onClick: () => undoOutfitAnswer(undo) }] : [])
+        : faceBatchActions(undo);
       if (!main.result.done.length) {
         window.AppAlert.warning(message, { duration: 8000, actions });
         return;

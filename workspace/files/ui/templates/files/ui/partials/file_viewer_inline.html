@@ -46,6 +46,16 @@
         ></span>
       </div>
     </div>
+    {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
+    <a
+      :href="downloadOverride || downloadUrl"
+      download
+      class="btn btn-ghost btn-sm btn-square"
+      title="Download file"
+      x-show="fileUuid && downloadUrl && !viewerBlocked"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+    </a>
     {% if properties %}
       <button
         type="button"
@@ -60,16 +70,6 @@
         <i data-lucide="info" class="w-4 h-4"></i>
       </button>
     {% endif %}
-    {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
-    <a
-      :href="downloadOverride || downloadUrl"
-      download
-      class="btn btn-ghost btn-sm btn-square"
-      title="Download file"
-      x-show="fileUuid && downloadUrl && !viewerBlocked"
-    >
-      <i data-lucide="download" class="w-4 h-4"></i>
-    </a>
   </div>
 
   {% include "files/ui/partials/file_viewer_stage.html" %}

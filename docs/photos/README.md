@@ -511,9 +511,14 @@ a long 4K recording costs far more than a short phone clip. Lower
 ### How grouping works
 
 - Right after a photo is analyzed, each new face joins the group its nearest
-  neighbours vote for, if they are close enough. A face the model reads
+  neighbours vote for, if they are close enough - and if it is within the
+  threshold of the group's centroid too: a face like one wrong guess of a
+  group, but not like the group, would otherwise join it and bring its own
+  look-alikes after it. A face the user confirmed votes three times as hard
+  as a guessed one, and weighs three times as much in its group's centroid.
+  A face the model reads
   poorly - blurred, tiny, turned away - joins only on firm evidence: one of
-  the group's good faces very close to it, or three of its faces within the
+  the group's good or confirmed faces very close to it, or three of its faces within the
   threshold (the blurred photo of someone seen often sits among many of
   their faces without being very close to any). How well the model reads a
   face is, with `yunet_sface` and `yunet_adaface`, the length of its
@@ -534,6 +539,14 @@ a long 4K recording costs far more than a short phone clip. Lower
   the user took out ("Not this person", "Ungroup") is never grouped again
   automatically. A face the user hid (a stranger, a poster) is out of the
   grouping too, until unhidden.
+- A correction carries the guesses it explains along. When the user takes a
+  face out of a group (not this person, someone else, hidden), the faces the
+  grouping put there on its own that sit nearer that face than the group's
+  centroid - or no longer within the threshold of it - leave too, in the
+  background. Each is offered to the grouping again, never to that group:
+  most follow the face to the person the user named, the others wait for the
+  review. A confirmed face never moves. Undoing the correction puts the
+  corrected faces back, not the ones that followed them.
 
 ### Naming people
 
@@ -610,8 +623,15 @@ close enough and clearly closer than anybody else's. Everybody whose face can te
 named or not: someone dressed like an unnamed group, or like a face the face
 review asks about, is suggested as nobody. Without that, in a library where
 few people are named, the stranger sitting by a named person would take
-their name. A person is suggested once per photo, and never when the photo
-already shows them, nor when the user said it is not them.
+their name. The same goes for a face the review asks to check (*Is this
+Léa?*): until the user says it is her, it names nobody by their clothes, or
+one wrong guess would name everybody dressed like that person that day. A
+person is suggested once per photo, and never when the photo already shows
+them, nor when the user said it is not them.
+
+Every correction asks again in the background: around the photos of the
+faces corrected, or across the library, half a minute later, when a whole
+group is named, merged, hidden or ungrouped.
 
 The suggestions are asked about in the review, never applied on their own,
 and a photo is shown under the person once the user said yes.

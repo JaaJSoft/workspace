@@ -4,7 +4,7 @@ Two passes, both confined to one owner's faces:
 
 - **Assignment**, right after a photo is analyzed: each new face asks the
   vector index for its nearest neighbours and joins the cluster they vote
-  for, if they are close enough.
+  for, if they are close enough and the cluster as a whole looks like it.
 - **Clustering**, nightly or once enough faces wait: look-alikes a cluster
   holds are separated, then DBSCAN runs over the faces still ungrouped,
   creating new clusters.
@@ -12,7 +12,9 @@ Two passes, both confined to one owner's faces:
 What the user decided is never undone: a confirmed face stays where it was
 put, a rejected one is never grouped again, and no face is proposed for a
 cluster that already holds another face of its photo (the database refuses it
-anyway).
+anyway). A confirmed face also weighs more than a guessed one, in a vote and
+in a centroid, and the guessed faces that came in with a face the user took
+out of a cluster leave with it (release_followers).
 """
 
 from __future__ import annotations
@@ -48,6 +50,13 @@ _CONFIDENT = 0.8
 _WITNESSES = 3
 # A low-quality face weighs this little in a centroid, never nothing.
 _MIN_WEIGHT = 0.1
+# A confirmed face weighs as much as this many guessed faces of its quality.
+CONFIRMED_WEIGHT = 3.0
+# A guessed face further than this fraction of the threshold from its
+# cluster's centroid is doubtful: the review asks about it, and it names
+# nobody by their clothes. The centroid being a mean, a face of the right
+# person usually sits well inside the threshold.
+DOUBT_RATIO = 0.5
 # DBSCAN: a core face has at least this many faces (itself included) within
 # the threshold. Two: two photos of one person make a cluster.
 _MIN_SAMPLES = 2
@@ -87,12 +96,29 @@ def max_distance():
     )
 
 
+def doubt_distance():
+    return max_distance() * DOUBT_RATIO
+
+
+def _unit(blob):
+    return from_bytes(blob, FACE_EMBEDDINGS.dims) if blob else None
+
+
 def _vector(face):
-    return from_bytes(face.embedding, FACE_EMBEDDINGS.dims) if face.embedding else None
+    return _unit(face.embedding)
 
 
-def face_weight(quality):
-    return max(float(quality), _MIN_WEIGHT)
+def face_weight(quality, *, confirmed=False):
+    weight = max(float(quality), _MIN_WEIGHT)
+    return weight * CONFIRMED_WEIGHT if confirmed else weight
+
+
+def cluster_centroids(cluster_ids):
+    """{cluster id: unit centroid} for those of *cluster_ids* that have one."""
+    rows = FaceCluster.objects.filter(pk__in=list(cluster_ids)).values_list(
+        "pk", "centroid"
+    )
+    return {pk: vector for pk, blob in rows if (vector := _unit(blob)) is not None}
 
 
 # -- assignment --------------------------------------------------------------
@@ -122,7 +148,12 @@ def assign_faces(owner_id, face_ids):
 
 
 def _vote(face, threshold):
-    """The cluster *face*'s neighbours vote for, or None."""
+    """The cluster *face*'s neighbours vote for, or None.
+
+    The best voted cluster whose centroid is within *threshold* of the face:
+    a face like one guessed member of a cluster but not like the cluster
+    would otherwise join it, then bring its own look-alikes after it.
+    """
     vector = _vector(face)
     if vector is None:
         return None
@@ -135,7 +166,7 @@ def _vote(face, threshold):
             pk__in=distances, owner_id=face.owner_id, cluster__isnull=False
         )
         .exclude(file_id=face.file_id)
-        .values_list("pk", "cluster_id", "quality")
+        .values_list("pk", "cluster_id", "quality", "assignment", "cluster__centroid")
     )
     excluded = photo_clusters(face.file_id, exclude_face=face.pk)
     if face.rejected_cluster_id:
@@ -143,20 +174,71 @@ def _vote(face, threshold):
     scores = defaultdict(float)
     witnesses = Counter()
     confident = set()
-    for pk, cluster_id, quality in neighbours:
+    centroids = {}
+    for pk, cluster_id, quality, assignment, centroid in neighbours:
         if cluster_id in excluded:
             continue
+        centroids[cluster_id] = centroid
         distance = distances[pk]
-        scores[cluster_id] += (1 - distance / threshold + 1e-6) * face_weight(quality)
+        # The user said who it is: how well the model read it matters no more.
+        confirmed = assignment == Face.Assignment.CONFIRMED
+        scores[cluster_id] += (1 - distance / threshold + 1e-6) * face_weight(
+            quality, confirmed=confirmed
+        )
         witnesses[cluster_id] += 1
-        if quality >= LOW_QUALITY and distance <= threshold * _CONFIDENT:
+        if (confirmed or quality >= LOW_QUALITY) and distance <= threshold * _CONFIDENT:
             confident.add(cluster_id)
     confident.update(cid for cid, count in witnesses.items() if count >= _WITNESSES)
     if face.quality < LOW_QUALITY:
         scores = {cid: score for cid, score in scores.items() if cid in confident}
-    if not scores:
-        return None
-    return max(scores, key=scores.get)
+    for cluster_id in sorted(scores, key=scores.get, reverse=True):
+        centroid = _unit(centroids[cluster_id])
+        if centroid is None or 1 - float(vector @ centroid) <= threshold:
+            return cluster_id
+    return None
+
+
+def release_followers(owner_id, cluster_id, departed_ids):
+    """Take out of *cluster_id* the guessed faces that came in with
+    *departed_ids*, faces the user just took out of it; return their ids.
+
+    A guessed face goes when it is nearer one of those faces than the
+    cluster's centroid, or no longer within the threshold of that centroid.
+    Each is offered to the grouping again but never to *cluster_id*, which
+    becomes its ``rejected_cluster``: it follows the face the user moved,
+    joins another cluster, or waits in none for the review.
+    """
+    centroid = cluster_centroids([cluster_id]).get(cluster_id)
+    if centroid is None:
+        return []
+    threshold = max_distance()
+    departed = [
+        vector
+        for blob in Face.objects.filter(
+            pk__in=departed_ids, owner_id=owner_id
+        ).values_list("embedding", flat=True)
+        if (vector := _unit(blob)) is not None
+    ]
+    followers = []
+    for pk, blob in Face.objects.filter(
+        cluster_id=cluster_id, owner_id=owner_id, assignment=Face.Assignment.AUTO
+    ).values_list("pk", "embedding"):
+        vector = _unit(blob)
+        if vector is None:
+            continue
+        to_cluster = 1 - float(vector @ centroid)
+        to_departed = min((1 - float(vector @ other) for other in departed), default=2)
+        if to_cluster > threshold or to_departed < to_cluster:
+            followers.append(pk)
+    if not followers:
+        return []
+    # Conditional: a face the user placed meanwhile stays where they put it.
+    Face.objects.filter(
+        pk__in=followers, cluster_id=cluster_id, assignment=Face.Assignment.AUTO
+    ).update(cluster=None, rejected_cluster_id=cluster_id)
+    refresh_clusters([cluster_id])
+    assign_faces(owner_id, followers)
+    return followers
 
 
 def photo_clusters(file_id, *, exclude_face=None):
@@ -559,17 +641,19 @@ def refresh_clusters(cluster_ids):
 def refresh_cluster(cluster):
     members = list(
         Face.objects.filter(cluster=cluster).values_list(
-            "pk", "quality", "embedding", "file__deleted_at"
+            "pk", "quality", "embedding", "file__deleted_at", "assignment"
         )
     )
     if not members:
         cluster.delete()
         return None
     total = None
-    for _pk, quality, blob, _deleted in members:
-        vector = from_bytes(blob, FACE_EMBEDDINGS.dims) if blob else None
+    for _pk, quality, blob, _deleted, assignment in members:
+        vector = _unit(blob)
         if vector is not None:
-            weighted = vector.astype(np.float64) * face_weight(quality)
+            weighted = vector.astype(np.float64) * face_weight(
+                quality, confirmed=assignment == Face.Assignment.CONFIRMED
+            )
             total = weighted if total is None else total + weighted
     try:
         cluster.centroid = (

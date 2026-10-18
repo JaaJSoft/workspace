@@ -28,6 +28,7 @@ from .face_corrections import (
     fold_face,
     start_cluster,
 )
+from .face_followups import faces_left, names_changed
 from .face_grouping import max_distance, photo_clusters, refresh_clusters
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,7 @@ def link_cluster(cluster, person):
             _pin_person_cover(cluster, person)
         cluster.person = person
         cluster.save(update_fields=["person", "updated_at"])
+        names_changed(cluster.owner_id)
     refresh_clusters(touched)
 
 
@@ -124,6 +126,7 @@ def assign_face_to_person(face, person, *, new_look=None, touched=None):
     """
     shown = person_faces_in_photo(face, person).select_related("cluster").first()
     if shown is not None:
+        faces_left(face.owner_id, face.cluster_id, [face.pk], destination=shown.cluster)
         fold_face(face, touched=touched)
         return shown.cluster
     taken = photo_clusters(face.file_id, exclude_face=face.pk)

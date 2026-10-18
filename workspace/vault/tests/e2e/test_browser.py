@@ -433,7 +433,9 @@ class VaultBrowserTests(VaultBrowserCase):
         self.page.get_by_role("button", name="New tag").click()
         self.page.fill(".modal-box input[type=text]", "Banking")
         self.page.click(".modal-box button:has-text('Create')")
-        self.page.wait_for_selector("aside tag-chip", timeout=30000)
+        self.page.wait_for_selector(
+            "aside button[aria-pressed]:has-text('Banking')", timeout=30000
+        )
 
         self.assertNotIn(
             "Banking",

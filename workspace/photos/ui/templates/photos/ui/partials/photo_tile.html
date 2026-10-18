@@ -21,6 +21,10 @@
   to open. data-removable says whether the viewer may take a photo out of
   the album on screen.
 
+  data-can-edit-details says whether the viewer may correct the photo's
+  date and place (timeline.mark_tile_actions); data-taken-at is the date
+  the correction dialog starts from.
+
   On a ranked page (similar photos, search by description) a video shows
   the moment that matched: its key frame's picture (file.match_frame_url)
   in place of the poster, its time (file.match_at) in the badge, and data-at,
@@ -48,6 +52,8 @@
   data-sensitive="{{ file.media_item.sensitive_level }}"
   data-favorite="{{ file.is_favorite|yesno:'1,0' }}"
   data-can-favorite="{{ file.can_favorite|yesno:'1,0' }}"
+  data-can-edit-details="{{ file.can_edit_details|yesno:'1,0' }}"
+  data-taken-at="{{ file.media_item.taken_at|date:'c' }}"
   data-files-url="{% if not file.album_urls %}{{ file|files_url }}{% endif %}"
   {% if file.album_urls %} data-album-scoped="1" data-viewer-url="{{ file.album_urls.viewer }}" data-content-url="{{ file.album_urls.content }}" data-download-url="{{ file.album_urls.download }}" {% endif %}
   {% if file.album_uuid %} data-removable="{{ file.removable|yesno:'1,0' }}" {% endif %}

@@ -23,6 +23,7 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       'workspace/photos/ui/static/photos/ui/js/faces.js',
       'workspace/photos/ui/static/photos/ui/js/import.js',
       'workspace/photos/ui/static/photos/ui/js/hidden.js',
+      'workspace/photos/ui/static/photos/ui/js/capture_details.js',
       'workspace/photos/ui/static/photos/ui/js/timeline_sentinel.js',
       'workspace/photos/ui/static/photos/ui/js/photos.js',
     ],

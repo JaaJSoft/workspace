@@ -14,7 +14,7 @@ from workspace.photos.services.timeline import (
     START,
     Position,
     encode_cursor,
-    mark_favorite_toggles,
+    mark_tile_actions,
     parse_cursor,
     parse_date_position,
     timeline_page,
@@ -394,13 +394,13 @@ class ParseDatePositionTests(SimpleTestCase):
         self.assertEqual(position.before - timedelta(days=1), _at(2024, 7, 14))
 
 
-class FavoriteToggleTests(TimelineTestCase):
+class TileActionTests(TimelineTestCase):
     def test_the_registry_decides_who_may_star_a_photo(self):
         mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
         stranger = User.objects.create_user(username="stranger", password="p")
         theirs = make_photo(stranger, "theirs.jpg", _at(2024, 7, 14, 12))
 
-        mark_favorite_toggles([mine, theirs], self.user)
+        mark_tile_actions([mine, theirs], self.user)
 
         self.assertTrue(mine.can_favorite)
         self.assertFalse(theirs.can_favorite)
@@ -419,9 +419,21 @@ class FavoriteToggleTests(TimelineTestCase):
             shared.append(f)
 
         with CaptureQueriesContext(connection) as one:
-            mark_favorite_toggles(shared[:1], self.user)
+            mark_tile_actions(shared[:1], self.user)
         with CaptureQueriesContext(connection) as five:
-            mark_favorite_toggles(shared, self.user)
+            mark_tile_actions(shared, self.user)
 
         self.assertEqual(len(five), len(one))
         self.assertTrue(all(f.can_favorite for f in shared))
+        # Read only: what everyone sees of them is not theirs to correct.
+        self.assertFalse(any(f.can_edit_details for f in shared))
+
+    def test_only_who_may_edit_a_photo_may_correct_its_date_and_place(self):
+        mine = make_photo(self.user, "mine.jpg", _at(2024, 7, 14, 12))
+        stranger = User.objects.create_user(username="stranger", password="p")
+        theirs = make_photo(stranger, "theirs.jpg", _at(2024, 7, 14, 12))
+
+        mark_tile_actions([mine, theirs], self.user)
+
+        self.assertTrue(mine.can_edit_details)
+        self.assertFalse(theirs.can_edit_details)

@@ -440,6 +440,7 @@ window.vaultBrowser = (function () {
         const arriving = this.openVault ? String(this.openVault.uuid) : null;
         if (arriving !== leaving) {
           this.resetNavigation();
+          this.clearFileEntry();
           // A draft is seeded with the folder, the tags and the key version
           // of the vault it was opened in, and saves into whichever is open.
           this.closeEntryDialog();
@@ -925,7 +926,7 @@ window.vaultBrowser = (function () {
         } catch (err) {
           if (err && err.reason === 'locked') return;
           if (this.panelEntry !== entry) return;
-          this.error = 'That value could not be revealed.';
+          this.error = "This entry's notes could not be opened.";
         }
       },
 

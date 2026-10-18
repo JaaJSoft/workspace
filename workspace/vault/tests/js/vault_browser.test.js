@@ -1575,6 +1575,22 @@ test('an entry without notes opens nothing', async () => {
   assert.ok(!opened.some((ad) => String(ad).endsWith('|notes')));
 });
 
+test("notes that cannot be opened say so in their own words", async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) throw new Error('bad tag');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.error, "This entry's notes could not be opened.");
+});
+
 test('a reload keeps the notes of the entry whose panel survives it', async () => {
   const { component } = browser({
     api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },

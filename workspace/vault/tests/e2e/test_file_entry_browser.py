@@ -27,30 +27,30 @@ class FileEntryBrowserTests(VaultBrowserCase):
         must build it again rather than look for the element it removed."""
         self._open_vault()
         self._create_entry("GitHub", "octocat", "hunter2")
-        self.page.get_by_role("button", name="New", exact=True).click()
-        self.page.get_by_role("button", name="New folder").first.click()
-        self.page.fill(".modal-box input[type=text]", "Banking")
-        self.page.click(".modal-box button:has-text('Create')")
-        self.page.wait_for_selector("tbody tr:has-text('Banking')", timeout=30000)
-
-        # The move dialog has no markup of its own yet, so the component's
-        # write path is driven directly - the alert is what is under test.
-        move = """(target) => {
-            const app = Alpine.$data(document.querySelector('[x-data="vaultBrowser()"]'));
-            const entry = app.entries.find((e) => e.name === 'GitHub');
-            const folder = app.folders.find((f) => f.name === target);
-            return app.moveEntries([entry.uuid], folder ? folder.uuid : null);
-        }"""
+        self._create_folder("Banking")
         notice = self.page.locator("inline-alert[type=success]")
 
-        self.page.evaluate(move, "Banking")
+        self._move_through_the_dialog("GitHub", "Banking")
         notice.get_by_text("Moved 1 entry to Banking.").wait_for(timeout=30000)
         notice.get_by_role("button", name="Dismiss").click()
         notice.wait_for(state="detached", timeout=5000)
 
-        self.page.evaluate(move, None)
+        self.page.click("tbody tr:has-text('Banking')")
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=30000)
+        self._move_through_the_dialog("GitHub", "no folder")
         notice.get_by_text("Moved 1 entry to").wait_for(timeout=30000)
         self.assertTrue(notice.is_visible())
+
+    def _move_through_the_dialog(self, entry, place):
+        for box in self.page.locator("tbody tr input.checkbox:checked").all():
+            box.uncheck()
+        self.page.locator(f"tbody tr:has-text('{entry}') input.checkbox").check()
+        self.page.get_by_role("button", name="Move to folder").click()
+        dialog = self.page.locator("[role=dialog]")
+        dialog.wait_for()
+        dialog.locator(f"a:has-text('{place}')").click()
+        dialog.get_by_role("button", name="Move", exact=True).click()
+        dialog.wait_for(state="detached", timeout=30000)
 
     def _create_folder(self, name):
         self.page.get_by_role("button", name="New", exact=True).click()

@@ -104,8 +104,14 @@ window.tagChipColor = function tagChipColor(value) {
   // flex alone reads ~1px too low. text-box trims the box to the cap
   // height; browsers without it fall back to a whole-pixel nudge
   // (fractional offsets shimmer across zoom levels, so keep it integer).
+  //
+  // The trimmed box is only cap-high, and `truncate` clips at the padding
+  // edge: without room above and below, ascenders, accents and descenders
+  // are cut off ("Money" reads "Monev"). The padding gives the glyphs that
+  // room and the equal negative margin takes it back out of the layout, so
+  // the trimmed box still decides the centering.
   const LABEL_CLASSES =
-    'relative -top-px truncate [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
+    'relative -top-px truncate py-[0.4em] -my-[0.4em] [text-box:trim-both_cap_alphabetic] supports-[text-box:trim-both_cap_alphabetic]:top-0';
 
   // Inline SVG on purpose: lucide.createIcons() does not process nodes
   // Alpine clones out of an x-for template.

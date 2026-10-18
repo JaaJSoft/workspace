@@ -35,26 +35,44 @@ def can_edit_type(file_type):
     return file_type in RASTER_LABELS
 
 
+def _rounded_crop(crop):
+    return {key: round(float(crop[key]), _PRECISION) for key in _RECT_KEYS}
+
+
+def edit_problem(rotation=0, crop=None):
+    """Why a rotation and a crop cannot be stored, or None when they can.
+
+    Kept apart from normalize_edit so a caller answers with this text rather
+    than with an exception's.
+    """
+    if rotation not in ROTATIONS:
+        return "Rotation must be 0, 90, 180 or 270."
+    if crop is None:
+        return None
+    rect = _rounded_crop(crop)
+    if rect["width"] < MIN_CROP or rect["height"] < MIN_CROP:
+        return "The crop is too small."
+    if (
+        rect["x"] < 0
+        or rect["y"] < 0
+        or rect["x"] + rect["width"] > 1 + _EPSILON
+        or rect["y"] + rect["height"] > 1 + _EPSILON
+    ):
+        return "The crop must fit in the image."
+    return None
+
+
 def normalize_edit(rotation=0, crop=None):
     """The stored form of a rotation and a crop, ``None`` when it changes nothing.
 
-    Raises ``ValueError`` on a rotation that is not a quarter turn or a crop
-    that does not fit in the image.
+    Raises ``ValueError`` when edit_problem finds one.
     """
-    if rotation not in ROTATIONS:
-        raise ValueError("Rotation must be 0, 90, 180 or 270.")
+    problem = edit_problem(rotation, crop)
+    if problem is not None:
+        raise ValueError(problem)
     edit = {"rotation": rotation} if rotation else {}
     if crop is not None:
-        rect = {key: round(float(crop[key]), _PRECISION) for key in _RECT_KEYS}
-        if rect["width"] < MIN_CROP or rect["height"] < MIN_CROP:
-            raise ValueError("The crop is too small.")
-        if (
-            rect["x"] < 0
-            or rect["y"] < 0
-            or rect["x"] + rect["width"] > 1 + _EPSILON
-            or rect["y"] + rect["height"] > 1 + _EPSILON
-        ):
-            raise ValueError("The crop must fit in the image.")
+        rect = _rounded_crop(crop)
         if rect != _FULL:
             edit["crop"] = rect
     return edit or None

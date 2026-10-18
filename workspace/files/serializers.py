@@ -14,7 +14,11 @@ from workspace.files.services._names import (
     NameTaken,
 )
 from workspace.files.services.files import GroupMismatch
-from workspace.files.services.image_edits import ROTATIONS, normalize_edit
+from workspace.files.services.image_edits import (
+    ROTATIONS,
+    edit_problem,
+    normalize_edit,
+)
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -784,10 +788,10 @@ class ImageEditSerializer(serializers.Serializer):
     crop = ImageCropSerializer(required=False, allow_null=True, default=None)
 
     def validate(self, attrs):
-        try:
-            return {"edit": normalize_edit(attrs["rotation"], attrs["crop"])}
-        except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from None
+        problem = edit_problem(attrs["rotation"], attrs["crop"])
+        if problem is not None:
+            raise serializers.ValidationError(problem)
+        return {"edit": normalize_edit(attrs["rotation"], attrs["crop"])}
 
 
 class ImageRotateSerializer(serializers.Serializer):

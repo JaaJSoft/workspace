@@ -267,7 +267,10 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
             _offers(action_id, request.user, entry, role)
             for action_id in required_entry_actions(entry, data)
         ):
-            return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "This change is not available on this entry."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return self._write(request, data, existing=entry)
 
     @extend_schema(

@@ -399,30 +399,30 @@ class EntryApiTests(TestCase):
         self._trash(created["uuid"])
         return VaultEntry.objects.get(uuid=created["uuid"])
 
-    def test_moving_a_trashed_entry_answers_404(self):
+    def test_moving_a_trashed_entry_answers_403(self):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid, folder=self.folder)
-        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 403)
         entry.refresh_from_db()
         self.assertIsNone(entry.folder_id)
 
-    def test_retagging_a_trashed_entry_answers_404(self):
+    def test_retagging_a_trashed_entry_answers_403(self):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid, tags=[self.tag])
-        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 403)
         self.assertEqual(entry.tags.count(), 0)
 
-    def test_editing_a_trashed_entry_answers_404(self):
+    def test_editing_a_trashed_entry_answers_403(self):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid, encrypted_name=sealed("BAUG"))
-        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 403)
         entry.refresh_from_db()
         self.assertEqual(entry.encrypted_name, NAME)
 
-    def test_favoriting_a_trashed_entry_answers_404(self):
+    def test_favoriting_a_trashed_entry_answers_403(self):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid, is_favorite=True)
-        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 403)
         entry.refresh_from_db()
         self.assertFalse(entry.is_favorite)
 
@@ -430,6 +430,12 @@ class EntryApiTests(TestCase):
         entry = self._trashed_entry()
         body = self.signed_entry(entry_uuid=entry.uuid)
         self.assertEqual(self._put(entry.uuid, body).status_code, 200)
+
+    def test_unfavoriting_an_active_entry_is_accepted(self):
+        created = self._create(self.signed_entry(is_favorite=True)).json()
+        body = self.signed_entry(entry_uuid=created["uuid"], is_favorite=False)
+        self.assertEqual(self._put(created["uuid"], body).status_code, 200)
+        self.assertFalse(VaultEntry.objects.get(uuid=created["uuid"]).is_favorite)
 
     def test_moving_and_retagging_an_active_entry_is_accepted(self):
         created = self._create(self.signed_entry()).json()

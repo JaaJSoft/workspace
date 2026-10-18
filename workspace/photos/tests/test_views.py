@@ -103,12 +103,13 @@ class IndexTests(PhotosViewTestCase):
         self.assertContains(response, 'data-can-favorite="1"')
         self.assertContains(response, 'aria-label="Add to favorites"')
 
-    def test_tiles_carry_what_the_viewer_modal_navigates_by(self):
+    def test_tiles_carry_what_the_inline_viewer_navigates_by(self):
         beach = make_photo(self.user, "beach.jpg", _at(2024, 7, 14, 12))
 
         response = self.client.get("/photos")
 
-        self.assertContains(response, 'x-data="fileViewerModal()"')
+        self.assertContains(response, 'x-data="fileViewerInline(')
+        self.assertNotContains(response, 'x-data="fileViewerModal()"')
         self.assertContains(response, f'data-uuid="{beach.uuid}"')
         self.assertContains(response, 'data-viewable="1"')
         self.assertContains(response, 'data-node-type="file"')
@@ -862,7 +863,7 @@ class SwapFragmentTests(PhotosViewTestCase):
     SHELL = (
         'id="properties-sidebar"',
         'id="photos-context-menu"',
-        'id="viewer-prefs-data"',
+        "data-file-viewer-inline",
     )
 
     def setUp(self):

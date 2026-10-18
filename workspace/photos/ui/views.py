@@ -110,7 +110,6 @@ from workspace.photos.services.timeline import (
     year_counts,
 )
 from workspace.users.services.settings import (
-    get_module_settings,
     get_setting,
     get_user_timezone,
 )
@@ -471,12 +470,8 @@ def _count_label(counts, media_type):
 
 def _display_context(user):
     """What every listing needs to lay out and open its tiles."""
-    viewer_prefs = get_module_settings(user, "files").get("viewer") or {}
-    if not isinstance(viewer_prefs, dict):
-        viewer_prefs = {}
     tile_size = _tile_size(user)
     return {
-        "viewer_prefs": viewer_prefs,
         "tile": {"size": tile_size, "widths": TILE_WIDTHS},
         "tile_width": TILE_WIDTHS[tile_size - 1],
     }

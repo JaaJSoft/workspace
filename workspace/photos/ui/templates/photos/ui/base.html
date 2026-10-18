@@ -83,7 +83,6 @@
 {% endblock %}
 
 {% block content %}
-  {{ viewer_prefs|json_script:"viewer-prefs-data" }}
   {{ tile|json_script:"photo-tile-data" }}
   {{ import_folder|json_script:"photos-import-folder-data" }}
   {{ photos_prefs|json_script:"photos-prefs-data" }}
@@ -109,14 +108,18 @@
     @dragleave="onImportDragLeave($event)"
     @drop="onImportDrop($event)"
   >
-    {% block photos_swap %}
-      <div id="photos-content" class="h-full overflow-y-auto">
-        {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
-        {{ faces_enabled|json_script:"photos-faces-enabled" }}
-        {{ embedded_media|json_script:"photos-embedded-media" }}
-        {% block photos_content %}{% endblock %}
-      </div>
-    {% endblock %}
+    {# What the viewer covers: one stable element around the swap target, so inert outlives a swap. #}
+    <div id="photos-main" class="h-full">
+      {% block photos_swap %}
+        <div id="photos-content" class="h-full overflow-y-auto">
+          {# Inside the swap target, so turning faces on or off reaches the menus without a reload. #}
+          {{ faces_enabled|json_script:"photos-faces-enabled" }}
+          {{ embedded_media|json_script:"photos-embedded-media" }}
+          {% block photos_content %}{% endblock %}
+        </div>
+      {% endblock %}
+    </div>
+    {% include "files/ui/partials/file_viewer_inline.html" with covers="photos-main" %}
     {% comment %}
       Outside #photos-content so it survives the swap. The fade-in waits
       200 ms as a CSS transition-delay, so a view that answers at once never
@@ -192,7 +195,6 @@
   {% include "files/ui/partials/rename_dialog.html" %}
   {% include "files/ui/partials/share_modal.html" %}
   {% include "photos/ui/partials/album_share_modal.html" %}
-  {% include "files/ui/partials/file_viewer_modal.html" %}
   {% if faces_available %}
     {% include "ui/partials/context_menu_panel.html" with items="photos/ui/partials/cluster_menu.html" open="clusterMenu.open" close="closeClusterMenu()" x="clusterMenu.x" y="clusterMenu.y" id="photos-cluster-menu" %}
     {% include "photos/ui/partials/faces_dialog.html" %}
@@ -204,6 +206,7 @@
 {% block extra_scripts %}
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
   {% properties_section_scripts %}
   <script src="{% static 'files/ui/js/tags.js' %}"></script>

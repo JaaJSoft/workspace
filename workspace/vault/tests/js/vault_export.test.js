@@ -5,6 +5,7 @@ const { loadScript, loadScripts } = require('../../../common/tests/js/loader');
 const SCRIPT = 'workspace/vault/ui/static/vault/ui/js/vault_export.js';
 const WORDLIST = 'workspace/common/static/ui/js/password_wordlist.js';
 const GENERATOR = 'workspace/common/static/ui/js/password_generator.js';
+const FLOOR = 'workspace/vault/ui/static/vault/ui/js/vault_password_floor.js';
 // An archive has no secret key behind it and is attacked offline for as long
 // as it exists, so the passphrase this dialog draws carries the whole of its
 // strength. 72 bits is past the panel's own Strong band; the design asked for
@@ -13,7 +14,10 @@ const ARCHIVE_BAR_BITS = 72;
 
 function load(overrides = {}) {
   const downloads = [];
-  const ctx = loadScript(SCRIPT, Object.assign({
+  const ctx = loadScripts([FLOOR, SCRIPT], Object.assign({
+    crypto: globalThis.crypto,
+    TextEncoder: globalThis.TextEncoder,
+    fetch: async () => ({ ok: true, status: 200, text: async () => '' }),
     downloadBlob: (blob, filename) => downloads.push(filename),
     vaultExportTree: { buildTree: async () => ({ format: 'vault-archive', vaults: [] }) },
     vaultArchive: {
@@ -28,6 +32,9 @@ function load(overrides = {}) {
   }, overrides));
   return { component: ctx.vaultExportMixin(), downloads };
 }
+
+const sha1 = (value) =>
+  require('node:crypto').createHash('sha1').update(value).digest('hex').toUpperCase();
 
 // The plaintext warning, answered the way the dialog answers it.
 function throughWarning(component) {
@@ -53,6 +60,7 @@ test('a typed passphrase needs its confirmation and an explicit acknowledgement'
   component.exportPassphrase = 'ma phrase a moi';
   component.noteTypedPassphrase();
   component.exportStrengthChanged({ status: 'ready', score: 4 });
+  component.exportBreachStatus = 'clean';
   assert.equal(component.exportSource, 'typed');
   assert.equal(component.passphraseAccepted(), false, 'accepted with no confirmation');
   component.exportConfirm = 'ma phrase a moi';
@@ -100,6 +108,8 @@ test('a typed passphrase is held to the account password floor', () => {
   component.exportStrengthChanged({ status: 'unavailable', score: null });
   assert.equal(component.passphraseAccepted(), false, 'accepted an unmeasured phrase');
   component.exportStrengthChanged({ status: 'ready', score: 3 });
+  assert.equal(component.passphraseAccepted(), false, 'accepted before the corpus answered');
+  component.exportBreachStatus = 'clean';
   assert.equal(component.passphraseAccepted(), true);
 });
 
@@ -113,6 +123,7 @@ test('a typed passphrase shorter than twelve characters is refused', () => {
   component.exportConfirm = component.exportPassphrase;
   component.exportOwnPhraseAck = true;
   component.exportStrengthChanged({ status: 'ready', score: 4 });
+  component.exportBreachStatus = 'clean';
   assert.equal(component.passphraseAccepted(), false);
   // Eleven characters once composed, seventeen UTF-16 units decomposed.
   component.exportPassphrase = 'été été été';
@@ -121,6 +132,84 @@ test('a typed passphrase shorter than twelve characters is refused', () => {
   component.exportPassphrase = 'été été étés';
   component.exportConfirm = component.exportPassphrase;
   assert.equal(component.passphraseAccepted(), true);
+});
+
+test('a typed passphrase found in the breach corpus is refused', async () => {
+  // The account floor refuses it, and the archive never takes less.
+  const phrase = 'correct horse battery staple';
+  const { component } = load({
+    fetch: async () => ({ ok: true, text: async () => sha1(phrase).slice(5) + ':3912' }),
+  });
+  component.exportFormat = 'archive';
+  component.exportPassphrase = phrase;
+  component.noteTypedPassphrase();
+  component.exportConfirm = phrase;
+  component.exportOwnPhraseAck = true;
+  component.exportStrengthChanged({ status: 'ready', score: 4 });
+  await component.checkExportBreach();
+  assert.equal(component.exportBreachStatus, 'found');
+  assert.equal(component.typedPassphraseVerdict(), 'breached');
+  assert.equal(component.passphraseAccepted(), false);
+});
+
+test('a corpus that could not be reached does not stop a typed passphrase', async () => {
+  const { component } = load({ fetch: async () => { throw new Error('offline'); } });
+  component.exportFormat = 'archive';
+  component.exportPassphrase = 'ma phrase a moi, longue';
+  component.noteTypedPassphrase();
+  component.exportConfirm = component.exportPassphrase;
+  component.exportOwnPhraseAck = true;
+  component.exportStrengthChanged({ status: 'ready', score: 4 });
+  await component.checkExportBreach();
+  assert.equal(component.exportBreachStatus, 'unavailable');
+  assert.equal(component.passphraseAccepted(), true);
+});
+
+test('an answer about a phrase the user has since edited is discarded', async () => {
+  let release;
+  const { component } = load({
+    fetch: () => new Promise((resolve) => { release = resolve; }),
+  });
+  component.exportPassphrase = 'ma phrase a moi, longue';
+  component.noteTypedPassphrase();
+  const pending = component.checkExportBreach();
+  while (!release) await new Promise((r) => setTimeout(r, 1));
+  component.exportPassphrase += '!';
+  component.noteTypedPassphrase();
+  release({ ok: true, text: async () => '' });
+  await pending;
+  assert.equal(component.exportBreachStatus, 'unchecked');
+});
+
+test('a drawn phrase is never sent to the breach corpus', async () => {
+  let looked = 0;
+  const { component } = load({ fetch: async () => { looked += 1; return { ok: true, text: async () => '' }; } });
+  component.applyGeneratedPassphrase(PHRASE, ARCHIVE_BAR_BITS);
+  await component.checkExportBreach();
+  assert.equal(looked, 0);
+});
+
+test('a phrase not measured yet is reported as measuring, not as too weak', () => {
+  const { component } = load();
+  component.exportPassphrase = 'ma phrase a moi, longue';
+  component.noteTypedPassphrase();
+  component.exportStrengthChanged({ status: 'checking', score: null });
+  assert.equal(component.typedPassphraseVerdict(), 'measuring');
+  component.exportStrengthChanged({ status: 'ready', score: 4 });
+  assert.equal(component.typedPassphraseVerdict(), 'measuring', 'the corpus has not answered');
+  component.exportBreachStatus = 'clean';
+  assert.equal(component.typedPassphraseVerdict(), 'ok');
+  component.exportStrengthChanged({ status: 'ready', score: 1 });
+  assert.equal(component.typedPassphraseVerdict(), 'weak');
+  component.exportPassphrase = 'court';
+  assert.equal(component.typedPassphraseVerdict(), 'short');
+});
+
+test('closing the dialog drops the corpus verdict with the phrase', () => {
+  const { component } = load();
+  component.exportBreachStatus = 'clean';
+  component.clearExport();
+  assert.equal(component.exportBreachStatus, 'unchecked');
 });
 
 test('an empty passphrase is refused whatever its source', () => {
@@ -293,6 +382,7 @@ test('the acknowledgement does not carry from one phrase to the next', async () 
   component.exportStrengthChanged({ status: 'ready', score: 4 });
   component.exportConfirm = 'ma premiere phrase';
   component.exportOwnPhraseAck = true;
+  component.exportBreachStatus = 'clean';
   assert.equal(component.passphraseAccepted(), true);
 
   component.applyGeneratedPassphrase('correcte cheval batterie agrafe sept huit neuf huit', ARCHIVE_BAR_BITS);
@@ -300,6 +390,7 @@ test('the acknowledgement does not carry from one phrase to the next', async () 
   component.noteTypedPassphrase();
   assert.equal(component.exportOwnPhraseAck, false, 'the earlier tick survived');
   component.exportConfirm = 'ma seconde phrase';
+  component.exportBreachStatus = 'clean';
   assert.equal(
     component.passphraseAccepted(), false,
     'a confirmed phrase was accepted on an acknowledgement given for another'

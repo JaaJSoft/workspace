@@ -6,10 +6,9 @@
 // for as long as the file exists with nothing but this phrase in front of it,
 // so the floor is never lower than the account's, which also has a secret key
 // behind it. A generated phrase is held to the panel's own "Strong" band; a
-// typed one to the account password's length and estimated strength.
+// typed one to the account password's floor itself - vaultPasswordFloor, the
+// same functions, so the two cannot drift apart.
 const EXPORT_MIN_GENERATED_BITS = 70;
-const EXPORT_MIN_TYPED_LENGTH = 12;
-const EXPORT_MIN_TYPED_SCORE = 3;
 
 window.vaultExportMixin = function vaultExportMixin() {
   return {
@@ -24,6 +23,11 @@ window.vaultExportMixin = function vaultExportMixin() {
     // a human typed. Each is only read under its own source.
     exportGeneratedBits: 0,
     exportTypedScore: null,
+    // The breach corpus's answer about the typed phrase: unchecked | checking
+    // | clean | found | unavailable, as on the account floor. The generation
+    // discards an answer about a phrase the user has since replaced.
+    exportBreachStatus: 'unchecked',
+    exportBreachGeneration: 0,
     exportOwnPhraseAck: false,
     exportProgress: 0,
     exportBusy: false,
@@ -199,6 +203,36 @@ window.vaultExportMixin = function vaultExportMixin() {
       }
       this.exportSource = 'typed';
       this.exportFollowsPanel = false;
+      this.exportBreachGeneration += 1;
+      this.exportBreachStatus = 'unchecked';
+    },
+
+    // Debounced on the field. A drawn phrase is never looked up: it comes from
+    // the panel's random draw, and the corpus can only hold what people chose.
+    async checkExportBreach() {
+      if (this.exportSource !== 'typed' || !this.exportPassphrase) return;
+      const generation = ++this.exportBreachGeneration;
+      this.exportBreachStatus = 'checking';
+      const status = await window.vaultPasswordFloor.lookupBreach(this.exportPassphrase);
+      if (generation !== this.exportBreachGeneration) return;
+      this.exportBreachStatus = status;
+    },
+
+    // What the floor says about a typed phrase: 'short', 'measuring' while the
+    // meter or the corpus has not answered, 'weak', 'breached' or 'ok'. A
+    // phrase not measured yet is neither refused nor accepted on screen.
+    typedPassphraseVerdict() {
+      const floor = window.vaultPasswordFloor;
+      if (!floor.longEnough(this.exportPassphrase)) return 'short';
+      if (this.exportBreachStatus === 'found') return 'breached';
+      if (this.exportTypedScore === null) return 'measuring';
+      if (!floor.strongEnough(this.exportTypedScore)) return 'weak';
+      // A corpus that could not be reached does not stop anyone, as on the
+      // account floor; one that has not answered yet is not a pass.
+      if (this.exportBreachStatus !== 'clean' && this.exportBreachStatus !== 'unavailable') {
+        return 'measuring';
+      }
+      return 'ok';
     },
 
     // A count, not a secret: it outlives the download so the dialog can say
@@ -216,18 +250,13 @@ window.vaultExportMixin = function vaultExportMixin() {
     // A generated phrase carries an exact count, drawn by the panel from a
     // request entropyBits can measure. A typed one cannot be measured - entropy
     // is a property of the process that produced it, not of the string - so it
-    // is held to the estimate the account password is held to, in code points
-    // after NFC like the account floor.
+    // is held to the account password's floor.
     passphraseStrongEnough() {
       if (!this.exportPassphrase) return false;
       if (this.exportSource === 'generated') {
         return this.exportGeneratedBits >= EXPORT_MIN_GENERATED_BITS;
       }
-      return (
-        Array.from(this.exportPassphrase.normalize('NFC')).length >= EXPORT_MIN_TYPED_LENGTH
-        && this.exportTypedScore !== null
-        && this.exportTypedScore >= EXPORT_MIN_TYPED_SCORE
-      );
+      return this.typedPassphraseVerdict() === 'ok';
     },
 
     // A typed phrase also needs a confirmation - the field is masked, and a
@@ -357,6 +386,8 @@ window.vaultExportMixin = function vaultExportMixin() {
       this.exportSource = 'generated';
       this.exportGeneratedBits = 0;
       this.exportTypedScore = null;
+      this.exportBreachGeneration += 1;
+      this.exportBreachStatus = 'unchecked';
       this.exportFollowsPanel = false;
       this.exportOwnPhraseAck = false;
       this.exportProgress = 0;

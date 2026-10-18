@@ -20,6 +20,7 @@ page: the JS suite reads the mixin's state without ever mounting the dialog, so
 none of them can be established there.
 """
 
+import hashlib
 import re
 
 from ..reference import archive
@@ -440,6 +441,29 @@ class ExportWalkTests(VaultBrowserCase):
         self.assertFalse(
             self.page.get_by_test_id("export-passphrase-too-weak").is_visible(),
             "the refusal stayed on screen over a phrase the floor accepts",
+        )
+
+    def test_a_typed_passphrase_from_the_breach_corpus_never_seals_an_archive(self):
+        """The account floor refuses a breached password; the archive too."""
+        breached = "correct horse battery staple, again"
+        suffix = hashlib.sha1(breached.encode()).hexdigest().upper()[5:]
+        # On the context: the lookup leaves through the service worker, which
+        # page.route does not see.
+        self.context.route(
+            "https://api.pwnedpasswords.com/range/*",
+            lambda route: route.fulfill(status=200, body=f"{suffix}:3912\n"),
+        )
+        self._seeded_vault()
+        self._open_export()
+
+        self.page.fill("#export-passphrase", breached)
+        self.page.wait_for_selector("#export-confirm", state="attached", timeout=10000)
+        self.page.fill("#export-confirm", breached)
+        self.page.check("[data-testid='export-own-phrase-ack']")
+        self.page.get_by_test_id("export-passphrase-breached").wait_for(timeout=15000)
+        self.assertTrue(
+            self.page.locator("[data-testid='export-run']").is_disabled(),
+            "a breached phrase enabled Export",
         )
 
     def test_the_interchange_export_warns_before_it_builds_anything(self):

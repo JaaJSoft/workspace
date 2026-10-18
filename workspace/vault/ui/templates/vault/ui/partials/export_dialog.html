@@ -150,6 +150,7 @@
                     x-model="exportPassphrase"
                     :disabled="exportBusy"
                     @input="noteTypedPassphrase()"
+                    @input.debounce.400ms="checkExportBreach()"
                   />
                   {% comment %}
                     Show and Copy act on the field, never on the panel. Once Use
@@ -212,13 +213,23 @@
                   >The field follows the generator: the passphrase shown below is the one that will seal the archive.</span>
                   <span
                     class="text-base-content/60"
-                    x-show="passphraseState() === 'typed' && passphraseStrongEnough()"
+                    x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'ok'"
                   >Your own passphrase: confirm it below.</span>
+                  <span
+                    class="text-base-content/60"
+                    data-testid="export-passphrase-measuring"
+                    x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'measuring'"
+                  >Checking this passphrase...</span>
                   <span
                     class="text-warning"
                     data-testid="export-passphrase-too-weak"
-                    x-show="passphraseState() === 'typed' && !passphraseStrongEnough()"
+                    x-show="passphraseState() === 'typed' && ['short', 'weak'].includes(typedPassphraseVerdict())"
                   >At least 12 characters, and strong enough to resist guessing: nothing else protects this file.</span>
+                  <span
+                    class="text-error"
+                    data-testid="export-passphrase-breached"
+                    x-show="passphraseState() === 'typed' && typedPassphraseVerdict() === 'breached'"
+                  >This passphrase appears in known data breaches, so it is among the first an attacker tries. Choose another.</span>
                   <span
                     class="text-warning"
                     data-testid="export-generated-too-weak"

@@ -1080,8 +1080,8 @@ test('saying yes to an outfit card confirms the people kept and sets the others 
   await component.pickGuess(card);
 
   assert.deepEqual(requests.map((r) => [r.url, r.body]), [
-    [APPEARANCES, { action: 'confirm', appearances: ['a1'] }],
-    [APPEARANCES, { action: 'reject', appearances: ['a2'] }],
+    [APPEARANCES, { action: 'confirm', appearances: ['a1'], person: 'n' }],
+    [APPEARANCES, { action: 'reject', appearances: ['a2'], person: 'n' }],
   ]);
   assert.equal(alerts[0].message, '1 person confirmed');
   assert.equal(alerts[0].options.actions.length, 1);
@@ -1096,6 +1096,7 @@ test('an outfit card puts the people kept with another contact, and offers no ne
   component.typeName(card, 'Léa');
 
   assert.deepEqual(Array.from(component.options(card), (o) => o.kind), []);
+  assert.equal(component.noOptionsLabel(card), 'Nobody with a face in your photos has this name.');
   await component.pick(card, { kind: 'person', person: NOAH });
 
   assert.deepEqual(requests.map((r) => r.body), [{ action: 'assign', appearances: ['a1'], person: 'o' }]);
@@ -1144,4 +1145,12 @@ test('an outfit answer says why people were left as they were', () => {
     ctx.outfitMessage('confirm', { done: ['a'], skipped: [{ appearance: 'b', reason: 'already_in_photo' }] }),
     '1 person confirmed. 1 person left as they were: they are already in that photo',
   );
+});
+
+test('an outfit card offers only the contacts with a face in the library', () => {
+  const { component } = reviewPage({ cards: [outfitCard('a1')] });
+  const card = component.cards[0];
+  component.results = [{ ...NOAH, photo_count: 3 }, { uuid: 'x', name: 'No face', photo_count: 0 }];
+
+  assert.deepEqual(Array.from(component.otherOptions(card), (o) => o.person.uuid), ['o']);
 });

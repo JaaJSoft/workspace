@@ -96,11 +96,14 @@ class BatchResult:
 def apply(user, action, appearances, person=None):
     """Answer for each of *appearances* (the user's, already checked).
 
-    confirm: they are the suggested person; reject: they are not; hide:
-    nobody to name; assign: they are *person* (a contact the user can see).
-    A person already shown in the photo is skipped: a person is in a photo
-    once. So is everyone assigned to a contact with no face in the library:
-    their photos are listed through their faces.
+    confirm: they are *person*, the person their clothes suggest; reject:
+    they are not; hide: nobody to name; assign: they are *person*, another
+    contact the user can see. A person whose suggestion is no longer
+    *person* is skipped: the suggestions move in the background, and the
+    answer is about the person the user was shown. So is a person the photo
+    already shows (a person is in a photo once), and everyone assigned to a
+    contact with no face in the library: their photos are listed through
+    their faces.
     """
     result = BatchResult()
     if not appearances:
@@ -126,18 +129,13 @@ def apply(user, action, appearances, person=None):
 
 def _answer(row, action, person):
     """Write *action*'s answer on *row*; the reason it could not, or None."""
-    if action in (CONFIRM, REJECT) and row.suggested_person_id is None:
+    if action in (CONFIRM, REJECT) and row.suggested_person_id != person.pk:
         return NO_SUGGESTION
-    if action == CONFIRM:
-        person_id = row.suggested_person_id
-    elif action == ASSIGN:
-        person_id = person.pk
-    else:
-        person_id = None
+    person_id = person.pk if action in (CONFIRM, ASSIGN) else None
     if person_id is not None and person_id in _persons_in_photo(row):
         return ALREADY_IN_PHOTO
     if action == REJECT:
-        row.rejected_person_id = row.suggested_person_id
+        row.rejected_person_id = person.pk
     elif action == HIDE:
         row.hidden = True
     else:

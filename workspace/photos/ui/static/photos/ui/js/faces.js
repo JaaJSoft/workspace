@@ -1198,8 +1198,11 @@ function outfitSteps(card, kept, left, answer) {
     return steps;
   }
   if (answer.person === card.guess.uuid) {
-    if (kept.length) steps.push({ appearances: { action: 'confirm', appearances: kept } });
-    if (left.length) steps.push({ appearances: { action: 'reject', appearances: left } });
+    // The person the card showed: the server skips anyone suggested someone
+    // else since the page loaded.
+    const person = card.guess.uuid;
+    if (kept.length) steps.push({ appearances: { action: 'confirm', appearances: kept, person } });
+    if (left.length) steps.push({ appearances: { action: 'reject', appearances: left, person } });
     return steps;
   }
   if (kept.length) {
@@ -1377,12 +1380,19 @@ window.facesReview = function facesReview() {
     },
 
     // The typed name and the contacts found are the active card's only. An
-    // outfit card offers no new contact: a person's photos are listed
-    // through their faces, and a new contact has none.
+    // outfit card only offers people with a face in the library: a person's
+    // photos are listed through their faces, and a new contact has none.
     options(card) {
       const query = this.isActive(card) ? this.query : '';
       const options = reviewOptions(query, this.results, card.guess);
-      return card.kind === 'outfit' ? options.filter((o) => o.kind !== 'create') : options;
+      if (card.kind !== 'outfit') return options;
+      return options.filter((o) => o.kind === 'person' && o.person.photo_count > 0);
+    },
+
+    noOptionsLabel(card) {
+      return card.kind === 'outfit'
+        ? 'Nobody with a face in your photos has this name.'
+        : 'No contact yet: type a name to add one to People.';
     },
 
     // The contacts the picker lists: the guess has its own button.

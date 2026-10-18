@@ -323,10 +323,14 @@ def _write(query, suggestion):
     person_id, distance = suggestion if suggestion is not None else (None, None)
     if person_id == query.suggested_id:
         return 0
-    # Conditional: a person the user answered for in the meantime keeps the
-    # answer.
+    # Conditional on what the pass read: a person the user answered for in
+    # the meantime (said who it is, or is not, or hid) keeps the answer.
     return Appearance.objects.filter(
-        pk=query.pk, person__isnull=True, hidden=False
+        pk=query.pk,
+        person__isnull=True,
+        hidden=False,
+        suggested_person_id=query.suggested_id,
+        rejected_person_id=query.rejected_id,
     ).update(
         suggested_person_id=person_id,
         suggestion_distance=None if distance is None else round(distance, 4),

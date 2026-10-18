@@ -7,11 +7,13 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from workspace.photos.models import Appearance
 from workspace.photos.queries import person_photos
 from workspace.photos.services import appearance_review
 from workspace.photos.services.appearance_review import (
     ALREADY_IN_PHOTO,
     NO_FACE,
+    NO_SUGGESTION,
     outfit_suggestions,
 )
 
@@ -71,7 +73,9 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertEqual(outfits.appearance_ids, (self.row.pk,))
 
     def test_saying_yes_makes_the_photo_the_persons(self):
-        result = appearance_review.apply(self.user, "confirm", [self.row])
+        result = appearance_review.apply(
+            self.user, "confirm", [self.row], person=self.lea
+        )
 
         self.assertEqual(result.done, [self.row.pk])
         self.row.refresh_from_db()
@@ -80,7 +84,7 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertIn(self.back, person_photos(self.user, self.lea))
 
     def test_saying_no_never_suggests_them_again(self):
-        appearance_review.apply(self.user, "reject", [self.row])
+        appearance_review.apply(self.user, "reject", [self.row], person=self.lea)
 
         self.row.refresh_from_db()
         self.assertEqual(self.row.rejected_person_id, self.lea.pk)
@@ -112,15 +116,38 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.row.refresh_from_db()
         self.assertIsNone(self.row.person_id)
 
+    def test_an_answer_about_someone_no_longer_suggested_is_left_unsaid(self):
+        # Suggested Noah since the card showing Lea was loaded.
+        Appearance.objects.filter(pk=self.row.pk).update(suggested_person=self.noah)
+        self.row.refresh_from_db()
+
+        confirmed = appearance_review.apply(
+            self.user, "confirm", [self.row], person=self.lea
+        )
+        rejected = appearance_review.apply(
+            self.user, "reject", [self.row], person=self.lea
+        )
+
+        self.assertEqual(confirmed.skipped, [(self.row.pk, NO_SUGGESTION)])
+        self.assertEqual(rejected.skipped, [(self.row.pk, NO_SUGGESTION)])
+        self.row.refresh_from_db()
+        self.assertIsNone(self.row.person_id)
+        self.assertIsNone(self.row.rejected_person_id)
+        self.assertEqual(self.row.suggested_person_id, self.noah.pk)
+
     def test_a_person_already_in_the_photo_is_left_as_they_were(self):
         named_face(self.user, self.back, self.lea, box=(0.65, 0.1, 0.1, 0.1))
 
-        result = appearance_review.apply(self.user, "confirm", [self.row])
+        result = appearance_review.apply(
+            self.user, "confirm", [self.row], person=self.lea
+        )
 
         self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
 
     def test_undo_puts_the_answers_back(self):
-        result = appearance_review.apply(self.user, "confirm", [self.row])
+        result = appearance_review.apply(
+            self.user, "confirm", [self.row], person=self.lea
+        )
 
         self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
 
@@ -132,7 +159,9 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
             appearance_review.undo(self.user, result.undo)
 
     def test_an_undo_is_the_users_own(self):
-        result = appearance_review.apply(self.user, "confirm", [self.row])
+        result = appearance_review.apply(
+            self.user, "confirm", [self.row], person=self.lea
+        )
         bob = User.objects.create_user(username="bob", password="p")
 
         with self.assertRaises(appearance_review.UndoExpired):
@@ -159,7 +188,11 @@ class AppearanceApiTests(FacesTestMixin, TestCase):
     def test_a_batch_answers_for_the_users_people(self):
         response = self.client.post(
             BATCH,
-            {"action": "confirm", "appearances": [str(self.row.pk)]},
+            {
+                "action": "confirm",
+                "appearances": [str(self.row.pk)],
+                "person": str(self.lea.pk),
+            },
             format="json",
         )
 
@@ -173,10 +206,15 @@ class AppearanceApiTests(FacesTestMixin, TestCase):
         opt_in(bob)
         client = APIClient()
         client.force_authenticate(bob)
+        their_lea = contact(bob, "Léa")
 
         response = client.post(
             BATCH,
-            {"action": "confirm", "appearances": [str(self.row.pk)]},
+            {
+                "action": "confirm",
+                "appearances": [str(self.row.pk)],
+                "person": str(their_lea.pk),
+            },
             format="json",
         )
 
@@ -202,11 +240,20 @@ class AppearanceApiTests(FacesTestMixin, TestCase):
 
         self.assertEqual(response.status_code, 400)
 
-    def test_only_assign_takes_a_person(self):
+    def test_confirm_names_the_person_it_confirms(self):
+        response = self.client.post(
+            BATCH,
+            {"action": "confirm", "appearances": [str(self.row.pk)]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_hide_names_nobody(self):
         response = self.client.post(
             BATCH,
             {
-                "action": "confirm",
+                "action": "hide",
                 "appearances": [str(self.row.pk)],
                 "person": str(self.lea.pk),
             },

@@ -300,13 +300,13 @@ class AppearanceBatchSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=ACTIONS)
     person = serializers.UUIDField(
         required=False,
-        help_text="assign: these people are this contact, whose face is in "
-        "the library.",
+        help_text="confirm and reject: the person the review suggested; "
+        "assign: the contact these people are, whose face is in the library.",
     )
 
     def validate(self, data):
-        if (data["action"] == "assign") != bool(data.get("person")):
+        if (data["action"] == "hide") == bool(data.get("person")):
             raise serializers.ValidationError(
-                "assign, and only assign, takes a person."
+                "confirm, reject and assign take a person, hide does not."
             )
         return data

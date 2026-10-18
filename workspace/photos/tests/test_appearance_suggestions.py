@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from workspace.photos.models import Face
+from workspace.photos.models import Appearance, Face
+from workspace.photos.services import appearance_suggestions
 from workspace.photos.services.appearance_suggestions import (
     suggest_around,
     suggest_owner,
@@ -205,6 +206,21 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         named_face(self.user, back.file, None)
 
         suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_an_answer_given_while_a_pass_ran_is_kept(self):
+        self.anchor(self.lea, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+        (read,) = [
+            item
+            for item in appearance_suggestions._read(self.user, "fake", None, None)
+            if item.pk == back.pk
+        ]
+        # The user says it is not Lea while the pass computes Lea.
+        Appearance.objects.filter(pk=back.pk).update(rejected_person=self.lea)
+
+        self.assertEqual(appearance_suggestions._write(read, (self.lea.pk, 0.0)), 0)
 
         self.assertIsNone(self.suggestion(back))
 

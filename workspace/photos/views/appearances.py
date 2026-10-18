@@ -54,7 +54,9 @@ class AppearanceBatchView(APIView):
         summary="Say who several people found by their body are",
         description=(
             "confirm: they are the person their clothes suggest; reject: they "
-            "are not; hide: nobody to name; assign: they are this contact. "
+            "are not (both name that person, and skip whoever is suggested "
+            "someone else by now); hide: nobody to name; assign: they are "
+            "this contact. "
             "Each one that cannot take the answer is skipped with a reason "
             "('unavailable', 'already_in_photo', 'no_face', 'missing'). The "
             "returned undo token puts them back as they were, for a few minutes."

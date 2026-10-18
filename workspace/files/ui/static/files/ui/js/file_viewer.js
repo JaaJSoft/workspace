@@ -130,7 +130,9 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       const viewerUrl = edit ?
         urls.viewer + (urls.viewer.includes('?') ? '&' : '?') + 'edit=1' :
         urls.viewer;
-      await this.loadViewerPanel(viewerUrl);
+      // Not merged: a later open or a close took the panel over, and what is
+      // in it now is not this file's.
+      if (!await this.loadViewerPanel(viewerUrl)) return;
       const panel = document.getElementById(this._viewerPanelId());
       this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
       const video = at != null && panel ? panel.querySelector('video') : null;

@@ -1375,6 +1375,7 @@ window.vaultBrowser = (function () {
           favorite: false,
           name: '',
           notes: '',
+          notesOpened: true,
           values: {},
           carriedFields: {},
           keyVersion: (this.openVault && this.openVault.key_version) || 1,
@@ -1393,6 +1394,7 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
+        let notes = '';
         const type = this.typeFor(entry.type);
         try {
           for (const field of type ? type.fields : []) {
@@ -1402,6 +1404,9 @@ window.vaultBrowser = (function () {
               window.vaultSession, this.openVault, row, field.field_id
             );
           }
+          notes = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'notes'
+          );
         } catch (err) {
           if (err && err.reason === 'locked') return;
           this.error = 'That entry could not be opened for editing.';
@@ -1415,7 +1420,8 @@ window.vaultBrowser = (function () {
           tags: [...entry.tags],
           favorite: entry.favorite,
           name: entry.name,
-          notes: '',
+          notes: notes,
+          notesOpened: true,
           values: values,
           hasTotp: (entry.fieldIds || []).includes('totp'),
           totpInput: null,

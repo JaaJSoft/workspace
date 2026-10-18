@@ -1570,11 +1570,8 @@ test('editing loads the row and opens only the fields the form shows', async () 
   ]);
 });
 
-test('editing carries the notes ciphertext without opening it', async () => {
-  // No form here edits notes, and the write is a full signed replacement: a
-  // draft that dropped the column would erase stored notes on the first
-  // rename. Carrying the ciphertext keeps them without decrypting anything.
-  const { component, opened } = typed({
+test('editing an entry opens its notes into the draft', async () => {
+  const { component } = typed({
     api: {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryWith('e-1', { encrypted_notes: 'ct:notes' })],
@@ -1585,12 +1582,16 @@ test('editing carries the notes ciphertext without opening it', async () => {
   component.init();
   await component.load();
   await component.editEntry(component.entries[0]);
-  assert.equal(component.draft.encryptedNotes, 'ct:notes');
+  assert.equal(component.draft.notes, 'open:e-1|notes');
+  assert.equal(component.draft.notesOpened, true);
+});
+
+test('a new entry starts with opened, empty notes', () => {
+  const { component } = typed();
+  component.init();
+  component.newEntry('login');
   assert.equal(component.draft.notes, '');
-  assert.ok(
-    !Array.from(opened).some((entry) => String(entry).includes('notes')),
-    'the notes were never opened',
-  );
+  assert.equal(component.draft.notesOpened, true);
 });
 
 test('editing an entry carries the fields the dialog does not edit', async () => {

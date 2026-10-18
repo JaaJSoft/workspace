@@ -279,9 +279,12 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         };
         // Only a description the user changed is re-sealed: the appearance
         // dialog never shows one, and an untouched one is carried as it is.
-        const description = (dialog.description || '').trim();
-        if (dialog.mode === 'rename' && description !== (vault.description || '')) {
-          changes.description = description;
+        // Compared with what the dialog opened on, not with the reloaded row:
+        // a description another device wrote in the meantime is not one this
+        // user edited, and sending the stale copy back would revert it.
+        const opened = dialog.vault.description || '';
+        if (dialog.mode === 'rename' && dialog.description !== opened) {
+          changes.description = (dialog.description || '').trim();
         }
         const body = await window.buildVaultUpdateRequest(window.vaultSession, vault, changes);
         await window.vaultApi.updateVault(dialog.vault.uuid, body);

@@ -287,6 +287,31 @@ test('an untouched description is carried rather than re-sealed', async () => {
   assert.equal('description' in bodies[0], false);
 });
 
+test('a description changed elsewhere while the dialog was open is not reverted', async () => {
+  const opened = { ...VAULT, description: 'Bank' };
+  const elsewhere = { ...VAULT, description: 'Bank and cards' };
+  const { component, bodies } = switcher({
+    component: {
+      vaults: [opened, OTHER],
+      flushDeferredReload: async function () { this.vaults = [elsewhere, OTHER]; },
+    },
+  });
+  component.openVaultDialog('rename', opened);
+  component.vaultDialog.name = 'Money';
+  await component.saveVaultDialog();
+  assert.equal(bodies[0].name, 'Money');
+  assert.equal('description' in bodies[0], false);
+});
+
+test('a description left as it was is not re-sealed for its surrounding spaces', async () => {
+  const padded = { ...VAULT, description: ' Bank ' };
+  const { component, bodies } = switcher({ component: { vaults: [padded, OTHER] } });
+  component.openVaultDialog('rename', padded);
+  component.vaultDialog.name = 'Money';
+  await component.saveVaultDialog();
+  assert.equal('description' in bodies[0], false);
+});
+
 test('the appearance dialog never touches the description', async () => {
   const described = { ...VAULT, description: 'Bank and cards' };
   const { component, bodies } = switcher({ component: { vaults: [described, OTHER] } });

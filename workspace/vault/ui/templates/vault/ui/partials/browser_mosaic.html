@@ -25,8 +25,12 @@
     <template x-for="folder in visibleFolders()" :key="folder.uuid">
       <div
         class="bg-base-100 border border-base-300 rounded-lg hover:border-warning hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
+        :class="dropTarget === folder.uuid && 'file-drop-target'"
         @click="openFolderFromRow(folder)"
         @contextmenu.stop="openFolderMenu($event, folder)"
+        @dragover="onFolderDragOver($event, folder.uuid)"
+        @dragleave="onFolderDragLeave($event)"
+        @drop="onFolderDrop($event, folder.uuid)"
       >
         <div class="absolute top-2 right-2 z-10" @click.stop>
           <button
@@ -70,8 +74,12 @@
         class="bg-base-100 border rounded-lg hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden flex flex-col"
         :class="[
         panelEntry === entry ? 'border-module ring-2 ring-module/30' : 'border-base-300 hover:border-module',
-        isSelected(entry.uuid) ? 'ring-2 ring-module border-module' : ''
+        isSelected(entry.uuid) ? 'ring-2 ring-module border-module' : '',
+        draggedUuids.includes(entry.uuid) ? 'opacity-40' : ''
       ]"
+        :draggable="canDragEntries()"
+        @dragstart="onEntryDragStart($event, entry)"
+        @dragend="onEntryDragEnd()"
         @click="openEntryFromRow(entry)"
         @contextmenu.stop="openMenu($event, entry)"
       >

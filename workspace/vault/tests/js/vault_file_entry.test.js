@@ -611,3 +611,130 @@ test('tags whose entry vanished while the dialog was open write nothing', async 
   assert.equal(updates.length, 0);
   assert.equal(component.tagsDialog, null);
 });
+
+function dragEvent() {
+  const data = {};
+  return {
+    data,
+    prevented: false,
+    preventDefault() { this.prevented = true; },
+    dataTransfer: {
+      effectAllowed: '',
+      dropEffect: '',
+      setData(type, value) { data[type] = value; },
+    },
+  };
+}
+
+test('a selected row drags the whole selection', () => {
+  const { component } = browser([
+    { uuid: 'e-1' }, { uuid: 'e-2' }, { uuid: 'e-3' },
+  ]);
+  component.selected = ['e-1', 'e-3'];
+  const event = dragEvent();
+
+  component.onEntryDragStart(event, component.entries[2]);
+
+  assert.deepStrictEqual(Array.from(component.draggedUuids), ['e-1', 'e-3']);
+  assert.equal(event.dataTransfer.effectAllowed, 'move');
+  assert.equal(event.data['application/x-vault-entries'], 'e-1,e-3');
+});
+
+test('an unselected row drags alone', () => {
+  const { component } = browser([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.selected = ['e-1'];
+  const event = dragEvent();
+
+  component.onEntryDragStart(event, component.entries[1]);
+
+  assert.deepStrictEqual(Array.from(component.draggedUuids), ['e-2']);
+  assert.equal(event.dataTransfer.effectAllowed, 'move');
+});
+
+test('rows are not draggable outside a folder view', () => {
+  const { component } = browser([{ uuid: 'e-1' }]);
+  assert.equal(component.canDragEntries(), true);
+
+  component.view = 'favorites';
+  assert.equal(component.canDragEntries(), false);
+  component.view = 'trash';
+  assert.equal(component.canDragEntries(), false);
+  component.view = 'all';
+  component.tagFilter = TAG_A;
+  assert.equal(component.canDragEntries(), false);
+
+  const event = dragEvent();
+  component.onEntryDragStart(event, component.entries[0]);
+  assert.equal(event.prevented, true);
+  assert.deepStrictEqual(Array.from(component.draggedUuids), []);
+});
+
+test('the current folder refuses the drop, any other accepts it as a move', () => {
+  const { component } = browser([{ uuid: 'e-1', folder: SAVINGS }]);
+  component.folderUuid = SAVINGS;
+  component.draggedUuids = ['e-1'];
+
+  const here = dragEvent();
+  component.onFolderDragOver(here, SAVINGS);
+  assert.equal(here.prevented, false);
+  assert.equal(component.dropTarget, undefined);
+
+  const there = dragEvent();
+  component.onFolderDragOver(there, WORK);
+  assert.equal(there.prevented, true);
+  assert.equal(there.dataTransfer.dropEffect, 'move');
+  assert.equal(component.dropTarget, WORK);
+
+  const root = dragEvent();
+  component.onFolderDragOver(root, null);
+  assert.equal(root.prevented, true);
+  assert.equal(component.dropTarget, null);
+});
+
+test('the vault root refuses the drop while the root is shown', () => {
+  const { component } = browser([{ uuid: 'e-1' }]);
+  component.draggedUuids = ['e-1'];
+  const event = dragEvent();
+
+  component.onFolderDragOver(event, null);
+
+  assert.equal(event.prevented, false);
+});
+
+test('a drop moves the dragged rows through the shared write path', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', folder: null }, { uuid: 'e-2', folder: null },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'move' }], 'e-2': [{ id: 'move' }] };
+  component.draggedUuids = ['e-1', 'e-2'];
+
+  await component.onFolderDrop(dragEvent(), SAVINGS);
+
+  assert.deepStrictEqual(updates.map((u) => u.uuid), ['e-1', 'e-2']);
+  assert.equal(component.fileNotice, 'Moved 2 entries to Savings.');
+  assert.deepStrictEqual(Array.from(component.draggedUuids), []);
+  assert.equal(component.dropTarget, undefined);
+});
+
+test('a drop writes nothing when the registry no longer offers a move for a row', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', folder: null }, { uuid: 'e-2', folder: null },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'move' }], 'e-2': [] };
+  component.draggedUuids = ['e-1', 'e-2'];
+
+  await component.onFolderDrop(dragEvent(), SAVINGS);
+
+  assert.equal(updates.length, 0);
+});
+
+test('a drop while a write is running writes nothing', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', folder: null }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  component.draggedUuids = ['e-1'];
+  component.busy = true;
+
+  await component.onFolderDrop(dragEvent(), SAVINGS);
+
+  assert.equal(updates.length, 0);
+});

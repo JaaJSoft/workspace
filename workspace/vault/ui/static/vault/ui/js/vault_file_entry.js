@@ -40,6 +40,10 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
     // What the last batch did, in words. It names a folder, so it goes when
     // the vault locks.
     fileNotice: '',
+    // The rows being dragged, and the folder the pointer is over (null is the
+    // vault root, undefined is none).
+    draggedUuids: [],
+    dropTarget: undefined,
 
     openMoveDialog: function (rows) {
       this.moveDialog = {
@@ -180,7 +184,74 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       this.tagsDialog = null;
     },
 
+    // Only where the rows sit in the folder the listing shows: in Favorites, a
+    // tag view or the trash a drop would send them out of their folder.
+    canDragEntries: function () {
+      return this.view === 'all' && !this.tagFilter;
+    },
+
+    // Dragging a selected row takes the whole selection; any other row goes
+    // alone.
+    onEntryDragStart: function (event, entry) {
+      if (!this.canDragEntries()) {
+        event.preventDefault();
+        return;
+      }
+      this.draggedUuids = this.isSelected(entry.uuid) ? this.selected.slice() : [entry.uuid];
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('application/x-vault-entries', this.draggedUuids.join(','));
+      if (this.draggedUuids.length > 1) {
+        const ghost = document.getElementById('drag-ghost');
+        if (ghost) {
+          ghost.textContent = this.draggedUuids.length + ' entries';
+          event.dataTransfer.setDragImage(ghost, 12, 12);
+        }
+      }
+    },
+
+    // The folder the listing shows is where the rows already are, so it is no
+    // target.
+    isDropFolder: function (folderUuid) {
+      return (folderUuid || null) !== (this.folderUuid || null);
+    },
+
+    onFolderDragOver: function (event, folderUuid) {
+      if (!this.draggedUuids.length || !this.isDropFolder(folderUuid)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      this.dropTarget = folderUuid || null;
+    },
+
+    // Crossing from a row into one of its own cells also fires a leave.
+    onFolderDragLeave: function (event) {
+      const next = event.relatedTarget;
+      if (next && event.currentTarget && event.currentTarget.contains(next)) return;
+      this.dropTarget = undefined;
+    },
+
+    // The registry is asked again, as the dialog does: a row it no longer
+    // offers a move for stops the whole drop.
+    onFolderDrop: async function (event, folderUuid) {
+      event.preventDefault();
+      const uuids = this.draggedUuids;
+      this.onEntryDragEnd();
+      if (!uuids.length || this.busy || !this.isDropFolder(folderUuid)) return;
+      const movable = uuids.every((uuid) => {
+        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
+        return entry && this.hasAction(entry, 'move');
+      });
+      if (!movable) return;
+      await this.moveEntries(uuids, folderUuid || null);
+    },
+
+    onEntryDragEnd: function () {
+      this.draggedUuids = [];
+      this.dropTarget = undefined;
+    },
+
     clearFileEntry: function () {
+      this.draggedUuids = [];
+      this.dropTarget = undefined;
       this.moveDialog = null;
       this.tagsDialog = null;
       this.fileNotice = '';

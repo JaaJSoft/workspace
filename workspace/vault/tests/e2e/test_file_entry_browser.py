@@ -163,3 +163,110 @@ class FileEntryBrowserTests(VaultBrowserCase):
         self.assertEqual(box.evaluate(read), [False, False])
         box.click()
         self.assertEqual(box.evaluate(read), [False, True])
+
+    def _record_drag(self):
+        """Log what the two sides of a drag negotiate, in the real browser.
+
+        Playwright's synthesized drags report ``effectAllowed = 'all'``, which
+        contains every effect, so a drop landing proves nothing about a drop
+        the browser would refuse. The values are read at ``dragstart`` and at
+        ``dragover``, after the component's own handlers have run.
+        """
+        self.page.evaluate(
+            """() => {
+                window.__drag = { start: null, over: [] };
+                window.addEventListener('dragstart', (e) => {
+                    window.__drag.start = {
+                        effectAllowed: e.dataTransfer.effectAllowed,
+                        types: [...e.dataTransfer.types],
+                    };
+                });
+                window.addEventListener('dragover', (e) => {
+                    window.__drag.over.push({
+                        dropEffect: e.dataTransfer.dropEffect,
+                        prevented: e.defaultPrevented,
+                    });
+                });
+            }"""
+        )
+
+    def _drag(self, source, target):
+        src = source.bounding_box()
+        dst = target.bounding_box()
+        self.page.mouse.move(src["x"] + 60, src["y"] + src["height"] / 2)
+        self.page.mouse.down()
+        self.page.mouse.move(src["x"] + 60, src["y"] + src["height"] / 2 + 8, steps=5)
+        self.page.mouse.move(
+            dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2, steps=20
+        )
+        self.page.wait_for_timeout(300)
+        self.page.mouse.move(
+            dst["x"] + dst["width"] / 2, dst["y"] + dst["height"] / 2 + 2, steps=3
+        )
+        self.page.mouse.up()
+
+    def test_dragging_entries_onto_a_folder_moves_them(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._create_entry("GitLab", "tanuki", "hunter3")
+        self._create_folder("Banking")
+        self._record_drag()
+
+        self._drag(
+            self.page.locator("tbody tr:has-text('GitHub')"),
+            self.page.locator("tbody tr:has-text('Banking')"),
+        )
+
+        self.page.get_by_text("Moved 1 entry to Banking.").wait_for(timeout=30000)
+        drag = self.page.evaluate("window.__drag")
+        self.assertEqual(drag["start"]["effectAllowed"], "move")
+        self.assertIn("application/x-vault-entries", drag["start"]["types"])
+        self.assertIn({"dropEffect": "move", "prevented": True}, drag["over"])
+        self.assertTrue(self.page.locator("tbody tr:has-text('GitLab')").is_visible())
+        self.assertEqual(self.page.locator("tbody tr:has-text('GitHub')").count(), 0)
+
+        self.page.click("tbody tr:has-text('Banking')")
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=30000)
+
+    def test_dropping_on_a_breadcrumb_ancestor_moves_up(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._create_folder("Banking")
+        self._drag(
+            self.page.locator("tbody tr:has-text('GitHub')"),
+            self.page.locator("tbody tr:has-text('Banking')"),
+        )
+        self.page.get_by_text("Moved 1 entry to Banking.").wait_for(timeout=30000)
+        self.page.click("tbody tr:has-text('Banking')")
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=30000)
+        self._record_drag()
+
+        root = self.page.locator("nav button").first
+        self._drag(self.page.locator("tbody tr:has-text('GitHub')"), root)
+
+        self.page.wait_for_selector(
+            "tbody tr:has-text('GitHub')", state="detached", timeout=30000
+        )
+        drag = self.page.evaluate("window.__drag")
+        self.assertEqual(drag["start"]["effectAllowed"], "move")
+        self.assertIn({"dropEffect": "move", "prevented": True}, drag["over"])
+        root.click()
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=30000)
+
+    def test_rows_are_not_draggable_in_the_favourites_view(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self.assertEqual(
+            self.page.locator("tbody tr:has-text('GitHub')").get_attribute("draggable"),
+            "true",
+        )
+        self.page.locator(".drawer-side").get_by_role(
+            "button", name="Favorites"
+        ).click()
+        self.page.evaluate(
+            """() => Alpine.$data(document.querySelector('[x-data="vaultBrowser()"]'))
+                .entries.forEach((e) => { e.favorite = true; })"""
+        )
+        row = self.page.locator("tbody tr:has-text('GitHub')")
+        row.wait_for(timeout=10000)
+        self.assertIsNone(row.get_attribute("draggable"))

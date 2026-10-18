@@ -96,8 +96,12 @@
         <template x-for="folder in visibleFolders()" :key="folder.uuid">
           <tr
             class="hover cursor-pointer"
+            :class="dropTarget === folder.uuid && 'file-drop-target'"
             @click="openFolderFromRow(folder)"
             @contextmenu.stop="openFolderMenu($event, folder)"
+            @dragover="onFolderDragOver($event, folder.uuid)"
+            @dragleave="onFolderDragLeave($event)"
+            @drop="onFolderDrop($event, folder.uuid)"
           >
             <td></td>
             <td>
@@ -128,7 +132,10 @@
         <template x-for="entry in visibleEntries()" :key="entry.uuid">
           <tr
             class="hover cursor-pointer"
-            :class="[isSelected(entry.uuid) ? 'bg-module/10' : '', panelEntry === entry ? 'bg-module/15' : '']"
+            :class="[isSelected(entry.uuid) ? 'bg-module/10' : '', panelEntry === entry ? 'bg-module/15' : '', draggedUuids.includes(entry.uuid) ? 'opacity-40' : '']"
+            :draggable="canDragEntries()"
+            @dragstart="onEntryDragStart($event, entry)"
+            @dragend="onEntryDragEnd()"
             @click="openEntryFromRow(entry)"
             @contextmenu.stop="openMenu($event, entry)"
           >
@@ -188,6 +195,15 @@
 
   {% include "vault/ui/partials/browser_mosaic.html" %}
 </div>
+
+{% comment %}
+  The picture the browser takes of a drag that carries several rows. It sits
+  off-screen: setDragImage needs an element that is rendered.
+{% endcomment %}
+<div
+  id="drag-ghost"
+  class="badge badge-lg bg-module text-module-content border-0 absolute -top-24 -left-24"
+></div>
 
 {% comment %}
   Every button here is one the action endpoint returned for every selected

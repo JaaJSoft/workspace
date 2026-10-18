@@ -8,6 +8,9 @@
 window.vaultOnboarding = function vaultOnboarding() {
   return {
     ...window.vaultPasswordFloorMixin(),
+    // False only on a plain-HTTP origin other than localhost, where the
+    // browser withholds crypto.subtle and no step past the first can work.
+    secureContext: window.isSecureContext !== false,
     step: 1,
     secretText: '',
     secretBytes: null,

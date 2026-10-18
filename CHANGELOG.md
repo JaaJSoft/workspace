@@ -1,34 +1,5 @@
 # Changelog
 
-## 0.44.0 - Password Vault
-
-### Highlights
-
-Meet the Vault: a password manager built into your workspace, encrypted in your browser so that not even the server can read what you keep in it. Documents also show their title, author and page count, and search finds them by those too.
-
-### Vault
-
-- A new Vault app keeps your passwords, logins and notes. Everything is encrypted on your device before it is saved: the server stores only data it cannot read, and the app warns you if anything it hands back was changed behind your back.
-- Setting it up gives you a recovery key and an emergency kit to print. Your master password and that key together open the vault, so keep the kit somewhere safe: nobody, not even an administrator, can open a vault without them.
-- Organize entries in folders and with coloured tags, mark favourites, and filter the list as you type. Move entries by dragging them onto a folder, or select several and move or retag them in one go.
-- Reveal a password only when you ask for it, and copy it with a countdown that takes it back off the clipboard. Two-factor codes are generated right in the entry.
-- A built-in generator makes strong passwords and passphrases. When you choose your master password or an export passphrase, a strength gauge flags weak ones and turns down those known from data breaches.
-- Keep several vaults, for example one for personal accounts and one for work, each with its own name and description.
-- The vault locks itself after a few idle minutes; you choose the delay. You can change your master password at any time, and the old one keeps working on your other devices until you unlock with the new one, so a forgotten new password never locks you out.
-- Export everything, either as an encrypted backup sealed with a passphrase of its own or as a readable file to take to another password manager.
-- Deleted entries go to a trash you can restore from or empty in one click.
-
-### Files
-
-- PDFs and office documents now show the properties they carry, such as title, author, subject, keywords, page count and the dates they were written and saved. Search finds a document by its title or author.
-- Videos show their dimensions next to their length, and audio files show their length.
-
-### Fixes
-
-- Dragging a folder onto Pinned works again when another folder is already pinned, instead of moving the folder inside the pinned one.
-- Tag labels no longer lose the top of capitals or the bottom of letters such as "y".
-- Notifications and alerts with a button are now the same height as the others, with the button lined up with the text.
-
 ## 0.43.0 - Uploads & Privacy
 
 ### Highlights

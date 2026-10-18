@@ -32,7 +32,10 @@
       {% endcomment %}
       <template x-if="exportConfirming">
         <div>
-          <h3 id="vault-export-warning-title" class="font-bold text-lg flex items-center gap-2 text-error">
+          <h3
+            id="vault-export-warning-title"
+            class="font-bold text-lg flex items-center gap-2 text-error"
+          >
             <i data-lucide="triangle-alert" class="w-5 h-5"></i>
             <span>This file is not protected</span>
           </h3>
@@ -51,7 +54,10 @@
 
       <template x-if="!exportConfirming">
         <div>
-          <h3 id="vault-export-dialog-title" class="font-bold text-lg flex items-center gap-2">
+          <h3
+            id="vault-export-dialog-title"
+            class="font-bold text-lg flex items-center gap-2"
+          >
             <i data-lucide="download" class="w-5 h-5 text-module"></i>
             <span>Export this account</span>
           </h3>

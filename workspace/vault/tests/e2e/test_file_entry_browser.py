@@ -51,3 +51,42 @@ class FileEntryBrowserTests(VaultBrowserCase):
         self.page.evaluate(move, None)
         notice.get_by_text("Moved 1 entry to").wait_for(timeout=30000)
         self.assertTrue(notice.is_visible())
+
+    def _create_folder(self, name):
+        self.page.get_by_role("button", name="New", exact=True).click()
+        self.page.get_by_role("button", name="New folder").first.click()
+        self.page.fill(".modal-box input[type=text]", name)
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_selector(f"tbody tr:has-text('{name}')", timeout=30000)
+
+    def _open_move_dialog_for_two_entries(self):
+        self._open_vault()
+        self._create_entry("GitHub", "octocat", "hunter2")
+        self._create_entry("GitLab", "tanuki", "hunter3")
+        self._create_folder("Banking")
+        for name in ("GitHub", "GitLab"):
+            self.page.locator(f"tbody tr:has-text('{name}') input.checkbox").check()
+        self.page.get_by_role("button", name="Move to folder").click()
+        self.page.locator("[role=dialog]").wait_for()
+
+    def test_entries_move_to_a_folder_from_the_selection_bar(self):
+        self._open_move_dialog_for_two_entries()
+        dialog = self.page.locator("[role=dialog]")
+        self.assertIn("Move 2 entries", dialog.inner_text())
+        move = dialog.get_by_role("button", name="Move", exact=True)
+        self.assertTrue(move.is_disabled())
+
+        dialog.locator("a:has-text('Banking')").click()
+        self.assertTrue(move.is_enabled())
+        move.click()
+
+        self.page.get_by_text("Moved 2 entries to Banking.").wait_for(timeout=30000)
+        self.page.locator("[role=dialog]").wait_for(state="detached")
+        self.page.click("tbody tr:has-text('Banking')")
+        self.page.wait_for_selector("tbody tr:has-text('GitHub')", timeout=30000)
+        self.assertTrue(self.page.locator("tbody tr:has-text('GitLab')").is_visible())
+
+    def test_the_move_dialog_closes_on_escape(self):
+        self._open_move_dialog_for_two_entries()
+        self.page.keyboard.press("Escape")
+        self.page.locator("[role=dialog]").wait_for(state="detached", timeout=5000)

@@ -48,6 +48,64 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       };
     },
 
+    closeMoveDialog: function () {
+      this.moveDialog = null;
+    },
+
+    // Every folder of the open vault, parents before their children, siblings
+    // in the order the listing shows them.
+    folderTree: function () {
+      const byParent = new Map();
+      this.folders.forEach(function (folder) {
+        const key = folder.parent || null;
+        if (!byParent.has(key)) byParent.set(key, []);
+        byParent.get(key).push(folder);
+      });
+      const tree = [];
+      const walk = function (parent, depth) {
+        (byParent.get(parent) || []).forEach(function (folder) {
+          tree.push({ uuid: folder.uuid, name: folder.name, depth: depth });
+          walk(folder.uuid, depth + 1);
+        });
+      };
+      walk(null, 0);
+      return tree;
+    },
+
+    // The folder every given entry sits in (null for the vault root), or
+    // undefined when they sit in different places.
+    commonFolder: function (uuids) {
+      const places = new Set();
+      uuids.forEach((uuid) => {
+        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
+        places.add(entry && entry.folder ? entry.folder : null);
+      });
+      return places.size === 1 ? [...places][0] : undefined;
+    },
+
+    canConfirmMove: function () {
+      const dialog = this.moveDialog;
+      if (!dialog || this.busy || dialog.target === undefined) return false;
+      return dialog.target !== this.commonFolder(dialog.uuids);
+    },
+
+    // The offer can change while the dialog is open (a reload, a trash from
+    // another tab), so the registry is asked again before anything is signed.
+    confirmMove: async function () {
+      if (!this.canConfirmMove()) return;
+      const { uuids, target } = this.moveDialog;
+      const stillOffered = uuids.every((uuid) => {
+        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
+        return entry && this.hasAction(entry, 'move');
+      });
+      if (!stillOffered) {
+        this.moveDialog = null;
+        return;
+      }
+      await this.moveEntries(uuids, target);
+      this.moveDialog = null;
+    },
+
     openTagsDialog: function (rows) {
       const uuids = rows.map(function (row) { return row.uuid; });
       const start = this.tagStates(uuids);

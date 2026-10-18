@@ -374,3 +374,103 @@ test('the selection bar opens the same dialogs for every selected row', async ()
   await component.runBulkAction({ id: 'set_tags' });
   assert.deepStrictEqual(Array.from(component.tagsDialog.uuids), ['e-1', 'e-2']);
 });
+
+test('the folder tree is depth-first with depths', () => {
+  const { component } = browser([]);
+  component.folders = [
+    { uuid: 'f-b', name: 'Beta', parent: null },
+    { uuid: 'f-a', name: 'Alpha', parent: null },
+    { uuid: 'f-a2', name: 'Inner', parent: 'f-a' },
+    { uuid: 'f-a21', name: 'Deep', parent: 'f-a2' },
+    { uuid: 'f-b1', name: 'Child', parent: 'f-b' },
+  ];
+
+  const tree = Array.from(component.folderTree(), (f) => [f.uuid, f.depth]);
+
+  assert.deepStrictEqual(tree, [
+    ['f-b', 0], ['f-b1', 1], ['f-a', 0], ['f-a2', 1], ['f-a21', 2],
+  ]);
+});
+
+test('the common folder is undefined for a mixed selection', () => {
+  const { component } = browser([
+    { uuid: 'e-1', folder: WORK },
+    { uuid: 'e-2', folder: WORK },
+    { uuid: 'e-3', folder: null },
+  ]);
+
+  assert.equal(component.commonFolder(['e-1', 'e-2']), WORK);
+  assert.equal(component.commonFolder(['e-3']), null);
+  assert.equal(component.commonFolder(['e-1', 'e-3']), undefined);
+});
+
+test('Move stays disabled on the current place', () => {
+  const { component } = browser([
+    { uuid: 'e-1', folder: WORK },
+    { uuid: 'e-2', folder: WORK },
+  ]);
+  component.openMoveDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+
+  assert.equal(component.canConfirmMove(), false, 'nothing chosen yet');
+  component.moveDialog.target = WORK;
+  assert.equal(component.canConfirmMove(), false, 'the place they already sit in');
+  component.moveDialog.target = SAVINGS;
+  assert.equal(component.canConfirmMove(), true);
+  component.moveDialog.target = null;
+  assert.equal(component.canConfirmMove(), true, 'the vault root is a place');
+  component.busy = true;
+  assert.equal(component.canConfirmMove(), false, 'a batch is already running');
+});
+
+test('a mixed selection can move anywhere', () => {
+  const { component } = browser([
+    { uuid: 'e-1', folder: WORK },
+    { uuid: 'e-2', folder: null },
+  ]);
+  component.openMoveDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.moveDialog.target = WORK;
+
+  assert.equal(component.canConfirmMove(), true);
+});
+
+test('confirming a move writes the chosen place and closes the dialog', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', folder: WORK }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  component.openMoveDialog([{ uuid: 'e-1' }]);
+  component.moveDialog.target = SAVINGS;
+
+  await component.confirmMove();
+
+  assert.deepStrictEqual(updates.map((u) => u.body.folder), [SAVINGS]);
+  assert.equal(component.moveDialog, null);
+  assert.equal(component.fileNotice, 'Moved 1 entry to Savings.');
+});
+
+test('a move whose offer was withdrawn while the dialog was open writes nothing', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', folder: WORK },
+    { uuid: 'e-2', folder: WORK },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'move' }], 'e-2': [{ id: 'move' }] };
+  component.openMoveDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.moveDialog.target = SAVINGS;
+  component.entryActions = { 'e-1': [{ id: 'move' }], 'e-2': [] };
+
+  await component.confirmMove();
+
+  assert.equal(updates.length, 0);
+  assert.equal(component.moveDialog, null);
+});
+
+test('a move whose entry vanished while the dialog was open writes nothing', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', folder: WORK }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  component.openMoveDialog([{ uuid: 'e-1' }]);
+  component.moveDialog.target = SAVINGS;
+  component.entries = [];
+
+  await component.confirmMove();
+
+  assert.equal(updates.length, 0);
+  assert.equal(component.moveDialog, null);
+});

@@ -162,7 +162,7 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertEqual(self.row.suggested_person_id, self.lea.pk)
         self.assertIsNone(self.row.rejected_person_id)
 
-    def test_a_person_assigned_to_someone_already_there_keeps_their_suggestion(self):
+    def test_a_person_assigned_to_someone_already_there_is_not_asked_again(self):
         noah_photo = photo_at(self.user, "noah.jpg", 2)
         named_face(self.user, noah_photo, self.noah)
         named_face(self.user, self.back, self.noah, box=(0.65, 0.1, 0.1, 0.1))
@@ -172,9 +172,28 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         )
 
         self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
-        self.assertIsNone(result.undo)
+        self.row.refresh_from_db()
+        self.assertIsNone(self.row.person_id)
+        self.assertEqual(self.row.rejected_person_id, self.lea.pk)
+        self.assertEqual(outfit_suggestions(self.user), [])
+        self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
         self.row.refresh_from_db()
         self.assertEqual(self.row.suggested_person_id, self.lea.pk)
+
+    def test_a_person_with_no_suggestion_assigned_to_someone_already_there(self):
+        named_face(self.user, photo_at(self.user, "noah.jpg", 2), self.noah)
+        named_face(self.user, self.back, self.noah, box=(0.65, 0.1, 0.1, 0.1))
+        Appearance.objects.filter(pk=self.row.pk).update(suggested_person=None)
+        self.row.refresh_from_db()
+
+        result = appearance_review.apply(
+            self.user, "assign", [self.row], person=self.noah
+        )
+
+        self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
+        self.assertIsNone(result.undo)
+        self.row.refresh_from_db()
+        self.assertIsNone(self.row.person_id)
         self.assertIsNone(self.row.rejected_person_id)
 
     def test_undo_puts_the_answers_back(self):

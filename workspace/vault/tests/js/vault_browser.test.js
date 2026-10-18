@@ -1504,6 +1504,88 @@ test('a key that fails to parse after the panel moved on reports nothing for the
   );
 });
 
+// --- the notes of the open entry -------------------------------------------
+
+function notedRow(uuid) {
+  return Object.assign(entryRow(uuid), { encrypted_notes: 'ct:notes' });
+}
+
+test("opening the panel opens the entry's notes", async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
+test('notes opened for one entry never land under another', async () => {
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [notedRow('e-1'), entryRow('e-2')],
+    },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  await component.openEntryFromRow(component.entries[1]);
+  resolveOpen();
+  await opening;
+  assert.equal(component.panelNotes, '');
+});
+
+test('closing the panel or locking drops the notes', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  component.resetPanel();
+  assert.equal(component.panelNotes, '');
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+  component.onLocked();
+  assert.equal(component.panelNotes, '');
+});
+
+test('an entry without notes opens nothing', async () => {
+  const { component, opened } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, '');
+  assert.ok(!opened.some((ad) => String(ad).endsWith('|notes')));
+});
+
+test('a reload keeps the notes of the entry whose panel survives it', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.load();
+  assert.equal(component.panelEntry.uuid, 'e-1');
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
 // --- the entry form, driven by the type registry ---------------------------
 
 const LOGIN_TYPE = {

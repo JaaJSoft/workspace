@@ -223,6 +223,10 @@ window.vaultBrowser = (function () {
       // javascript cannot read back. `code` is a six-digit derivative that
       // expires within the period, which is why it may live in state at all.
       totp: null,
+      // The open entry's notes in clear. Opened with the panel and dropped with
+      // it, like every other plaintext the panel holds; '' when the entry has
+      // none or they have not been opened yet.
+      panelNotes: '',
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -616,6 +620,9 @@ window.vaultBrowser = (function () {
           if (fresh) this.panelEntry = fresh;
         }
         await this.loadEntryActions();
+        // The reset above dropped the notes with the rest, and the surviving
+        // row is the same entry: a reload must not leave its panel empty.
+        if (this.panelEntry && !this.panelNotes) await this.loadPanelNotes(this.panelEntry);
       },
 
       loadEntryActions: async function () {
@@ -898,6 +905,28 @@ window.vaultBrowser = (function () {
         }
       },
 
+      // The notes are shown whenever the panel is, so unlike a secret field
+      // they are opened with it. The entry captured before the await is checked
+      // against panelEntry after it: a slow answer must not land under another
+      // row's name.
+      loadPanelNotes: async function (entry) {
+        this.panelNotes = '';
+        if (!entry) return;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !row.encrypted_notes || !this.openVault) return;
+        try {
+          const notes = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'notes'
+          );
+          if (this.panelEntry !== entry) return;
+          this.panelNotes = notes;
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          if (this.panelEntry !== entry) return;
+          this.error = 'That value could not be revealed.';
+        }
+      },
+
       // Opens the key once, derives the HMAC handle from it and lets the
       // base32 bytes go: what stays in state afterward is the non-extractable
       // key plus the six-digit derivative, never the shared secret itself.
@@ -992,7 +1021,7 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.flushDeferredReload();
-        return this.startTotp(entry);
+        return Promise.all([this.startTotp(entry), this.loadPanelNotes(entry)]);
       },
 
       // The one place that takes the panel and everything it decrypted down
@@ -1003,6 +1032,7 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.totp = null;
+        this.panelNotes = '';
         this.flushDeferredReload();
       },
 

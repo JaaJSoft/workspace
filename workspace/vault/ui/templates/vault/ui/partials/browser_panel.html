@@ -146,6 +146,14 @@
           <span class="opacity-60">Opened from the menu, never rendered as a link here.</span>
         </div>
 
+        <div x-show="panelNotes">
+          <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Notes</div>
+          <div
+            class="whitespace-pre-wrap break-words select-text"
+            x-text="panelNotes"
+          ></div>
+        </div>
+
         <div x-show="panelEntry.tags.length">
           <div class="text-xs uppercase tracking-wider opacity-50 mb-1">Tags</div>
           <div class="flex flex-wrap gap-1">

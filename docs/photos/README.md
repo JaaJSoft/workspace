@@ -602,11 +602,11 @@ each person wide enough to show their clothes is embedded with the photo
 embedding model. No other model is involved: faces keep theirs, everything
 else uses the photo model.
 
-People keep their clothes for a few hours, and only that long: a person seen
+People keep their clothes for the day, and rarely longer: a person seen
 without a face, or with one too blurred to recognize anyone by, is suggested
-as the named person whose torso, on another photo taken within 6 hours, is
-the nearest - when it is close enough and clearly closer than anybody
-else's. Everybody whose face can tell who they are counts as somebody there,
+as the named person whose torso, on another photo taken the same day or
+within 6 hours (a night out goes past midnight), is the nearest - when it is
+close enough and clearly closer than anybody else's. Everybody whose face can tell who they are counts as somebody there,
 named or not: someone dressed like an unnamed group, or like a face the face
 review asks about, is suggested as nobody. Without that, in a library where
 few people are named, the stranger sitting by a named person would take

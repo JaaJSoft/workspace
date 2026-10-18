@@ -88,15 +88,9 @@ class InlineViewerTests(PlaywrightTestCase):
         # the listing.
         header = self.page.locator("#folder-browser [data-viewer-keep]")
         expect(header).to_be_visible()
-        self.assertTrue(
-            self.page.evaluate(
-                """() => {
-                  const r = document.querySelector('#folder-browser h1').getBoundingClientRect();
-                  const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-                  return !!hit.closest('[data-file-viewer-inline]');
-                }"""
-            )
-        )
+        # Nothing of the folder title peeks out between the trail and the
+        # viewer.
+        expect(self.page.locator("#folder-browser h1")).to_be_hidden()
         box = viewer.bounding_box()
         header_box = header.bounding_box()
         main_box = self.page.locator("#files-main").bounding_box()
@@ -121,6 +115,7 @@ class InlineViewerTests(PlaywrightTestCase):
 
         viewer.get_by_role("button", name="Back").click()
         expect(viewer).to_be_hidden()
+        expect(self.page.locator("#folder-browser h1")).to_be_visible()
         self.assertEqual(
             self._inert(), {"trail": False, "title": False, "listing": False}
         )

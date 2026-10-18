@@ -385,8 +385,11 @@ window.fileViewerModal = function fileViewerModal() {
 // gallery, which pages through the rows in the DOM, still sees them.
 //
 // An element inside it marked [data-viewer-keep] (a breadcrumb) stays visible
-// and live: the viewer starts at its bottom edge. Everything else covered
-// goes inert, so focus and the listing's shortcuts stay off the rows behind.
+// and live: the viewer starts below it. Everything else covered goes inert,
+// so focus and the listing's shortcuts stay off the rows behind, and
+// invisible, so what the room left under the kept element would show of
+// it (a title) does not peek out. Invisible, not display: none: the rows
+// keep their layout, which the gallery and scrollIntoView rely on.
 //
 // Back on the listing, the row's `[data-viewer-focus]` element, if it has
 // one, takes the focus: the row's first control may be a checkbox, and an
@@ -421,14 +424,20 @@ window.fileViewerInline = function fileViewerInline(options) {
       } else if (!covered.inert) {
         inerted.push(covered);
       }
-      inerted.forEach((el) => { el.inert = true; });
+      inerted.forEach((el) => {
+        el.inert = true;
+        el.style.visibility = 'hidden';
+      });
       this._watchKept(kept, covered);
     },
 
     _uncover() {
       const covered = this._covered();
       if (covered) covered.removeAttribute('data-viewer-covered');
-      inerted.forEach((el) => { el.inert = false; });
+      inerted.forEach((el) => {
+        el.inert = false;
+        el.style.removeProperty('visibility');
+      });
       inerted = [];
       this._watchKept(null);
     },

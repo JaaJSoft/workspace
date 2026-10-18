@@ -54,7 +54,9 @@ class VaultBrowserCase(PlaywrightTestCase):
         super().setUp()
         self.user = self.create_user(username="owner", email="owner@example.com")
         self.login_as(self.user)
-        self.page.route(
+        # On the context, not the page: the lookup leaves through the service
+        # worker base.html registers, and page.route never sees it.
+        self.context.route(
             CORPUS_ROUTE,
             lambda route: route.fulfill(
                 status=200, body="0000000000000000000000000000000000000:1\n"

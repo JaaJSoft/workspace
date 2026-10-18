@@ -2,7 +2,8 @@
   The Files viewer in place of the listing, for a module that prefers it to
   the modal (file_viewer_modal.html). Include it inside the positioned
   element that holds the listing, with covers= the id of the listing it
-  takes the place of; see fileViewerInline() in file_viewer.js.
+  takes the place of; see fileViewerInline() in file_viewer.js. A header of
+  that listing marked data-viewer-keep stays above the viewer.
 
   properties=True adds the button that opens the page's properties panel on
   the file shown. The include must then sit inside the component spreading
@@ -13,6 +14,7 @@
   x-ref="frame"
   tabindex="-1"
   x-show="open"
+  :style="{ top: keptHeight + 'px' }"
   x-cloak
   class="absolute inset-0 z-[15] flex flex-col bg-base-100 outline-none"
   role="region"

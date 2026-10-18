@@ -735,7 +735,7 @@ window.fileTableControls = function fileTableControls() {
       if (e.target.closest('dialog[open]')) return;
       // The viewer covering the listing owns the keys: a Delete there must
       // not reach the row selected or hovered behind it.
-      if (document.getElementById('files-main')?.inert) return;
+      if (document.getElementById('files-main')?.hasAttribute('data-viewer-covered')) return;
       // Skip when typing in text inputs
       if (this._isInputFocused()) return;
 

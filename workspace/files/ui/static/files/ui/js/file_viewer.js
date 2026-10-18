@@ -380,23 +380,66 @@ window.fileViewerModal = function fileViewerModal() {
 };
 
 // The viewer in place of the listing. It covers the element `covers` names,
-// inert while covered so focus and page shortcuts stay off the tiles behind,
-// but left mounted: the scroll position and the pages loaded so far are
-// still there on close, and the gallery, which pages through the rows in
-// the DOM, still sees them.
+// marked data-viewer-covered while it does, but left mounted: the scroll
+// position and the pages loaded so far are still there on close, and the
+// gallery, which pages through the rows in the DOM, still sees them.
+//
+// A header inside it marked [data-viewer-keep] (a breadcrumb) stays visible
+// and live above the viewer; everything else covered goes inert, so focus
+// and the listing's shortcuts stay off the rows behind.
 //
 // Back on the listing, the row's `[data-viewer-focus]` element, if it has
 // one, takes the focus: the row's first control may be a checkbox, and an
 // input holding the focus mutes the listing's shortcuts.
 window.fileViewerInline = function fileViewerInline(options) {
   const coversId = options && options.covers;
+  // Kept off the component: Alpine's reactive proxy breaks DOM methods.
+  let inerted = [];
+  let keptObserver = null;
 
   return {
     ...fileViewerShellMixin(),
     _propertiesEnabled: !!(options && options.properties),
+    // How far down the kept header pushes the viewer, in px.
+    keptHeight: 0,
 
     _covered() {
       return coversId ? document.getElementById(coversId) : null;
+    },
+
+    _cover() {
+      const covered = this._covered();
+      if (!covered) return;
+      covered.setAttribute('data-viewer-covered', '');
+      const kept = covered.querySelector('[data-viewer-keep]');
+      if (kept) {
+        for (let node = kept; node !== covered; node = node.parentElement) {
+          for (const sibling of node.parentElement.children) {
+            if (sibling !== node && !sibling.inert) inerted.push(sibling);
+          }
+        }
+      } else if (!covered.inert) {
+        inerted.push(covered);
+      }
+      inerted.forEach((el) => { el.inert = true; });
+      this._watchKept(kept);
+    },
+
+    _uncover() {
+      const covered = this._covered();
+      if (covered) covered.removeAttribute('data-viewer-covered');
+      inerted.forEach((el) => { el.inert = false; });
+      inerted = [];
+      this._watchKept(null);
+    },
+
+    _watchKept(kept) {
+      if (keptObserver) keptObserver.disconnect();
+      keptObserver = null;
+      this.keptHeight = kept ? kept.offsetHeight : 0;
+      if (!kept) return;
+      keptObserver = new ResizeObserver(() => { this.keptHeight = kept.offsetHeight; });
+      keptObserver.observe(kept);
     },
 
     // Focus moves in on opening only, not on each gallery step. It goes to
@@ -404,14 +447,13 @@ window.fileViewerInline = function fileViewerInline(options) {
     // click on a row would draw its focus ring.
     _present() {
       const covered = this._covered();
-      if (covered && covered.inert) return;
-      if (covered) covered.inert = true;
+      if (covered && covered.hasAttribute('data-viewer-covered')) return;
+      this._cover();
       this.$nextTick(() => this.$refs.frame.focus({ preventScroll: true }));
     },
 
     _dismiss() {
-      const covered = this._covered();
-      if (covered) covered.inert = false;
+      this._uncover();
       const row = this.fileUuid ? this._row(this.fileUuid) : null;
       this._onClosed();
       const target = row && row.querySelector('[data-viewer-focus]');
@@ -433,14 +475,22 @@ window.fileViewerInline = function fileViewerInline(options) {
 
     init() {
       // The page around stays clickable: a navigation that drops ?open (a
-      // sidebar link) takes the viewer away with the content it covered,
-      // writing no history of its own.
+      // sidebar link, the kept breadcrumb) takes the viewer away with the
+      // content it covered, writing no history of its own.
       if (this._initialized) return;
       const ready = this._listen(this.$refs.frame);
       this._on(window, 'nav:change', () => {
         if (this.open && !new URLSearchParams(window.location.search).has('open')) {
           this._dismiss();
         }
+      });
+      // A refresh swapped the covered listing under the open viewer: the new
+      // markup comes in live, and its header is a new element to measure.
+      this._on(document, 'ajax:merged', (e) => {
+        const covered = this._covered();
+        if (!this.open || !covered || !covered.contains(e.target)) return;
+        this._uncover();
+        this._cover();
       });
       return ready;
     },

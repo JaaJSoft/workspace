@@ -1,9 +1,10 @@
 """E2E cover for the Files viewer shown in place of the listing.
 
 What only a rendered page can prove: the viewer takes the listing's place
-and not the properties panel's, the listing's shortcuts stay off the rows
-behind it, the properties button follows the gallery, and a sidebar link
-takes the viewer away. Skipped unless E2E=1 is set.
+below its breadcrumb and not the properties panel's, the listing's shortcuts
+stay off the rows behind it while the breadcrumb stays live, the properties
+button follows the gallery, and a navigation takes the viewer away. Skipped
+unless E2E=1 is set.
 """
 
 from __future__ import annotations
@@ -30,10 +31,12 @@ class InlineViewerTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="inline-viewer")
+        self.folder = FileService.create_folder(self.user, "Trip")
         self.images = [
             FileService.create_file(
                 owner=self.user,
                 name=name,
+                parent=self.folder,
                 content=SimpleUploadedFile(name, PNG_1PX, content_type="image/png"),
                 acting_user=self.user,
             )
@@ -47,9 +50,9 @@ class InlineViewerTests(PlaywrightTestCase):
     def _row(self, file_obj):
         return self.page.locator(f'#folder-browser [data-uuid="{file_obj.uuid}"]')
 
-    def _open_listing(self, path="/files"):
+    def _open_listing(self, path=None):
         self.login_as(self.user)
-        self.page.goto(f"{self.live_server_url}{path}")
+        self.page.goto(f"{self.live_server_url}{path or f'/files/{self.folder.uuid}'}")
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
         self.page.wait_for_function(
             """(uuids) => {
@@ -58,6 +61,14 @@ class InlineViewerTests(PlaywrightTestCase):
               return !!data && uuids.every((u) => (data.actionsMap[u] || []).length > 0);
             }""",
             arg=[str(f.uuid) for f in self.images],
+        )
+
+    def _inert(self):
+        return self.page.evaluate(
+            """() => ({
+              header: document.querySelector('#folder-browser [data-viewer-keep]').inert,
+              listing: document.querySelector('#folder-browser > :not([data-viewer-keep])').inert,
+            })"""
         )
 
     def _open(self, file_obj):
@@ -72,12 +83,19 @@ class InlineViewerTests(PlaywrightTestCase):
         viewer = self._open(self.images[0])
 
         expect(self.page.locator("dialog.modal[open]")).to_have_count(0)
-        self.assertEqual(
-            viewer.bounding_box(), self.page.locator("#files-main").bounding_box()
+        # Below the breadcrumb, down to the bottom of the listing.
+        header = self.page.locator("#folder-browser [data-viewer-keep]")
+        expect(header).to_be_visible()
+        box = viewer.bounding_box()
+        header_box = header.bounding_box()
+        main_box = self.page.locator("#files-main").bounding_box()
+        self.assertAlmostEqual(
+            box["y"], header_box["y"] + header_box["height"], delta=1
         )
-        self.assertTrue(
-            self.page.evaluate("document.getElementById('files-main').inert")
+        self.assertAlmostEqual(
+            box["y"] + box["height"], main_box["y"] + main_box["height"], delta=1
         )
+        self.assertEqual(self._inert(), {"header": False, "listing": True})
         self.assertIn(f"open={self.images[0].uuid}", self.page.url)
 
         self.page.keyboard.press("ArrowRight")
@@ -85,10 +103,37 @@ class InlineViewerTests(PlaywrightTestCase):
 
         viewer.get_by_role("button", name="Back").click()
         expect(viewer).to_be_hidden()
-        self.assertFalse(
-            self.page.evaluate("document.getElementById('files-main').inert")
-        )
+        self.assertEqual(self._inert(), {"header": False, "listing": False})
         self.assertNotIn("open=", self.page.url)
+
+    def test_the_breadcrumb_stays_live_and_takes_the_viewer_away(self):
+        self._open_listing()
+        viewer = self._open(self.images[0])
+
+        self.page.locator(
+            "#folder-browser [data-viewer-keep] a[href='/files']"
+        ).first.click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/files")
+        expect(viewer).to_be_hidden()
+        expect(self.page.locator("#folder-browser h1")).not_to_have_text("Trip")
+        self.assertEqual(self._inert(), {"header": False, "listing": False})
+        self.page.go_back()
+        expect(viewer.locator("h3")).to_have_text("alpha.png")
+
+    def test_a_refresh_under_the_viewer_keeps_the_new_listing_covered(self):
+        self._open_listing()
+        viewer = self._open(self.images[0])
+        stale = self.page.locator("#folder-browser").element_handle()
+
+        self.page.get_by_role("button", name="Sync and refresh folder").click()
+        self.page.wait_for_function("(old) => !old.isConnected", arg=stale)
+
+        expect(viewer.locator("h3")).to_have_text("alpha.png")
+        self.page.wait_for_function(
+            "() => document.querySelector('#folder-browser > :not([data-viewer-keep])').inert"
+        )
+        self.assertEqual(self._inert(), {"header": False, "listing": True})
 
     def test_listing_shortcuts_stay_off_the_rows_behind_the_viewer(self):
         self._open_listing()

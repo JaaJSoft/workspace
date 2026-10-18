@@ -306,7 +306,7 @@ window.photosApp = function photosApp() {
       window.addEventListener('photos-faces-changed', () => this._reloadView());
       window.addEventListener('keydown', (e) => {
         // A dialog, or the viewer covering the timeline, owns the keys.
-        if (document.querySelector('dialog[open]') || document.getElementById('photos-main')?.inert) return;
+        if (document.querySelector('dialog[open]') || document.getElementById('photos-main')?.hasAttribute('data-viewer-covered')) return;
         if (e.key === 'Escape' && this.selection.length) {
           this.clearSelection();
         } else if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !this._typingIn(e.target)) {

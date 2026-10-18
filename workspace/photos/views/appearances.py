@@ -59,7 +59,8 @@ class AppearanceBatchView(APIView):
             "this contact. "
             "Each one that cannot take the answer is skipped with a reason "
             "('unavailable', 'already_in_photo', 'no_face', 'missing'); a "
-            "confirm skipped as 'already_in_photo' still rejects that person, "
+            "confirm or assign skipped as 'already_in_photo' still rejects the "
+            "suggested person, "
             "so they are not suggested again. The "
             "returned undo token puts them back as they were, for a few minutes."
         ),

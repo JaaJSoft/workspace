@@ -103,8 +103,8 @@ def apply(user, action, appearances, person=None):
     answer is about the person the user was shown. So is a person the photo
     already shows (a person is in a photo once), and everyone assigned to a
     contact with no face in the library: their photos are listed through
-    their faces. A person confirmed as someone the photo already shows
-    cannot be them, so they are set apart from that person as by a reject:
+    their faces. A person confirmed or assigned as someone the photo already
+    shows is still set apart from the person suggested, as by a reject:
     otherwise the next pass suggests the same name and the review asks again.
     """
     result = BatchResult()
@@ -119,12 +119,13 @@ def apply(user, action, appearances, person=None):
     changed = False
     with transaction.atomic():
         for row in appearances:
+            suggested = row.suggested_person_id
             reason = _answer(row, action, person)
             if reason is None:
                 result.done.append(row.pk)
             else:
                 result.skipped.append((row.pk, reason))
-            set_apart = action == CONFIRM and reason == ALREADY_IN_PHOTO
+            set_apart = reason == ALREADY_IN_PHOTO and suggested is not None
             changed = changed or reason is None or set_apart
     if not changed:
         cache.delete(_UNDO_KEY.format(user.pk, result.undo))
@@ -137,15 +138,15 @@ def _answer(row, action, person):
     if action in (CONFIRM, REJECT) and row.suggested_person_id != person.pk:
         return NO_SUGGESTION
     person_id = person.pk if action in (CONFIRM, ASSIGN) else None
+    reason = None
     if person_id is not None and person_id in _persons_in_photo(row):
-        if action != CONFIRM:
+        if row.suggested_person_id is None:
             return ALREADY_IN_PHOTO
+        # Whoever the user named, they said the suggestion is not them.
         action = REJECT
         reason = ALREADY_IN_PHOTO
-    else:
-        reason = None
     if action == REJECT:
-        row.rejected_person_id = person.pk
+        row.rejected_person_id = row.suggested_person_id
     elif action == HIDE:
         row.hidden = True
     else:

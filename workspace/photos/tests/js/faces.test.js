@@ -1143,7 +1143,11 @@ test('an outfit answer says why people were left as they were', () => {
   );
   assert.equal(
     ctx.outfitMessage('confirm', { done: ['a'], skipped: [{ appearance: 'b', reason: 'already_in_photo' }] }),
-    '1 person confirmed. 1 person left as they were: they are already in that photo',
+    '1 person confirmed. 1 person set apart: they are already in that photo',
+  );
+  assert.equal(
+    ctx.outfitMessage('assign', { done: [], skipped: [{ appearance: 'a', reason: 'already_in_photo' }] }, 'Noah'),
+    '1 person left as they were: they are already in that photo',
   );
 });
 

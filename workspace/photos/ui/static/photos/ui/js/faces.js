@@ -1233,10 +1233,13 @@ function outfitMessage(action, result, target) {
   }
   if (skipped) {
     const reasons = new Set(result.skipped.map((s) => s.reason));
+    const alreadyThere = reasons.size === 1 && reasons.has('already_in_photo');
     let why = '';
-    if (reasons.size === 1 && reasons.has('already_in_photo')) why = ': they are already in that photo';
+    if (alreadyThere) why = ': they are already in that photo';
     else if (reasons.size === 1 && reasons.has('no_face')) why = ': no photo shows their face yet';
-    const left = `${peopleCount(skipped)} left as they were${why}`;
+    // A confirm the photo contradicts sets them apart from that person.
+    const outcome = alreadyThere && action === 'confirm' ? 'set apart' : 'left as they were';
+    const left = `${peopleCount(skipped)} ${outcome}${why}`;
     message = message ? `${message}. ${left}` : left;
   }
   return message;

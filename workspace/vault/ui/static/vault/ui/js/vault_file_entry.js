@@ -287,12 +287,15 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       if (this.busy) return 0;
       this.fileNotice = '';
       this.busy = true;
-      const vault = this.openVault;
       let written = 0;
       let failure = null;
       try {
         await this.flushDeferredReload();
-        if (!this.openVault) return 0;
+        // Read after the reload, never before: a migration pass can hand the
+        // vault back under another key generation, and the batch must sign
+        // with the row it has now.
+        const vault = this.openVault;
+        if (!vault) return 0;
         const batch = [];
         for (const uuid of Object.keys(changesByUuid)) {
           const row = this.rowFor(uuid);

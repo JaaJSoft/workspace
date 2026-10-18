@@ -833,6 +833,27 @@ test('a second batch started during the deferred reload writes nothing', async (
   assert.equal(component.busy, false);
 });
 
+test('a batch signs with the vault the deferred reload brought back', async () => {
+  // The deferred reload is what a migration pass asks for, and it can hand
+  // back the vault under a new key generation: signing with the row read
+  // before it would seal the batch under a key the vault has left.
+  const { component, ctx } = browser([{ uuid: 'e-1', folder: WORK }]);
+  const fresh = { uuid: VAULT_UUID, name: 'Personal', key_version: 2 };
+  component.reloadDeferred = true;
+  component.load = async () => { component.openVault = fresh; };
+  const signedWith = [];
+  const build = ctx.buildEntryResignRequest;
+  ctx.buildEntryResignRequest = async (session, vault, row, changes) => {
+    signedWith.push(vault);
+    return build(session, vault, row, changes);
+  };
+
+  await component.moveEntries(['e-1'], SAVINGS);
+
+  assert.equal(signedWith.length, 1);
+  assert.equal(signedWith[0], fresh);
+});
+
 test('the batch releases busy when it has nothing to write', async () => {
   const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
 

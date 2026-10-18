@@ -63,7 +63,7 @@ Each Django app under `workspace/` follows the same shape (`models.py`, `views.p
 | `photos` | Photo and video library built on the files module: capture-date timeline, EXIF and ffprobe metadata read off-request (preview) |
 | `projects` | Projects and kanban boards: tasks, statuses, members, comments, task references |
 | `users` | User model, settings, profile, activity feed |
-| `vault` | End-to-end encrypted password vault (preview) |
+| `vault` | End-to-end encrypted password vault |
 
 ### `core` vs `common`
 

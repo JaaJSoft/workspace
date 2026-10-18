@@ -16,6 +16,7 @@ Documentation for [Workspace](../README.md) - a self-hosted productivity suite b
 | [People](people/) | Address book with group books, lists, linked accounts, and vCard import/export |
 | [AI Assistants](ai/) | Configurable bots with tools, vision, memory, and scheduled messages |
 | [Notifications](notifications/) | In-app and Web Push notifications with priority and read tracking |
+| [Vault](vault/CRYPTO.md) | End-to-end encrypted password manager: folders, tags, notes, generator, one-time codes, export |
 | [Imports](imports/) | Bring files over from Nextcloud or any WebDAV host, in resumable background jobs |
 
 ## Deployment

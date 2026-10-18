@@ -13,11 +13,17 @@
 window.vaultSidebar = function vaultSidebar() {
   const NARROW = '(max-width: 1023px)';
 
+  const preferred = window.sidebarPreference.initial();
+
   return {
+    // What the user chose, kept apart from what is on screen: a narrow
+    // window forces the rail without that becoming the preference, and
+    // widening again has to know what to go back to.
+    preferred: preferred,
     // The drawer stays open at every width, so below `lg` the sidebar is the
     // icon rail and nothing else; above it, the preference the server sized
     // the <aside> with.
-    collapsed: window.matchMedia(NARROW).matches || window.sidebarPreference.initial(),
+    collapsed: window.matchMedia(NARROW).matches || preferred,
 
     isNarrow() {
       return window.matchMedia(NARROW).matches;
@@ -25,7 +31,7 @@ window.vaultSidebar = function vaultSidebar() {
 
     init() {
       window.matchMedia(NARROW).addEventListener('change', (event) => {
-        if (event.matches) this.collapsed = true;
+        this.collapsed = event.matches || this.preferred;
       });
     },
 
@@ -34,6 +40,7 @@ window.vaultSidebar = function vaultSidebar() {
       // nothing rather than producing a sidebar wider than the content.
       if (this.isNarrow()) return;
       this.collapsed = !this.collapsed;
+      this.preferred = this.collapsed;
       window.sidebarPreference.save('vault', this.collapsed);
     },
   };

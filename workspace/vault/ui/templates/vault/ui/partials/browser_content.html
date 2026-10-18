@@ -170,10 +170,8 @@
                 of the cell cutting the next pill in half.
               {% endcomment %}
               <div class="flex flex-nowrap items-center gap-1 overflow-hidden">
-                <template x-for="tagUuid in entry.tags" :key="tagUuid">
-                  <template x-if="tagById(tagUuid)">
-                    <tag-chip size="sm" :name="tagById(tagUuid).name" :color="tagById(tagUuid).color" :compact="entry.tags.length > 2"></tag-chip>
-                  </template>
+                <template x-for="tag in entryTags(entry)" :key="tag.uuid">
+                  <tag-chip size="sm" :name="tag.name" :color="tag.color" :compact="entryTags(entry).length > 2"></tag-chip>
                 </template>
               </div>
             </td>

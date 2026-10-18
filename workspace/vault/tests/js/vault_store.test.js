@@ -294,3 +294,9 @@ test('select all takes what is on screen, and leaves the rest of the vault alone
   s.selectAll();
   assert.deepStrictEqual(Array.from(s.selected).sort(), ['e-1', 'e-2', 'e-3']);
 });
+
+test("an entry's tags skip a uuid the vault holds no tag for", () => {
+  const s = store();
+  const entry = { tags: ['t-work', 't-gone', 't-home'] };
+  assert.deepStrictEqual(names(s.entryTags(entry)), ['pro', 'perso']);
+});

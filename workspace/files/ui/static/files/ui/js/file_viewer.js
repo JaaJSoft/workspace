@@ -11,10 +11,14 @@
 //   _keysBlocked()  something above the viewer owns the keyboard
 //   _onOpened(uuid) optional, after each file starts loading
 //
-// A shell given `properties` offers the page's properties panel for the file
-// on screen (a button, Ctrl+I): it raises `open-properties`, which the page
-// hosting propertiesPanelMixin() answers, and `viewer-file-shown` on each
-// file, so an open panel follows the gallery (followViewer()).
+// Each file's actions come from the registry (POST /api/v1/files/actions).
+// The shell stars and unstars the file itself, then raises
+// `file-favorite-changed` ({uuid, isFavorite}) for the page to update its
+// listing. A shell given `properties` also offers the page's properties
+// panel for the file on screen (a button, Ctrl+I): it raises
+// `open-properties`, which the page hosting propertiesPanelMixin() answers,
+// and `viewer-file-shown` on each file, so an open panel follows the
+// gallery (followViewer()).
 window.fileViewerShellMixin = function fileViewerShellMixin() {
   return {
     ...viewerPanelMixin(),
@@ -36,11 +40,14 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     // Where the panel wants the download to come from instead (an edited
     // image, rendered as shown); null for the raw bytes.
     downloadOverride: null,
-    // The action registry lets the user see the file's properties; false
-    // while it answers, and always without `properties`.
+    // What the action registry lets the user do on the file on screen; false
+    // while it answers. canShowProperties stays false without `properties`.
     canShowProperties: false,
+    canFavorite: false,
+    isFavorite: false,
     _propertiesEnabled: false,
-    _propertiesSeq: 0,
+    _actionsSeq: 0,
+    _favoriteBusy: false,
 
     _onOpened() {},
 
@@ -136,7 +143,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
         else window.navHistory.push(url);
       }
       this._onOpened(uuid);
-      this._loadPropertiesAction(uuid);
+      this._loadActions(uuid);
 
       const viewerUrl = edit ?
         urls.viewer + (urls.viewer.includes('?') ? '&' : '?') + 'edit=1' :
@@ -166,21 +173,51 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.downloadOverride = null;
       this.viewerError = null;
       this.canShowProperties = false;
+      this.canFavorite = false;
+      this.isFavorite = false;
     },
 
-    async _loadPropertiesAction(uuid) {
+    async _loadActions(uuid) {
       this.canShowProperties = false;
-      if (!this._propertiesEnabled) return;
-      const seq = ++this._propertiesSeq;
+      this.canFavorite = false;
+      this.isFavorite = false;
+      const seq = ++this._actionsSeq;
       let actions = null;
       try {
         actions = await window.fileActions.fetchActions([uuid]);
       } catch (_) {}
-      if (seq !== this._propertiesSeq || !this.open || this.fileUuid !== uuid) return;
-      this.canShowProperties = !!actions && (actions[uuid] || []).some(a => a.id === 'properties');
+      if (seq !== this._actionsSeq || !this.open || this.fileUuid !== uuid) return;
+      const available = (actions && actions[uuid]) || [];
+      const favorite = available.find(a => a.id === 'toggle_favorite');
+      this.canFavorite = !!favorite;
+      this.isFavorite = !!(favorite && favorite.state && favorite.state.is_favorite);
+      if (!this._propertiesEnabled) return;
+      this.canShowProperties = available.some(a => a.id === 'properties');
       window.dispatchEvent(new CustomEvent('viewer-file-shown', {
         detail: { uuid, properties: this.canShowProperties },
       }));
+    },
+
+    async toggleFavorite() {
+      if (!this.canFavorite || this._favoriteBusy || !this.fileUuid) return;
+      const uuid = this.fileUuid;
+      const isFavorite = !this.isFavorite;
+      this._favoriteBusy = true;
+      try {
+        const response = await fetch(`/api/v1/files/${uuid}/favorite`, {
+          method: isFavorite ? 'POST' : 'DELETE',
+          headers: { 'X-CSRFToken': getCSRFToken() },
+        });
+        if (!response.ok) throw new Error();
+        if (this.fileUuid === uuid) this.isFavorite = isFavorite;
+        window.dispatchEvent(new CustomEvent('file-favorite-changed', {
+          detail: { uuid, isFavorite },
+        }));
+      } catch (_) {
+        window.AppAlert.error('Failed to update favorites');
+      } finally {
+        this._favoriteBusy = false;
+      }
     },
 
     // Asking again for the file the panel shows closes it.

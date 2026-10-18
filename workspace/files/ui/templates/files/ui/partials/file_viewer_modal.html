@@ -25,6 +25,20 @@
           <i x-show="expanded" data-lucide="minimize-2" class="w-4 h-4" x-cloak></i>
         </button>
 
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm btn-square"
+          :class="{ 'text-warning [&_svg]:fill-current': isFavorite }"
+          @click="toggleFavorite()"
+          :disabled="!canFavorite"
+          :title="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+          :aria-label="isFavorite ? 'Remove from favorites' : 'Add to favorites'"
+          :aria-pressed="isFavorite ? 'true' : 'false'"
+          data-viewer-favorite
+        >
+          <i data-lucide="star" class="w-4 h-4"></i>
+        </button>
+
         <!-- Download - hidden once the panel reports the file is blocked
              (see viewerBlocked): the malware policy already 403s the
              request, but a live-looking button on the refusal screen would

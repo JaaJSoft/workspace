@@ -196,6 +196,31 @@ class InlineViewerTests(PlaywrightTestCase):
         expect(panel).to_be_hidden()
         expect(button).not_to_have_class(ACTIVE)
 
+    def test_the_header_star_marks_the_file_and_the_listing_follows(self):
+        self._open_listing()
+        viewer = self._open(self.images[0])
+        star = viewer.locator("[data-viewer-favorite]")
+
+        expect(star).to_be_enabled()
+        expect(star).to_have_attribute("aria-pressed", "false")
+        # The image viewer's own toolbar no longer carries one.
+        expect(
+            self.page.locator("#viewer-panel").get_by_role(
+                "button", name="Add to favorites"
+            )
+        ).to_have_count(0)
+        star.click()
+
+        expect(star).to_have_attribute("aria-pressed", "true")
+        expect(self._row(self.images[0])).to_have_attribute("data-favorite", "1")
+        self.assertTrue(
+            FileFavorite.objects.filter(owner=self.user, file=self.images[0]).exists()
+        )
+
+        star.click()
+        expect(star).to_have_attribute("aria-pressed", "false")
+        expect(self._row(self.images[0])).to_have_attribute("data-favorite", "0")
+
     def test_a_sidebar_link_takes_the_viewer_away(self):
         FileFavorite.objects.create(owner=self.user, file=self.images[1])
         self._open_listing()

@@ -172,6 +172,21 @@ class PhotosTimelineTests(PlaywrightTestCase):
         viewer.get_by_role("button", name="Properties").click()
         expect(panel).to_be_hidden()
 
+    def test_the_header_star_marks_the_photo_and_its_tile(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        star = viewer.locator("[data-viewer-favorite]")
+
+        star.click()
+
+        expect(star).to_have_attribute("aria-pressed", "true")
+        expect(self.page.locator(TILES).first).to_have_attribute("data-favorite", "1")
+        self.assertTrue(
+            FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
+        )
+
     def test_a_sidebar_link_takes_the_viewer_away(self):
         FileFavorite.objects.create(owner=self.user, file=self.photos[1])
         self._open()

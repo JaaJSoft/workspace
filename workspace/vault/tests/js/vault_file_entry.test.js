@@ -20,6 +20,7 @@ const RESIGNABLE = 'AQ';
 const BROKEN = 'CQ';
 
 function browser(rows, options = {}) {
+  const ctxState = { locked: false };
   const ctx = loadScripts(
     [
       'workspace/vault/ui/static/vault/ui/js/vault_format.js',
@@ -61,7 +62,7 @@ function browser(rows, options = {}) {
       clearInterval() {},
       TAG_CHIP_COLORS: [{ name: 'None', value: '' }],
       vaultApi: {},
-      vaultSession: { isUnlocked: () => true },
+      vaultSession: { isUnlocked: () => !ctxState.locked },
       vaultClipboard: { cancel() {} },
       vaultCrypto: {
         fromBase64Url: (value) =>
@@ -83,6 +84,15 @@ function browser(rows, options = {}) {
     return { uuid: row.uuid, vault: vault.uuid, ...changes };
   };
   ctx.vaultApi.updateEntry = async (uuid, body) => {
+    if (options.lockOn && options.lockOn === uuid) {
+      // What a real lock does: the session goes, the page is wiped, and the
+      // request in flight rejects as locked.
+      ctxState.locked = true;
+      component.onLocked();
+      const err = new Error('locked');
+      err.reason = 'locked';
+      throw err;
+    }
     if (options.failOn && options.failOn === uuid) throw new Error('500');
     updates.push({ uuid, body });
     return body;
@@ -207,6 +217,23 @@ test('a failed write stops the batch and reloads', async () => {
     'Some entries could not be changed. The list above is up to date.',
   );
   assert.equal(component.fileNotice, '');
+});
+
+test('a lock mid-batch leaves no notice and no reload behind', async () => {
+  const { component, updates, loads } = browser(
+    [
+      { uuid: 'e-1', folder: null },
+      { uuid: 'e-2', folder: null },
+      { uuid: 'e-3', folder: null },
+    ],
+    { lockOn: 'e-2' },
+  );
+
+  await component.moveEntries(['e-1', 'e-2', 'e-3'], SAVINGS);
+
+  assert.equal(updates.length, 1);
+  assert.equal(component.fileNotice, '');
+  assert.equal(loads(), 0);
 });
 
 test('the next batch clears the previous notice', async () => {

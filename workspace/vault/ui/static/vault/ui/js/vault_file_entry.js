@@ -119,6 +119,9 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
           return String(folder.uuid) === String(target);
         }) || {}).name || '';
       const written = await this.resignEntries(changes);
+      // A lock mid-batch has already cleared the page; a notice set after it
+      // would put a decrypted folder name back on a locked screen.
+      if (!window.vaultSession.isUnlocked()) return;
       if (!written || this.error) return;
       this.fileNotice = written === 1
         ? 'Moved 1 entry to ' + place + '.'

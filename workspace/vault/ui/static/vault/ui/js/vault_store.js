@@ -58,6 +58,12 @@ window.vaultStore = function vaultStore() {
       return this.tags.find((tag) => tag.uuid === uuid) || null;
     },
 
+    // The tags of an entry the vault still knows, in the entry's order: a
+    // uuid with no tag row behind it draws nothing and counts for nothing.
+    entryTags(entry) {
+      return entry.tags.map((uuid) => this.tagById(uuid)).filter(Boolean);
+    },
+
     folderById(uuid) {
       return this.folders.find((folder) => folder.uuid === uuid) || null;
     },

@@ -105,6 +105,34 @@ def write_entry(entry, *, tags, fields):
 
 def entry_queryset():
     """Entries with everything a listing renders, in a fixed number of queries."""
-    return VaultEntry.objects.select_related("folder").prefetch_related(
+    return VaultEntry.objects.select_related("folder", "vault").prefetch_related(
         "fields", "tags"
     )
+
+
+def required_entry_actions(entry, data):
+    """The registry actions a write of *data* over *entry* amounts to.
+
+    A write carries every signed field, so what it asks for is what differs
+    from the stored row. A write that differs from nothing requires nothing,
+    which is why re-sending a trashed entry unchanged stays harmless. Reads
+    the prefetched tags and fields: no query of its own.
+    """
+    required = []
+    if data["folder"] != entry.folder_id:
+        required.append("move")
+    if {tag.uuid for tag in entry.tags.all()} != set(data["tags"]):
+        required.append("set_tags")
+    if data["is_favorite"] != entry.is_favorite:
+        required.append("favorite" if data["is_favorite"] else "unfavorite")
+    stored_fields = {
+        field.field_id: field.encrypted_value for field in entry.fields.all()
+    }
+    if (
+        data["type"] != entry.type
+        or data["encrypted_name"] != entry.encrypted_name
+        or data["encrypted_notes"] != entry.encrypted_notes
+        or data["fields"] != stored_fields
+    ):
+        required.append("edit")
+    return required

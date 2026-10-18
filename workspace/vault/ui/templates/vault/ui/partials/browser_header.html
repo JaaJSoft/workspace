@@ -68,8 +68,11 @@
           <button
             type="button"
             class="flex items-center gap-1 min-w-0"
-            :class="index === trail().length - 1 ? 'text-base-content font-medium' : 'text-base-content/50 hover:text-module'"
+            :class="[index === trail().length - 1 ? 'text-base-content font-medium' : 'text-base-content/50 hover:text-module', dropTarget === crumb.uuid ? 'file-drop-target' : '']"
             @click="openFolder(crumb.uuid)"
+            @dragover="onFolderDragOver($event, crumb.uuid)"
+            @dragleave="onFolderDragLeave($event)"
+            @drop="onFolderDrop($event, crumb.uuid)"
           >
             <i
               :data-lucide="crumb.root ? 'vault' : 'folder'"

@@ -92,6 +92,16 @@
           <span x-text="error"></span>
           </inline-alert>
 
+          {% comment %}
+              x-if, not x-show: the dismiss button takes the element out of
+              the DOM, and only x-if builds it again for the next notice.
+          {% endcomment %}
+          <template x-if="fileNotice">
+            <inline-alert type="success" dismissible class="mx-5 mt-4">
+            <span x-text="fileNotice"></span>
+            </inline-alert>
+          </template>
+
           <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
 
           {% comment %}
@@ -154,6 +164,8 @@
         {% include "vault/ui/partials/browser_folder_menu.html" %}
         {% include "vault/ui/partials/browser_listing_menu.html" %}
         {% include "vault/ui/partials/entry_dialog.html" %}
+        {% include "vault/ui/partials/move_dialog.html" %}
+        {% include "vault/ui/partials/entry_tags_dialog.html" %}
         {% include "vault/ui/partials/tag_dialog.html" %}
         {% include "vault/ui/partials/help_dialog.html" %}
         {% include "vault/ui/partials/clipboard_banner.html" %}
@@ -213,5 +225,6 @@
   <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password_floor.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_file_entry.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

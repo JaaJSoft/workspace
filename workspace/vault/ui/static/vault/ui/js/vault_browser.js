@@ -23,9 +23,6 @@
 // does nothing when clicked - worse than an absent one, and exactly the drift
 // a server-driven menu exists to prevent. So the menu is narrowed to this
 // list, and a test holds the list against the registry.
-//
-// `move` and `set_tags` are what the registry offers and this client does
-// not do yet. They are hidden rather than shown dead.
 window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'edit',
   'copy_username',
@@ -37,6 +34,8 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'trash',
   'restore',
   'delete_forever',
+  'move',
+  'set_tags',
 ];
 
 // POST /api/v1/vault/actions refuses more than this many UUIDs in one call
@@ -151,6 +150,7 @@ window.vaultBrowser = (function () {
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
       ...window.vaultResealDialogMixin(),
+      ...window.vaultFileEntryMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -223,6 +223,11 @@ window.vaultBrowser = (function () {
       // javascript cannot read back. `code` is a six-digit derivative that
       // expires within the period, which is why it may live in state at all.
       totp: null,
+      // The open entry's notes in clear. Opened with the panel and dropped with
+      // it, like every other plaintext the panel holds; '' when the entry has
+      // none or they have not been opened yet.
+      panelNotes: '',
+      panelNotesLoad: 0,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -361,6 +366,8 @@ window.vaultBrowser = (function () {
         this.clearExport();
         // And the password change holds the current and the new password.
         this.closePasswordDialog();
+        // The notice names a folder, opened from its ciphertext.
+        this.clearFileEntry();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
@@ -434,6 +441,7 @@ window.vaultBrowser = (function () {
         const arriving = this.openVault ? String(this.openVault.uuid) : null;
         if (arriving !== leaving) {
           this.resetNavigation();
+          this.clearFileEntry();
           // A draft is seeded with the folder, the tags and the key version
           // of the vault it was opened in, and saves into whichever is open.
           this.closeEntryDialog();
@@ -616,6 +624,9 @@ window.vaultBrowser = (function () {
           if (fresh) this.panelEntry = fresh;
         }
         await this.loadEntryActions();
+        // The reset above dropped the notes with the rest, and the surviving
+        // row is the same entry: a reload must not leave its panel empty.
+        if (this.panelEntry && !this.panelNotes) await this.loadPanelNotes(this.panelEntry);
       },
 
       loadEntryActions: async function () {
@@ -898,6 +909,32 @@ window.vaultBrowser = (function () {
         }
       },
 
+      // The notes are shown whenever the panel is, so unlike a secret field
+      // they are opened with it. A slow answer must not land under another
+      // row's name, nor in a panel closed and reopened on the same entry while
+      // it was pending: panelEntry alone cannot tell the second case, since
+      // reopening restores the same object, so each load takes a number that
+      // resetPanel and the next load move past.
+      loadPanelNotes: async function (entry) {
+        const load = ++this.panelNotesLoad;
+        this.panelNotes = '';
+        if (!entry) return;
+        const row = this.rowFor(entry.uuid);
+        if (!row || !row.encrypted_notes || !this.openVault) return;
+        const current = () => this.panelNotesLoad === load && this.panelEntry === entry;
+        try {
+          const notes = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'notes'
+          );
+          if (!current()) return;
+          this.panelNotes = notes;
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          if (!current()) return;
+          this.error = "This entry's notes could not be opened.";
+        }
+      },
+
       // Opens the key once, derives the HMAC handle from it and lets the
       // base32 bytes go: what stays in state afterward is the non-extractable
       // key plus the six-digit derivative, never the shared secret itself.
@@ -992,7 +1029,7 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.flushDeferredReload();
-        return this.startTotp(entry);
+        return Promise.all([this.startTotp(entry), this.loadPanelNotes(entry)]);
       },
 
       // The one place that takes the panel and everything it decrypted down
@@ -1003,6 +1040,8 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.totp = null;
+        this.panelNotes = '';
+        this.panelNotesLoad += 1;
         this.flushDeferredReload();
       },
 
@@ -1017,6 +1056,7 @@ window.vaultBrowser = (function () {
         store.apply.call(this, place);
         this.resetPanel();
         this.closeMenu();
+        this.fileNotice = '';
       },
 
       // A move to the place on screen records nothing: Back would stay put.
@@ -1082,6 +1122,8 @@ window.vaultBrowser = (function () {
         }[action.id];
         if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
         if (action.id === 'open_uri') return this.openUri(entry);
+        if (action.id === 'move') return this.openMoveDialog([entry]);
+        if (action.id === 'set_tags') return this.openTagsDialog([entry]);
         if (CONFIRMS[action.id]) {
           const confirmed = await this.confirm(CONFIRMS[action.id](1), DESTRUCTIVE);
           if (!confirmed) return;
@@ -1099,6 +1141,8 @@ window.vaultBrowser = (function () {
           return candidate.id === action.id;
         });
         if (!offered) return;
+        if (action.id === 'move') return this.openMoveDialog(rows);
+        if (action.id === 'set_tags') return this.openTagsDialog(rows);
         if (CONFIRMS[action.id]) {
           const confirmed = await this.confirm(
             CONFIRMS[action.id](rows.length), DESTRUCTIVE
@@ -1375,6 +1419,7 @@ window.vaultBrowser = (function () {
           favorite: false,
           name: '',
           notes: '',
+          notesOpened: true,
           values: {},
           carriedFields: {},
           keyVersion: (this.openVault && this.openVault.key_version) || 1,
@@ -1393,6 +1438,8 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
+        let notes = '';
+        let notesOpened = true;
         const type = this.typeFor(entry.type);
         try {
           for (const field of type ? type.fields : []) {
@@ -1407,6 +1454,17 @@ window.vaultBrowser = (function () {
           this.error = 'That entry could not be opened for editing.';
           return;
         }
+        // Notes that will not open do not cost the rest of the entry its
+        // form: the draft carries their ciphertext untouched and the textarea
+        // stays read-only, so a save can neither drop nor overwrite them.
+        try {
+          notes = await window.vaultReader.openField(
+            window.vaultSession, this.openVault, row, 'notes'
+          );
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          notesOpened = false;
+        }
         if (!window.vaultSession.isUnlocked()) return;
         this.draft = Object.assign({
           uuid: entry.uuid,
@@ -1415,7 +1473,8 @@ window.vaultBrowser = (function () {
           tags: [...entry.tags],
           favorite: entry.favorite,
           name: entry.name,
-          notes: '',
+          notes: notes,
+          notesOpened: notesOpened,
           values: values,
           hasTotp: (entry.fieldIds || []).includes('totp'),
           totpInput: null,

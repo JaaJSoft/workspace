@@ -178,6 +178,21 @@
         </div>
 
         <label class="form-control">
+          <span class="label-text">Notes</span>
+          <textarea
+            class="textarea textarea-bordered textarea-sm w-full"
+            rows="4"
+            autocomplete="off"
+            spellcheck="false"
+            x-model="draft.notes"
+            :readonly="!draft.notesOpened"
+          ></textarea>
+          <span class="label-text-alt text-warning mt-1" x-show="!draft.notesOpened">
+            These notes could not be opened. Saving keeps them as they are.
+          </span>
+        </label>
+
+        <label class="form-control">
           <span class="label-text">Folder</span>
           <select
             class="select select-bordered select-sm w-full"

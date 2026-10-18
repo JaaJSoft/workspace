@@ -117,7 +117,7 @@ test('notes stay an empty string rather than becoming absent', async () => {
   assert.equal(body.encrypted_notes, '');
 });
 
-// --- notes, which no form here edits -----------------------------------------
+// --- notes, carried by a re-signature and owned by an opened draft -----------------------------------------
 
 test('a draft with no notes plaintext keeps the ciphertext it was handed', async () => {
   // The write is a full signed replacement over PUT, so a draft that dropped
@@ -140,6 +140,50 @@ test('typed notes are sealed and replace the carried ciphertext', async () => {
     encryptedNotes: 'ct:notes-as-stored',
   });
   assert.equal(body.encrypted_notes, 'b64:a recovery hint@e-1|notes@kv3');
+});
+
+test('an opened draft with emptied notes writes empty notes', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notesOpened: true,
+    notes: '',
+    encryptedNotes: 'old',
+  });
+  assert.equal(body.encrypted_notes, '');
+});
+
+test('an opened draft seals its notes under the notes slot', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notesOpened: true,
+    notes: 'PIN 1234',
+    encryptedNotes: 'old',
+  });
+  assert.equal(body.encrypted_notes, 'b64:PIN 1234@e-1|notes@kv3');
+});
+
+test('an opened draft does not count notes as carried for the key version guard', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notesOpened: true,
+    notes: '',
+    encryptedNotes: 'old',
+    keyVersion: 2,
+  });
+  assert.equal(body.encrypted_notes, '');
+});
+
+test('a draft that never opened its notes still carries them', async () => {
+  const { ctx, session } = builder();
+  const body = await ctx.buildEntryWriteRequest(session, VAULT, {
+    ...DRAFT,
+    notes: '',
+    encryptedNotes: 'old',
+  });
+  assert.equal(body.encrypted_notes, 'old');
 });
 
 test('an entry that never had notes writes an empty column', async () => {

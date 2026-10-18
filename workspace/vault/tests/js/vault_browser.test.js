@@ -151,6 +151,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_export.js',
       'workspace/vault/ui/static/vault/ui/js/vault_password.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_file_entry.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -1504,6 +1505,131 @@ test('a key that fails to parse after the panel moved on reports nothing for the
   );
 });
 
+// --- the notes of the open entry -------------------------------------------
+
+function notedRow(uuid) {
+  return Object.assign(entryRow(uuid), { encrypted_notes: 'ct:notes' });
+}
+
+test("opening the panel opens the entry's notes", async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
+test('notes opened for one entry never land under another', async () => {
+  let resolveOpen;
+  const { component } = browser({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [notedRow('e-1'), entryRow('e-2')],
+    },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) {
+          return new Promise((resolve) => {
+            resolveOpen = () => resolve(new TextEncoder().encode('open:' + ad));
+          });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const opening = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  await component.openEntryFromRow(component.entries[1]);
+  resolveOpen();
+  await opening;
+  assert.equal(component.panelNotes, '');
+});
+
+test('closing the panel or locking drops the notes', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  component.resetPanel();
+  assert.equal(component.panelNotes, '');
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+  component.onLocked();
+  assert.equal(component.panelNotes, '');
+});
+
+test('a notes load pending across a close and reopen of the same entry is dropped', async () => {
+  // Reopening restores the same entry object, so only the load counter tells
+  // the first, stale answer from the second.
+  const rejects = [];
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes') && !rejects.length) {
+          return new Promise((resolve, reject) => { rejects.push(reject); });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const first = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  component.resetPanel();
+  await component.openEntryFromRow(component.entries[0]);
+  rejects[0](new Error('bad tag'));
+  await first;
+  assert.equal(component.error, '');
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
+test('an entry without notes opens nothing', async () => {
+  const { component, opened } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.panelNotes, '');
+  assert.ok(!opened.some((ad) => String(ad).endsWith('|notes')));
+});
+
+test("notes that cannot be opened say so in their own words", async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) throw new Error('bad tag');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  assert.equal(component.error, "This entry's notes could not be opened.");
+});
+
+test('a reload keeps the notes of the entry whose panel survives it', async () => {
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+  });
+  component.init();
+  await component.load();
+  await component.openEntryFromRow(component.entries[0]);
+  await component.load();
+  assert.equal(component.panelEntry.uuid, 'e-1');
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
 // --- the entry form, driven by the type registry ---------------------------
 
 const LOGIN_TYPE = {
@@ -1570,11 +1696,8 @@ test('editing loads the row and opens only the fields the form shows', async () 
   ]);
 });
 
-test('editing carries the notes ciphertext without opening it', async () => {
-  // No form here edits notes, and the write is a full signed replacement: a
-  // draft that dropped the column would erase stored notes on the first
-  // rename. Carrying the ciphertext keeps them without decrypting anything.
-  const { component, opened } = typed({
+test('editing an entry opens its notes into the draft', async () => {
+  const { component } = typed({
     api: {
       listEntries: async (uuid, opts) =>
         opts && opts.trashed ? [] : [entryWith('e-1', { encrypted_notes: 'ct:notes' })],
@@ -1585,12 +1708,40 @@ test('editing carries the notes ciphertext without opening it', async () => {
   component.init();
   await component.load();
   await component.editEntry(component.entries[0]);
+  assert.equal(component.draft.notes, 'open:e-1|notes');
+  assert.equal(component.draft.notesOpened, true);
+});
+
+test('notes that will not open leave the rest of the entry editable', async () => {
+  const { component } = typed({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { encrypted_notes: 'ct:notes' })],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+    session: { openEntryKey: async () => new Uint8Array(32) },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) throw new Error('bad tag');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.notEqual(component.draft, null);
+  assert.equal(component.draft.notesOpened, false);
   assert.equal(component.draft.encryptedNotes, 'ct:notes');
+  assert.equal(component.error, '');
+});
+
+test('a new entry starts with opened, empty notes', () => {
+  const { component } = typed();
+  component.init();
+  component.newEntry('login');
   assert.equal(component.draft.notes, '');
-  assert.ok(
-    !Array.from(opened).some((entry) => String(entry).includes('notes')),
-    'the notes were never opened',
-  );
+  assert.equal(component.draft.notesOpened, true);
 });
 
 test('editing an entry carries the fields the dialog does not edit', async () => {
@@ -2442,8 +2593,8 @@ test('a new folder is still created rather than updated', async () => {
 });
 
 test('an action the client cannot carry out is never put in the menu', async () => {
-  // The endpoint offers `move` and `set_tags`; nothing here can run them yet.
-  // A row that does nothing when clicked is worse than one that is not there.
+  // A server ahead of this page offers an id nothing here can run. A row
+  // that does nothing when clicked is worse than one that is not there.
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
@@ -2451,7 +2602,7 @@ test('an action the client cannot carry out is never put in the menu', async () 
         'e-1': [
           { id: 'edit', label: 'Edit', icon: 'pen', category: 'edit' },
           { id: 'move', label: 'Move to folder', icon: 'folder', category: 'organize', bulk: true },
-          { id: 'set_tags', label: 'Edit tags', icon: 'tag', category: 'organize', bulk: true },
+          { id: 'archive', label: 'Archive', icon: 'archive', category: 'organize', bulk: true },
         ],
       }),
     },
@@ -2460,10 +2611,10 @@ test('an action the client cannot carry out is never put in the menu', async () 
   await component.load();
   assert.deepStrictEqual(
     component.actionsFor(component.entries[0]).map((a) => a.id),
-    ['edit']
+    ['edit', 'move']
   );
   component.selected = ['e-1'];
-  assert.deepStrictEqual(component.bulkActions().map((a) => a.id), []);
+  assert.deepStrictEqual(component.bulkActions().map((a) => a.id), ['move']);
 });
 
 test('favouriting an entry re-signs the record instead of asking for a flag', async () => {

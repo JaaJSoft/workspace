@@ -49,11 +49,11 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   // re-seal, and this refuses to write the record that would prove otherwise.
   const carried = draft.carriedFields || {};
   const carriedIds = Object.keys(carried);
-  // Notes carry the same way a field does when the draft has no typed
-  // plaintext for them (see encryptedNotes below), so a mismatched key
-  // version has to refuse the write on their account too - not just when a
-  // field slot is carried.
-  const carriesNotes = !draft.notes && !!draft.encryptedNotes;
+  // Notes carry the same way a field does when the draft neither opened them
+  // nor typed any (see encryptedNotes below), so a mismatched key version has
+  // to refuse the write on their account too - not just when a field slot is
+  // carried.
+  const carriesNotes = !draft.notesOpened && !draft.notes && !!draft.encryptedNotes;
   if ((carriedIds.length || carriesNotes) && (draft.keyVersion || keyVersion) !== keyVersion) {
     throw new Error(
       `cannot carry fields sealed under key version ${draft.keyVersion} into ${keyVersion}`,
@@ -76,14 +76,15 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   // one stays an empty string: unlike a field it is a column, so there is no
   // "absent" for it to be.
   //
-  // A draft that carries no plaintext notes is not a draft that empties them:
-  // no form here edits notes, so an edit hands back the ciphertext it was
-  // given and the record keeps what it held. Re-sealing would need the
-  // plaintext, and opening notes to write them back is the one thing this
-  // page refuses to do.
-  const encryptedNotes = draft.notes
-    ? await seal(draft.notes, 'notes')
-    : draft.encryptedNotes || '';
+  // A draft that opened its notes (the entry form) owns them: what it holds,
+  // empty included, is what the record gets. Any other draft - a
+  // re-signature, a rename that never showed the notes - hands back the
+  // ciphertext it was given, because no plaintext means nothing to re-seal.
+  const encryptedNotes = draft.notesOpened
+    ? (draft.notes ? await seal(draft.notes, 'notes') : '')
+    : draft.notes
+      ? await seal(draft.notes, 'notes')
+      : draft.encryptedNotes || '';
   const tagUuids = [...(draft.tags || [])];
 
   const payload = V.entryMetadataPayload({

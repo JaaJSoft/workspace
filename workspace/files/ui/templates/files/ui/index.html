@@ -174,7 +174,7 @@
       <!-- Folder browser (replaced on navigation) -->
       <div class="flex-1 flex flex-col min-w-0 relative">
         {# What the viewer covers: one stable element around the swap target, so inert outlives a swap. #}
-        <div id="files-main" class="flex-1 flex flex-col min-h-0">
+        <div id="files-main" class="group/viewer flex-1 flex flex-col min-h-0">
           {% partialdef folder-browser inline %}
             <div
               class="h-full flex flex-col"
@@ -188,8 +188,9 @@
             >
 
               <!-- Top Header Bar: navigation and trail above, title and the folder action below -->
+              {# Under an open file only the trail shows, so the header tightens around it. #}
               <div
-                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5"
+                class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5 group-data-[viewer-covered]/viewer:py-2"
               >
                 {# The trail stays above an open file (data-viewer-keep); the title row goes under the viewer. #}
                 <div class="flex items-center gap-2 min-w-0" data-viewer-keep>

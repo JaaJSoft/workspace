@@ -322,3 +322,18 @@ test('a re-signature signs with the session it was handed, not the global one', 
   assert.equal(seen.length, 1);
   assert.equal(seen[0].signer_account_uuid, 'account-2');
 });
+
+// --- one row, re-signed in place ---------------------------------------------
+
+test('a row signed under an algorithm marked broken may not be re-signed', () => {
+  const { ctx } = resign();
+  assert.throws(
+    () => ctx.vaultResign.assertMayResign(row('e-1', { metadata_sig: 'CQ' })),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+});
+
+test('a row signed under a current algorithm may be re-signed', () => {
+  const { ctx } = resign();
+  ctx.vaultResign.assertMayResign(row('e-1', { metadata_sig: 'AQ' }));
+});

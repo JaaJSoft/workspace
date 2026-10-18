@@ -93,7 +93,7 @@ class EditImageAction(BaseFileAction):
     """Rotate and crop an image, its bytes untouched (services/image_edits.py)."""
 
     id = "edit_image"
-    label = "Edit"
+    label = "Crop & rotate"
     icon = "crop"
     category = ActionCategory.EDIT
     node_types = ("file",)

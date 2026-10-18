@@ -116,11 +116,15 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
-            # The vector index and what its pgvector backend runs on.
+            # The vector index and what its pgvector backend runs on, plus
+            # the vault envelope rotation, whose conditional UPDATE leans on
+            # PostgreSQL's pre-update semantics.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
               - 'workspace/common/tests/test_vectors*.py'
+              - 'workspace/vault/views/account.py'
+              - 'workspace/vault/tests/test_account_api.py'
               - 'workspace/settings/**'
               - 'pyproject.toml'
               - 'uv.lock'
@@ -525,3 +529,13 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.common.tests.test_vectors workspace.common.tests.test_vectors_schema -v 2
+
+      # The rotation's single UPDATE copies the current envelope into the
+      # previous slot with Case/F, JSONField included, and only PostgreSQL
+      # here proves it reads the row as it was before the statement.
+      - name: Run the vault envelope rotation tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.vault.tests.test_account_api.AccountRotateTests -v 2

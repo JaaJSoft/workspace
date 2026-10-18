@@ -81,6 +81,7 @@ function switcher(overrides = {}) {
       error: '',
       loaded: 0,
       load: async function () { this.loaded += 1; },
+      flushDeferredReload: async function () {},
       confirm: async () => true,
       goToVault: function (uuid) { this.vaultUuid = uuid; },
       $nextTick: null,
@@ -368,4 +369,44 @@ test('a 409 for a uuid that is nobody else here reports the failure', async () =
   await component.createVault();
   assert.match(component.error, /could not be created/);
   assert.equal(component.vaultUuid, 'v-1', 'and leaves the open vault alone');
+});
+
+test('a vault signed under an algorithm marked broken is left untouched, and the user is told', async () => {
+  const { ctx, component, calls } = switcher();
+  ctx.buildVaultUpdateRequest = async () => {
+    const error = new Error('blocked');
+    error.name = 'VaultResignBlocked';
+    throw error;
+  };
+  await component.loadVaultActions();
+  await component.runVaultAction(ACTION.favorite, VAULT);
+  assert.deepStrictEqual(Array.from(calls), []);
+  assert.equal(component.error, 'This vault could not be verified. It was left untouched.');
+});
+
+test('every vault write runs a held reload first and signs the row it brought back', async () => {
+  // The reload replaces the vault rows; the write must sign the fresh one.
+  const fresh = Object.assign({}, VAULT, { encrypted_description: 'rewritten' });
+  const signedFrom = [];
+  const { ctx, component } = switcher({
+    component: {
+      flushDeferredReload: async function () {
+        signedFrom.push('reload');
+        this.vaults = [fresh, OTHER];
+      },
+    },
+  });
+  ctx.buildVaultUpdateRequest = async (session, vault, changes) => {
+    signedFrom.push(vault);
+    return Object.assign({ uuid: vault.uuid }, changes);
+  };
+  await component.loadVaultActions();
+  await component.runVaultAction(ACTION.favorite, VAULT);
+  component.vaults = [VAULT, OTHER];
+  component.openVaultDialog('rename', VAULT);
+  component.vaultDialog.name = 'Renamed';
+  await component.saveVaultDialog();
+  component.vaults = [VAULT, OTHER];
+  await component.favouriteAfterCreate(VAULT);
+  assert.deepStrictEqual(signedFrom, ['reload', fresh, 'reload', fresh, 'reload', fresh]);
 });

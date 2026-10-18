@@ -44,6 +44,7 @@ from workspace.files.models import FileFavorite
 from workspace.files.services import FileService
 from workspace.files.services.image_edits import versioned_thumbnail_url
 from workspace.photos.models import AlbumItem
+from workspace.photos.services.capture_details import can_edit_capture_details
 
 PAGE_SIZE = 60
 DAY_OVERFLOW = 500
@@ -238,19 +239,23 @@ def timeline_page(files_qs, position, tz, *, page_size=None):
     )
 
 
-def mark_favorite_toggles(photos, user, permissions=None):
-    """Set ``can_favorite`` on each photo, as the files action registry decides.
+def mark_tile_actions(photos, user, permissions=None):
+    """Set what each photo's tile offers: ``can_favorite``, as the files
+    action registry decides, and ``can_edit_details``, as the date and place
+    correction endpoint does.
 
-    The tile's star is a file action like any other; asking the registry keeps
-    it from offering what the favorite endpoint would refuse. Permissions are
-    read in one pass for the whole page, unless the caller already has them.
+    Asking the same rules as the endpoints keeps a tile from offering what
+    they would refuse. Permissions are read in one pass for the whole page,
+    unless the caller already has them.
     """
     if permissions is None:
         permissions = FileService.get_permissions_bulk(user, photos)
     for photo in photos:
+        permission = permissions[photo.pk]
         photo.can_favorite = ActionRegistry.is_action_available(
-            "toggle_favorite", user, photo, permission=permissions[photo.pk]
+            "toggle_favorite", user, photo, permission=permission
         )
+        photo.can_edit_details = can_edit_capture_details(photo, permission)
 
 
 def _album_urls(album, photo, download):
@@ -276,13 +281,13 @@ def mark_album_tiles(photos, user, album, role):
     file action; None otherwise.
     ``removable``: *role* lets the viewer take it out of the album (any item
     for a manager or an owner, the ones they added for a contributor). The
-    favorite star is set as on the timeline, from the same permissions.
+    favorite star and the date correction are set as on the timeline, from the same permissions.
     """
     from workspace.photos.actions import AlbumActionRegistry
     from workspace.photos.queries import CONTRIBUTOR, MANAGER, OWNER
 
     permissions = FileService.get_permissions_bulk(user, photos)
-    mark_favorite_toggles(photos, user, permissions)
+    mark_tile_actions(photos, user, permissions)
     download = AlbumActionRegistry.is_action_available(
         "download", user, album, role=role
     )

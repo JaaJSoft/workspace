@@ -40,6 +40,8 @@ _CODEC_NAMES = {
     "av1": "AV1",
     "mpeg4": "MPEG-4",
     "prores": "ProRes",
+    "opus": "Opus",
+    "vorbis": "Vorbis",
 }
 
 

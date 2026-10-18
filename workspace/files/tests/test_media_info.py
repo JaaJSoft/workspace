@@ -9,6 +9,7 @@ from django.db import connection
 from django.template import Context, Template
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 from django.utils import timezone
 
 from workspace.files.models import File, FileScan, MediaInfo
@@ -267,7 +268,46 @@ class FilterTests(SimpleTestCase):
     def test_codec_names(self):
         self.assertEqual(codec_name("hevc"), "HEVC")
         self.assertEqual(codec_name("h264"), "H.264")
+        self.assertEqual(codec_name("opus"), "Opus")
         self.assertEqual(codec_name("theora"), "THEORA")
+
+
+class AudioPropertiesSectionTests(MediaInfoTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+
+    def _panel(self, f):
+        response = self.client.get(reverse("files_ui:properties", args=[f.uuid]))
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode()
+
+    def _with_info(self, name, **fields):
+        f = self._upload(name, clip_bytes(name))
+        MediaInfo.objects.create(
+            file=f, content_hash=f.content_hash, probed_at=timezone.now(), **fields
+        )
+        return f
+
+    def test_an_audio_file_shows_its_length_and_codec(self):
+        f = self._with_info("clip.ogg", duration=125.0, audio_codec="opus")
+
+        html = self._panel(f)
+
+        self.assertIn('data-properties-section="audio"', html)
+        self.assertIn("2:05", html)
+        self.assertIn("Opus", html)
+
+    def test_hidden_while_the_row_describes_replaced_bytes(self):
+        f = self._with_info("clip.ogg", duration=125.0, audio_codec="opus")
+        MediaInfo.objects.filter(file=f).update(content_hash="0" * 64)
+
+        self.assertNotIn('data-properties-section="audio"', self._panel(f))
+
+    def test_a_video_has_no_audio_section(self):
+        f = self._with_info("clip.webm", duration=3.0, audio_codec="opus")
+
+        self.assertNotIn('data-properties-section="audio"', self._panel(f))
 
 
 class MosaicBadgeTests(SimpleTestCase):

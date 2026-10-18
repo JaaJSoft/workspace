@@ -36,6 +36,9 @@ class MediaItem(models.Model):
     # services/filename_dates.py), and follows the name when it is renamed.
     taken_at = models.DateTimeField(null=True, blank=True)
     taken_at_from_name = models.BooleanField(default=False)
+    # Set by hand (services/capture_details.py): reading the file again, or
+    # renaming it, leaves the date alone.
+    taken_at_by_user = models.BooleanField(default=False)
     # As displayed, i.e. with the EXIF orientation or the video rotation
     # applied. Null when the file could not be decoded.
     width = models.PositiveIntegerField(null=True, blank=True)
@@ -63,6 +66,8 @@ class MediaItem(models.Model):
     longitude = models.FloatField(null=True, blank=True)
     # Metres above sea level, negative below it. Only kept with a position.
     altitude = models.FloatField(null=True, blank=True)
+    # Set or removed by hand, as taken_at_by_user: all three fields above.
+    location_by_user = models.BooleanField(default=False)
     # How sensitive the photo is (files/sensitivity.py), for everyone who can
     # open it: 0 is nothing to hide, and each viewer's blur preference blurs
     # it from its own level on (services/sensitive_photos.py). A choice made
@@ -585,9 +590,9 @@ class PhotoEmbedding(models.Model):
     # moment that matched. Empty for a photo.
     frame = models.CharField(max_length=255, blank=True, default="")
     analyzed_at = models.DateTimeField()
-    # When the photo was given its automatic tags (services/auto_tags.py),
-    # reset with every new vector. Each photo is tagged once: a tag its owner
-    # took off never comes back on its own.
+    # When the file was given its automatic tags (services/auto_tags.py), on
+    # every row of the file, reset with every new vector. Each file is tagged
+    # once: a tag its owner took off never comes back on its own.
     auto_tagged_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

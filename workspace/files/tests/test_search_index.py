@@ -587,6 +587,20 @@ class DocumentBackfillTests(_FtsTestCase):
         run_catch_up("search_index")
         self.assertEqual(self._matches('"treasurer"'), {self._rowid(minutes)})
 
+    def test_a_documents_author_and_title_are_searchable(self):
+        engine = self._document(
+            "notes.docx",
+            extraction.DOCX,
+            make_docx(
+                ["a body that names nobody"],
+                properties={"title": "Analytical Engine", "author": "Ada Lovelace"},
+            ),
+        )
+        run_catch_up("search_index")
+
+        self.assertEqual(self._matches('"lovelace"'), {self._rowid(engine)})
+        self.assertEqual(self._matches('"analytical"'), {self._rowid(engine)})
+
     def test_an_unreadable_document_does_not_stop_the_catch_up(self):
         self._document("broken.pdf", "application/pdf", b"%PDF-1.4 truncated")
         readable = self._document(

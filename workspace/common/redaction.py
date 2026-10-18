@@ -25,14 +25,16 @@ from django.views.debug import SafeExceptionReporterFilter
 
 REDACTED = "[redacted]"
 
-# password / secret_key / session_key anywhere in the name; wrapped_ and
-# encrypted_ as a prefix only, token and _encrypted as a suffix only - so
-# `designation`, the `prompt_tokens` counters and a PDF's `encrypted` flag stay
+# password / secret_key / session_key anywhere in the name; wrapped_,
+# previous_wrapped_, expected_wrapped_ and encrypted_ as a prefix only, token
+# and _encrypted as a suffix only - so `designation`, the `prompt_tokens`
+# counters and a PDF's `encrypted` flag stay
 # legible, while access_token, refresh_token and oauth2_data_encrypted do not.
 # Signatures and public keys (`sig_public`, `metadata_sig`) are public by
 # design: the server hands them to every account that verifies them.
 _SENSITIVE_NAME = re.compile(
-    r"(password|secret_key|session_key|^wrapped_|^encrypted_|token$|_encrypted$)",
+    r"(password|secret_key|session_key|^wrapped_|^previous_wrapped_"
+    r"|^expected_wrapped_|^encrypted_|token$|_encrypted$)",
     re.IGNORECASE,
 )
 

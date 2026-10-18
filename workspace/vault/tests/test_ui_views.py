@@ -210,6 +210,21 @@ class ExportDialogWiringTests(SimpleTestCase):
         self.assertIn('x-text="skippedMessage()"', self.render())
 
 
+class PasswordDialogWiringTests(SimpleTestCase):
+    """The panel's Copy reaches the root's copyGenerated, whose default window
+    is an entry password's. A generated master password copied under it is
+    cleared before it reaches wherever it is being filed, and nothing in the
+    vault hands it back."""
+
+    def test_the_generated_master_password_is_copied_under_its_own_policy(self):
+        html = render_to_string("vault/ui/partials/password_dialog.html")
+        self.assertIn(
+            '@password-copy="copyGenerated($event.detail.value, '
+            'masterPasswordClipboardPolicy())"',
+            html,
+        )
+
+
 class OnboardingStrengthMeterTests(TestCase):
     """The strength meter on the onboarding page is the shared one.
 

@@ -18,6 +18,13 @@ window.buildEntryWriteRequest = async function buildEntryWriteRequest(
   vault,
   draft,
 ) {
+  // An edit re-signs the row it was opened from; only a new entry has none.
+  // Fails closed: an edit that lost the signature it replaces is refused
+  // rather than written without the check.
+  if (!draft.isNew) {
+    if (!draft.storedSig) throw window.vaultResign.Blocked();
+    window.vaultResign.assertMayResign({ metadata_sig: draft.storedSig });
+  }
   const V = window.vaultCrypto;
   const keyVersion = vault.key_version || 1;
   const key = await session.openEntryKey(vault, draft.uuid);
@@ -126,6 +133,7 @@ window.buildEntryResignRequest = async function buildEntryResignRequest(
   row,
   changes,
 ) {
+  window.vaultResign.assertMayResign(row);
   const V = window.vaultCrypto;
   const next = Object.assign(
     {

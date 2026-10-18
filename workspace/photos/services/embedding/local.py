@@ -149,6 +149,20 @@ class ClipVitB32Backend(LocalBackend):
         "christmas": 0.742,
         "swimming pool": 0.726,
     }
+    # A video's tags, from the closest of its key frames: fitted the same way
+    # on the photos filmed and read back as key frames, the photo table's
+    # tags only.
+    video_tag_thresholds = {
+        "dog": 0.745,
+        "cat": 0.733,
+        "horse": 0.745,
+        "mountain": 0.735,
+        "snow": 0.745,
+        "sunset": 0.753,
+        "garden": 0.745,
+        "cake": 0.743,
+        "cocktail": 0.713,
+    }
 
 
 class Siglip2BaseBackend(LocalBackend):
@@ -204,6 +218,29 @@ class Siglip2BaseBackend(LocalBackend):
         "screenshot": 0.885,
         "document": 0.901,
     }
+    video_tag_thresholds = {
+        "dog": 0.925,
+        "cat": 0.9,
+        "horse": 0.889,
+        "beach": 0.901,
+        "mountain": 0.896,
+        "snow": 0.888,
+        "sea": 0.894,
+        "forest": 0.902,
+        "sunset": 0.906,
+        "garden": 0.905,
+        "night": 0.887,
+        "car": 0.925,
+        "boat": 0.882,
+        "bicycle": 0.914,
+        "cake": 0.896,
+        "cocktail": 0.9,
+        "wedding": 0.892,
+        "christmas": 0.895,
+        "skiing": 0.872,
+        "swimming pool": 0.885,
+        "document": 0.901,
+    }
 
 
 class JinaClipV1Backend(LocalBackend):
@@ -252,4 +289,27 @@ class JinaClipV1Backend(LocalBackend):
         "swimming pool": 0.818,
         "screenshot": 0.863,
         "document": 0.853,
+    }
+    video_tag_thresholds = {
+        "dog": 0.887,
+        "cat": 0.843,
+        "horse": 0.821,
+        "beach": 0.844,
+        "mountain": 0.861,
+        "snow": 0.852,
+        "forest": 0.823,
+        "lake": 0.842,
+        "sunset": 0.828,
+        "garden": 0.855,
+        "car": 0.879,
+        "boat": 0.83,
+        "airplane": 0.821,
+        "bicycle": 0.841,
+        "cake": 0.834,
+        "cocktail": 0.82,
+        "selfie": 0.824,
+        "wedding": 0.841,
+        "skiing": 0.837,
+        "swimming pool": 0.811,
+        "document": 0.844,
     }

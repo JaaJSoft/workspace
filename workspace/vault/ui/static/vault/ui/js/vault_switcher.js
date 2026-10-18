@@ -211,14 +211,28 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
 
       try {
         const body = await window.buildVaultUpdateRequest(
-          window.vaultSession, vault, changes
+          window.vaultSession, await this.reloadedVault(vault), changes
         );
         await window.vaultApi.updateVault(vault.uuid, body);
         await this.load();
       } catch (err) {
         if (err && err.reason === 'locked') return;
+        if (err && err.name === 'VaultResignBlocked') {
+          this.error = 'This vault could not be verified. It was left untouched.';
+          return;
+        }
         this.error = 'That change could not be saved. Try again.';
       }
+    },
+
+    // Every vault write re-signs the row, so a reload held back by a
+    // migration pass runs first, and the write signs the row it brought back
+    // rather than the one the menu or the dialog was opened on.
+    reloadedVault: async function (vault) {
+      await this.flushDeferredReload();
+      return this.vaults.find(function (row) {
+        return String(row.uuid) === String(vault.uuid);
+      }) || vault;
     },
 
     // ---- rename and appearance --------------------------------------------
@@ -257,7 +271,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
       try {
         const body = await window.buildVaultUpdateRequest(
           window.vaultSession,
-          dialog.vault,
+          await this.reloadedVault(dialog.vault),
           {
             name: name,
             icon: this.selectedIcon,
@@ -269,6 +283,10 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
         await this.load();
       } catch (err) {
         if (err && err.reason === 'locked') return;
+        if (err && err.name === 'VaultResignBlocked') {
+          this.error = 'This vault could not be verified. It was left untouched.';
+          return;
+        }
         this.error = 'That change could not be saved. Try again.';
       } finally {
         this.busy = false;
@@ -370,7 +388,7 @@ window.vaultSwitcherMixin = function vaultSwitcherMixin() {
     favouriteAfterCreate: async function (vault) {
       try {
         const body = await window.buildVaultUpdateRequest(
-          window.vaultSession, vault, { is_favorite: true }
+          window.vaultSession, await this.reloadedVault(vault), { is_favorite: true }
         );
         await window.vaultApi.updateVault(vault.uuid, body);
       } catch (err) {

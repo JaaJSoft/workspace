@@ -7,6 +7,7 @@ from .views import (
     album_links,
     album_sharing,
     albums,
+    capture_details,
     faces,
     hidden,
     import_folder,
@@ -114,6 +115,11 @@ urlpatterns = [
         "api/v1/photos/shared/<str:token>/files/<uuid:file_uuid>/download",
         album_links.AlbumLinkDownloadView.as_view(),
         name="photo-album-link-download",
+    ),
+    path(
+        "api/v1/photos/capture-details",
+        capture_details.CaptureDetailsView.as_view(),
+        name="photos-capture-details",
     ),
     path(
         "api/v1/photos/hidden",

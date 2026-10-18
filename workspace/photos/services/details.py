@@ -1,6 +1,6 @@
-"""What the Photo section of the Files properties panel says about a photo.
+"""What the Photo and Video sections of the Files properties panel say.
 
-The panel belongs to ``files``; photos contributes the section through
+The panel belongs to ``files``; photos contributes the sections through
 ``files.properties_sections`` (registered in ``PhotosConfig.ready()``).
 """
 
@@ -8,7 +8,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from urllib.parse import urlencode
 
+from workspace.files.services.details import current_media_info
+from workspace.files.services.thumbnails.generation import VIDEO_LABELS
+
 from ..models import MediaItem
+from .location_map import location_map
 
 # Below this, a shutter speed reads as a fraction of a second ("1/4 s",
 # "1/120 s"); from it up, as a decimal ("0.3 s", "2 s"), the way cameras
@@ -43,6 +47,20 @@ class PhotoDetails:
         )
 
 
+@dataclass(frozen=True)
+class VideoDetails:
+    dimensions: str = ""
+    # Seconds.
+    duration: float | None = None
+    video_codec: str = ""
+    audio_codec: str = ""
+
+    def __bool__(self):
+        return bool(
+            self.dimensions or self.duration or self.video_codec or self.audio_codec
+        )
+
+
 def current_photo_item(file_obj):
     """The MediaItem of *file_obj* when it describes it as a photo in its
     current content, or None.
@@ -50,15 +68,42 @@ def current_photo_item(file_obj):
     A row describing replaced bytes is not shown: until the analysis catches
     up, its camera and place are those of another picture.
     """
+    return _current_item(file_obj, MediaItem.MediaType.PHOTO)
+
+
+def _current_item(file_obj, media_type):
     try:
         item = file_obj.media_item
     except MediaItem.DoesNotExist:
         return None
-    if item.media_type != MediaItem.MediaType.PHOTO:
+    if item.media_type != media_type:
         return None
     if item.content_hash != file_obj.content_hash:
         return None
     return item
+
+
+def video_details(file_obj):
+    """The :class:`VideoDetails` of a video: its dimensions from the photo
+    library's row, its length and codecs from the files module's probe.
+
+    Either may be missing on its own - the library has not analyzed the file
+    yet, the deployment has no ffprobe - and the other still shows.
+    """
+    if file_obj.type not in VIDEO_LABELS:
+        return VideoDetails()
+    details = {}
+    item = _current_item(file_obj, MediaItem.MediaType.VIDEO)
+    if item is not None and item.width and item.height:
+        details["dimensions"] = f"{item.width} × {item.height}"
+    info = current_media_info(file_obj)
+    if info is not None:
+        details.update(
+            duration=info.duration,
+            video_codec=info.video_codec,
+            audio_codec=info.audio_codec,
+        )
+    return VideoDetails(**details)
 
 
 def photo_details(item):
@@ -158,4 +203,13 @@ def is_section_visible(user, file_obj):
 
 
 def section_context(user, file_obj):
-    return {"photo": photo_details(current_photo_item(file_obj))}
+    item = current_photo_item(file_obj)
+    return {"photo": photo_details(item), "map": location_map(user, item)}
+
+
+def is_video_section_visible(user, file_obj):
+    return bool(video_details(file_obj))
+
+
+def video_section_context(user, file_obj):
+    return {"video": video_details(file_obj)}

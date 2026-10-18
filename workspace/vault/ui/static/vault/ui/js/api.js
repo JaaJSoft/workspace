@@ -25,7 +25,8 @@ window.vaultApi = (function () {
       if (!response.ok) {
         throw VaultApiError('the vault API refused the request', response.status);
       }
-      return response.status === 204 ? null : response.json();
+      if (response.status === 204 || settings.bodiless) return null;
+      return response.json();
     });
   }
 
@@ -33,6 +34,19 @@ window.vaultApi = (function () {
     Error: VaultApiError,
     fetchEnvelope: function () {
       return request('/api/v1/vault/account/envelope');
+    },
+    // Every envelope write: the unlock's re-wrap and the password change. The
+    // server applies it only against the envelope named as expected, and
+    // answers 200 with no body: reading one would reject after the envelope
+    // has already been replaced.
+    rotateEnvelope: function (body) {
+      return request('/api/v1/vault/account/rotate', { method: 'POST', body: body, bodiless: true });
+    },
+    confirmEnvelope: function (wrappedKexPriv) {
+      return request('/api/v1/vault/account/confirm', {
+        method: 'POST',
+        body: { wrapped_kex_priv: wrappedKexPriv },
+      });
     },
     // What this account still has under a superseded algorithm. A shortcut,
     // not a guarantee: the client only ever rewrites what it verified.

@@ -372,3 +372,30 @@ test('the test build refuses to leave an axis without a current entry', () => {
   const T = loadTestBuild();
   assert.throws(() => T.installTestManifest({ signature: { 1: 'superseded' } }));
 });
+
+test('the test build may change the current kdf params before first use', () => {
+  const T = loadTestBuild();
+  T.installTestManifest({ kdf: { argon2id: { params: { v: '1.3', m: 16384, t: 1, p: 1 } } } });
+  assert.deepStrictEqual({ ...T.CURRENT_SUITE.kdf.params }, { v: '1.3', m: 16384, t: 1, p: 1 });
+});
+
+test('the test build refuses kdf params outside the declared shape or bounds', () => {
+  for (const params of [
+    { v: '1.3', m: 1024, t: 1, p: 1 },
+    { v: '1.0', m: 16384, t: 1, p: 1 },
+    { v: '1.3', m: 16384, t: 1 },
+    { v: '1.3', m: 16384, t: 1, p: 1, extra: 1 },
+    { v: '1.3', m: 16384, t: true, p: 1 },
+  ]) {
+    const T = loadTestBuild();
+    assert.throws(() => T.installTestManifest({ kdf: { argon2id: { params } } }), JSON.stringify(params));
+  }
+  const T = loadTestBuild();
+  assert.throws(() => T.installTestManifest({ aead: { 1: { params: {} } } }));
+});
+
+test('the test build refuses a kdf override that carries more than params', () => {
+  const T = loadTestBuild();
+  const params = { v: '1.3', m: 16384, t: 1, p: 1 };
+  assert.throws(() => T.installTestManifest({ kdf: { argon2id: { params, state: 'superseded' } } }));
+});

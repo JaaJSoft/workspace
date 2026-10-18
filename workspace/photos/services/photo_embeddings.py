@@ -45,7 +45,7 @@ from workspace.files.services.scanning.policy import exclude_blocked, is_blocked
 from ..indexes import PHOTO_EMBEDDINGS
 from ..models import MediaItem, PhotoEmbedding
 from .analysis import library_candidates, media_type_for
-from .auto_tags import tag_photo_safely
+from .auto_tags import tag_file_safely
 from .embedding.registry import (
     embeddings_available,
     get_embedding_backend,
@@ -197,11 +197,12 @@ def embed_file(file_obj):
 
 
 def _tag(rows):
-    """Tag the photo of freshly written *rows*, then hand them back. Here
-    rather than left to the catch-up: the photo is tagged within moments of
+    """Tag the file of freshly written *rows*, then hand them back. Here
+    rather than left to the catch-up: the file is tagged within moments of
     its upload, while the backend is loaded."""
-    for row in rows or ():
-        tag_photo_safely(row)
+    if rows:
+        # One file: its first row reads all of them.
+        tag_file_safely(rows[0])
     return rows
 
 

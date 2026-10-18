@@ -144,3 +144,9 @@ def tag_thresholds():
     """The backend's automatic tags: {tag text: max distance}, the classic
     tags it recognizes."""
     return dict(get_embedding_backend().tag_thresholds)
+
+
+def video_tag_thresholds():
+    """The backend's automatic tags on a video: {tag text: max distance from
+    the closest key frame}."""
+    return dict(get_embedding_backend().video_tag_thresholds)

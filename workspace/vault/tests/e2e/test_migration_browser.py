@@ -17,12 +17,14 @@ bundle, and the next unlock reseals every row under it.
 
 import hashlib
 from collections import Counter
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from playwright.sync_api import Error as PlaywrightError
 
 from workspace.common.tests.e2e.base import PlaywrightTestCase
+from workspace.vault.checks import retired_ids_check
 from workspace.vault.models import (
     AccountIdentity,
     Vault,
@@ -31,7 +33,8 @@ from workspace.vault.models import (
     VaultTag,
 )
 from workspace.vault.queries import user_vault_ids
-from workspace.vault.services.census import census, ciphertext_marks, stale_rows
+from workspace.vault.services import suites
+from workspace.vault.services.census import census, stale_rows
 from workspace.vault.tests.reference.encoding import from_base64url, to_base64url
 
 from .. import compat
@@ -332,6 +335,33 @@ class AeadMigrationBrowserTests(ReferenceRowsMixin, VaultBrowserCase):
 
 
 CORPUS = compat.load("v1")
+ENVELOPE_COLUMNS = ("wrapped_kex_priv", "wrapped_sig_priv")
+PREVIOUS_COLUMNS = (
+    "previous_kdf_algo",
+    "previous_kdf_params",
+    "previous_wrapped_kex_priv",
+    "previous_wrapped_sig_priv",
+)
+
+
+def _envelope(user):
+    return (
+        AccountIdentity.objects.filter(user=user)
+        .values(*ENVELOPE_COLUMNS, *PREVIOUS_COLUMNS)
+        .get()
+    )
+
+
+def _without_format_1():
+    """The manifest as it reads once format 1 is dropped from it."""
+    real_state = suites.state
+
+    def without(axis, identifier):
+        if (axis, identifier) == ("format", 1):
+            return None
+        return real_state(axis, identifier)
+
+    return mock.patch("workspace.vault.checks.suites.state", side_effect=without)
 
 
 def _corpus_digests():
@@ -437,8 +467,14 @@ class FrozenAccountMigrationBrowserTests(ReferenceRowsMixin, PlaywrightTestCase)
         self.assertNotEqual(stale_rows(self.user), [])
         updated_before = dict(VaultEntry.objects.values_list("uuid", "updated_at"))
 
+        envelope_before = _envelope(self.user)
+        self.assertEqual(
+            [from_base64url(envelope_before[column])[0] for column in ENVELOPE_COLUMNS],
+            [1, 1],
+        )
         self._unlock()
         self._wait_for_no_migration(timeout_ms=60000)
+        self.page.evaluate("() => window.vaultSession.envelopeWrites()")
 
         self.assertEqual(stale_rows(self.user), [])
         self.assertEqual(
@@ -459,16 +495,41 @@ class FrozenAccountMigrationBrowserTests(ReferenceRowsMixin, PlaywrightTestCase)
             counts["entries"], sum(len(v["entries"]) for v in manifest_vaults)
         )
 
-        # The account envelope is not this migration's to move: format 1
-        # survives on the identity's two wrapped keys and nowhere else.
-        identity_marks = Counter()
-        for kex, sig in AccountIdentity.objects.values_list(
-            "wrapped_kex_priv", "wrapped_sig_priv"
-        ):
-            identity_marks.update(ciphertext_marks(kex) + ciphertext_marks(sig))
-        counts_by_mark = census()
-        self.assertGreater(identity_marks[("format", 1)], 0)
-        self.assertEqual(counts_by_mark[("format", 1)], identity_marks[("format", 1)])
-        self.assertEqual(counts_by_mark[("hpke", 1)], 0)
+        # The envelope moved too, on the same unlock: re-wrapped under
+        # format 2, with the format-1 envelope kept as the previous one until
+        # an unlock proves the new one. Format 1 therefore still cannot be
+        # dropped from the manifest.
+        envelope = _envelope(self.user)
+        self.assertEqual(
+            [from_base64url(envelope[column])[0] for column in ENVELOPE_COLUMNS],
+            [2, 2],
+        )
+        self.assertEqual(
+            (
+                envelope["previous_wrapped_kex_priv"],
+                envelope["previous_wrapped_sig_priv"],
+            ),
+            (envelope_before["wrapped_kex_priv"], envelope_before["wrapped_sig_priv"]),
+        )
+        self.assertEqual(census()[("format", 1)], 2)
+        self.assertEqual(census()[("hpke", 1)], 0)
+        with _without_format_1():
+            self.assertEqual(
+                [error.id for error in retired_ids_check(None, databases=["default"])],
+                ["vault.E001"],
+            )
+
+        # The next unlock opens the new envelope and drops the previous one:
+        # nothing under format 1 is left anywhere.
+        self._unlock()
+        self.page.evaluate("() => window.vaultSession.envelopeWrites()")
+        envelope = _envelope(self.user)
+        self.assertEqual(
+            [envelope[column] for column in PREVIOUS_COLUMNS],
+            [None] * len(PREVIOUS_COLUMNS),
+        )
+        self.assertEqual(census()[("format", 1)], 0)
+        with _without_format_1():
+            self.assertEqual(retired_ids_check(None, databases=["default"]), [])
 
         self.assertEqual(_corpus_digests(), digests)

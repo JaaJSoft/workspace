@@ -159,7 +159,7 @@ class UnlockWalkTests(PlaywrightTestCase):
         requests = []
         self.page.on("request", lambda request: requests.append(request.url))
         self._unlock(password="not the password")
-        self.page.wait_for_selector("inline-alert", timeout=30000)
+        self.page.wait_for_selector("inline-alert[type=error]", timeout=30000)
         # The envelope is fetched; nothing else is, and no vault is listed.
         self.assertTrue(
             [url for url in requests if "/account/envelope" in url],

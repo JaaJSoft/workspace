@@ -1259,6 +1259,8 @@ window.fileBrowser = function fileBrowser() {
       });
 
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
+      // A contributed section of the panel changed what it renders.
+      window.addEventListener('properties-section-changed', () => this.reloadPropertiesPanel());
 
       // alpine-ajax marks every swap target aria-busy for the life of its
       // request. Listening on the document, that attribute is what tells a

@@ -52,6 +52,7 @@ REST_FRAMEWORK = {
         # an exfiltration spread across several stolen session cookies.
         "vault.account.envelope.ip": "200/hour",
         "vault.account.rotate.user": "5/hour",
+        "vault.account.confirm.user": "60/hour",
         # Vault data endpoints. Unlike the account rates above, these guard no
         # key material: refusing one costs the user progress, so they are sized
         # to the work - a 10,000-row migration is 50 batches - and lowered only
@@ -199,6 +200,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Photos - Album sharing",
             "description": "Album members, their roles, leaving an album, and its public links.",
+        },
+        {
+            "name": "Photos - Details",
+            "description": "Corrections by hand of when and where photos and videos were taken.",
         },
         {
             "name": "Photos - Faces",

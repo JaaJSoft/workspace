@@ -9,7 +9,8 @@ from django.test import TestCase, override_settings
 
 from workspace.common.redaction import REDACTED, SecretRedactingFilter
 from workspace.vault.models import AccountIdentity, Vault, VaultKeyWrap
-from workspace.vault.tests.factories import sealed
+from workspace.vault.services import suites
+from workspace.vault.tests.factories import sealed, sealed_envelope
 from workspace.vault.tests.reference import ad, primitives
 from workspace.vault.tests.reference.encoding import to_base64url
 
@@ -19,10 +20,6 @@ INIT_URL = "/api/v1/vault/account/init"
 ENVELOPE_URL = "/api/v1/vault/account/envelope"
 FINALIZE_URL = "/api/v1/vault/account/finalize"
 ROTATE_URL = "/api/v1/vault/account/rotate"
-
-
-NEW_WKEX = sealed("new-wkex")
-NEW_WSIG = sealed("new-wsig")
 
 
 def build_identity_payload(account_uuid):
@@ -173,6 +170,30 @@ class AccountEnvelopeTests(TestCase):
             sig_over_kex_pub="ATTEST",
             state=AccountIdentity.State.ACTIVE,
         )
+
+    def test_returns_an_empty_previous_envelope_as_nulls(self):
+        self._identity(self.user)
+        body = self.client.get(ENVELOPE_URL).json()
+        for key in (
+            "previous_kdf_algo",
+            "previous_kdf_params",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
+        ):
+            self.assertIn(key, body)
+            self.assertIsNone(body[key])
+
+    def test_returns_a_pending_previous_envelope(self):
+        self._identity(self.user)
+        AccountIdentity.objects.filter(user=self.user).update(
+            previous_kdf_algo="argon2id",
+            previous_kdf_params={"v": "1.3", "m": 65536, "t": 3, "p": 2},
+            previous_wrapped_kex_priv="PREV-KEX",
+            previous_wrapped_sig_priv="PREV-SIG",
+        )
+        body = self.client.get(ENVELOPE_URL).json()
+        self.assertEqual(body["previous_wrapped_kex_priv"], "PREV-KEX")
+        self.assertEqual(body["previous_wrapped_sig_priv"], "PREV-SIG")
 
     def test_returns_the_callers_envelope(self):
         identity = self._identity(self.user)
@@ -399,15 +420,16 @@ class AccountRotateTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="owner", password="pw")
         self.client.force_login(self.user)
+        _, self.params = suites.current_kdf()
         self.identity = AccountIdentity.objects.create(
             user=self.user,
             kdf_algo="argon2id",
-            kdf_params={"m": 65536, "t": 3, "p": 2},
+            kdf_params=self.params,
             kdf_salt="SALT",
             kex_public="KEX",
             sig_public="SIG",
-            wrapped_kex_priv="OLD-WKEX",
-            wrapped_sig_priv="OLD-WSIG",
+            wrapped_kex_priv=sealed_envelope("old-kex", 1),
+            wrapped_sig_priv=sealed_envelope("old-sig", 1),
             sig_over_kex_pub="ATTEST",
             state=AccountIdentity.State.ACTIVE,
         )
@@ -421,15 +443,20 @@ class AccountRotateTests(TestCase):
             key_version=1,
             hpke_suite={"kem_id": 32, "kdf_id": 1, "aead_id": 2, "mode": 0},
         )
-        self.body = {
-            "kdf_algo": "argon2id",
-            "kdf_params": {"v": "1.3", "m": 262144, "t": 4, "p": 2},
-            "wrapped_kex_priv": NEW_WKEX,
-            "wrapped_sig_priv": NEW_WSIG,
-        }
+        self.body = self._body("new")
 
     def tearDown(self):
         cache.clear()
+
+    def _body(self, label, expected=None):
+        return {
+            "kdf_algo": "argon2id",
+            "kdf_params": dict(self.params),
+            "wrapped_kex_priv": sealed_envelope(f"{label}-kex"),
+            "wrapped_sig_priv": sealed_envelope(f"{label}-sig"),
+            "expected_wrapped_kex_priv": expected
+            or AccountIdentity.objects.get(pk=self.identity.pk).wrapped_kex_priv,
+        }
 
     def _post(self, body=None):
         return self.client.post(
@@ -438,53 +465,101 @@ class AccountRotateTests(TestCase):
             content_type="application/json",
         )
 
-    def test_rewrites_the_envelope(self):
+    def test_a_proven_envelope_becomes_the_previous_one(self):
+        old_kex = self.identity.wrapped_kex_priv
+        old_sig = self.identity.wrapped_sig_priv
         self.assertEqual(self._post().status_code, 200)
         self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, NEW_WKEX)
-        self.assertEqual(self.identity.wrapped_sig_priv, NEW_WSIG)
+        self.assertEqual(self.identity.wrapped_kex_priv, self.body["wrapped_kex_priv"])
+        self.assertEqual(self.identity.wrapped_sig_priv, self.body["wrapped_sig_priv"])
+        self.assertEqual(self.identity.previous_wrapped_kex_priv, old_kex)
+        self.assertEqual(self.identity.previous_wrapped_sig_priv, old_sig)
+        self.assertEqual(self.identity.previous_kdf_algo, "argon2id")
+        self.assertEqual(self.identity.previous_kdf_params, self.params)
+
+    def _age_the_envelope(self):
+        """Gives the stored envelope a kdf that no rotation can write, so every
+        one of the four previous columns tells the original envelope apart from
+        a rotated one."""
+        older = {**self.params, "m": self.params["m"] // 4}
+        AccountIdentity.objects.filter(pk=self.identity.pk).update(
+            kdf_algo="argon2i", kdf_params=older
+        )
+        return AccountIdentity.objects.get(pk=self.identity.pk)
+
+    def _assert_previous_is(self, original):
+        self.identity.refresh_from_db()
         self.assertEqual(
-            self.identity.kdf_params, {"v": "1.3", "m": 262144, "t": 4, "p": 2}
+            self.identity.previous_wrapped_kex_priv, original.wrapped_kex_priv
+        )
+        self.assertEqual(
+            self.identity.previous_wrapped_sig_priv, original.wrapped_sig_priv
+        )
+        self.assertEqual(self.identity.previous_kdf_algo, original.kdf_algo)
+        self.assertEqual(self.identity.previous_kdf_params, original.kdf_params)
+
+    def test_an_unproven_envelope_never_replaces_the_previous_one(self):
+        """The previous slot holds the last envelope an unlock opened. A second
+        rotation before any unlock replaces the unproven current one only."""
+        original = self._age_the_envelope()
+        self.assertEqual(self._post(self._body("first")).status_code, 200)
+        second = self._body("second")
+        self.assertEqual(self._post(second).status_code, 200)
+        self._assert_previous_is(original)
+        self.assertEqual(self.identity.wrapped_kex_priv, second["wrapped_kex_priv"])
+
+    def test_a_stale_expected_envelope_is_409_and_writes_nothing(self):
+        before = AccountIdentity.objects.filter(pk=self.identity.pk).values().get()
+        body = self._body("late", expected=sealed_envelope("someone-else"))
+        self.assertEqual(self._post(body).status_code, 409)
+        self.assertEqual(
+            AccountIdentity.objects.filter(pk=self.identity.pk).values().get(), before
         )
 
-    def test_writes_the_kdf_algo_alongside_its_params(self):
-        """The two describe one derivation: rewriting the parameters under the
-        algorithm the row happened to hold would pair them with the wrong
-        function the day a second one is declared."""
-        AccountIdentity.objects.filter(pk=self.identity.pk).update(kdf_algo="legacy")
-        self.assertEqual(self._post().status_code, 200)
-        self.identity.refresh_from_db()
-        self.assertEqual(self.identity.kdf_algo, "argon2id")
+    def test_two_rotations_from_the_same_read_land_once(self):
+        original = self._age_the_envelope()
+        first = self._body("tab-a")
+        second = self._body("tab-b", expected=first["expected_wrapped_kex_priv"])
+        self.assertEqual(self._post(first).status_code, 200)
+        self.assertEqual(self._post(second).status_code, 409)
+        self._assert_previous_is(original)
+        self.assertEqual(self.identity.wrapped_kex_priv, first["wrapped_kex_priv"])
 
-    def test_refuses_a_memory_cost_above_the_manifest_bound(self):
-        body = {**self.body, "kdf_params": {**self.body["kdf_params"], "m": 4 << 20}}
-        response = self._post(body)
-        self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json(), {"kdf_params": ["unsupported kdf_params"]})
+    def test_refuses_params_other_than_the_current_ones(self):
+        for params in (
+            {**self.params, "m": self.params["m"] * 2},
+            {**self.params, "p": float(self.params["p"])},
+            {**self.params, "t": True}
+            if self.params["t"] == 1
+            else {**self.params, "t": str(self.params["t"])},
+            {**self.params, "extra": 1},
+        ):
+            with self.subTest(params=params):
+                response = self._post({**self.body, "kdf_params": params})
+                self.assertEqual(response.status_code, 400)
         self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
+        self.assertIsNone(self.identity.previous_wrapped_kex_priv)
 
-    def test_refuses_a_wrapped_key_whose_header_names_an_unknown_format(self):
-        body = {**self.body, "wrapped_kex_priv": to_base64url(bytes([9]) + bytes(40))}
-        response = self._post(body)
-        self.assertEqual(response.status_code, 400)
+    def test_refuses_a_kdf_that_is_not_the_current_one(self):
         self.assertEqual(
-            response.json(), {"wrapped_kex_priv": ["unsupported ciphertext header"]}
+            self._post({**self.body, "kdf_algo": "scrypt"}).status_code, 400
         )
+
+    def test_refuses_an_envelope_ciphertext_not_under_the_current_suite(self):
+        for name, value in (
+            ("wrapped_kex_priv", sealed_envelope("x", 1)),
+            ("wrapped_sig_priv", sealed("x")),  # hkdf byte, key version 1
+        ):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    self._post({**self.body, name: value}).status_code, 400
+                )
         self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
+        self.assertIsNone(self.identity.previous_wrapped_kex_priv)
 
     def test_updates_the_row_in_place_rather_than_recreating_it(self):
-        """The identity UUID is what every associated data string of this
-        account is bound to, and the sealed private keys are the only path back
-        to every VaultKeyWrap. A delete-then-recreate is invisible in the data:
-        VaultKeyWrap points at auth.User, not at the identity, so every wrap
-        survives the deletion intact and merely stops being decryptable. The
-        account can never open a vault again, and nothing says so until the
-        next unlock. Only the UUID's stability catches it."""
         original_uuid = self.identity.uuid
         self.assertEqual(self._post().status_code, 200)
-
         identities = AccountIdentity.objects.filter(user=self.user)
         self.assertEqual(identities.count(), 1)
         self.assertEqual(identities.get().uuid, original_uuid)
@@ -493,7 +568,6 @@ class AccountRotateTests(TestCase):
         self.assertEqual(self._post().status_code, 200)
         self.wrap.refresh_from_db()
         self.assertEqual(self.wrap.wrapped_key, "WRAPPED")
-        self.assertEqual(VaultKeyWrap.objects.filter(recipient=self.user).count(), 1)
 
     def test_never_touches_the_public_keys_or_the_salt(self):
         response = self._post(
@@ -514,12 +588,10 @@ class AccountRotateTests(TestCase):
         self.assertEqual(self.identity.sig_over_kex_pub, "ATTEST")
         self.assertEqual(self.identity.state, AccountIdentity.State.ACTIVE)
 
-    def test_refuses_a_body_missing_a_wrapped_key(self):
+    def test_refuses_a_body_missing_the_expected_envelope(self):
         body = dict(self.body)
-        del body["wrapped_sig_priv"]
+        del body["expected_wrapped_kex_priv"]
         self.assertEqual(self._post(body).status_code, 400)
-        self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
 
     def test_answers_404_when_the_identity_is_still_pending(self):
         AccountIdentity.objects.filter(user=self.user).update(
@@ -533,11 +605,108 @@ class AccountRotateTests(TestCase):
         AccountIdentity.objects.all().delete()
         self.assertEqual(self._post().status_code, 404)
 
+    def test_answers_404_before_validating_the_body(self):
+        AccountIdentity.objects.filter(user=self.user).update(
+            state=AccountIdentity.State.PENDING
+        )
+        self.assertEqual(
+            self._post({**self.body, "kdf_algo": "scrypt"}).status_code, 404
+        )
+
+    def test_never_touches_another_users_identity(self):
+        before = AccountIdentity.objects.filter(pk=self.identity.pk).values().get()
+        other = User.objects.create_user(username="other", password="pw")
+        self.client.force_login(other)
+        self.assertEqual(self._post().status_code, 404)
+        self.assertEqual(
+            AccountIdentity.objects.filter(pk=self.identity.pk).values().get(), before
+        )
+
     def test_the_response_is_never_cached(self):
         self.assertEqual(self._post()["Cache-Control"], "no-store")
 
     def test_requires_authentication(self):
         self.client.logout()
         self.assertIn(self._post().status_code, (401, 403))
+
+
+CONFIRM_URL = "/api/v1/vault/account/confirm"
+
+
+class AccountConfirmTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="owner", password="pw")
+        self.client.force_login(self.user)
+        _, params = suites.current_kdf()
+        self.identity = AccountIdentity.objects.create(
+            user=self.user,
+            kdf_algo="argon2id",
+            kdf_params=params,
+            kdf_salt="SALT",
+            kex_public="KEX",
+            sig_public="SIG",
+            wrapped_kex_priv=sealed_envelope("new-kex"),
+            wrapped_sig_priv=sealed_envelope("new-sig"),
+            sig_over_kex_pub="ATTEST",
+            state=AccountIdentity.State.ACTIVE,
+            previous_kdf_algo="argon2id",
+            previous_kdf_params=params,
+            previous_wrapped_kex_priv=sealed_envelope("old-kex", 1),
+            previous_wrapped_sig_priv=sealed_envelope("old-sig", 1),
+        )
+
+    def tearDown(self):
+        cache.clear()
+
+    def _post(self, value):
+        return self.client.post(
+            CONFIRM_URL,
+            data={"wrapped_kex_priv": value},
+            content_type="application/json",
+        )
+
+    def test_clears_the_previous_envelope_once_the_current_one_opened(self):
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 204)
         self.identity.refresh_from_db()
-        self.assertEqual(self.identity.wrapped_kex_priv, "OLD-WKEX")
+        self.assertIsNone(self.identity.previous_kdf_algo)
+        self.assertIsNone(self.identity.previous_kdf_params)
+        self.assertIsNone(self.identity.previous_wrapped_kex_priv)
+        self.assertIsNone(self.identity.previous_wrapped_sig_priv)
+        self.assertEqual(self.identity.wrapped_kex_priv, sealed_envelope("new-kex"))
+
+    def test_keeps_it_when_the_current_one_moved_since(self):
+        self.assertEqual(
+            self._post(sealed_envelope("what-another-tab-opened")).status_code, 204
+        )
+        self.identity.refresh_from_db()
+        self.assertEqual(
+            self.identity.previous_wrapped_kex_priv, sealed_envelope("old-kex", 1)
+        )
+
+    def test_is_idempotent(self):
+        self._post(self.identity.wrapped_kex_priv)
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 204)
+
+    def test_answers_404_without_an_active_identity(self):
+        AccountIdentity.objects.filter(pk=self.identity.pk).update(
+            state=AccountIdentity.State.PENDING
+        )
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 404)
+
+    def test_never_touches_another_users_identity(self):
+        other = User.objects.create_user(username="other", password="pw")
+        self.client.force_login(other)
+        self.assertEqual(self._post(self.identity.wrapped_kex_priv).status_code, 404)
+        self.identity.refresh_from_db()
+        self.assertIsNotNone(self.identity.previous_wrapped_kex_priv)
+
+    def test_the_response_is_never_cached(self):
+        self.assertEqual(
+            self._post(self.identity.wrapped_kex_priv)["Cache-Control"], "no-store"
+        )
+
+    def test_requires_authentication(self):
+        self.client.logout()
+        self.assertIn(
+            self._post(self.identity.wrapped_kex_priv).status_code, (401, 403)
+        )

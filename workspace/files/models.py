@@ -1319,6 +1319,38 @@ class MediaInfo(models.Model):
         return f"MediaInfo: {self.file_id}"
 
 
+class DocumentInfo(models.Model):
+    """The properties a PDF or an office file declares about itself.
+
+    Written off-request, once the file's content lands (see
+    ``services/document_info.py``), or by the hourly catch-up. A file whose
+    properties could not be read still has a row, all empty: it has been
+    looked at.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    file = models.OneToOneField(
+        File, on_delete=models.CASCADE, related_name="document_info"
+    )
+    title = models.CharField(max_length=500, blank=True, default="")
+    author = models.CharField(max_length=255, blank=True, default="")
+    subject = models.CharField(max_length=500, blank=True, default="")
+    keywords = models.CharField(max_length=500, blank=True, default="")
+    # Null when the format does not record it (a spreadsheet has no pages).
+    page_count = models.PositiveIntegerField(null=True, blank=True)
+    # The dates the authoring application wrote, not the file's own
+    # created_at / updated_at: an old report uploaded today was written years
+    # ago.
+    created = models.DateTimeField(null=True, blank=True)
+    modified = models.DateTimeField(null=True, blank=True)
+    # The file's content_hash when it was read; see MediaInfo.content_hash.
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    extracted_at = models.DateTimeField()
+
+    def __str__(self):
+        return f"DocumentInfo: {self.file_id}"
+
+
 class FileLinkState(models.Model):
     """What a note's outgoing links (FileLink rows) were extracted from.
 

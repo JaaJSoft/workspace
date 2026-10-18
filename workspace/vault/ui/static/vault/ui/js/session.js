@@ -68,8 +68,6 @@ function pkcs8FromSeed(seed) {
 // substitution, not an old tab.
 function refuseUnreadable(V, envelope) {
   try {
-    V.decodeCiphertext(V.fromBase64Url(envelope.wrapped_kex_priv));
-    V.decodeCiphertext(V.fromBase64Url(envelope.wrapped_sig_priv));
     V.decodePublicKey(V.fromBase64Url(envelope.sig_public), 'sig');
     V.decodePublicKey(V.fromBase64Url(envelope.kex_public), 'kex');
     const attestation = V.fromBase64Url(envelope.sig_over_kex_pub);
@@ -90,6 +88,12 @@ window.vaultSession = (function () {
   const lockCallbacks = [];
   const tickCallbacks = [];
   let unlocked = false;
+  // Whether the live session was opened by the envelope a password change
+  // kept, rather than by the current one. Nothing is written back then.
+  let openedByPrevious = false;
+  // The writes the last unlock sent after it committed. Never awaited by the
+  // page, and never rejecting.
+  let pendingWrites = Promise.resolve();
   // Moved by every lock. A key operation is several awaits long and the idle
   // timer fires between them without asking, so checking `unlocked` once at
   // the top is a check about a session that may no longer be the one the call
@@ -144,8 +148,31 @@ window.vaultSession = (function () {
     return publicRaw;
   }
 
+  // After the session is live, never awaited by the page. The previous
+  // envelope is dropped once the current one opened, and only then is a
+  // re-wrap sent: the proven envelope is what the server must keep as the
+  // previous one. Every failure - a 409 from another tab that rewrapped
+  // first included - is left for the next unlock.
+  async function writeEnvelopeBack(envelope, opened, resealed) {
+    if (opened !== 'current') return;
+    try {
+      if (envelope.previous_wrapped_kex_priv) {
+        await window.vaultApi.confirmEnvelope(envelope.wrapped_kex_priv);
+      }
+      if (resealed) {
+        await window.vaultApi.rotateEnvelope(
+          window.vaultEnvelope.rotateBody(resealed, envelope.wrapped_kex_priv)
+        );
+      }
+    } catch (err) {
+      // Nothing to undo: a refused write left the stored envelope as it was.
+    }
+  }
+
   return {
     isUnlocked: function () { return unlocked; },
+    openedWithPrevious: function () { return openedByPrevious; },
+    envelopeWrites: function () { return pendingWrites; },
     accountUuid: function () { return accountUuid; },
     accountKexPublicRaw: function () { return kexPublicRaw; },
     // Both wrapped for the same reason the write in unlock() is: private
@@ -191,7 +218,6 @@ window.vaultSession = (function () {
       if (envelope.state !== 'active') throw VaultUnlockError('identity');
 
       let secretBytes;
-      let amk;
       let unwrapKey;
       let kexPriv;
       let sigSeed;
@@ -211,6 +237,8 @@ window.vaultSession = (function () {
       // envelope-shaped, not a credentials problem, so it reports the same
       // way a deliberate substitution does.
       let keysUnwrapped = false;
+      let opened;
+      let resealed = null;
 
       try {
         try {
@@ -218,44 +246,20 @@ window.vaultSession = (function () {
         } catch (err) {
           throw VaultUnlockError('recovery-key', err);
         }
-        V.assertAccountKdf(envelope.kdf_algo, envelope.kdf_params);
         refuseUnreadable(V, envelope);
-        amk = await V.deriveAmk({
-          algo: envelope.kdf_algo,
-          password: options.password.normalize('NFC'),
-          secretKey: secretBytes,
-          salt: V.fromBase64Url(envelope.kdf_salt),
-          params: envelope.kdf_params,
-        });
-        unwrapKey = await V.hkdf(amk, V.AD.unwrapInfo());
-        zero(amk);
+        const salt = V.fromBase64Url(envelope.kdf_salt);
 
+        // The tag failure IS the wrong-password answer. No request validates
+        // it, and the server never learns whether one succeeded.
         try {
-          // The tag failure here IS the wrong-password answer. No request
-          // validates it, and the server never learns whether one succeeded.
-          kexPriv = await V.open(
-            unwrapKey,
-            V.fromBase64Url(envelope.wrapped_kex_priv),
-            V.AD.kexPrivAd(envelope.uuid)
-          );
-          sigSeed = await V.open(
-            unwrapKey,
-            V.fromBase64Url(envelope.wrapped_sig_priv),
-            V.AD.sigPrivAd(envelope.uuid)
-          );
+          ({ opened, unwrapKey, keys: { kexPriv, sigSeed } } = await window.vaultEnvelope.openWithFallback(
+            envelope, options.password, secretBytes, salt
+          ));
         } catch (err) {
-          // Named bytes this build cannot read are not a wrong password, and
-          // saying so would send the user hunting for a typo that is not there.
-          if (err && err.name === 'UnsupportedAlgorithmError') {
-            throw VaultUnlockError('unsupported', err);
-          }
-          throw VaultUnlockError('password', err);
+          if (err && err.name === 'VaultEnvelopeWrongPassword') throw VaultUnlockError('password', err);
+          throw err;
         }
         keysUnwrapped = true;
-        // Nothing in v1 needs it again: a rotation re-derives it from the
-        // password the user retypes.
-        zero(unwrapKey);
-        zero(secretBytes);
 
         recomputed = await publicKeyFromSeed(sigSeed);
         const served = V.decodePublicKey(V.fromBase64Url(envelope.sig_public), 'sig');
@@ -279,6 +283,37 @@ window.vaultSession = (function () {
           throw VaultUnlockError('substituted-key', err);
         }
 
+        // Resealed here, once the keys are proven and while they still exist
+        // raw: nothing raw may outlive this function, and only the sealed
+        // result travels on. A reseal that fails or does not reread is
+        // dropped - the next unlock tries again - and never fails this one.
+        // Never from the previous envelope: that would overwrite the current
+        // one, a password changed since, with the old password's.
+        if (opened === 'current') {
+          let resealKey = unwrapKey;
+          try {
+            if (window.vaultEnvelope.isStale(envelope)) {
+              if (window.vaultEnvelope.needsDerivation(envelope)) {
+                resealKey = await window.vaultEnvelope.deriveUnwrapKey(
+                  { kdf_algo: V.CURRENT_SUITE.kdf.algo, kdf_params: V.CURRENT_SUITE.kdf.params },
+                  options.password, secretBytes, salt
+                );
+              }
+              resealed = await window.vaultEnvelope.sealAndReread(
+                resealKey, { kexPriv: kexPriv, sigSeed: sigSeed }, envelope.uuid
+              );
+            }
+          } catch (err) {
+            resealed = null;
+          } finally {
+            if (resealKey !== unwrapKey) zero(resealKey);
+          }
+        }
+        // Nothing in this session needs either again: a password change
+        // re-derives from the password the user retypes.
+        zero(unwrapKey);
+        zero(secretBytes);
+
         // The server's kex_public, trusted only now: the attestation just
         // above is what vouches for it, checked with the recomputed signing
         // key rather than the served one. Decoding it any earlier - or
@@ -294,7 +329,6 @@ window.vaultSession = (function () {
         // behind, however it got here: zero() no-ops on whatever was never
         // assigned, so this is safe to run unconditionally.
         zero(secretBytes);
-        zero(amk);
         zero(unwrapKey);
         zero(kexPriv);
         zero(sigSeed);
@@ -317,6 +351,8 @@ window.vaultSession = (function () {
       recipient = newRecipient;
       unlocked = true;
       expiresAt = Date.now() + idleLockMs;
+      openedByPrevious = opened === 'previous';
+      pendingWrites = writeEnvelopeBack(envelope, opened, resealed);
 
       // Failing to remember - or forget - the device does not mean failing
       // to unlock it - the session above is already live and must stay that
@@ -337,6 +373,7 @@ window.vaultSession = (function () {
     lock: function () {
       if (!unlocked) return;
       unlocked = false;
+      openedByPrevious = false;
       generation += 1;
       // Dropped, not merely made unreachable: the point of a lock is to stop
       // holding the keys, and these are keys.

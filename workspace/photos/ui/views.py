@@ -74,6 +74,7 @@ from workspace.photos.services.face_review import (
 )
 from workspace.photos.services.hidden import hidden_folder_data
 from workspace.photos.services.import_folder import import_folder, import_folder_data
+from workspace.photos.services.location_map import map_available, tile_server
 from workspace.photos.services.photo_embeddings import (
     MAX_QUERY_LENGTH,
     QueryEmbeddingUnavailable,
@@ -97,7 +98,7 @@ from workspace.photos.services.timeline import (
     UNDATED,
     manual_page,
     mark_album_tiles,
-    mark_favorite_toggles,
+    mark_tile_actions,
     parse_cursor,
     parse_date_position,
     parse_manual_cursor,
@@ -367,7 +368,7 @@ def _paging(page, page_url, view_params=None):
 
 
 def _page_context(request, page, page_url, view_params=None):
-    mark_favorite_toggles(page.photos, request.user)
+    mark_tile_actions(page.photos, request.user)
     return _paging(page, page_url, view_params) | {
         "tile_width": _tile_width(request.user),
     }
@@ -597,6 +598,8 @@ def _render_page(request, template, context):
             hidden_folder_data(folder) for folder in hidden_folders(request.user)
         ]
         context["scope_choices"] = _scope_choices(request.user)
+        context["map_available"] = map_available()
+        context["map_server"] = tile_server()
     response = render(request, template, context)
     patch_vary_headers(response, ["X-Alpine-Request"])
     if swap:
@@ -733,7 +736,7 @@ def _ranked(request, query, similar):
                     "photos-video-frame", kwargs={"pk": match.frame_id}
                 )
             photos.append(photo)
-    mark_favorite_toggles(photos, request.user)
+    mark_tile_actions(photos, request.user)
     scope_params = _scope_params(scope, defaults)
     videos = sum(p.media_item.media_type == MediaItem.MediaType.VIDEO for p in photos)
     context = {

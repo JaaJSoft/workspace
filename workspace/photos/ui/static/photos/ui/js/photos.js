@@ -231,6 +231,7 @@ window.photosApp = function photosApp() {
     ...window.photosFacesMixin(),
     ...window.photosImportMixin(),
     ...window.photosHiddenMixin(),
+    ...window.photosCaptureDetailsMixin(),
 
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
@@ -278,6 +279,8 @@ window.photosApp = function photosApp() {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
+      // A contributed section of the panel changed what it renders.
+      window.addEventListener('properties-section-changed', () => this.reloadPropertiesPanel());
       // Members came or went: the header's faces and the sidebar's groups.
       window.addEventListener('album-shares-changed', () => {
         this._refresh(['photos-nav', 'photos-header']);
@@ -416,6 +419,8 @@ window.photosApp = function photosApp() {
           // ?type= shows and every link of the page, which leave out
           // whatever equals the default.
           if (PHOTO_PREF_REFRESH[key]) this._refresh(PHOTO_PREF_REFRESH[key]);
+          // The open panel's Photo section renders the map, or the offer.
+          if (key === 'show_map') this.reloadPropertiesPanel();
         })
         .catch(() => {
           if (this._prefVersions[key] !== version) return;
@@ -677,6 +682,7 @@ window.photosApp = function photosApp() {
         albumScoped: tile.dataset.albumScoped === '1',
         removable: tile.dataset.removable === '1',
         downloadUrl: tile.dataset.downloadUrl || '',
+        canEditDetails: tile.dataset.canEditDetails === '1',
       };
       const generation = ++this._ctxGeneration;
       this.ctxMenu = { open: true, x, y, photo, actions: null };
@@ -738,6 +744,7 @@ window.photosApp = function photosApp() {
           photo.filesUrl && 'open_in_files',
           has('copy_link') && 'copy_link',
           has('rename') && 'rename',
+          photo.canEditDetails && 'edit_details',
           has('properties') && 'properties',
         ],
         [
@@ -1175,6 +1182,7 @@ window.photosApp = function photosApp() {
           this.selectionRemovable() && 'remove_from_album',
           !!this.currentCluster() && 'not_this_person',
         ],
+        [this.selectionEditsDetails() && 'edit_details'],
         [
           this.selectionAllows('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',

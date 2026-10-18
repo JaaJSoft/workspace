@@ -178,3 +178,38 @@ test('migrateVault posts its items to the vault', async () => {
   assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
   assert.deepStrictEqual(JSON.parse(calls[0].options.body), { items });
 });
+
+test('rotateEnvelope posts its body as JSON with the CSRF token', () => {
+  const { api, calls } = withFetch();
+  api.rotateEnvelope({ kdf_algo: 'argon2id', expected_wrapped_kex_priv: 'old' });
+  assert.equal(calls[0].url, '/api/v1/vault/account/rotate');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+  assert.equal(calls[0].options.headers['Content-Type'], 'application/json');
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), {
+    kdf_algo: 'argon2id', expected_wrapped_kex_priv: 'old',
+  });
+});
+
+test('rotateEnvelope resolves on the bodiless 200 a rotation answers', async () => {
+  // A body read on an empty 200 rejects, and the caller would report a
+  // failure for an envelope the server has already replaced.
+  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/api.js', {
+    fetch: () => Promise.resolve({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+    }),
+    getCSRFToken: () => 'token',
+  });
+  assert.equal(await ctx.vaultApi.rotateEnvelope({ kdf_algo: 'argon2id' }), null);
+});
+
+test('confirmEnvelope posts the envelope it opened', () => {
+  const { api, calls } = withFetch();
+  api.confirmEnvelope('x');
+  assert.equal(calls[0].url, '/api/v1/vault/account/confirm');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.headers['X-CSRFToken'], 'token');
+  assert.deepStrictEqual(JSON.parse(calls[0].options.body), { wrapped_kex_priv: 'x' });
+});

@@ -5,13 +5,16 @@
 // verify afterwards, including its own author.
 const test = require('node:test');
 const assert = require('node:assert');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
 const VAULT = { uuid: 'v-1', wrapped_key: 'AQ', key_version: 3 };
 
 function builder(overrides = {}) {
   const signed = [];
-  const ctx = loadScript('workspace/vault/ui/static/vault/ui/js/entry_write.js', {
+  const ctx = loadScripts([
+    'workspace/vault/ui/static/vault/ui/js/entry_write.js',
+    'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
+  ], {
     TextEncoder: globalThis.TextEncoder,
     TextDecoder: globalThis.TextDecoder,
     vaultCrypto: {
@@ -25,6 +28,9 @@ function builder(overrides = {}) {
       AD: { entryFieldAd: (uuid, field) => uuid + '|' + field },
       entryMetadataPayload: (fields) => fields,
       KDF_HKDF_SHA256: 0x01,
+      // 'CQ' is a signature whose first byte names suite 9, the one refused.
+      fromBase64Url: (value) => Uint8Array.of(value === 'CQ' ? 9 : 1),
+      mayResign: (id) => id !== 9,
       ...overrides.crypto,
     },
   });
@@ -46,6 +52,7 @@ const DRAFT = {
   name: 'GitHub',
   notes: '',
   values: { username: 'chevron-j', password: 'hunter2' },
+  isNew: true,
 };
 
 test('every value is sealed under its own field slot', async () => {
@@ -292,6 +299,7 @@ test('a carried format 1 field and a freshly sealed one both open through the re
     [
       'workspace/vault/ui/static/vault/ui/js/vendor/vault-crypto.js',
       'workspace/vault/ui/static/vault/ui/js/entry_write.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_resign.js',
       'workspace/vault/ui/static/vault/ui/js/vault_reader.js',
     ],
     {
@@ -332,6 +340,9 @@ test('a carried format 1 field and a freshly sealed one both open through the re
     values: { username: 'ada' },
     carriedFields: { password: frozen.expected_wire_b64 },
     keyVersion: frozen.key_version,
+    isNew: false,
+    // Signature suite 1, which the bundle may re-sign.
+    storedSig: 'AQ',
   });
   assert.equal(body.fields.password, frozen.expected_wire_b64);
   assert.equal(V.fromBase64Url(body.fields.password)[0], 1);
@@ -347,4 +358,64 @@ test('a carried format 1 field and a freshly sealed one both open through the re
   assert.equal(await ctx.vaultReader.openField(session, vault, row, 'password'), frozen.plaintext);
   assert.equal(await ctx.vaultReader.openField(session, vault, row, 'username'), 'ada');
   assert.equal(await ctx.vaultReader.openField(session, vault, row, 'name'), 'GitHub');
+});
+
+// --- a signature algorithm marked broken ------------------------------------
+
+const STORED_ROW = {
+  uuid: 'e-1',
+  type: 'login',
+  folder: null,
+  tags: [],
+  is_favorite: false,
+  encrypted_name: 'ct:name',
+  encrypted_notes: '',
+  key_version: 3,
+  entry_version: 1,
+  metadata_sig: 'CQ',
+  entry_fields: [],
+};
+
+test('a re-signature refuses a row signed under an algorithm marked broken', async () => {
+  const { ctx, session, signed } = builder();
+  await assert.rejects(
+    ctx.buildEntryResignRequest(session, VAULT, STORED_ROW, { is_favorite: true }),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
+});
+
+test('an edit refuses to replace a row signed under an algorithm marked broken', async () => {
+  const { ctx, session, signed } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false, storedSig: 'CQ' })),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
+});
+
+test('an edit of a row under a current algorithm is signed', async () => {
+  const { ctx, session, signed } = builder();
+  await ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false, storedSig: 'AQ' }));
+  assert.equal(signed.length, 1);
+});
+
+test('an edit that carries no stored signature is refused rather than written unchecked', async () => {
+  const { ctx, session, signed } = builder();
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, Object.assign({}, DRAFT, { isNew: false })),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
+});
+
+test('a draft that does not say it is new is checked as an edit', async () => {
+  const { ctx, session, signed } = builder();
+  const draft = Object.assign({}, DRAFT);
+  delete draft.isNew;
+  await assert.rejects(
+    ctx.buildEntryWriteRequest(session, VAULT, draft),
+    (err) => err.name === 'VaultResignBlocked',
+  );
+  assert.equal(signed.length, 0);
 });

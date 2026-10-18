@@ -20,6 +20,7 @@ import zipfile
 from xml.sax.saxutils import escape
 
 from docx import Document
+from odf import dc, meta
 from odf.draw import Frame, Page, TextBox
 from odf.opendocument import (
     OpenDocumentPresentation,
@@ -78,9 +79,16 @@ def make_docx(
     header: str | None = None,
     footer: str | None = None,
     extra: dict[str, str] | None = None,
+    properties: dict | None = None,
 ) -> bytes:
-    """A .docx as Word lays one out. *runs* build one paragraph from many runs."""
+    """A .docx as Word lays one out. *runs* build one paragraph from many runs.
+
+    *properties* are python-docx core properties (title, author, subject,
+    keywords, created, modified...).
+    """
     document = Document()
+    for name, value in (properties or {}).items():
+        setattr(document.core_properties, name, value)
     if heading is not None:
         document.add_heading(heading, level=1)
     for text in paragraphs:
@@ -105,14 +113,19 @@ def make_docx(
     return _with_extra(buffer.getvalue(), extra)
 
 
-def make_xlsx(*, sheets: dict[str, list[list]] | None = None) -> bytes:
+def make_xlsx(
+    *, sheets: dict[str, list[list]] | None = None, properties: dict | None = None
+) -> bytes:
     """A workbook, one entry per sheet, each a list of rows.
 
     openpyxl writes text inline, as <c t="inlineStr"><is><t>, and never emits
     a sharedStrings part. That is one of the two dialects the extractor has to
-    read; make_xlsx_shared_strings() below is the other.
+    read; make_xlsx_shared_strings() below is the other. *properties* are
+    openpyxl document properties (title, creator, subject, keywords...).
     """
     workbook = Workbook()
+    for name, value in (properties or {}).items():
+        setattr(workbook.properties, name, value)
     workbook.remove(workbook.active)
     for title, rows in (sheets or {"Sheet1": []}).items():
         worksheet = workbook.create_sheet(title)
@@ -141,9 +154,17 @@ def make_pptx(slides: list[list[str]]) -> bytes:
 
 
 def make_odf(
-    mime_type: str, paragraphs: list[str], *, heading: str | None = None
+    mime_type: str,
+    paragraphs: list[str],
+    *,
+    heading: str | None = None,
+    properties: dict[str, str] | None = None,
 ) -> bytes:
-    """An OpenDocument container; odt, ods and odp differ in where text sits."""
+    """An OpenDocument container; odt, ods and odp differ in where text sits.
+
+    *properties* go to meta.xml: title, creator, subject, keywords (comma
+    separated, one meta:keyword each), created, modified, page_count.
+    """
     buffer = io.BytesIO()
     if mime_type == ODT:
         document = OpenDocumentText()
@@ -172,8 +193,29 @@ def make_odf(
         document.presentation.addElement(page)
     else:
         raise ValueError(f"Not an OpenDocument type: {mime_type}")
+    _add_odf_meta(document, properties or {})
     document.save(buffer)
     return buffer.getvalue()
+
+
+def _add_odf_meta(document, properties):
+    elements = {
+        "title": dc.Title,
+        "creator": dc.Creator,
+        "subject": dc.Subject,
+        "created": meta.CreationDate,
+        "modified": dc.Date,
+    }
+    for name, element in elements.items():
+        if name in properties:
+            document.meta.addElement(element(text=properties[name]))
+    for keyword in (properties.get("keywords") or "").split(","):
+        if keyword.strip():
+            document.meta.addElement(meta.Keyword(text=keyword.strip()))
+    if "page_count" in properties:
+        document.meta.addElement(
+            meta.DocumentStatistic(pagecount=properties["page_count"])
+        )
 
 
 # Excel keeps a cell's text in xl/sharedStrings.xml and leaves only a row

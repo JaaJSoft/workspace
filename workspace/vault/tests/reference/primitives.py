@@ -75,21 +75,27 @@ def argon2id_raw(
     plumbing the vault derivation uses.
     """
     out = ffi.new("uint8_t[]", tag_length)
+    # Each buffer is bound to a name that outlives core(). A struct field only
+    # stores the pointer: an ffi.new() written inline in the initializer is
+    # freed as soon as the struct is built, and core() then reads whatever
+    # another thread allocated there - a different AMK, now and then.
+    pwd_buffer = ffi.new("uint8_t[]", password)
+    salt_buffer = ffi.new("uint8_t[]", salt)
+    secret_buffer = ffi.new("uint8_t[]", secret)
+    ad_buffer = ffi.new("uint8_t[]", associated_data) if associated_data else ffi.NULL
     context = ffi.new(
         "argon2_context *",
         {
             "version": 0x13,
             "out": out,
             "outlen": tag_length,
-            "pwd": ffi.new("uint8_t[]", password),
+            "pwd": pwd_buffer,
             "pwdlen": len(password),
-            "salt": ffi.new("uint8_t[]", salt),
+            "salt": salt_buffer,
             "saltlen": len(salt),
-            "secret": ffi.new("uint8_t[]", secret),
+            "secret": secret_buffer,
             "secretlen": len(secret),
-            "ad": ffi.new("uint8_t[]", associated_data)
-            if associated_data
-            else ffi.NULL,
+            "ad": ad_buffer,
             "adlen": len(associated_data),
             "t_cost": t,
             "m_cost": m,

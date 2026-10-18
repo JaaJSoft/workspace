@@ -150,6 +150,7 @@ window.vaultBrowser = (function () {
       ...window.vaultSwitcherMixin(),
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
+      ...window.vaultResealDialogMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -170,6 +171,9 @@ window.vaultBrowser = (function () {
       // Set after three passes in a row that left some rows unmigrated.
       migrationWarning: false,
       migrationGeneration: 0,
+      // The session was opened by the envelope a password change replaced:
+      // the new password has not been used yet, and the old one still works.
+      unlockedWithPrevious: false,
       // The field schema of each entry type, rendered by the server from the
       // Python registry. The New menu is built from it rather than from a
       // list written here, so adding a type stays one class.
@@ -211,6 +215,9 @@ window.vaultBrowser = (function () {
       // screen and one click undoes it. It is dropped when the panel closes,
       // when another entry is selected, and when the vault locks.
       revealed: {},
+      // A reload a migration pass asked for while a secret was revealed; see
+      // flushDeferredReload.
+      reloadDeferred: false,
       // The authenticator key, held as a handle rather than as a secret: the
       // HMAC key is imported non-extractable, so what sits here is something
       // javascript cannot read back. `code` is a six-digit derivative that
@@ -278,14 +285,16 @@ window.vaultBrowser = (function () {
       },
 
       afterUnlock: async function () {
+        this.passwordChangedNotice = false;
+        this.unlockedWithPrevious = window.vaultSession.openedWithPrevious();
         await this.load();
         this.startMigration();
       },
 
       // Never awaited: the vault is on screen first, and nothing here may
       // delay it or surface as an error. A pass that rewrote rows reloads the
-      // listing, because a later re-sign (a tag or folder removal) builds from
-      // the rows this page holds and must sign what is actually stored.
+      // listing, because a later re-sign builds from the rows this page holds
+      // and must sign what is actually stored.
       startMigration: function () {
         const self = this;
         const mine = this.migrationGeneration;
@@ -296,13 +305,35 @@ window.vaultBrowser = (function () {
           if (result.outcome === 'busy' || mine !== self.migrationGeneration) return;
           if (!window.vaultSession.isUnlocked()) return;
           self.migrationWarning = result.warn;
-          if (result.wrote) self.load();
+          if (!result.wrote) return;
+          // A reveal still decrypting lands in `revealed` after the reload
+          // would have cleared it, so it holds the reload just the same.
+          const showing = Object.keys(self.revealed).length
+            || Object.keys(self.revealing).length;
+          if (showing) self.reloadDeferred = true;
+          else self.load();
         }, function () { /* a migration never surfaces as an error */ });
+      },
+
+      // A reload takes back a revealed secret. A pass that rewrote rows while
+      // a secret was revealed, or while a reveal was still decrypting,
+      // therefore waits for a gesture that takes the secret back anyway:
+      // closing the panel or opening another entry. Any write that re-signs a
+      // row runs it first: it must sign the ciphertexts the server now holds,
+      // not the ones the migration replaced.
+      flushDeferredReload: async function () {
+        if (!this.reloadDeferred) return;
+        this.reloadDeferred = false;
+        await this.load();
       },
 
       onLocked: function () {
         this.migrationWarning = false;
+        this.unlockedWithPrevious = false;
         this.migrationGeneration += 1;
+        // Before resetPanel, which would otherwise run it: the rows it would
+        // fetch belong to keys that are leaving.
+        this.reloadDeferred = false;
         // A secret on the clipboard outlives the keys that opened it, so a
         // lock takes it back rather than leaving it for the next person at
         // this machine.
@@ -328,6 +359,8 @@ window.vaultBrowser = (function () {
         // Same reason, one step further out: the export dialog holds a
         // passphrase and, while it runs, a tree of decrypted entries.
         this.clearExport();
+        // And the password change holds the current and the new password.
+        this.closePasswordDialog();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
@@ -335,6 +368,8 @@ window.vaultBrowser = (function () {
       },
 
       load: async function () {
+        // Whatever reload was being held, this is it.
+        this.reloadDeferred = false;
         this.loading = true;
         this.error = '';
         // Every row is about to be rebuilt, and a menu left open would go on
@@ -956,6 +991,7 @@ window.vaultBrowser = (function () {
         this.panelEntry = entry;
         this.revealed = {};
         this.revealing = {};
+        this.flushDeferredReload();
         return this.startTotp(entry);
       },
 
@@ -967,6 +1003,7 @@ window.vaultBrowser = (function () {
         this.revealed = {};
         this.revealing = {};
         this.totp = null;
+        this.flushDeferredReload();
       },
 
       closePanel: function () {
@@ -1191,7 +1228,10 @@ window.vaultBrowser = (function () {
         // makes the listing describe what actually happened, and it clears
         // the error line on its way in.
         await this.load();
-        if (failure) {
+        if (failure && failure.name === 'VaultResignBlocked') {
+          this.error =
+            'An entry could not be verified. It was left untouched, and so were the ones after it.';
+        } else if (failure) {
           this.error =
             'Some entries could not be changed. The list above is up to date.';
         }
@@ -1201,6 +1241,7 @@ window.vaultBrowser = (function () {
       // signature covers the ciphertexts, so they are what has to be signed
       // again.
       setFavorite: async function (uuid, value) {
+        await this.flushDeferredReload();
         const row = this.rowFor(uuid);
         if (!row || !this.openVault) return;
         const body = await window.buildEntryResignRequest(
@@ -1352,13 +1393,7 @@ window.vaultBrowser = (function () {
         const row = this.rowFor(entry.uuid);
         if (!row || !this.openVault) return;
         const values = {};
-        const carriedFields = {};
         const type = this.typeFor(entry.type);
-        const editable = new Set(
-          (type ? type.fields : [])
-            .filter(function (field) { return field.kind !== 'totp'; })
-            .map(function (field) { return field.field_id; }),
-        );
         try {
           for (const field of type ? type.fields : []) {
             if (field.kind === 'totp') continue;
@@ -1373,15 +1408,7 @@ window.vaultBrowser = (function () {
           return;
         }
         if (!window.vaultSession.isUnlocked()) return;
-        // Everything the dialog does not edit - the authenticator key, and any
-        // field a future type declares - travels as its ciphertext. Rebuilding
-        // the record from the form alone would delete it.
-        (row.entry_fields || []).forEach(function (field) {
-          if (!editable.has(field.field_id)) {
-            carriedFields[field.field_id] = field.encrypted_value;
-          }
-        });
-        this.draft = {
+        this.draft = Object.assign({
           uuid: entry.uuid,
           type: entry.type,
           folder: entry.folder,
@@ -1389,18 +1416,45 @@ window.vaultBrowser = (function () {
           favorite: entry.favorite,
           name: entry.name,
           notes: '',
+          values: values,
+          hasTotp: (entry.fieldIds || []).includes('totp'),
+          totpInput: null,
+          totpRemoved: false,
+          isNew: false,
+        }, this.storedEntryParts(row, entry.type));
+      },
+
+      // What an edit takes from the stored row rather than from the form. The
+      // save reads it again from the row the server now holds: a migration
+      // pass can rewrite these ciphertexts while the dialog is open, and a
+      // draft that kept the ones it opened with would put them back.
+      storedEntryParts: function (row, typeId) {
+        const type = this.typeFor(typeId);
+        const editable = new Set(
+          (type ? type.fields : [])
+            .filter(function (field) { return field.kind !== 'totp'; })
+            .map(function (field) { return field.field_id; }),
+        );
+        // Everything the dialog does not edit - the authenticator key, and any
+        // field a future type declares - travels as its ciphertext. Rebuilding
+        // the record from the form alone would delete it.
+        const carriedFields = {};
+        (row.entry_fields || []).forEach(function (field) {
+          if (!editable.has(field.field_id)) {
+            carriedFields[field.field_id] = field.encrypted_value;
+          }
+        });
+        return {
           // The row's own ciphertext, carried rather than opened: the write is
           // a full signed replacement, so a draft that dropped it would sign
           // an entry whose notes are gone.
           encryptedNotes: row.encrypted_notes || '',
-          values: values,
           carriedFields: carriedFields,
           keyVersion: row.key_version || 1,
-          hasTotp: (entry.fieldIds || []).includes('totp'),
-          totpInput: null,
-          totpRemoved: false,
           entryVersion: row.entry_version || 1,
-          isNew: false,
+          // The signature the save replaces, so the write can refuse to
+          // re-sign a row under an algorithm marked broken.
+          storedSig: row.metadata_sig,
         };
       },
 
@@ -1426,11 +1480,21 @@ window.vaultBrowser = (function () {
         // The name is the only thing a listing shows: a row without one is a
         // row the user cannot tell from another.
         if (!name) return;
+        await this.flushDeferredReload();
+        let stored = {};
+        if (!draft.isNew) {
+          const row = this.rowFor(draft.uuid);
+          if (!row) {
+            this.error = 'This entry changed since it was opened. Close it and open it again.';
+            return;
+          }
+          stored = this.storedEntryParts(row, draft.type);
+        }
         // Three outcomes, and only one of them seals: a typed key becomes the
         // uri that will be stored, a removed one is dropped from both maps so
         // the write deletes it, and an untouched one stays in carriedFields.
         const values = Object.assign({}, draft.values);
-        const carriedFields = Object.assign({}, draft.carriedFields);
+        const carriedFields = Object.assign({}, stored.carriedFields || draft.carriedFields);
         if (draft.totpInput !== null && draft.totpInput !== undefined
             && String(draft.totpInput).trim()) {
           try {
@@ -1452,7 +1516,7 @@ window.vaultBrowser = (function () {
           const body = await window.buildEntryWriteRequest(
             window.vaultSession,
             this.openVault,
-            Object.assign({}, draft, {
+            Object.assign({}, draft, stored, {
               name: name, values: values, carriedFields: carriedFields,
             }),
           );
@@ -1467,6 +1531,10 @@ window.vaultBrowser = (function () {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error = 'This entry could not be verified. It was left untouched.';
+            return;
+          }
           this.error = 'That entry could not be saved. Try again.';
         } finally {
           this.busy = false;
@@ -1483,6 +1551,7 @@ window.vaultBrowser = (function () {
           { title: 'Delete tag', okLabel: 'Delete', okClass: 'btn-error' }
         );
         if (!confirmed) return;
+        await this.flushDeferredReload();
         this.busy = true;
         let failed = false;
         try {
@@ -1513,6 +1582,7 @@ window.vaultBrowser = (function () {
           { title: 'Delete folder', okLabel: 'Delete', okClass: 'btn-error' }
         );
         if (!confirmed) return;
+        await this.flushDeferredReload();
         this.busy = true;
         let failed = false;
         try {
@@ -1549,6 +1619,7 @@ window.vaultBrowser = (function () {
           parent: folder.parent || null,
           name: folder.name,
           position: folder.position || 0,
+          storedSig: folder.metadata_sig,
           existing: true,
         };
       },
@@ -1612,8 +1683,21 @@ window.vaultBrowser = (function () {
         if (!draft || !this.openVault) return;
         const name = (draft.name || '').trim();
         if (!name) return;
+        await this.flushDeferredReload();
+        // The signature a migration pass left on the row, not the one the
+        // dialog opened with: the pass re-signs every row it rewrites.
+        let storedSig = draft.storedSig;
+        if (draft.existing) {
+          const folder = this.folders.find(function (row) { return row.uuid === draft.uuid; });
+          if (!folder) {
+            this.error = 'This folder changed since it was opened. Close it and open it again.';
+            return;
+          }
+          storedSig = folder.metadata_sig;
+        }
         this.busy = true;
         try {
+          if (draft.existing) window.vaultResign.assertMayResign({ metadata_sig: storedSig });
           const body = await window.buildFolderWriteRequest(
             window.vaultSession,
             this.openVault,
@@ -1628,6 +1712,10 @@ window.vaultBrowser = (function () {
           await this.load();
         } catch (err) {
           if (err && err.reason === 'locked') return;
+          if (err && err.name === 'VaultResignBlocked') {
+            this.error = 'This folder could not be verified. It was left untouched.';
+            return;
+          }
           this.error = draft.existing
             ? 'That folder could not be renamed. Try again.'
             : 'That folder could not be created. Try again.';

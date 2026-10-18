@@ -117,6 +117,10 @@ class AccountEnvelopeSerializer(serializers.ModelSerializer):
             "wrapped_kex_priv",
             "wrapped_sig_priv",
             "sig_over_kex_pub",
+            "previous_kdf_algo",
+            "previous_kdf_params",
+            "previous_wrapped_kex_priv",
+            "previous_wrapped_sig_priv",
             "state",
             "updated_at",
         ]
@@ -146,20 +150,61 @@ class AccountFinalizeSerializer(_AccountKdfMixin, serializers.Serializer):
     sig_over_kex_pub = _OpaqueField()
 
 
-class AccountRotateSerializer(_AccountKdfMixin, serializers.Serializer):
-    """The four fields a password rotation rewrites.
+def _same_json_values(given, expected) -> bool:
+    """Equality with types: True == 1 and 2.0 == 2 in Python, and a parameter
+    sent as either would pass a plain comparison while naming another value to
+    every reader that types it."""
+    return (
+        isinstance(given, dict)
+        and given.keys() == expected.keys()
+        and all(
+            type(given[key]) is type(value) and given[key] == value
+            for key, value in expected.items()
+        )
+    )
 
-    The public keys and the salt are absent by design: rotation re-wraps the
-    same private keys under a key derived from the new password, it never
-    mints new ones, and a regenerated salt would orphan the envelope outright.
-    ``kdf_algo`` travels with ``kdf_params`` because the two describe one
-    derivation.
+
+class AccountConfirmSerializer(serializers.Serializer):
+    """The current envelope an unlock just opened, named by its sealed
+    key-exchange key: a confirmation only clears the previous envelope while
+    that is still the current one."""
+
+    wrapped_kex_priv = _OpaqueField()
+
+
+class AccountRotateSerializer(serializers.Serializer):
+    """Every envelope written to an active account: the unlock re-wrap and the
+    password change alike.
+
+    Always the current suite - there is no rotation towards a superseded one -
+    and always against the envelope the client read: ``expected_wrapped_kex_priv``
+    is what turns a second tab's write into a 409 instead of an overwrite. The
+    public keys and the salt are absent by design: a rotation re-seals the same
+    private keys, and a regenerated salt would orphan every key wrap.
     """
 
     kdf_algo = serializers.CharField(max_length=16)
     kdf_params = serializers.JSONField()
     wrapped_kex_priv = _CiphertextField()
     wrapped_sig_priv = _CiphertextField()
+    expected_wrapped_kex_priv = _OpaqueField()
+
+    def validate(self, attrs):
+        algo, params = suites.current_kdf()
+        if attrs["kdf_algo"] != algo:
+            raise serializers.ValidationError({"kdf_algo": ["not the current kdf"]})
+        if not _same_json_values(attrs["kdf_params"], params):
+            raise serializers.ValidationError(
+                {"kdf_params": ["not the current kdf_params"]}
+            )
+        for name in ("wrapped_kex_priv", "wrapped_sig_priv"):
+            try:
+                suites.check_envelope_ciphertext(decode_base64url(attrs[name]))
+            except (suites.UnsupportedCiphertext, AttestationError) as exc:
+                raise serializers.ValidationError(
+                    {name: ["not under the current suite"]}
+                ) from exc
+        return attrs
 
 
 # The trailing anchor is \Z, not $: $ also matches before a final newline,

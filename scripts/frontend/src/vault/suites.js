@@ -162,16 +162,45 @@ export function mayResign(signatureId) {
 
 const OVERRIDE_STATES = new Set(['current', 'superseded']);
 
+// Parameters may be switched on the KDF axis only, to the declared keys, the
+// declared version and values inside the declared bounds - the same bounds
+// every unlock already enforces before it derives anything.
+function checkParamsOverride(axis, declared, wanted) {
+  if (axis !== 'kdf' || Object.keys(wanted).length !== 1 || !Object.hasOwn(wanted, 'params')) {
+    throw new Error('test manifest overrides params outside the kdf axis');
+  }
+  const params = wanted.params;
+  const keys = Object.keys(declared.params).sort();
+  if (!params || typeof params !== 'object'
+    || JSON.stringify(Object.keys(params).sort()) !== JSON.stringify(keys)
+    || params.v !== declared.params.v) {
+    throw new Error('test manifest params do not match the declared shape');
+  }
+  for (const [name, [low, high]] of Object.entries(declared.bounds)) {
+    const value = params[name];
+    if (!Number.isInteger(value) || value < low || value > high) {
+      throw new Error(`test manifest params.${name} is outside the declared bounds`);
+    }
+  }
+}
+
 export function installTestManifest(overrides) {
   if (suiteRead) throw new Error('test manifest installed after the current suite was read');
   const next = JSON.parse(JSON.stringify(MANIFEST));
   for (const [axis, states] of Object.entries(overrides)) {
     if (!Object.hasOwn(next, axis)) throw new Error(`test manifest names unknown axis ${axis}`);
     for (const [id, wanted] of Object.entries(states)) {
-      if (!Object.hasOwn(next[axis], id) || !OVERRIDE_STATES.has(wanted)) {
-        throw new Error(`test manifest names undeclared ${axis} ${id} or state ${wanted}`);
+      if (!Object.hasOwn(next[axis], id)) {
+        throw new Error(`test manifest names undeclared ${axis} ${id}`);
       }
-      next[axis][id].state = wanted;
+      if (wanted && typeof wanted === 'object') {
+        checkParamsOverride(axis, next[axis][id], wanted);
+        next[axis][id].params = { ...wanted.params };
+      } else if (OVERRIDE_STATES.has(wanted)) {
+        next[axis][id].state = wanted;
+      } else {
+        throw new Error(`test manifest names state ${wanted} for ${axis} ${id}`);
+      }
     }
   }
   const candidate = buildCurrent(next);

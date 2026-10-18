@@ -30,25 +30,49 @@ def _manifest() -> dict:
 _STATES = ("current", "superseded")
 
 
-def _test_overrides() -> dict:
-    """State overrides the test runner may install, validated on every read.
+def _check_params_override(axis, declared, wanted) -> None:
+    """Parameters may be overridden on the KDF axis only, to the declared keys,
+    the declared version and values inside the declared bounds - the bounds
+    every unlock already enforces."""
+    if axis != "kdf" or set(wanted) != {"params"}:
+        raise ValueError("test manifest overrides params outside the kdf axis")
+    params = wanted["params"]
+    if not isinstance(params, dict) or params.keys() != declared["params"].keys():
+        raise ValueError("test manifest params do not match the declared keys")
+    if params.get("v") != declared["params"]["v"]:
+        raise ValueError("test manifest params change the kdf version")
+    for name, (low, high) in declared["bounds"].items():
+        value = params.get(name)
+        if not _is_integer(value) or not low <= value <= high:
+            raise ValueError("test manifest params are outside the declared bounds")
 
-    Only under VAULT_TEST_SUITES, only states of ids the manifest already
-    declares, and every axis still ends with exactly one current entry - an
-    override that widened what is readable would be a second manifest.
+
+def _test_overrides() -> dict:
+    """State or KDF-parameter overrides the test runner may install, validated
+    on every read.
+
+    Only under VAULT_TEST_SUITES, only ids the manifest already declares, and
+    every axis still ends with exactly one current entry - an override that
+    widened what is readable would be a second manifest.
     """
     overrides = settings.VAULT_TEST_MANIFEST if settings.VAULT_TEST_SUITES else None
     if not overrides:
         return {}
     manifest = _manifest()
-    for axis, states in overrides.items():
+    for axis, wanted_by_id in overrides.items():
         if axis not in manifest:
             raise ValueError("test manifest names an unknown axis")
-        for identifier, wanted in states.items():
-            if identifier not in manifest[axis] or wanted not in _STATES:
+        for identifier, wanted in wanted_by_id.items():
+            if identifier not in manifest[axis]:
+                raise ValueError("test manifest names an undeclared id or state")
+            if isinstance(wanted, dict):
+                _check_params_override(axis, manifest[axis][identifier], wanted)
+            elif wanted not in _STATES:
                 raise ValueError("test manifest names an undeclared id or state")
         effective = {
-            key: states.get(key, entry["state"])
+            key: wanted_by_id[key]
+            if isinstance(wanted_by_id.get(key), str)
+            else entry["state"]
             for key, entry in manifest[axis].items()
         }
         if list(effective.values()).count("current") != 1:
@@ -61,6 +85,8 @@ def _entry(axis: str, identifier):
     if found is None:
         return None
     overridden = _test_overrides().get(axis, {}).get(str(identifier))
+    if isinstance(overridden, dict):
+        return {**found, "params": dict(overridden["params"])}
     if overridden is not None:
         return {**found, "state": overridden}
     if found["state"] == "test" and not settings.VAULT_TEST_SUITES:
@@ -179,3 +205,22 @@ def check_current_ciphertext(raw: bytes, key_version: int) -> None:
         raise UnsupportedCiphertext("ciphertext is not under the current suite")
     if int.from_bytes(raw[3:5], "big") != key_version:
         raise UnsupportedCiphertext("header key version does not match the row")
+
+
+def current_kdf() -> tuple[str, dict]:
+    for algo in _manifest()["kdf"]:
+        if is_current("kdf", algo):
+            return algo, dict(_entry("kdf", algo)["params"])
+    raise ValueError("the manifest declares no current kdf")
+
+
+# The header onboarding writes on the account's two sealed private keys: the
+# unwrap key seals them directly, and a password change re-seals them rather
+# than bumping a version, so the KDF byte is direct and the key version zero.
+_KDF_DIRECT = 0
+
+
+def check_envelope_ciphertext(raw: bytes) -> None:
+    check_current_ciphertext(raw, key_version=0)
+    if raw[2] != _KDF_DIRECT:
+        raise UnsupportedCiphertext("envelope ciphertext does not use the direct kdf")

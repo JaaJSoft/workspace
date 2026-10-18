@@ -1,10 +1,10 @@
 """Suggest who the people found by their body are, from what they wear.
 
-People keep their clothes for a few hours. A person no grouped face
-accounts for is suggested as the named person whose torso, in another photo
-taken within WINDOW of theirs, is the nearest: when it is near enough (the
-backend's ``appearance_max_distance``) and nearer than anybody else's by the
-backend's ``appearance_margin``. The anchors are the people whose face is
+People keep their clothes for the day. A person no grouped face accounts
+for is suggested as the named person whose torso, in another photo taken
+the same day as theirs or within WINDOW of it, is the nearest: when it is
+near enough (the backend's ``appearance_max_distance``) and nearer than
+anybody else's by the backend's ``appearance_margin``. The anchors are the people whose face is
 in a named group, and those the user confirmed.
 
 Everyone whose face can tell who they are is somebody, named or not: an
@@ -24,13 +24,14 @@ import itertools
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 import numpy as np
 from django.contrib.auth import get_user_model
 from django.db.models import F, Q
 
 from workspace.common.vectors.encoding import from_bytes
+from workspace.users.services.settings import get_user_timezone
 
 from ..models import Appearance, Face, MediaItem
 from ..queries import library_files, user_face_clusters
@@ -38,7 +39,8 @@ from .embedding.registry import get_embedding_backend
 from .face_grouping import LOW_QUALITY
 from .face_preferences import faces_enabled
 
-# How far apart two photos may be taken for clothes to tell who is who.
+# Two photos may tell who is who by the clothes when taken the same day, in
+# the owner's timezone, or this close: a night out goes past midnight.
 WINDOW = timedelta(hours=6)
 # A face is a person's when its centre is inside the person's box, within
 # the top HEAD_ZONE of its height: the head of someone standing or sitting.
@@ -54,6 +56,8 @@ class _Seen:
     pk: object
     file_id: object
     taken: datetime
+    # The day it was taken, in the owner's timezone.
+    day: date
     box: tuple
     person_id: object
     rejected_id: object
@@ -78,7 +82,17 @@ def suggest_around(file_obj):
     )
     if taken is None:
         return 0
-    return _suggest(file_obj.owner, taken - WINDOW, taken + WINDOW)
+    owner = file_obj.owner
+    return _suggest(owner, *_reach(taken, get_user_timezone(owner)))
+
+
+def _reach(moment, tz):
+    """(first, last): the moments whose photos may tell by the clothes who is
+    in one taken at *moment* - its day in *tz*, and WINDOW around it."""
+    midnight = moment.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    return min(moment - WINDOW, midnight), max(
+        moment + WINDOW, midnight + timedelta(days=1)
+    )
 
 
 def _suggest(user, start=None, end=None):
@@ -88,10 +102,12 @@ def _suggest(user, start=None, end=None):
     threshold = backend.appearance_max_distance
     if threshold is None or not faces_enabled(user):
         return 0
-    seen = _read(user, backend.model_key, start, end)
+    tz = get_user_timezone(user)
+    span = None if start is None else (_reach(start, tz)[0], _reach(end, tz)[1])
+    seen = _read(user, backend.model_key, tz, span)
     if not seen:
         return 0
-    named, in_photo = _known_by_faces(user, seen, start, end)
+    named, in_photo = _known_by_faces(user, seen, span)
     for item in seen:
         if item.person_id is not None:
             named[item.pk] = item.person_id
@@ -121,8 +137,8 @@ def _suggest(user, start=None, end=None):
     ]
     for batch in itertools.batched(queries, _BATCH, strict=False):
         window = anchors[
-            bisect_left(times, batch[0].taken - WINDOW) : bisect_right(
-                times, batch[-1].taken + WINDOW
+            bisect_left(times, _reach(batch[0].taken, tz)[0]) : bisect_right(
+                times, _reach(batch[-1].taken, tz)[1]
             )
         ]
         # Only the window is kept: the vectors of a whole library would not fit.
@@ -168,7 +184,7 @@ def _by_time(item):
     return item.taken
 
 
-def _read(user, model_key, start, end):
+def _read(user, model_key, tz, span):
     rows = Appearance.objects.filter(
         owner=user,
         file__in=library_files(user).values("pk"),
@@ -176,15 +192,14 @@ def _read(user, model_key, start, end):
         embedding__isnull=False,
         file__media_item__taken_at__isnull=False,
     )
-    if start is not None:
-        rows = rows.filter(
-            file__media_item__taken_at__range=(start - WINDOW, end + WINDOW)
-        )
+    if span is not None:
+        rows = rows.filter(file__media_item__taken_at__range=span)
     return [
         _Seen(
             pk=pk,
             file_id=file_id,
             taken=taken,
+            day=taken.astimezone(tz).date(),
             box=(x, y, w, h),
             person_id=person_id,
             rejected_id=rejected_id,
@@ -209,7 +224,7 @@ def _read(user, model_key, start, end):
     ]
 
 
-def _known_by_faces(user, seen, start, end):
+def _known_by_faces(user, seen, span):
     """({appearance pk: who} for the people whose face was seen,
     {file id: the persons its named faces show}).
 
@@ -237,10 +252,8 @@ def _known_by_faces(user, seen, start, end):
         # ungrouped face nearby does.
         .order_by(F("cluster").asc(nulls_last=True), "pk")
     )
-    if start is not None:
-        faces = faces.filter(
-            file__media_item__taken_at__range=(start - WINDOW, end + WINDOW)
-        )
+    if span is not None:
+        faces = faces.filter(file__media_item__taken_at__range=span)
     by_file = defaultdict(list)
     for item in seen:
         by_file[item.file_id].append(item)
@@ -296,7 +309,7 @@ def _nearest(query, window, named, in_photo, vectors, threshold, margin):
         item
         for item in window
         if item.file_id != query.file_id
-        and abs(item.taken - query.taken) <= WINDOW
+        and (item.day == query.day or abs(item.taken - query.taken) <= WINDOW)
         and named[item.pk] not in excluded
         and item.pk in vectors
     ]

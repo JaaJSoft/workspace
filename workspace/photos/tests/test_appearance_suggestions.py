@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -7,6 +9,7 @@ from workspace.photos.services.appearance_suggestions import (
     suggest_around,
     suggest_owner,
 )
+from workspace.users.services.settings import set_setting
 
 from .appearances import (
     BLUE,
@@ -67,6 +70,49 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         suggest_owner(self.user.pk)
 
         self.assertIsNone(self.suggestion(back))
+
+    def test_the_same_clothes_later_that_day_suggest_the_person(self):
+        self.anchor(self.lea, RED, hours=-11)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 11), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_past_midnight_the_window_still_holds(self):
+        self.anchor(self.lea, RED, hours=11)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 14), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_the_next_morning_is_another_day(self):
+        self.anchor(self.lea, RED, hours=10)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 19), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_the_day_is_the_owners(self):
+        # 01:00 and 22:00 UTC: one day in UTC, two days in Tokyo (10:00 and
+        # 07:00 the next morning).
+        set_setting(self.user, "core", "timezone", "Asia/Tokyo")
+        self.anchor(self.lea, RED, hours=-11)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 10), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_around_a_photo_its_whole_day_is_asked_about_again(self):
+        morning = seen(self.user, photo_at(self.user, "morning.jpg", -11), RED)
+        lea = self.anchor(self.lea, RED, hours=10)
+
+        suggest_around(lea.file)
+
+        self.assertEqual(self.suggestion(morning), self.lea.pk)
 
     def test_two_people_dressed_alike_suggest_neither(self):
         self.anchor(self.lea, RED)
@@ -214,7 +260,7 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
         (read,) = [
             item
-            for item in appearance_suggestions._read(self.user, "fake", None, None)
+            for item in appearance_suggestions._read(self.user, "fake", UTC, None)
             if item.pk == back.pk
         ]
         # The user says it is not Lea while the pass computes Lea.

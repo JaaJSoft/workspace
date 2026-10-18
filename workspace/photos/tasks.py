@@ -240,6 +240,50 @@ def cluster_faces(user_id):
     return cluster_owner(user_id)
 
 
+@shared_task(
+    name="photos.release_face_followers",
+    priority=NORMAL_PRIORITY,
+    ignore_result=True,
+)
+def release_face_followers(owner_id, cluster_id, face_ids):
+    """The user took *face_ids* out of *cluster_id*: the faces that came in
+    with them leave too, and the people around all of them are suggested
+    again."""
+    from .models import Face
+    from .services import appearance_suggestions
+    from .services.face_grouping import release_followers
+
+    released = release_followers(owner_id, cluster_id, face_ids)
+    file_ids = Face.objects.filter(pk__in=[*face_ids, *released]).values_list(
+        "file_id", flat=True
+    )
+    appearance_suggestions.suggest_around_files(owner_id, set(file_ids))
+
+
+@shared_task(
+    name="photos.suggest_appearances_around",
+    priority=NORMAL_PRIORITY,
+    ignore_result=True,
+)
+def suggest_appearances_around(owner_id, face_ids):
+    from .models import Face
+    from .services import appearance_suggestions
+
+    file_ids = Face.objects.filter(pk__in=face_ids).values_list("file_id", flat=True)
+    appearance_suggestions.suggest_around_files(owner_id, set(file_ids))
+
+
+@shared_task(
+    name="photos.suggest_appearances", priority=LOW_PRIORITY, ignore_result=True
+)
+def suggest_appearances(owner_id):
+    from .services.appearance_suggestions import suggest_owner
+    from .services.face_followups import library_pass_started
+
+    library_pass_started(owner_id)
+    return suggest_owner(owner_id)
+
+
 @shared_task(name="photos.cluster_all_faces", priority=BACKGROUND_PRIORITY)
 def cluster_all_faces():
     """The nightly pass: tidy up, then queue a clustering run per user.

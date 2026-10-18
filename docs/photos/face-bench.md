@@ -318,6 +318,33 @@ score, see below):
 - **`yunet_adaface` now groups about as well as ArcFace**, with the
   default's detector and a quarter of ArcFace's CPU.
 
+### The group as a whole
+
+A face used to join the group its neighbours voted for, however unlike the
+group it was: one face guessed wrong was enough to bring its own look-alikes
+in after it, each new one voting for the next. It now also has to be within
+the threshold of the group's centroid. Measured on 2026-10-18 with
+`yunet_sface`, on a desktop machine:
+
+| | before | after |
+|---|---|---|
+| Grouped | 82.7% | 81.9% |
+| Pairwise precision | 95.6% | 98.2% |
+| Pairwise recall | 87.4% | 84.8% |
+| BCubed F1 | 89.7% | 89.6% |
+| People found | 75.5% | 76.1% |
+| Groups to merge | 33 | 34 |
+| Mixed groups | 23 | 21 |
+| Faces to take out | 97 | 65 |
+| Grouping CPU, s | 61.3 | 66.6 |
+
+A third of the faces in the wrong group leave it, for one more group to merge
+and the same F1: the recall lost is faces left in no group, which the review
+asks about, rather than faces in someone else's. The bench confirms nothing,
+so the other changes of the same release - a confirmed face weighing three
+times a guessed one, the faces that followed a corrected one leaving with it
+- do not show here.
+
 ### int8 models
 
 OpenCV Zoo publishes int8 copies of both default models, a quarter of the

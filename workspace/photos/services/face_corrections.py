@@ -22,6 +22,7 @@ from django.db.models import F, Q
 from django.utils import timezone
 
 from ..models import Face, FaceCluster
+from .face_followups import faces_left, faces_settled, names_changed
 from .face_grouping import refresh_clusters
 
 
@@ -149,12 +150,14 @@ def merge_clusters(target, sources, *, person_id=None):
             changed += ["cover", "cover_chosen_at"]
         if changed:
             target.save(update_fields=[*changed, "updated_at"])
+        names_changed(target.owner_id)
     refresh_clusters([target.pk])
 
 
 def set_hidden(cluster, hidden):
     cluster.hidden = hidden
     cluster.save(update_fields=["hidden", "updated_at"])
+    names_changed(cluster.owner_id)
 
 
 def ungroup(cluster):
@@ -168,6 +171,7 @@ def ungroup(cluster):
             cluster=None, assignment=Face.Assignment.REJECTED, rejected_cluster=None
         )
         cluster.delete()
+        names_changed(cluster.owner_id)
 
 
 def reject_face(face, *, touched=None):
@@ -180,6 +184,7 @@ def reject_face(face, *, touched=None):
     face.rejected_cluster_id = previous
     face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     _refresh([previous], touched)
+    faces_left(face.owner_id, previous, [face.pk])
 
 
 def fold_face(face, *, touched=None):
@@ -206,6 +211,7 @@ def hide_face(face, *, touched=None):
         face.rejected_cluster_id = previous
     face.save(update_fields=["cluster", "assignment", "rejected_cluster"])
     _refresh([previous], touched)
+    faces_left(face.owner_id, previous, [face.pk])
 
 
 def unhide_face(face):
@@ -214,6 +220,7 @@ def unhide_face(face):
         return
     face.assignment = Face.Assignment.AUTO
     face.save(update_fields=["assignment"])
+    faces_settled(face.owner_id, [face.pk])
 
 
 def review_cluster(cluster, *, confirmed=(), rejected=()):
@@ -224,15 +231,21 @@ def review_cluster(cluster, *, confirmed=(), rejected=()):
     """
     faces = Face.objects.filter(cluster=cluster)
     with transaction.atomic():
+        confirmed = list(faces.filter(pk__in=confirmed).values_list("pk", flat=True))
+        rejected = list(faces.filter(pk__in=rejected).values_list("pk", flat=True))
         faces.filter(pk__in=confirmed).update(assignment=Face.Assignment.CONFIRMED)
         # The SET clauses read the row as it was: rejected_cluster takes the
         # cluster the face is leaving.
-        left = faces.filter(pk__in=rejected).update(
+        faces.filter(pk__in=rejected).update(
             rejected_cluster=F("cluster"),
             cluster=None,
             assignment=Face.Assignment.REJECTED,
         )
-    if left:
+        if confirmed:
+            faces_settled(cluster.owner_id, confirmed)
+        if rejected:
+            faces_left(cluster.owner_id, cluster.pk, rejected)
+    if confirmed or rejected:
         refresh_clusters([cluster.pk])
 
 
@@ -241,6 +254,8 @@ def confirm_face(face, cluster, *, touched=None):
     """This is X: pin *face* in *cluster*, wherever it was - or, in a photo
     already showing X, fold it into the face that is."""
     previous = face.cluster_id
+    # Before the refresh: it deletes the cluster the face leaves empty.
+    faces_left(face.owner_id, previous, [face.pk], destination=cluster)
     if same_person_faces(face, cluster).exists():
         fold_face(face, touched=touched)
         return

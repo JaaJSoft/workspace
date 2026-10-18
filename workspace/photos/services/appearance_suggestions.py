@@ -5,7 +5,8 @@ for is suggested as the named person whose torso, in another photo taken
 the same day as theirs or within WINDOW of it, is the nearest: when it is
 near enough (the backend's ``appearance_max_distance``) and nearer than
 anybody else's by the backend's ``appearance_margin``. The anchors are the people whose face is
-in a named group, and those the user confirmed.
+in a named group - unless the grouping put it there without being sure - and
+those the user confirmed.
 
 Everyone whose face can tell who they are is somebody, named or not: an
 unnamed group, a face the face review asks about. They are never suggested,
@@ -33,10 +34,11 @@ from django.db.models import F, Q
 from workspace.common.vectors.encoding import from_bytes
 from workspace.users.services.settings import get_user_timezone
 
+from ..indexes import FACE_EMBEDDINGS
 from ..models import Appearance, Face, MediaItem
 from ..queries import library_files, user_face_clusters
 from .embedding.registry import get_embedding_backend
-from .face_grouping import LOW_QUALITY
+from .face_grouping import LOW_QUALITY, doubt_distance
 from .face_preferences import faces_enabled
 
 # Two photos may tell who is who by the clothes when taken the same day, in
@@ -75,15 +77,28 @@ def suggest_owner(owner_id):
 def suggest_around(file_obj):
     """Suggest again who the people near *file_obj* are, in time: its own,
     and those its people may now name."""
-    taken = (
-        MediaItem.objects.filter(file_id=file_obj.pk)
-        .values_list("taken_at", flat=True)
-        .first()
-    )
-    if taken is None:
+    return suggest_around_files(file_obj.owner_id, [file_obj.pk])
+
+
+def suggest_around_files(owner_id, file_ids):
+    """suggest_around for each of *file_ids*, one pass for the photos whose
+    reaches overlap; return how many suggestions changed."""
+    user = get_user_model().objects.filter(pk=owner_id).first()
+    if user is None:
         return 0
-    owner = file_obj.owner
-    return _suggest(owner, *_reach(taken, get_user_timezone(owner)))
+    tz = get_user_timezone(user)
+    spans = []
+    for taken in sorted(
+        MediaItem.objects.filter(
+            file_id__in=list(file_ids), taken_at__isnull=False
+        ).values_list("taken_at", flat=True)
+    ):
+        start, end = _reach(taken, tz)
+        if spans and start <= spans[-1][1]:
+            spans[-1][1] = max(spans[-1][1], end)
+        else:
+            spans.append([start, end])
+    return sum(_suggest(user, start, end) for start, end in spans)
 
 
 def _reach(moment, tz):
@@ -231,14 +246,17 @@ def _known_by_faces(user, seen, span):
     Who is the person a visible group is named after; ("cluster", its uuid)
     for an unnamed or hidden group, and ("face", its uuid) for a face in no
     group that is good enough for the face review to ask about: somebody,
-    but nobody to suggest. A blurred face in no group says nothing.
+    but nobody to suggest. So is ("doubt", its uuid), a face the grouping put
+    in a named group without being sure: one wrong guess would otherwise name
+    everyone dressed like them that day. A blurred face in no group says
+    nothing.
     """
-    who = {
-        pk: person_id if person_visible and not hidden else ("cluster", pk)
-        for pk, person_id, person_visible, hidden in user_face_clusters(
-            user
-        ).values_list("pk", "person_id", "person_visible", "hidden")
-    }
+    who, centroids = {}, {}
+    for pk, person_id, person_visible, hidden, centroid in user_face_clusters(
+        user
+    ).values_list("pk", "person_id", "person_visible", "hidden", "centroid"):
+        who[pk] = person_id if person_visible and not hidden else ("cluster", pk)
+        centroids[pk] = centroid
     # A duplicate stands for someone another face of the photo shows.
     faces = (
         Face.objects.filter(owner=user)
@@ -257,17 +275,60 @@ def _known_by_faces(user, seen, span):
     by_file = defaultdict(list)
     for item in seen:
         by_file[item.file_id].append(item)
+    rows = list(
+        faces.values_list(
+            "pk",
+            "file_id",
+            "box_x",
+            "box_y",
+            "box_width",
+            "box_height",
+            "cluster_id",
+            "assignment",
+        )
+    )
+    doubtful = _doubtful(
+        [
+            (pk, cluster_id)
+            for pk, *_, cluster_id, assignment in rows
+            if assignment == Face.Assignment.AUTO
+            and not isinstance(who.get(cluster_id, ()), tuple)
+        ],
+        centroids,
+    )
     named, in_photo = {}, defaultdict(set)
-    for pk, file_id, x, y, w, h, cluster_id in faces.values_list(
-        "pk", "file_id", "box_x", "box_y", "box_width", "box_height", "cluster_id"
-    ):
+    for pk, file_id, x, y, w, h, cluster_id, _assignment in rows:
         key = who.get(cluster_id, ("face", pk))
         if not isinstance(key, tuple):
             in_photo[file_id].add(key)
+            if pk in doubtful:
+                key = ("doubt", pk)
         owner = _wearer((x + w / 2, y + h / 2), by_file.get(file_id, ()), named)
         if owner is not None:
             named[owner.pk] = key
     return named, in_photo
+
+
+def _doubtful(faces, centroids):
+    """The pks of *faces*, ``(pk, cluster id)`` pairs, further than
+    doubt_distance() from their cluster's centroid. A face or a centroid
+    without a vector is no doubt: there is nothing to measure."""
+    limit = doubt_distance()
+    dims = FACE_EMBEDDINGS.dims
+    clusters = dict(faces)
+    doubtful = set()
+    for chunk in itertools.batched(clusters, _BATCH, strict=False):
+        for pk, blob in Face.objects.filter(pk__in=chunk).values_list(
+            "pk", "embedding"
+        ):
+            centroid = centroids.get(clusters[pk])
+            vector = from_bytes(blob, dims) if blob else None
+            centroid = from_bytes(centroid, dims) if centroid else None
+            if vector is None or centroid is None:
+                continue
+            if 1 - float(vector @ centroid) > limit:
+                doubtful.add(pk)
+    return doubtful
 
 
 def _wearer(centre, people, taken):

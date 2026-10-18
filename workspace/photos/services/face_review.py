@@ -25,13 +25,9 @@ from workspace.common.vectors.encoding import from_bytes
 from ..indexes import FACE_EMBEDDINGS
 from ..models import Face
 from ..queries import named_face_clusters, unnamed_face_clusters, user_faces
-from .face_grouping import LOW_QUALITY, max_distance
+from .face_grouping import LOW_QUALITY, doubt_distance, max_distance
 from .face_people import person_cards
 
-# A face further than this fraction of the grouping threshold from its
-# cluster's centroid is worth a look. The centroid being a mean, a face of
-# the right person usually sits well inside the threshold.
-DOUBT_RATIO = 0.5
 # Faces of an unnamed cluster shown: the least like the rest, where an
 # intruder would be; the others go with the answer unseen.
 CLUSTER_FACES = 24
@@ -190,7 +186,7 @@ def doubtful_faces(user):
         .select_related("person")
     }
     centroids = {pk: _unit(c.centroid) for pk, c in clusters.items()}
-    limit = max_distance() * DOUBT_RATIO
+    limit = doubt_distance()
     by_person = defaultdict(list)
     for pk, cluster_id, blob in (
         user_faces(user)

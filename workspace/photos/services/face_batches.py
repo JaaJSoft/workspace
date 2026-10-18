@@ -24,6 +24,7 @@ from ..actions import FaceActionRegistry
 from ..models import Face, FaceCluster
 from . import face_corrections, face_people
 from .face_corrections import CorrectionError, PhotoAlreadyInCluster
+from .face_followups import names_changed
 from .face_grouping import photo_clusters, refresh_clusters
 
 UNDO_TTL = 10 * 60
@@ -244,6 +245,7 @@ def undo(user, token):
                 continue
             restored += 1
         _restore_covers(state["clusters"])
+        names_changed(user.pk)
     touched |= {row["uuid"] for row in state["clusters"]}
     refresh_clusters(touched)
     return restored

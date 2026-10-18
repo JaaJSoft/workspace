@@ -1,14 +1,19 @@
 from datetime import UTC
 
+import numpy as np
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from workspace.common.vectors.encoding import normalize, to_bytes
+from workspace.photos.indexes import FACE_EMBEDDINGS
 from workspace.photos.models import Appearance, Face
 from workspace.photos.services import appearance_suggestions
 from workspace.photos.services.appearance_suggestions import (
     suggest_around,
+    suggest_around_files,
     suggest_owner,
 )
+from workspace.photos.services.face_grouping import refresh_clusters
 from workspace.users.services.settings import set_setting
 
 from .appearances import (
@@ -24,6 +29,12 @@ from .appearances import (
 from .faces import FacesTestMixin, opt_in
 
 User = get_user_model()
+
+
+def face_vector(*components):
+    vector = np.zeros(FACE_EMBEDDINGS.dims)
+    vector[: len(components)] = components
+    return to_bytes(normalize(vector, FACE_EMBEDDINGS.dims))
 
 
 @appearances_on
@@ -280,6 +291,49 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
 
         self.assertEqual(self.suggestion(near), self.lea.pk)
         self.assertIsNone(self.suggestion(far))
+
+    def test_around_several_photos_the_people_near_each_are_asked_about(self):
+        lea = self.anchor(self.lea, RED)
+        near_lea = seen(self.user, photo_at(self.user, "near-lea.jpg", 1), RED)
+        noah = self.anchor(self.noah, BLUE, hours=48)
+        near_noah = seen(self.user, photo_at(self.user, "near-noah.jpg", 49), BLUE)
+        self.anchor(self.lea, RED, hours=96)
+        far = seen(self.user, photo_at(self.user, "far.jpg", 97), RED)
+
+        suggest_around_files(self.user.pk, [lea.file_id, noah.file_id])
+
+        self.assertEqual(self.suggestion(near_lea), self.lea.pk)
+        self.assertEqual(self.suggestion(near_noah), self.noah.pk)
+        self.assertIsNone(self.suggestion(far))
+
+    def _lea_guessed(self, assignment):
+        """Lea's group, sure of one face of hers, and another face in it,
+        unlike that one, above someone wearing red. Returns someone else in
+        red, seen from behind an hour later."""
+        sure = named_face(self.user, photo_at(self.user, "sure.jpg", -48), self.lea)
+        face = self.anchor(self.lea, RED).file.faces.get()
+        Face.objects.filter(pk=sure.pk).update(
+            embedding=face_vector(1), assignment=Face.Assignment.CONFIRMED
+        )
+        Face.objects.filter(pk=face.pk).update(
+            embedding=face_vector(0, 1), assignment=assignment
+        )
+        refresh_clusters([sure.cluster_id])
+        return seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+    def test_a_face_the_grouping_is_unsure_of_names_nobody_by_their_clothes(self):
+        back = self._lea_guessed(Face.Assignment.AUTO)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(back))
+
+    def test_a_face_the_user_confirmed_names_them_however_unlike_the_rest(self):
+        back = self._lea_guessed(Face.Assignment.CONFIRMED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.lea.pk)
 
     def test_another_users_people_are_left_alone(self):
         self.anchor(self.lea, RED)

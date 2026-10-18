@@ -50,6 +50,11 @@ _EMPTY_METADATA = {
     **dataclasses.asdict(video.VideoMetadata()),
 }
 
+# What a correction by hand overrides (services/capture_details.py): a new
+# reading of the file leaves these alone while the matching flag is set.
+_DATE_FIELDS = ("taken_at", "taken_at_from_name")
+_LOCATION_FIELDS = ("latitude", "longitude", "altitude")
+
 
 def library_candidates(files):
     """The photos and videos among *files*.
@@ -157,18 +162,32 @@ def analyze_media(file_obj):
         else:
             taken_at_from_name = False
 
+        defaults = {
+            **_EMPTY_METADATA,
+            **dataclasses.asdict(metadata),
+            "taken_at": taken_at,
+            "taken_at_from_name": taken_at_from_name,
+            "media_type": media_type,
+            "content_hash": read_hash,
+            "analysis_version": ANALYSIS_VERSIONS[media_type],
+            "analyzed_at": timezone.now(),
+        }
+        # Locked with the file row: a correction landing now waits, and one
+        # that landed before is kept.
+        by_user = (
+            MediaItem.objects.select_for_update()
+            .filter(file_id=file_obj.pk)
+            .values("taken_at_by_user", "location_by_user")
+            .first()
+        )
+        if by_user and by_user["taken_at_by_user"]:
+            for field in _DATE_FIELDS:
+                defaults.pop(field)
+        if by_user and by_user["location_by_user"]:
+            for field in _LOCATION_FIELDS:
+                defaults.pop(field)
         item, _ = MediaItem.objects.update_or_create(
-            file_id=file_obj.pk,
-            defaults={
-                **_EMPTY_METADATA,
-                **dataclasses.asdict(metadata),
-                "taken_at": taken_at,
-                "taken_at_from_name": taken_at_from_name,
-                "media_type": media_type,
-                "content_hash": read_hash,
-                "analysis_version": ANALYSIS_VERSIONS[media_type],
-                "analyzed_at": timezone.now(),
-            },
+            file_id=file_obj.pk, defaults=defaults
         )
     return item
 

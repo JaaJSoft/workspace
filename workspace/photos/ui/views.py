@@ -99,7 +99,7 @@ from workspace.photos.services.timeline import (
     UNDATED,
     manual_page,
     mark_album_tiles,
-    mark_favorite_toggles,
+    mark_tile_actions,
     parse_cursor,
     parse_date_position,
     parse_manual_cursor,
@@ -377,7 +377,7 @@ def _paging(page, page_url, view_params=None):
 
 
 def _page_context(request, page, page_url, view_params=None):
-    mark_favorite_toggles(page.photos, request.user)
+    mark_tile_actions(page.photos, request.user)
     return _paging(page, page_url, view_params) | {
         "tile_width": _tile_width(request.user),
     }
@@ -745,7 +745,7 @@ def _ranked(request, query, similar):
                     "photos-video-frame", kwargs={"pk": match.frame_id}
                 )
             photos.append(photo)
-    mark_favorite_toggles(photos, request.user)
+    mark_tile_actions(photos, request.user)
     scope_params = _scope_params(scope, defaults)
     videos = sum(p.media_item.media_type == MediaItem.MediaType.VIDEO for p in photos)
     context = {

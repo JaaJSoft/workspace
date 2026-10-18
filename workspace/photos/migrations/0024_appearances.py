@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("files", "0072_documentinfo"),
         ("people", "0003_fold_person_search_text"),
-        ("photos", "0022_auto_tag_icons"),
+        ("photos", "0023_media_item_capture_details_by_user"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

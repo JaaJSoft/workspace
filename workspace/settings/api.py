@@ -202,6 +202,10 @@ SPECTACULAR_SETTINGS = {
             "description": "Album members, their roles, leaving an album, and its public links.",
         },
         {
+            "name": "Photos - Details",
+            "description": "Corrections by hand of when and where photos and videos were taken.",
+        },
+        {
             "name": "Photos - Faces",
             "description": "Face grouping: the people found in your photos, and their corrections.",
         },

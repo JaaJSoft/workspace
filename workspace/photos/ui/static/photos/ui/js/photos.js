@@ -222,6 +222,7 @@ window.photosApp = function photosApp() {
     ...window.photosFacesMixin(),
     ...window.photosImportMixin(),
     ...window.photosHiddenMixin(),
+    ...window.photosCaptureDetailsMixin(),
 
     collapsed: window.sidebarPreference.initial(),
     tileSize: tile.size,
@@ -661,6 +662,7 @@ window.photosApp = function photosApp() {
         albumScoped: tile.dataset.albumScoped === '1',
         removable: tile.dataset.removable === '1',
         downloadUrl: tile.dataset.downloadUrl || '',
+        canEditDetails: tile.dataset.canEditDetails === '1',
       };
       const generation = ++this._ctxGeneration;
       this.ctxMenu = { open: true, x, y, photo, actions: null };
@@ -716,6 +718,7 @@ window.photosApp = function photosApp() {
           photo.filesUrl && 'open_in_files',
           has('copy_link') && 'copy_link',
           has('rename') && 'rename',
+          photo.canEditDetails && 'edit_details',
           has('properties') && 'properties',
         ],
         [
@@ -1077,6 +1080,7 @@ window.photosApp = function photosApp() {
           this.selectionRemovable() && 'remove_from_album',
           !!this.currentCluster() && 'not_this_person',
         ],
+        [this.selectionEditsDetails() && 'edit_details'],
         [
           this.selectionAllows('toggle_sensitive') && 'toggle_sensitive',
           inLibrary && 'hide',

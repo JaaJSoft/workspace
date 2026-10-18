@@ -1,0 +1,288 @@
+{% comment %}
+  Edit date & location, for one photo or a selection: shift every date by
+  the same amount (a camera on the wrong clock or timezone), set one date (a
+  scanned print), place them somewhere, or hand either back to the file.
+  State and requests live in photosCaptureDetailsMixin() (capture_details.js).
+{% endcomment %}
+<dialog id="capture-details-dialog" class="modal">
+  <div class="modal-box max-w-lg">
+    <div class="flex items-center gap-3 mb-5">
+      <span
+        class="flex w-10 h-10 items-center justify-center rounded-full bg-module/10 text-module shrink-0"
+      >
+        <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+      </span>
+      <div class="min-w-0">
+        <h3 class="font-bold text-lg">Edit date &amp; location</h3>
+        <p class="text-sm text-base-content/60" x-text="captureCountLabel()"></p>
+      </div>
+    </div>
+
+    <form @submit.prevent="saveCaptureDetails()" class="space-y-6">
+      <fieldset class="space-y-3" :disabled="captureDialog.saving">
+        <legend class="flex items-center gap-2 text-sm font-semibold mb-2">
+          <i data-lucide="calendar" class="w-4 h-4 text-base-content/60"></i>
+          Date &amp; time
+        </legend>
+        <div
+          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          role="radiogroup"
+          aria-label="Date and time"
+        >
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'keep' }"
+            :aria-checked="captureDialog.dateMode === 'keep'"
+            @click="captureDialog.dateMode = 'keep'"
+          >
+            Keep
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'shift' }"
+            :aria-checked="captureDialog.dateMode === 'shift'"
+            @click="captureDialog.dateMode = 'shift'"
+          >
+            Shift
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'set' }"
+            :aria-checked="captureDialog.dateMode === 'set'"
+            @click="captureDialog.dateMode = 'set'"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.dateMode === 'restore' }"
+            :aria-checked="captureDialog.dateMode === 'restore'"
+            @click="captureDialog.dateMode = 'restore'"
+          >
+            From file
+          </button>
+        </div>
+
+        <div x-show="captureDialog.dateMode === 'shift'" x-cloak class="space-y-2">
+          <div class="flex flex-wrap items-end gap-2">
+            <select
+              class="select select-bordered select-sm w-28"
+              aria-label="Direction"
+              x-model.number="captureDialog.shiftSign"
+            >
+              <option value="1">Later</option>
+              <option value="-1">Earlier</option>
+            </select>
+            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+              <input
+                type="number"
+                min="0"
+                max="36525"
+                class="grow w-0 tabular-nums"
+                aria-label="Days"
+                x-model.number="captureDialog.shiftDays"
+              />
+              <span class="text-base-content/50">d</span>
+            </label>
+            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+              <input
+                type="number"
+                min="0"
+                class="grow w-0 tabular-nums"
+                aria-label="Hours"
+                x-model.number="captureDialog.shiftHours"
+              />
+              <span class="text-base-content/50">h</span>
+            </label>
+            <label class="input input-bordered input-sm flex items-center gap-1 w-24">
+              <input
+                type="number"
+                min="0"
+                class="grow w-0 tabular-nums"
+                aria-label="Minutes"
+                x-model.number="captureDialog.shiftMinutes"
+              />
+              <span class="text-base-content/50">min</span>
+            </label>
+          </div>
+          <p
+            class="text-xs text-base-content/60 flex items-center gap-1.5"
+            x-show="captureShiftPreview()"
+          >
+            <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 shrink-0"></i>
+            <span x-text="captureShiftPreview()"></span>
+          </p>
+          <p class="text-xs text-base-content/50">Photos without a date are left as they are.</p>
+        </div>
+
+        <div x-show="captureDialog.dateMode === 'set'" x-cloak class="space-y-2">
+          <div class="flex flex-wrap gap-2">
+            <input
+              type="date"
+              class="input input-bordered input-sm w-44"
+              aria-label="Date"
+              x-model="captureDialog.date"
+            />
+            <input
+              type="time"
+              class="input input-bordered input-sm w-32"
+              aria-label="Time"
+              x-model="captureDialog.time"
+            />
+          </div>
+          <p class="text-xs text-base-content/50">
+            Leave the time empty to keep each photo's own time (noon for photos without a date).
+          </p>
+        </div>
+
+        <p
+          x-show="captureDialog.dateMode === 'restore'"
+          x-cloak
+          class="text-xs text-base-content/60"
+        >
+          Use the date the camera wrote in the file, or the one in its name, again.
+        </p>
+      </fieldset>
+
+      <fieldset class="space-y-3" :disabled="captureDialog.saving">
+        <legend class="flex items-center gap-2 text-sm font-semibold mb-2">
+          <i data-lucide="map-pin" class="w-4 h-4 text-base-content/60"></i>
+          Location
+        </legend>
+        <div
+          class="tabs tabs-boxed tabs-sm bg-base-200 p-0.5 w-full"
+          role="radiogroup"
+          aria-label="Location"
+        >
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'keep' }"
+            :aria-checked="captureDialog.locationMode === 'keep'"
+            @click="captureDialog.locationMode = 'keep'"
+          >
+            Keep
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'set' }"
+            :aria-checked="captureDialog.locationMode === 'set'"
+            @click="captureDialog.locationMode = 'set'"
+          >
+            Set
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'clear' }"
+            :aria-checked="captureDialog.locationMode === 'clear'"
+            @click="captureDialog.locationMode = 'clear'"
+          >
+            Remove
+          </button>
+          <button
+            type="button"
+            role="radio"
+            class="tab tab-module flex-1"
+            :class="{ 'tab-active': captureDialog.locationMode === 'restore' }"
+            :aria-checked="captureDialog.locationMode === 'restore'"
+            @click="captureDialog.locationMode = 'restore'"
+          >
+            From file
+          </button>
+        </div>
+
+        <div
+          x-show="captureDialog.locationMode === 'set'"
+          x-cloak
+          class="space-y-2"
+        >
+          <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+            <i data-lucide="map-pinned" class="w-4 h-4 opacity-60"></i>
+            <input
+              type="text"
+              class="grow font-mono"
+              placeholder="48.85837, 2.29448"
+              autocomplete="off"
+              aria-label="Coordinates"
+              x-model="captureDialog.coordinates"
+            />
+          </label>
+          <p
+            class="text-xs text-error"
+            x-show="captureDialog.coordinates.trim() && !captureCoordinates()"
+          >
+            Not a position: paste coordinates or a map link.
+          </p>
+          <p class="text-xs text-base-content/50" x-show="!captureCoordinates()">
+            Coordinates, or a link copied from OpenStreetMap or Google Maps.
+          </p>
+          <a
+            x-show="captureCoordinates()"
+            x-cloak
+            :href="captureMapUrl()"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="link link-hover text-xs inline-flex items-center gap-1 hover:text-module"
+          >
+            Check on OpenStreetMap
+            <i data-lucide="external-link" class="w-3 h-3"></i>
+          </a>
+        </div>
+
+        <p
+          x-show="captureDialog.locationMode === 'clear'"
+          x-cloak
+          class="text-xs text-base-content/60"
+        >
+          The photos will show no location, whatever their file says.
+        </p>
+        <p
+          x-show="captureDialog.locationMode === 'restore'"
+          x-cloak
+          class="text-xs text-base-content/60"
+        >
+          Use the position the camera wrote in the file again.
+        </p>
+      </fieldset>
+
+      <div class="modal-action">
+        <span
+          x-show="captureDialog.saving"
+          x-cloak
+          class="loading loading-spinner loading-sm mr-auto self-center"
+        ></span>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="closeCaptureDialog()"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="btn btn-module btn-sm"
+          :disabled="!captureCanSave()"
+          data-testid="capture-details-save"
+        >
+          Save
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

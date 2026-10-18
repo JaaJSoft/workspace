@@ -121,7 +121,7 @@ class FileViewerModalRaceTests(PlaywrightTestCase):
 
         # Close the viewer while the viewer request is still hanging.
         viewer = self.page.locator("[data-file-viewer-inline]")
-        viewer.get_by_role("button", name="Back").click()
+        viewer.get_by_role("button", name="Close").click()
         expect(viewer).to_be_hidden()
 
         # The response lands only now, into a closed viewer.

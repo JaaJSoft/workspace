@@ -121,7 +121,7 @@ class PhotosTimelineTests(PlaywrightTestCase):
             self.page.keyboard.press("ArrowRight")
             expect(viewer.locator("h3")).to_have_text(photo.name)
 
-        viewer.get_by_role("button", name="Back").click()
+        viewer.get_by_role("button", name="Close").click()
 
         expect(viewer).to_be_hidden()
         self.assertNotIn("open=", self.page.url)

@@ -113,7 +113,7 @@ class InlineViewerTests(PlaywrightTestCase):
         self.page.keyboard.press("ArrowRight")
         expect(viewer.locator("h3")).to_have_text("bravo.png")
 
-        viewer.get_by_role("button", name="Back").click()
+        viewer.get_by_role("button", name="Close").click()
         expect(viewer).to_be_hidden()
         expect(self.page.locator("#folder-browser h1")).to_be_visible()
         self.assertEqual(

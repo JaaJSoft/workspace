@@ -27,17 +27,8 @@
   @ajax:merge="_viewerMerge($event)"
 >
   <div
-    class="flex items-center gap-2 px-3 py-2 border-b border-base-300 bg-base-100"
+    class="flex items-center gap-2 pl-4 lg:pl-6 pr-3 py-2 border-b border-base-300 bg-base-100"
   >
-    <button
-      type="button"
-      class="btn btn-ghost btn-sm btn-square"
-      @click="close()"
-      title="Back (ESC)"
-      aria-label="Back"
-    >
-      <i data-lucide="arrow-left" class="w-4 h-4"></i>
-    </button>
     <div class="flex-1 min-w-0">
       <h3 class="font-bold truncate" x-text="fileName"></h3>
       <div class="flex items-center gap-2">
@@ -73,6 +64,15 @@
         <i data-lucide="info" class="w-4 h-4"></i>
       </button>
     {% endif %}
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-square"
+      @click="close()"
+      title="Close (ESC)"
+      aria-label="Close"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
   </div>
 
   {% include "files/ui/partials/file_viewer_stage.html" %}

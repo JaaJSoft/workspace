@@ -8,7 +8,7 @@
   {{ image_edit|json_script:"image-viewer-edit-data" }}
   <!-- Toolbar -->
   <div
-    class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300"
+    class="flex flex-wrap items-center justify-center gap-1 sm:gap-2 p-2 sm:p-4 bg-base-100 border-b border-base-300"
     x-show="!editing"
   >
     <button
@@ -31,7 +31,7 @@
     >
       <i data-lucide="zoom-in" class="w-4 h-4"></i>
     </button>
-    <div class="divider divider-horizontal mx-2"></div>
+    <div class="divider divider-horizontal mx-2 max-sm:hidden"></div>
     {% if not image_edit_available %}
       {# Turns the view only, for whoever may not edit the file. #}
       <button
@@ -52,7 +52,7 @@
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
     {% if image_edit_available %}
-      <div class="divider divider-horizontal mx-2"></div>
+      <div class="divider divider-horizontal mx-2 max-sm:hidden"></div>
       <button
         type="button"
         class="btn btn-sm btn-ghost"
@@ -66,7 +66,7 @@
       </button>
     {% endif %}
     {% if user_can_edit %}
-      <div class="divider divider-horizontal mx-2"></div>
+      <div class="divider divider-horizontal mx-2 max-sm:hidden"></div>
       <button
         type="button"
         class="btn btn-sm btn-ghost"
@@ -82,7 +82,7 @@
       </button>
     {% endif %}
     {% if ai_edit_available %}
-      <div class="divider divider-horizontal mx-2"></div>
+      <div class="divider divider-horizontal mx-2 max-sm:hidden"></div>
       <button
         type="button"
         class="btn btn-sm"

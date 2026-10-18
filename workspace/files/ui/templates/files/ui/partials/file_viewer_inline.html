@@ -11,9 +11,10 @@
 <div
   x-data="fileViewerInline({ covers: '{{ covers|escapejs }}', properties: {{ properties|yesno:'true,false' }} })"
   x-ref="frame"
+  tabindex="-1"
   x-show="open"
   x-cloak
-  class="absolute inset-0 z-[15] flex flex-col bg-base-100"
+  class="absolute inset-0 z-[15] flex flex-col bg-base-100 outline-none"
   role="region"
   aria-label="File viewer"
   data-file-viewer-inline
@@ -27,7 +28,6 @@
   >
     <button
       type="button"
-      x-ref="back"
       class="btn btn-ghost btn-sm btn-square"
       @click="close()"
       title="Back (ESC)"

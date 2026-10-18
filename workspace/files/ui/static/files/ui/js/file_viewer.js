@@ -399,12 +399,14 @@ window.fileViewerInline = function fileViewerInline(options) {
       return coversId ? document.getElementById(coversId) : null;
     },
 
-    // Focus moves in on opening only, not on each gallery step.
+    // Focus moves in on opening only, not on each gallery step. It goes to
+    // the frame rather than a button: a button focused from script after a
+    // click on a row would draw its focus ring.
     _present() {
       const covered = this._covered();
       if (covered && covered.inert) return;
       if (covered) covered.inert = true;
-      this.$nextTick(() => this.$refs.back && this.$refs.back.focus({ preventScroll: true }));
+      this.$nextTick(() => this.$refs.frame.focus({ preventScroll: true }));
     },
 
     _dismiss() {

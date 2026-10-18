@@ -100,8 +100,13 @@ class InlineViewerTests(PlaywrightTestCase):
         box = viewer.bounding_box()
         header_box = header.bounding_box()
         main_box = self.page.locator("#files-main").bounding_box()
+        # As much room under the trail as the header leaves above it.
+        room = header.evaluate(
+            "el => parseFloat(getComputedStyle(el.parentElement).paddingBottom)"
+        )
+        self.assertGreater(room, 0)
         self.assertAlmostEqual(
-            box["y"], header_box["y"] + header_box["height"], delta=1
+            box["y"], header_box["y"] + header_box["height"] + room, delta=1
         )
         self.assertAlmostEqual(
             box["y"] + box["height"], main_box["y"] + main_box["height"], delta=1

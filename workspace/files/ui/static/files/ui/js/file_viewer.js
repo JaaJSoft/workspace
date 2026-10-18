@@ -434,15 +434,19 @@ window.fileViewerInline = function fileViewerInline(options) {
     },
 
     // Measured from the covered element's top: what sits above the kept
-    // element (a header's padding) stays uncovered with it. Both are
+    // element (a header's padding) stays uncovered with it, and the same
+    // room is left below it, its container's bottom padding. Both are
     // observed, since a breakpoint can change that padding alone.
     _watchKept(kept, covered) {
       if (keptObserver) keptObserver.disconnect();
       keptObserver = null;
       const measure = () => {
-        this.keptHeight = kept
-          ? kept.getBoundingClientRect().bottom - covered.getBoundingClientRect().top
-          : 0;
+        if (!kept) {
+          this.keptHeight = 0;
+          return;
+        }
+        const room = parseFloat(getComputedStyle(kept.parentElement).paddingBottom) || 0;
+        this.keptHeight = kept.getBoundingClientRect().bottom + room - covered.getBoundingClientRect().top;
       };
       measure();
       if (!kept) return;

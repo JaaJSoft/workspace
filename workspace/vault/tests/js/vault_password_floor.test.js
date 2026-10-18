@@ -98,9 +98,11 @@ test('a corpus answer about a replaced password is discarded', async () => {
   const sha1 = require('node:crypto');
   const digest = (value) =>
     sha1.createHash('sha1').update(value).digest('hex').toUpperCase();
-  const resolvers = [];
+  // Keyed by the range each lookup asked for, not by call order: the two
+  // digests run on the thread pool and either may reach fetch first.
+  const resolvers = new Map();
   const app = component({
-    fetch: () => new Promise((resolve) => resolvers.push(resolve)),
+    fetch: (url) => new Promise((resolve) => resolvers.set(url.slice(-5), resolve)),
   });
 
   app.password = 'a-password-nobody-has-used';
@@ -109,13 +111,19 @@ test('a corpus answer about a replaced password is discarded', async () => {
   app.password = 'password1';
   const current = app.checkBreachCorpus();
   // Let both hash and reach the stubbed fetch.
-  while (resolvers.length < 2) await new Promise((r) => setTimeout(r, 1));
+  while (resolvers.size < 2) await new Promise((r) => setTimeout(r, 1));
 
-  resolvers[1]({ ok: true, text: async () => digest('password1').slice(5) + ':42' });
+  resolvers.get(digest('password1').slice(0, 5))({
+    ok: true,
+    text: async () => digest('password1').slice(5) + ':42',
+  });
   await current;
   assert.equal(app.breachStatus, 'found');
 
-  resolvers[0]({ ok: true, text: async () => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:1' });
+  resolvers.get(digest('a-password-nobody-has-used').slice(0, 5))({
+    ok: true,
+    text: async () => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF:1',
+  });
   await stale;
   assert.equal(app.breachStatus, 'found');
 });

@@ -77,6 +77,21 @@ class AlbumFileServingTests(AlbumFilesTestCase):
         self.assertEqual(download.status_code, 200)
         self.assertIn("attachment", download["Content-Disposition"])
 
+    def test_a_rotated_photo_downloads_turned_but_shows_its_original_inline(self):
+        with Image.open(self.photo.content) as original:
+            width, height = original.size
+        File.objects.filter(pk=self.photo.pk).update(image_edit={"rotation": 90})
+
+        download = self.client.get(self.file_url(self.photo, "download"))
+        content = self.client.get(self.file_url(self.photo, "content"))
+
+        self.assertEqual(download.status_code, 200)
+        self.assertIn("attachment", download["Content-Disposition"])
+        self.assertEqual(Image.open(io.BytesIO(download.content)).size, (height, width))
+        # Inline, the viewer turns the original itself.
+        inline = Image.open(io.BytesIO(b"".join(content.streaming_content)))
+        self.assertEqual(inline.size, (width, height))
+
     def test_content_answers_a_range(self):
         response = self.client.get(
             self.file_url(self.photo, "content"), HTTP_RANGE="bytes=0-1"

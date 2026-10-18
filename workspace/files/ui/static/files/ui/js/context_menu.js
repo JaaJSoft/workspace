@@ -1,3 +1,7 @@
+// Registry actions Files leaves to the viewer: rotate and crop is reached
+// from the image itself, not from the file's menu.
+const FILES_VIEWER_ONLY_ACTIONS = ['edit_image'];
+
 window.contextMenu = function contextMenu() {
   return {
     isOpen: false,
@@ -88,6 +92,11 @@ window.contextMenu = function contextMenu() {
       }
 
       this.position = { x, y };
+    },
+
+    menuActions() {
+      const actions = (this.nodeData && this.nodeData.actions) || [];
+      return actions.filter((a) => !FILES_VIEWER_ONLY_ACTIONS.includes(a.id));
     },
 
     close() {

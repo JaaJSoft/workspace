@@ -14,6 +14,11 @@ from workspace.files.services._names import (
     NameTaken,
 )
 from workspace.files.services.files import GroupMismatch
+from workspace.files.services.image_edits import (
+    ROTATIONS,
+    edit_problem,
+    normalize_edit,
+)
 from workspace.files.services.locking import (
     LockConflict,
     StaleContent,
@@ -246,9 +251,11 @@ class FileSerializer(serializers.ModelSerializer):
             "type_icon",
             "type_color",
             "has_thumbnail",
+            "image_edit",
         ]
         read_only_fields = [
             "has_thumbnail",
+            "image_edit",
             "owner",
             "created_at",
             "updated_at",
@@ -763,6 +770,34 @@ class FileCommentCreateSerializer(serializers.Serializer):
 
 class FileCommentEditSerializer(serializers.Serializer):
     body = serializers.CharField()
+
+
+class ImageCropSerializer(serializers.Serializer):
+    """A rectangle in fractions of the rotated image (services/image_edits.py)."""
+
+    x = serializers.FloatField(min_value=0, max_value=1)
+    y = serializers.FloatField(min_value=0, max_value=1)
+    width = serializers.FloatField(min_value=0, max_value=1)
+    height = serializers.FloatField(min_value=0, max_value=1)
+
+
+class ImageEditSerializer(serializers.Serializer):
+    """Validate ``PUT /api/v1/files/<uuid>/image-edit`` into its stored form."""
+
+    rotation = serializers.ChoiceField(choices=ROTATIONS, default=0)
+    crop = ImageCropSerializer(required=False, allow_null=True, default=None)
+
+    def validate(self, attrs):
+        problem = edit_problem(attrs["rotation"], attrs["crop"])
+        if problem is not None:
+            raise serializers.ValidationError(problem)
+        return {"edit": normalize_edit(attrs["rotation"], attrs["crop"])}
+
+
+class ImageRotateSerializer(serializers.Serializer):
+    """``POST /api/v1/files/<uuid>/image-edit/rotate``: clockwise quarter turns."""
+
+    quarter_turns = serializers.ChoiceField(choices=(-1, 1))
 
 
 class PinnedReorderSerializer(serializers.Serializer):

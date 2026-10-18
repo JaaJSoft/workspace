@@ -1,9 +1,15 @@
 {% load static %}
 <!-- Image Viewer -->
-<div class="flex flex-col h-full" x-data="imageViewerData()">
+<div
+  class="flex flex-col h-full"
+  x-data="imageViewerData()"
+  x-effect="_announce()"
+>
+  {{ image_edit|json_script:"image-viewer-edit-data" }}
   <!-- Toolbar -->
   <div
     class="flex items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300"
+    x-show="!editing"
   >
     <button
       type="button"
@@ -26,14 +32,17 @@
       <i data-lucide="zoom-in" class="w-4 h-4"></i>
     </button>
     <div class="divider divider-horizontal mx-2"></div>
-    <button
-      type="button"
-      class="btn btn-sm btn-ghost"
-      @click="rotate(90)"
-      title="Rotate (R)"
-    >
-      <i data-lucide="rotate-cw" class="w-4 h-4"></i>
-    </button>
+    {% if not image_edit_available %}
+      {# Turns the view only, for whoever may not edit the file. #}
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="rotate(90)"
+        title="Rotate (R)"
+      >
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+      </button>
+    {% endif %}
     <button
       type="button"
       class="btn btn-sm btn-ghost"
@@ -42,6 +51,20 @@
     >
       <i data-lucide="refresh-cw" class="w-4 h-4"></i>
     </button>
+    {% if image_edit_available %}
+      <div class="divider divider-horizontal mx-2"></div>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="startEditing()"
+        :disabled="!!editPreview"
+        title="Rotate and crop"
+        data-testid="image-edit-start"
+      >
+        <i data-lucide="crop" class="w-4 h-4"></i>
+        <span class="hidden sm:inline">Edit</span>
+      </button>
+    {% endif %}
     {% if user_can_edit %}
       <div class="divider divider-horizontal mx-2"></div>
       <button
@@ -73,32 +96,179 @@
     {% endif %}
   </div>
 
+  {% if image_edit_available %}
+    <!-- Rotate and crop toolbar -->
+    <div
+      class="flex flex-wrap items-center justify-center gap-2 p-4 bg-base-100 border-b border-base-300"
+      x-show="editing"
+      x-cloak
+      data-testid="image-edit-toolbar"
+    >
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="rotateDraft(-1)"
+        :disabled="saving"
+        title="Rotate left"
+        aria-label="Rotate left"
+      >
+        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="rotateDraft(1)"
+        :disabled="saving"
+        title="Rotate right"
+        aria-label="Rotate right"
+        data-testid="image-edit-rotate-right"
+      >
+        <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+      </button>
+      <div class="divider divider-horizontal mx-1"></div>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="resetDraft()"
+        :disabled="saving || draftIsOriginal()"
+        title="Back to the image as it was uploaded"
+        data-testid="image-edit-original"
+      >
+        <i data-lucide="undo-2" class="w-4 h-4"></i>
+        <span class="hidden sm:inline">Original</span>
+      </button>
+      <div class="divider divider-horizontal mx-1"></div>
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        @click="cancelEditing()"
+        :disabled="saving"
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-module"
+        @click="saveEdit()"
+        :disabled="saving || !draftChanged()"
+        data-testid="image-edit-save"
+      >
+        <span x-show="saving" x-cloak class="loading loading-spinner loading-xs"></span>
+        Save
+      </button>
+    </div>
+  {% endif %}
+
   <!-- Main content: image + edit panel -->
   <div class="flex-1 flex min-h-0">
     <!-- Image Container -->
     <div
       class="flex-1 overflow-auto flex items-center justify-center p-4 min-h-0"
+      x-ref="stage"
     >
       <span
         x-show="converting"
         x-cloak
         class="loading loading-spinner loading-lg"
       ></span>
-      <img
-        :src="editPreview || convertedSrc || '{{ content_url|escapejs }}'"
-        alt="{{ file.name }}"
-        class="max-w-full max-h-full object-contain transition-transform duration-200"
-        :style="{ transform: `scale(${zoomLevel}) rotate(${rotation}deg)` }"
+      {% comment %}
+        Once the image has loaded it is laid out by hand (imageEdit.layout): the
+        frame is the size the image shows at and clips it to the crop, and the
+        image inside is turned about its centre. In edit mode the frame holds
+        the whole turned image and the crop box sits over it.
+      {% endcomment %}
+      <div
+        x-ref="frame"
+        class="relative shrink-0 transition-transform duration-200"
+        :class="{ 'overflow-hidden': !!natural && !editing }"
+        :style="frameStyle()"
         x-show="!converting"
-        x-ref="image"
-        @error="convertUnsupported()"
-      />
+      >
+        <img
+          :src="editPreview || convertedSrc || '{{ content_url|escapejs }}'"
+          alt="{{ file.name }}"
+          class="max-w-full max-h-full object-contain"
+          :class="{ 'absolute max-w-none max-h-none': !!natural }"
+          :style="imageStyle()"
+          x-ref="image"
+          draggable="false"
+          @load="imageLoaded()"
+          @error="convertUnsupported()"
+        />
+        {% if image_edit_available %}
+          <template x-if="editing && natural">
+            {# The dimming is clipped to the image; the handles, which stick out of it, are not. #}
+            <div class="absolute inset-0">
+              <div class="absolute inset-0 overflow-hidden pointer-events-none">
+                <div
+                  class="absolute outline outline-2 outline-white"
+                  style="box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.55)"
+                  :style="cropStyle()"
+                >
+                  <span
+                    class="pointer-events-none absolute inset-y-0 left-1/3 w-px bg-white/50"
+                  ></span>
+                  <span
+                    class="pointer-events-none absolute inset-y-0 left-2/3 w-px bg-white/50"
+                  ></span>
+                  <span
+                    class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-white/50"
+                  ></span>
+                  <span
+                    class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-white/50"
+                  ></span>
+                </div>
+              </div>
+              <div
+                class="absolute touch-none cursor-move"
+                :style="cropStyle()"
+                @pointerdown.prevent="startCropDrag($event, 'move')"
+                data-testid="image-edit-crop"
+              >
+                <span
+                  class="absolute -left-2 -top-2 w-4 h-4 rounded-sm bg-white shadow cursor-nwse-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'nw')"
+                ></span>
+                <span
+                  class="absolute -right-2 -top-2 w-4 h-4 rounded-sm bg-white shadow cursor-nesw-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'ne')"
+                ></span>
+                <span
+                  class="absolute -left-2 -bottom-2 w-4 h-4 rounded-sm bg-white shadow cursor-nesw-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'sw')"
+                ></span>
+                <span
+                  class="absolute -right-2 -bottom-2 w-4 h-4 rounded-sm bg-white shadow cursor-nwse-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'se')"
+                  data-testid="image-edit-handle-se"
+                ></span>
+                <span
+                  class="absolute left-1/2 -top-1.5 -translate-x-1/2 w-6 h-3 rounded-sm bg-white shadow cursor-ns-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'n')"
+                ></span>
+                <span
+                  class="absolute left-1/2 -bottom-1.5 -translate-x-1/2 w-6 h-3 rounded-sm bg-white shadow cursor-ns-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 's')"
+                ></span>
+                <span
+                  class="absolute top-1/2 -left-1.5 -translate-y-1/2 w-3 h-6 rounded-sm bg-white shadow cursor-ew-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'w')"
+                ></span>
+                <span
+                  class="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-6 rounded-sm bg-white shadow cursor-ew-resize"
+                  @pointerdown.prevent.stop="startCropDrag($event, 'e')"
+                ></span>
+              </div>
+            </div>
+          </template>
+        {% endif %}
+      </div>
     </div>
 
     <!-- AI Edit Panel -->
     {% if ai_edit_available %}
       <div
-        x-show="editMode"
+        x-show="editMode && !editing"
         x-cloak
         class="w-80 border-l border-base-300 bg-base-100 flex flex-col overflow-y-auto shrink-0"
       >
@@ -270,6 +440,12 @@
     const contentUrl = '{{ content_url|escapejs }}';
     const fileType = '{{ file.type|escapejs }}';
     const heicDecoderUrl = '{% static "files/ui/js/vendor/heic-to/heic-to.js" %}';
+    const imageEditAvailable = {{ image_edit_available|yesno:"true,false" }};
+    const openInEditMode = {{ start_editing|yesno:"true,false" }};
+    const editedDownloadUrl = '{{ edited_download_url|escapejs }}';
+    // The stage's p-4 padding, and the room the crop handles stick out into.
+    const STAGE_PADDING = 16;
+    const HANDLE_ROOM = 12;
 
     // The decoder is ~700 KB gzipped: fetched on the first HEIC the browser
     // cannot show, then shared by every viewer the page opens.
@@ -353,13 +529,32 @@
       convertedSrc: null,
       converting: false,
 
+      // The rotation and crop the file shows with (null: the original), and
+      // the one edit mode is drawing, every field present.
+      edit: null,
+      editing: false,
+      draft: window.imageEdit.expand(null),
+      saving: false,
+      // The decoded image's size, orientation applied, and the stage's room
+      // for it: the layout waits for both.
+      natural: null,
+      box: null,
+
       init() {
         const self = this;
+        const editData = this.$root.querySelector('#image-viewer-edit-data');
+        this.edit = editData ? JSON.parse(editData.textContent) : null;
+        this._resizeObserver = new ResizeObserver(function() {
+          self._measure();
+        });
+        this._resizeObserver.observe(this.$refs.stage);
+        this._measure();
         this.$nextTick(function() {
           const img = self.$refs.image;
           if (img) {
             if (img.naturalWidth) {
               self.editSize = closestSize(img.naturalWidth, img.naturalHeight);
+              self.imageLoaded();
             } else {
               img.addEventListener('load', function() {
                 self.editSize = closestSize(img.naturalWidth, img.naturalHeight);
@@ -373,6 +568,209 @@
 
       destroy() {
         if (this.convertedSrc) URL.revokeObjectURL(this.convertedSrc);
+        if (this._resizeObserver) this._resizeObserver.disconnect();
+        if (this._endCropDrag) this._endCropDrag();
+      },
+
+      // Tells the hosting modal what the viewer holds: an edit in progress
+      // locks its gallery navigation, and an edited image downloads through
+      // the endpoint that renders the edit.
+      _announce() {
+        this.$dispatch('viewer-editing', this.editing);
+        this.$dispatch('viewer-download', this.edit && editedDownloadUrl ? editedDownloadUrl : null);
+      },
+
+      _measure() {
+        const stage = this.$refs.stage;
+        if (!stage) return;
+        this.box = {
+          width: Math.max(0, stage.clientWidth - 2 * STAGE_PADDING),
+          height: Math.max(0, stage.clientHeight - 2 * STAGE_PADDING),
+        };
+      },
+
+      imageLoaded() {
+        const img = this.$refs.image;
+        if (!img || !img.naturalWidth) return;
+        this.natural = {
+          width: img.naturalWidth,
+          height: img.naturalHeight
+        };
+        if (openInEditMode && !this._openedInEditMode) {
+          this._openedInEditMode = true;
+          this.startEditing();
+        }
+      },
+
+      // What the frame shows. An AI preview is another image, which the
+      // stored crop was not drawn on; edit mode shows the whole turned image.
+      _shownEdit() {
+        if (this.editing) return {
+          rotation: this.draft.rotation
+        };
+        return this.editPreview ? null : this.edit;
+      },
+
+      _layout() {
+        if (!this.natural || !this.box) return null;
+        const edit = this._shownEdit();
+        const room = this.editing ? HANDLE_ROOM : 0;
+        const scale = window.imageEdit.fitScale(
+          this.natural.width, this.natural.height, edit,
+          this.box.width - 2 * room, this.box.height - 2 * room
+        );
+        return window.imageEdit.layout(this.natural.width, this.natural.height, edit, scale);
+      },
+
+      frameStyle() {
+        const style = {
+          transform: `scale(${this.zoomLevel}) rotate(${this.rotation}deg)`
+        };
+        const layout = this._layout();
+        if (layout) {
+          style.width = layout.frameWidth + 'px';
+          style.height = layout.frameHeight + 'px';
+        }
+        return style;
+      },
+
+      imageStyle() {
+        const layout = this._layout();
+        if (!layout) return {};
+        return {
+          width: layout.imageWidth + 'px',
+          height: layout.imageHeight + 'px',
+          left: layout.left + 'px',
+          top: layout.top + 'px',
+          transform: `rotate(${layout.rotation}deg)`,
+        };
+      },
+
+      cropStyle() {
+        const crop = this.draft.crop;
+        return {
+          left: crop.x * 100 + '%',
+          top: crop.y * 100 + '%',
+          width: crop.width * 100 + '%',
+          height: crop.height * 100 + '%',
+        };
+      },
+
+      startEditing() {
+        if (!imageEditAvailable || this.editing || this.editPreview) return;
+        this.editMode = false;
+        this.zoomLevel = 1;
+        this.rotation = 0;
+        this.draft = window.imageEdit.expand(this.edit);
+        this.editing = true;
+      },
+
+      cancelEditing() {
+        if (this._endCropDrag) this._endCropDrag();
+        this.editing = false;
+      },
+
+      rotateDraft(quarterTurns) {
+        this.draft = window.imageEdit.expand(
+          window.imageEdit.rotate(this._draftEdit(), quarterTurns)
+        );
+      },
+
+      resetDraft() {
+        this.draft = window.imageEdit.expand(null);
+      },
+
+      _draftEdit() {
+        return window.imageEdit.normalize(this.draft.rotation, this.draft.crop);
+      },
+
+      draftIsOriginal() {
+        return this._draftEdit() === null;
+      },
+
+      draftChanged() {
+        return !window.imageEdit.equal(this._draftEdit(), this.edit);
+      },
+
+      // Drags the crop box ('move') or the sides a handle holds, in
+      // fractions of the frame - the whole turned image.
+      startCropDrag(event, handle) {
+        if (this.saving || event.button > 0) return;
+        if (this._endCropDrag) this._endCropDrag();
+        const frame = this.$refs.frame.getBoundingClientRect();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startRect = {
+          ...this.draft.crop
+        };
+        const move = (e) => {
+          this.draft.crop = window.imageEdit.dragCrop(
+            startRect, handle,
+            (e.clientX - startX) / frame.width,
+            (e.clientY - startY) / frame.height
+          );
+        };
+        const end = () => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', end);
+          window.removeEventListener('pointercancel', end);
+          this._endCropDrag = null;
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', end);
+        window.addEventListener('pointercancel', end);
+        this._endCropDrag = end;
+      },
+
+      async saveEdit() {
+        if (this.saving || !this.draftChanged()) return;
+        const edit = this._draftEdit();
+        const headers = {
+          'X-CSRFToken': getCSRFToken()
+        };
+        const request = {
+          method: 'DELETE',
+          headers: headers,
+          credentials: 'same-origin'
+        };
+        if (edit) {
+          request.method = 'PUT';
+          headers['Content-Type'] = 'application/json';
+          request.body = JSON.stringify({
+            rotation: edit.rotation || 0,
+            crop: edit.crop || null
+          });
+        }
+        this.saving = true;
+        window.dispatchEvent(new CustomEvent('image-edit-saving', {
+          detail: {
+            uuid: fileUuid
+          },
+        }));
+        try {
+          const resp = await fetch('/api/v1/files/' + fileUuid + '/image-edit', request);
+          if (!resp.ok) {
+            throw new Error(resp.status === 423 ?
+              'Someone else is editing this file.' :
+              'The edit could not be saved.');
+          }
+          const data = await resp.json();
+          this.edit = data.image_edit;
+          this.editing = false;
+          window.dispatchEvent(new CustomEvent('image-edited', {
+            detail: {
+              uuid: fileUuid,
+              imageEdit: data.image_edit,
+              version: data.version,
+              thumbnailReady: data.thumbnail_ready
+            },
+          }));
+          window.dispatchEvent(new CustomEvent('files-changed'));
+        } catch (e) {
+          if (window.AppAlert) window.AppAlert.error(e.message);
+        } finally {
+          this.saving = false;
+        }
       },
 
       // Only formats the browser cannot decode get here: a HEIC anywhere but

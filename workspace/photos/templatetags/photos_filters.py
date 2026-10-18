@@ -4,6 +4,7 @@ from django import template
 from django.db.models import F
 from django.urls import reverse
 
+from workspace.files.services.image_edits import edited_size
 from workspace.files.services.thumbnails.generation import (
     THUMBNAIL_MAX_SIZE,
     THUMBNAIL_SIZES,
@@ -17,15 +18,24 @@ register = template.Library()
 _TILE_ASPECT_RANGE = (0.5, 2.5)
 
 
+def _shown_size(file_obj):
+    """*file_obj*'s width and height as its tile shows it, rotation and crop
+    applied; None when the analysis found no size."""
+    item = getattr(file_obj, "media_item", None)
+    if item is None or not item.width or not item.height:
+        return None
+    return edited_size(item.width, item.height, getattr(file_obj, "image_edit", None))
+
+
 @register.filter
 def tile_aspect(file_obj):
     """The width-to-height ratio of *file_obj*'s tile, as CSS ``aspect-ratio``
     reads it; square when the analysis found no size."""
-    item = getattr(file_obj, "media_item", None)
-    if item is None or not item.width or not item.height:
+    size = _shown_size(file_obj)
+    if size is None:
         return "1"
     low, high = _TILE_ASPECT_RANGE
-    return f"{min(max(item.width / item.height, low), high):.4f}"
+    return f"{min(max(size[0] / size[1], low), high):.4f}"
 
 
 @register.filter
@@ -39,10 +49,8 @@ def tile_srcset(url, file_obj):
     "original" tile shape the pick is then a size too large for a landscape
     photo - more bytes, never a blurrier tile.
     """
-    item = getattr(file_obj, "media_item", None)
-    ratio = 1.0
-    if item is not None and item.width and item.height:
-        ratio = max(item.width, item.height) / min(item.width, item.height)
+    shown = _shown_size(file_obj)
+    ratio = max(shown) / min(shown) if shown else 1.0
     separator = "&" if "?" in url else "?"
     return ", ".join(
         f"{url if size == THUMBNAIL_MAX_SIZE[0] else f'{url}{separator}size={size}'}"

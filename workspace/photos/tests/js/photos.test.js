@@ -325,7 +325,7 @@ test('the "..." button anchors the menu under itself, inside the viewport', () =
   app.openCtxMenu({ clientX: 0, clientY: 0 }, tile(), button);
 
   assert.equal(app.ctxMenu.x, 1270 - 224);
-  assert.equal(app.ctxMenu.y, 900 - 460 - 4);
+  assert.equal(app.ctxMenu.y, 900 - 540 - 4);
 });
 
 test('properties opens the Files panel and loads the tags once', () => {

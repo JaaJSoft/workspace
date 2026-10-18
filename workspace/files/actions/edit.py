@@ -1,4 +1,5 @@
 from workspace.files.services import FilePermission, FileService
+from workspace.files.services.image_edits import can_edit_type
 from workspace.files.services.scanning.policy import is_blocked
 
 from . import ActionRegistry
@@ -85,3 +86,29 @@ class PasteIntoAction(BaseFileAction):
         if file_obj.deleted_at is not None:
             return False
         return permission is not None and permission >= FilePermission.EDIT
+
+
+@ActionRegistry.register
+class EditImageAction(BaseFileAction):
+    """Rotate and crop an image, its bytes untouched (services/image_edits.py)."""
+
+    id = "edit_image"
+    label = "Crop & rotate"
+    icon = "crop"
+    category = ActionCategory.EDIT
+    node_types = ("file",)
+
+    def is_available(self, user, file_obj, *, permission, journal_folder=UNRESOLVED):
+        if file_obj.deleted_at is not None or not file_obj.content:
+            return False
+        if not can_edit_type(file_obj.type) or is_blocked(file_obj):
+            return False
+        # Everyone who opens the file sees the edit: it is a write.
+        if permission is None or permission < FilePermission.WRITE:
+            return False
+        return not (file_obj.is_locked() and file_obj.locked_by_id != user.pk)
+
+    def serialize(self, file_obj):
+        data = super().serialize(file_obj)
+        data["state"] = {"is_edited": bool(file_obj.image_edit)}
+        return data

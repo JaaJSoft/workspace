@@ -8,6 +8,7 @@ from django.core.files.storage import default_storage
 
 from ...metrics import FILES_THUMBNAIL_DURATION, FILES_THUMBNAIL_RESULT
 from .. import ffmpeg
+from ..image_edits import apply_edit, crop_scale
 from ..raster_formats import RASTER_LABELS
 from ..scanning.policy import is_blocked
 from .poster import poster_frame
@@ -202,6 +203,7 @@ def generate_thumbnail(file_obj):
             else:
                 file_obj.content.open("rb")
                 img = Image.open(file_obj.content)
+                edit = getattr(file_obj, "image_edit", None)
 
                 # Hint the decoder to load at a reduced scale near the target
                 # size, before any pixels are read. For JPEG this makes libjpeg
@@ -209,7 +211,13 @@ def generate_thumbnail(file_obj):
                 # on big photos - and is a no-op for formats without draft
                 # support. Kept before exif_transpose (which forces a full
                 # load) so the reduced-scale decode actually takes effect.
-                img.draft(None, THUMBNAIL_MAX_SIZE)
+                # A crop keeps part of the image, so that part has to come
+                # out of the decoder at the thumbnail's size.
+                scale = crop_scale(edit)
+                img.draft(
+                    None,
+                    tuple(round(side / scale) for side in THUMBNAIL_MAX_SIZE),
+                )
 
                 # Auto-rotate based on EXIF orientation. A malformed EXIF
                 # block must not abort thumbnail generation; we log at debug
@@ -222,6 +230,7 @@ def generate_thumbnail(file_obj):
                         file_obj.uuid,
                         exc_info=True,
                     )
+                img = apply_edit(img, edit)
 
             # Convert to RGB for WebP output
             if img.mode in ("RGBA", "LA", "PA", "P"):

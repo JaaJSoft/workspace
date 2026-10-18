@@ -806,3 +806,102 @@ test('a tags dialog reopened during the write is not closed by the first batch',
 
   assert.notEqual(component.tagsDialog, null);
 });
+
+test('a second batch started during the deferred reload writes nothing', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', folder: WORK }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  let release;
+  component.reloadDeferred = true;
+  let pending = true;
+  component.load = () => {
+    if (!pending) return Promise.resolve();
+    pending = false;
+    return new Promise((resolve) => { release = resolve; });
+  };
+
+  const first = component.moveEntries(['e-1'], SAVINGS);
+  assert.equal(component.busy, true);
+  component.draggedUuids = ['e-1'];
+  await component.onFolderDrop(dragEvent(), SAVINGS);
+  const second = await component.moveEntries(['e-1'], SAVINGS);
+  assert.equal(second, undefined);
+  assert.equal(updates.length, 0);
+
+  release();
+  await first;
+  assert.deepStrictEqual(updates.map((u) => u.uuid), ['e-1']);
+  assert.equal(component.busy, false);
+});
+
+test('the batch releases busy when it has nothing to write', async () => {
+  const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
+
+  await component.moveEntries(['e-1'], WORK);
+
+  assert.equal(component.busy, false);
+});
+
+test('a drop the registry refuses says so', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', folder: null }]);
+  component.entryActions = { 'e-1': [] };
+  component.draggedUuids = ['e-1'];
+
+  await component.onFolderDrop(dragEvent(), SAVINGS);
+
+  assert.equal(updates.length, 0);
+  assert.equal(
+    component.error,
+    'An entry can no longer be changed this way. Nothing was changed.',
+  );
+});
+
+test('a move the registry withdrew says so', async () => {
+  const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  component.openMoveDialog([{ uuid: 'e-1' }]);
+  component.moveDialog.target = SAVINGS;
+  component.entryActions = { 'e-1': [] };
+
+  await component.confirmMove();
+
+  assert.equal(component.moveDialog, null);
+  assert.equal(
+    component.error,
+    'An entry can no longer be changed this way. Nothing was changed.',
+  );
+});
+
+test('tags the registry withdrew say so', async () => {
+  const { component } = browser([{ uuid: 'e-1', tags: [] }]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }]);
+  component.tagsDialog.states[TAG_A] = 'all';
+  component.entryActions = { 'e-1': [] };
+
+  await component.confirmTags();
+
+  assert.equal(component.tagsDialog, null);
+  assert.equal(
+    component.error,
+    'An entry can no longer be changed this way. Nothing was changed.',
+  );
+});
+
+test('navigating to another place drops the notice of the last move', async () => {
+  const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
+  await component.moveEntries(['e-1'], SAVINGS);
+  assert.equal(component.fileNotice, 'Moved 1 entry to Savings.');
+
+  component.apply({ view: 'all', folder: WORK, tag: null });
+
+  assert.equal(component.fileNotice, '');
+});
+
+test('the notice survives the reload of the batch that set it', async () => {
+  const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
+  component.load = async () => {
+    component.apply({ view: 'all', folder: component.folderUuid || null, tag: null });
+  };
+  await component.moveEntries(['e-1'], SAVINGS);
+  assert.equal(component.fileNotice, 'Moved 1 entry to Savings.');
+});

@@ -1050,6 +1050,7 @@ window.vaultBrowser = (function () {
         store.apply.call(this, place);
         this.resetPanel();
         this.closeMenu();
+        this.fileNotice = '';
       },
 
       // A move to the place on screen records nothing: Back would stay put.

@@ -87,6 +87,20 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       return places.size === 1 ? [...places][0] : undefined;
     },
 
+    // Whether the registry still offers every given entry this action. An
+    // entry that left the listing counts as not offered.
+    allOffered: function (uuids, actionId) {
+      return uuids.every((uuid) => {
+        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
+        return Boolean(entry) && this.hasAction(entry, actionId);
+      });
+    },
+
+    // Said when a batch is refused because a row lost its offer.
+    refuseFiling: function () {
+      this.error = 'An entry can no longer be changed this way. Nothing was changed.';
+    },
+
     canConfirmMove: function () {
       const dialog = this.moveDialog;
       if (!dialog || this.busy || dialog.target === undefined) return false;
@@ -99,12 +113,9 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       if (!this.canConfirmMove()) return;
       const dialog = this.moveDialog;
       const { uuids, target } = dialog;
-      const stillOffered = uuids.every((uuid) => {
-        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
-        return entry && this.hasAction(entry, 'move');
-      });
-      if (!stillOffered) {
+      if (!this.allOffered(uuids, 'move')) {
         this.moveDialog = null;
+        this.refuseFiling();
         return;
       }
       await this.moveEntries(uuids, target);
@@ -176,12 +187,9 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       if (!this.canConfirmTags()) return;
       const dialog = this.tagsDialog;
       const { uuids, start, states } = dialog;
-      const stillOffered = uuids.every((uuid) => {
-        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
-        return entry && this.hasAction(entry, 'set_tags');
-      });
-      if (!stillOffered) {
+      if (!this.allOffered(uuids, 'set_tags')) {
         this.tagsDialog = null;
+        this.refuseFiling();
         return;
       }
       // Only the boxes the user moved: a row reloaded under the dialog may
@@ -247,11 +255,10 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       const uuids = this.draggedUuids;
       this.onEntryDragEnd();
       if (!uuids.length || this.busy || !this.isDropFolder(folderUuid)) return;
-      const movable = uuids.every((uuid) => {
-        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
-        return entry && this.hasAction(entry, 'move');
-      });
-      if (!movable) return;
+      if (!this.allOffered(uuids, 'move')) {
+        this.refuseFiling();
+        return;
+      }
       await this.moveEntries(uuids, folderUuid || null);
     },
 
@@ -275,34 +282,39 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
     // not counted and not checked, so a row that cannot be re-signed does not
     // block a move it would never take part in.
     resignEntries: async function (changesByUuid) {
+      // Claimed before the first await: a second batch started while the
+      // deferred reload runs would re-sign the same rows over this one.
+      if (this.busy) return 0;
       this.fileNotice = '';
-      await this.flushDeferredReload();
-      if (!this.openVault) return 0;
-      const batch = [];
-      for (const uuid of Object.keys(changesByUuid)) {
-        const row = this.rowFor(uuid);
-        const change = changesByUuid[uuid];
-        if (!row || changesNothing(row, change)) continue;
-        batch.push({ row: row, change: change });
-      }
-      if (!batch.length) return 0;
-
+      this.busy = true;
       const vault = this.openVault;
       let written = 0;
       let failure = null;
-      this.busy = true;
       try {
-        batch.forEach(function (item) { window.vaultResign.assertMayResign(item.row); });
-        for (const item of batch) {
-          const body = await window.buildEntryResignRequest(
-            window.vaultSession, vault, item.row, item.change
-          );
-          await window.vaultApi.updateEntry(item.row.uuid, body);
-          written += 1;
+        await this.flushDeferredReload();
+        if (!this.openVault) return 0;
+        const batch = [];
+        for (const uuid of Object.keys(changesByUuid)) {
+          const row = this.rowFor(uuid);
+          const change = changesByUuid[uuid];
+          if (!row || changesNothing(row, change)) continue;
+          batch.push({ row: row, change: change });
         }
-      } catch (err) {
-        if (err && err.reason === 'locked') return written;
-        failure = err;
+        if (!batch.length) return 0;
+
+        try {
+          batch.forEach(function (item) { window.vaultResign.assertMayResign(item.row); });
+          for (const item of batch) {
+            const body = await window.buildEntryResignRequest(
+              window.vaultSession, vault, item.row, item.change
+            );
+            await window.vaultApi.updateEntry(item.row.uuid, body);
+            written += 1;
+          }
+        } catch (err) {
+          if (err && err.reason === 'locked') return written;
+          failure = err;
+        }
       } finally {
         this.busy = false;
       }
@@ -323,9 +335,7 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       uuids.forEach(function (uuid) { changes[uuid] = { folder: target }; });
       const place = target === null
         ? this.vaultName()
-        : (this.folders.find(function (folder) {
-          return String(folder.uuid) === String(target);
-        }) || {}).name || '';
+        : (this.folderById(target) || {}).name || '';
       const written = await this.resignEntries(changes);
       // A lock mid-batch has already cleared the page; a notice set after it
       // would put a decrypted folder name back on a locked screen.

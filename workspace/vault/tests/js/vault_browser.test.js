@@ -151,6 +151,7 @@ function browser(options = {}) {
       'workspace/vault/ui/static/vault/ui/js/vault_generator.js',
       'workspace/vault/ui/static/vault/ui/js/vault_export.js',
       'workspace/vault/ui/static/vault/ui/js/vault_password.js',
+      'workspace/vault/ui/static/vault/ui/js/vault_file_entry.js',
       'workspace/vault/ui/static/vault/ui/js/vault_browser.js',
     ],
     {
@@ -2525,8 +2526,8 @@ test('a new folder is still created rather than updated', async () => {
 });
 
 test('an action the client cannot carry out is never put in the menu', async () => {
-  // The endpoint offers `move` and `set_tags`; nothing here can run them yet.
-  // A row that does nothing when clicked is worse than one that is not there.
+  // A server ahead of this page offers an id nothing here can run. A row
+  // that does nothing when clicked is worse than one that is not there.
   const { component } = browser({
     api: {
       listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryWith('e-1')]),
@@ -2534,7 +2535,7 @@ test('an action the client cannot carry out is never put in the menu', async () 
         'e-1': [
           { id: 'edit', label: 'Edit', icon: 'pen', category: 'edit' },
           { id: 'move', label: 'Move to folder', icon: 'folder', category: 'organize', bulk: true },
-          { id: 'set_tags', label: 'Edit tags', icon: 'tag', category: 'organize', bulk: true },
+          { id: 'archive', label: 'Archive', icon: 'archive', category: 'organize', bulk: true },
         ],
       }),
     },
@@ -2543,10 +2544,10 @@ test('an action the client cannot carry out is never put in the menu', async () 
   await component.load();
   assert.deepStrictEqual(
     component.actionsFor(component.entries[0]).map((a) => a.id),
-    ['edit']
+    ['edit', 'move']
   );
   component.selected = ['e-1'];
-  assert.deepStrictEqual(component.bulkActions().map((a) => a.id), []);
+  assert.deepStrictEqual(component.bulkActions().map((a) => a.id), ['move']);
 });
 
 test('favouriting an entry re-signs the record instead of asking for a flag', async () => {

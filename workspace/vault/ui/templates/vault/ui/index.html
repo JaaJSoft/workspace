@@ -92,6 +92,10 @@
           <span x-text="error"></span>
           </inline-alert>
 
+          <inline-alert type="success" dismissible x-show="fileNotice" x-cloak class="mx-5 mt-4">
+          <span x-text="fileNotice"></span>
+          </inline-alert>
+
           <inline-alert type="warning" icon="key-round" message="Unlocked with your previous password. Your new one takes over the first time you use it." class="mx-5 mt-4" x-show="unlockedWithPrevious" x-cloak></inline-alert>
 
           {% comment %}
@@ -213,5 +217,6 @@
   <script src="{% static 'ui/js/password_strength.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password_floor.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_password.js' %}"></script>
+  <script src="{% static 'vault/ui/js/vault_file_entry.js' %}"></script>
   <script src="{% static 'vault/ui/js/vault_browser.js' %}"></script>
 {% endblock %}

@@ -23,9 +23,6 @@
 // does nothing when clicked - worse than an absent one, and exactly the drift
 // a server-driven menu exists to prevent. So the menu is narrowed to this
 // list, and a test holds the list against the registry.
-//
-// `move` and `set_tags` are what the registry offers and this client does
-// not do yet. They are hidden rather than shown dead.
 window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'edit',
   'copy_username',
@@ -37,6 +34,8 @@ window.VAULT_HANDLED_ENTRY_ACTIONS = [
   'trash',
   'restore',
   'delete_forever',
+  'move',
+  'set_tags',
 ];
 
 // POST /api/v1/vault/actions refuses more than this many UUIDs in one call
@@ -151,6 +150,7 @@ window.vaultBrowser = (function () {
       ...window.vaultGeneratorMixin(),
       ...window.vaultExportMixin(),
       ...window.vaultResealDialogMixin(),
+      ...window.vaultFileEntryMixin(),
       ...store,
 
       // The vault this page was routed to. Null on /vault, where the vault to
@@ -365,6 +365,8 @@ window.vaultBrowser = (function () {
         this.clearExport();
         // And the password change holds the current and the new password.
         this.closePasswordDialog();
+        // The notice names a folder, opened from its ciphertext.
+        this.clearFileEntry();
         this.draft = null;
         this.folderDraft = null;
         this.tagDraft = null;
@@ -1112,6 +1114,8 @@ window.vaultBrowser = (function () {
         }[action.id];
         if (copies) return this.copyField(entry, copies[0], copies[1], copies[2]);
         if (action.id === 'open_uri') return this.openUri(entry);
+        if (action.id === 'move') return this.openMoveDialog([entry]);
+        if (action.id === 'set_tags') return this.openTagsDialog([entry]);
         if (CONFIRMS[action.id]) {
           const confirmed = await this.confirm(CONFIRMS[action.id](1), DESTRUCTIVE);
           if (!confirmed) return;
@@ -1129,6 +1133,8 @@ window.vaultBrowser = (function () {
           return candidate.id === action.id;
         });
         if (!offered) return;
+        if (action.id === 'move') return this.openMoveDialog(rows);
+        if (action.id === 'set_tags') return this.openTagsDialog(rows);
         if (CONFIRMS[action.id]) {
           const confirmed = await this.confirm(
             CONFIRMS[action.id](rows.length), DESTRUCTIVE

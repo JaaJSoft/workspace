@@ -338,6 +338,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.js == 'true'
+    # A suite takes seconds; a test awaiting a promise nobody resolves keeps
+    # node alive until GitHub's six-hour cap otherwise.
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

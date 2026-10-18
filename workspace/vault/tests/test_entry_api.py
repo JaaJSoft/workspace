@@ -34,6 +34,8 @@ from workspace.vault.tests.factories import (
 
 LIST_URL = "/api/v1/vault/entries"
 NAME = sealed("AQID")
+# One more than this when the registry gate fetches entry.vault on its own.
+QUERIES_FOR_A_MOVE = 23
 
 
 class EntryApiTests(TestCase):
@@ -503,3 +505,13 @@ class EntryApiTests(TestCase):
         response = self.client.post(f"{LIST_URL}/{self.other_entry.uuid}/restore")
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(VaultEntry.objects.get(uuid=self.other_entry.uuid).deleted_at)
+
+    def test_a_move_reads_the_entry_vault_in_the_entry_query(self):
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(entry_uuid=created["uuid"], folder=self.folder)
+        self._put(created["uuid"], body)  # warm whatever the first request caches
+        body = self.signed_entry(entry_uuid=created["uuid"], folder=None)
+        with CaptureQueriesContext(connection) as captured:
+            response = self._put(created["uuid"], body)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(captured.captured_queries), QUERIES_FOR_A_MOVE)

@@ -105,7 +105,7 @@ def write_entry(entry, *, tags, fields):
 
 def entry_queryset():
     """Entries with everything a listing renders, in a fixed number of queries."""
-    return VaultEntry.objects.select_related("folder").prefetch_related(
+    return VaultEntry.objects.select_related("folder", "vault").prefetch_related(
         "fields", "tags"
     )
 

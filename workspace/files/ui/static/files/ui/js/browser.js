@@ -1258,8 +1258,11 @@ window.fileBrowser = function fileBrowser() {
         this.openPropertiesPanel(uuid, nodeType);
       });
       window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
-      // Starred from the viewer: the listing's star column follows.
-      window.addEventListener('file-favorite-changed', () => this.refreshFolderBrowser());
+      // Starred from the viewer: the listing's star column and the panel follow.
+      window.addEventListener('file-favorite-changed', (e) => {
+        this.refreshFolderBrowser();
+        if (this.propertiesUuid === e.detail.uuid) this.reloadPropertiesPanel();
+      });
 
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
       // A contributed section of the panel changed what it renders.

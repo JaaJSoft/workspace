@@ -213,6 +213,15 @@ class InlineViewerTests(PlaywrightTestCase):
 
         expect(star).to_have_attribute("aria-pressed", "true")
         expect(self._row(self.images[0])).to_have_attribute("data-favorite", "1")
+        # A panel already open on the file says so too.
+        viewer.get_by_role("button", name="Properties").click()
+        panel = self.page.locator("#properties-content")
+        expect(panel).to_contain_text("Favorite")
+        star.click()
+        expect(panel.locator("h3")).to_have_text("alpha.png")
+        expect(panel).not_to_contain_text("Favorite")
+        star.click()
+        expect(panel).to_contain_text("Favorite")
         self.assertTrue(
             FileFavorite.objects.filter(owner=self.user, file=self.images[0]).exists()
         )

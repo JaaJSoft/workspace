@@ -284,6 +284,7 @@ window.photosApp = function photosApp() {
         const tile = this._tile(uuid);
         if (tile) tile.dataset.favorite = isFavorite ? '1' : '0';
         this._forgetActions([uuid]);
+        if (this.propertiesUuid === uuid) this.reloadPropertiesPanel();
       });
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
       // A contributed section of the panel changed what it renders.

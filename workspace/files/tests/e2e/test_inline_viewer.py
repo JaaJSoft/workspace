@@ -19,6 +19,7 @@ from playwright.sync_api import expect
 from workspace.common.tests.e2e.base import PlaywrightTestCase
 from workspace.files.models import FileFavorite
 from workspace.files.services import FileService
+from workspace.users.services.settings import set_setting
 
 PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -73,7 +74,7 @@ class InlineViewerTests(PlaywrightTestCase):
         )
 
     def _open(self, file_obj):
-        self._row(file_obj).locator('td[data-col="size"]').click()
+        self._row(file_obj).locator(f'span[title="{file_obj.name}"]').first.click()
         viewer = self.page.locator(VIEWER)
         expect(viewer.locator("h3")).to_have_text(file_obj.name)
         return viewer
@@ -90,7 +91,13 @@ class InlineViewerTests(PlaywrightTestCase):
         expect(header).to_be_visible()
         # Nothing of the folder title peeks out between the trail and the
         # viewer.
-        expect(self.page.locator("#folder-browser h1")).to_be_hidden()
+        self.assertEqual(
+            self.page.evaluate(
+                "() => getComputedStyle(document.querySelector('#folder-browser h1')"
+                ".closest('[inert]')).opacity"
+            ),
+            "0",
+        )
         box = viewer.bounding_box()
         header_box = header.bounding_box()
         main_box = self.page.locator("#files-main").bounding_box()
@@ -120,6 +127,29 @@ class InlineViewerTests(PlaywrightTestCase):
             self._inert(), {"trail": False, "title": False, "listing": False}
         )
         self.assertNotIn("open=", self.page.url)
+
+    def _assert_focus_returns_to_the_file_last_shown(self):
+        viewer = self._open(self.images[0])
+        self.page.keyboard.press("ArrowRight")
+        expect(viewer.locator("h3")).to_have_text("bravo.png")
+
+        viewer.get_by_role("button", name="Close").click()
+
+        expect(viewer).to_be_hidden()
+        self.assertTrue(
+            self._row(self.images[1]).evaluate(
+                "item => item.contains(document.activeElement)"
+            )
+        )
+
+    def test_closing_focuses_the_row_last_shown(self):
+        self._open_listing()
+        self._assert_focus_returns_to_the_file_last_shown()
+
+    def test_closing_focuses_the_card_last_shown(self):
+        set_setting(self.user, "files", "preferences", {"defaultViewMode": "mosaic"})
+        self._open_listing()
+        self._assert_focus_returns_to_the_file_last_shown()
 
     def test_the_breadcrumb_stays_live_and_takes_the_viewer_away(self):
         self._open_listing()

@@ -12,12 +12,15 @@
     - name_size_class_expr: str - raw Alpine `:class` expression for the
       name's text size (e.g. the mosaic tile's dynamic tile-size binding).
       Omit for a fixed `text-sm`.
+    - viewer_focus: bool - the name takes the focus back when the inline
+      viewer closes on this file (focusable from script only).
 {% endcomment %}
 <div class="flex items-center gap-1 min-w-0">
   <span
-    class="font-medium truncate min-w-0{% if not name_size_class_expr %} text-sm{% endif %}"
+    class="font-medium truncate min-w-0{% if not name_size_class_expr %} text-sm{% endif %}{% if viewer_focus %} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module focus-visible:rounded-sm{% endif %}"
     {% if name_size_class_expr %}:class="{{ name_size_class_expr }}"{% endif %}
     title="{{ name }}"
+    {% if viewer_focus %}tabindex="-1" data-viewer-focus{% endif %}
   >{{ name }}</span>
   {% if is_quarantined %}
     <i

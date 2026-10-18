@@ -424,9 +424,11 @@ window.fileViewerModal = function fileViewerModal() {
 // An element inside it marked [data-viewer-keep] (a breadcrumb) stays visible
 // and live: the viewer starts below it. Everything else covered goes inert,
 // so focus and the listing's shortcuts stay off the rows behind, and
-// invisible, so what the room left under the kept element would show of
-// it (a title) does not peek out. Invisible, not display: none: the rows
-// keep their layout, which the gallery and scrollIntoView rely on.
+// transparent, so what the room left under the kept element would show of
+// it (a title) does not peek out. Opacity, not display: none, which would
+// drop the layout the gallery and scrollIntoView rely on, nor visibility,
+// which children inherit and a transition-all card animates back: the
+// focus handed to it on close would land while it is still hidden.
 //
 // Back on the listing, the row's `[data-viewer-focus]` element, if it has
 // one, takes the focus: the row's first control may be a checkbox, and an
@@ -463,7 +465,7 @@ window.fileViewerInline = function fileViewerInline(options) {
       }
       inerted.forEach((el) => {
         el.inert = true;
-        el.style.visibility = 'hidden';
+        el.style.opacity = '0';
       });
       this._watchKept(kept, covered);
     },
@@ -473,7 +475,7 @@ window.fileViewerInline = function fileViewerInline(options) {
       if (covered) covered.removeAttribute('data-viewer-covered');
       inerted.forEach((el) => {
         el.inert = false;
-        el.style.removeProperty('visibility');
+        el.style.removeProperty('opacity');
       });
       inerted = [];
       this._watchKept(null);

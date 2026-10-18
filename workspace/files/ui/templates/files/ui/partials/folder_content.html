@@ -613,9 +613,12 @@
                           title="{{ node.name }}"
                         >{{ node.name }}</a>
                       {% elif node.node_type == "file" and node.viewable %}
+                        {# Focusable from script only: the inline viewer hands the focus back here on close. #}
                         <span
-                          class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline"
+                          class="font-medium block truncate min-w-0 group-hover:text-module group-hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-module focus-visible:rounded-sm"
                           title="{{ node.name }}"
+                          tabindex="-1"
+                          data-viewer-focus
                         >{{ node.name }}</span>
                       {% else %}
                         <span class="font-medium block truncate min-w-0" title="{{ node.name }}">{{ node.name }}</span>
@@ -808,7 +811,7 @@
                   >
                     <div class="flex items-start justify-between gap-1">
                       <div class="flex-1 min-w-0">
-                        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined is_processing=node.is_processing name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" %}
+                        {% include "files/ui/partials/node_name.html" with name=node.name is_quarantined=node.is_quarantined is_processing=node.is_processing name_size_class_expr="mosaicTileSize <= 2 ? 'text-xs' : 'text-sm'" viewer_focus=node.viewable %}
                         <p
                           class="text-xs text-base-content/60"
                           :class="mosaicTileSize <= 1 ? 'hidden' : 'mt-0.5'"

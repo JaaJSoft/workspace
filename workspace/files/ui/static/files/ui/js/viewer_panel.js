@@ -1,5 +1,5 @@
 // Shared loading logic for the hosts of the #viewer-panel element: the
-// files viewer modal, the chat attachment viewer modal and the notes
+// files inline viewer, the chat attachment viewer modal and the notes
 // editor pane. Spread into the host component (`...viewerPanelMixin()`)
 // and bind both guards on the component root:
 // `@ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)"`.

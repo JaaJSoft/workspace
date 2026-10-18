@@ -1,6 +1,6 @@
 """The file viewer endpoint must wrap every response in the #viewer-panel anchor.
 
-The viewer surfaces (files viewer modal, notes editor pane) load
+The viewer surfaces (files inline viewer, notes editor pane) load
 ``/files/view/<uuid>`` through alpine-ajax, which merges responses by element
 id: a body without the anchor never renders. Error bodies are wrapped too, so
 "no viewer available" lands inside the panel instead of vanishing.

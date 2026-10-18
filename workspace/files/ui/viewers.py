@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 
 from django.conf import settings
 
-# Stable id the viewer panel hosts (files viewer modal, chat attachment
+# Stable id the viewer panel hosts (files inline viewer, chat attachment
 # viewer modal, notes editor pane) target with alpine-ajax. The client keeps an
 # element with this id mounted at all times; every viewer response replaces it.
 VIEWER_PANEL_ID = "viewer-panel"
@@ -256,7 +256,7 @@ class ImageViewer(BaseViewer):
         context["start_editing"] = context["image_edit_available"] and is_truthy(
             request.GET.get("edit")
         )
-        # The modal's download button reads the raw bytes (the content
+        # The viewer's download button reads the raw bytes (the content
         # endpoint, which trashed files are previewed through); an edited
         # image downloads as it is shown instead. Files' viewer only: an album
         # names its own download, which applies the edit already.

@@ -31,7 +31,7 @@ PNG_1PX = base64.b64decode(
 )
 
 
-class FileViewerModalRaceTests(PlaywrightTestCase):
+class FileViewerRaceTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="viewer-race")

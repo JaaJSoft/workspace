@@ -731,7 +731,7 @@ def view_file(request, uuid):
     Render file viewer HTML for a specific file.
 
     Returns the appropriate viewer HTML based on file MIME type.
-    Used by the file viewer modal to load content via Alpine AJAX.
+    Used by the file viewer to load content via Alpine AJAX.
     """
     # A trashed file is previewed from the trash - read-only, since every
     # write refuses a trashed row.

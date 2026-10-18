@@ -82,9 +82,8 @@ class FilesIndexSettingsTests(TestCase):
         self.assertEqual(response.context["file_prefs"], {})
 
     def test_index_loads_files_settings_in_a_single_query(self):
-        """Cold cache: the two files settings are read in one DB round-trip."""
+        """Cold cache: the files settings are read in one DB round-trip."""
         set_setting(self.user, "files", "preferences", {"breadcrumbCollapse": 3})
-        set_setting(self.user, "files", "viewer", {"theme": "light"})
         # Cold the cache so reads hit the database.
         cache.clear()
 

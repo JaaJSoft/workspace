@@ -1,11 +1,10 @@
 // The Files viewer, opened anywhere with an `open-file-viewer` event on window
-// (detail {uuid, name, type, at?, edit?}) or a `?open=<uuid>` URL. Exactly one
-// shell per page listens, and the page picks how it shows by the partial it
-// includes: fileViewerModal() over the page (file_viewer_modal.html), or
-// fileViewerInline() in place of the listing (file_viewer_inline.html).
+// (detail {uuid, name, type, at?, edit?}) or a `?open=<uuid>` URL, and shown
+// in place of the listing by fileViewerInline() (file_viewer_inline.html).
+// One per page listens.
 //
-// Both spread fileViewerShellMixin(), which owns the state, the gallery, ?open
-// and the keyboard, and each supplies the presentation hooks:
+// fileViewerShellMixin() owns the state, the gallery, ?open and the keyboard;
+// the presentation spreads it and supplies the hooks:
 //   _present()      show the shell; called again while open by gallery steps
 //   _dismiss()      hide it, ending in _onClosed()
 //   _keysBlocked()  something above the viewer owns the keyboard
@@ -348,70 +347,6 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     destroy() {
       (this._listeners || []).forEach((off) => off && off());
       this._listeners = [];
-    },
-  };
-};
-
-window.fileViewerModal = function fileViewerModal() {
-  const VIEWER_PREFS_URL = '/api/v1/settings/files/viewer';
-  let _prefsSaveTimer = null;
-
-  return {
-    ...fileViewerShellMixin(),
-    expanded: false,
-
-    // Gallery navigation re-opens over an already-open dialog: the
-    // current spec makes that a no-op, but older engines throw.
-    _present() {
-      if (!this.$refs.frame.open) this.$refs.frame.showModal();
-    },
-
-    // Every close path (this one, Escape, the backdrop form) ends in the
-    // dialog's close event, bound to _onClosed().
-    _dismiss() {
-      this.$refs.frame.close();
-    },
-
-    _keysBlocked() {
-      return false;
-    },
-
-    toggleExpanded() {
-      this.expanded = !this.expanded;
-      this._saveViewerPrefs();
-    },
-
-    _saveViewerPrefs() {
-      const prefs = {
-        expanded: this.expanded
-      };
-      clearTimeout(_prefsSaveTimer);
-      _prefsSaveTimer = setTimeout(function() {
-        fetch(VIEWER_PREFS_URL, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-          },
-          body: JSON.stringify({
-            value: prefs
-          }),
-        }).catch(function() {});
-      }, 500);
-    },
-
-    init() {
-      // Initial viewer prefs are embedded server-side via |json_script
-      // (see files/ui/index.html). Reading from the DOM avoids a redundant
-      // fetch and the 404 a fresh user would hit on the settings endpoint.
-      const prefsEl = document.getElementById('viewer-prefs-data');
-      if (prefsEl) {
-        try {
-          const initial = JSON.parse(prefsEl.textContent) || {};
-          if (initial.expanded !== undefined) this.expanded = initial.expanded;
-        } catch (_) {}
-      }
-      return this._listen(this.$refs.frame);
     },
   };
 };

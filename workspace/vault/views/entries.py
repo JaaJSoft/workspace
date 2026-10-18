@@ -45,6 +45,7 @@ from ..services.entries import (
     UnknownTag,
     entry_queryset,
     entry_signature_payload,
+    required_entry_actions,
     resolve_folder,
     resolve_tags,
     write_entry,
@@ -260,6 +261,12 @@ class EntryDetailView(_EntryWriteMixin, CacheControlMixin, APIView):
             )
         entry = _reachable_entry(request.user, uuid)
         if entry is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        role = get_vault_role(request.user, entry.vault)
+        if not all(
+            _offers(action_id, request.user, entry, role)
+            for action_id in required_entry_actions(entry, data)
+        ):
             return Response(status=status.HTTP_404_NOT_FOUND)
         return self._write(request, data, existing=entry)
 

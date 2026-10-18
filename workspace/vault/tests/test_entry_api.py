@@ -19,7 +19,11 @@ from workspace.vault.models import (
     VaultFolder,
     VaultTag,
 )
-from workspace.vault.services.entries import entry_signature_payload
+from workspace.vault.services.entries import (
+    entry_queryset,
+    entry_signature_payload,
+    required_entry_actions,
+)
 from workspace.vault.tests.factories import (
     make_account,
     make_key_wrap,
@@ -384,6 +388,73 @@ class EntryApiTests(TestCase):
         self.assertEqual(
             self.client.delete(f"{LIST_URL}/{entry_uuid}").status_code, 204
         )
+
+    def _put(self, entry_uuid, body):
+        return self.client.put(f"{LIST_URL}/{entry_uuid}", body, "application/json")
+
+    def _trashed_entry(self):
+        created = self._create(self.signed_entry()).json()
+        self._trash(created["uuid"])
+        return VaultEntry.objects.get(uuid=created["uuid"])
+
+    def test_moving_a_trashed_entry_answers_404(self):
+        entry = self._trashed_entry()
+        body = self.signed_entry(entry_uuid=entry.uuid, folder=self.folder)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        entry.refresh_from_db()
+        self.assertIsNone(entry.folder_id)
+
+    def test_retagging_a_trashed_entry_answers_404(self):
+        entry = self._trashed_entry()
+        body = self.signed_entry(entry_uuid=entry.uuid, tags=[self.tag])
+        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        self.assertEqual(entry.tags.count(), 0)
+
+    def test_editing_a_trashed_entry_answers_404(self):
+        entry = self._trashed_entry()
+        body = self.signed_entry(entry_uuid=entry.uuid, encrypted_name=sealed("BAUG"))
+        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        entry.refresh_from_db()
+        self.assertEqual(entry.encrypted_name, NAME)
+
+    def test_favoriting_a_trashed_entry_answers_404(self):
+        entry = self._trashed_entry()
+        body = self.signed_entry(entry_uuid=entry.uuid, is_favorite=True)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 404)
+        entry.refresh_from_db()
+        self.assertFalse(entry.is_favorite)
+
+    def test_a_put_that_changes_nothing_is_accepted_on_a_trashed_entry(self):
+        entry = self._trashed_entry()
+        body = self.signed_entry(entry_uuid=entry.uuid)
+        self.assertEqual(self._put(entry.uuid, body).status_code, 200)
+
+    def test_moving_and_retagging_an_active_entry_is_accepted(self):
+        created = self._create(self.signed_entry()).json()
+        body = self.signed_entry(
+            entry_uuid=created["uuid"], folder=self.folder, tags=[self.tag]
+        )
+        self.assertEqual(self._put(created["uuid"], body).status_code, 200)
+        entry = VaultEntry.objects.get(uuid=created["uuid"])
+        self.assertEqual(entry.folder_id, self.folder.uuid)
+        self.assertEqual([tag.uuid for tag in entry.tags.all()], [self.tag.uuid])
+
+    def test_required_actions_compare_tags_as_a_set(self):
+        second = VaultTag.objects.create(
+            vault=self.vault, encrypted_name=sealed("AQID"), metadata_sig="AQ"
+        )
+        created = self._create(self.signed_entry(tags=[self.tag, second])).json()
+        entry = entry_queryset().get(uuid=created["uuid"])
+        data = {
+            "type": entry.type,
+            "folder": None,
+            "tags": [second.uuid, self.tag.uuid],
+            "is_favorite": False,
+            "encrypted_name": entry.encrypted_name,
+            "encrypted_notes": entry.encrypted_notes,
+            "fields": {"password": sealed("Ag")},
+        }
+        self.assertEqual(required_entry_actions(entry, data), [])
 
     def test_restoring_brings_an_entry_back_without_touching_its_signature(self):
         """deleted_at is outside the signed payload, so the round trip through

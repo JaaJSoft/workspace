@@ -66,8 +66,9 @@ class InlineViewerTests(PlaywrightTestCase):
     def _inert(self):
         return self.page.evaluate(
             """() => ({
-              header: document.querySelector('#folder-browser [data-viewer-keep]').inert,
-              listing: document.querySelector('#folder-browser > :not([data-viewer-keep])').inert,
+              trail: document.querySelector('#folder-browser [data-viewer-keep]').inert,
+              title: document.querySelector('#folder-browser h1').closest('[inert]') !== null,
+              listing: document.querySelector('#folder-browser > :last-child').inert,
             })"""
         )
 
@@ -83,9 +84,19 @@ class InlineViewerTests(PlaywrightTestCase):
         viewer = self._open(self.images[0])
 
         expect(self.page.locator("dialog.modal[open]")).to_have_count(0)
-        # Below the breadcrumb, down to the bottom of the listing.
+        # Below the breadcrumb, over the folder title, down to the bottom of
+        # the listing.
         header = self.page.locator("#folder-browser [data-viewer-keep]")
         expect(header).to_be_visible()
+        self.assertTrue(
+            self.page.evaluate(
+                """() => {
+                  const r = document.querySelector('#folder-browser h1').getBoundingClientRect();
+                  const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+                  return !!hit.closest('[data-file-viewer-inline]');
+                }"""
+            )
+        )
         box = viewer.bounding_box()
         header_box = header.bounding_box()
         main_box = self.page.locator("#files-main").bounding_box()
@@ -95,7 +106,9 @@ class InlineViewerTests(PlaywrightTestCase):
         self.assertAlmostEqual(
             box["y"] + box["height"], main_box["y"] + main_box["height"], delta=1
         )
-        self.assertEqual(self._inert(), {"header": False, "listing": True})
+        self.assertEqual(
+            self._inert(), {"trail": False, "title": True, "listing": True}
+        )
         self.assertIn(f"open={self.images[0].uuid}", self.page.url)
 
         self.page.keyboard.press("ArrowRight")
@@ -103,7 +116,9 @@ class InlineViewerTests(PlaywrightTestCase):
 
         viewer.get_by_role("button", name="Back").click()
         expect(viewer).to_be_hidden()
-        self.assertEqual(self._inert(), {"header": False, "listing": False})
+        self.assertEqual(
+            self._inert(), {"trail": False, "title": False, "listing": False}
+        )
         self.assertNotIn("open=", self.page.url)
 
     def test_the_breadcrumb_stays_live_and_takes_the_viewer_away(self):
@@ -117,7 +132,9 @@ class InlineViewerTests(PlaywrightTestCase):
         expect(self.page).to_have_url(f"{self.live_server_url}/files")
         expect(viewer).to_be_hidden()
         expect(self.page.locator("#folder-browser h1")).not_to_have_text("Trip")
-        self.assertEqual(self._inert(), {"header": False, "listing": False})
+        self.assertEqual(
+            self._inert(), {"trail": False, "title": False, "listing": False}
+        )
         self.page.go_back()
         expect(viewer.locator("h3")).to_have_text("alpha.png")
 
@@ -131,9 +148,11 @@ class InlineViewerTests(PlaywrightTestCase):
 
         expect(viewer.locator("h3")).to_have_text("alpha.png")
         self.page.wait_for_function(
-            "() => document.querySelector('#folder-browser > :not([data-viewer-keep])').inert"
+            "() => document.querySelector('#folder-browser > :last-child').inert"
         )
-        self.assertEqual(self._inert(), {"header": False, "listing": True})
+        self.assertEqual(
+            self._inert(), {"trail": False, "title": True, "listing": True}
+        )
 
     def test_listing_shortcuts_stay_off_the_rows_behind_the_viewer(self):
         self._open_listing()

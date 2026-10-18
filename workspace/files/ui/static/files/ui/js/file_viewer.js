@@ -384,9 +384,9 @@ window.fileViewerModal = function fileViewerModal() {
 // position and the pages loaded so far are still there on close, and the
 // gallery, which pages through the rows in the DOM, still sees them.
 //
-// A header inside it marked [data-viewer-keep] (a breadcrumb) stays visible
-// and live above the viewer; everything else covered goes inert, so focus
-// and the listing's shortcuts stay off the rows behind.
+// An element inside it marked [data-viewer-keep] (a breadcrumb) stays visible
+// and live: the viewer starts at its bottom edge. Everything else covered
+// goes inert, so focus and the listing's shortcuts stay off the rows behind.
 //
 // Back on the listing, the row's `[data-viewer-focus]` element, if it has
 // one, takes the focus: the row's first control may be a checkbox, and an
@@ -400,7 +400,7 @@ window.fileViewerInline = function fileViewerInline(options) {
   return {
     ...fileViewerShellMixin(),
     _propertiesEnabled: !!(options && options.properties),
-    // How far down the kept header pushes the viewer, in px.
+    // How far down the kept element pushes the viewer, in px.
     keptHeight: 0,
 
     _covered() {
@@ -422,7 +422,7 @@ window.fileViewerInline = function fileViewerInline(options) {
         inerted.push(covered);
       }
       inerted.forEach((el) => { el.inert = true; });
-      this._watchKept(kept);
+      this._watchKept(kept, covered);
     },
 
     _uncover() {
@@ -433,13 +433,22 @@ window.fileViewerInline = function fileViewerInline(options) {
       this._watchKept(null);
     },
 
-    _watchKept(kept) {
+    // Measured from the covered element's top: what sits above the kept
+    // element (a header's padding) stays uncovered with it. Both are
+    // observed, since a breakpoint can change that padding alone.
+    _watchKept(kept, covered) {
       if (keptObserver) keptObserver.disconnect();
       keptObserver = null;
-      this.keptHeight = kept ? kept.offsetHeight : 0;
+      const measure = () => {
+        this.keptHeight = kept
+          ? kept.getBoundingClientRect().bottom - covered.getBoundingClientRect().top
+          : 0;
+      };
+      measure();
       if (!kept) return;
-      keptObserver = new ResizeObserver(() => { this.keptHeight = kept.offsetHeight; });
+      keptObserver = new ResizeObserver(measure);
       keptObserver.observe(kept);
+      keptObserver.observe(covered);
     },
 
     // Focus moves in on opening only, not on each gallery step. It goes to

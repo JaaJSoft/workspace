@@ -188,12 +188,11 @@
             >
 
               <!-- Top Header Bar: navigation and trail above, title and the folder action below -->
-              {# Stays above the viewer, which opens below it (data-viewer-keep). #}
               <div
                 class="bg-base-100 border-b border-base-300 px-4 py-3 lg:px-6 lg:py-5"
-                data-viewer-keep
               >
-                <div class="flex items-center gap-2 min-w-0">
+                {# The trail stays above an open file (data-viewer-keep); the title row goes under the viewer. #}
+                <div class="flex items-center gap-2 min-w-0" data-viewer-keep>
                   <div class="join shrink-0" x-data="navButtons('folder-browser')">
                     <button
                       type="button"

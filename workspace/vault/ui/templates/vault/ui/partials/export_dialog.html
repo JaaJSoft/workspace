@@ -14,7 +14,9 @@
     {% comment %}
       x-trap rather than a native <dialog>, for the reason the password dialog
       gives: showModal would make the clipboard banner inert. Escape is Cancel,
-      which is allowed mid-run - closing is how a run is abandoned.
+      which is allowed mid-run - closing is how a run is abandoned. It listens
+      on the window: a step swapped by x-if or a button disabled mid-run drops
+      focus to the body, and a listener on the box would stop hearing it.
     {% endcomment %}
     <div
       class="modal-box max-w-lg"
@@ -22,7 +24,7 @@
       role="dialog"
       aria-modal="true"
       :aria-labelledby="exportConfirming ? 'vault-export-warning-title' : 'vault-export-dialog-title'"
-      @keydown.escape="closeExportDialog()"
+      @keydown.escape.window="closeExportDialog()"
     >
 
       {% comment %}

@@ -66,3 +66,27 @@ class DialogFocusTests(VaultBrowserCase):
             "[role=dialog][aria-labelledby=vault-export-dialog-title]",
             "Export this account",
         )
+
+    def test_escape_still_closes_the_export_dialog_once_its_step_has_changed(self):
+        # The warning step replaces the button that was focused, and focus
+        # then falls back to the body - outside the box.
+        box_selector = "[role=dialog][aria-labelledby=vault-export-dialog-title]"
+        self._sidebar_row(re.compile(r"^Export(?: this account)?$")).click()
+        self.page.wait_for_selector(box_selector, timeout=15000)
+        self.page.check("input[value='interchange']")
+        self.page.locator("[data-testid=export-run]").focus()
+        self.page.keyboard.press("Enter")
+        self.page.wait_for_selector("#vault-export-warning-title", timeout=10000)
+
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_selector("#vault-export-warning-title", state="detached", timeout=10000)
+
+    def test_escape_still_closes_the_password_dialog_once_focus_has_left_it(self):
+        box_selector = "[role=dialog][aria-labelledby=vault-password-dialog-title]"
+        self._sidebar_row(re.compile(r"^Change (?:your master )?password$")).click()
+        self.page.wait_for_selector(box_selector, timeout=15000)
+        # A control disabled under the cursor drops focus the same way.
+        self.page.evaluate("document.activeElement.blur()")
+
+        self.page.keyboard.press("Escape")
+        self.page.wait_for_selector(box_selector, state="detached", timeout=10000)

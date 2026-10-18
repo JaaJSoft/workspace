@@ -117,7 +117,7 @@ test('notes stay an empty string rather than becoming absent', async () => {
   assert.equal(body.encrypted_notes, '');
 });
 
-// --- notes, which no form here edits -----------------------------------------
+// --- notes, carried by a re-signature and owned by an opened draft -----------------------------------------
 
 test('a draft with no notes plaintext keeps the ciphertext it was handed', async () => {
   // The write is a full signed replacement over PUT, so a draft that dropped

@@ -130,7 +130,10 @@ window.INLINE_ALERT_TYPES = {
 
       if (actionNodes.length) {
         const row = document.createElement('div');
-        row.className = 'flex gap-2 shrink-0';
+        // One text line tall (h-5 = text-sm line height): a btn-xs (24px)
+        // overflows into the padding instead of growing the alert past the
+        // height of one without actions, and stays centred on the first line.
+        row.className = 'flex items-center gap-2 shrink-0 h-5';
         for (const node of actionNodes) {
           if (node.hasAttribute('data-dismiss')) node.addEventListener('click', () => this.remove());
           row.appendChild(node);

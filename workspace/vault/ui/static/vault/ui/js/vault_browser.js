@@ -227,6 +227,7 @@ window.vaultBrowser = (function () {
       // it, like every other plaintext the panel holds; '' when the entry has
       // none or they have not been opened yet.
       panelNotes: '',
+      panelNotesLoad: 0,
       // The context menu: which row it belongs to and where it was raised.
       menu: { open: false, entry: null, x: 0, y: 0 },
       // The folder menu is its own, and its rows are written rather than
@@ -909,23 +910,27 @@ window.vaultBrowser = (function () {
       },
 
       // The notes are shown whenever the panel is, so unlike a secret field
-      // they are opened with it. The entry captured before the await is checked
-      // against panelEntry after it: a slow answer must not land under another
-      // row's name.
+      // they are opened with it. A slow answer must not land under another
+      // row's name, nor in a panel closed and reopened on the same entry while
+      // it was pending: panelEntry alone cannot tell the second case, since
+      // reopening restores the same object, so each load takes a number that
+      // resetPanel and the next load move past.
       loadPanelNotes: async function (entry) {
+        const load = ++this.panelNotesLoad;
         this.panelNotes = '';
         if (!entry) return;
         const row = this.rowFor(entry.uuid);
         if (!row || !row.encrypted_notes || !this.openVault) return;
+        const current = () => this.panelNotesLoad === load && this.panelEntry === entry;
         try {
           const notes = await window.vaultReader.openField(
             window.vaultSession, this.openVault, row, 'notes'
           );
-          if (this.panelEntry !== entry) return;
+          if (!current()) return;
           this.panelNotes = notes;
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          if (this.panelEntry !== entry) return;
+          if (!current()) return;
           this.error = "This entry's notes could not be opened.";
         }
       },
@@ -1036,6 +1041,7 @@ window.vaultBrowser = (function () {
         this.revealing = {};
         this.totp = null;
         this.panelNotes = '';
+        this.panelNotesLoad += 1;
         this.flushDeferredReload();
       },
 
@@ -1433,6 +1439,7 @@ window.vaultBrowser = (function () {
         if (!row || !this.openVault) return;
         const values = {};
         let notes = '';
+        let notesOpened = true;
         const type = this.typeFor(entry.type);
         try {
           for (const field of type ? type.fields : []) {
@@ -1442,13 +1449,21 @@ window.vaultBrowser = (function () {
               window.vaultSession, this.openVault, row, field.field_id
             );
           }
+        } catch (err) {
+          if (err && err.reason === 'locked') return;
+          this.error = 'That entry could not be opened for editing.';
+          return;
+        }
+        // Notes that will not open do not cost the rest of the entry its
+        // form: the draft carries their ciphertext untouched and the textarea
+        // stays read-only, so a save can neither drop nor overwrite them.
+        try {
           notes = await window.vaultReader.openField(
             window.vaultSession, this.openVault, row, 'notes'
           );
         } catch (err) {
           if (err && err.reason === 'locked') return;
-          this.error = 'That entry could not be opened for editing.';
-          return;
+          notesOpened = false;
         }
         if (!window.vaultSession.isUnlocked()) return;
         this.draft = Object.assign({
@@ -1459,7 +1474,7 @@ window.vaultBrowser = (function () {
           favorite: entry.favorite,
           name: entry.name,
           notes: notes,
-          notesOpened: true,
+          notesOpened: notesOpened,
           values: values,
           hasTotp: (entry.fieldIds || []).includes('totp'),
           totpInput: null,

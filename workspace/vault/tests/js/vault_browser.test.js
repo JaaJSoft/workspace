@@ -1564,6 +1564,33 @@ test('closing the panel or locking drops the notes', async () => {
   assert.equal(component.panelNotes, '');
 });
 
+test('a notes load pending across a close and reopen of the same entry is dropped', async () => {
+  // Reopening restores the same entry object, so only the load counter tells
+  // the first, stale answer from the second.
+  const rejects = [];
+  const { component } = browser({
+    api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [notedRow('e-1')]) },
+    crypto: {
+      open: (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes') && !rejects.length) {
+          return new Promise((resolve, reject) => { rejects.push(reject); });
+        }
+        return Promise.resolve(new TextEncoder().encode('open:' + ad));
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  const first = component.openEntryFromRow(component.entries[0]);
+  await settle();
+  component.resetPanel();
+  await component.openEntryFromRow(component.entries[0]);
+  rejects[0](new Error('bad tag'));
+  await first;
+  assert.equal(component.error, '');
+  assert.equal(component.panelNotes, 'open:e-1|notes');
+});
+
 test('an entry without notes opens nothing', async () => {
   const { component, opened } = browser({
     api: { listEntries: async (uuid, opts) => (opts && opts.trashed ? [] : [entryRow('e-1')]) },
@@ -1683,6 +1710,30 @@ test('editing an entry opens its notes into the draft', async () => {
   await component.editEntry(component.entries[0]);
   assert.equal(component.draft.notes, 'open:e-1|notes');
   assert.equal(component.draft.notesOpened, true);
+});
+
+test('notes that will not open leave the rest of the entry editable', async () => {
+  const { component } = typed({
+    api: {
+      listEntries: async (uuid, opts) =>
+        opts && opts.trashed ? [] : [entryWith('e-1', { encrypted_notes: 'ct:notes' })],
+      fetchEntryActions: async () => ({ 'e-1': [ACTION.edit] }),
+    },
+    session: { openEntryKey: async () => new Uint8Array(32) },
+    crypto: {
+      open: async (key, ciphertext, ad) => {
+        if (String(ad).endsWith('|notes')) throw new Error('bad tag');
+        return new TextEncoder().encode('open:' + ad);
+      },
+    },
+  });
+  component.init();
+  await component.load();
+  await component.editEntry(component.entries[0]);
+  assert.notEqual(component.draft, null);
+  assert.equal(component.draft.notesOpened, false);
+  assert.equal(component.draft.encryptedNotes, 'ct:notes');
+  assert.equal(component.error, '');
 });
 
 test('a new entry starts with opened, empty notes', () => {

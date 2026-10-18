@@ -90,3 +90,76 @@ class FileEntryBrowserTests(VaultBrowserCase):
         self._open_move_dialog_for_two_entries()
         self.page.keyboard.press("Escape")
         self.page.locator("[role=dialog]").wait_for(state="detached", timeout=5000)
+
+    def _create_tag(self, name):
+        self.page.get_by_role("button", name="New tag").click()
+        self.page.fill(".modal-box input[type=text]", name)
+        self.page.click(".modal-box button:has-text('Create')")
+        self.page.wait_for_selector(
+            f"aside button[aria-pressed]:has-text('{name}')", timeout=30000
+        )
+
+    def _open_tags_dialog(self, *names):
+        for box in self.page.locator("tbody tr input.checkbox:checked").all():
+            box.uncheck()
+        for name in names:
+            self.page.locator(f"tbody tr:has-text('{name}') input.checkbox").check()
+        self.page.get_by_role("button", name="Edit tags").click()
+        self.page.locator("[role=dialog]").wait_for()
+
+    def _apply_tags(self, ticks):
+        dialog = self.page.locator("[role=dialog]")
+        for tag in ticks:
+            dialog.locator(f"label:has-text('{tag}') input").click()
+        dialog.get_by_role("button", name="Apply").click()
+        dialog.wait_for(state="detached", timeout=30000)
+
+    def _row_tags(self, name):
+        chips = self.page.locator(f"tbody tr:has-text('{name}') tag-chip")
+        return sorted(chip.inner_text().strip() for chip in chips.all())
+
+    def _two_entries_sharing_a_tag(self):
+        """A carries X and Y, B carries X: Y is the mixed one."""
+        self._open_vault()
+        for tag in ("X", "Y", "Z"):
+            self._create_tag(tag)
+        self._create_entry("Alpha", "a", "pw-a")
+        self._create_entry("Beta", "b", "pw-b")
+        self._open_tags_dialog("Alpha")
+        self._apply_tags(["X", "Y"])
+        self._wait_for_chips("Alpha", 2)
+        self._open_tags_dialog("Beta")
+        self._apply_tags(["X"])
+        self._wait_for_chips("Beta", 1)
+
+    def _wait_for_chips(self, name, count):
+        self.page.wait_for_function(
+            "([name, count]) => [...document.querySelectorAll('tbody tr')]"
+            ".some((r) => r.innerText.includes(name)"
+            " && r.querySelectorAll('tag-chip').length === count)",
+            arg=[name, count],
+            timeout=30000,
+        )
+
+    def test_bulk_tagging_keeps_a_tag_one_entry_has_alone(self):
+        self._two_entries_sharing_a_tag()
+        self._open_tags_dialog("Alpha", "Beta")
+        self._apply_tags(["Z"])
+
+        self._wait_for_chips("Alpha", 3)
+        self.assertEqual(self._row_tags("Alpha"), ["X", "Y", "Z"])
+        self.assertEqual(self._row_tags("Beta"), ["X", "Z"])
+
+    def test_the_dash_survives_a_click_cycle(self):
+        self._two_entries_sharing_a_tag()
+        self._open_tags_dialog("Alpha", "Beta")
+        box = self.page.locator("[role=dialog] label:has-text('Y') input")
+        read = "(el) => [el.checked, el.indeterminate]"
+
+        self.assertEqual(box.evaluate(read), [False, True])
+        box.click()
+        self.assertEqual(box.evaluate(read), [True, False])
+        box.click()
+        self.assertEqual(box.evaluate(read), [False, False])
+        box.click()
+        self.assertEqual(box.evaluate(read), [False, True])

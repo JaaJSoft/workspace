@@ -112,6 +112,74 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
       this.tagsDialog = { uuids: uuids, start: start, states: Object.assign({}, start) };
     },
 
+    closeTagsDialog: function () {
+      this.tagsDialog = null;
+    },
+
+    // all -> none -> some -> all. The dash is only a place to come back to:
+    // a tag that no mixed selection started on has no dash to offer.
+    cycleTag: function (tagUuid) {
+      const dialog = this.tagsDialog;
+      if (!dialog) return;
+      const state = dialog.states[tagUuid];
+      if (state === 'all') dialog.states[tagUuid] = 'none';
+      else if (state === 'none') {
+        dialog.states[tagUuid] = dialog.start[tagUuid] === 'some' ? 'some' : 'all';
+      } else dialog.states[tagUuid] = 'all';
+    },
+
+    // How many of the dialog's entries carry the tag right now.
+    dialogTagCount: function (tagUuid) {
+      if (!this.tagsDialog) return 0;
+      return this.tagsDialog.uuids.filter((uuid) => {
+        const row = this.rowFor(uuid);
+        return row && (row.tags || []).some(function (carried) {
+          return String(carried) === String(tagUuid);
+        });
+      }).length;
+    },
+
+    // What Apply would do, one line per tag that moved off its starting
+    // state. The count is the entries the line really changes: a tag added to
+    // a selection that half has it touches only the other half.
+    tagSummary: function () {
+      const dialog = this.tagsDialog;
+      if (!dialog) return [];
+      const total = dialog.uuids.length;
+      const lines = [];
+      this.tags.forEach((tag) => {
+        const state = dialog.states[tag.uuid];
+        if (state === dialog.start[tag.uuid] || state === 'some') return;
+        const changing = state === 'all' ? total - this.dialogTagCount(tag.uuid) : this.dialogTagCount(tag.uuid);
+        const suffix = total > 1
+          ? ' (' + changing + (changing === 1 ? ' entry' : ' entries') + ')'
+          : '';
+        lines.push((state === 'all' ? 'Adds ' : 'Removes ') + tag.name + suffix);
+      });
+      return lines;
+    },
+
+    canConfirmTags: function () {
+      return Boolean(this.tagsDialog) && !this.busy && this.tagSummary().length > 0;
+    },
+
+    // The offer can change while the dialog is open, so the registry is asked
+    // again before anything is signed.
+    confirmTags: async function () {
+      if (!this.canConfirmTags()) return;
+      const { uuids, states } = this.tagsDialog;
+      const stillOffered = uuids.every((uuid) => {
+        const entry = this.entries.find(function (item) { return item.uuid === uuid; });
+        return entry && this.hasAction(entry, 'set_tags');
+      });
+      if (!stillOffered) {
+        this.tagsDialog = null;
+        return;
+      }
+      await this.resignEntries(this.tagChangesFor(uuids, states));
+      this.tagsDialog = null;
+    },
+
     clearFileEntry: function () {
       this.moveDialog = null;
       this.tagsDialog = null;

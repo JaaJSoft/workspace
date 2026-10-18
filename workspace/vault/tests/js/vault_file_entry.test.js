@@ -474,3 +474,140 @@ test('a move whose entry vanished while the dialog was open writes nothing', asy
   assert.equal(updates.length, 0);
   assert.equal(component.moveDialog, null);
 });
+
+test('cycling skips the dash for a tag that did not start mixed', () => {
+  const { component } = browser([
+    { uuid: 'e-1', tags: [TAG_A, TAG_B] },
+    { uuid: 'e-2', tags: [TAG_A] },
+  ]);
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  const states = component.tagsDialog.states;
+
+  const walk = (tag, times) => {
+    const seen = [];
+    for (let i = 0; i < times; i += 1) {
+      component.cycleTag(tag);
+      seen.push(states[tag]);
+    }
+    return seen;
+  };
+
+  assert.deepStrictEqual(walk(TAG_A, 3), ['none', 'all', 'none'], 'carried by all');
+  assert.deepStrictEqual(walk(TAG_C, 3), ['all', 'none', 'all'], 'carried by none');
+  assert.deepStrictEqual(walk(TAG_B, 3), ['all', 'none', 'some'], 'mixed at the start');
+});
+
+test('the summary counts only the entries that change', () => {
+  const { component } = browser([
+    { uuid: 'e-1', tags: [TAG_A, TAG_B] },
+    { uuid: 'e-2', tags: [TAG_A] },
+    { uuid: 'e-3', tags: [] },
+  ]);
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }, { uuid: 'e-3' }]);
+  component.tagsDialog.states[TAG_A] = 'none';
+  component.tagsDialog.states[TAG_B] = 'all';
+  component.tagsDialog.states[TAG_C] = 'all';
+
+  assert.deepStrictEqual(Array.from(component.tagSummary()), [
+    'Removes Bank (2 entries)',
+    'Adds Home (2 entries)',
+    'Adds Travel (3 entries)',
+  ]);
+});
+
+test('the summary names a single entry without a count', () => {
+  const { component } = browser([{ uuid: 'e-1', tags: [TAG_A] }]);
+  component.openTagsDialog([{ uuid: 'e-1' }]);
+  component.tagsDialog.states[TAG_A] = 'none';
+  component.tagsDialog.states[TAG_B] = 'all';
+
+  assert.deepStrictEqual(Array.from(component.tagSummary()), ['Removes Bank', 'Adds Home']);
+});
+
+test('the summary counts one entry as an entry', () => {
+  const { component } = browser([
+    { uuid: 'e-1', tags: [TAG_A] },
+    { uuid: 'e-2', tags: [] },
+  ]);
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.tagsDialog.states[TAG_A] = 'all';
+
+  assert.deepStrictEqual(Array.from(component.tagSummary()), ['Adds Bank (1 entry)']);
+});
+
+test('the number of entries carrying a tag is read from the selection', () => {
+  const { component } = browser([
+    { uuid: 'e-1', tags: [TAG_A] },
+    { uuid: 'e-2', tags: [TAG_A] },
+    { uuid: 'e-3', tags: [] },
+  ]);
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-3' }]);
+
+  assert.equal(component.dialogTagCount(TAG_A), 1);
+});
+
+test('Apply is disabled with nothing to change', () => {
+  const { component } = browser([
+    { uuid: 'e-1', tags: [TAG_A, TAG_B] },
+    { uuid: 'e-2', tags: [TAG_A] },
+  ]);
+  assert.equal(component.canConfirmTags(), false, 'no dialog');
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  assert.equal(component.canConfirmTags(), false, 'nothing clicked');
+
+  component.cycleTag(TAG_C);
+  assert.equal(component.canConfirmTags(), true);
+  component.cycleTag(TAG_C);
+  assert.equal(component.canConfirmTags(), false, 'back where it started');
+
+  component.cycleTag(TAG_C);
+  component.busy = true;
+  assert.equal(component.canConfirmTags(), false, 'a batch is already running');
+});
+
+test('confirming tags writes only the entries that change and shows no notice', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', tags: [TAG_A, TAG_B] },
+    { uuid: 'e-2', tags: [TAG_A] },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }], 'e-2': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.cycleTag(TAG_C);
+
+  await component.confirmTags();
+
+  assert.deepStrictEqual(updates.map((u) => u.uuid), ['e-1', 'e-2']);
+  assert.deepStrictEqual(Array.from(updates[0].body.tags), [TAG_A, TAG_B, TAG_C]);
+  assert.deepStrictEqual(Array.from(updates[1].body.tags), [TAG_A, TAG_C]);
+  assert.equal(component.tagsDialog, null);
+  assert.equal(component.fileNotice, '');
+});
+
+test('tags whose offer was withdrawn while the dialog was open write nothing', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', tags: [] },
+    { uuid: 'e-2', tags: [] },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }], 'e-2': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.cycleTag(TAG_A);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }], 'e-2': [] };
+
+  await component.confirmTags();
+
+  assert.equal(updates.length, 0);
+  assert.equal(component.tagsDialog, null);
+});
+
+test('tags whose entry vanished while the dialog was open write nothing', async () => {
+  const { component, updates } = browser([{ uuid: 'e-1', tags: [] }]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }]);
+  component.cycleTag(TAG_A);
+  component.entries = [];
+
+  await component.confirmTags();
+
+  assert.equal(updates.length, 0);
+  assert.equal(component.tagsDialog, null);
+});

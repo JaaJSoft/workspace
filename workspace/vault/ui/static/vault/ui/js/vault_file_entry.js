@@ -296,11 +296,18 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
         // with the row it has now.
         const vault = this.openVault;
         if (!vault) return 0;
+        // The reload may have taken a row away (trashed or deleted elsewhere):
+        // writing the rest would report a batch the user never asked for.
+        const uuids = Object.keys(changesByUuid);
+        if (!uuids.every((uuid) => this.rowFor(uuid))) {
+          this.refuseFiling();
+          return 0;
+        }
         const batch = [];
-        for (const uuid of Object.keys(changesByUuid)) {
+        for (const uuid of uuids) {
           const row = this.rowFor(uuid);
           const change = changesByUuid[uuid];
-          if (!row || changesNothing(row, change)) continue;
+          if (changesNothing(row, change)) continue;
           batch.push({ row: row, change: change });
         }
         if (!batch.length) return 0;

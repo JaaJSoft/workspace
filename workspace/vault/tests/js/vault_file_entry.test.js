@@ -854,6 +854,28 @@ test('a batch signs with the vault the deferred reload brought back', async () =
   assert.equal(signedWith[0], fresh);
 });
 
+test('a row the deferred reload took away refuses the whole batch', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', folder: WORK },
+    { uuid: 'e-2', folder: WORK },
+  ]);
+  component.reloadDeferred = true;
+  component.load = async () => {
+    component.entryRows = component.entryRows.filter((row) => row.uuid !== 'e-2');
+  };
+
+  const written = await component.moveEntries(['e-1', 'e-2'], SAVINGS);
+
+  assert.equal(written, undefined);
+  assert.equal(updates.length, 0);
+  assert.equal(component.fileNotice, '');
+  assert.equal(
+    component.error,
+    'An entry can no longer be changed this way. Nothing was changed.',
+  );
+  assert.equal(component.busy, false);
+});
+
 test('the batch releases busy when it has nothing to write', async () => {
   const { component } = browser([{ uuid: 'e-1', folder: WORK }]);
 

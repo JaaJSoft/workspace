@@ -3,9 +3,13 @@
   the modal (file_viewer_modal.html). Include it inside the positioned
   element that holds the listing, with covers= the id of the listing it
   takes the place of; see fileViewerInline() in file_viewer.js.
+
+  properties=True adds the button that opens the page's properties panel on
+  the file shown. The include must then sit inside the component spreading
+  propertiesPanelMixin(): the button reads its state to show it active.
 {% endcomment %}
 <div
-  x-data="fileViewerInline({ covers: '{{ covers|escapejs }}' })"
+  x-data="fileViewerInline({ covers: '{{ covers|escapejs }}', properties: {{ properties|yesno:'true,false' }} })"
   x-ref="frame"
   x-show="open"
   x-cloak
@@ -42,6 +46,20 @@
         ></span>
       </div>
     </div>
+    {% if properties %}
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm btn-square"
+        :class="{ 'btn-active': showPropertiesPanel && propertiesUuid === fileUuid }"
+        @click="toggleProperties()"
+        :disabled="!canShowProperties"
+        title="Properties (Ctrl+I)"
+        aria-label="Properties"
+        data-viewer-properties
+      >
+        <i data-lucide="info" class="w-4 h-4"></i>
+      </button>
+    {% endif %}
     {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
     <a
       :href="downloadOverride || downloadUrl"

@@ -36,17 +36,15 @@ class FilesIndexSettingsTests(TestCase):
         # reset between TestCase runs. Clear it to keep tests order-independent.
         cache.clear()
 
-    def test_index_exposes_file_and_viewer_preferences(self):
-        """Both settings flow into the template context with the right values."""
+    def test_index_exposes_file_preferences(self):
+        """The setting flows into the template context with the right values."""
         set_setting(self.user, "files", "preferences", {"breadcrumbCollapse": 2})
-        set_setting(self.user, "files", "viewer", {"theme": "dark"})
 
         response = self.client.get(reverse("files_ui:index"))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["breadcrumb_collapse"], 2)
         self.assertEqual(response.context["file_prefs"], {"breadcrumbCollapse": 2})
-        self.assertEqual(response.context["viewer_prefs"], {"theme": "dark"})
 
     def test_index_renders_only_the_saved_view_mode(self):
         """A large folder costs the browser as much to bind as it has markup,
@@ -82,7 +80,6 @@ class FilesIndexSettingsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["breadcrumb_collapse"], 4)
         self.assertEqual(response.context["file_prefs"], {})
-        self.assertEqual(response.context["viewer_prefs"], {})
 
     def test_index_loads_files_settings_in_a_single_query(self):
         """Cold cache: the two files settings are read in one DB round-trip."""

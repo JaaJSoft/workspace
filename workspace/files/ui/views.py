@@ -372,9 +372,6 @@ def _build_context(request, folder=None, is_trash_view=False):
     view_mode = file_prefs.get("defaultViewMode")
     if not isinstance(view_mode, str) or view_mode not in {"list", "mosaic"}:
         view_mode = "list"
-    viewer_prefs = files_settings.get("viewer") or {}
-    if not isinstance(viewer_prefs, dict):
-        viewer_prefs = {}
     table_controls = files_settings.get("table_controls")
     if not isinstance(table_controls, dict):
         table_controls = None
@@ -408,7 +405,6 @@ def _build_context(request, folder=None, is_trash_view=False):
         "breadcrumb_collapse": breadcrumb_collapse,
         "view_mode": view_mode,
         "file_prefs": file_prefs,
-        "viewer_prefs": viewer_prefs,
         "table_controls": table_controls,
         "group_folders": group_folders,
         "available_groups": available_groups,

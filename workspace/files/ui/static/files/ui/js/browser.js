@@ -1257,6 +1257,7 @@ window.fileBrowser = function fileBrowser() {
         const { uuid, nodeType } = e.detail;
         this.openPropertiesPanel(uuid, nodeType);
       });
+      window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
 
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
       // A contributed section of the panel changed what it renders.

@@ -10,6 +10,11 @@
 //   _dismiss()      hide it, ending in _onClosed()
 //   _keysBlocked()  something above the viewer owns the keyboard
 //   _onOpened(uuid) optional, after each file starts loading
+//
+// A shell given `properties` offers the page's properties panel for the file
+// on screen (a button, Ctrl+I): it raises `open-properties`, which the page
+// hosting propertiesPanelMixin() answers, and `viewer-file-shown` on each
+// file, so an open panel follows the gallery (followViewer()).
 window.fileViewerShellMixin = function fileViewerShellMixin() {
   return {
     ...viewerPanelMixin(),
@@ -31,6 +36,11 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     // Where the panel wants the download to come from instead (an edited
     // image, rendered as shown); null for the raw bytes.
     downloadOverride: null,
+    // The action registry lets the user see the file's properties; false
+    // while it answers, and always without `properties`.
+    canShowProperties: false,
+    _propertiesEnabled: false,
+    _propertiesSeq: 0,
 
     _onOpened() {},
 
@@ -126,6 +136,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
         else window.navHistory.push(url);
       }
       this._onOpened(uuid);
+      this._loadPropertiesAction(uuid);
 
       const viewerUrl = edit ?
         urls.viewer + (urls.viewer.includes('?') ? '&' : '?') + 'edit=1' :
@@ -154,6 +165,30 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.panelEditing = false;
       this.downloadOverride = null;
       this.viewerError = null;
+      this.canShowProperties = false;
+    },
+
+    async _loadPropertiesAction(uuid) {
+      this.canShowProperties = false;
+      if (!this._propertiesEnabled) return;
+      const seq = ++this._propertiesSeq;
+      let actions = null;
+      try {
+        actions = await window.fileActions.fetchActions([uuid]);
+      } catch (_) {}
+      if (seq !== this._propertiesSeq || !this.open || this.fileUuid !== uuid) return;
+      this.canShowProperties = !!actions && (actions[uuid] || []).some(a => a.id === 'properties');
+      window.dispatchEvent(new CustomEvent('viewer-file-shown', {
+        detail: { uuid, properties: this.canShowProperties },
+      }));
+    },
+
+    // Asking again for the file the panel shows closes it.
+    toggleProperties() {
+      if (!this.canShowProperties || !this.fileUuid) return;
+      window.dispatchEvent(new CustomEvent('open-properties', {
+        detail: { uuid: this.fileUuid, nodeType: 'file' },
+      }));
     },
 
     close() {
@@ -170,6 +205,11 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
 
       if (event.key === 'Escape') {
         this.close();
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'i' && this.canShowProperties) {
+        event.preventDefault();
+        this.toggleProperties();
       }
 
       // Arrow navigation - skip if focus is in an editable element
@@ -344,11 +384,16 @@ window.fileViewerModal = function fileViewerModal() {
 // but left mounted: the scroll position and the pages loaded so far are
 // still there on close, and the gallery, which pages through the rows in
 // the DOM, still sees them.
+//
+// Back on the listing, the row's `[data-viewer-focus]` element, if it has
+// one, takes the focus: the row's first control may be a checkbox, and an
+// input holding the focus mutes the listing's shortcuts.
 window.fileViewerInline = function fileViewerInline(options) {
   const coversId = options && options.covers;
 
   return {
     ...fileViewerShellMixin(),
+    _propertiesEnabled: !!(options && options.properties),
 
     _covered() {
       return coversId ? document.getElementById(coversId) : null;
@@ -362,14 +407,13 @@ window.fileViewerInline = function fileViewerInline(options) {
       this.$nextTick(() => this.$refs.back && this.$refs.back.focus({ preventScroll: true }));
     },
 
-    // Back on the listing, the tile last shown is in view and focused.
     _dismiss() {
       const covered = this._covered();
       if (covered) covered.inert = false;
       const row = this.fileUuid ? this._row(this.fileUuid) : null;
       this._onClosed();
-      const button = row && row.querySelector('button');
-      if (button) button.focus({ preventScroll: true });
+      const target = row && row.querySelector('[data-viewer-focus]');
+      if (target) target.focus({ preventScroll: true });
     },
 
     // The listing is live around the viewer, so a dialog it opened (a

@@ -115,8 +115,10 @@ class FileEntryBrowserTests(VaultBrowserCase):
         dialog.wait_for(state="detached", timeout=30000)
 
     def _row_tags(self, name):
+        # The name attribute, not the text: past two tags a chip shows only
+        # its icon.
         chips = self.page.locator(f"tbody tr:has-text('{name}') tag-chip")
-        return sorted(chip.inner_text().strip() for chip in chips.all())
+        return sorted(chip.get_attribute("name") for chip in chips.all())
 
     def _two_entries_sharing_a_tag(self):
         """A carries X and Y, B carries X: Y is the mixed one."""

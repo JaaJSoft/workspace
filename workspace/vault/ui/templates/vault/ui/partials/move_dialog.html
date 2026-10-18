@@ -24,7 +24,10 @@
             : moveDialog.uuids.length + ' entries')"
         ></span>
       </h3>
-      <p class="text-sm opacity-60 mt-1">Choose where it goes in this vault.</p>
+      <p
+        class="text-sm opacity-60 mt-1"
+        x-text="moveDialog.uuids.length > 1 ? 'Choose where they go in this vault.' : 'Choose where it goes in this vault.'"
+      ></p>
 
       <ul
         class="menu bg-base-200/50 rounded-box mt-4 max-h-72 overflow-y-auto flex-nowrap"

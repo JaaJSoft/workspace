@@ -46,7 +46,7 @@ class PhotosVideoTests(PlaywrightTestCase):
 
         self._tile(self.video).click()
 
-        dialog = self.page.locator("dialog.modal[open]")
+        dialog = self.page.locator("[data-file-viewer-inline]")
         expect(dialog.locator("h3")).to_have_text("surf.webm")
         video = self.page.locator("#viewer-panel video")
         expect(video).to_be_visible()

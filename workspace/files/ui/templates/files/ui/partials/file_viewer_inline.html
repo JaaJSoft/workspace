@@ -1,0 +1,58 @@
+{% comment %}
+  The Files viewer in place of the listing, for a module that prefers it to
+  the modal (file_viewer_modal.html). Include it inside the positioned
+  element that holds the listing, with covers= the id of the listing it
+  takes the place of; see fileViewerInline() in file_viewer.js.
+{% endcomment %}
+<div
+  x-data="fileViewerInline({ covers: '{{ covers|escapejs }}' })"
+  x-ref="frame"
+  x-show="open"
+  x-cloak
+  class="absolute inset-0 z-[15] flex flex-col bg-base-100"
+  role="region"
+  aria-label="File viewer"
+  data-file-viewer-inline
+  @ajax:missing="_viewerMissing($event)"
+  @viewer-editing="panelEditing = $event.detail"
+  @viewer-download="downloadOverride = $event.detail"
+  @ajax:merge="_viewerMerge($event)"
+>
+  <div
+    class="flex items-center gap-2 px-3 py-2 border-b border-base-300 bg-base-100"
+  >
+    <button
+      type="button"
+      x-ref="back"
+      class="btn btn-ghost btn-sm btn-square"
+      @click="close()"
+      title="Back (ESC)"
+      aria-label="Back"
+    >
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </button>
+    <div class="flex-1 min-w-0">
+      <h3 class="font-bold truncate" x-text="fileName"></h3>
+      <div class="flex items-center gap-2">
+        <p class="text-xs text-base-content/60" x-text="fileType"></p>
+        <span
+          class="text-xs text-base-content/40"
+          x-show="_totalViewable() > 1"
+          x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
+        ></span>
+      </div>
+    </div>
+    {# Hidden on a blocked file: the malware policy 403s the request anyway. #}
+    <a
+      :href="downloadOverride || downloadUrl"
+      download
+      class="btn btn-ghost btn-sm btn-square"
+      title="Download file"
+      x-show="fileUuid && downloadUrl && !viewerBlocked"
+    >
+      <i data-lucide="download" class="w-4 h-4"></i>
+    </a>
+  </div>
+
+  {% include "files/ui/partials/file_viewer_stage.html" %}
+</div>

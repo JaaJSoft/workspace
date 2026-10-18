@@ -22,6 +22,7 @@ from workspace.photos.tests.images import make_photo
 from workspace.users.services.settings import set_setting
 
 TILES = "#timeline-grid [data-uuid]"
+VIEWER = "[data-file-viewer-inline]"
 
 
 class PhotosTimelineTests(PlaywrightTestCase):
@@ -80,19 +81,89 @@ class PhotosTimelineTests(PlaywrightTestCase):
         expect(self.page.locator("#timeline-grid [data-undated]")).to_have_count(1)
         expect(self.page.locator("#timeline-more [x-data]")).to_have_count(0)
 
-    def test_a_tile_opens_the_files_viewer(self):
+    def test_a_tile_opens_the_files_viewer_in_place_of_the_timeline(self):
         self._open()
 
         self.page.locator(TILES).first.click()
 
-        dialog = self.page.locator("dialog.modal[open]")
-        expect(dialog).to_be_visible()
-        expect(dialog.locator("h3")).to_have_text("day14.jpg")
+        viewer = self.page.locator(VIEWER)
+        expect(viewer).to_be_visible()
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
         expect(self.page.locator("#viewer-panel img").first).to_be_visible()
+        expect(self.page.locator("dialog.modal[open]")).to_have_count(0)
         self.assertIn(f"open={self.photos[0].uuid}", self.page.url)
+        # It covers the content area only: the sidebar stays beside it.
+        content = self.page.locator("#photos-main").bounding_box()
+        self.assertEqual(viewer.bounding_box(), content)
+        expect(self.page.locator("#photos-nav")).to_be_visible()
+        self.assertTrue(
+            self.page.evaluate("document.getElementById('photos-main').inert")
+        )
 
         self.page.keyboard.press("ArrowRight")
-        expect(dialog.locator("h3")).to_have_text("day13.jpg")
+        expect(viewer.locator("h3")).to_have_text("day13.jpg")
+        expect(viewer.locator("text=2 / 6")).to_be_visible()
+
+    @patch("workspace.photos.services.timeline.PAGE_SIZE", 2)
+    def test_closing_the_viewer_lands_on_the_last_photo_shown(self):
+        self.page.set_viewport_size({"width": 1280, "height": 400})
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+
+        # Stepping past the loaded page scrolls the hidden timeline along,
+        # so the next page loads behind the viewer.
+        for photo in self.photos[1:4]:
+            expect(
+                self.page.locator(f'{TILES}[data-uuid="{photo.uuid}"]')
+            ).to_have_count(1)
+            self.page.keyboard.press("ArrowRight")
+            expect(viewer.locator("h3")).to_have_text(photo.name)
+
+        viewer.get_by_role("button", name="Back").click()
+
+        expect(viewer).to_be_hidden()
+        self.assertNotIn("open=", self.page.url)
+        self.assertFalse(
+            self.page.evaluate("document.getElementById('photos-main').inert")
+        )
+        last = self.page.locator(f'{TILES}[data-uuid="{self.photos[3].uuid}"]')
+        expect(last).to_be_in_viewport()
+        self.assertTrue(last.evaluate("tile => tile.contains(document.activeElement)"))
+
+    def test_browser_back_closes_the_viewer_and_forward_reopens_it(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+
+        self.page.go_back()
+        expect(viewer).to_be_hidden()
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos")
+
+        self.page.go_forward()
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+
+    def test_a_sidebar_link_takes_the_viewer_away(self):
+        FileFavorite.objects.create(owner=self.user, file=self.photos[1])
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+
+        self.page.locator("#photos-nav a[href='/photos?favorites=1']").click()
+
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos?favorites=1")
+        expect(viewer).to_be_hidden()
+        expect(self.page.locator(TILES)).to_have_count(1)
+        self.assertFalse(
+            self.page.evaluate("document.getElementById('photos-main').inert")
+        )
+        # Back returns to the photo, over the listing it was opened from.
+        self.page.go_back()
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        expect(self.page.locator(TILES)).to_have_count(6)
 
     def test_opening_a_search_hit_lands_on_the_photo(self):
         target = self.photos[2]
@@ -101,7 +172,7 @@ class PhotosTimelineTests(PlaywrightTestCase):
             f"{self.live_server_url}/photos?date=2024-07-12&open={target.uuid}"
         )
 
-        expect(self.page.locator("dialog.modal[open] h3")).to_have_text("day12.jpg")
+        expect(self.page.locator(f"{VIEWER} h3")).to_have_text("day12.jpg")
         expect(self.page.locator(TILES).first).to_have_attribute(
             "data-uuid", str(target.uuid)
         )

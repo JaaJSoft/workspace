@@ -79,7 +79,9 @@ class DialogFocusTests(VaultBrowserCase):
         self.page.wait_for_selector("#vault-export-warning-title", timeout=10000)
 
         self.page.keyboard.press("Escape")
-        self.page.wait_for_selector("#vault-export-warning-title", state="detached", timeout=10000)
+        self.page.wait_for_selector(
+            "#vault-export-warning-title", state="detached", timeout=10000
+        )
 
     def test_escape_still_closes_the_password_dialog_once_focus_has_left_it(self):
         box_selector = "[role=dialog][aria-labelledby=vault-password-dialog-title]"

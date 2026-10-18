@@ -97,7 +97,8 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
     // another tab), so the registry is asked again before anything is signed.
     confirmMove: async function () {
       if (!this.canConfirmMove()) return;
-      const { uuids, target } = this.moveDialog;
+      const dialog = this.moveDialog;
+      const { uuids, target } = dialog;
       const stillOffered = uuids.every((uuid) => {
         const entry = this.entries.find(function (item) { return item.uuid === uuid; });
         return entry && this.hasAction(entry, 'move');
@@ -107,7 +108,9 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
         return;
       }
       await this.moveEntries(uuids, target);
-      this.moveDialog = null;
+      // Escape during the write may have closed this dialog and another one
+      // been opened since; that one is not this batch's to close.
+      if (this.moveDialog === dialog) this.moveDialog = null;
     },
 
     openTagsDialog: function (rows) {
@@ -171,7 +174,8 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
     // again before anything is signed.
     confirmTags: async function () {
       if (!this.canConfirmTags()) return;
-      const { uuids, states } = this.tagsDialog;
+      const dialog = this.tagsDialog;
+      const { uuids, start, states } = dialog;
       const stillOffered = uuids.every((uuid) => {
         const entry = this.entries.find(function (item) { return item.uuid === uuid; });
         return entry && this.hasAction(entry, 'set_tags');
@@ -180,8 +184,15 @@ window.vaultFileEntryMixin = function vaultFileEntryMixin() {
         this.tagsDialog = null;
         return;
       }
-      await this.resignEntries(this.tagChangesFor(uuids, states));
-      this.tagsDialog = null;
+      // Only the boxes the user moved: a row reloaded under the dialog may
+      // have changed a tag the user never touched, and that is not theirs to
+      // put back.
+      const clicked = {};
+      Object.keys(states).forEach(function (tagUuid) {
+        if (states[tagUuid] !== start[tagUuid]) clicked[tagUuid] = states[tagUuid];
+      });
+      await this.resignEntries(this.tagChangesFor(uuids, clicked));
+      if (this.tagsDialog === dialog) this.tagsDialog = null;
     },
 
     // Only where the rows sit in the folder the listing shows: in Favorites, a

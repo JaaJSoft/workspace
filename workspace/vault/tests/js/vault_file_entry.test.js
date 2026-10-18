@@ -738,3 +738,71 @@ test('a drop while a write is running writes nothing', async () => {
 
   assert.equal(updates.length, 0);
 });
+
+test('apply gives back only the tags the user clicked, not ones a reload changed', async () => {
+  const { component, updates } = browser([
+    { uuid: 'e-1', tags: [TAG_A] },
+    { uuid: 'e-2', tags: [TAG_A] },
+  ]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }], 'e-2': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }, { uuid: 'e-2' }]);
+  component.cycleTag(TAG_C);
+  // A reload lands under the open dialog: e-2 no longer carries TAG_A.
+  component.entryRows.find((row) => row.uuid === 'e-2').tags = [];
+
+  await component.confirmTags();
+
+  assert.deepStrictEqual(updates.map((u) => u.uuid), ['e-1', 'e-2']);
+  assert.deepStrictEqual(Array.from(updates[0].body.tags), [TAG_A, TAG_C]);
+  assert.deepStrictEqual(Array.from(updates[1].body.tags), [TAG_C]);
+});
+
+test('loading another vault drops the notice and any open dialog', async () => {
+  const { component, ctx } = browser([{ uuid: 'e-1' }]);
+  component.fileNotice = 'Moved 1 entry to Savings.';
+  component.openMoveDialog([{ uuid: 'e-1' }]);
+  component.openTagsDialog([{ uuid: 'e-1' }]);
+  component.vaultUuid = 'other-vault';
+  ctx.vaultApi.listVaults = async () => [{ uuid: 'other-vault' }];
+  ctx.vaultReader.readVault = async (session, row) => ({ uuid: row.uuid, name: 'Other' });
+  component.syncEntry = () => {};
+  component.resetNavigation = () => {};
+
+  await component.loadVault();
+
+  assert.equal(component.fileNotice, '');
+  assert.equal(component.moveDialog, null);
+  assert.equal(component.tagsDialog, null);
+});
+
+test('a dialog reopened during the write is not closed by the first batch', async () => {
+  const { component, ctx } = browser([{ uuid: 'e-1', folder: null }]);
+  component.entryActions = { 'e-1': [{ id: 'move' }] };
+  component.openMoveDialog([{ uuid: 'e-1' }]);
+  component.moveDialog.target = SAVINGS;
+  ctx.vaultApi.updateEntry = async (uuid, body) => {
+    component.closeMoveDialog();
+    component.openMoveDialog([{ uuid: 'e-1' }]);
+    return body;
+  };
+
+  await component.confirmMove();
+
+  assert.notEqual(component.moveDialog, null);
+});
+
+test('a tags dialog reopened during the write is not closed by the first batch', async () => {
+  const { component, ctx } = browser([{ uuid: 'e-1', tags: [] }]);
+  component.entryActions = { 'e-1': [{ id: 'set_tags' }] };
+  component.openTagsDialog([{ uuid: 'e-1' }]);
+  component.cycleTag(TAG_A);
+  ctx.vaultApi.updateEntry = async (uuid, body) => {
+    component.closeTagsDialog();
+    component.openTagsDialog([{ uuid: 'e-1' }]);
+    return body;
+  };
+
+  await component.confirmTags();
+
+  assert.notEqual(component.tagsDialog, null);
+});

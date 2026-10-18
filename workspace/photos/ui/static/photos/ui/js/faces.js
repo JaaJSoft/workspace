@@ -1231,15 +1231,20 @@ function outfitMessage(action, result, target) {
       ? `${peopleCount(done)} put with ${target}`
       : `${peopleCount(done)} ${OUTFIT_DONE[action] || 'answered'}`;
   }
-  if (skipped) {
-    const reasons = new Set(result.skipped.map((s) => s.reason));
+  // A confirm the photo contradicts sets them apart from that person.
+  const isSetApart = (s) => action === 'confirm' && s.reason === 'already_in_photo';
+  const setApart = result.skipped.filter(isSetApart).length;
+  const unchanged = result.skipped.filter((s) => !isSetApart(s));
+  const parts = message ? [message] : [];
+  if (setApart) parts.push(`${peopleCount(setApart)} set apart: they are already in that photo`);
+  if (unchanged.length) {
+    const reasons = new Set(unchanged.map((s) => s.reason));
     let why = '';
     if (reasons.size === 1 && reasons.has('already_in_photo')) why = ': they are already in that photo';
     else if (reasons.size === 1 && reasons.has('no_face')) why = ': no photo shows their face yet';
-    const left = `${peopleCount(skipped)} left as they were${why}`;
-    message = message ? `${message}. ${left}` : left;
+    parts.push(`${peopleCount(unchanged.length)} left as they were${why}`);
   }
-  return message;
+  return parts.join('. ');
 }
 
 // Puts an outfit card's answer back; the photosApp() root reloads the page

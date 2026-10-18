@@ -58,7 +58,9 @@ class AppearanceBatchView(APIView):
             "someone else by now); hide: nobody to name; assign: they are "
             "this contact. "
             "Each one that cannot take the answer is skipped with a reason "
-            "('unavailable', 'already_in_photo', 'no_face', 'missing'). The "
+            "('unavailable', 'already_in_photo', 'no_face', 'missing'); a "
+            "confirm skipped as 'already_in_photo' still rejects that person, "
+            "so they are not suggested again. The "
             "returned undo token puts them back as they were, for a few minutes."
         ),
         request=AppearanceBatchSerializer,

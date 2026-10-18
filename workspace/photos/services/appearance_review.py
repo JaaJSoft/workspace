@@ -103,7 +103,9 @@ def apply(user, action, appearances, person=None):
     answer is about the person the user was shown. So is a person the photo
     already shows (a person is in a photo once), and everyone assigned to a
     contact with no face in the library: their photos are listed through
-    their faces.
+    their faces. A person confirmed as someone the photo already shows
+    cannot be them, so they are set apart from that person as by a reject:
+    otherwise the next pass suggests the same name and the review asks again.
     """
     result = BatchResult()
     if not appearances:
@@ -114,6 +116,7 @@ def apply(user, action, appearances, person=None):
         result.skipped = [(row.pk, NO_FACE) for row in appearances]
         return result
     result.undo = _save_undo(user, appearances)
+    changed = False
     with transaction.atomic():
         for row in appearances:
             reason = _answer(row, action, person)
@@ -121,7 +124,9 @@ def apply(user, action, appearances, person=None):
                 result.done.append(row.pk)
             else:
                 result.skipped.append((row.pk, reason))
-    if not result.done:
+            set_apart = action == CONFIRM and reason == ALREADY_IN_PHOTO
+            changed = changed or reason is None or set_apart
+    if not changed:
         cache.delete(_UNDO_KEY.format(user.pk, result.undo))
         result.undo = None
     return result
@@ -133,7 +138,12 @@ def _answer(row, action, person):
         return NO_SUGGESTION
     person_id = person.pk if action in (CONFIRM, ASSIGN) else None
     if person_id is not None and person_id in _persons_in_photo(row):
-        return ALREADY_IN_PHOTO
+        if action != CONFIRM:
+            return ALREADY_IN_PHOTO
+        action = REJECT
+        reason = ALREADY_IN_PHOTO
+    else:
+        reason = None
     if action == REJECT:
         row.rejected_person_id = person.pk
     elif action == HIDE:
@@ -144,7 +154,7 @@ def _answer(row, action, person):
     row.suggested_person_id = None
     row.suggestion_distance = None
     row.save(update_fields=_fields(_SAVED_FIELDS))
-    return None
+    return reason
 
 
 def _fields(names):

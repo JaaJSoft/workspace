@@ -95,7 +95,7 @@
               @click="rejectFace(face)"
             >
               <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
-              Not this person
+              <span x-text="notPersonLabel(clusterOf(face)?.person_name)"></span>
             </button>
             <button
               type="button"

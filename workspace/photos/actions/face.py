@@ -29,7 +29,7 @@ class ConfirmFaceAction(BaseFaceAction):
 @FaceActionRegistry.register
 class AssignFaceAction(BaseFaceAction):
     id = "assign"
-    label = "This is..."
+    label = "Move to..."
     icon = "user-round-pen"
 
 

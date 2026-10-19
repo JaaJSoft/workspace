@@ -8,8 +8,7 @@ ctxRule(). The file actions it offers come from `POST /api/v1/files/actions`
 (see PHOTO_ACTIONS), so a row is only ever offered when the registry says the
 user may do it. The album rows follow the album action registry instead, the
 face rows the user's face grouping, Similar photos the instance's embeddings.
-Crop & rotate, Rotate and Revert to original follow the registry's edit_image: they
-change what everyone sees of the photo, never its bytes. Hide never touches
+Rotating and cropping live in the viewer only, as in Files. Hide never touches
 the file: it only takes it out of the viewer's own library.
 Marking it sensitive blurs it for everyone who can open it.
 
@@ -32,15 +31,6 @@ the album allows (through the album), and the album rows.
   </template>
   <template x-if="ctxShows('faces')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('faces')" icon="scan-face" label_expr="ctxMenu.photo?.mediaType === 'video' ? 'People in this video' : 'People in this photo'" click="openFacesDialog(ctxMenu.photo)" only %}
-  </template>
-  <template x-if="ctxShows('edit_image')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('edit_image')" icon="crop" label="Crop & rotate" click="closeCtxMenu(); editPhoto(ctxMenu.photo)" only %}
-  </template>
-  <template x-if="ctxShows('rotate_image')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('rotate_image')" icon="rotate-cw" label="Rotate" click="closeCtxMenu(); rotatePhoto(ctxMenu.photo.uuid)" only %}
-  </template>
-  <template x-if="ctxShows('revert_image')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('revert_image')" icon="undo-2" label="Revert to original" click="closeCtxMenu(); revertPhoto(ctxMenu.photo.uuid)" only %}
   </template>
   <template x-if="ctxShows('toggle_favorite')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('toggle_favorite')" icon="star" icon_class_expr="ctxAction('toggle_favorite')?.state?.is_favorite ? 'text-warning fill-current' : ''" label_expr="ctxAction('toggle_favorite')?.label" click="runCtxAction(ctxAction('toggle_favorite'))" only %}

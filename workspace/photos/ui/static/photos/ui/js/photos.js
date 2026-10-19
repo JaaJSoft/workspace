@@ -15,7 +15,7 @@ const PHOTOS_SWAP_TARGETS = [
 // user may run on a given file; this only drops the ones that mean nothing on
 // a timeline (cut, paste, pin, extract...).
 const PHOTO_ACTIONS = [
-  'view', 'edit_image', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties',
+  'view', 'download', 'copy_link', 'toggle_favorite', 'share', 'properties',
   'rename', 'toggle_sensitive', 'delete',
 ];
 
@@ -713,7 +713,6 @@ window.photosApp = function photosApp() {
       const { photo, actions } = this.ctxMenu;
       if (!photo || actions === null) return [];
       const has = (id) => actions.some((a) => a.id === id);
-      const ctxAction = (id) => actions.find((a) => a.id === id);
       const own = !photo.albumScoped;
       const inLibrary = own && !this.hiddenView;
       const cluster = !!this.currentCluster();
@@ -722,11 +721,6 @@ window.photosApp = function photosApp() {
           (has('view') || photo.albumScoped) && 'open',
           inLibrary && this.embeds(photo.mediaType) && 'similar',
           inLibrary && this.facesEnabled() && 'faces',
-        ],
-        [
-          has('edit_image') && 'edit_image',
-          has('edit_image') && 'rotate_image',
-          has('edit_image') && ctxAction('edit_image')?.state?.is_edited && 'revert_image',
         ],
         [
           has('toggle_favorite') && 'toggle_favorite',
@@ -811,36 +805,7 @@ window.photosApp = function photosApp() {
       }
     },
 
-    // ── Rotate and crop ─────────────────────────────────
-
-    editPhoto(photo) {
-      window.dispatchEvent(new CustomEvent('open-file-viewer', {
-        detail: { uuid: photo.uuid, name: photo.name, type: photo.type, edit: true },
-      }));
-    },
-
-    // A quarter turn clockwise from the menu, the photo's crop turning with it.
-    rotatePhoto(uuid) {
-      return this._sendImageEdit(uuid, 'POST', `/api/v1/files/${uuid}/image-edit/rotate`,
-        { quarter_turns: 1 });
-    },
-
-    revertPhoto(uuid) {
-      return this._sendImageEdit(uuid, 'DELETE', `/api/v1/files/${uuid}/image-edit`);
-    },
-
-    async _sendImageEdit(uuid, method, url, body) {
-      photosTileEdits.set(uuid, {});
-      try {
-        const data = await photosJson(method, url, body);
-        this._noteTileEdit(uuid, {
-          edit: data.image_edit, version: data.version, ready: data.thumbnail_ready,
-        });
-      } catch (_) {
-        photosTileEdits.delete(uuid);
-        window.AppAlert.error('The photo could not be edited');
-      }
-    },
+    // ── Rotate and crop (saved from the viewer) ─────────
 
     // Merges what is known of a tile's pending edit, and shows it once both
     // the edit and its thumbnail are in.

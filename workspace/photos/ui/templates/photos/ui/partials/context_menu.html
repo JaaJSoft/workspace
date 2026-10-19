@@ -64,7 +64,7 @@ the album allows (through the album), and the album rows.
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('person_cover')" icon="image-up" label="Set as cover" click="useAsCover(ctxMenu.photo)" only %}
   </template>
   <template x-if="ctxShows('not_this_person')">
-    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('not_this_person')" icon="user-x" label="Not this person" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
+    {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('not_this_person')" icon="user-x" label_expr="notPersonLabel(currentCluster()?.person?.name)" tone="error" click="rejectFromCluster(ctxMenu.photo)" only %}
   </template>
   <template x-if="ctxShows('open_in_files')">
     {% include "ui/partials/context_menu_item.html" with li_class_expr="ctxRule('open_in_files')" icon="hard-drive" label="Open in Files" href_expr="ctxMenu.photo?.filesUrl" click="closeCtxMenu()" only %}

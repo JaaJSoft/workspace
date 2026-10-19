@@ -29,6 +29,13 @@ test('without the embedded JSON, faces are off and no person is on screen', () =
   assert.equal(faces.currentCluster(), null);
 });
 
+test('taking a face out names the person it leaves, when they have a name', () => {
+  const faces = mixin();
+
+  assert.equal(faces.notPersonLabel('Alice'), 'Not Alice');
+  assert.equal(faces.notPersonLabel(undefined), 'Not this person');
+});
+
 test('a face is offered every cluster but its own, the one of another face marked taken', () => {
   const faces = mixin();
   faces.facesDialog.clusters = [ALICE, BOB, CAROL];

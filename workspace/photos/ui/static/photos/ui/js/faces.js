@@ -165,6 +165,10 @@ window.photosFacesMixin = function photosFacesMixin() {
       return facesJson('photos-cluster-data');
     },
 
+    notPersonLabel(name) {
+      return name ? `Not ${name}` : 'Not this person';
+    },
+
     // Rejected when no answer came: the content-loading veil must drop even
     // when the caller swallows the error.
     _reloadView(url = window.location.href) {

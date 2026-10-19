@@ -135,8 +135,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm btn-circle"
-        title="Not this person"
-        aria-label="Not this person"
+        :title="notPersonLabel(currentCluster().person?.name)"
+        :aria-label="notPersonLabel(currentCluster().person?.name)"
         :disabled="selectionBusy"
         @click="rejectSelectionFromCluster()"
       >

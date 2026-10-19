@@ -180,16 +180,15 @@ class PersonFacesTests(FacesTestMixin, TestCase):
         self.assertContains(faces, f"/photos?cluster={self.alice.pk}")
 
     def test_the_bar_names_the_person_the_faces_leave(self):
+        unnamed = self.get()
         self.alice.person = create_person(owner=self.user, display_name="Alice")
         self.alice.save(update_fields=["person"])
 
-        named = self.client.get(
-            "/photos/people/faces", {"person": str(self.alice.person.pk)}
-        )
-        unnamed = self.get()
+        named = self.get()
 
-        self.assertContains(named, "Not Alice")
+        self.assertContains(unnamed, "Not this person")
         self.assertNotContains(unnamed, "Not Alice")
+        self.assertContains(named, "Not Alice")
 
     def test_someone_elses_cluster_is_missing(self):
         other = User.objects.create_user(username="eve", password="p")

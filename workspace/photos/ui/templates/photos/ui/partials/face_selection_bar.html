@@ -2,7 +2,8 @@
   What the picked faces of a board can have done to them. Sticks to the
   bottom of the board while something is picked; each button shows once the
   registry offers its action for every picked face. State in
-  faceSelectionMixin() (faces.js).
+  faceSelectionMixin() (faces.js). Reads person_name, set on a named
+  person's board.
 {% endcomment %}
 <div
   x-show="selectedFaces.length > 0"
@@ -46,12 +47,12 @@
     <button
       type="button"
       class="btn btn-module btn-sm rounded-full gap-1.5"
-      title="Say who they are"
+      title="Move to another person"
       x-show="faceAllows('assign')"
       @click="runFaceAction('assign')"
     >
       <i data-lucide="user-round-pen" class="w-4 h-4"></i>
-      <span class="max-sm:hidden">This is...</span>
+      <span class="max-sm:hidden">Move to...</span>
     </button>
     <button
       type="button"
@@ -65,11 +66,14 @@
     <button
       type="button"
       class="btn btn-ghost btn-sm rounded-full gap-1.5 text-error"
+      title="{% if person_name %}Not {{ person_name }}{% else %}Not this person{% endif %}"
       x-show="faceAllows('reject')"
       @click="runFaceAction('reject')"
     >
       <i data-lucide="user-x" class="w-4 h-4"></i>
-      <span class="max-sm:hidden">Not this person</span>
+      <span
+        class="max-sm:hidden max-w-40 truncate"
+      >{% if person_name %}Not {{ person_name }}{% else %}Not this person{% endif %}</span>
     </button>
     <button
       type="button"

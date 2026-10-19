@@ -1535,6 +1535,7 @@ def person_faces_view(request):
     context = {
         **_people_shell_context(request.user),
         "title": who.person.display_name if who.person else "Unnamed person",
+        "person_name": who.person.display_name if who.person else None,
         "cluster": _who_card(who),
         "person_views": _person_views(who, "faces"),
         "board": {"faces": _face_items(page.face_ids), "total": page.total},

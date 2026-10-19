@@ -1035,7 +1035,7 @@ window.faceSelectionMixin = function faceSelectionMixin() {
       return result;
     },
 
-    // ── "This is..." ─────────────────────────────────────
+    // ── "Move to..." ─────────────────────────────────────
 
     async openAssignDialog() {
       this.assignDialog = { query: '', results: [], clusters: [], loading: true };

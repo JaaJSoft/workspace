@@ -656,11 +656,11 @@ The *Faces* tab of a person's page and the hidden faces on the *Hidden* page
 are boards of face tiles: click to pick (Shift picks a
 range), then act from the bar under them:
 
-- **This is...** puts the faces with a contact (their closest group, or one
+- **Move to...** puts the faces with a contact (their closest group, or one
   new group for all the faces that look like none of theirs), a new contact,
   an unnamed person, or someone new with no name yet.
-- **That's right** confirms them where they are; **Not this person** takes
-  them out of their group; **Hide** takes them out of the grouping and puts
+- **That's right** confirms them where they are; **Not *name*** (**Not this
+  person** on an unnamed person) takes them out of their group; **Hide** takes them out of the grouping and puts
   them on the *Hidden* page, where **Unhide** hands them back.
 
 A face the correction cannot apply to (its photo already holds that person)

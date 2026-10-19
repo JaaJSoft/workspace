@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from workspace.people.services.persons import create_person
 from workspace.photos.models import Face, FaceCluster
 from workspace.photos.services.face_corrections import hide_face
 from workspace.photos.services.face_grouping import cluster_owner
@@ -177,6 +178,18 @@ class PersonFacesTests(FacesTestMixin, TestCase):
 
         self.assertContains(timeline, f"/photos/people/faces?cluster={self.alice.pk}")
         self.assertContains(faces, f"/photos?cluster={self.alice.pk}")
+
+    def test_the_bar_names_the_person_the_faces_leave(self):
+        self.alice.person = create_person(owner=self.user, display_name="Alice")
+        self.alice.save(update_fields=["person"])
+
+        named = self.client.get(
+            "/photos/people/faces", {"person": str(self.alice.person.pk)}
+        )
+        unnamed = self.get()
+
+        self.assertContains(named, "Not Alice")
+        self.assertNotContains(unnamed, "Not Alice")
 
     def test_someone_elses_cluster_is_missing(self):
         other = User.objects.create_user(username="eve", password="p")

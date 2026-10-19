@@ -46,7 +46,7 @@ COPY workspace/ ./workspace/
 RUN mkdir -p /models     && for backend in $FACE_MODELS; do         SECRET_KEY=build-secret DEBUG=0 PHOTOS_MODEL_DIR=/models         .venv/bin/python manage.py download_face_models --backend "$backend" || exit 1;     done
 
 # Stage 4: Runtime
-FROM mirror.gcr.io/library/python:3.14-slim
+FROM mirror.gcr.io/library/python:3.15-slim
 
 # OCI metadata — static labels
 LABEL org.opencontainers.image.title="workspace" \

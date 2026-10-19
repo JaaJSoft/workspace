@@ -30,10 +30,7 @@ class FilesIndexSmokeTests(PlaywrightTestCase):
         # keeps the smoke test from flaking on unrelated app-shell 4xx
         # (e.g. ``/api/v1/users/<id>/avatar``, which 404s by design and
         # is handled by an ``onerror`` placeholder in the navbar).
-        watched_paths = (
-            "/api/v1/settings/files/preferences",
-            "/api/v1/settings/files/viewer",
-        )
+        watched_paths = ("/api/v1/settings/files/preferences",)
         bad_responses: list[str] = []
 
         def _watch(r):

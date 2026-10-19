@@ -51,6 +51,14 @@ window.propertiesPanelMixin = function propertiesPanelMixin() {
       this.openPropertiesPanel(uuid, this.propertiesNodeType);
     },
 
+    // Bound to the viewer's `viewer-file-shown`: an open panel moves to the
+    // file the viewer stepped to, or closes on one it may not describe.
+    followViewer(detail) {
+      if (!this.showPropertiesPanel || !detail || detail.uuid === this.propertiesUuid) return;
+      if (detail.properties) this.openPropertiesPanel(detail.uuid, 'file');
+      else this.closePropertiesPanel();
+    },
+
     closePropertiesPanel() {
       this.showPropertiesPanel = false;
       this.propertiesUuid = null;

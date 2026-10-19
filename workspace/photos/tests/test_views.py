@@ -109,7 +109,6 @@ class IndexTests(PhotosViewTestCase):
         response = self.client.get("/photos")
 
         self.assertContains(response, 'x-data="fileViewerInline(')
-        self.assertNotContains(response, 'x-data="fileViewerModal()"')
         self.assertContains(response, f'data-uuid="{beach.uuid}"')
         self.assertContains(response, 'data-viewable="1"')
         self.assertContains(response, 'data-node-type="file"')

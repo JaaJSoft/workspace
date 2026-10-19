@@ -82,6 +82,7 @@
     class="absolute inset-0 w-full h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-module"
     title="{{ file.name }}"
     data-name-title
+    data-viewer-focus
     @click="tileClicked($event, $el.closest('[data-uuid]'))"
   >
     {% if file.match_frame_url %}

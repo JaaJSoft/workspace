@@ -278,6 +278,14 @@ window.photosApp = function photosApp() {
       window.addEventListener('open-properties', (e) => {
         this.showProperties(e.detail.uuid, e.detail.nodeType);
       });
+      window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
+      window.addEventListener('file-favorite-changed', (e) => {
+        const { uuid, isFavorite } = e.detail;
+        const tile = this._tile(uuid);
+        if (tile) tile.dataset.favorite = isFavorite ? '1' : '0';
+        this._forgetActions([uuid]);
+        if (this.propertiesUuid === uuid) this.reloadPropertiesPanel();
+      });
       window.addEventListener('shares-changed', () => this.reloadPropertiesPanel());
       // A contributed section of the panel changed what it renders.
       window.addEventListener('properties-section-changed', () => this.reloadPropertiesPanel());
@@ -304,7 +312,8 @@ window.photosApp = function photosApp() {
       // An undone face correction: whatever board is on screen is stale.
       window.addEventListener('photos-faces-changed', () => this._reloadView());
       window.addEventListener('keydown', (e) => {
-        if (document.querySelector('dialog[open]')) return;
+        // A dialog, or the viewer covering the timeline, owns the keys.
+        if (document.querySelector('dialog[open]') || document.getElementById('photos-main')?.hasAttribute('data-viewer-covered')) return;
         if (e.key === 'Escape' && this.selection.length) {
           this.clearSelection();
         } else if (e.key === 'a' && (e.ctrlKey || e.metaKey) && !this._typingIn(e.target)) {

@@ -1,7 +1,7 @@
-"""E2E cover for the file viewer modal's stale-response race.
+"""E2E cover for the file viewer's stale-response race.
 
 Open file A, then file B while A's viewer request is still in flight: A's
-late response must neither paint its viewer into the modal nor execute its
+late response must neither paint its viewer into the panel nor execute its
 scripts against B's DOM. Instead of racing real timing, A's request is held
 at the network layer and only released after B has fully rendered - the
 worst-case ordering the old hand-rolled loader lost (it appended A's markup
@@ -31,7 +31,7 @@ PNG_1PX = base64.b64decode(
 )
 
 
-class FileViewerModalRaceTests(PlaywrightTestCase):
+class FileViewerRaceTests(PlaywrightTestCase):
     def setUp(self):
         super().setUp()
         self.user = self.create_user(username="viewer-race")
@@ -73,7 +73,7 @@ class FileViewerModalRaceTests(PlaywrightTestCase):
             lambda route: held.setdefault("text", route),
         )
 
-        # Open A (text). Alpine may still be booting the modal's listeners,
+        # Open A (text). Alpine may still be booting the viewer's listeners,
         # so retry the dispatch until A's viewer request is actually held.
         deadline = time.monotonic() + 5
         while "text" not in held and time.monotonic() < deadline:
@@ -83,8 +83,8 @@ class FileViewerModalRaceTests(PlaywrightTestCase):
 
         # Open B (image) while A is still loading, and let it render fully.
         self._open_viewer(self.image_file)
-        modal = self.page.locator('[x-data="fileViewerModal()"] .modal-box')
-        expect(modal.locator(f'img[src*="{self.image_file.uuid}"]')).to_be_visible(
+        viewer = self.page.locator("[data-file-viewer-inline]")
+        expect(viewer.locator(f'img[src*="{self.image_file.uuid}"]')).to_be_visible(
             timeout=10000
         )
 
@@ -98,11 +98,11 @@ class FileViewerModalRaceTests(PlaywrightTestCase):
         self.assertEqual(
             self.page.evaluate("typeof window.textViewerMonaco"), "undefined"
         )
-        # ...and A's viewer markup must not be in the modal - only B's.
-        expect(modal.locator('[x-data^="textViewerMonaco"]')).to_have_count(0)
-        expect(modal.locator(f'img[src*="{self.image_file.uuid}"]')).to_be_visible()
+        # ...and A's viewer markup must not be in the viewer - only B's.
+        expect(viewer.locator('[x-data^="textViewerMonaco"]')).to_have_count(0)
+        expect(viewer.locator(f'img[src*="{self.image_file.uuid}"]')).to_be_visible()
 
-    def test_a_response_landing_after_close_never_mounts_into_the_closed_modal(self):
+    def test_a_response_landing_after_close_never_mounts_into_the_closed_viewer(self):
         self.login_as(self.user)
         self.page.goto(f"{self.live_server_url}/files")
         self.page.evaluate("document.getElementById('djDebugRoot')?.remove()")
@@ -119,14 +119,12 @@ class FileViewerModalRaceTests(PlaywrightTestCase):
             self.page.wait_for_timeout(100)
         self.assertIn("text", held, "the viewer request must be in flight")
 
-        # Close the modal while the viewer request is still hanging.
-        dialog = self.page.locator('[x-data="fileViewerModal()"] dialog')
-        self.page.locator(
-            '[x-data="fileViewerModal()"] button[title="Close (ESC)"]'
-        ).click()
-        expect(dialog).to_have_js_property("open", False)
+        # Close the viewer while the viewer request is still hanging.
+        viewer = self.page.locator("[data-file-viewer-inline]")
+        viewer.get_by_role("button", name="Close").click()
+        expect(viewer).to_be_hidden()
 
-        # The response lands only now, into a closed modal.
+        # The response lands only now, into a closed viewer.
         with self.page.expect_response(f"**/files/view/{self.text_file.uuid}"):
             held["text"].continue_()
         # Give a (buggy) merge every chance to mount before asserting.

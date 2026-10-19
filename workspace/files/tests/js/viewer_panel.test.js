@@ -1,6 +1,6 @@
 'use strict';
 
-// The shared viewer panel loader (notes editor, files viewer modal, chat
+// The shared viewer panel loader (notes editor, files inline viewer, chat
 // attachment viewer modal): all viewer HTML goes through alpine-ajax into
 // #viewer-panel. Content staleness is arbitrated by alpine-ajax itself
 // (newest request per target wins) - these tests pin the component-side

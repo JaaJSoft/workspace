@@ -96,7 +96,7 @@ class FileViewerPinningTests(TestCase):
 
 
 class FileViewerResolutionTests(TestCase):
-    """The viewer modal must honour the pinned slug, not just the content type."""
+    """The viewer must honour the pinned slug, not just the content type."""
 
     def setUp(self):
         self.user = User.objects.create_user(

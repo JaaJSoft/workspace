@@ -42,7 +42,7 @@ class ViewerDeepLinkTests(PlaywrightTestCase):
         self.login_as(self.recipient)
         self.page.goto(f"{self.live_server_url}/files?shared=1&open={self.file.uuid}")
 
-        dialog = self.page.locator("dialog[open]").filter(
+        dialog = self.page.locator("[data-file-viewer-inline]").filter(
             has=self.page.locator("h3", has_text="Minutes.txt")
         )
         expect(dialog).to_be_visible()

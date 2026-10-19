@@ -91,3 +91,34 @@ test('reloading a closed panel does nothing', () => {
   assert.equal(host.showPropertiesPanel, false);
   assert.equal(requests.length, 0);
 });
+
+test('an open panel follows the file the viewer steps to', () => {
+  const { host, requests } = panel();
+  host.openPropertiesPanel('u1', 'file');
+
+  host.followViewer({ uuid: 'u2', properties: true });
+
+  assert.equal(host.propertiesUuid, 'u2');
+  assert.deepEqual(requests.map((r) => r[0]), ['/files/properties/u1', '/files/properties/u2']);
+});
+
+test('the viewer opens no panel the user did not ask for', () => {
+  const { host, requests } = panel();
+
+  host.followViewer({ uuid: 'u2', properties: true });
+
+  assert.equal(host.showPropertiesPanel, false);
+  assert.equal(requests.length, 0);
+});
+
+test('the panel stays on the file it shows, and closes on one it may not describe', () => {
+  const { host, requests } = panel();
+  host.openPropertiesPanel('u1', 'file');
+
+  host.followViewer({ uuid: 'u1', properties: true });
+  assert.equal(host.showPropertiesPanel, true);
+  assert.equal(requests.length, 1);
+
+  host.followViewer({ uuid: 'u2', properties: false });
+  assert.equal(host.showPropertiesPanel, false);
+});

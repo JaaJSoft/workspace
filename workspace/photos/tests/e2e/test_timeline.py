@@ -121,7 +121,7 @@ class PhotosTimelineTests(PlaywrightTestCase):
             self.page.keyboard.press("ArrowRight")
             expect(viewer.locator("h3")).to_have_text(photo.name)
 
-        viewer.get_by_role("button", name="Back").click()
+        viewer.get_by_role("button", name="Close").click()
 
         expect(viewer).to_be_hidden()
         self.assertNotIn("open=", self.page.url)
@@ -144,6 +144,48 @@ class PhotosTimelineTests(PlaywrightTestCase):
 
         self.page.go_forward()
         expect(viewer.locator("h3")).to_have_text("day14.jpg")
+
+    def test_select_all_stays_off_the_tiles_behind_the_viewer(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        expect(self.page.locator(f"{VIEWER} h3")).to_have_text("day14.jpg")
+
+        self.page.keyboard.press("Control+a")
+        self.page.wait_for_timeout(200)
+
+        expect(self.page.locator("[data-selecting]")).to_have_count(0)
+
+    def test_the_properties_button_opens_the_panel_and_follows_the_gallery(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        panel = self.page.locator("#properties-sidebar")
+
+        viewer.get_by_role("button", name="Properties").click()
+        expect(panel.locator("#properties-content h3")).to_have_text("day14.jpg")
+
+        self.page.keyboard.press("ArrowRight")
+        expect(viewer.locator("h3")).to_have_text("day13.jpg")
+        expect(panel.locator("#properties-content h3")).to_have_text("day13.jpg")
+
+        viewer.get_by_role("button", name="Properties").click()
+        expect(panel).to_be_hidden()
+
+    def test_the_header_star_marks_the_photo_and_its_tile(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        star = viewer.locator("[data-viewer-favorite]")
+
+        star.click()
+
+        expect(star).to_have_attribute("aria-pressed", "true")
+        expect(self.page.locator(TILES).first).to_have_attribute("data-favorite", "1")
+        self.assertTrue(
+            FileFavorite.objects.filter(owner=self.user, file=self.photos[0]).exists()
+        )
 
     def test_a_sidebar_link_takes_the_viewer_away(self):
         FileFavorite.objects.create(owner=self.user, file=self.photos[1])

@@ -1258,6 +1258,8 @@ window.fileBrowser = function fileBrowser() {
         this.openPropertiesPanel(uuid, nodeType);
       });
       window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
+      window.addEventListener('nav:restore', () => this.followPropertiesUrl());
+      this.followPropertiesUrl();
       // Starred from the viewer: the listing's star column and the panel follow.
       window.addEventListener('file-favorite-changed', (e) => {
         this.refreshFolderBrowser();
@@ -1293,12 +1295,14 @@ window.fileBrowser = function fileBrowser() {
         });
       });
 
-      // Close properties panel on folder navigation (but not on same-folder refresh)
+      // Close properties panel on folder navigation (but not on same-folder
+      // refresh, nor on a back or forward onto an entry that had it open)
       this._lastViewUrl = null;
       window.addEventListener('folder-browser-replaced', (e) => {
         this.folderLoading = false;
         const newUrl = e.detail?.viewUrl;
-        if (this._lastViewUrl && newUrl && newUrl !== this._lastViewUrl && this.showPropertiesPanel) {
+        if (this._lastViewUrl && newUrl && newUrl !== this._lastViewUrl
+            && this.showPropertiesPanel && !this.propertiesAddressed()) {
           this.closePropertiesPanel();
         }
         this._lastViewUrl = newUrl;

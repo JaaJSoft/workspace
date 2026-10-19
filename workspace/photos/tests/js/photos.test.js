@@ -40,6 +40,10 @@ function load({ mobile = false, collapsed = false, observers = [], ...extra } = 
       }),
       innerWidth: 1280,
       innerHeight: 900,
+      location: new URL('http://testserver/photos'),
+      URL,
+      URLSearchParams,
+      navHistory: { push() {}, replace() {}, returnTo() {}, state: () => ({}) },
       ...extra,
     },
   );
@@ -337,7 +341,7 @@ test('properties opens the Files panel and loads the tags once', () => {
 
   app.runCtxAction({ id: 'properties' });
   app.closePropertiesPanel();
-  app.showProperties('u2', 'file');
+  app.openPropertiesPanel('u2', 'file');
 
   assert.equal(app.ctxMenu.open, false);
   assert.equal(app.showPropertiesPanel, true);

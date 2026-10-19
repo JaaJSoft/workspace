@@ -276,9 +276,11 @@ window.photosApp = function photosApp() {
     init() {
       window.addEventListener('nav:restore', (e) => this._restoreSwappedView(e));
       window.addEventListener('open-properties', (e) => {
-        this.showProperties(e.detail.uuid, e.detail.nodeType);
+        this.openPropertiesPanel(e.detail.uuid, e.detail.nodeType);
       });
       window.addEventListener('viewer-file-shown', (e) => this.followViewer(e.detail));
+      window.addEventListener('nav:restore', () => this.followPropertiesUrl());
+      this.followPropertiesUrl();
       window.addEventListener('file-favorite-changed', (e) => {
         const { uuid, isFavorite } = e.detail;
         const tile = this._tile(uuid);
@@ -625,14 +627,12 @@ window.photosApp = function photosApp() {
 
     // ── Properties ──────────────────────────────────────
 
-    showProperties(uuid, nodeType) {
-      // The tag dropdown in the panel lists every tag; nothing else on the
-      // page needs them, so they load the first time the panel opens.
-      if (!this._tagsLoaded) {
-        this._tagsLoaded = true;
-        this.loadTags();
-      }
-      this.openPropertiesPanel(uuid, nodeType);
+    // The tag dropdown in the panel lists every tag; nothing else on the
+    // page needs them, so they load the first time the panel opens.
+    _onPropertiesOpen() {
+      if (this._tagsLoaded) return;
+      this._tagsLoaded = true;
+      this.loadTags();
     },
 
     // An assignment changes the sidebar's tag counts, like the mixin's own
@@ -800,7 +800,7 @@ window.photosApp = function photosApp() {
           }));
           break;
         case 'properties':
-          this.showProperties(photo.uuid, 'file');
+          this.openPropertiesPanel(photo.uuid, 'file');
           break;
         case 'rename':
           window.fileActions.showRenameDialog(photo.uuid, photo.name);

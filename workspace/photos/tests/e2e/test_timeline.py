@@ -344,6 +344,53 @@ class PhotosTimelineTests(PlaywrightTestCase):
         panel.get_by_role("button").first.click()
         expect(panel).to_be_hidden()
 
+    def test_browser_back_closes_the_properties_panel_on_a_phone(self):
+        self.page.set_viewport_size({"width": 375, "height": 800})
+        self._open()
+        panel = self.page.locator("#properties-sidebar")
+
+        self._open_menu().get_by_role("button", name="Properties").click()
+        expect(panel.locator("#properties-content h3")).to_have_text("day14.jpg")
+        self.assertIn(f"properties={self.photos[0].uuid}", self.page.url)
+
+        self.page.go_back()
+        expect(panel).to_be_hidden()
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos")
+
+        self.page.go_forward()
+        expect(panel.locator("#properties-content h3")).to_have_text("day14.jpg")
+
+    def test_browser_back_closes_the_panel_over_the_viewer_and_keeps_the_viewer(self):
+        self._open()
+        self.page.locator(TILES).first.click()
+        viewer = self.page.locator(VIEWER)
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        panel = self.page.locator("#properties-sidebar")
+        viewer.get_by_role("button", name="Properties").click()
+        expect(panel.locator("#properties-content h3")).to_have_text("day14.jpg")
+
+        self.page.go_back()
+
+        expect(panel).to_be_hidden()
+        expect(viewer.locator("h3")).to_have_text("day14.jpg")
+        self.assertNotIn("properties=", self.page.url)
+
+        self.page.go_back()
+        expect(viewer).to_be_hidden()
+
+    def test_closing_the_panel_steps_back_over_its_entry(self):
+        self._open()
+        panel = self.page.locator("#properties-sidebar")
+        self._open_menu().get_by_role("button", name="Properties").click()
+        expect(panel).to_be_visible()
+
+        panel.get_by_role("button").first.click()
+
+        expect(panel).to_be_hidden()
+        expect(self.page).to_have_url(f"{self.live_server_url}/photos")
+        self.page.go_forward()
+        expect(panel.locator("#properties-content h3")).to_have_text("day14.jpg")
+
     def test_renaming_from_the_menu_renames_the_tile_and_nothing_else(self):
         File.objects.filter(pk=self.photos[0].pk).update(has_thumbnail=True)
         self._open()

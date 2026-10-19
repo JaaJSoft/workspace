@@ -1,9 +1,34 @@
 const assert = require('node:assert');
 const { test } = require('node:test');
-const { loadScript } = require('../../../common/tests/js/loader');
+const { loadScripts } = require('../../../common/tests/js/loader');
 
-function panel() {
-  const ctx = loadScript('workspace/files/ui/static/files/ui/js/properties_panel.js');
+const U1 = '0190a6b2-0000-7000-8000-000000000001';
+const U2 = '0190a6b2-0000-7000-8000-000000000002';
+
+// navHistory as far as the panel sees it: an address, and the writes it gets.
+function fakeHistory(ctx, address) {
+  const writes = [];
+  ctx.location = new URL(address, 'http://testserver');
+  const go = (url) => { ctx.location = new URL(url, 'http://testserver'); };
+  const path = (url) => { const u = new URL(url, 'http://testserver'); return u.pathname + u.search; };
+  ctx.navHistory = {
+    push(url) { writes.push(['push', path(url)]); go(url); },
+    replace(url) { writes.push(['replace', path(url)]); go(url); },
+    returnTo(url) { writes.push(['returnTo', path(url)]); go(url); },
+    state: () => ({}),
+  };
+  return writes;
+}
+
+function panel(address = '/files') {
+  const ctx = loadScripts(
+    [
+      'workspace/common/static/ui/js/uuid.js',
+      'workspace/files/ui/static/files/ui/js/properties_panel.js',
+    ],
+    { URL, URLSearchParams, document: { querySelector: () => null } },
+  );
+  const history = fakeHistory(ctx, address);
   const listeners = {};
   const requests = [];
   const host = ctx.propertiesPanelMixin();
@@ -14,7 +39,7 @@ function panel() {
     },
   };
   host.$ajax = (url, opts) => requests.push([url, { ...opts }]);
-  return { host, listeners, requests };
+  return { ctx, host, listeners, requests, history };
 }
 
 test('opening loads the file properties into the panel', () => {
@@ -121,4 +146,83 @@ test('the panel stays on the file it shows, and closes on one it may not describ
 
   host.followViewer({ uuid: 'u2', properties: false });
   assert.equal(host.showPropertiesPanel, false);
+});
+
+test('opening adds a history entry naming the file, and closing returns from it', () => {
+  const { ctx, host, history } = panel('/files/f?open=x');
+
+  host.openPropertiesPanel(U1, 'file');
+  assert.equal(ctx.location.search, `?open=x&properties=${U1}`);
+
+  host.closePropertiesPanel();
+
+  assert.deepEqual(history.map((w) => Array.from(w)), [
+    ['push', `/files/f?open=x&properties=${U1}`],
+    ['returnTo', '/files/f?open=x'],
+  ]);
+});
+
+test('moving the open panel to another file rewrites its entry', () => {
+  const { host, history } = panel();
+  host.openPropertiesPanel(U1, 'file');
+
+  host.followViewer({ uuid: U2, properties: true });
+
+  assert.deepEqual(history.map((w) => w[0]), ['push', 'replace']);
+  assert.equal(history[1][1], `/files?properties=${U2}`);
+});
+
+test('reloading the file on show writes no history', () => {
+  const { host, history } = panel();
+  host.openPropertiesPanel(U1, 'file');
+
+  host.reloadPropertiesPanel();
+
+  assert.equal(history.length, 1);
+});
+
+test('a close after a navigation that dropped the parameter writes no history', () => {
+  const { ctx, host, history } = panel();
+  host.openPropertiesPanel(U1, 'file');
+  ctx.location = new URL('http://testserver/files/other');
+
+  host.closePropertiesPanel();
+
+  assert.equal(history.length, 1);
+});
+
+test('back onto an entry without the parameter closes the panel', () => {
+  const { ctx, host, history } = panel();
+  host.openPropertiesPanel(U1, 'file');
+  ctx.location = new URL('http://testserver/files');
+
+  host.followPropertiesUrl();
+
+  assert.equal(host.showPropertiesPanel, false);
+  assert.equal(history.length, 1);
+});
+
+test('forward onto an entry naming a file opens it, without writing history', () => {
+  const { ctx, host, requests, history } = panel();
+  ctx.document.querySelector = (sel) => (sel.includes(U1) ? { dataset: { nodeType: 'folder' } } : null);
+  ctx.location = new URL(`http://testserver/files?properties=${U1}`);
+
+  host.followPropertiesUrl();
+  host.followPropertiesUrl();
+
+  assert.equal(host.showPropertiesPanel, true);
+  assert.equal(host.propertiesUuid, U1);
+  assert.equal(host.propertiesNodeType, 'folder');
+  assert.equal(requests.length, 1);
+  assert.equal(history.length, 0);
+  assert.equal(host.propertiesAddressed(), true);
+});
+
+test('a malformed parameter opens nothing', () => {
+  const { host, requests } = panel('/files?properties=nope');
+
+  host.followPropertiesUrl();
+
+  assert.equal(host.showPropertiesPanel, false);
+  assert.equal(requests.length, 0);
 });

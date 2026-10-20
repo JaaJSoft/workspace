@@ -1,17 +1,27 @@
-// The Files viewer, opened anywhere with an `open-file-viewer` event on window
-// (detail {uuid, name, type, at?, edit?}) or a `?open=<uuid>` URL, and shown
-// in place of the listing by fileViewerInline() (file_viewer_inline.html).
-// One per page listens.
+// The Files viewer. fileViewerShellMixin() owns the state, the gallery, the
+// history and the keyboard; two presentations spread it:
+//   fileViewerInline()  in place of the Files and Photos listings
+//                       (file_viewer_inline.html), opened with an
+//                       `open-file-viewer` event or a `?open=<uuid>` URL
+//   fileViewerModal()   a modal dialog over a page whose items are not
+//                       Files rows, chat and task attachments
+//                       (file_viewer_modal.html), opened with the event the
+//                       page names
+// One per page listens. The open event's detail is
+// {uuid, name, type, at?, edit?, viewerUrl?, downloadUrl?, isFile?, galleryId?}.
 //
-// fileViewerShellMixin() owns the state, the gallery, ?open and the keyboard;
-// the presentation spreads it and supplies the hooks:
+// A presentation supplies the hooks:
 //   _present()      show the shell; called again while open by gallery steps
 //   _dismiss()      hide it, ending in _onClosed()
 //   _keysBlocked()  something above the viewer owns the keyboard
 //   _onOpened(uuid) optional, after each file starts loading
+//   _galleryRoot()  optional, the element the gallery pages through
+// and may override the configuration fields below (_openEvent, _history,
+// _filesItems, _gallery, _viewerUrl, _downloadUrl).
 //
-// Each file's actions come from the registry (POST /api/v1/files/actions).
-// The shell stars and unstars the file itself, then raises
+// The actions of a Files file come from the registry
+// (POST /api/v1/files/actions); an item that is not one gets none, and no
+// request. The shell stars and unstars the file itself, then raises
 // `file-favorite-changed` ({uuid, isFavorite}) for the page to update its
 // listing. A shell given `properties` also offers the page's properties
 // panel for the file on screen (a button, Ctrl+I): it raises
@@ -25,9 +35,11 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     fileUuid: null,
     fileName: '',
     fileType: '',
-    // Where the panel and the download come from: the Files endpoints,
-    // unless the listing row names its own (see _rowUrls).
+    // Where the download comes from (see _urls).
     downloadUrl: '',
+    // Whether the item on screen is a Files file: only then do the action
+    // registry and the favorite endpoint know it.
+    filesItem: false,
     // Set from the merged panel's marker element (see openFile) rather
     // than the HTTP status: loadViewerPanel goes through $ajax, which
     // does not expose it.
@@ -47,28 +59,67 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     _propertiesEnabled: false,
     _actionsSeq: 0,
     _favoriteBusy: false,
+    // Declared rather than assigned on the fly: Alpine writes a property a
+    // nested component lacks onto the outermost one, where another
+    // component's field of the same name would answer for it.
+    _initialized: false,
+    _listeners: [],
+    // The detail of the last open event. Its URLs and isFile hold for its
+    // uuid, and back then forward reopens it when no row names it.
+    _opener: null,
+
+    // The window event that opens the viewer.
+    _openEvent: 'open-file-viewer',
+    // Opening adds a ?open entry, so back closes the viewer.
+    _history: true,
+    // The items are Files files, unless the opener says otherwise (isFile).
+    _filesItems: true,
+    // How an item reads off the page: the attribute holding its uuid, and
+    // those holding its name and type. `row` narrows to the elements that
+    // are items, `viewable` to the ones the gallery steps through.
+    _gallery: {
+      uuid: 'data-uuid',
+      name: 'data-display-name',
+      type: 'data-file-type',
+      row: '[data-node-type="file"]',
+      viewable: '[data-viewable="1"]',
+    },
+    // Where an item's panel and download come from when neither the opener
+    // nor its row names them; {uuid} stands for its uuid.
+    _viewerUrl: '/files/view/{uuid}',
+    _downloadUrl: '/api/v1/files/{uuid}/content',
 
     _onOpened() {},
 
+    _galleryRoot() {
+      return document;
+    },
+
     _row(uuid) {
-      return document.querySelector(`[data-uuid="${uuid}"][data-node-type="file"]`);
+      const root = this._galleryRoot();
+      const gallery = this._gallery;
+      return root ? root.querySelector(`[${gallery.uuid}="${uuid}"]${gallery.row}`) : null;
+    },
+
+    _item(row) {
+      const gallery = this._gallery;
+      return {
+        uuid: row.getAttribute(gallery.uuid),
+        name: row.getAttribute(gallery.name),
+        fileType: row.getAttribute(gallery.type),
+        // A row may name the moment a video opens at, in seconds.
+        at: row.dataset.at ? Number(row.dataset.at) : null,
+      };
     },
 
     _getViewableFiles() {
-      const rows = document.querySelectorAll('[data-uuid][data-viewable="1"][data-node-type="file"]');
+      const root = this._galleryRoot();
+      if (!root) return [];
+      const gallery = this._gallery;
+      const rows = root.querySelectorAll(`[${gallery.uuid}]${gallery.row}${gallery.viewable}`);
       return Array.from(rows)
-        .filter(function(r) {
-          return r.offsetParent !== null;
-        })
-        .map(function(r) {
-          return {
-            uuid: r.dataset.uuid,
-            name: r.dataset.displayName,
-            fileType: r.dataset.fileType,
-            // A row may name the moment a video opens at, in seconds.
-            at: r.dataset.at ? Number(r.dataset.at) : null,
-          };
-        });
+        .filter((row) => row.offsetParent !== null)
+        .map((row) => this._item(row));
     },
 
     navigateNext() {
@@ -105,27 +156,37 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       return this._getViewableFiles().length;
     },
 
-    // A listing whose rows are not Files' to serve (an album shared
-    // with the viewer) names the panel and the download on the row:
-    // data-viewer-url, and data-download-url, left empty when the file
-    // may not be downloaded.
-    _rowUrls(uuid) {
+    _openerOf(uuid) {
+      return this._opener && this._opener.uuid === uuid ? this._opener : null;
+    },
+
+    // The opener (a task attachment, served by projects) or the row (an
+    // album shared with the viewer) may name the panel and the download:
+    // viewerUrl and downloadUrl, data-viewer-url and data-download-url on
+    // the row. An empty download URL means the item may not be downloaded.
+    _urls(uuid) {
+      const opener = this._openerOf(uuid) || {};
       const row = this._row(uuid);
       const data = row ? row.dataset : {};
+      let download = this._downloadUrl.replace('{uuid}', uuid);
+      if ('downloadUrl' in data) download = data.downloadUrl;
+      if ('downloadUrl' in opener) download = opener.downloadUrl;
       return {
-        viewer: data.viewerUrl || `/files/view/${uuid}`,
-        download: 'downloadUrl' in data ? data.downloadUrl : `/api/v1/files/${uuid}/content`,
+        viewer: opener.viewerUrl || data.viewerUrl || this._viewerUrl.replace('{uuid}', uuid),
+        download,
       };
     },
 
     // `at`, in seconds, starts a video there rather than at its beginning;
     // `edit` opens an image straight into rotate and crop.
     async openFile(uuid, name, fileType, updateUrl = true, at = null, edit = false) {
-      const urls = this._rowUrls(uuid);
+      const urls = this._urls(uuid);
+      const opener = this._openerOf(uuid);
       this.fileUuid = uuid;
       this.fileName = name || 'File';
       this.fileType = fileType || '';
       this.downloadUrl = urls.download;
+      this.filesItem = opener && 'isFile' in opener ? !!opener.isFile : this._filesItems;
       this.viewerBlocked = false;
       this.panelEditing = false;
       this.downloadOverride = null;
@@ -135,7 +196,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
 
       // Opening adds an entry, so back closes the viewer; stepping
       // through the gallery only rewrites it.
-      if (updateUrl) {
+      if (updateUrl && this._history) {
         const url = new URL(window.location);
         url.searchParams.set('open', uuid);
         if (wasOpen) window.navHistory.replace(url);
@@ -167,6 +228,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.fileName = '';
       this.fileType = '';
       this.downloadUrl = '';
+      this.filesItem = false;
       this.viewerBlocked = false;
       this.panelEditing = false;
       this.downloadOverride = null;
@@ -181,6 +243,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.canFavorite = false;
       this.isFavorite = false;
       const seq = ++this._actionsSeq;
+      if (!this.filesItem) return;
       let actions = null;
       try {
         actions = await window.fileActions.fetchActions([uuid]);
@@ -229,6 +292,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
 
     close() {
       this._dismiss();
+      if (!this._history) return;
 
       const url = new URL(window.location);
       if (!url.searchParams.has('open')) return;
@@ -270,9 +334,16 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       // the "Shared with me" view renders one - is read first.
       const row = this._row(fileUuid);
       if (row) {
-        this.openFile(fileUuid, row.dataset.displayName, row.dataset.fileType, false);
+        const item = this._item(row);
+        this.openFile(fileUuid, item.name, item.fileType, false);
         return;
       }
+      const opener = this._openerOf(fileUuid);
+      if (opener) {
+        this.openFile(fileUuid, opener.name, opener.type, false);
+        return;
+      }
+      if (!this._filesItems) return;
       try {
         const response = await fetch('/api/v1/files/' + fileUuid);
         if (response.ok) {
@@ -289,9 +360,9 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this._listeners.push(() => target.removeEventListener(type, handler));
     },
 
-    // Called by the shell's init(). `swipeEl` is the element a horizontal
-    // swipe steps through the gallery on.
-    async _listen(swipeEl) {
+    // Called by the presentation's init(). `swipeEl` is the element a
+    // horizontal swipe steps through the gallery on.
+    _listen(swipeEl) {
       // Prevent multiple initializations
       if (this._initialized) {
         return;
@@ -300,15 +371,10 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this._listeners = [];
 
       this._on(window, 'keydown', (e) => this.handleKeydown(e));
-      this._on(window, 'open-file-viewer', (e) => {
-        const {
-          uuid,
-          name,
-          type,
-          at,
-          edit
-        } = e.detail;
-        this.openFile(uuid, name, type, true, at, !!edit);
+      this._on(window, this._openEvent, (e) => {
+        const detail = e.detail;
+        this._opener = { ...detail };
+        this.openFile(detail.uuid, detail.name, detail.type, true, detail.at, !!detail.edit);
       });
 
       const reloadCurrent = (e) => {
@@ -324,6 +390,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
         onNext: () => this.navigateNext(),
       }));
 
+      if (!this._history) return;
       // Back or forward: the viewer follows ?open.
       this._on(window, 'nav:restore', async () => {
         const urlParams = new URLSearchParams(window.location.search);
@@ -335,13 +402,6 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
           this._dismiss();
         }
       });
-
-      // Check if there's an open parameter in URL and open it
-      const urlParams = new URLSearchParams(window.location.search);
-      const fileUuid = urlParams.get('open');
-      if (fileUuid) {
-        await this._openFileFromUuid(fileUuid);
-      }
     },
 
     destroy() {
@@ -474,7 +534,7 @@ window.fileViewerInline = function fileViewerInline(options) {
       // sidebar link, the kept breadcrumb) takes the viewer away with the
       // content it covered, writing no history of its own.
       if (this._initialized) return;
-      const ready = this._listen(this.$refs.frame);
+      this._listen(this.$refs.frame);
       this._on(window, 'nav:change', () => {
         if (this.open && !new URLSearchParams(window.location.search).has('open')) {
           this._dismiss();
@@ -488,7 +548,84 @@ window.fileViewerInline = function fileViewerInline(options) {
         this._uncover();
         this._cover();
       });
-      return ready;
+      // A link to the page may name the file to open.
+      const fileUuid = new URLSearchParams(window.location.search).get('open');
+      if (fileUuid) return this._openFileFromUuid(fileUuid);
+    },
+  };
+};
+
+// The viewer in a modal dialog, for a page whose items are not Files rows
+// (file_viewer_modal.html). Options:
+//   event        the window event that opens it
+//   gallery      the id of the element prev/next step through, unless the
+//                opener names another (galleryId); none when empty. An item
+//                in it carries data-attachment-uuid, data-attachment-name and
+//                data-attachment-type.
+//   viewerUrl, downloadUrl
+//                where an item's panel and download come from, {uuid}
+//                standing for its uuid; Files' own when empty
+//   files        the items are Files files, unless the opener says
+//                otherwise (isFile)
+//   history      opening adds a ?open entry, so back closes the modal, and
+//                back then forward reopens the item. A link carrying ?open
+//                opens nothing: the page lays its items out after the modal
+//                starts.
+//
+// The dialog is modal, so the page under it is inert: its shortcuts and its
+// focus stay off what the modal covers, and the focus goes back where it was
+// on close.
+window.fileViewerModal = function fileViewerModal(options) {
+  const opts = options || {};
+  const config = {
+    _openEvent: opts.event,
+    _history: !!opts.history,
+    _filesItems: !!opts.files,
+    _gallery: {
+      uuid: 'data-attachment-uuid',
+      name: 'data-attachment-name',
+      type: 'data-attachment-type',
+      row: '',
+      viewable: '',
+    },
+  };
+  if (opts.viewerUrl) config._viewerUrl = opts.viewerUrl;
+  if (opts.downloadUrl) config._downloadUrl = opts.downloadUrl;
+
+  return {
+    ...fileViewerShellMixin(),
+    ...config,
+
+    _galleryRoot() {
+      const id = (this._opener && this._opener.galleryId) || opts.gallery;
+      return id ? document.getElementById(id) : null;
+    },
+
+    // Gallery steps open over the open dialog: the current spec makes
+    // showModal() a no-op there, but older engines throw.
+    _present() {
+      if (!this.$refs.dialog.open) this.$refs.dialog.showModal();
+    },
+
+    _dismiss() {
+      if (this.$refs.dialog.open) this.$refs.dialog.close();
+      this._onClosed();
+    },
+
+    // The dialog closes itself on Escape and from the backdrop. Its close
+    // event lands a task later, after a reopen when one came in between.
+    _onDialogClose() {
+      if (this.open && !this.$refs.dialog.open) this.close();
+    },
+
+    // A dialog opened from the panel (a prompt) sits above the modal.
+    _keysBlocked() {
+      return Array.from(document.querySelectorAll('dialog:modal'))
+        .some((dialog) => dialog !== this.$refs.dialog);
+    },
+
+    init() {
+      this._listen(this.$refs.dialog);
     },
   };
 };

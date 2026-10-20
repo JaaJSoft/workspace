@@ -1,7 +1,7 @@
 // Shared loading logic for the hosts of the #viewer-panel element: the
-// files inline viewer, the chat attachment viewer modal and the notes
-// editor pane. Spread into the host component (`...viewerPanelMixin()`)
-// and bind both guards on the component root:
+// Files viewer (inline, or the modal chat and projects open attachments
+// in) and the notes editor pane. Spread into the host component
+// (`...viewerPanelMixin()`) and bind both guards on the component root:
 // `@ajax:missing="_viewerMissing($event)" @ajax:merge="_viewerMerge($event)"`.
 //
 // Loads go through alpine-ajax into the #viewer-panel element every viewer

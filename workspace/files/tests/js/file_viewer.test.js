@@ -262,3 +262,246 @@ test('an answer about a file the gallery left behind is dropped', async () => {
   assert.equal(shell.canShowProperties, false);
   assert.deepEqual(shown(events, 'viewer-file-shown'), [{ uuid: 'b', properties: false }]);
 });
+
+// The modal presentation (fileViewerModal): its items are not Files rows, so
+// the gallery, the endpoints, the registry and the history are its options.
+function makeModal(options = {}, { items = {}, location = 'http://x/chat/c' } = {}) {
+  const panel = { replaceChildren() {}, querySelector: () => null };
+  const actionCalls = [];
+  const history = [];
+  const listeners = {};
+  // id -> [{uuid, name, type}], each a gallery container holding its items.
+  const containers = {};
+  for (const [id, list] of Object.entries(items)) {
+    const rows = list.map((item) => ({
+      offsetParent: {},
+      dataset: {},
+      getAttribute(attr) {
+        return {
+          'data-attachment-uuid': item.uuid,
+          'data-attachment-name': item.name,
+          'data-attachment-type': item.type,
+        }[attr] ?? null;
+      },
+    }));
+    containers[id] = {
+      querySelectorAll: () => rows,
+      querySelector(selector) {
+        const uuid = /="([^"]+)"/.exec(selector)[1];
+        return rows.find((r) => r.getAttribute('data-attachment-uuid') === uuid) || null;
+      },
+    };
+  }
+  const win = { href: location };
+  const ctx = loadScripts(
+    [
+      'workspace/files/ui/static/files/ui/js/viewer_panel.js',
+      'workspace/files/ui/static/files/ui/js/file_viewer.js',
+    ],
+    {
+      CustomEvent: class {
+        constructor(type, opts) {
+          this.type = type;
+          this.detail = opts && opts.detail;
+        }
+      },
+      dispatchEvent() {},
+      addEventListener(type, handler) {
+        listeners[type] = handler;
+      },
+      removeEventListener() {},
+      attachSwipeNavigation: () => () => {},
+      fileActions: {
+        fetchActions(uuids) {
+          actionCalls.push(Array.from(uuids));
+          return new Promise(() => {});
+        },
+      },
+      document: {
+        getElementById: (id) => (id === 'viewer-panel' ? panel : containers[id] || null),
+        querySelectorAll: () => [],
+      },
+      navHistory: {
+        push: (url) => { history.push(['push', String(url)]); win.href = String(url); },
+        replace: (url) => { history.push(['replace', String(url)]); win.href = String(url); },
+        returnTo: (url) => { history.push(['returnTo', String(url)]); win.href = String(url); },
+      },
+      isValidUuid: () => true,
+      URL,
+      URLSearchParams,
+    },
+  );
+  Object.defineProperty(ctx, 'location', { get: () => new URL(win.href) });
+  const dialog = {
+    open: false,
+    showModal() { this.open = true; },
+    close() { this.open = false; },
+  };
+  const loads = [];
+  const modal = {
+    ...ctx.fileViewerModal(options),
+    $refs: { dialog },
+    $ajax(url) {
+      loads.push(url);
+      return new Promise(() => {});
+    },
+  };
+  modal.init();
+  const opener = (detail) => listeners[options.event]({ detail });
+  const restore = (href) => { win.href = href; return listeners['nav:restore'](); };
+  return { modal, dialog, loads, actionCalls, history, opener, restore, listeners };
+}
+
+test('the modal opens on its own event and fills the endpoints with the uuid', () => {
+  const { modal, dialog, loads } = makeModal({
+    event: 'open-chat-attachment-viewer',
+    viewerUrl: '/chat/view-attachment/{uuid}',
+    downloadUrl: '/api/v1/chat/attachments/{uuid}',
+  });
+  modal.openFile('a', 'a.png', 'image/png', false);
+
+  assert.equal(dialog.open, true);
+  assert.deepEqual(Array.from(loads), ['/chat/view-attachment/a']);
+  assert.equal(modal.downloadUrl, '/api/v1/chat/attachments/a');
+});
+
+test('the opener names the endpoints of the item it opens', () => {
+  const { modal, loads, opener } = makeModal({
+    event: 'open-task-attachment-viewer',
+    viewerUrl: '/projects/view-attachment/{uuid}',
+  });
+
+  opener({ uuid: 'f', name: 'logo.png', type: 'image', viewerUrl: '/files/view/f', downloadUrl: '/dl/f' });
+
+  assert.equal(modal.fileName, 'logo.png');
+  assert.deepEqual(Array.from(loads), ['/files/view/f']);
+  assert.equal(modal.downloadUrl, '/dl/f');
+});
+
+test('an item that is not a Files file asks the registry nothing', () => {
+  const { modal, actionCalls, opener } = makeModal({ event: 'open' });
+
+  opener({ uuid: 'a', name: 'a.png', type: 'image/png' });
+
+  assert.equal(modal.filesItem, false);
+  assert.equal(modal.canFavorite, false);
+  assert.deepEqual(actionCalls, []);
+});
+
+test('an opener saying isFile brings the registry in for its item only', () => {
+  const { modal, actionCalls, opener } = makeModal(
+    { event: 'open', gallery: 'messages' },
+    { items: { messages: [{ uuid: 'f', name: 'f.png' }, { uuid: 'g', name: 'g.png' }] } },
+  );
+
+  opener({ uuid: 'f', name: 'f.png', type: 'image', isFile: true });
+  assert.equal(modal.filesItem, true);
+  modal.navigateNext();
+
+  assert.equal(modal.fileUuid, 'g');
+  assert.equal(modal.filesItem, false);
+  assert.deepEqual(actionCalls.map((uuids) => Array.from(uuids)), [['f']]);
+});
+
+test('the gallery is the element the opener names, else the default one', () => {
+  const { modal, opener } = makeModal(
+    { event: 'open', gallery: 'messages' },
+    {
+      items: {
+        messages: [{ uuid: 'a', name: 'a.png' }, { uuid: 'b', name: 'b.png' }],
+        thread: [{ uuid: 't1', name: 't1.png' }, { uuid: 't2', name: 't2.png' }],
+      },
+    },
+  );
+
+  opener({ uuid: 't1', name: 't1.png', galleryId: 'thread' });
+  modal.navigateNext();
+  assert.equal(modal.fileName, 't2.png');
+  modal.navigateNext();
+  assert.equal(modal.fileUuid, 't2');
+
+  opener({ uuid: 'a', name: 'a.png' });
+  modal.navigateNext();
+  assert.equal(modal.fileName, 'b.png');
+});
+
+test('a modal without a gallery steps nowhere', () => {
+  const { modal, opener } = makeModal({ event: 'open' });
+
+  opener({ uuid: 'a', name: 'a.png' });
+
+  assert.equal(modal._totalViewable(), 0);
+  modal.navigateNext();
+  assert.equal(modal.fileUuid, 'a');
+});
+
+test('without history, opening and closing write none', () => {
+  const { modal, dialog, history, opener, listeners } = makeModal({ event: 'open' });
+
+  opener({ uuid: 'a', name: 'a.png' });
+  modal.close();
+
+  assert.equal(dialog.open, false);
+  assert.equal(modal.open, false);
+  assert.deepEqual(history, []);
+  assert.equal(listeners['nav:restore'], undefined);
+});
+
+test('with history, opening adds an entry, stepping rewrites it, closing steps back', () => {
+  const { modal, history, opener } = makeModal(
+    { event: 'open', gallery: 'messages', history: true },
+    { items: { messages: [{ uuid: 'a', name: 'a.png' }, { uuid: 'b', name: 'b.png' }] } },
+  );
+
+  opener({ uuid: 'a', name: 'a.png' });
+  modal.navigateNext();
+  modal.close();
+
+  assert.deepEqual(history.map((entry) => Array.from(entry)), [
+    ['push', 'http://x/chat/c?open=a'],
+    ['replace', 'http://x/chat/c?open=b'],
+    ['returnTo', 'http://x/chat/c'],
+  ]);
+});
+
+test('back closes the modal, forward reopens what the opener showed', async () => {
+  const { modal, dialog, loads, opener, restore } = makeModal({
+    event: 'open',
+    viewerUrl: '/projects/view-attachment/{uuid}',
+    history: true,
+  });
+  opener({ uuid: 'a', name: 'a.png', type: 'image/png', downloadUrl: '/dl/a' });
+
+  await restore('http://x/chat/c');
+  assert.equal(dialog.open, false);
+  assert.equal(modal.open, false);
+
+  await restore('http://x/chat/c?open=a');
+  assert.equal(dialog.open, true);
+  assert.equal(modal.fileName, 'a.png');
+  assert.equal(modal.downloadUrl, '/dl/a');
+  assert.deepEqual(Array.from(loads), ['/projects/view-attachment/a', '/projects/view-attachment/a']);
+});
+
+test('the dialog closing itself (Escape, backdrop) goes through close', () => {
+  const { modal, dialog, history, opener } = makeModal({ event: 'open', history: true });
+  opener({ uuid: 'a', name: 'a.png' });
+
+  dialog.close();
+  modal._onDialogClose();
+
+  assert.equal(modal.open, false);
+  assert.deepEqual(history.map((entry) => Array.from(entry)).at(-1), ['returnTo', 'http://x/chat/c']);
+});
+
+test('a close event landing after a reopen leaves the new item open', () => {
+  const { modal, dialog, opener } = makeModal({ event: 'open' });
+  opener({ uuid: 'a', name: 'a.png' });
+  modal.close();
+  opener({ uuid: 'b', name: 'b.png' });
+
+  modal._onDialogClose();
+
+  assert.equal(dialog.open, true);
+  assert.equal(modal.fileUuid, 'b');
+});

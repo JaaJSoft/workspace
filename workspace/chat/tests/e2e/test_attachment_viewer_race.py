@@ -96,7 +96,7 @@ class AttachmentViewerModalRaceTests(PlaywrightTestCase):
 
         # Open B (image) while A is still loading, and let it render fully.
         self._open_viewer(self.image_att)
-        modal = self.page.locator('[x-data="chatAttachmentViewer()"] .modal-box')
+        modal = self.page.locator("[data-file-viewer-modal] .modal-box")
         expect(modal.locator(f'img[src*="{self.image_att.uuid}"]')).to_be_visible(
             timeout=10000
         )
@@ -133,9 +133,9 @@ class AttachmentViewerModalRaceTests(PlaywrightTestCase):
         self.assertIn("text", held, "the viewer request must be in flight")
 
         # Close the modal while the viewer request is still hanging.
-        dialog = self.page.locator('[x-data="chatAttachmentViewer()"] dialog')
+        dialog = self.page.locator("[data-file-viewer-modal] dialog")
         self.page.locator(
-            '[x-data="chatAttachmentViewer()"] button[title="Close (ESC)"]'
+            '[data-file-viewer-modal] button[title="Close (ESC)"]'
         ).click()
         expect(dialog).to_have_js_property("open", False)
 

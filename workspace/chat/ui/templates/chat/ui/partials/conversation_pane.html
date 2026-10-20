@@ -766,7 +766,7 @@
 {% endif %}
 
 <!-- Attachment viewer modal -->
-{% include "chat/ui/partials/attachment_viewer_modal.html" %}
+{% include "files/ui/partials/file_viewer_modal.html" with event="open-chat-attachment-viewer" gallery="messages-container" viewer_url="/chat/view-attachment/{uuid}" download_url="/api/v1/chat/attachments/{uuid}" actions="chat/ui/partials/attachment_viewer_actions.html" history=True %}
 
 <!-- Embedded conversation data for fast Alpine init -->
 {{ conversations|json_script:"conversations-data" }}

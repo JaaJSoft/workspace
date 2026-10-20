@@ -216,7 +216,7 @@
   {% include "projects/ui/partials/task_modal.html" %}
   {% include "projects/ui/partials/sprints_dialog.html" %}
   {% include "projects/ui/partials/help_dialog.html" %}
-  {% include "projects/ui/partials/attachment_viewer_modal.html" %}
+  {% include "files/ui/partials/file_viewer_modal.html" with event="open-task-attachment-viewer" viewer_url="/projects/view-attachment/{uuid}" history=True %}
 
   <dialog id="new-project-dialog" class="modal">
     <div
@@ -337,9 +337,12 @@
     </form>
   </dialog>
   {# Attachment preview needs the files viewer stack: locking (the text #}
-  {# viewer calls it even read-only), then the panel host mixin. #}
+  {# viewer calls it even read-only), the panel host mixin, the viewer, #}
+  {# and the action registry for a linked file's star. #}
   <script src="{% static 'files/ui/js/file_lock.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'ui/js/attachment_input.js' %}"></script>
   <script src="{% static 'projects/ui/js/board.js' %}"></script>
   <script src="{% static 'projects/ui/js/preferences.js' %}"></script>

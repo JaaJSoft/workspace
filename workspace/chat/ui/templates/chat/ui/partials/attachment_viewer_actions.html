@@ -1,0 +1,10 @@
+{# The attachment viewer's chat buttons, in the header of the Files viewer modal (file_viewer_modal.html). #}
+<button
+  type="button"
+  class="btn btn-ghost btn-sm btn-square"
+  @click="const uuid = fileUuid; close(); $dispatch('chat-save-attachment-to-files', { uuid })"
+  title="Save to Files"
+  aria-label="Save to Files"
+>
+  <i data-lucide="folder-down" class="w-4 h-4"></i>
+</button>

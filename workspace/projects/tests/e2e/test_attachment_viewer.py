@@ -58,7 +58,9 @@ class TaskAttachmentViewerTests(PlaywrightTestCase):
         expect(self.viewer).to_have_count(0)
 
     def test_a_task_attachment_opens_from_the_task(self):
-        self.page.locator("#task-panel").get_by_role("button", name="mockup.png").click()
+        self.page.locator("#task-panel").get_by_role(
+            "button", name="mockup.png"
+        ).click()
 
         expect(self.viewer.locator("h3")).to_have_text("mockup.png")
         expect(self.viewer.locator("#viewer-panel img")).to_be_visible()
@@ -84,3 +86,37 @@ class TaskAttachmentViewerTests(PlaywrightTestCase):
             "href", f"/api/v1/files/{self.linked.uuid}/download"
         )
         self._close()
+
+    def test_back_closes_the_viewer_and_leaves_the_task_open(self):
+        task_url = f"{self.base}/backlog?task={self.task.uuid}"
+        self.page.locator("#task-panel").get_by_role(
+            "button", name="mockup.png"
+        ).click()
+        expect(self.viewer.locator("h3")).to_have_text("mockup.png")
+        expect(self.page).to_have_url(f"{task_url}&open={self.attachment.uuid}")
+
+        self.page.go_back()
+
+        expect(self.viewer).to_have_count(0)
+        expect(self.page).to_have_url(task_url)
+        expect(self.page.locator("#task-panel")).to_contain_text("Write the brief")
+
+        self.page.go_forward()
+        expect(self.viewer.locator("h3")).to_have_text("mockup.png")
+        expect(self.viewer.locator("#viewer-panel img")).to_be_visible()
+        self._close()
+        expect(self.page).to_have_url(task_url)
+
+    def test_only_a_linked_file_gets_the_favorite_star(self):
+        star = self.viewer.locator("[data-viewer-favorite]")
+        self.page.locator("#task-panel").get_by_role(
+            "button", name="mockup.png"
+        ).click()
+        expect(self.viewer.locator("#viewer-panel img")).to_be_visible()
+        expect(star).to_be_hidden()
+        self._close()
+
+        self.page.locator("#task-panel").get_by_role("button", name="logo.png").click()
+        expect(star).to_be_enabled()
+        star.click()
+        expect(star).to_have_attribute("aria-pressed", "true")

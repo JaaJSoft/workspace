@@ -1699,10 +1699,10 @@ function taskPanel() {
       window.dispatchEvent(
         new CustomEvent('open-task-attachment-viewer', {
           detail: {
+            uuid: att.uuid,
             name: att.name,
-            mime_type: att.mime_type,
-            download_url: att.download_url,
-            viewer_url: '/projects/view-attachment/' + att.uuid,
+            type: att.mime_type,
+            downloadUrl: att.download_url,
           },
         })
       );
@@ -1792,10 +1792,12 @@ function taskPanel() {
       window.dispatchEvent(
         new CustomEvent('open-task-attachment-viewer', {
           detail: {
+            uuid: link.file_uuid,
             name: link.name,
-            mime_type: '',
-            download_url: link.download_url,
-            viewer_url: '/files/view/' + link.file_uuid,
+            type: link.type,
+            viewerUrl: '/files/view/' + link.file_uuid,
+            downloadUrl: link.download_url,
+            isFile: true,
           },
         })
       );

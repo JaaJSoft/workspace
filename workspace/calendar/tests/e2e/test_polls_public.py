@@ -76,6 +76,38 @@ class SharedPollVotingTests(PlaywrightTestCase):
         # — this guards against the UI silently swallowing errors.
         self.assertEqual(poll.slots.first().votes.filter(choice="yes").count(), 1)
 
+    def test_participant_count_includes_the_visitors_own_vote(self):
+        poll = self._make_open_poll(title="Retro")
+        slot = poll.slots.first()
+        for name in ("Bob", "Carol"):
+            PollVote.objects.create(
+                slot=slot,
+                user=None,
+                voter_token=str(uuid.uuid4()),
+                guest_name=name,
+                choice="yes",
+            )
+        url = f"{self.live_server_url}/calendar/polls/shared/{poll.share_token}"
+        badge = self.page.locator(
+            ".badge", has=self.page.locator('[data-lucide="users"]')
+        )
+
+        self.page.goto(url)
+        expect(self.page.locator("h1")).to_have_text("Retro")
+        expect(badge).to_have_text("2 participants")
+
+        self.page.locator('input[placeholder="Your name"]').fill("Alice Guest")
+        self.page.locator('tr:has([data-lucide="pencil"]) button').nth(0).click()
+        self.page.get_by_role("button", name="Save my votes").click()
+        expect(
+            self.page.get_by_text("Your votes have been saved!", exact=False)
+        ).to_be_visible()
+        expect(badge).to_have_text("3 participants")
+
+        self.page.reload()
+        expect(self.page.locator("h1")).to_have_text("Retro")
+        expect(badge).to_have_text("3 participants")
+
     def test_participants_render_by_display_name_one_row_per_voter(self):
         poll = self._make_open_poll(title="Offsite")
         slot = poll.slots.first()

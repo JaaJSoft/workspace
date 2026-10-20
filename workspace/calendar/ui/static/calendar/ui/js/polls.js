@@ -19,6 +19,13 @@ window.pollUtils = {
     return poll.slots.find(s => s.uuid === poll.chosen_slot_id) || null;
   },
 
+  // Every voter counts once, the visitor's own saved votes included: those are
+  // the ones flagged is_mine, which the shared page renders in its editable row
+  // rather than among the other participants.
+  participantCount(poll) {
+    return new Set((poll?.votes || []).map(v => v.participant)).size;
+  },
+
   isChosenSlot(poll, slotUuid) {
     return poll?.status === 'closed' && poll?.chosen_slot_id === slotUuid;
   },

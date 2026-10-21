@@ -1,214 +1,120 @@
 """Tests for workspace.users.sse_provider.
 
-Exercises the real DB-to-snapshot bucketing logic and the
-PresenceSSEProvider poll/initial-event flow. The process-level
-snapshot cache is reset between tests to avoid cross-test bleed.
+What a presence stream carries (the viewer's watched users only) and how much
+it sends once connected (nothing until a status it follows changes).
 """
 
-from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.test import TestCase
-from django.utils import timezone
 
-from workspace.users import sse_provider
-from workspace.users.models import UserPresence
-from workspace.users.sse_provider import (
-    PresenceSSEProvider,
-    _build_global_snapshot,
-    _query_presence_snapshot,
-)
+from workspace.users.services import presence_stream
+from workspace.users.sse_provider import POLL_INTERVAL, PresenceSSEProvider
+from workspace.users.tests.test_presence_stream import PresenceStreamResetMixin
 
 User = get_user_model()
 
 
-class _SnapshotResetMixin:
-    def setUp(self):
-        # Process-level cache — reset so each test starts fresh.
-        sse_provider._snapshot_cache["value"] = None
-        sse_provider._snapshot_cache["ts"] = 0
-        cache.delete("presence:bot_user_ids")
-
-
-class QueryPresenceSnapshotTests(_SnapshotResetMixin, TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        now = timezone.now()
-
-        def _presence(username, *, delta, manual="auto"):
-            user = User.objects.create_user(username=username, password="pass")
-            UserPresence.objects.create(
-                user=user,
-                last_seen=now - delta,
-                last_activity=now - delta,
-                manual_status=manual,
-            )
-            return user
-
-        cls.now = now
-        cls.online_user = _presence("online", delta=timedelta(seconds=30))
-        cls.away_by_age = _presence("away_age", delta=timedelta(minutes=5))
-        cls.offline_user = _presence("offline", delta=timedelta(minutes=30))
-        cls.busy_user = _presence("busy", delta=timedelta(minutes=30), manual="busy")
-        cls.manual_away = _presence(
-            "manual_away", delta=timedelta(minutes=30), manual="away"
-        )
-        cls.invisible_user = _presence(
-            "invisible",
-            delta=timedelta(seconds=10),
-            manual="invisible",
-        )
-
-    def test_buckets_users_by_status(self):
-        with mock.patch.object(PresenceSSEProvider, "_get_bot_ids", return_value=[]):
-            snapshot = _query_presence_snapshot()
-
-        self.assertIn(self.online_user.id, snapshot["online"])
-        self.assertNotIn(self.online_user.id, snapshot["away"])
-
-        self.assertIn(self.away_by_age.id, snapshot["away"])
-        self.assertIn(self.manual_away.id, snapshot["away"])
-
-        self.assertIn(self.busy_user.id, snapshot["busy"])
-
-        # Invisible users never surface even though they were recently active.
-        for key in ("online", "away", "busy"):
-            self.assertNotIn(self.invisible_user.id, snapshot[key])
-
-        # Offline (auto, stale) users are omitted.
-        for key in ("online", "away", "busy"):
-            self.assertNotIn(self.offline_user.id, snapshot[key])
-
-    def test_bot_ids_propagated(self):
-        with mock.patch.object(
-            PresenceSSEProvider,
-            "_get_bot_ids",
-            return_value=[42, 43],
-        ):
-            snapshot = _query_presence_snapshot()
-        self.assertEqual(snapshot["bot"], [42, 43])
-
-
-class BuildGlobalSnapshotTests(_SnapshotResetMixin, TestCase):
-    def test_cache_hit_reuses_previous_snapshot(self):
-        with mock.patch(
-            "workspace.users.sse_provider._query_presence_snapshot",
-            return_value={"online": [1], "away": [], "busy": [], "bot": []},
-        ) as query:
-            first = _build_global_snapshot()
-            second = _build_global_snapshot()
-
-        # Second call must hit the cache, not re-query.
-        query.assert_called_once()
-        self.assertIs(first, second)
-
-    def test_cache_miss_triggers_requery(self):
-        with mock.patch(
-            "workspace.users.sse_provider._query_presence_snapshot",
-            return_value={"online": [1], "away": [], "busy": [], "bot": []},
-        ) as query:
-            _build_global_snapshot()
-
-        # Expire the cache manually.
-        sse_provider._snapshot_cache["ts"] = 0
-
-        with mock.patch(
-            "workspace.users.sse_provider._query_presence_snapshot",
-            return_value={"online": [1, 2], "away": [], "busy": [], "bot": []},
-        ) as query2:
-            snapshot = _build_global_snapshot()
-
-        query.assert_called_once()
-        query2.assert_called_once()
-        self.assertEqual(snapshot["online"], [1, 2])
-
-
-class PresenceSSEProviderTests(_SnapshotResetMixin, TestCase):
+class PresenceSSEProviderTests(PresenceStreamResetMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.user = User.objects.create_user(username="caller", password="pass")
 
-    def _make_provider(self):
-        return PresenceSSEProvider(user=self.user, last_event_id=None)
+    def setUp(self):
+        super().setUp()
+        self.instance = {}
+        patcher = mock.patch.object(
+            presence_stream, "instance_statuses", side_effect=lambda: self.instance
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_initial_events_returns_snapshot(self):
-        fake_snapshot = {"online": [1], "away": [], "busy": [], "bot": []}
-        with mock.patch(
-            "workspace.users.sse_provider._build_global_snapshot",
-            return_value=fake_snapshot,
-        ):
-            events = self._make_provider().get_initial_events()
+    def _connect(self):
+        provider = PresenceSSEProvider(user=self.user, last_event_id=None)
+        events = provider.get_initial_events()
+        return provider, events
 
-        self.assertEqual(len(events), 1)
-        event_name, payload, event_id = events[0]
-        self.assertEqual(event_name, "presence_snapshot")
-        self.assertEqual(payload, fake_snapshot)
-        self.assertIsNone(event_id)
+    @staticmethod
+    def _elapse(provider):
+        provider._last_check -= POLL_INTERVAL + 1
 
-    def test_poll_suppresses_updates_before_interval(self):
-        with mock.patch(
-            "workspace.users.sse_provider._build_global_snapshot",
-            return_value={"online": [], "away": [], "busy": [], "bot": []},
-        ):
-            provider = self._make_provider()
-            provider.get_initial_events()
-            # Immediately poll — should be throttled (<10 s since initial).
-            events = provider.poll(cache_value=None)
-        self.assertEqual(events, [])
+    def test_snapshot_carries_only_watched_users(self):
+        presence_stream.watch(self.user.id, [101, 104])
+        self.instance = {
+            101: "online",
+            102: "online",
+            103: "busy",
+            104: "bot",
+            105: "bot",
+            self.user.id: "away",
+        }
 
-    def test_poll_emits_when_snapshot_changes(self):
-        initial = {"online": [1], "away": [], "busy": [], "bot": []}
-        updated = {"online": [1, 2], "away": [], "busy": [], "bot": []}
+        _, events = self._connect()
 
-        with mock.patch(
-            "workspace.users.sse_provider._build_global_snapshot",
-            return_value=initial,
-        ):
-            provider = self._make_provider()
-            provider.get_initial_events()
+        self.assertEqual(
+            events,
+            [
+                (
+                    "presence_snapshot",
+                    {"online": [101], "away": [self.user.id], "busy": [], "bot": [104]},
+                    None,
+                )
+            ],
+        )
 
-        # Pretend 11 seconds have passed so poll() is allowed to fire.
-        provider._last_push -= 11
+    def test_unchanged_statuses_send_nothing_after_the_snapshot(self):
+        presence_stream.watch(self.user.id, [101, 102])
+        self.instance = {101: "online"}
+        provider, _ = self._connect()
 
-        with mock.patch(
-            "workspace.users.sse_provider._build_global_snapshot",
-            return_value=updated,
-        ):
-            events = provider.poll(cache_value=None)
+        self._elapse(provider)
+        self.assertEqual(provider.poll(cache_value=None), [])
 
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0][1], updated)
+    def test_changes_of_unwatched_users_send_nothing(self):
+        presence_stream.watch(self.user.id, [101])
+        self.instance = {101: "online"}
+        provider, _ = self._connect()
 
-    def test_poll_suppresses_when_snapshot_unchanged(self):
-        snapshot = {"online": [1], "away": [], "busy": [], "bot": []}
-        with mock.patch(
-            "workspace.users.sse_provider._build_global_snapshot",
-            return_value=snapshot,
-        ):
-            provider = self._make_provider()
-            provider.get_initial_events()
-            provider._last_push -= 11
-            events = provider.poll(cache_value=None)
+        self.instance = {101: "online", 102: "online", 103: "busy"}
+        self._elapse(provider)
+        self.assertEqual(provider.poll(cache_value=None), [])
 
-        self.assertEqual(events, [])
+    def test_poll_sends_only_what_changed(self):
+        presence_stream.watch(self.user.id, [101, 102, 103])
+        self.instance = {101: "online", 102: "online"}
+        provider, _ = self._connect()
 
+        self.instance = {101: "online", 102: "away", 103: "busy"}
+        self._elapse(provider)
+        self.assertEqual(
+            provider.poll(cache_value=None),
+            [("presence_changes", {"102": "away", "103": "busy"}, None)],
+        )
 
-class BotIdsCacheTests(_SnapshotResetMixin, TestCase):
-    def test_bot_ids_are_cached(self):
-        # ai/0002_create_default_bot may have seeded a row when AI_API_KEY is
-        # set (e.g. in local dev via .env), so don't assume the table is empty.
-        from workspace.ai.models import BotProfile
+        # A user going offline is a change too, sent explicitly.
+        self.instance = {102: "away", 103: "busy"}
+        self._elapse(provider)
+        self.assertEqual(
+            provider.poll(cache_value=None),
+            [("presence_changes", {"101": "offline"}, None)],
+        )
 
-        bot_user = User.objects.create_user(username="bot1", password="pass")
-        BotProfile.objects.create(user=bot_user)
+    def test_poll_waits_for_the_interval(self):
+        presence_stream.watch(self.user.id, [101])
+        provider, _ = self._connect()
 
-        ids = PresenceSSEProvider._get_bot_ids()
-        self.assertIn(bot_user.id, ids)
+        self.instance = {101: "online"}
+        self.assertEqual(provider.poll(cache_value=None), [])
 
-        # Delete the profile; the cached call must still return the same list
-        # (stale reads for up to the TTL are the property under test).
-        BotProfile.objects.filter(user=bot_user).delete()
-        ids_after = PresenceSSEProvider._get_bot_ids()
-        self.assertEqual(ids_after, ids)
+    def test_a_watch_notification_answers_for_the_new_ids_at_once(self):
+        presence_stream.watch(self.user.id, [101])
+        self.instance = {101: "online", 102: "busy"}
+        provider, _ = self._connect()
+
+        presence_stream.watch(self.user.id, [102, 103])
+        # Notified, so the interval does not hold the answer back.
+        self.assertEqual(
+            provider.poll(cache_value="notified"),
+            [("presence_changes", {"102": "busy", "103": "offline"}, None)],
+        )

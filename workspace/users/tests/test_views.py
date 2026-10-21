@@ -446,6 +446,64 @@ class UserStatusTests(UserTestMixin, APITestCase):
         self.assertEqual(resp.status_code, 400)
 
 
+# ── UserPresenceView ────────────────────────────────────────────
+
+
+class UserPresenceTests(UserTestMixin, APITestCase):
+    URL = "/api/v1/users/presence"
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        patcher = patch(
+            "workspace.users.services.presence_stream.instance_statuses",
+            return_value={7: "online", 8: "bot"},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        cache.clear()
+        super().tearDown()
+
+    def test_unauthenticated_rejected(self):
+        self.client.force_authenticate(None)
+        resp = self.client.post(self.URL, {"user_ids": [7]}, format="json")
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_returns_the_status_of_each_listed_user(self):
+        resp = self.client.post(self.URL, {"user_ids": [7, 8, 9]}, format="json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"7": "online", "8": "bot", "9": "offline"})
+
+    def test_listed_users_join_the_callers_stream(self):
+        from workspace.users.services.presence_stream import watched_user_ids
+
+        with patch("workspace.users.views.notify_sse") as notify:
+            self.client.post(self.URL, {"user_ids": [7, 9]}, format="json")
+        self.assertEqual(watched_user_ids(self.user.pk), {7, 9, self.user.pk})
+        notify.assert_called_once_with("presence", self.user.pk)
+
+    def test_already_watched_users_do_not_wake_the_stream(self):
+        self.client.post(self.URL, {"user_ids": [7]}, format="json")
+        with patch("workspace.users.views.notify_sse") as notify:
+            self.client.post(self.URL, {"user_ids": [7]}, format="json")
+        notify.assert_not_called()
+
+    def test_rejects_malformed_or_oversized_lists(self):
+        from workspace.users.services.presence_stream import MAX_IDS_PER_REQUEST
+
+        for body in (
+            {},
+            {"user_ids": []},
+            {"user_ids": ["abc"]},
+            {"user_ids": [0]},
+            {"user_ids": list(range(1, MAX_IDS_PER_REQUEST + 2))},
+        ):
+            resp = self.client.post(self.URL, body, format="json")
+            self.assertEqual(resp.status_code, 400, body)
+
+
 # ── SettingsListView ────────────────────────────────────────────
 
 

@@ -20,7 +20,8 @@ def pickable_users():
 def search_people(
     query, requesting_user=None, limit=DEFAULT_SEARCH_LIMIT, *, with_email=False
 ):
-    """Active, non-bot users matching *query* on username, first or last name.
+    """Active, non-bot users matching *query* on username, first or last name,
+    ignoring accents and case.
 
     Bots are excluded on purpose: every caller is a person picker, and an
     assistant offered as a colleague is never the right answer. *requesting_user*
@@ -29,13 +30,13 @@ def search_people(
     recipient picker needs, since it can only offer an address.
     """
     match = (
-        Q(username__icontains=query)
-        | Q(first_name__icontains=query)
-        | Q(last_name__icontains=query)
+        Q(username__ficontains=query)
+        | Q(first_name__ficontains=query)
+        | Q(last_name__ficontains=query)
     )
     qs = pickable_users()
     if with_email:
-        match |= Q(email__icontains=query)
+        match |= Q(email__ficontains=query)
         qs = qs.exclude(email="")
     qs = qs.filter(match)
     if getattr(requesting_user, "pk", None):

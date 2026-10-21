@@ -61,6 +61,37 @@ class SearchPeopleTests(TestCase):
         self.assertEqual(len(search_people("mar", limit=1)), 1)
 
 
+class SearchPeopleAccentTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.helene = User.objects.create_user(
+            username="hdurand", password="pass", first_name="Hélène"
+        )
+        cls.elodie = User.objects.create_user(
+            username="elo", password="pass", last_name="élodie"
+        )
+        cls.zoe = User.objects.create_user(
+            username="zoé", password="pass", email="zoé@exemple.fr"
+        )
+
+    def test_a_query_without_accents_finds_the_accented_name(self):
+        self.assertEqual(list(search_people("helene")), [self.helene])
+
+    def test_a_non_ascii_capital_finds_the_lowercase_name(self):
+        self.assertEqual(list(search_people("ÉLODIE")), [self.elodie])
+
+    def test_an_accented_query_finds_the_accented_name(self):
+        self.assertEqual(list(search_people("Hélè")), [self.helene])
+
+    def test_matches_username_without_accents(self):
+        self.assertEqual(list(search_people("ZOE")), [self.zoe])
+
+    def test_matches_email_without_accents(self):
+        self.assertEqual(
+            list(search_people("zoe@exemple", with_email=True)), [self.zoe]
+        )
+
+
 class SearchPeopleWithEmailTests(TestCase):
     @classmethod
     def setUpTestData(cls):

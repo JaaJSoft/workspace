@@ -116,13 +116,17 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - '.github/workflows/tests.yml'
-            # The vector index and what its pgvector backend runs on, plus
-            # the vault envelope rotation, whose conditional UPDATE leans on
-            # PostgreSQL's pre-update semantics.
+            # The vector index and what its pgvector backend runs on, the
+            # vault envelope rotation, whose conditional UPDATE leans on
+            # PostgreSQL's pre-update semantics, and the accent-folding lookup,
+            # whose PostgreSQL SQL calls f_unaccent.
             vectors:
               - 'workspace/common/vectors/**'
               - 'workspace/common/management/commands/*vector*'
               - 'workspace/common/tests/test_vectors*.py'
+              - 'workspace/common/folding.py'
+              - 'workspace/common/migrations/0001_f_unaccent.py'
+              - 'workspace/common/tests/test_folding.py'
               - 'workspace/vault/views/account.py'
               - 'workspace/vault/tests/test_account_api.py'
               - 'workspace/settings/**'
@@ -542,3 +546,12 @@ jobs:
           PYTHONWARNINGS: default
         run: |
           uv run python manage.py test workspace.vault.tests.test_account_api.AccountRotateTests -v 2
+
+      # Fold and the ficontains lookup compile to f_unaccent on PostgreSQL;
+      # the Django matrix only ever runs their SQLite side.
+      - name: Run the accent-folding lookup tests on PostgreSQL
+        env:
+          DATABASE_URL: postgres://workspace:workspace@localhost:5432/workspace
+          PYTHONWARNINGS: default
+        run: |
+          uv run python manage.py test workspace.common.tests.test_folding -v 2

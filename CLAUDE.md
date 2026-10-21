@@ -221,7 +221,7 @@ Tests run in parallel in CI with one job per module (see `.github/workflows/test
 
 **CI coverage floors** (`.github/workflows/tests.yml`): each module pins a `min_coverage` (45-95%). Lowering a threshold is forbidden by the workflow's own comment - raise it after adding coverage, never lower it.
 
-**CI only runs what a change can affect.** Every workflow carries a `paths` filter, so docs-only commits (`*.md` except `CHANGELOG.md`, `docs/`, issue/PR templates, `.claude/`) start no run at all, and the Docker workflow skips anything `.dockerignore` keeps out of the image (tests, docs); the Trivy workflow only runs on its nightly schedule (per-commit scanning lives in the Docker workflow). Inside `tests.yml` a `changes` job (`dorny/paths-filter`) further gates the narrow jobs: `lint` needs a Python/`pyproject.toml`/`uv.lock` change, `djlint` a `workspace/**.html` or manifest change, `js` a `workspace/**.js` change, `webdav-mount` a change under `files`/`common`/`users`/`core`/`settings` or the dependency manifests, `nextcloud-live` (the imports run against a real Nextcloud service container, `workspace/imports/tests/test_nextcloud_live.py`, skipped everywhere else) a change under `imports`/`people`/`files`/`common`/`settings` or the manifests. `pgvector` (the vector index tests run on PostgreSQL against a `pgvector/pgvector` service, the only place its pgvector backend runs) a change under `common/vectors`, its commands and tests, `settings` or the manifests. The Django and E2E matrices always run once the workflow triggers - they render templates and read static assets, so almost any change can reach them. When a job grows a new dependency (e.g. the mount test starts importing from `mail`), extend its filter in the `changes` job; when in doubt, err on running the job.
+**CI only runs what a change can affect.** Every workflow carries a `paths` filter, so docs-only commits (`*.md` except `CHANGELOG.md`, `docs/`, issue/PR templates, `.claude/`) start no run at all, and the Docker workflow skips anything `.dockerignore` keeps out of the image (tests, docs); the Trivy workflow only runs on its nightly schedule (per-commit scanning lives in the Docker workflow). Inside `tests.yml` a `changes` job (`dorny/paths-filter`) further gates the narrow jobs: `lint` needs a Python/`pyproject.toml`/`uv.lock` change, `djlint` a `workspace/**.html` or manifest change, `js` a `workspace/**.js` change, `webdav-mount` a change under `files`/`common`/`users`/`core`/`settings` or the dependency manifests, `nextcloud-live` (the imports run against a real Nextcloud service container, `workspace/imports/tests/test_nextcloud_live.py`, skipped everywhere else) a change under `imports`/`people`/`files`/`common`/`settings` or the manifests. `pgvector` (the vector index tests run on PostgreSQL against a `pgvector/pgvector` service, the only place its pgvector backend runs, along with the other PostgreSQL-only checks: the vault envelope rotation and the `ficontains` lookup) a change under `common/vectors`, its commands and tests, `common/folding.py` and its test, `settings` or the manifests. The Django and E2E matrices always run once the workflow triggers - they render templates and read static assets, so almost any change can reach them. When a job grows a new dependency (e.g. the mount test starts importing from `mail`), extend its filter in the `changes` job; when in doubt, err on running the job.
 
 ### JS unit tests
 
@@ -646,6 +646,18 @@ means `@sensitive_variables()`: `@sensitive_post_parameters` cleanses `request.P
 body leaves empty. It is still worth keeping, because the default parser list also accepts a
 form-encoded body, and on that request it is the only thing standing between the field and the
 technical 500 page. `workspace/vault/views.py` is the worked example.
+
+### Substring search - `__ficontains`, never `__icontains`
+
+A search box that matches a column by substring uses the `ficontains` lookup from `workspace/common/folding.py`, registered on every `CharField` and `TextField`. It folds case and accents on both sides, in the database: `title__ficontains="reunion"` finds "Réunion", and `"élodie"` finds "ÉLODIE". A plain `__icontains` does neither on SQLite (`LIKE` only folds ASCII case) and ignores accents on PostgreSQL, so the same query finds a note through the full-text index and misses the conversation next to it.
+
+```python
+qs.filter(Q(title__ficontains=q) | Q(description__ficontains=q))
+qs.annotate(folded=Fold("name"))   # the folded value itself, when one is needed
+```
+
+- It compiles to `lower(f_unaccent(...))` on PostgreSQL and to a `fold_text` function registered on every SQLite connection. No index serves it - it scans, like the `icontains` it replaces. A hot, short field can keep a folded shadow column instead (`Person.search_text`, folded with `fold_text`).
+- Exact matches on identifiers (`username__iexact`, an email, a slug) are not searches: leave them alone.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`
 

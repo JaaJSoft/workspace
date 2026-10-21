@@ -1,6 +1,9 @@
+from unittest import skipUnless
+
 from django.contrib.auth.models import Group
 from django.db import NotSupportedError, connection
 from django.db.models import F
+from django.db.models.functions import Collate
 from django.test import SimpleTestCase, TestCase
 
 from workspace.common.folding import Fold
@@ -46,6 +49,14 @@ class FoldedContainsTests(TestCase):
         folded = Group.objects.annotate(folded=Fold("name")).get().folded
         self.assertEqual(folded, "angstrom helene")
 
+    @skipUnless(connection.vendor == "postgresql", "collation C is PostgreSQL's")
+    def test_folds_accented_capitals_under_the_c_collation(self):
+        # Under "C", PostgreSQL's lower() folds ASCII only, so lowering first
+        # would leave "É" alone and unaccent would turn it into "E".
+        Group.objects.create(name="Élodie")
+        folded = Group.objects.annotate(folded=Fold(Collate("name", "C"))).get().folded
+        self.assertEqual(folded, "elodie")
+
 
 class FoldSqlTests(SimpleTestCase):
     """The default suite runs on SQLite: pin the PostgreSQL form by its SQL."""
@@ -57,7 +68,7 @@ class FoldSqlTests(SimpleTestCase):
 
     def test_postgresql_folds_with_f_unaccent(self):
         sql, _ = self._sql(Fold.as_postgresql)
-        self.assertEqual(sql, 'f_unaccent(lower("auth_group"."name"))')
+        self.assertEqual(sql, 'lower(f_unaccent("auth_group"."name"))')
 
     def test_sqlite_folds_with_the_registered_function(self):
         sql, _ = self._sql(Fold.as_sqlite)

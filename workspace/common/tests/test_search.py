@@ -76,6 +76,9 @@ class FallbackBranchTests(TestCase):
         cls.u2 = User.objects.create_user(
             username="b", email="b@x.io", first_name="Bob"
         )
+        cls.u3 = User.objects.create_user(
+            username="c", email="c@x.io", first_name="Élodie"
+        )
 
     def test_fallback_filters_and_annotates_rank(self):
         orig = fts.fts5_available
@@ -87,6 +90,14 @@ class FallbackBranchTests(TestCase):
             fts.fts5_available = orig
         self.assertEqual([r.username for r in rows], ["a"])
         self.assertEqual(rows[0].search_rank, 0.0)
+
+    def test_fallback_ignores_accents_and_non_ascii_case(self):
+        # The full-text indexes it stands in for fold accents; SQLite's LIKE
+        # alone folds neither them nor the case of "É".
+        qs = IcontainsFulltext().apply(
+            User.objects.all(), "elodie", fallback_fields=("first_name",)
+        )
+        self.assertEqual([r.username for r in qs], ["c"])
 
     def test_empty_fallback_fields_return_no_rows(self):
         # A FulltextIndex rejects empty columns, but the strategy keeps its

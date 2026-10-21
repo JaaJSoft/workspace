@@ -13,17 +13,38 @@ document.addEventListener('alpine:init', function () {
   let pendingIds = [];
   let flushTimer = null;
   const MAX_IDS_PER_REQUEST = 500;
+  // The endpoint wakes the stream before it answers, and the two may be served
+  // by processes whose status caches differ by a few seconds: a stream change
+  // can land first and be newer. An answer never overrides a stream change
+  // received after its request went out - the stream would not correct it.
+  let streamSeq = 0;
+  const streamSeqOf = new Map();
 
   function postWatch(ids) {
     for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
+      const batch = ids.slice(i, i + MAX_IDS_PER_REQUEST);
+      const sentAt = streamSeq;
       fetch('/api/v1/users/presence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
-        body: JSON.stringify({ user_ids: ids.slice(i, i + MAX_IDS_PER_REQUEST) }),
+        body: JSON.stringify({ user_ids: batch }),
       })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((statuses) => { if (statuses) Alpine.store('presence').handleChanges(statuses); })
-        .catch(() => {});
+        .then((r) => {
+          if (!r.ok) throw new Error('presence watch failed: ' + r.status);
+          return r.json();
+        })
+        .then((statuses) => {
+          const fresh = {};
+          for (const [key, status] of Object.entries(statuses || {})) {
+            if ((streamSeqOf.get(Number(key)) || 0) <= sentAt) fresh[key] = status;
+          }
+          Alpine.store('presence').handleChanges(fresh);
+        })
+        .catch(() => {
+          // Forget the batch so the next status read asks again, instead of
+          // leaving it unfollowed until the stream reconnects.
+          batch.forEach((uid) => watchedIds.delete(uid));
+        });
     }
   }
 
@@ -147,6 +168,8 @@ document.addEventListener('alpine:init', function () {
     Alpine.store('presence').handleSnapshot(e.detail);
   });
   window.addEventListener('sse:presence.presence_changes', function (e) {
+    streamSeq += 1;
+    for (const key of Object.keys(e.detail || {})) streamSeqOf.set(Number(key), streamSeq);
     Alpine.store('presence').handleChanges(e.detail);
   });
 

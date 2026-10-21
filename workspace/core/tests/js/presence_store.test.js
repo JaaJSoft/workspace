@@ -58,8 +58,14 @@ function loadPresenceEnv() {
     },
     fetch(url, opts) {
       env.posts.push({ url, body: JSON.parse(opts.body) });
-      const statuses = env.responses.shift() || {};
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(statuses) });
+      // A queued response is a status map, a promise of one (to hold the
+      // answer back), or an Error for a failed request.
+      const next = env.responses.shift();
+      if (next instanceof Error) return Promise.resolve({ ok: false, status: 500 });
+      return Promise.resolve(next).then((statuses) => ({
+        ok: true,
+        json: () => Promise.resolve(statuses || {}),
+      }));
     },
     getCSRFToken: () => 'csrf',
   });
@@ -229,4 +235,38 @@ test('a presence_changes event applies the changes', () => {
   env.dispatch('sse:presence.presence_changes', { detail: { 1: 'away' } });
 
   assert.equal(env.store.statusOf(1), 'away');
+});
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('an answer does not override a stream change received after the request', async () => {
+  const env = loadPresenceEnv();
+  let answer;
+  env.responses.push(new Promise((resolve) => { answer = resolve; }));
+  env.store.statusOf(5);
+  env.flush();
+
+  env.dispatch('sse:presence.presence_changes', { detail: { 5: 'away' } });
+  answer({ 5: 'online', 6: 'busy' });
+  await settle();
+
+  assert.equal(env.store.statusOf(5), 'away', 'the newer stream change wins');
+  assert.equal(env.store.statusOf(6), 'busy', 'untouched ids still apply');
+});
+
+test('a failed request is asked again on the next status read', async () => {
+  const env = loadPresenceEnv();
+  env.responses.push(new Error('server error'));
+  env.store.statusOf(5);
+  env.flush();
+  await settle();
+
+  env.responses.push({ 5: 'online' });
+  env.store.statusOf(5);
+  env.flush();
+  await settle();
+
+  assert.equal(env.posts.length, 2);
+  assert.deepStrictEqual(Array.from(env.posts[1].body.user_ids), [5]);
+  assert.equal(env.store.statusOf(5), 'online');
 });

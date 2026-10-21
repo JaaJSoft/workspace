@@ -24,7 +24,7 @@ dependencies = [
     # C-accelerated RESP parser; redis-py auto-detects and uses it when present
     "hiredis>=3.5.0",
     # imaging
-    "pillow>=12.3.0",
+    "pillow>=13.0.0",
     # HEIF/HEIC decoding (photos straight off an iPhone), as a Pillow plugin
     "pillow-heif>=1.8.1",
     "cairosvg>=2.9.1",
@@ -134,6 +134,12 @@ dev = [
     "python-pptx>=1.0.2",
     "odfpy>=1.4.1",
 ]
+
+[tool.uv]
+# fastembed 0.9.0 caps pillow below 13, which would hold back the Pillow
+# security fixes. It only uses Image.Resampling, resize and fromarray on uint8
+# RGB arrays, none of which 13.0 changed. Drop once fastembed lifts the cap.
+override-dependencies = ["pillow>=13.0.0"]
 
 [tool.djlint]
 profile = "django"

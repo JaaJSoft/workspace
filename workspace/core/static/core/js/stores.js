@@ -4,6 +4,70 @@
 //   - presence/notification updates: window dispatched events from sse.js
 //   - service-worker version: <body data-app-version="...">
 document.addEventListener('alpine:init', function () {
+  // The stream only carries the users this page asked about. Any status read
+  // (statusOf, hence ringClass/dotClass) registers its id, so every surface
+  // that renders a presence is covered without declaring anything. Kept out of
+  // the store: statusOf runs inside Alpine effects, which must not write
+  // reactive state.
+  const watchedIds = new Set();
+  let pendingIds = [];
+  let flushTimer = null;
+  const MAX_IDS_PER_REQUEST = 500;
+  // The endpoint wakes the stream before it answers, and the two may be served
+  // by processes whose status caches differ by a few seconds: a stream change
+  // can land first and be newer. An answer never overrides a stream change
+  // received after its request went out - the stream would not correct it.
+  let streamSeq = 0;
+  const streamSeqOf = new Map();
+
+  function postWatch(ids) {
+    for (let i = 0; i < ids.length; i += MAX_IDS_PER_REQUEST) {
+      const batch = ids.slice(i, i + MAX_IDS_PER_REQUEST);
+      const sentAt = streamSeq;
+      fetch('/api/v1/users/presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+        body: JSON.stringify({ user_ids: batch }),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error('presence watch failed: ' + r.status);
+          return r.json();
+        })
+        .then((statuses) => {
+          const fresh = {};
+          for (const [key, status] of Object.entries(statuses || {})) {
+            if ((streamSeqOf.get(Number(key)) || 0) <= sentAt) fresh[key] = status;
+          }
+          Alpine.store('presence').handleChanges(fresh);
+        })
+        .catch(() => {
+          // Forget the batch so the next status read asks again, instead of
+          // leaving it unfollowed until the stream reconnects.
+          batch.forEach((uid) => watchedIds.delete(uid));
+        });
+    }
+  }
+
+  function watchId(uid) {
+    if (!(uid > 0) || watchedIds.has(uid)) return;
+    watchedIds.add(uid);
+    pendingIds.push(uid);
+    if (flushTimer === null) {
+      flushTimer = setTimeout(() => {
+        flushTimer = null;
+        const ids = pendingIds;
+        pendingIds = [];
+        postWatch(ids);
+      }, 50);
+    }
+  }
+
+  // The server-side watch list may have lapsed while the stream was down
+  // (TTL, eviction): send the whole set again so the new stream follows it.
+  window.addEventListener('sse:reconnect', function () {
+    if (watchedIds.size) postWatch(Array.from(watchedIds));
+  });
+
   Alpine.store('presence', {
     online: new Set(),
     away: new Set(),
@@ -24,6 +88,28 @@ document.addEventListener('alpine:init', function () {
       if (Array.isArray(data.away)) this.away = new Set(data.away);
       if (Array.isArray(data.busy)) this.busy = new Set(data.busy);
       if (Array.isArray(data.bot)) this.bot = new Set(data.bot);
+    },
+
+    handleChanges(changes) {
+      // { "<user id>": "online" | "away" | "busy" | "bot" | "offline" }, from a
+      // presence_changes event or the watch endpoint. Only the listed users
+      // move; everyone else keeps their bucket.
+      if (!changes || typeof changes !== 'object') return;
+      const buckets = {
+        online: new Set(this.online),
+        away: new Set(this.away),
+        busy: new Set(this.busy),
+        bot: new Set(this.bot),
+      };
+      for (const [key, status] of Object.entries(changes)) {
+        const uid = Number(key);
+        for (const set of Object.values(buckets)) set.delete(uid);
+        if (buckets[status]) buckets[status].add(uid);
+      }
+      this.online = buckets.online;
+      this.away = buckets.away;
+      this.busy = buckets.busy;
+      this.bot = buckets.bot;
     },
 
     setLocalStatus(userId, status) {
@@ -51,6 +137,7 @@ document.addEventListener('alpine:init', function () {
 
     statusOf(userId) {
       const uid = Number(userId);
+      watchId(uid);
       if (this.bot.has(uid)) return 'bot';
       if (this.busy.has(uid)) return 'busy';
       if (this.online.has(uid)) return 'online';
@@ -79,6 +166,11 @@ document.addEventListener('alpine:init', function () {
 
   window.addEventListener('sse:presence.presence_snapshot', function (e) {
     Alpine.store('presence').handleSnapshot(e.detail);
+  });
+  window.addEventListener('sse:presence.presence_changes', function (e) {
+    streamSeq += 1;
+    for (const key of Object.keys(e.detail || {})) streamSeqOf.set(Number(key), streamSeq);
+    Alpine.store('presence').handleChanges(e.detail);
   });
 
   // Notifications store

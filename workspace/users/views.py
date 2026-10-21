@@ -27,6 +27,7 @@ from rest_framework.views import APIView
 from workspace.common.limits import clamp_limit
 from workspace.common.mixins import CacheControlMixin
 from workspace.core.module_registry import SearchScope
+from workspace.core.sse_registry import notify_sse
 from workspace.files.models import File
 from workspace.files.sensitivity import BlurPreference
 from workspace.users.models import APITokenLabel, UserSetting
@@ -38,6 +39,7 @@ from workspace.users.queries import (
 )
 from workspace.users.services import avatar as avatar_service
 from workspace.users.services import presence as presence_service
+from workspace.users.services import presence_stream
 from workspace.users.services.settings import (
     delete_setting,
     get_module_settings,
@@ -484,6 +486,43 @@ class UserStatusView(APIView):
             )
         presence_service.set_manual_status(request.user.pk, new_status)
         return Response({"status": new_status})
+
+
+class _PresenceWatchSerializer(serializers.Serializer):
+    user_ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        allow_empty=False,
+        max_length=presence_stream.MAX_IDS_PER_REQUEST,
+    )
+
+
+@extend_schema(tags=["Users"])
+class UserPresenceView(APIView):
+    """Presence of the users a page displays, followed live by the SSE stream."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Watch user presence",
+        description=(
+            "Return the current status of each listed user (online, away, busy, "
+            "bot or offline) and add them to the users the caller's SSE streams "
+            "follow: later changes arrive as `presence.presence_changes` events."
+        ),
+        request=_PresenceWatchSerializer,
+        responses={
+            200: OpenApiResponse(description="Map of user id to status."),
+        },
+    )
+    def post(self, request):
+        serializer = _PresenceWatchSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user_ids = serializer.validated_data["user_ids"]
+        if presence_stream.watch(request.user.pk, user_ids):
+            notify_sse("presence", request.user.pk)
+        return Response(
+            presence_stream.as_payload(presence_stream.statuses_of(user_ids))
+        )
 
 
 # ── Settings API ──────────────────────────────────────────────

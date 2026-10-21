@@ -29,6 +29,9 @@ urlpatterns = [
     ),
     path("api/v1/users/me/status", views.UserStatusView.as_view(), name="user-status"),
     path(
+        "api/v1/users/presence", views.UserPresenceView.as_view(), name="user-presence"
+    ),
+    path(
         "api/v1/users/<int:user_id>/avatar",
         views.UserAvatarRetrieveView.as_view(),
         name="user-avatar-retrieve",

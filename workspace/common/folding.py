@@ -4,8 +4,10 @@
 and ``field__ficontains=needle`` is ``icontains`` on both sides folded:
 ``from_name__ficontains="francois"`` finds "François".
 
-PostgreSQL folds with ``f_unaccent(lower(...))`` (``common/0001_f_unaccent``),
-SQLite with ``fold_text`` itself, registered on every connection. The needle
+PostgreSQL folds with ``lower(f_unaccent(...))`` (``common/0001_f_unaccent``),
+SQLite with ``fold_text`` itself, registered on every connection. Unaccenting
+comes first because under the ``C`` collation ``lower`` folds ASCII only: it
+would leave "É" alone, and ``unaccent`` would then make it "E". The needle
 is folded by the same SQL as the column, so the two always agree even where
 PostgreSQL's ``unaccent`` and ``fold_text`` differ (``"œ"`` gives ``"oe"`` in
 one, stays ``"œ"`` in the other). No index serves either form: it is a scan,
@@ -35,7 +37,7 @@ class Fold(Func):
 
     def as_postgresql(self, compiler, connection, **extra_context):
         return super().as_sql(
-            compiler, connection, template="f_unaccent(lower(%(expressions)s))"
+            compiler, connection, template="lower(f_unaccent(%(expressions)s))"
         )
 
 

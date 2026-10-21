@@ -656,7 +656,7 @@ qs.filter(Q(title__ficontains=q) | Q(description__ficontains=q))
 qs.annotate(folded=Fold("name"))   # the folded value itself, when one is needed
 ```
 
-- It compiles to `f_unaccent(lower(...))` on PostgreSQL and to a `fold_text` function registered on every SQLite connection. No index serves it - it scans, like the `icontains` it replaces. A hot, short field can keep a folded shadow column instead (`Person.search_text`, folded with `fold_text`).
+- It compiles to `lower(f_unaccent(...))` on PostgreSQL and to a `fold_text` function registered on every SQLite connection. No index serves it - it scans, like the `icontains` it replaces. A hot, short field can keep a folded shadow column instead (`Person.search_text`, folded with `fold_text`).
 - Exact matches on identifiers (`username__iexact`, an email, a slug) are not searches: leave them alone.
 
 ### Query parameter parsing - never trust raw values from `request.query_params` or `request.data`

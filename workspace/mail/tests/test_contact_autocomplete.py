@@ -190,6 +190,28 @@ class BasicSearchTests(AutocompleteTestMixin, APITestCase):
         resp = self.client.get(URL, {"q": "zzz"})
         self.assertEqual(resp.json(), [])
 
+    def test_sender_name_matches_a_query_typed_without_accents(self):
+        self._create_message(
+            from_name="François Dupré", from_email="f.dupre@example.com"
+        )
+        resp = self.client.get(URL, {"q": "francois"})
+        self.assertEqual(
+            [(c["name"], c["email"]) for c in resp.json()],
+            [("François Dupré", "f.dupre@example.com")],
+        )
+
+    def test_recipient_name_matches_a_query_typed_without_accents(self):
+        self._create_message(
+            to_addresses=[{"name": "Hélène Côté", "email": "hc@example.com"}],
+        )
+        resp = self.client.get(URL, {"q": "helene cote"})
+        self.assertEqual([c["email"] for c in resp.json()], ["hc@example.com"])
+
+    def test_accented_capital_matches_its_lowercase(self):
+        self._create_message(from_name="Élodie", from_email="e@example.com")
+        resp = self.client.get(URL, {"q": "élodie"})
+        self.assertEqual([c["email"] for c in resp.json()], ["e@example.com"])
+
 
 class DeduplicationTests(AutocompleteTestMixin, APITestCase):
     def setUp(self):

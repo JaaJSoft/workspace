@@ -5,6 +5,7 @@ from django.db.models import Q
 
 from workspace.common.search import apply_fulltext
 from workspace.common.search.schema import Col, FulltextIndex
+from workspace.common.text import fold_text
 from workspace.core.module_registry import SearchResult, SearchTag
 
 from .models import MailMessage
@@ -87,15 +88,15 @@ def search_contacts(query, user, limit):
     messages = (
         MailMessage.objects.filter(account_id__in=account_ids, deleted_at__isnull=True)
         .filter(
-            Q(from_email__icontains=query)
-            | Q(from_name__icontains=query)
-            | Q(recipients_text__icontains=query)
+            Q(from_email__ficontains=query)
+            | Q(from_name__ficontains=query)
+            | Q(recipients_text__ficontains=query)
         )
         .order_by("-date")
         .only("from_email", "from_name", "to_addresses", "cc_addresses")[:500]
     )
 
-    q_lower = query.lower()
+    needle = fold_text(query)
     email_count = Counter()
     email_names = defaultdict(Counter)
 
@@ -112,7 +113,7 @@ def search_contacts(query, user, limit):
         for addr in addresses:
             email = addr["email"].strip().lower()
             name = (addr.get("name") or "").strip()
-            if q_lower not in email and q_lower not in name.lower():
+            if needle not in fold_text(email) and needle not in fold_text(name):
                 continue
             email_count[email] += 1
             if name:

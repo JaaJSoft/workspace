@@ -75,13 +75,13 @@ def account_suggestions(user, query):
 
 def history_suggestions(account_filter, query):
     """Correspondents of the messages ``account_filter`` selects, most frequent first."""
-    needle = query.lower()
+    needle = fold_text(query)
     rows = (
         MailMessage.objects.filter(account_filter, deleted_at__isnull=True)
         .filter(
-            Q(from_email__icontains=query)
-            | Q(from_name__icontains=query)
-            | Q(recipients_text__icontains=query)
+            Q(from_email__ficontains=query)
+            | Q(from_name__ficontains=query)
+            | Q(recipients_text__ficontains=query)
         )
         .order_by("-date")
         .values("from_email", "from_name", "to_addresses", "cc_addresses")[
@@ -105,7 +105,7 @@ def history_suggestions(account_filter, query):
             email = addr["email"].strip().lower()
             name = (addr.get("name") or "").strip()
             # The message matched, but each of its addresses must match too.
-            if needle not in email and needle not in name.lower():
+            if needle not in fold_text(email) and needle not in fold_text(name):
                 continue
             email_count[email] += 1
             if name:

@@ -601,6 +601,13 @@ answered the same way whatever it holds:
   folder - the folder alone guesses wrong one time in two. Saying yes puts
   the photos under Léa, those left out are never asked about as her again.
 
+A person is in a photo once: someone found by their body cannot be named Léa
+when Léa is already another person of that photo - her face is on another
+head, or the user said who that other person is. They are set apart from Léa
+instead, so the review does not ask the same question again. Léa's face on
+nobody's head does not count: someone crouching or bent over wears it lower
+than a head, and the person asked about may well be her.
+
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
 the card's field, or *Hide* for nobody to name. Faces left out are taken out of the group the answer settles,

@@ -13,7 +13,7 @@ from workspace.files.services import FileService
 from workspace.files.services.search_index import index_file
 from workspace.files.services.sharing import share_file
 from workspace.photos.models import Album
-from workspace.photos.search import search_photos
+from workspace.photos.search import search_albums, search_photos
 from workspace.photos.services.album_sharing import share_album
 from workspace.photos.services.albums import create_album
 from workspace.users.services.settings import set_setting
@@ -203,6 +203,17 @@ class SearchAlbumsTests(TestCase):
 
         self.assertEqual(
             [h.name for h in search_photos("sunset", self.user, 1)], ["Sunset walks"]
+        )
+
+    def test_a_title_is_found_whatever_its_accents_and_case(self):
+        create_album(self.user, "Été 2025")
+        create_album(self.user, "Noel")
+
+        self.assertEqual(
+            [h.name for h in search_albums("ete 2025", self.user, 10)], ["Été 2025"]
+        )
+        self.assertEqual(
+            [h.name for h in search_albums("NOËL", self.user, 10)], ["Noel"]
         )
 
 

@@ -219,6 +219,45 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
 
         self.assertIsNone(self.suggestion(back))
 
+    def test_a_face_off_the_head_of_the_only_person_left_is_theirs(self):
+        # Léa crouching: her face sits below the top of her box.
+        crouching = photo_at(self.user, "crouching.jpg")
+        named_face(self.user, crouching, self.lea, box=(0.15, 0.6, 0.1, 0.12))
+        hers = seen(self.user, crouching, RED)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(hers))
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_faces_and_people_left_two_by_two_are_somebody_but_nobody_named(self):
+        self.anchor(self.lea, RED)
+        pair = photo_at(self.user, "pair.jpg", 1)
+        named_face(self.user, pair, self.noah, box=(0.15, 0.6, 0.1, 0.12))
+        named_face(self.user, pair, None, box=(0.7, 0.6, 0.1, 0.12))
+        first = seen(self.user, pair, RED)
+        second = seen(self.user, pair, BLUE, box=(0.6, 0.1, 0.3, 0.8))
+        back = seen(self.user, photo_at(self.user, "back.jpg", 2), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(first))
+        self.assertIsNone(self.suggestion(second))
+        # Whoever wears red there is somebody: Léa is no longer the only one.
+        self.assertIsNone(self.suggestion(back))
+
+    def test_more_people_left_than_faces_are_still_asked_about(self):
+        self.anchor(self.lea, RED)
+        group = photo_at(self.user, "group.jpg", 1)
+        named_face(self.user, group, self.noah, box=(0.15, 0.6, 0.1, 0.12))
+        near = seen(self.user, group, RED)
+        seen(self.user, group, BLUE, box=(0.6, 0.1, 0.3, 0.8))
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(near), self.lea.pk)
+
     def test_a_person_the_user_said_it_is_not_is_never_suggested_again(self):
         self.anchor(self.lea, RED)
         back = seen(

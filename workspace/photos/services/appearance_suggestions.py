@@ -253,6 +253,10 @@ def known_by_faces(user, seen, span=None, files=None):
     in a named group without being sure: one wrong guess would otherwise name
     everyone dressed like them that day. A blurred face in no group says
     nothing.
+
+    A face is someone's when it is on their head (_wearer), or when it is
+    the photo's only face on nobody's head and they its only person no face
+    is on (_pair_leftovers).
     """
     who, centroids = {}, {}
     for pk, person_id, person_visible, hidden, centroid in user_face_clusters(
@@ -302,6 +306,8 @@ def known_by_faces(user, seen, span=None, files=None):
         centroids,
     )
     named, in_photo = {}, defaultdict(set)
+    # The faces of each photo on nobody's head.
+    unworn = defaultdict(list)
     for pk, file_id, x, y, w, h, cluster_id, _assignment in rows:
         key = who.get(cluster_id, ("face", pk))
         if not isinstance(key, tuple):
@@ -311,7 +317,31 @@ def known_by_faces(user, seen, span=None, files=None):
         owner = _wearer((x + w / 2, y + h / 2), by_file.get(file_id, ()), named)
         if owner is not None:
             named[owner.pk] = key
+        else:
+            unworn[file_id].append(key)
+    _pair_leftovers(by_file, unworn, named)
     return named, in_photo
+
+
+def _pair_leftovers(by_file, unworn, named):
+    """Give the people of each photo no face is on the head of the faces of
+    that photo on nobody's: someone crouching, bent over or whose box is cut
+    short wears their face lower than a head, or beside it.
+
+    One of each: they are the same person. As many faces left as people or
+    more: each of them is somebody, whose is unknown - ("body", their pk) -
+    and nobody to ask about. Fewer faces than people: anyone may be the one
+    whose face shows, so nothing is said of them.
+    """
+    for file_id, keys in unworn.items():
+        people = [item for item in by_file.get(file_id, ()) if item.pk not in named]
+        if not people or len(keys) < len(people):
+            continue
+        if len(people) == len(keys) == 1:
+            named[people[0].pk] = keys[0]
+            continue
+        for item in people:
+            named[item.pk] = ("body", item.pk)
 
 
 def _doubtful(faces, centroids):

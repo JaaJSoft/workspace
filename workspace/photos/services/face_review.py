@@ -271,16 +271,17 @@ def hidden_faces(user):
     return FacePage(face_ids=tuple(ids[:FACES_PER_PAGE]), total=faces.count())
 
 
-def likeness_groups(rows, threshold):
+def likeness_groups(rows, threshold, dims=FACE_EMBEDDINGS.dims):
     """The ids of *rows*, ``(pk, embedding)`` pairs, gathered by likeness.
 
     Starts from the first row, then each face is followed by the nearest one
     left; a new group starts when that one is further than *threshold*. A
-    face without an embedding is a group of its own, last.
+    face without an embedding is a group of its own, last. *dims* is the size
+    of the embeddings: a face's by default.
     """
     ids, vectors, rest = [], [], []
     for pk, blob in rows:
-        vector = _unit(blob)
+        vector = from_bytes(blob, dims) if blob else None
         if vector is None:
             rest.append([pk])
         else:

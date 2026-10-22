@@ -54,9 +54,10 @@ class AppearanceBatchView(APIView):
         summary="Say who several people found by their body are",
         description=(
             "confirm: they are the person their clothes suggest; reject: they "
-            "are not (both name that person, and skip whoever is suggested "
-            "someone else by now); hide: nobody to name; assign: they are "
-            "this contact. "
+            "are not the person named - the one suggested, the one they were "
+            "said to be, or the one the review asked about (both skip whoever "
+            "is suggested or said to be someone else by now); hide: nobody to "
+            "name; assign: they are this contact. "
             "Each one that cannot take the answer is skipped with a reason "
             "('unavailable', 'already_in_photo', 'no_face', 'missing'); a "
             "confirm or assign skipped as 'already_in_photo' still rejects the "

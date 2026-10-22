@@ -1161,6 +1161,90 @@ window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
   };
 };
 
+// A person's silhouettes: the people found by their body the user said are
+// `person` ({ uuid, name }), embedded under `dataId` ({ faces, total }) as a
+// board of faces is. The picked ones are not them, someone else, or nobody
+// to name; each leaves the board once answered.
+window.silhouetteBoard = function silhouetteBoard(dataId, person) {
+  return {
+    ...window.faceSelectionMixin(),
+    person,
+    faces: [],
+    total: 0,
+
+    init() {
+      const data = facesJson(dataId) || {};
+      this.faces = data.faces || [];
+      this.total = data.total || 0;
+    },
+
+    canAnswerSilhouettes() {
+      return !this.faceBusy && this.selectedFaces.length > 0;
+    },
+
+    rejectSilhouettes() {
+      return this.answerSilhouettes({ action: 'reject', person: this.person.uuid });
+    },
+
+    hideSilhouettes() {
+      return this.answerSilhouettes({ action: 'hide' });
+    },
+
+    // Only the contacts with a face in the library: a person's photos are
+    // listed through their faces.
+    async openSilhouetteAssign() {
+      this.assignDialog = { query: '', results: [], clusters: [], loading: true };
+      document.getElementById('silhouette-assign-dialog').showModal();
+      await this.searchAssign();
+      this.assignDialog.loading = false;
+    },
+
+    silhouetteAssignOptions() {
+      return this.assignDialog.results.filter((p) => p.photo_count > 0 && p.uuid !== this.person.uuid);
+    },
+
+    assignSilhouettes(target) {
+      document.getElementById('silhouette-assign-dialog').close();
+      return this.answerSilhouettes({ action: 'assign', person: target.uuid }, target.name);
+    },
+
+    async answerSilhouettes(body, target = null) {
+      const uuids = this.selectedFaces.slice();
+      if (!uuids.length || this.faceBusy) return null;
+      this.faceBusy = true;
+      let result;
+      try {
+        result = await facesRequest(`${FACES_API}/appearances/batch`, {
+          method: 'POST',
+          body: { ...body, appearances: uuids },
+        });
+      } catch (err) {
+        window.AppAlert.error(err.message || 'Could not save');
+        return null;
+      } finally {
+        this.faceBusy = false;
+      }
+      const done = new Set(result.done);
+      this.selectedFaces = this.selectedFaces.filter((uuid) => !done.has(uuid));
+      const settled = settleFaces(this.faces, this.total, result.done);
+      this.faces = settled.faces;
+      this.total = settled.total;
+      const message = outfitMessage(body.action, result, target);
+      const actions = result.undo ? [{ label: 'Undo', onClick: () => undoOutfitAnswer([result.undo]) }] : [];
+      if (!result.done.length) window.AppAlert.warning(message, { duration: 8000, actions });
+      else window.AppAlert.success(message, { duration: 8000, actions });
+      if (!this.faces.length && this.total > 0) {
+        // The next ones were left out of the page.
+        this.$ajax(window.location.pathname + window.location.search, {
+          targets: ['photos-nav', 'photos-content'],
+          focus: false,
+        });
+      }
+      return result;
+    },
+  };
+};
+
 // What answering a review card sends, in order. `kept` and `left` are the
 // uuids of the card's faces kept and left out; `answer` is who the kept ones
 // are ({ person } or { new_person }), or { hide: true } for nobody to name.
@@ -1169,6 +1253,7 @@ window.faceBoard = function faceBoard(dataId, { stays = [] } = {}) {
 function reviewSteps(card, kept, left, answer) {
   const steps = [];
   if (card.kind === 'outfit') return outfitSteps(card, kept, left, answer);
+  if (card.kind === 'silhouette') return silhouetteSteps(card, kept, left, answer);
   if (card.kind === 'cluster') {
     // The whole cluster is named, its faces past the card's included.
     if (left.length) steps.push({ batch: { action: 'reject', faces: left } });
@@ -1215,6 +1300,30 @@ function outfitSteps(card, kept, left, answer) {
   return steps;
 }
 
+// The same for a card of people nobody named, found by their body in one
+// folder and dressed alike. Its guess is the person of their folder, not a
+// suggestion: saying yes puts them with that person, and those left out are
+// never asked about as them again.
+function silhouetteSteps(card, kept, left, answer) {
+  const steps = [];
+  if (answer.hide) {
+    if (kept.length) steps.push({ appearances: { action: 'hide', appearances: kept } });
+    return steps;
+  }
+  if (kept.length) {
+    steps.push({ appearances: { action: 'assign', appearances: kept, person: answer.person } });
+  }
+  if (card.guess && answer.person === card.guess.uuid && left.length) {
+    steps.push({ appearances: { action: 'reject', appearances: left, person: answer.person } });
+  }
+  return steps;
+}
+
+// Where the people of a silhouette card were found.
+function folderLabel(folder) {
+  return folder ? `in ${folder}` : 'at the top of your files';
+}
+
 function peopleCount(count) {
   return `${count} ${count === 1 ? 'person' : 'people'}`;
 }
@@ -1247,6 +1356,19 @@ function outfitMessage(action, result, target) {
     parts.push(`${peopleCount(unchanged.length)} left as they were${why}`);
   }
   return parts.join('. ');
+}
+
+// What a silhouette card says of its people: where they were found, and why
+// they are asked about together.
+function silhouetteSubtitle(card) {
+  const where = folderLabel(card.folder);
+  if (card.guess) return `${peopleCount(card.total)} alone in their photo ${where}, dressed like ${card.guess.name} there`;
+  if (card.alone) {
+    return card.total === 1
+      ? `1 person alone in their photo ${where}, without their face`
+      : `${peopleCount(card.total)} alone in their photo ${where}, dressed alike`;
+  }
+  return `${peopleCount(card.total)} dressed alike ${where}, without their face`;
 }
 
 // Puts an outfit card's answer back; the photosApp() root reloads the page
@@ -1345,9 +1467,15 @@ window.facesReview = function facesReview() {
 
     // ── What a card says ────────────────────────────────
 
-    // Doubts and outfits both ask about one named person.
+    // Doubts and outfits ask about one named person, and so do silhouettes
+    // when their folder is mostly someone's.
     asksAboutGuess(card) {
-      return card.kind === 'check' || card.kind === 'outfit';
+      return card.kind === 'check' || card.kind === 'outfit' || (card.kind === 'silhouette' && !!card.guess);
+    },
+
+    // The tiles are people found by their body, not faces.
+    asksAboutBodies(card) {
+      return card.kind === 'outfit' || card.kind === 'silhouette';
     },
 
     question(card) {
@@ -1358,6 +1486,7 @@ window.facesReview = function facesReview() {
       if (card.kind === 'cluster') return `${photoCount(card.photo_count)}, grouped by likeness`;
       if (card.kind === 'check') return `${faceCount(card.total)} put with them without being sure`;
       if (card.kind === 'outfit') return `${peopleCount(card.total)} wearing their clothes on photos taken the same day`;
+      if (card.kind === 'silhouette') return silhouetteSubtitle(card);
       return card.total === 1 ? '1 face in no group' : `${card.total} look-alike faces in no group`;
     },
 
@@ -1376,6 +1505,10 @@ window.facesReview = function facesReview() {
         if (!kept) return 'Never suggests them again';
         return left ? `Confirms ${peopleCount(kept)}, not the ${left} left out` : `Confirms ${peopleCount(kept)}`;
       }
+      if (card.kind === 'silhouette') {
+        if (!kept) return 'Never asks about them again';
+        return left ? `Puts ${peopleCount(kept)} with them, not the ${left} left out` : `Puts ${peopleCount(kept)} with them`;
+      }
       if (!kept) return 'Takes them out of the group';
       return left ? `Confirms ${faceCount(kept)}, takes ${left} out` : `Confirms ${faceCount(kept)}`;
     },
@@ -1392,12 +1525,12 @@ window.facesReview = function facesReview() {
     options(card) {
       const query = this.isActive(card) ? this.query : '';
       const options = reviewOptions(query, this.results, card.guess);
-      if (card.kind !== 'outfit') return options;
+      if (!this.asksAboutBodies(card)) return options;
       return options.filter((o) => o.kind === 'person' && o.person.photo_count > 0);
     },
 
     noOptionsLabel(card) {
-      return card.kind === 'outfit'
+      return this.asksAboutBodies(card)
         ? 'Nobody with a face in your photos has this name.'
         : 'No contact yet: type a name to add one to People.';
     },
@@ -1641,7 +1774,7 @@ window.facesReview = function facesReview() {
         return;
       }
       if (!main) return;
-      const outfit = card.kind === 'outfit';
+      const outfit = this.asksAboutBodies(card);
       const message = outfit
         ? outfitMessage(main.action, main.result, answer.name)
         : faceBatchMessage(main.action, main.result, answer.name);

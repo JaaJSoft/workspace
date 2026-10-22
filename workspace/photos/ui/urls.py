@@ -23,4 +23,9 @@ urlpatterns = [
     path("/people", views.people, name="people"),
     path("/people/review", views.people_review, name="people_review"),
     path("/people/faces", views.person_faces_view, name="person_faces"),
+    path(
+        "/people/silhouettes",
+        views.person_silhouettes_view,
+        name="person_silhouettes",
+    ),
 ]

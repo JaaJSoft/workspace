@@ -1,0 +1,73 @@
+{% comment %}
+  What the picked silhouettes of a person's page can have done to them:
+  someone else, not this person, or nobody to name. State in
+  silhouetteBoard() (faces.js).
+{% endcomment %}
+<div
+  x-show="selectedFaces.length > 0"
+  x-cloak
+  x-transition.opacity
+  class="sticky bottom-4 z-20 flex justify-center px-4 pointer-events-none"
+  @keydown.escape.window="if (!document.querySelector('dialog[open]')) clearFaceSelection()"
+>
+  <div
+    class="pointer-events-auto flex items-center gap-0.5 sm:gap-2 rounded-full shadow-xl bg-base-100 border border-base-300 pl-2 pr-2 py-1.5 max-w-full"
+    role="toolbar"
+    aria-label="Selected silhouettes"
+  >
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Clear selection"
+      aria-label="Clear selection"
+      @click="clearFaceSelection()"
+    >
+      <i data-lucide="x" class="w-4 h-4"></i>
+    </button>
+    <span
+      class="text-sm font-medium whitespace-nowrap px-1"
+      x-text="selectedFaces.length === 1 ? '1 selected' : selectedFaces.length + ' selected'"
+    ></span>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Select all"
+      aria-label="Select all"
+      @click="selectAllFaces()"
+    >
+      <i data-lucide="check-check" class="w-4 h-4"></i>
+    </button>
+    <span class="w-px h-5 bg-base-300" aria-hidden="true"></span>
+    <span x-show="faceBusy" class="loading loading-spinner loading-sm mx-2"></span>
+    <button
+      type="button"
+      class="btn btn-module btn-sm rounded-full gap-1.5"
+      title="Move to another person"
+      :disabled="!canAnswerSilhouettes()"
+      @click="openSilhouetteAssign()"
+    >
+      <i data-lucide="user-round-pen" class="w-4 h-4"></i>
+      <span class="max-sm:hidden">Move to...</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm rounded-full gap-1.5 text-error"
+      title="Not {{ person.name }}"
+      :disabled="!canAnswerSilhouettes()"
+      @click="rejectSilhouettes()"
+    >
+      <i data-lucide="user-x" class="w-4 h-4"></i>
+      <span class="max-sm:hidden max-w-40 truncate">Not {{ person.name }}</span>
+    </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-sm btn-circle"
+      title="Hide: nobody to name"
+      aria-label="Hide"
+      :disabled="!canAnswerSilhouettes()"
+      @click="hideSilhouettes()"
+    >
+      <i data-lucide="eye-off" class="w-4 h-4"></i>
+    </button>
+  </div>
+</div>

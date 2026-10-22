@@ -178,7 +178,10 @@ def _answer(row, action, person):
         if row.person_id == not_them:
             row.person_id = None
     elif action == HIDE:
+        # Nobody to name: kept as someone's, they would still teach the
+        # suggestions that person's clothes.
         row.hidden = True
+        row.person_id = None
     else:
         row.person_id = person_id
         row.hidden = False

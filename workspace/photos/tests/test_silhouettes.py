@@ -9,6 +9,7 @@ from workspace.files.services import FileService
 from workspace.photos.models import Appearance
 from workspace.photos.services import appearance_review
 from workspace.photos.services.appearance_review import NO_SUGGESTION
+from workspace.photos.services.appearance_suggestions import suggest_owner
 from workspace.photos.services.silhouettes import silhouette_groups
 
 from .appearances import (
@@ -202,6 +203,20 @@ class RejectAnswerTests(SilhouetteSetupMixin, TestCase):
         row.refresh_from_db()
         self.assertIsNone(row.person)
         self.assertEqual(row.rejected_person, self.lea)
+
+    def test_hiding_a_person_said_to_be_someone_stops_them_naming_others(self):
+        hidden = self.alone(RED)
+        Appearance.objects.filter(pk=hidden.pk).update(person=self.lea)
+        hidden.refresh_from_db()
+        dressed_alike = self.alone(RED)
+
+        appearance_review.apply(self.user, "hide", [hidden])
+        suggest_owner(self.user.pk)
+
+        hidden.refresh_from_db()
+        self.assertIsNone(hidden.person)
+        dressed_alike.refresh_from_db()
+        self.assertIsNone(dressed_alike.suggested_person)
 
     def test_an_answer_about_someone_they_no_longer_are_is_skipped(self):
         said = self.alone(RED)

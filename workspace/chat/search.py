@@ -14,7 +14,7 @@ def search_conversations(query, user, limit):
     groups = Conversation.objects.filter(
         uuid__in=user_conv_uuids,
         kind=Conversation.Kind.GROUP,
-        title__icontains=query,
+        title__ficontains=query,
     ).order_by("-updated_at")[:limit]
 
     # DMs: match on the other member's username or full name
@@ -35,7 +35,7 @@ def search_conversations(query, user, limit):
             ),
         )
         .filter(
-            Q(user__username__icontains=query) | Q(full_name__icontains=query),
+            Q(user__username__ficontains=query) | Q(full_name__ficontains=query),
         )
         .order_by("-conversation__updated_at")[:limit]
     )

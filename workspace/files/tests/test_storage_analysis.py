@@ -257,6 +257,21 @@ class AnalyzeStorageServiceTests(_TreeMixin, TestCase):
             duplicate_groups(StorageScope(self.alice, None), query="zzz"), []
         )
 
+    def test_query_ignores_accents_on_largest_files(self):
+        _file(self.alice, "Résumé.pdf", self.docs, size=10, category="document")
+        result = analyze_storage(self.alice, query="docs/resume")
+        [entry] = result["largest_files"]
+        self.assertEqual(entry["name"], "Résumé.pdf")
+        self.assertTrue(entry["matches"])
+
+    def test_query_ignores_accents_on_duplicate_groups(self):
+        _file(self.alice, "Résumé.pdf", self.docs, size=20, category="text", hash="h2")
+        _file(self.alice, "copy.pdf", self.docs, size=20, category="text", hash="h2")
+        [group] = duplicate_groups(StorageScope(self.alice, None), query="RESUME")
+        self.assertEqual(group["content_hash"], "h2")
+        files = {f["name"]: f["matches"] for f in group["files"]}
+        self.assertEqual(files, {"Résumé.pdf": True, "copy.pdf": False})
+
     def test_query_is_trimmed_and_capped(self):
         result = analyze_storage(self.alice, query="   ")
         self.assertIsNone(result["query"])

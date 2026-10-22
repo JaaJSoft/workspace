@@ -251,6 +251,14 @@ class FileTagFilterTests(APITestCase):
         self.assertEqual(len(resp.data), 1)
         self.assertEqual(resp.data[0]["uuid"], str(self.file1.uuid))
 
+    def test_filter_by_tag_name_ignores_accents_and_case(self):
+        summer = Tag.objects.create(owner=self.user, name="Été", color="info")
+        FileTag.objects.create(file=self.file2, tag=summer)
+        for tag_name in ("ete", "ÉTÉ"):
+            resp = self.client.get(f"/api/v1/files?recent=1&tag_name={tag_name}")
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            self.assertEqual([f["uuid"] for f in resp.data], [str(self.file2.uuid)])
+
     def test_filter_by_malformed_tag_uuid_returns_400(self):
         """Regression: raw strings reaching filter(tag__uuid__in=...) raised
         ValidationError from UUIDField.to_python and surfaced as a 500."""

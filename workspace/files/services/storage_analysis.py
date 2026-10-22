@@ -19,6 +19,8 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce, Concat, RowNumber
 
+from workspace.common.text import fold_text
+
 from ..models import File
 
 LARGEST_FILES_LIMIT = 20
@@ -243,18 +245,18 @@ def _file_entry(scope, f, query=None):
         "type": f.type,
         "category": f.category,
         "parent": str(f.parent_id) if f.parent_id else None,
-        "matches": bool(query) and query.lower() in (path or "").lower(),
+        "matches": bool(query) and fold_text(query) in fold_text(path),
     }
 
 
 def largest_files(scope, *, category=None, query=None, limit=LARGEST_FILES_LIMIT):
     """Biggest files of the subtree, optionally narrowed to a category and
-    to paths containing *query* (case-insensitive)."""
+    to paths containing *query*, ignoring case and accents."""
     qs = _files(scope)
     if category:
         qs = qs.filter(category=category)
     if query:
-        qs = qs.filter(**{f"{scope.query_field}__icontains": query})
+        qs = qs.filter(**{f"{scope.query_field}__ficontains": query})
     qs = qs.order_by("-size", "name").only(
         "uuid", "name", "path", "size", "type", "category", "parent"
     )[:limit]
@@ -281,7 +283,9 @@ def duplicate_groups(scope, *, query=None, limit=DUPLICATE_GROUPS_LIMIT):
     )
     if query:
         groups = groups.annotate(
-            matching=Count("pk", filter=Q(**{f"{scope.query_field}__icontains": query}))
+            matching=Count(
+                "pk", filter=Q(**{f"{scope.query_field}__ficontains": query})
+            )
         ).filter(matching__gt=0)
     groups = list(
         groups.annotate(wasted=F("size") * (F("copies") - 1)).order_by(

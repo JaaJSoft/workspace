@@ -12,8 +12,9 @@ from django.db import transaction
 
 from workspace.people.models import Person
 
-from ..models import Appearance, Face
+from ..models import Appearance
 from ..queries import named_face_clusters, user_appearances
+from .appearance_suggestions import known_by_faces
 from .face_people import person_cards
 
 # People found by their body shown per suggested person at once, the nearest
@@ -123,12 +124,15 @@ def apply(user, action, appearances, person=None):
     they are *person*, another contact the user can see. A person suggested
     someone else than *person*, or said to be someone else, is skipped: the
     suggestions move in the background, and the answer is about the person
-    the user was shown. So is a person the photo
-    already shows (a person is in a photo once), and everyone assigned to a
-    contact with no face in the library: their photos are listed through
-    their faces. A person confirmed or assigned as someone the photo already
-    shows is still set apart from the person suggested, as by a reject:
-    otherwise the next pass suggests the same name and the review asks again.
+    the user was shown. So is a person confirmed or assigned as someone
+    another person of the photo already is (a person is in a photo once) -
+    whose face is on another head, or whom the user named already - and
+    everyone assigned to a contact with no face in the library: their photos
+    are listed through their faces. A face on nobody's head may be theirs:
+    someone crouching or bent over wears it lower. A person confirmed or
+    assigned as someone the photo already shows is still set apart from the
+    person suggested, or from that person when nobody was, as by a reject:
+    otherwise the review asks the same question again.
     """
     result = BatchResult()
     if not appearances:
@@ -139,25 +143,25 @@ def apply(user, action, appearances, person=None):
         result.skipped = [(row.pk, NO_FACE) for row in appearances]
         return result
     result.undo = _save_undo(user, appearances)
+    worn = _worn_faces(user, appearances)
     changed = False
     with transaction.atomic():
         for row in appearances:
-            suggested = row.suggested_person_id
-            reason = _answer(row, action, person)
+            reason = _answer(row, action, person, worn)
             if reason is None:
                 result.done.append(row.pk)
             else:
                 result.skipped.append((row.pk, reason))
-            set_apart = reason == ALREADY_IN_PHOTO and suggested is not None
-            changed = changed or reason is None or set_apart
+            changed = changed or reason in (None, ALREADY_IN_PHOTO)
     if not changed:
         cache.delete(_UNDO_KEY.format(user.pk, result.undo))
         result.undo = None
     return result
 
 
-def _answer(row, action, person):
-    """Write *action*'s answer on *row*; the reason it could not, or None."""
+def _answer(row, action, person, worn):
+    """Write *action*'s answer on *row*; the reason it could not, or None.
+    *worn* is _worn_faces() of the batch."""
     if action == CONFIRM and row.suggested_person_id != person.pk:
         return NO_SUGGESTION
     if action == REJECT and not _may_reject(row, person):
@@ -165,12 +169,10 @@ def _answer(row, action, person):
     person_id = person.pk if action in (CONFIRM, ASSIGN) else None
     not_them = person.pk if action == REJECT else None
     reason = None
-    if person_id is not None and person_id in _persons_in_photo(row):
-        if row.suggested_person_id is None:
-            return ALREADY_IN_PHOTO
+    if person_id is not None and person_id in _persons_in_photo(row, worn):
         # Whoever the user named, they said the suggestion is not them.
         action = REJECT
-        not_them = row.suggested_person_id
+        not_them = row.suggested_person_id or person_id
         reason = ALREADY_IN_PHOTO
     if action == REJECT:
         # One name is kept: the last the user said they are not.
@@ -203,18 +205,43 @@ def _fields(names):
     return [name.removesuffix("_id") for name in names]
 
 
-def _persons_in_photo(row):
-    """The persons the photo of *row* already shows: its named faces, and the
-    other people the user said who they are."""
-    faces = Face.objects.filter(
-        file_id=row.file_id, cluster__person__isnull=False
-    ).values_list("cluster__person_id", flat=True)
-    others = (
+@dataclass(frozen=True)
+class _Body:
+    pk: object
+    file_id: object
+    box: tuple
+
+
+def _worn_faces(user, rows):
+    """{file id: {appearance pk: the person whose face is on them}} for
+    everyone in the photos of *rows*, as the suggestions read it
+    (appearance_suggestions.known_by_faces)."""
+    files = {row.file_id for row in rows}
+    bodies = [
+        _Body(pk=pk, file_id=file_id, box=(x, y, w, h))
+        for pk, file_id, x, y, w, h in Appearance.objects.filter(
+            owner=user, file_id__in=files
+        ).values_list("pk", "file_id", "box_x", "box_y", "box_width", "box_height")
+    ]
+    named, _ = known_by_faces(user, bodies, files=list(files))
+    file_of = {body.pk: body.file_id for body in bodies}
+    worn = defaultdict(dict)
+    for pk, who in named.items():
+        if not isinstance(who, tuple):
+            worn[file_of[pk]][pk] = who
+    return worn
+
+
+def _persons_in_photo(row, worn):
+    """The persons another person of the photo of *row* already is: their
+    face is on that person's head, or the user said who that person is."""
+    on_others = {who for pk, who in worn.get(row.file_id, {}).items() if pk != row.pk}
+    said = (
         Appearance.objects.filter(file_id=row.file_id, person__isnull=False)
         .exclude(pk=row.pk)
         .values_list("person_id", flat=True)
     )
-    return set(faces) | set(others)
+    return on_others | set(said)
 
 
 def _save_undo(user, appearances):

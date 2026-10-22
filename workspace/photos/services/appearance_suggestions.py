@@ -308,7 +308,7 @@ def known_by_faces(user, seen, span=None, files=None):
     named, in_photo = {}, defaultdict(set)
     # The faces of each photo on nobody's head.
     unworn = defaultdict(list)
-    for pk, file_id, x, y, w, h, cluster_id, _assignment in rows:
+    for pk, file_id, x, y, w, h, cluster_id, assignment in rows:
         key = who.get(cluster_id, ("face", pk))
         if not isinstance(key, tuple):
             in_photo[file_id].add(key)
@@ -317,7 +317,8 @@ def known_by_faces(user, seen, span=None, files=None):
         owner = _wearer((x + w / 2, y + h / 2), by_file.get(file_id, ()), named)
         if owner is not None:
             named[owner.pk] = key
-        else:
+        elif assignment != Face.Assignment.HIDDEN:
+            # A hidden face may be a poster's: nobody's body to give it to.
             unworn[file_id].append(key)
     _pair_leftovers(by_file, unworn, named)
     return named, in_photo

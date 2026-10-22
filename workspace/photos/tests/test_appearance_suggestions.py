@@ -231,6 +231,19 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
         self.assertIsNone(self.suggestion(hers))
         self.assertEqual(self.suggestion(back), self.lea.pk)
 
+    def test_a_hidden_face_off_every_head_is_nobodys(self):
+        self.anchor(self.lea, RED)
+        poster = photo_at(self.user, "poster.jpg", 1)
+        face = named_face(self.user, poster, None, box=(0.7, 0.6, 0.1, 0.12))
+        Face.objects.filter(pk=face.pk).update(
+            cluster=None, assignment=Face.Assignment.HIDDEN
+        )
+        back = seen(self.user, poster, RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
     def test_faces_and_people_left_two_by_two_are_somebody_but_nobody_named(self):
         self.anchor(self.lea, RED)
         pair = photo_at(self.user, "pair.jpg", 1)

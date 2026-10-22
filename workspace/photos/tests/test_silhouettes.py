@@ -139,6 +139,15 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
 
         self.assertFalse(any(passer_by.pk in g.appearance_ids for g in groups))
 
+    def test_people_whose_face_is_off_their_head_are_not_asked_about(self):
+        for _ in range(2):
+            photo = self.photo()
+            # Crouching: the face sits below the top of the box.
+            named_face(self.user, photo, self.noah, box=(0.15, 0.6, 0.1, 0.12))
+            seen(self.user, photo, BLUE)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
     def test_no_guess_for_people_already_said_not_to_be_them(self):
         row = self.alone(RED)
         Appearance.objects.filter(pk=row.pk).update(rejected_person=self.lea)

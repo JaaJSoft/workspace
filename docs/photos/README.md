@@ -639,6 +639,12 @@ one wrong guess would name everybody dressed like that person that day. A
 person is suggested once per photo, and never when the photo already shows
 them, nor when the user said it is not them.
 
+A face is a person's when it sits on their head, or when it is the only
+face of the photo on nobody's head and they are its only person with no face
+on theirs: someone crouching, bent over or half out of the frame keeps their
+name. With as many such faces left as people or more, each of those people
+is somebody - never asked about, never suggested - but nobody's clothes.
+
 Every correction asks again in the background: around the photos of the
 faces corrected, or across the library, half a minute later, when a whole
 group is named, merged, hidden or ungrouped.

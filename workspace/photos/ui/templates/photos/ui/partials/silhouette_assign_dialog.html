@@ -1,0 +1,82 @@
+{% comment %}
+  "Move to...": who the picked silhouettes of a person's page are. Only the
+  contacts with a face in the library: a person's photos are listed through
+  their faces. State in silhouetteBoard() (faces.js).
+{% endcomment %}
+<dialog id="silhouette-assign-dialog" class="modal">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg flex items-center gap-2">
+      <i data-lucide="user-round-pen" class="w-5 h-5 text-module"></i>
+      <span
+        x-text="selectedFaces.length === 1 ? 'Who is this?' : 'Who are these ' + selectedFaces.length + ' people?'"
+      ></span>
+    </h3>
+    <p class="text-sm text-base-content/60 mb-4">Pick someone whose face is in your photos.</p>
+
+    <label class="input input-bordered input-sm flex items-center gap-2 w-full">
+      <i data-lucide="search" class="w-4 h-4 opacity-60"></i>
+      <input
+        type="text"
+        class="grow"
+        placeholder="Name"
+        autocomplete="off"
+        x-model="assignDialog.query"
+        @input.debounce.250ms="searchAssign()"
+      />
+    </label>
+
+    <div x-show="assignDialog.loading" class="flex justify-center py-6">
+      <span class="loading loading-spinner loading-md"></span>
+    </div>
+
+    <ul
+      x-show="!assignDialog.loading"
+      class="menu menu-sm p-0 mt-3 max-h-64 flex-nowrap overflow-y-auto"
+    >
+      <template x-for="option in silhouetteAssignOptions()" :key="option.uuid">
+        <li>
+          <button
+            type="button"
+            class="gap-3 rounded"
+            @click="assignSilhouettes(option)"
+          >
+            <template x-if="option.cover_url">
+              <img
+                :src="option.cover_url"
+                alt=""
+                class="w-8 h-8 rounded-full object-cover"
+              />
+            </template>
+            <template x-if="!option.cover_url">
+              <span
+                class="flex w-8 h-8 items-center justify-center rounded-full bg-base-200 text-base-content/50"
+              >
+                <i data-lucide="contact" class="w-4 h-4"></i>
+              </span>
+            </template>
+            <span class="flex-1 truncate" x-text="option.name"></span>
+            <span
+              class="text-xs text-base-content/60 tabular-nums"
+              x-text="option.photo_count + (option.photo_count === 1 ? ' photo' : ' photos')"
+            ></span>
+          </button>
+        </li>
+      </template>
+      <li
+        x-show="!silhouetteAssignOptions().length"
+        class="px-3 py-3 text-sm text-base-content/60"
+      >
+        Nobody with a face in your photos has this name.
+      </li>
+    </ul>
+
+    <div class="modal-action">
+      <form method="dialog">
+        <button type="submit" class="btn btn-ghost btn-sm">Cancel</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button type="submit">close</button>
+  </form>
+</dialog>

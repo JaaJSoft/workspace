@@ -122,7 +122,7 @@ def _suggest(user, start=None, end=None):
     seen = _read(user, backend.model_key, tz, span)
     if not seen:
         return 0
-    named, in_photo = _known_by_faces(user, seen, span)
+    named, in_photo = known_by_faces(user, seen, span)
     for item in seen:
         if item.person_id is not None:
             named[item.pk] = item.person_id
@@ -239,9 +239,12 @@ def _read(user, model_key, tz, span):
     ]
 
 
-def _known_by_faces(user, seen, span):
+def known_by_faces(user, seen, span=None, files=None):
     """({appearance pk: who} for the people whose face was seen,
     {file id: the persons its named faces show}).
+
+    Reads the faces of the photos taken in *span*, or of *files* (a queryset
+    of file pks), or of the whole library.
 
     Who is the person a visible group is named after; ("cluster", its uuid)
     for an unnamed or hidden group, and ("face", its uuid) for a face in no
@@ -272,6 +275,8 @@ def _known_by_faces(user, seen, span):
     )
     if span is not None:
         faces = faces.filter(file__media_item__taken_at__range=span)
+    if files is not None:
+        faces = faces.filter(file__in=files)
     by_file = defaultdict(list)
     for item in seen:
         by_file[item.file_id].append(item)

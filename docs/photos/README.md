@@ -590,6 +590,16 @@ answered the same way whatever it holds:
   without a usable face whose clothes match Léa's on a photo taken the same
   day, nearest first (see *People without a usable face* below). Saying yes
   puts the photo under Léa; saying no never suggests her for them again.
+- **Silhouettes nobody named**: people found without a usable face whose
+  clothes suggest nobody, dated photos or not, one card per folder and
+  outfit. Those alone in their photo are asked about even on their own
+  (the subject of the photo); those who share it only when the folder shows
+  the same outfit twice, so the passer-by in the background stays out. A
+  card of people alone in their photo asks *Is this Léa?* when Léa is in
+  more than half of the folder's photos that show someone named (three at
+  least) and one of them is dressed like her in another photo of the
+  folder - the folder alone guesses wrong one time in two. Saying yes puts
+  the photos under Léa, those left out are never asked about as her again.
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
@@ -649,6 +659,15 @@ videos), the same purge when the user turns it off. Each photo costs the
 detector and one embedding per person found: `PHOTOS_APPEARANCES_ENABLED=0`
 leaves it out on a host without the CPU to spare. Photos analyzed before it
 existed are read by the hourly catch-up (`manage.py catch_up appearances`).
+
+### A person's silhouettes
+
+Once someone found by their body was said to be Léa, her page grows a
+*Silhouettes* tab next to *Photos* and *Faces*: everyone the user said is
+her in photos where her face does not show. Pick the ones that are someone
+else, then *Move to...* another contact with a face in the library, *Not
+Léa* (never asked about as her again), or hide them. Each answer can be
+undone for a few minutes.
 
 ### Correcting several faces at once
 

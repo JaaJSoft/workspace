@@ -1172,3 +1172,128 @@ test('an outfit card offers only the contacts with a face in the library', () =>
 
   assert.deepEqual(Array.from(component.otherOptions(card), (o) => o.person.uuid), ['o']);
 });
+
+const silhouetteCard = (guess, ...uuids) => ({
+  key: 'silhouette-1',
+  kind: 'silhouette',
+  guess,
+  folder: 'Holidays',
+  alone: true,
+  faces: faces(...uuids),
+  total: uuids.length,
+});
+
+test('a silhouette card asks about the person of its folder, or who they are', () => {
+  const { component } = reviewPage({ cards: [silhouetteCard(NINA, 'a1', 'a2'), silhouetteCard(null, 'b1')] });
+  const [guessed, unknown] = component.cards;
+
+  assert.equal(component.question(guessed), 'Is this Nina Petit?');
+  assert.equal(component.subtitle(guessed), '2 people alone in their photo in Holidays, dressed like Nina Petit there');
+  assert.equal(component.guessHint(guessed), 'Puts 2 people with them');
+  assert.equal(component.question(unknown), 'Who is this?');
+  assert.equal(component.subtitle(unknown), '1 person alone in their photo in Holidays, without their face');
+  assert.equal(
+    component.subtitle({ ...unknown, alone: false, folder: null, total: 3 }),
+    '3 people dressed alike at the top of your files, without their face',
+  );
+});
+
+test('saying yes to a silhouette card puts the people kept with its person, and the others never as them', async () => {
+  const { component, requests, alerts } = reviewPage({
+    cards: [silhouetteCard(NINA, 'a1', 'a2')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'a2');
+
+  await component.pickGuess(card);
+
+  assert.deepEqual(requests.map((r) => [r.url, r.body]), [
+    [APPEARANCES, { action: 'assign', appearances: ['a1'], person: 'n' }],
+    [APPEARANCES, { action: 'reject', appearances: ['a2'], person: 'n' }],
+  ]);
+  assert.equal(alerts[0].message, '1 person put with Nina Petit');
+});
+
+test('none of a silhouette card being its person only says so', async () => {
+  const { component, requests } = reviewPage({
+    cards: [silhouetteCard(NINA, 'a1')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  const card = component.cards[0];
+  component.toggleExcluded(card, 'a1');
+
+  assert.equal(component.guessLabel(card), 'None of them is Nina Petit');
+  await component.pickGuess(card);
+
+  assert.deepEqual(requests.map((r) => r.body), [{ action: 'reject', appearances: ['a1'], person: 'n' }]);
+});
+
+test('a silhouette card puts its people with any contact with a face, and leaves those left out alone', async () => {
+  const { component, requests } = reviewPage({
+    cards: [silhouetteCard(null, 'a1', 'a2')],
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  const card = component.cards[0];
+  component.results = [{ ...NOAH, photo_count: 3 }, { uuid: 'x', name: 'No face', photo_count: 0 }];
+  component.toggleExcluded(card, 'a2');
+
+  assert.deepEqual(Array.from(component.otherOptions(card), (o) => o.person.uuid), ['o']);
+  await component.pick(card, { kind: 'person', person: NOAH });
+
+  assert.deepEqual(requests.map((r) => r.body), [{ action: 'assign', appearances: ['a1'], person: 'o' }]);
+});
+
+function silhouettePage({ faces: tiles = [], total = tiles.length, responses = {}, alerts = [] } = {}) {
+  const requests = [];
+  const ctx = loadScript('workspace/photos/ui/static/photos/ui/js/faces.js', {
+    document: {
+      getElementById: (id) => (id === 'silhouettes-data' ? { textContent: JSON.stringify({ faces: tiles, total }) } : null),
+    },
+    getCSRFToken: () => 'token',
+    location: { pathname: '/photos/people/silhouettes', search: '?person=n' },
+    fetch: async (url, options) => {
+      const body = options.body ? JSON.parse(options.body) : null;
+      requests.push({ url, body });
+      const answer = responses[url];
+      const data = typeof answer === 'function' ? answer(body) : answer;
+      return { ok: true, status: 200, json: async () => data };
+    },
+    AppAlert: {
+      success: (message, options) => alerts.push({ level: 'success', message, options }),
+      warning: (message, options) => alerts.push({ level: 'warning', message, options }),
+      error: (message) => alerts.push({ level: 'error', message }),
+    },
+  });
+  const component = ctx.silhouetteBoard('silhouettes-data', { uuid: 'n', name: 'Nina Petit' });
+  component.$watch = () => {};
+  component.$ajax = (url) => requests.push({ url, ajax: true });
+  component.init();
+  return { component, requests, alerts };
+}
+
+test('a person\'s silhouettes taken out of them leave the board', async () => {
+  const { component, requests, alerts } = silhouettePage({
+    faces: faces('a1', 'a2'),
+    responses: { [APPEARANCES]: appearancesDone },
+  });
+  component.toggleFace('a1');
+
+  await component.rejectSilhouettes();
+
+  assert.deepEqual(requests.map((r) => r.body), [{ action: 'reject', appearances: ['a1'], person: 'n' }]);
+  assert.deepEqual(Array.from(component.faces, (f) => f.uuid), ['a2']);
+  assert.equal(component.total, 1);
+  assert.equal(alerts[0].message, '1 person set apart');
+});
+
+test('a person\'s silhouettes move only to contacts with a face, never to them again', () => {
+  const { component } = silhouettePage({ faces: faces('a1') });
+  component.assignDialog.results = [
+    { uuid: 'n', name: 'Nina Petit', photo_count: 4 },
+    { uuid: 'o', name: 'Noah', photo_count: 3 },
+    { uuid: 'x', name: 'No face', photo_count: 0 },
+  ];
+
+  assert.deepEqual(Array.from(component.silhouetteAssignOptions(), (p) => p.uuid), ['o']);
+});

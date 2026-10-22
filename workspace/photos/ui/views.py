@@ -59,7 +59,10 @@ from workspace.photos.services.album_cards import (
     shared_album_cards,
 )
 from workspace.photos.services.album_links import find_link, has_access, record_view
-from workspace.photos.services.appearance_review import outfit_suggestions
+from workspace.photos.services.appearance_review import (
+    outfit_suggestions,
+    person_silhouettes,
+)
 from workspace.photos.services.embedding.registry import embeddings_available
 from workspace.photos.services.face_people import person_cards
 from workspace.photos.services.face_preferences import faces_available, faces_enabled
@@ -91,6 +94,7 @@ from workspace.photos.services.preferences import (
     sensitive_blur_choices,
     show_hidden,
 )
+from workspace.photos.services.silhouettes import silhouette_groups
 from workspace.photos.services.similarity import (
     search_by_description,
     similar_photos,
@@ -844,7 +848,9 @@ def index(request):
         active_view, title, icon = "timeline", "Timeline", "images"
 
     context = {
-        "person_views": _person_views(who, "photos") if who is not None else None,
+        "person_views": _person_views(request.user, who, "photos")
+        if who is not None
+        else None,
         "active_view": active_view,
         "is_timeline_view": active_view == "timeline",
         "is_favorites_view": active_view == "favorites",
@@ -1345,7 +1351,7 @@ def _face_items(face_ids):
 # Cards the review page holds at once; the next ones come after a reload.
 REVIEW_CARDS = 30
 # Among cards of the same weight, the named people's doubts first.
-_REVIEW_ORDER = {"check": 0, "outfit": 1, "cluster": 2, "loose": 3}
+_REVIEW_ORDER = {"check": 0, "outfit": 1, "cluster": 2, "loose": 3, "silhouette": 4}
 
 
 def _appearance_items(appearance_ids):
@@ -1440,6 +1446,28 @@ def _review_cards(user):
                 "weight": len(group.face_ids),
             }
         )
+    for group in silhouette_groups(user):
+        guess = _person_summary(group.guess) if group.guess else None
+        cards.append(
+            {
+                "kind": "silhouette",
+                "key": f"silhouette-{group.appearance_ids[0]}",
+                "cluster": None,
+                "guess": guess,
+                "cover_url": guess["cover_url"]
+                if guess
+                else reverse(
+                    "photos-appearance-crop", kwargs={"pk": group.appearance_ids[0]}
+                ),
+                "url": _url_with({"person": guess["uuid"]}) if guess else None,
+                "photo_count": guess["photo_count"] if guess else None,
+                "folder": group.folder_name,
+                "alone": group.alone,
+                "total": group.total,
+                "appearance_ids": group.appearance_ids,
+                "weight": group.total,
+            }
+        )
     cards.sort(key=lambda card: (-card["weight"], _REVIEW_ORDER[card["kind"]]))
     # The unnamed clusters past the first page were not read: they are
     # counted, the doubts and loose groups all are cards already.
@@ -1459,8 +1487,8 @@ def _review_cards(user):
         )
     }
     for card in cards:
-        # An outfit card's tiles are people found by their body: the page
-        # lays them out as it does faces.
+        # The tiles of an outfit or a silhouette card are people found by
+        # their body: the page lays them out as it does faces.
         ids = card.pop("face_ids", None) or card.pop("appearance_ids", ())
         del card["weight"]
         card["faces"] = [faces[pk] for pk in ids if pk in faces]
@@ -1495,10 +1523,11 @@ def people_review(request):
     return _render_page(request, "photos/ui/people_review.html", context)
 
 
-def _person_views(who, active):
-    """The Photos and Faces tabs of a person's page."""
-    faces_url = f"{reverse('photos_ui:person_faces')}?{urlencode(who.params)}"
-    return [
+def _person_views(user, who, active):
+    """The tabs of a person's page: their photos, their faces, and the
+    people found by their body said to be them while there are any."""
+    query = urlencode(who.params)
+    views = [
         {
             "label": "Photos",
             "icon": "images",
@@ -1508,10 +1537,22 @@ def _person_views(who, active):
         {
             "label": "Faces",
             "icon": "scan-face",
-            "url": faces_url,
+            "url": f"{reverse('photos_ui:person_faces')}?{query}",
             "active": active == "faces",
         },
     ]
+    if who.person is not None and (
+        active == "silhouettes" or confirmed_appearance_files(user, who.person).exists()
+    ):
+        views.append(
+            {
+                "label": "Silhouettes",
+                "icon": "person-standing",
+                "url": f"{reverse('photos_ui:person_silhouettes')}?{query}",
+                "active": active == "silhouettes",
+            }
+        )
+    return views
 
 
 @login_required
@@ -1536,9 +1577,9 @@ def person_faces_view(request):
         **_people_shell_context(request.user),
         "title": who.person.display_name if who.person else "Unnamed person",
         "cluster": _who_card(who),
-        "person_views": _person_views(who, "faces"),
+        "person_views": _person_views(request.user, who, "faces"),
         "board": {"faces": _face_items(page.face_ids), "total": page.total},
-        "face_count": page.total,
+        "count": page.total,
         "shows": [
             {
                 "label": label,
@@ -1553,3 +1594,32 @@ def person_faces_view(request):
         ],
     }
     return _render_page(request, "photos/ui/person_faces.html", context)
+
+
+@login_required
+@ensure_csrf_cookie
+def person_silhouettes_view(request):
+    """The people found by their body the user said are a person, to take
+    out the ones that are someone else. Same ``?person=`` as their
+    timeline; a cluster named after nobody has none."""
+    if not faces_available():
+        raise Http404
+    if not faces_enabled(request.user):
+        return redirect("photos_ui:people")
+    who = _who(request)
+    if who is None or who.person is None:
+        raise Http404
+    page = person_silhouettes(request.user, who.person)
+    context = {
+        **_people_shell_context(request.user),
+        "title": who.person.display_name,
+        "cluster": _who_card(who),
+        "person_views": _person_views(request.user, who, "silhouettes"),
+        "board": {
+            "faces": _appearance_items(page.appearance_ids),
+            "total": page.total,
+        },
+        "count": page.total,
+        "person": {"uuid": str(who.person.pk), "name": who.person.display_name},
+    }
+    return _render_page(request, "photos/ui/person_silhouettes.html", context)

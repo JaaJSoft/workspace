@@ -85,6 +85,26 @@ def outfit_suggestions(user):
     ]
 
 
+@dataclass(frozen=True)
+class SilhouettePage:
+    appearance_ids: tuple
+    total: int
+
+
+# People found by their body shown on a person's page at once.
+PERSON_SILHOUETTES_PER_PAGE = 300
+
+
+def person_silhouettes(user, person):
+    """The people found by their body the user said are *person*, the most
+    recently found first."""
+    rows = user_appearances(user).filter(person=person, hidden=False)
+    ids = rows.order_by("-created_at", "pk").values_list("pk", flat=True)
+    return SilhouettePage(
+        appearance_ids=tuple(ids[:PERSON_SILHOUETTES_PER_PAGE]), total=rows.count()
+    )
+
+
 @dataclass
 class BatchResult:
     done: list = field(default_factory=list)
@@ -97,10 +117,13 @@ def apply(user, action, appearances, person=None):
     """Answer for each of *appearances* (the user's, already checked).
 
     confirm: they are *person*, the person their clothes suggest; reject:
-    they are not; hide: nobody to name; assign: they are *person*, another
-    contact the user can see. A person whose suggestion is no longer
-    *person* is skipped: the suggestions move in the background, and the
-    answer is about the person the user was shown. So is a person the photo
+    they are not *person* - the one suggested, the one the user said they
+    were, or the one the review asked about without a suggestion (the
+    person of their folder, silhouettes.py); hide: nobody to name; assign:
+    they are *person*, another contact the user can see. A person suggested
+    someone else than *person*, or said to be someone else, is skipped: the
+    suggestions move in the background, and the answer is about the person
+    the user was shown. So is a person the photo
     already shows (a person is in a photo once), and everyone assigned to a
     contact with no face in the library: their photos are listed through
     their faces. A person confirmed or assigned as someone the photo already
@@ -135,20 +158,30 @@ def apply(user, action, appearances, person=None):
 
 def _answer(row, action, person):
     """Write *action*'s answer on *row*; the reason it could not, or None."""
-    if action in (CONFIRM, REJECT) and row.suggested_person_id != person.pk:
+    if action == CONFIRM and row.suggested_person_id != person.pk:
+        return NO_SUGGESTION
+    if action == REJECT and not _may_reject(row, person):
         return NO_SUGGESTION
     person_id = person.pk if action in (CONFIRM, ASSIGN) else None
+    not_them = person.pk if action == REJECT else None
     reason = None
     if person_id is not None and person_id in _persons_in_photo(row):
         if row.suggested_person_id is None:
             return ALREADY_IN_PHOTO
         # Whoever the user named, they said the suggestion is not them.
         action = REJECT
+        not_them = row.suggested_person_id
         reason = ALREADY_IN_PHOTO
     if action == REJECT:
-        row.rejected_person_id = row.suggested_person_id
+        # One name is kept: the last the user said they are not.
+        row.rejected_person_id = not_them
+        if row.person_id == not_them:
+            row.person_id = None
     elif action == HIDE:
+        # Nobody to name: kept as someone's, they would still teach the
+        # suggestions that person's clothes.
         row.hidden = True
+        row.person_id = None
     else:
         row.person_id = person_id
         row.hidden = False
@@ -156,6 +189,14 @@ def _answer(row, action, person):
     row.suggestion_distance = None
     row.save(update_fields=_fields(_SAVED_FIELDS))
     return reason
+
+
+def _may_reject(row, person):
+    """Whether *row* is still about *person*: suggested as them, said to be
+    them, or neither and asked about as them."""
+    if person.pk in (row.suggested_person_id, row.person_id):
+        return True
+    return row.suggested_person_id is None and row.person_id is None
 
 
 def _fields(names):

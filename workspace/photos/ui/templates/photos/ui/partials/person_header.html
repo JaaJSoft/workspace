@@ -1,0 +1,74 @@
+{% comment %}
+  The header of a person's faces or silhouettes: who, how many, the menu of
+  the person, the tabs. Reads title, cluster, count, person_views and shows
+  from the view; unit and units name what is counted. `total` is the
+  board's count, kept as tiles leave.
+{% endcomment %}
+<header
+  class="sticky top-0 z-10 border-b border-base-300 bg-base-100/90 backdrop-blur"
+>
+  <div class="flex items-center gap-3 px-4 py-3">
+    {% include "ui/partials/drawer_toggle.html" with drawer_id="photos-drawer" class="lg:hidden" %}
+    <a
+      href="{{ people_url }}"
+      x-target.push="photos-nav photos-content"
+      class="btn btn-ghost btn-sm btn-square shrink-0"
+      title="All people"
+      aria-label="All people"
+    >
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+    </a>
+    {% if cluster.cover_url %}
+      <img
+        src="{{ cluster.cover_url }}"
+        alt=""
+        class="w-9 h-9 rounded-full object-cover shrink-0"
+      />
+    {% endif %}
+    <div class="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-3">
+      <h1 class="text-lg font-semibold truncate">{{ title }}</h1>
+      <span class="text-sm text-base-content/60"><span class="tabular-nums" x-text="total">{{ count }}</span> <span x-text="total === 1 ? '{{ unit|escapejs }}' : '{{ units|escapejs }}'">{% if count == 1 %}{{ unit }}{% else %}{{ units }}{% endif %}</span></span>
+    </div>
+    {% if cluster.person %}
+      <a
+        href="{{ cluster.person.url }}"
+        class="btn btn-ghost btn-sm gap-1"
+        title="Open {{ cluster.person.name }} in People"
+      >
+        <i data-lucide="contact" class="w-4 h-4"></i>
+        <span class="max-sm:hidden">Open in People</span>
+      </a>
+    {% endif %}
+    <div class="dropdown dropdown-end">
+      <button
+        type="button"
+        tabindex="0"
+        class="btn btn-ghost btn-sm btn-square"
+        aria-label="Person options"
+      >
+        <i data-lucide="more-vertical" class="w-4 h-4"></i>
+      </button>
+      <ul
+        tabindex="0"
+        class="dropdown-content z-50 menu menu-sm shadow-lg bg-base-100 border border-base-300 rounded-lg w-56 p-1"
+      >
+        {% include "photos/ui/partials/cluster_menu_rows.html" with cluster_expr="currentCluster()" %}
+      </ul>
+    </div>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 px-4 pb-2">
+    {% include "photos/ui/partials/person_view_tabs.html" %}
+    {% if shows %}
+      <nav class="flex items-center gap-1 ml-auto" aria-label="Which faces">
+        {% for item in shows %}
+          <a
+            href="{{ item.url }}"
+            x-target.push="photos-nav photos-content"
+            class="btn btn-xs rounded-full {% if item.active %}btn-module{% else %}btn-ghost{% endif %}"
+            {% if item.active %}aria-current="page"{% endif %}
+          >{{ item.label }}</a>
+        {% endfor %}
+      </nav>
+    {% endif %}
+  </div>
+</header>

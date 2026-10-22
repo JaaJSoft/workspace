@@ -300,7 +300,8 @@ class AppearanceBatchSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=ACTIONS)
     person = serializers.UUIDField(
         required=False,
-        help_text="confirm and reject: the person the review suggested; "
+        help_text="confirm: the person the review suggested; reject: the "
+        "person the review asked about, or the one they were said to be; "
         "assign: the contact these people are, whose face is in the library.",
     )
 

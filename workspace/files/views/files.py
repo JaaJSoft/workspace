@@ -630,11 +630,11 @@ class FileViewSet(
                     file_tags__tag__uuid__in=tag_uuids
                 ).distinct()
 
-        # Filter by tag name (case-insensitive contains)
+        # Filter by tag name (contains, ignoring case and accents)
         tag_name_param = request.query_params.get("tag_name")
         if tag_name_param:
             queryset = queryset.filter(
-                file_tags__tag__name__icontains=tag_name_param.strip()
+                file_tags__tag__name__ficontains=tag_name_param.strip()
             ).distinct()
 
         if self._is_recent_query():

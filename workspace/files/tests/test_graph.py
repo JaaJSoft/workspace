@@ -164,6 +164,14 @@ class BuildFileGraphTests(TestCase):
         self.assertEqual(ids, {str(self.b.uuid)})  # only b.md matches "b"
         self.assertEqual(g["edges"], [])  # a->b dropped: a filtered out
 
+    def test_search_ignores_accents_and_case(self):
+        resume = _note(self.user, "Résumé.md")
+        for search in ("resume", "RÉSUMÉ"):
+            g = build_file_graph(
+                self.user, scope="mine", file_type="markdown", search=search
+            )
+            self.assertEqual({n["uuid"] for n in g["nodes"]}, {str(resume.uuid)})
+
     def test_favorites_true_keeps_only_favorites(self):
         g = build_file_graph(
             self.user, scope="mine", file_type="markdown", favorites=True

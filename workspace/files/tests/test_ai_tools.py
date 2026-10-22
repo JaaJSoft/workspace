@@ -112,6 +112,14 @@ class SearchFilenamesScopeTests(TestCase):
         self.assertEqual(hit["parent_folder"], "")
         self.assertTrue(hit["shared_with_me"])
 
+    def test_query_ignores_accents_and_case(self):
+        doc = File.objects.create(
+            owner=self.user, name="Résumé.pdf", node_type=File.NodeType.FILE
+        )
+        for query in ("resume", "RÉSUMÉ"):
+            [hit] = self._search(query)
+            self.assertEqual(hit["uuid"], str(doc.uuid))
+
     def test_another_users_unshared_file_stays_hidden(self):
         File.objects.create(
             owner=self.bob, name="budget.xlsx", node_type=File.NodeType.FILE

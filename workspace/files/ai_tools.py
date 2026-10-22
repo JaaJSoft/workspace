@@ -94,7 +94,7 @@ Use read_file with the returned UUID to get the content."""
         qs = (
             File.objects.filter(
                 pk__in=FileService.accessible_file_ids(user, include_deleted=False),
-                name__icontains=query,
+                name__ficontains=query,
             )
             .select_related("parent")
             .order_by("-updated_at")

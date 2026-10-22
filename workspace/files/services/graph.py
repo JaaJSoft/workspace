@@ -89,7 +89,7 @@ def build_file_graph(
     elif favorites is False:
         base = base.exclude(favorites__owner=user)
     if search:
-        base = base.filter(name__icontains=search)
+        base = base.filter(name__ficontains=search)
     if tags:
         # OR semantics: a node matches if it carries any of the requested tags.
         # The join to file_tags fans out one row per matching tag, so distinct()

@@ -105,7 +105,7 @@ def search_albums(query, user, limit, *, mine=False):
     those shared with them."""
     if limit <= 0 or not (query or "").strip():
         return []
-    albums = user_albums(user).filter(title__icontains=query.strip())
+    albums = user_albums(user).filter(title__ficontains=query.strip())
     if mine:
         albums = albums.filter(owner=user, group__isnull=True)
     return [

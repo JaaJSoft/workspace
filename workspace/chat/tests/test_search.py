@@ -9,10 +9,36 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from workspace.chat.models import Message, MessageAttachment
+from workspace.chat.search import search_conversations
 from workspace.common.search import fts5_available
 from workspace.users.services.settings import set_setting
 
 from .test_chat import ChatTestMixin
+
+
+class ConversationSearchAccentTests(ChatTestMixin, APITestCase):
+    """search_conversations, the conversation section of the unified search."""
+
+    def _matched_uuids(self, query):
+        return {r.uuid for r in search_conversations(query, self.member, 10)}
+
+    def test_group_title_matches_a_query_typed_without_accents(self):
+        self.group.title = "Réunion d'équipe"
+        self.group.save(update_fields=["title"])
+        self.assertIn(str(self.group.uuid), self._matched_uuids("reunion"))
+        self.assertIn(str(self.group.uuid), self._matched_uuids("EQUIPE"))
+
+    def test_dm_member_full_name_matches_a_query_typed_without_accents(self):
+        self.creator.first_name = "Jérôme"
+        self.creator.last_name = "Lefèvre"
+        self.creator.save(update_fields=["first_name", "last_name"])
+        self.assertIn(str(self.dm.uuid), self._matched_uuids("jerome"))
+        self.assertIn(str(self.dm.uuid), self._matched_uuids("jerome lefevre"))
+
+    def test_dm_member_username_matches_a_query_typed_without_accents(self):
+        self.creator.username = "hélène"
+        self.creator.save(update_fields=["username"])
+        self.assertIn(str(self.dm.uuid), self._matched_uuids("helene"))
 
 
 class ConversationMessageSearchTests(ChatTestMixin, APITestCase):

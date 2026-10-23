@@ -52,9 +52,11 @@ HEAD_ZONE = 0.35
 # The detector keeps boxes overlapping up to 0.6 (detection/nanodet.py), and
 # often boxes someone sitting or half hidden twice: whole, and in part. A box
 # nobody named that overlaps another of its photo this much (intersection
-# over union) is that person again. On the face bench's photos, it takes out
-# half of those second boxes, and 3% of the people really seen without a face.
-DOUBLE_IOU = 0.4
+# over union) is that person again. On the face bench's photos, naming
+# everyone asked about right, it spares 83% of the answers refused as already
+# in the photo, and never asks about 5% of the people really seen without a
+# face; any lower, each refusal spared costs two of those people.
+DOUBLE_IOU = 0.25
 # The key of a second box of somebody: see _mark_doubles().
 DOUBLE = "double"
 # People answered per pass over the window, and embeddings read per query.

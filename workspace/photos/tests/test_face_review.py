@@ -1,6 +1,7 @@
 """The review page: one group of faces after the other, and who they are."""
 
 from unittest.mock import patch
+from uuid import uuid4
 
 import numpy as np
 from django.contrib.auth import get_user_model
@@ -20,6 +21,7 @@ from workspace.photos.services.face_review import (
     unassigned_groups,
     unnamed_queue,
 )
+from workspace.photos.services.silhouettes import SilhouetteGroup
 from workspace.users.services.settings import set_setting
 
 from .images import CAROL
@@ -280,6 +282,27 @@ class ReviewPageTests(ReviewTestCase):
         # comes before a loose face of the same weight.
         self.assertEqual(
             [card["kind"] for card in cards], ["cluster", "check", "loose"]
+        )
+
+    def test_a_face_counts_for_more_than_a_body(self):
+        def silhouettes(total):
+            return SilhouetteGroup(
+                folder_id=None,
+                folder_name=None,
+                alone=True,
+                guess=None,
+                appearance_ids=(uuid4(),),
+                total=total,
+            )
+
+        groups = [silhouettes(15), silhouettes(30)]
+        with patch("workspace.photos.ui.views.silhouette_groups", return_value=groups):
+            cards = self._cards()
+
+        # Bob's 2 photos outweigh 15 people found by their body, not 30.
+        self.assertEqual(
+            [(card["kind"], card["total"]) for card in cards],
+            [("silhouette", 30), ("cluster", 2), ("silhouette", 15)],
         )
 
     @patch("workspace.photos.ui.views.REVIEW_CARDS", 1)

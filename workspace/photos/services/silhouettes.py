@@ -23,7 +23,7 @@ from workspace.files.models import File
 
 from ..models import Face
 from ..queries import library_files, named_face_clusters, user_appearances
-from .appearance_suggestions import known_by_faces
+from .appearance_suggestions import is_double, known_by_faces
 from .embedding.registry import get_embedding_backend
 from .face_people import person_cards
 from .face_preferences import faces_enabled
@@ -89,7 +89,9 @@ def silhouette_groups(user):
     rows = _in_folders(rows, folders, "file__parent")
     seen = _read(rows)
     named, in_photo = known_by_faces(user, seen, files=rows.values("file_id"))
-    people_per_photo = Counter(row.file_id for row in seen)
+    people_per_photo = Counter(
+        row.file_id for row in seen if not is_double(named.get(row.pk))
+    )
     by_folder = defaultdict(list)
     # The people the folder's other photos name, by their face or as the
     # user said.

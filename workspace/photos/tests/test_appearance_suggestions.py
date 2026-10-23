@@ -19,6 +19,7 @@ from workspace.users.services.settings import set_setting
 from .appearances import (
     BLUE,
     DARK_RED,
+    LEGS,
     RED,
     appearances_on,
     contact,
@@ -230,6 +231,42 @@ class SuggestAppearancesTests(FacesTestMixin, TestCase):
 
         self.assertIsNone(self.suggestion(hers))
         self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_a_person_boxed_twice_whose_face_is_off_their_head_is_theirs(self):
+        crouching = photo_at(self.user, "crouching.jpg")
+        named_face(self.user, crouching, self.lea, box=(0.15, 0.6, 0.1, 0.12))
+        hers = seen(self.user, crouching, RED)
+        seen(self.user, crouching, RED, box=LEGS)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), RED)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(hers))
+        self.assertEqual(self.suggestion(back), self.lea.pk)
+
+    def test_a_second_box_of_someone_is_suggested_as_nobody(self):
+        self.anchor(self.noah, RED)
+        lea = photo_at(self.user, "lea.jpg", 1)
+        named_face(self.user, lea, self.lea)
+        seen(self.user, lea, BLUE)
+        # Léa sitting, boxed again from the waist down, where no face is.
+        legs = seen(self.user, lea, RED, box=LEGS)
+
+        suggest_owner(self.user.pk)
+
+        self.assertIsNone(self.suggestion(legs))
+
+    def test_a_second_box_stands_in_nobodys_way(self):
+        lea = photo_at(self.user, "lea.jpg")
+        named_face(self.user, lea, self.lea)
+        seen(self.user, lea, RED)
+        seen(self.user, lea, BLUE, box=LEGS)
+        self.anchor(self.noah, BLUE, hours=2)
+        back = seen(self.user, photo_at(self.user, "back.jpg", 1), BLUE)
+
+        suggest_owner(self.user.pk)
+
+        self.assertEqual(self.suggestion(back), self.noah.pk)
 
     def test_a_hidden_face_off_every_head_is_nobodys(self):
         self.anchor(self.lea, RED)

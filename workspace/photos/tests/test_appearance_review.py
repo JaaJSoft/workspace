@@ -161,11 +161,13 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.row.refresh_from_db()
         self.assertEqual(self.row.rejected_person_id, self.lea.pk)
         self.assertIsNone(self.row.suggested_person_id)
+        self.assertTrue(self.row.hidden)
         self.assertEqual(outfit_suggestions(self.user), [])
         self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
         self.row.refresh_from_db()
         self.assertEqual(self.row.suggested_person_id, self.lea.pk)
         self.assertIsNone(self.row.rejected_person_id)
+        self.assertFalse(self.row.hidden)
 
     def test_a_person_assigned_to_someone_already_there_is_not_asked_again(self):
         noah_photo = photo_at(self.user, "noah.jpg", 2)
@@ -198,11 +200,36 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
         self.row.refresh_from_db()
         self.assertIsNone(self.row.person_id)
-        # Set apart from Noah: never asked about as him again.
+        # Set apart from Noah, and never asked about again.
         self.assertEqual(self.row.rejected_person_id, self.noah.pk)
+        self.assertTrue(self.row.hidden)
         self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
         self.row.refresh_from_db()
         self.assertIsNone(self.row.rejected_person_id)
+        self.assertFalse(self.row.hidden)
+
+    def test_moving_someone_to_a_person_already_there_unnames_them(self):
+        named_face(self.user, photo_at(self.user, "noah.jpg", 2), self.noah)
+        self.someone_else_wears(self.noah)
+        # Said to be Léa, then moved to Noah from her page.
+        Appearance.objects.filter(pk=self.row.pk).update(
+            person=self.lea, suggested_person=None
+        )
+        self.row.refresh_from_db()
+
+        result = appearance_review.apply(
+            self.user, "assign", [self.row], person=self.noah
+        )
+
+        self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
+        self.row.refresh_from_db()
+        # Hidden, and no longer teaching anybody Léa's clothes.
+        self.assertTrue(self.row.hidden)
+        self.assertIsNone(self.row.person_id)
+        self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.person_id, self.lea.pk)
+        self.assertFalse(self.row.hidden)
 
     def test_a_face_on_nobodys_head_may_be_theirs(self):
         # Léa crouching beside someone: her face is on no head.

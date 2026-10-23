@@ -604,9 +604,11 @@ answered the same way whatever it holds:
 A person is in a photo once: someone found by their body cannot be named Léa
 when Léa is already another person of that photo - her face is on another
 head, or the user said who that other person is. They are set apart from Léa
-instead, so the review does not ask the same question again. Léa's face on
-nobody's head does not count: someone crouching or bent over wears it lower
-than a head, and the person asked about may well be her.
+instead, and hidden: the user recognized someone the photo already shows -
+boxed a second time, or with their face given to the person beside them -
+so the review never asks about them again. Léa's face on nobody's head does
+not count: someone crouching or bent over wears it lower than a head, and
+the person asked about may well be her.
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
@@ -651,6 +653,16 @@ face of the photo on nobody's head and they are its only person with no face
 on theirs: someone crouching, bent over or half out of the frame keeps their
 name. With as many such faces left as people or more, each of those people
 is somebody - never asked about, never suggested - but nobody's clothes.
+
+The detector often boxes someone sitting or half hidden twice: whole, and
+from the waist down or one side only. A box nobody named (no face on it, and
+the user did not say who it is) that overlaps another box of the photo by
+0.4 or more (intersection over union) is a second box of that person: never
+asked about, never suggested, nobody's clothes, and counted once when the
+faces left are given to the people left. Whatever names the first box - its
+face, the user - names the person. On the face bench's photos, this takes
+out half of those second boxes, and 3% of the people really seen without a
+face (in someone's arms, half behind them).
 
 Every correction asks again in the background: around the photos of the
 faces corrected, or across the library, half a minute later, when a whole

@@ -19,6 +19,7 @@ from .appearances import (
     BESIDE,
     BLUE,
     EDGE,
+    KNEES,
     LEGS,
     NOON,
     RED,
@@ -163,6 +164,16 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
             seen(self.user, photo, BLUE)
             # Sitting: boxed again from the waist down, where no face is.
             seen(self.user, photo, BLUE, box=LEGS)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_box_around_a_part_of_someone_named_is_not_asked_about(self):
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, BLUE)
+            # Their knees, boxed on their own.
+            seen(self.user, photo, BLUE, box=KNEES)
 
         self.assertEqual(silhouette_groups(self.user), [])
 

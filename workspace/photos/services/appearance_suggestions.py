@@ -51,12 +51,15 @@ WINDOW = timedelta(hours=6)
 HEAD_ZONE = 0.35
 # The detector keeps boxes overlapping up to 0.6 (detection/nanodet.py), and
 # often boxes someone sitting or half hidden twice: whole, and in part. A box
-# nobody named that overlaps another of its photo this much (intersection
-# over union) is that person again. On the face bench's photos, naming
-# everyone asked about right, it spares 83% of the answers refused as already
-# in the photo, and never asks about 5% of the people really seen without a
-# face; any lower, each refusal spared costs two of those people.
+# nobody named is that person again when it overlaps another box of its
+# photo by DOUBLE_IOU (intersection over union), or by PART_IOU with
+# PART_INSIDE of the smaller box inside the other: a part of them, their
+# legs or an arm. On the face bench's photos this takes out three quarters
+# of those second boxes, and never asks about 6% of the people really seen
+# without a face; a lower DOUBLE_IOU loses one of them per box it takes out.
 DOUBLE_IOU = 0.25
+PART_IOU = 0.1
+PART_INSIDE = 0.6
 # The key of a second box of somebody: see _mark_doubles().
 DOUBLE = "double"
 # People answered per pass over the window, and embeddings read per query.
@@ -354,8 +357,8 @@ def is_double(who):
 
 def _mark_doubles(by_file, named):
     """Mark in *named* the people of each photo nobody named - no face is on
-    them, and the user did not say who they are - whose box overlaps
-    another's by DOUBLE_IOU or more: a second box of that person.
+    them, and the user did not say who they are - whose box is a second box
+    of the person another box shows (_boxed_twice).
 
     The first box is the one a face is on or the user named, or the larger
     of two nobody named; what is said of it covers both, and the leftover
@@ -372,7 +375,7 @@ def _mark_doubles(by_file, named):
                 for other in people
                 if other is not item
                 and _ranks_first(other, item, named)
-                and (overlap := _iou(item.box, other.box)) >= DOUBLE_IOU
+                and _boxed_twice(overlap := _iou(item.box, other.box), item, other)
             ]
             if firsts:
                 doubles[item.pk] = max(firsts, key=lambda pair: pair[0])[1].pk
@@ -380,6 +383,25 @@ def _mark_doubles(by_file, named):
         # named, and rank first over the box it is a second of.
         for pk, first in doubles.items():
             named[pk] = (DOUBLE, first)
+
+
+def _boxed_twice(overlap, item, other):
+    """Whether *item* and *other*, two boxes of a photo overlapping by
+    *overlap* (intersection over union), box the same person."""
+    if overlap >= DOUBLE_IOU:
+        return True
+    return overlap >= PART_IOU and _inside(item.box, other.box) >= PART_INSIDE
+
+
+def _inside(a, b):
+    """The share of the smaller of boxes *a* and *b* that is inside the
+    other."""
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    w = max(0.0, min(ax + aw, bx + bw) - max(ax, bx))
+    h = max(0.0, min(ay + ah, by + bh) - max(ay, by))
+    smaller = min(aw * ah, bw * bh)
+    return w * h / smaller if smaller > 0 else 0.0
 
 
 def _is_named(item, named):

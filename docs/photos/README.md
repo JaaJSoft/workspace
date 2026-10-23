@@ -658,15 +658,16 @@ is somebody - never asked about, never suggested - but nobody's clothes.
 
 The detector often boxes someone sitting or half hidden twice: whole, and
 from the waist down or one side only. A box nobody named (no face on it, and
-the user did not say who it is) that overlaps another box of the photo by
-0.25 or more (intersection over union) is a second box of that person: never
-asked about, never suggested, nobody's clothes, and counted once when the
-faces left are given to the people left. Whatever names the first box - its
-face, the user - names the person. On the face bench's photos, answering
-every question right, this spares 83% of the answers refused as already in
-the photo, and never asks about 5% of the people really seen without a face
-(in someone's arms, half behind them); any lower, each refusal spared costs
-two of those people.
+the user did not say who it is) is a second box of the person another box of
+the photo shows when the two overlap by 0.25 or more (intersection over
+union), or by 0.1 with 60% of the smaller one inside the other - a part of
+them, their legs or an arm. A second box is never asked about, never
+suggested, nobody's clothes, and counted once when the faces left are given
+to the people left. Whatever names the first box - its face, the user -
+names the person. On the face bench's photos, this takes out three quarters
+of those second boxes, and never asks about 6% of the people really seen
+without a face (in someone's arms, half behind them); a lower overlap alone
+loses one of them for each second box it takes out.
 
 Every correction asks again in the background: around the photos of the
 faces corrected, or across the library, half a minute later, when a whole

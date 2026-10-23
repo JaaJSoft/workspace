@@ -1392,7 +1392,7 @@ def _review_cards(user):
     """What the review page asks about, one card at a time: a group of faces
     and who they may be. The unnamed clusters, the faces the grouping put
     under a named person without being sure, and the look-alike groups of
-    faces in no cluster, then the people found by their body - the cards
+    faces in no cluster, and the people found by their body - the cards
     settling the most photos first, a face counting for more than a body."""
     cards = [
         {

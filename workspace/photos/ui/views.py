@@ -1359,7 +1359,7 @@ _REVIEW_KIND_WEIGHT = {
     "cluster": 1.0,
     "loose": 1.0,
     "outfit": 0.25,
-    "silhouette": 0.1,
+    "silhouette": 0.05,
 }
 # Among cards of the same weight, the named people's doubts first.
 _REVIEW_ORDER = {"check": 0, "cluster": 1, "loose": 2, "outfit": 3, "silhouette": 4}

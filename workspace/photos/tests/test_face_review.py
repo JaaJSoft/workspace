@@ -295,14 +295,14 @@ class ReviewPageTests(ReviewTestCase):
                 total=total,
             )
 
-        groups = [silhouettes(15), silhouettes(30)]
+        groups = [silhouettes(15), silhouettes(60)]
         with patch("workspace.photos.ui.views.silhouette_groups", return_value=groups):
             cards = self._cards()
 
-        # Bob's 2 photos outweigh 15 people found by their body, not 30.
+        # Bob's 2 photos outweigh 15 people found by their body, not 60.
         self.assertEqual(
             [(card["kind"], card["total"]) for card in cards],
-            [("silhouette", 30), ("cluster", 2), ("silhouette", 15)],
+            [("silhouette", 60), ("cluster", 2), ("silhouette", 15)],
         )
 
     @patch("workspace.photos.ui.views.REVIEW_CARDS", 1)

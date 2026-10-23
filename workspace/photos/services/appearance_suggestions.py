@@ -13,7 +13,8 @@ unnamed group, a face the face review asks about. They are never suggested,
 but someone dressed like one of them is not suggested as anybody else
 either - in a library where few people are named, the stranger sitting by a
 named person would otherwise take their name. The people asked about are
-those seen without a face, or with one too poor to recognize anyone by.
+those seen without a face, or with one too poor to recognize anyone by -
+not a second box of somebody else of the photo.
 
 Only ever a suggestion: the review asks, and a photo is the person's once
 the user says yes (``Appearance.person``).
@@ -40,6 +41,7 @@ from ..queries import library_files, user_face_clusters
 from .embedding.registry import get_embedding_backend
 from .face_grouping import LOW_QUALITY, doubt_distance
 from .face_preferences import faces_enabled
+from .face_tracking import _iou
 
 # Two photos may tell who is who by the clothes when taken the same day, in
 # the owner's timezone, or this close: a night out goes past midnight.
@@ -47,6 +49,14 @@ WINDOW = timedelta(hours=6)
 # A face is a person's when its centre is inside the person's box, within
 # the top HEAD_ZONE of its height: the head of someone standing or sitting.
 HEAD_ZONE = 0.35
+# The detector keeps boxes overlapping up to 0.6 (detection/nanodet.py), and
+# often boxes someone sitting or half hidden twice: whole, and in part. A box
+# nobody named that overlaps another of its photo this much (intersection
+# over union) is that person again. On the face bench's photos, it takes out
+# half of those second boxes, and 3% of the people really seen without a face.
+DOUBLE_IOU = 0.4
+# The key of a second box of somebody: see _mark_doubles().
+DOUBLE = "double"
 # People answered per pass over the window, and embeddings read per query.
 _BATCH = 500
 
@@ -127,7 +137,12 @@ def _suggest(user, start=None, end=None):
         if item.person_id is not None:
             named[item.pk] = item.person_id
             in_photo[item.file_id].add(item.person_id)
-    anchors = sorted((item for item in seen if item.pk in named), key=_by_time)
+    # A second box shows its person's clothes cut otherwise: it would only
+    # stand in the way of the first.
+    anchors = sorted(
+        (item for item in seen if item.pk in named and not is_double(named[item.pk])),
+        key=_by_time,
+    )
     queries = sorted(
         (
             item
@@ -243,8 +258,10 @@ def known_by_faces(user, seen, span=None, files=None):
     """({appearance pk: who} for the people whose face was seen,
     {file id: the persons its named faces show}).
 
-    Reads the faces of the photos taken in *span*, or of *files* (a queryset
-    of file pks), or of the whole library.
+    *seen* are the people of the photos, each with its pk, file_id, box and
+    person_id (who the user said it is). Reads the faces of the photos taken
+    in *span*, or of *files* (a queryset of file pks), or of the whole
+    library.
 
     Who is the person a visible group is named after; ("cluster", its uuid)
     for an unnamed or hidden group, and ("face", its uuid) for a face in no
@@ -256,7 +273,9 @@ def known_by_faces(user, seen, span=None, files=None):
 
     A face is someone's when it is on their head (_wearer), or when it is
     the photo's only face on nobody's head and they its only person no face
-    is on (_pair_leftovers).
+    is on (_pair_leftovers). A second box of somebody is (DOUBLE, the pk of
+    their first box): never asked about, never suggested, and nobody's
+    clothes (_mark_doubles).
     """
     who, centroids = {}, {}
     for pk, person_id, person_visible, hidden, centroid in user_face_clusters(
@@ -320,8 +339,62 @@ def known_by_faces(user, seen, span=None, files=None):
         elif assignment != Face.Assignment.HIDDEN:
             # A hidden face may be a poster's: nobody's body to give it to.
             unworn[file_id].append(key)
+    _mark_doubles(by_file, named)
     _pair_leftovers(by_file, unworn, named)
     return named, in_photo
+
+
+def is_double(who):
+    """Whether *who*, a value of known_by_faces()'s first dict, is a second
+    box of somebody."""
+    return isinstance(who, tuple) and who[0] == DOUBLE
+
+
+def _mark_doubles(by_file, named):
+    """Mark in *named* the people of each photo nobody named - no face is on
+    them, and the user did not say who they are - whose box overlaps
+    another's by DOUBLE_IOU or more: a second box of that person.
+
+    The first box is the one a face is on or the user named, or the larger
+    of two nobody named; what is said of it covers both, and the leftover
+    faces count it once.
+    """
+    for people in by_file.values():
+        doubles = {}
+        for item in people:
+            if _is_named(item, named):
+                continue
+            firsts = [
+                (overlap, other)
+                for other in people
+                if other is not item
+                and _ranks_first(other, item, named)
+                and (overlap := _iou(item.box, other.box)) >= DOUBLE_IOU
+            ]
+            if firsts:
+                doubles[item.pk] = max(firsts, key=lambda pair: pair[0])[1].pk
+        # Marked after the loop: marked earlier, a second box would count as
+        # named, and rank first over the box it is a second of.
+        for pk, first in doubles.items():
+            named[pk] = (DOUBLE, first)
+
+
+def _is_named(item, named):
+    """Whether a face or the user says who *item* is."""
+    return item.pk in named or item.person_id is not None
+
+
+def _ranks_first(other, item, named):
+    """Whether *other* is the first box of the person *item*, a box nobody
+    named, may be twice."""
+    if _is_named(other, named):
+        return True
+    return (_area(other), str(other.pk)) > (_area(item), str(item.pk))
+
+
+def _area(item):
+    _x, _y, w, h = item.box
+    return w * h
 
 
 def _pair_leftovers(by_file, unworn, named):

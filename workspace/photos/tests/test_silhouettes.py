@@ -8,12 +8,17 @@ from rest_framework.test import APIClient
 from workspace.files.services import FileService
 from workspace.photos.models import Appearance
 from workspace.photos.services import appearance_review
-from workspace.photos.services.appearance_review import NO_SUGGESTION
+from workspace.photos.services.appearance_review import (
+    ALREADY_IN_PHOTO,
+    NO_SUGGESTION,
+)
 from workspace.photos.services.appearance_suggestions import suggest_owner
 from workspace.photos.services.silhouettes import silhouette_groups
 
 from .appearances import (
+    BESIDE,
     BLUE,
+    LEGS,
     NOON,
     RED,
     appearances_on,
@@ -122,7 +127,8 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
 
     def test_no_guess_for_people_who_share_their_photo(self):
         photo = self.photo()
-        first, second = seen(self.user, photo, RED), seen(self.user, photo, RED)
+        first = seen(self.user, photo, RED)
+        second = seen(self.user, photo, RED, box=BESIDE)
 
         group = self.group_of(first)
 
@@ -147,6 +153,77 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
             seen(self.user, photo, BLUE)
 
         self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_second_box_of_someone_named_by_their_face_is_not_asked_about(self):
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, BLUE)
+            # Sitting: boxed again from the waist down, where no face is.
+            seen(self.user, photo, BLUE, box=LEGS)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_person_boxed_twice_whose_face_is_off_their_head_is_theirs(self):
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah, box=(0.15, 0.6, 0.1, 0.12))
+            seen(self.user, photo, BLUE)
+            seen(self.user, photo, BLUE, box=LEGS)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_box_over_one_the_user_named_is_not_asked_about(self):
+        for _ in range(2):
+            photo = self.photo()
+            seen(self.user, photo, BLUE)
+            seen(self.user, photo, BLUE, box=LEGS, person=self.noah)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_person_boxed_twice_is_asked_about_once(self):
+        photo = self.photo()
+        whole = seen(self.user, photo, BLUE)
+        seen(self.user, photo, BLUE, box=LEGS)
+
+        group = self.group_of(whole)
+
+        self.assertEqual(group.appearance_ids, (whole.pk,))
+        # Alone in their photo, though boxed twice.
+        self.assertTrue(group.alone)
+
+    def test_people_beside_each_other_are_two(self):
+        photo = self.photo()
+        first = seen(self.user, photo, BLUE)
+        second = seen(self.user, photo, BLUE, box=BESIDE)
+
+        self.assertEqual(
+            set(self.group_of(first).appearance_ids), {first.pk, second.pk}
+        )
+
+    def test_people_said_to_be_someone_their_photo_shows_are_not_asked_again(self):
+        rows = []
+        for _ in range(2):
+            photo = self.photo()
+            # Noah's face is on somebody else's head.
+            named_face(self.user, photo, self.noah, box=(0.65, 0.1, 0.1, 0.1))
+            seen(self.user, photo, RED, box=BESIDE)
+            rows.append(seen(self.user, photo, BLUE))
+        self.assertEqual(
+            set(self.group_of(rows[0]).appearance_ids), {row.pk for row in rows}
+        )
+
+        result = appearance_review.apply(self.user, "assign", rows, person=self.noah)
+
+        self.assertEqual(
+            sorted(result.skipped), sorted((row.pk, ALREADY_IN_PHOTO) for row in rows)
+        )
+        asked = {pk for g in silhouette_groups(self.user) for pk in g.appearance_ids}
+        self.assertFalse(asked & {row.pk for row in rows})
+        appearance_review.undo(self.user, result.undo)
+        self.assertEqual(
+            set(self.group_of(rows[0]).appearance_ids), {row.pk for row in rows}
+        )
 
     def test_no_guess_for_people_already_said_not_to_be_them(self):
         row = self.alone(RED)

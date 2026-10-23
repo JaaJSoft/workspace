@@ -131,8 +131,9 @@ def apply(user, action, appearances, person=None):
     are listed through their faces. A face on nobody's head may be theirs:
     someone crouching or bent over wears it lower. A person confirmed or
     assigned as someone the photo already shows is still set apart from the
-    person suggested, or from that person when nobody was, as by a reject:
-    otherwise the review asks the same question again.
+    person suggested, or from that person when nobody was, as by a reject,
+    and hidden: the user recognized them, and the review would otherwise ask
+    the same question again.
     """
     result = BatchResult()
     if not appearances:
@@ -179,6 +180,10 @@ def _answer(row, action, person, worn):
         row.rejected_person_id = not_them
         if row.person_id == not_them:
             row.person_id = None
+        if reason == ALREADY_IN_PHOTO:
+            # Someone the photo already shows - a second box of them, or
+            # their face put on another head: nobody new to ask about.
+            row.hidden = True
     elif action == HIDE:
         # Nobody to name: kept as someone's, they would still teach the
         # suggestions that person's clothes.
@@ -210,6 +215,7 @@ class _Body:
     pk: object
     file_id: object
     box: tuple
+    person_id: object
 
 
 def _worn_faces(user, rows):
@@ -218,10 +224,12 @@ def _worn_faces(user, rows):
     (appearance_suggestions.known_by_faces)."""
     files = {row.file_id for row in rows}
     bodies = [
-        _Body(pk=pk, file_id=file_id, box=(x, y, w, h))
-        for pk, file_id, x, y, w, h in Appearance.objects.filter(
+        _Body(pk=pk, file_id=file_id, box=(x, y, w, h), person_id=person_id)
+        for pk, file_id, x, y, w, h, person_id in Appearance.objects.filter(
             owner=user, file_id__in=files
-        ).values_list("pk", "file_id", "box_x", "box_y", "box_width", "box_height")
+        ).values_list(
+            "pk", "file_id", "box_x", "box_y", "box_width", "box_height", "person_id"
+        )
     ]
     named, _ = known_by_faces(user, bodies, files=list(files))
     file_of = {body.pk: body.file_id for body in bodies}

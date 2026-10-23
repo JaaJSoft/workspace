@@ -603,12 +603,14 @@ answered the same way whatever it holds:
 
 A person is in a photo once: someone found by their body cannot be named Léa
 when Léa is already another person of that photo - her face is on another
-head, or the user said who that other person is. They are set apart from Léa
-instead, and hidden: the user recognized someone the photo already shows -
-boxed a second time, or with their face given to the person beside them -
-so the review never asks about them again. Léa's face on nobody's head does
-not count: someone crouching or bent over wears it lower than a head, and
-the person asked about may well be her.
+head, or the user said who that other person is. When their box overlaps
+hers, they are Léa boxed a second time: the answer goes through, and they
+are hidden, as nobody new to ask about. When Léa is elsewhere in the photo,
+they are set apart from Léa instead, and hidden: her face was given to the
+wrong person, or somebody else was taken for her, and the review never asks
+about them again. Léa's face on nobody's head does not count: someone
+crouching or bent over wears it lower than a head, and the person asked
+about may well be her.
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in
@@ -656,15 +658,16 @@ is somebody - never asked about, never suggested - but nobody's clothes.
 
 The detector often boxes someone sitting or half hidden twice: whole, and
 from the waist down or one side only. A box nobody named (no face on it, and
-the user did not say who it is) that overlaps another box of the photo by
-0.25 or more (intersection over union) is a second box of that person: never
-asked about, never suggested, nobody's clothes, and counted once when the
-faces left are given to the people left. Whatever names the first box - its
-face, the user - names the person. On the face bench's photos, answering
-every question right, this spares 83% of the answers refused as already in
-the photo, and never asks about 5% of the people really seen without a face
-(in someone's arms, half behind them); any lower, each refusal spared costs
-two of those people.
+the user did not say who it is) is a second box of the person another box of
+the photo shows when the two overlap by 0.25 or more (intersection over
+union), or by 0.1 with 60% of the smaller one inside the other - a part of
+them, their legs or an arm. A second box is never asked about, never
+suggested, nobody's clothes, and counted once when the faces left are given
+to the people left. Whatever names the first box - its face, the user -
+names the person. On the face bench's photos, this takes out three quarters
+of those second boxes, and never asks about 6% of the people really seen
+without a face (in someone's arms, half behind them); a lower overlap alone
+loses one of them for each second box it takes out.
 
 Every correction asks again in the background: around the photos of the
 faces corrected, or across the library, half a minute later, when a whole

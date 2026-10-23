@@ -21,6 +21,7 @@ from .appearances import (
     LEGS,
     NOON,
     RED,
+    SIDE,
     appearances_on,
     contact,
     named_face,
@@ -161,6 +162,16 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
             seen(self.user, photo, BLUE)
             # Sitting: boxed again from the waist down, where no face is.
             seen(self.user, photo, BLUE, box=LEGS)
+
+        self.assertEqual(silhouette_groups(self.user), [])
+
+    def test_a_second_box_off_to_one_side_is_not_asked_about(self):
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, BLUE)
+            # Boxed again with what they hold out, beside them.
+            seen(self.user, photo, BLUE, box=SIDE)
 
         self.assertEqual(silhouette_groups(self.user), [])
 

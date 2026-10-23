@@ -357,7 +357,8 @@ def _mark_doubles(by_file, named):
 
     The first box is the one a face is on or the user named, or the larger
     of two nobody named; what is said of it covers both, and the leftover
-    faces count it once.
+    faces count it once. A box may be the second of a second box: a chain
+    always ends on a first box, named or asked about once.
     """
     for people in by_file.values():
         doubles = {}

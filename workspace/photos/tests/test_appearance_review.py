@@ -208,6 +208,29 @@ class OutfitReviewTests(FacesTestMixin, TestCase):
         self.assertIsNone(self.row.rejected_person_id)
         self.assertFalse(self.row.hidden)
 
+    def test_moving_someone_to_a_person_already_there_unnames_them(self):
+        named_face(self.user, photo_at(self.user, "noah.jpg", 2), self.noah)
+        self.someone_else_wears(self.noah)
+        # Said to be Léa, then moved to Noah from her page.
+        Appearance.objects.filter(pk=self.row.pk).update(
+            person=self.lea, suggested_person=None
+        )
+        self.row.refresh_from_db()
+
+        result = appearance_review.apply(
+            self.user, "assign", [self.row], person=self.noah
+        )
+
+        self.assertEqual(result.skipped, [(self.row.pk, ALREADY_IN_PHOTO)])
+        self.row.refresh_from_db()
+        # Hidden, and no longer teaching anybody Léa's clothes.
+        self.assertTrue(self.row.hidden)
+        self.assertIsNone(self.row.person_id)
+        self.assertEqual(appearance_review.undo(self.user, result.undo), 1)
+        self.row.refresh_from_db()
+        self.assertEqual(self.row.person_id, self.lea.pk)
+        self.assertFalse(self.row.hidden)
+
     def test_a_face_on_nobodys_head_may_be_theirs(self):
         # Léa crouching beside someone: her face is on no head.
         named_face(self.user, self.back, self.lea, box=(0.15, 0.6, 0.1, 0.12))

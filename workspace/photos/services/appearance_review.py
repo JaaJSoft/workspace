@@ -182,8 +182,10 @@ def _answer(row, action, person, worn):
             row.person_id = None
         if reason == ALREADY_IN_PHOTO:
             # Someone the photo already shows - a second box of them, or
-            # their face put on another head: nobody new to ask about.
+            # their face put on another head: nobody new to ask about, and
+            # no longer whoever the user said they were, as by a hide.
             row.hidden = True
+            row.person_id = None
     elif action == HIDE:
         # Nobody to name: kept as someone's, they would still teach the
         # suggestions that person's clothes.

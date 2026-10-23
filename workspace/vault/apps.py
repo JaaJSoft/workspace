@@ -33,7 +33,6 @@ class VaultConfig(AppConfig):
                 color="purple",
                 url="/vault",
                 order=40,
-                preview=True,
             )
         )
 

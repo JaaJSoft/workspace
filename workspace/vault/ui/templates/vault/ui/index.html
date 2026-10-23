@@ -63,7 +63,15 @@
     class="h-full flex flex-col min-h-0"
     @keydown.escape.window="closeMenu()"
   >
-    <template x-if="state !== 'unlocked'">
+    <div
+      class="py-8 px-4 max-w-lg mx-auto w-full"
+      x-show="!secureContext"
+      x-cloak
+    >
+      {% include "vault/ui/partials/insecure_context.html" %}
+    </div>
+
+    <template x-if="secureContext && state !== 'unlocked'">
       <div class="flex-1 overflow-y-auto py-8 px-4">{% include "vault/ui/partials/unlock_form.html" %}</div>
     </template>
 

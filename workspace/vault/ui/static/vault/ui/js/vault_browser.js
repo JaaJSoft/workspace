@@ -153,6 +153,9 @@ window.vaultBrowser = (function () {
       ...window.vaultFileEntryMixin(),
       ...store,
 
+      // False only on a plain-HTTP origin other than localhost, where the
+      // browser withholds crypto.subtle: nothing on this page can work there.
+      secureContext: window.isSecureContext !== false,
       // The vault this page was routed to. Null on /vault, where the vault to
       // open is resolved once the account is unlocked.
       vaultUuid: null,
@@ -252,6 +255,7 @@ window.vaultBrowser = (function () {
       navAhead: 0,
 
       init: function () {
+        if (!this.secureContext) return;
         this.vaultUuid = readJson('vault-uuid');
         this.entryTypes = readJson('entry-types') || [];
         this.icons = window.ICON_PICKER_ICONS || [];

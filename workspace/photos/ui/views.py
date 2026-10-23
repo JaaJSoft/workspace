@@ -1350,8 +1350,19 @@ def _face_items(face_ids):
 
 # Cards the review page holds at once; the next ones come after a reload.
 REVIEW_CARDS = 30
+# What one item of a card is worth, by kind. Faces come first: a name given
+# to a face is what the people found by their body are then suggested from,
+# and their cards ask about many more items each - a folder of silhouettes
+# would otherwise bury every face.
+_REVIEW_KIND_WEIGHT = {
+    "check": 1.0,
+    "cluster": 1.0,
+    "loose": 1.0,
+    "outfit": 0.25,
+    "silhouette": 0.05,
+}
 # Among cards of the same weight, the named people's doubts first.
-_REVIEW_ORDER = {"check": 0, "outfit": 1, "cluster": 2, "loose": 3, "silhouette": 4}
+_REVIEW_ORDER = {"check": 0, "cluster": 1, "loose": 2, "outfit": 3, "silhouette": 4}
 
 
 def _appearance_items(appearance_ids):
@@ -1381,7 +1392,8 @@ def _review_cards(user):
     """What the review page asks about, one card at a time: a group of faces
     and who they may be. The unnamed clusters, the faces the grouping put
     under a named person without being sure, and the look-alike groups of
-    faces in no cluster - the cards settling the most photos first."""
+    faces in no cluster, and the people found by their body - the cards
+    settling the most photos first, a face counting for more than a body."""
     cards = [
         {
             "kind": "cluster",
@@ -1468,7 +1480,12 @@ def _review_cards(user):
                 "weight": group.total,
             }
         )
-    cards.sort(key=lambda card: (-card["weight"], _REVIEW_ORDER[card["kind"]]))
+    cards.sort(
+        key=lambda card: (
+            -card["weight"] * _REVIEW_KIND_WEIGHT[card["kind"]],
+            _REVIEW_ORDER[card["kind"]],
+        )
+    )
     # The unnamed clusters past the first page were not read: they are
     # counted, the doubts and loose groups all are cards already.
     to_name = unnamed_count(user)

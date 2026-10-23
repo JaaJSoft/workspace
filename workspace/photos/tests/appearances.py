@@ -33,10 +33,11 @@ NOON = timezone.now().replace(hour=12, minute=0, second=0, microsecond=0)
 
 # Boxes beside the one ``seen`` puts a person in by default, and over it -
 # from the waist down, or half a width off to one side: the same person
-# boxed a second time.
+# boxed a second time. EDGE only overlaps its edge: too little to tell.
 BESIDE = (0.6, 0.1, 0.3, 0.8)
 LEGS = (0.1, 0.45, 0.3, 0.45)
 SIDE = (0.26, 0.1, 0.3, 0.8)
+EDGE = (0.3, 0.1, 0.3, 0.8)
 
 
 def torso_png(*people, size=(800, 600)):

@@ -16,6 +16,7 @@ from ..models import Appearance
 from ..queries import named_face_clusters, user_appearances
 from .appearance_suggestions import known_by_faces
 from .face_people import person_cards
+from .face_tracking import _iou
 
 # People found by their body shown per suggested person at once, the nearest
 # first; the rest come once these are answered.
@@ -129,11 +130,13 @@ def apply(user, action, appearances, person=None):
     whose face is on another head, or whom the user named already - and
     everyone assigned to a contact with no face in the library: their photos
     are listed through their faces. A face on nobody's head may be theirs:
-    someone crouching or bent over wears it lower. A person confirmed or
-    assigned as someone the photo already shows is still set apart from the
-    person suggested, or from that person when nobody was, as by a reject,
-    and hidden: the user recognized them, and the review would otherwise ask
-    the same question again.
+    someone crouching or bent over wears it lower. A box overlapping a box of
+    that person is them boxed a second time: the answer holds, and hides it,
+    as nobody new to ask about. A person confirmed or assigned as someone the
+    photo already shows elsewhere is still set apart from the person
+    suggested, or from that person when nobody was, as by a reject, and
+    hidden: the user recognized them, and the review would otherwise ask the
+    same question again.
     """
     result = BatchResult()
     if not appearances:
@@ -170,7 +173,13 @@ def _answer(row, action, person, worn):
     person_id = person.pk if action in (CONFIRM, ASSIGN) else None
     not_them = person.pk if action == REJECT else None
     reason = None
-    if person_id is not None and person_id in _persons_in_photo(row, worn):
+    theirs = _boxes_of(row, worn, person_id) if person_id is not None else []
+    box = (row.box_x, row.box_y, row.box_width, row.box_height)
+    if any(_iou(box, other) > 0 for other in theirs):
+        # Over a box of that person already: them, boxed a second time.
+        # Nobody new to ask about, and a second box is nobody's clothes.
+        action = HIDE
+    elif theirs:
         # Whoever the user named, they said the suggestion is not them.
         action = REJECT
         not_them = row.suggested_person_id or person_id
@@ -181,9 +190,10 @@ def _answer(row, action, person, worn):
         if row.person_id == not_them:
             row.person_id = None
         if reason == ALREADY_IN_PHOTO:
-            # Someone the photo already shows - a second box of them, or
-            # their face put on another head: nobody new to ask about, and
-            # no longer whoever the user said they were, as by a hide.
+            # Someone the photo already shows elsewhere - their face put on
+            # another head, or somebody else taken for them: nobody new to
+            # ask about, and no longer whoever the user said they were, as by
+            # a hide.
             row.hidden = True
             row.person_id = None
     elif action == HIDE:
@@ -221,8 +231,8 @@ class _Body:
 
 
 def _worn_faces(user, rows):
-    """{file id: {appearance pk: the person whose face is on them}} for
-    everyone in the photos of *rows*, as the suggestions read it
+    """{file id: {appearance pk: (the person whose face is on them, their
+    box)}} for everyone in the photos of *rows*, as the suggestions read it
     (appearance_suggestions.known_by_faces)."""
     files = {row.file_id for row in rows}
     bodies = [
@@ -234,24 +244,28 @@ def _worn_faces(user, rows):
         )
     ]
     named, _ = known_by_faces(user, bodies, files=list(files))
-    file_of = {body.pk: body.file_id for body in bodies}
     worn = defaultdict(dict)
-    for pk, who in named.items():
-        if not isinstance(who, tuple):
-            worn[file_of[pk]][pk] = who
+    for body in bodies:
+        who = named.get(body.pk)
+        if who is not None and not isinstance(who, tuple):
+            worn[body.file_id][body.pk] = (who, body.box)
     return worn
 
 
-def _persons_in_photo(row, worn):
-    """The persons another person of the photo of *row* already is: their
-    face is on that person's head, or the user said who that person is."""
-    on_others = {who for pk, who in worn.get(row.file_id, {}).items() if pk != row.pk}
+def _boxes_of(row, worn, person_id):
+    """The boxes of the other people of the photo of *row* who are
+    *person_id*: their face is on that person's head, or the user said so."""
+    worn_by = [
+        box
+        for pk, (who, box) in worn.get(row.file_id, {}).items()
+        if pk != row.pk and who == person_id
+    ]
     said = (
-        Appearance.objects.filter(file_id=row.file_id, person__isnull=False)
+        Appearance.objects.filter(file_id=row.file_id, person_id=person_id)
         .exclude(pk=row.pk)
-        .values_list("person_id", flat=True)
+        .values_list("box_x", "box_y", "box_width", "box_height")
     )
-    return on_others | set(said)
+    return worn_by + list(said)
 
 
 def _save_undo(user, appearances):

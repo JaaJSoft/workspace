@@ -603,12 +603,14 @@ answered the same way whatever it holds:
 
 A person is in a photo once: someone found by their body cannot be named Léa
 when Léa is already another person of that photo - her face is on another
-head, or the user said who that other person is. They are set apart from Léa
-instead, and hidden: the user recognized someone the photo already shows -
-boxed a second time, or with their face given to the person beside them -
-so the review never asks about them again. Léa's face on nobody's head does
-not count: someone crouching or bent over wears it lower than a head, and
-the person asked about may well be her.
+head, or the user said who that other person is. When their box overlaps
+hers, they are Léa boxed a second time: the answer goes through, and they
+are hidden, as nobody new to ask about. When Léa is elsewhere in the photo,
+they are set apart from Léa instead, and hidden: her face was given to the
+wrong person, or somebody else was taken for her, and the review never asks
+about them again. Léa's face on nobody's head does not count: someone
+crouching or bent over wears it lower than a head, and the person asked
+about may well be her.
 
 Clicking a face leaves it out of its card's answer; everything else on the
 card goes with it. The answer is the guess, a contact or a new name typed in

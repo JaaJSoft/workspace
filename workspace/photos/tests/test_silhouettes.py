@@ -18,6 +18,7 @@ from workspace.photos.services.silhouettes import silhouette_groups
 from .appearances import (
     BESIDE,
     BLUE,
+    EDGE,
     LEGS,
     NOON,
     RED,
@@ -235,6 +236,46 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         self.assertEqual(
             set(self.group_of(rows[0]).appearance_ids), {row.pk for row in rows}
         )
+
+    def test_named_after_whoever_their_box_overlaps_they_are_that_person(self):
+        rows = []
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, RED)
+            # Over the edge of Noah's box: too little to tell before the answer.
+            rows.append(seen(self.user, photo, BLUE, box=EDGE))
+        self.assertEqual(
+            set(self.group_of(rows[0]).appearance_ids), {row.pk for row in rows}
+        )
+
+        result = appearance_review.apply(self.user, "assign", rows, person=self.noah)
+
+        # Noah boxed a second time: answered, and nobody new to ask about.
+        self.assertEqual(result.done, [row.pk for row in rows])
+        self.assertEqual(result.skipped, [])
+        self.assertEqual(silhouette_groups(self.user), [])
+        appearance_review.undo(self.user, result.undo)
+        self.assertEqual(
+            set(self.group_of(rows[0]).appearance_ids), {row.pk for row in rows}
+        )
+
+    def test_two_boxes_of_one_person_named_together_are_both_answered(self):
+        named_face(self.user, self.photo(), self.noah)
+        photo = self.photo()
+        whole = seen(self.user, photo, BLUE)
+        edge = seen(self.user, photo, BLUE, box=EDGE)
+
+        result = appearance_review.apply(
+            self.user, "assign", [whole, edge], person=self.noah
+        )
+
+        self.assertEqual(result.done, [whole.pk, edge.pk])
+        whole.refresh_from_db()
+        edge.refresh_from_db()
+        self.assertEqual(whole.person, self.noah)
+        self.assertTrue(edge.hidden)
+        self.assertIsNone(edge.person)
 
     def test_no_guess_for_people_already_said_not_to_be_them(self):
         row = self.alone(RED)

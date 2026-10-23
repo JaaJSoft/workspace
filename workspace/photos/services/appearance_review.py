@@ -148,15 +148,20 @@ def apply(user, action, appearances, person=None):
         return result
     result.undo = _save_undo(user, appearances)
     worn = _worn_faces(user, appearances)
-    changed = False
     with transaction.atomic():
-        for row in appearances:
-            reason = _answer(row, action, person, worn)
-            if reason is None:
-                result.done.append(row.pk)
-            else:
-                result.skipped.append((row.pk, reason))
-            changed = changed or reason in (None, ALREADY_IN_PHOTO)
+        # Largest first: of two boxes of one person answered together, the
+        # whole one keeps the name, whatever order the batch lists them in.
+        reasons = {
+            row.pk: _answer(row, action, person, worn)
+            for row in sorted(appearances, key=_area, reverse=True)
+        }
+    for row in appearances:
+        reason = reasons[row.pk]
+        if reason is None:
+            result.done.append(row.pk)
+        else:
+            result.skipped.append((row.pk, reason))
+    changed = any(reason in (None, ALREADY_IN_PHOTO) for reason in reasons.values())
     if not changed:
         cache.delete(_UNDO_KEY.format(user.pk, result.undo))
         result.undo = None
@@ -208,6 +213,10 @@ def _answer(row, action, person, worn):
     row.suggestion_distance = None
     row.save(update_fields=_fields(_SAVED_FIELDS))
     return reason
+
+
+def _area(row):
+    return row.box_width * row.box_height
 
 
 def _may_reject(row, person):

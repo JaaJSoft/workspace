@@ -275,18 +275,20 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         named_face(self.user, self.photo(), self.noah)
         photo = self.photo()
         whole = seen(self.user, photo, BLUE)
-        edge = seen(self.user, photo, BLUE, box=EDGE)
+        # Smaller, over the edge of the whole box: asked about as well.
+        part = seen(self.user, photo, BLUE, box=(0.3, 0.2, 0.25, 0.5))
 
         result = appearance_review.apply(
-            self.user, "assign", [whole, edge], person=self.noah
+            self.user, "assign", [part, whole], person=self.noah
         )
 
-        self.assertEqual(result.done, [whole.pk, edge.pk])
+        self.assertEqual(result.done, [part.pk, whole.pk])
         whole.refresh_from_db()
-        edge.refresh_from_db()
+        part.refresh_from_db()
+        # The whole box keeps the name, whichever came first.
         self.assertEqual(whole.person, self.noah)
-        self.assertTrue(edge.hidden)
-        self.assertIsNone(edge.person)
+        self.assertTrue(part.hidden)
+        self.assertIsNone(part.person)
 
     def test_no_guess_for_people_already_said_not_to_be_them(self):
         row = self.alone(RED)

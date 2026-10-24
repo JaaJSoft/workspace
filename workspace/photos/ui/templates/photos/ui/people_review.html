@@ -22,7 +22,9 @@
           <p
             class="sm:hidden text-xs text-base-content/60 tabular-nums truncate"
             x-text="leftLabel()"
-          >{{ review_left_label }}</p>
+          >
+            {{ review_left_label }}
+          </p>
         </div>
         <div class="ml-auto flex items-center gap-2">
           <span
@@ -30,7 +32,11 @@
             title="People to name: groups of faces nobody is named for yet. Faces to check: faces under a named person, or in no group, that may be someone else."
             x-text="leftLabel()"
           >{{ review_left_label }}</span>
-          <span class="contents" @ajax:send="refreshing = true" @ajax:after="refreshing = false">
+          <span
+            class="contents"
+            @ajax:send="refreshing = true"
+            @ajax:after="refreshing = false"
+          >
             {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="refreshing" title="Look for new faces to check" %}
           </span>
         </div>
@@ -90,7 +96,9 @@
           <p class="text-sm text-base-content/60 max-w-sm">
             New people and faces to check show up here as more photos are read for faces.
           </p>
-          <div class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+          <div
+            class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto"
+          >
             <button
               type="button"
               class="btn btn-ghost btn-sm gap-2"

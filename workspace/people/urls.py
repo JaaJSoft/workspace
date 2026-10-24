@@ -1,7 +1,7 @@
-from django.urls import include, path
+from django.urls import include, path, re_path
 from rest_framework.routers import SimpleRouter
 
-from .views import actions, avatar, lists, persons, promote, vcard
+from .views import actions, avatar, carddav, lists, persons, promote, vcard
 
 router = SimpleRouter(trailing_slash=False)
 router.register(r"people", persons.PersonViewSet, basename="person")
@@ -51,4 +51,33 @@ urlpatterns = [
         name="person-avatar",
     ),
     path("api/v1/", include(router.urls)),
+    # CardDAV. Collections answer with or without their trailing slash: the
+    # hrefs we serve carry it, but clients are not consistent about keeping it.
+    re_path(r"^\.well-known/carddav/?$", carddav.well_known, name="carddav-well-known"),
+    re_path(r"^carddav/?$", carddav.CardDavRootView.as_view(), name="carddav-root"),
+    re_path(
+        r"^carddav/principals/?$",
+        carddav.CardDavRootView.as_view(),
+        name="carddav-principals",
+    ),
+    re_path(
+        r"^carddav/principals/(?P<username>[^/]+)/?$",
+        carddav.PrincipalView.as_view(),
+        name="carddav-principal",
+    ),
+    re_path(
+        r"^carddav/addressbooks/(?P<username>[^/]+)/?$",
+        carddav.AddressBookHomeView.as_view(),
+        name="carddav-home",
+    ),
+    re_path(
+        r"^carddav/addressbooks/(?P<username>[^/]+)/(?P<slug>[\w-]+)/?$",
+        carddav.AddressBookView.as_view(),
+        name="carddav-book",
+    ),
+    re_path(
+        r"^carddav/addressbooks/(?P<username>[^/]+)/(?P<slug>[\w-]+)/(?P<name>[^/]+)$",
+        carddav.CardView.as_view(),
+        name="carddav-card",
+    ),
 ]

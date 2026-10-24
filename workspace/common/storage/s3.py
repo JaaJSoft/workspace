@@ -248,6 +248,10 @@ class S3Backend(Backend):
             raise ValueError(
                 "Object storage blobs are written with save() or staged_writer()"
             )
+        return _BlobFile(self, name, mode)
+
+    def _reader(self, name, mode):
+        """A fresh reader over *name*, and the size of the object it reads."""
         key = self._key(name)
         with _translated(name):
             head = self.client.head_object(Bucket=self.bucket, Key=key)
@@ -255,12 +259,9 @@ class S3Backend(Backend):
         reader = io.BufferedReader(
             _RangeReader(self, key, size, name, _pinned(head)), buffer_size=256 * 1024
         )
-        handle = File(
-            reader if "b" in mode else io.TextIOWrapper(reader, encoding="utf-8"),
-            name=name,
-        )
-        handle.size = size
-        return handle
+        if "b" not in mode:
+            reader = io.TextIOWrapper(reader, encoding="utf-8")
+        return reader, size
 
     def save(self, name, content):
         upload = _Upload(self, self._key(name), name, exclusive=self.exclusive_saves)
@@ -603,6 +604,29 @@ class _DropSources(Relocation):
         # A rewritten source holds another write's bytes: keeping it leaves
         # nothing of this move behind.
         return not self._backend._delete_quietly(unchanged, self._name)
+
+
+class _BlobFile(File):
+    """An open blob, which ``open()`` opens again once it is closed.
+
+    Django's File reopens a closed file by its path, which a blob on object
+    storage does not have: a FieldFile read twice in one request - once to
+    render it, once to serve it - would be refused the second time.
+    """
+
+    def __init__(self, backend, name, mode):
+        self._backend = backend
+        self._open_mode = mode
+        reader, size = backend._reader(name, mode)
+        super().__init__(reader, name=name)
+        self.size = size
+
+    def open(self, mode=None):
+        if not self.closed:
+            self.seek(0)
+            return self
+        self.file, self.size = self._backend._reader(self.name, mode or self._open_mode)
+        return self
 
 
 class _RangeReader(io.RawIOBase):

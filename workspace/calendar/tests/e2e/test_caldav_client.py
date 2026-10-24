@@ -77,13 +77,15 @@ class CalDavClientTests(StaticLiveServerTestCase):
         cache.clear()
 
     def client_for(self, path="/", username="alice", password=PASSWORD):
-        return DAVClient(
+        client = DAVClient(
             url=f"{self.live_server_url}{path}",
             username=username,
             password=password,
             require_tls=False,
             timeout=30,
         )
+        self.addCleanup(client.close)
+        return client
 
     def work_calendar(self, client=None):
         calendars = (client or self.client_for()).principal().calendars()

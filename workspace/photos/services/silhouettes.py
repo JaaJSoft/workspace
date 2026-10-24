@@ -17,7 +17,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 
 from workspace.common.vectors.encoding import from_bytes
 from workspace.files.models import File
@@ -263,33 +263,69 @@ def _folder_persons(user, folders, clusters):
     """{folder id: the person in most of its photos}, for those of *folders*
     where one is in more than half of the photos showing someone named, and
     in MIN_FOLDER_PHOTOS of them at least. *clusters* are
-    ReviewReads.named."""
+    ReviewReads.named.
+
+    Counted by the database: a library's folders hold tens of thousands of
+    faces, and each row read costs more than its share of a count."""
     if not folders:
         return {}
-    files = _in_folders(library_files(user), folders, "parent").values("pk")
-    # A set: a person shown by their face and as the user said counts once.
-    shown = set(
-        Face.objects.filter(
-            owner=user,
-            file__in=files,
-            cluster__in=[c.pk for c in clusters if not c.hidden],
-        ).values_list("file__parent_id", "file_id", "cluster__person_id")
-    ) | set(
-        user_appearances(user)
-        .filter(file__in=files, person__isnull=False, hidden=False)
-        .values_list("file__parent_id", "file_id", "person_id")
+    files = _in_folders(library_files(user), folders, "parent")
+    named_clusters = [c.pk for c in clusters if not c.hidden]
+    named_faces = Face.objects.filter(owner=user, cluster__in=named_clusters)
+    named_bodies = Appearance.objects.filter(
+        owner=user, person__isnull=False, hidden=False
     )
-    photos = defaultdict(set)
+    shown = files.filter(
+        Q(pk__in=named_faces.values("file")) | Q(pk__in=named_bodies.values("file"))
+    )
+    photos = dict(_photos_per(shown, "parent_id", photo="pk"))
+    faces = named_faces.filter(file__in=files.values("pk"))
+    said = named_bodies.filter(file__in=files.values("pk"))
+    # A person shown by their face and as the user said counts once. Looked
+    # up by photo first: led by its owner and cluster instead, SQLite reads
+    # every named face of the library for each person said.
+    both = said.filter(
+        Exists(
+            Face.objects.filter(
+                file=OuterRef("file"),
+                cluster__in=named_clusters,
+                cluster__person=OuterRef("person"),
+            )
+        )
+    )
     counts = defaultdict(Counter)
-    for folder_id, file_id, person_id in shown:
-        photos[folder_id].add(file_id)
-        counts[folder_id][person_id] += 1
+    for folder_id, person_id, count in _photos_per(
+        faces, "file__parent_id", "cluster__person_id", photo="file"
+    ):
+        counts[folder_id][person_id] += count
+    for folder_id, person_id, count in _photos_per(
+        said, "file__parent_id", "person_id", photo="file"
+    ):
+        counts[folder_id][person_id] += count
+    for folder_id, person_id, count in _photos_per(
+        both, "file__parent_id", "person_id", photo="file"
+    ):
+        counts[folder_id][person_id] -= count
     persons = {}
     for folder_id, counter in counts.items():
-        ((person_id, count),) = counter.most_common(1)
-        if count >= MIN_FOLDER_PHOTOS and 2 * count > len(photos[folder_id]):
+        # Ties go to the same person on every load.
+        person_id, count = max(
+            counter.items(), key=lambda item: (item[1], -int(item[0]))
+        )
+        if count >= MIN_FOLDER_PHOTOS and 2 * count > photos.get(folder_id, 0):
             persons[folder_id] = person_id
     return persons
+
+
+def _photos_per(rows, *group_by, photo):
+    """(*group_by values..., how many distinct *photo* they hold) for each
+    group of *rows*."""
+    return (
+        rows.order_by()
+        .values(*group_by)
+        .annotate(photo_count=Count(photo, distinct=True))
+        .values_list(*group_by, "photo_count")
+    )
 
 
 def _cards(person_ids, clusters):

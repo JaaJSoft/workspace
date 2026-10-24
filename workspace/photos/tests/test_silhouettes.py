@@ -142,6 +142,17 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
 
         self.assertIsNone(self.group_of(row).guess)
 
+    def test_someone_shown_by_their_face_and_as_said_counts_once_a_photo(self):
+        # Noah's face is on a body the user said is him, in two photos: two
+        # photos of five, against Léa's three - she is still the folder's.
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, BLUE, person=self.noah)
+        row = self.alone(RED)
+
+        self.assertEqual(self.group_of(row).guess.person, self.lea)
+
     def test_another_folders_photos_say_nothing(self):
         trip = FileService.create_folder(owner=self.user, name="Trip")
         for _ in range(3):

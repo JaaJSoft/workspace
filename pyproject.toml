@@ -133,6 +133,9 @@ dev = [
     "openpyxl>=3.1.5",
     "python-pptx>=1.0.2",
     "odfpy>=1.4.1",
+    # A third-party CalDAV client, driven against a live server by the calendar
+    # E2E suite: the server is tested with somebody else's reading of the RFCs.
+    "caldav>=3.6.0",
 ]
 
 [tool.uv]

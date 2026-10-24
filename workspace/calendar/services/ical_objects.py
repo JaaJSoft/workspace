@@ -57,6 +57,8 @@ _UNFOLD_RE = re.compile(r"\r?\n[ \t]")
 
 # The width of the title and location columns.
 _MAX_TEXT = 255
+# The width of Event.ical_uid.
+_MAX_UID = 512
 
 # RFC 5545 3.1: content lines SHOULD NOT exceed 75 octets.
 _FOLD_OCTETS = 75
@@ -155,7 +157,7 @@ def _vevent(event, master, tzids, cancelled=()):
     ):
         tzids.add(master.timezone)
 
-    verbatim = _lines(event.recurrence_rule) if event is master else []
+    verbatim = _recurrence_lines(event.recurrence_rule) if event is master else []
     verbatim += extra
     for line in verbatim:
         tzids.update(_tzids(line))
@@ -214,6 +216,18 @@ def _fold(line):
         encoded = encoded[cut:]
         limit = _FOLD_OCTETS - 1  # the leading space of a continuation
     return "\r\n ".join(parts) + "\r\n"
+
+
+def _recurrence_lines(rule_text):
+    """The stored recurrence lines, each a complete content line.
+
+    The REST API accepts a bare RRULE body (``FREQ=WEEKLY;BYDAY=MO``), which
+    the recurrence engine reads fine but is no iCalendar content line.
+    """
+    return [
+        line if _property_name(line) in _RECURRENCE else f"RRULE:{line}"
+        for line in _lines(rule_text)
+    ]
 
 
 def _lines(text):
@@ -298,6 +312,8 @@ def parse_object(data, default_tz=UTC):
         for vevent, raw in zip(vevents, raw_blocks, strict=True)
     ]
     uids = {uid for uid, _event, _rid_line in parsed}
+    if any(len(uid) > _MAX_UID for uid in uids):
+        raise InvalidObject("The UID is too long.", "valid-calendar-object-resource")
     if len(uids) != 1 or "" in uids:
         raise InvalidObject(
             "Every event of an object must carry the same UID.",

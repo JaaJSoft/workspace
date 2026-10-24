@@ -137,6 +137,11 @@ window.calendarCalendarsMixin = function calendarCalendarsMixin() {
 
     copyCalendarFeed() {
       if (!this.calendarFeed.url) return;
+      // Undefined outside a secure context, e.g. plain HTTP on a LAN address.
+      if (!navigator.clipboard) {
+        if (window.AppAlert) window.AppAlert.error('Failed to copy link');
+        return;
+      }
       navigator.clipboard.writeText(this.calendarFeed.url).then(() => {
         if (window.AppAlert) window.AppAlert.success('Link copied!', { duration: 2000 });
       }).catch(() => {

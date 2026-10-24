@@ -275,3 +275,32 @@ class FoldTests(SimpleTestCase):
             self.assertLessEqual(len(part.encode()), 75)
             part.encode().decode()  # whole characters only
         self.assertEqual(folded.replace("\r\n ", "").removesuffix("\r\n"), line)
+
+
+class RecurrenceLineTests(SimpleTestCase):
+    def test_bare_rule_body_is_served_as_an_rrule(self):
+        # The REST API accepts a rule without its property name.
+        event = Event(
+            title="Standup",
+            start=datetime(2026, 10, 5, 7, tzinfo=UTC),
+            recurrence_rule="FREQ=WEEKLY;BYDAY=MO\nEXDATE:20261012T070000Z",
+            ical_uid="bare",
+        )
+        text = render_object(event)
+        self.assertIn("\r\nRRULE:FREQ=WEEKLY;BYDAY=MO\r\n", text)
+        self.assertIn("\r\nEXDATE:20261012T070000Z\r\n", text)
+        self.assertEqual(
+            parse_object(text).master.rule.splitlines()[0], "RRULE:FREQ=WEEKLY;BYDAY=MO"
+        )
+
+
+class UidLengthTests(SimpleTestCase):
+    def test_uid_longer_than_the_column_is_refused(self):
+        with self.assertRaises(InvalidObject):
+            parse_object(_ics(["UID:" + "u" * 513, "DTSTART:20261005T090000Z"]))
+
+    def test_uid_at_the_column_width_is_accepted(self):
+        uid = "u" * 512
+        self.assertEqual(
+            parse_object(_ics([f"UID:{uid}", "DTSTART:20261005T090000Z"])).uid, uid
+        )

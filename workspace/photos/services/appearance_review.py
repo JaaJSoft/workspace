@@ -16,6 +16,7 @@ from ..models import Appearance
 from ..queries import named_face_clusters, user_appearances
 from .appearance_suggestions import known_by_faces
 from .face_people import person_cards
+from .face_review import ReviewReads
 from .face_tracking import _iou
 
 # People found by their body shown per suggested person at once, the nearest
@@ -58,7 +59,7 @@ class PersonOutfits:
     total: int
 
 
-def outfit_suggestions(user):
+def outfit_suggestions(user, reads=None):
     """The people found by their body that wait for an answer, by the person
     their clothes suggest, largest first."""
     by_person = defaultdict(list)
@@ -71,19 +72,15 @@ def outfit_suggestions(user):
         by_person[person_id].append(pk)
     if not by_person:
         return []
-    clusters = (
-        named_face_clusters(user)
-        .filter(person__in=list(by_person), photo_count__gt=0)
-        .select_related("person")
-    )
+    named = (reads or ReviewReads(user)).named
     return [
         PersonOutfits(
             card=card,
             appearance_ids=tuple(by_person[card.person.pk][:OUTFITS_PER_PERSON]),
             total=len(by_person[card.person.pk]),
         )
-        for card in person_cards(clusters)
-        if not card.hidden and card.person.pk in by_person
+        for card in person_cards([c for c in named if c.person_id in by_person])
+        if not card.hidden
     ]
 
 

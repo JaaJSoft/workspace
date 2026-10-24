@@ -16,6 +16,7 @@ And the faces the user hid, for the Hidden page.
 
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 from django.db.models import Q
@@ -88,7 +89,57 @@ def unnamed_count(user):
     return _unnamed_clusters(user).count()
 
 
-def unnamed_queue(user, limit=None):
+class ReviewReads:
+    """What the parts of the review page all read of the user's library,
+    read once for the page: each is a pass over every face of it. A part
+    called without one reads its own."""
+
+    def __init__(self, user):
+        self.user = user
+
+    @cached_property
+    def named(self):
+        """The user's clusters named after a contact they can see, with a
+        live photo, their contact read along."""
+        return list(
+            named_face_clusters(self.user)
+            .filter(photo_count__gt=0)
+            .select_related("person")
+        )
+
+    @cached_property
+    def suggest(self):
+        return _suggester(self.named)
+
+    @cached_property
+    def doubts(self):
+        """Every unconfirmed face further than doubt_distance() from the
+        centroid of its visible named cluster, as DoubtfulFace."""
+        clusters = {c.pk: c for c in self.named if not c.hidden}
+        centroids = {pk: _unit(c.centroid) for pk, c in clusters.items()}
+        limit = doubt_distance()
+        doubts = []
+        for pk, cluster_id, blob in (
+            user_faces(self.user)
+            .filter(cluster__in=list(clusters), assignment=Face.Assignment.AUTO)
+            .values_list("pk", "cluster_id", "embedding")
+        ):
+            vector, centroid = _unit(blob), centroids[cluster_id]
+            if vector is None or centroid is None:
+                continue
+            distance = _distance(vector, centroid)
+            if distance > limit:
+                doubts.append(
+                    DoubtfulFace(face_id=pk, cluster_id=cluster_id, distance=distance)
+                )
+        return doubts
+
+    @cached_property
+    def doubtful_face_ids(self):
+        return {doubt.face_id for doubt in self.doubts}
+
+
+def unnamed_queue(user, limit=None, reads=None):
     """The user's visible unnamed clusters, largest first, at most *limit*."""
     clusters = list(
         _unnamed_clusters(user).order_by("-photo_count", "-face_count", "created_at")[
@@ -108,7 +159,7 @@ def unnamed_queue(user, limit=None):
         faces[cluster_id].append((_distance(_unit(blob), centroids[cluster_id]), pk))
         if timestamp is None:
             files[cluster_id].add(file_id)
-    suggest = _suggester(user)
+    suggest = (reads or ReviewReads(user)).suggest
     return [
         UnnamedCluster(
             cluster=cluster,
@@ -127,8 +178,9 @@ def _distance(vector, centroid):
     return 1 - float(np.dot(vector, centroid))
 
 
-def _suggester(user):
-    """A function giving the named person a face vector looks like.
+def _suggester(clusters):
+    """A function giving the named person a face vector looks like, one of
+    *clusters*' (ReviewReads.named).
 
     The nearest named cluster by centroid, within the grouping threshold,
     whose person is in none of *files*, the photos of the faces asked about:
@@ -137,9 +189,6 @@ def _suggester(user):
     usual reason. *excluded* persons are never suggested - those the faces
     were taken out of.
     """
-    clusters = list(
-        named_face_clusters(user).filter(photo_count__gt=0).select_related("person")
-    )
     # A centroid of another size (a backend switch not rebuilt yet) has no
     # direction to compare.
     decoded = [
@@ -174,33 +223,16 @@ def _suggester(user):
     return suggest
 
 
-def doubtful_faces(user):
+def doubtful_faces(user, reads=None):
     """Unconfirmed faces far from their named cluster's centroid, by person.
 
     People come largest first, their faces most doubtful first.
     """
-    clusters = {
-        cluster.pk: cluster
-        for cluster in named_face_clusters(user)
-        .filter(hidden=False, photo_count__gt=0)
-        .select_related("person")
-    }
-    centroids = {pk: _unit(c.centroid) for pk, c in clusters.items()}
-    limit = doubt_distance()
+    reads = reads or ReviewReads(user)
+    clusters = {c.pk: c for c in reads.named if not c.hidden}
     by_person = defaultdict(list)
-    for pk, cluster_id, blob in (
-        user_faces(user)
-        .filter(cluster__in=list(clusters), assignment=Face.Assignment.AUTO)
-        .values_list("pk", "cluster_id", "embedding")
-    ):
-        vector, centroid = _unit(blob), centroids[cluster_id]
-        if vector is None or centroid is None:
-            continue
-        distance = _distance(vector, centroid)
-        if distance > limit:
-            by_person[clusters[cluster_id].person_id].append(
-                DoubtfulFace(face_id=pk, cluster_id=cluster_id, distance=distance)
-            )
+    for doubt in reads.doubts:
+        by_person[clusters[doubt.cluster_id].person_id].append(doubt)
     result = []
     for card in person_cards(clusters.values()):
         doubts = sorted(by_person.get(card.person.pk, ()), key=lambda d: -d.distance)
@@ -226,7 +258,7 @@ def _unassigned_faces(user):
     )
 
 
-def unassigned_groups(user):
+def unassigned_groups(user, reads=None):
     """Faces in no cluster that still wait for a person, by look-alikes.
 
     Those the user took out of a cluster, and those the grouping never
@@ -244,7 +276,7 @@ def unassigned_groups(user):
     if not rows:
         return []
     by_pk = {row[0]: row for row in rows}
-    suggest = _suggester(user)
+    suggest = (reads or ReviewReads(user)).suggest
     groups = []
     for ids in likeness_groups([(pk, blob) for pk, blob, *_ in rows], max_distance()):
         vectors = [v for pk in ids if (v := _unit(by_pk[pk][1])) is not None]

@@ -259,7 +259,7 @@ def _read(user, model_key, tz, span):
     ]
 
 
-def known_by_faces(user, seen, span=None, files=None):
+def known_by_faces(user, seen, span=None, files=None, doubtful=None):
     """({appearance pk: who} for the people whose face was seen,
     {file id: the persons its named faces show}).
 
@@ -273,8 +273,9 @@ def known_by_faces(user, seen, span=None, files=None):
     group that is good enough for the face review to ask about: somebody,
     but nobody to suggest. So is ("doubt", its uuid), a face the grouping put
     in a named group without being sure: one wrong guess would otherwise name
-    everyone dressed like them that day. A blurred face in no group says
-    nothing.
+    everyone dressed like them that day. *doubtful* are the pks of those
+    faces, when the caller read them already (face_review.ReviewReads). A
+    blurred face in no group says nothing.
 
     A face is someone's when it is on their head (_wearer), or when it is
     the photo's only face on nobody's head and they its only person no face
@@ -320,15 +321,16 @@ def known_by_faces(user, seen, span=None, files=None):
             "assignment",
         )
     )
-    doubtful = _doubtful(
-        [
-            (pk, cluster_id)
-            for pk, *_, cluster_id, assignment in rows
-            if assignment == Face.Assignment.AUTO
-            and not isinstance(who.get(cluster_id, ()), tuple)
-        ],
-        centroids,
-    )
+    if doubtful is None:
+        doubtful = _doubtful(
+            [
+                (pk, cluster_id)
+                for pk, *_, cluster_id, assignment in rows
+                if assignment == Face.Assignment.AUTO
+                and not isinstance(who.get(cluster_id, ()), tuple)
+            ],
+            centroids,
+        )
     named, in_photo = {}, defaultdict(set)
     # The faces of each photo on nobody's head.
     unworn = defaultdict(list)

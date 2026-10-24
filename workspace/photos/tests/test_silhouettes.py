@@ -1,12 +1,15 @@
 from datetime import timedelta
 
+import numpy as np
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from workspace.common.vectors.encoding import to_bytes
 from workspace.files.services import FileService
-from workspace.photos.models import Appearance
+from workspace.photos.indexes import FACE_EMBEDDINGS
+from workspace.photos.models import Appearance, Face, FaceCluster
 from workspace.photos.services import appearance_review
 from workspace.photos.services.appearance_review import (
     ALREADY_IN_PHOTO,
@@ -35,6 +38,13 @@ from .images import make_photo
 User = get_user_model()
 
 BATCH = "/api/v1/photos/appearances/batch"
+
+
+def _unit(axis):
+    """A face vector along *axis*: two axes are as far apart as faces get."""
+    vector = np.zeros(FACE_EMBEDDINGS.dims)
+    vector[axis] = 1.0
+    return to_bytes(vector)
 
 
 class SilhouetteSetupMixin(FacesTestMixin):
@@ -93,6 +103,19 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         self.assertTrue(group.alone)
         self.assertEqual(group.folder_name, "Holidays")
 
+    def test_a_face_put_with_someone_without_being_sure_says_nothing_of_their_clothes(
+        self,
+    ):
+        # Léa's face over the red top is unlike her others: the face review
+        # asks who it is, so the red top is nobody's yet.
+        lea = Face.objects.filter(cluster__person=self.lea)
+        FaceCluster.objects.filter(person=self.lea).update(centroid=_unit(0))
+        lea.update(embedding=_unit(0))
+        lea.filter(file__appearances__isnull=False).update(embedding=_unit(1))
+        first = self.alone(RED)
+
+        self.assertIsNone(self.group_of(first).guess)
+
     def test_dressed_otherwise_they_are_asked_who_they_are(self):
         red, blue = self.alone(RED), self.alone(BLUE)
 
@@ -118,6 +141,17 @@ class SilhouetteGroupTests(SilhouetteSetupMixin, TestCase):
         row = self.alone(RED, folder=trip)
 
         self.assertIsNone(self.group_of(row).guess)
+
+    def test_someone_shown_by_their_face_and_as_said_counts_once_a_photo(self):
+        # Noah's face is on a body the user said is him, in two photos: two
+        # photos of five, against Léa's three - she is still the folder's.
+        for _ in range(2):
+            photo = self.photo()
+            named_face(self.user, photo, self.noah)
+            seen(self.user, photo, BLUE, person=self.noah)
+        row = self.alone(RED)
+
+        self.assertEqual(self.group_of(row).guess.person, self.lea)
 
     def test_another_folders_photos_say_nothing(self):
         trip = FileService.create_folder(owner=self.user, name="Trip")

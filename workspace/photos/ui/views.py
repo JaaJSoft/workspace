@@ -70,6 +70,7 @@ from workspace.photos.services.face_review import (
     ALL_FACES,
     CONFIRMED,
     TO_CHECK,
+    ReviewReads,
     doubtful_faces,
     hidden_faces,
     person_faces,
@@ -1394,6 +1395,7 @@ def _review_cards(user):
     under a named person without being sure, and the look-alike groups of
     faces in no cluster, and the people found by their body - the cards
     settling the most photos first, a face counting for more than a body."""
+    reads = ReviewReads(user)
     cards = [
         {
             "kind": "cluster",
@@ -1407,9 +1409,9 @@ def _review_cards(user):
             "face_ids": item.face_ids,
             "weight": item.cluster.photo_count,
         }
-        for item in unnamed_queue(user, limit=REVIEW_CARDS)
+        for item in unnamed_queue(user, limit=REVIEW_CARDS, reads=reads)
     ]
-    for doubts in doubtful_faces(user):
+    for doubts in doubtful_faces(user, reads):
         person = _person_summary(doubts.card)
         cards.append(
             {
@@ -1425,7 +1427,7 @@ def _review_cards(user):
                 "weight": doubts.total,
             }
         )
-    for outfits in outfit_suggestions(user):
+    for outfits in outfit_suggestions(user, reads):
         person = _person_summary(outfits.card)
         cards.append(
             {
@@ -1441,7 +1443,7 @@ def _review_cards(user):
                 "weight": outfits.total,
             }
         )
-    for group in unassigned_groups(user):
+    for group in unassigned_groups(user, reads):
         cards.append(
             {
                 "kind": "loose",
@@ -1458,7 +1460,7 @@ def _review_cards(user):
                 "weight": len(group.face_ids),
             }
         )
-    for group in silhouette_groups(user):
+    for group in silhouette_groups(user, reads):
         guess = _person_summary(group.guess) if group.guess else None
         cards.append(
             {

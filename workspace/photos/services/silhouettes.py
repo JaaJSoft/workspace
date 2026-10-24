@@ -12,22 +12,23 @@ the user answers (appearance_review.apply).
 
 from __future__ import annotations
 
+import itertools
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 
 import numpy as np
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 
 from workspace.common.vectors.encoding import from_bytes
 from workspace.files.models import File
 
-from ..models import Face
-from ..queries import library_files, named_face_clusters, user_appearances
+from ..models import Appearance, Face
+from ..queries import library_files, user_appearances
 from .appearance_suggestions import is_double, known_by_faces
 from .embedding.registry import get_embedding_backend
 from .face_people import person_cards
 from .face_preferences import faces_enabled
-from .face_review import likeness_groups
+from .face_review import ReviewReads, likeness_groups
 
 # People found by their body shown per group at once; the rest come once
 # these are answered.
@@ -38,6 +39,8 @@ SILHOUETTES_PER_FOLDER = 500
 # The folder's person shows in at least this many of its photos, and in more
 # than half of those showing someone named.
 MIN_FOLDER_PHOTOS = 3
+# Embeddings read per query.
+_BATCH = 500
 
 
 @dataclass(frozen=True)
@@ -64,10 +67,12 @@ class _Row:
     rejected_id: object
     # Nobody answered for them, and their clothes suggest nobody.
     waiting: bool
-    embedding: bytes
+    # Read by _load_embeddings(), for the rows compared by their clothes: a
+    # torso's is kilobytes, and the library's would be read for a few.
+    embedding: bytes | None = None
 
 
-def silhouette_groups(user):
+def silhouette_groups(user, reads=None):
     """The people found by their body nobody named, by folder and outfit,
     largest groups first. Somebody dressed like nobody else of their folder
     is asked about only when alone in their photo: the subject of it, not a
@@ -76,6 +81,7 @@ def silhouette_groups(user):
     threshold = backend.appearance_max_distance
     if threshold is None or not faces_enabled(user):
         return []
+    reads = reads or ReviewReads(user)
     rows = user_appearances(user).filter(
         file__appearance_analysis__model=backend.model_key, embedding__isnull=False
     )
@@ -88,7 +94,9 @@ def silhouette_groups(user):
         return []
     rows = _in_folders(rows, folders, "file__parent")
     seen = _read(rows)
-    named, in_photo = known_by_faces(user, seen, files=rows.values("file_id"))
+    named, in_photo = known_by_faces(
+        user, seen, files=rows.values("file_id"), doubtful=reads.doubtful_face_ids
+    )
     people_per_photo = Counter(
         row.file_id for row in seen if not is_double(named.get(row.pk))
     )
@@ -102,24 +110,39 @@ def silhouette_groups(user):
         who = row.person_id if row.person_id is not None else named.get(row.pk)
         if who is not None and not isinstance(who, tuple):
             anchors[row.folder_id, who].append(row)
-    majority = _folder_persons(user, set(by_folder))
+    majority = _folder_persons(user, set(by_folder), reads.named)
+    for folder_id in by_folder:
+        by_folder[folder_id] = by_folder[folder_id][:SILHOUETTES_PER_FOLDER]
     dims = backend.dims
+    folder_anchors = {
+        folder_id: anchors.get((folder_id, person_id), [])
+        for folder_id, person_id in majority.items()
+    }
+    _load_embeddings(
+        itertools.chain(
+            itertools.chain.from_iterable(by_folder.values()),
+            itertools.chain.from_iterable(folder_anchors.values()),
+        )
+    )
     asked = []
     for folder_id, people in by_folder.items():
-        people = people[:SILHOUETTES_PER_FOLDER]
         alone = [
             row
             for row in people
             if people_per_photo[row.file_id] == 1 and not in_photo.get(row.file_id)
         ]
         person_id = majority.get(folder_id)
+        # Decoded once per folder: every group of it is compared with them.
+        theirs = None
         for group in _outfits(alone, threshold, dims):
             guess = person_id
-            if guess is not None and (
-                any(row.rejected_id == guess for row in group)
-                or not _dressed_like(group, anchors[folder_id, guess], threshold, dims)
-            ):
+            if guess is not None and any(row.rejected_id == guess for row in group):
                 guess = None
+            if guess is not None:
+                if theirs is None:
+                    theirs = _matrix(folder_anchors[folder_id], dims)
+                if not _dressed_like(group, theirs, threshold, dims):
+                    guess = None
             asked.append((folder_id, True, group, guess))
         lone = set(alone)
         others = [row for row in people if row not in lone]
@@ -129,7 +152,7 @@ def silhouette_groups(user):
             # Dressed like nobody else: someone in the background.
             if len(group) > 1
         ]
-    cards = _cards(user, {guess for *_, guess in asked if guess is not None})
+    cards = _cards({guess for *_, guess in asked if guess is not None}, reads.named)
     names = dict(
         File.objects.filter(pk__in=[f for f in by_folder if f is not None]).values_list(
             "pk", "name"
@@ -170,7 +193,6 @@ def _read(rows):
             person_id=None if hidden else person_id,
             rejected_id=rejected_id,
             waiting=person_id is None and not hidden and suggested_id is None,
-            embedding=embedding,
         )
         for (
             pk,
@@ -184,7 +206,6 @@ def _read(rows):
             rejected_id,
             hidden,
             suggested_id,
-            embedding,
         ) in rows.order_by("-detector_score", "pk").values_list(
             "pk",
             "file_id",
@@ -197,9 +218,18 @@ def _read(rows):
             "rejected_person_id",
             "hidden",
             "suggested_person_id",
-            "embedding",
         )
     ]
+
+
+def _load_embeddings(rows):
+    """Read the embedding of each of *rows*, _Row, that has none yet."""
+    missing = {row.pk: row for row in rows if row.embedding is None}
+    for chunk in itertools.batched(missing, _BATCH, strict=False):
+        for pk, blob in Appearance.objects.filter(pk__in=chunk).values_list(
+            "pk", "embedding"
+        ):
+            missing[pk].embedding = blob
 
 
 def _outfits(rows, threshold, dims):
@@ -213,55 +243,95 @@ def _outfits(rows, threshold, dims):
     ]
 
 
-def _dressed_like(group, anchors, threshold, dims):
-    """Whether someone of *group* is dressed like one of *anchors*."""
-    if not anchors:
+def _matrix(rows, dims):
+    """The embeddings of *rows*, one per line; None when none has one - a
+    row deleted since it was read (its photo read again) has none."""
+    vectors = [from_bytes(row.embedding, dims) for row in rows if row.embedding]
+    return np.stack(vectors) if vectors else None
+
+
+def _dressed_like(group, theirs, threshold, dims):
+    """Whether someone of *group* is dressed like one of the people whose
+    embeddings are *theirs*, _matrix()'s."""
+    mine = _matrix(group, dims)
+    if mine is None or theirs is None:
         return False
-    mine = np.stack([from_bytes(row.embedding, dims) for row in group])
-    theirs = np.stack([from_bytes(row.embedding, dims) for row in anchors])
     return float((1 - mine @ theirs.T).min()) <= threshold
 
 
-def _folder_persons(user, folders):
+def _folder_persons(user, folders, clusters):
     """{folder id: the person in most of its photos}, for those of *folders*
     where one is in more than half of the photos showing someone named, and
-    in MIN_FOLDER_PHOTOS of them at least."""
+    in MIN_FOLDER_PHOTOS of them at least. *clusters* are
+    ReviewReads.named.
+
+    Counted by the database: a library's folders hold tens of thousands of
+    faces, and each row read costs more than its share of a count."""
     if not folders:
         return {}
-    files = _in_folders(library_files(user), folders, "parent").values("pk")
-    # A set: a person shown by their face and as the user said counts once.
-    shown = set(
-        Face.objects.filter(
-            owner=user,
-            file__in=files,
-            cluster__in=named_face_clusters(user).filter(hidden=False).values("pk"),
-        ).values_list("file__parent_id", "file_id", "cluster__person_id")
-    ) | set(
-        user_appearances(user)
-        .filter(file__in=files, person__isnull=False, hidden=False)
-        .values_list("file__parent_id", "file_id", "person_id")
+    files = _in_folders(library_files(user), folders, "parent")
+    named_clusters = [c.pk for c in clusters if not c.hidden]
+    named_faces = Face.objects.filter(owner=user, cluster__in=named_clusters)
+    named_bodies = Appearance.objects.filter(
+        owner=user, person__isnull=False, hidden=False
     )
-    photos = defaultdict(set)
+    shown = files.filter(
+        Q(pk__in=named_faces.values("file")) | Q(pk__in=named_bodies.values("file"))
+    )
+    photos = dict(_photos_per(shown, "parent_id", photo="pk"))
+    faces = named_faces.filter(file__in=files.values("pk"))
+    said = named_bodies.filter(file__in=files.values("pk"))
+    # A person shown by their face and as the user said counts once. Looked
+    # up by photo first: led by its owner and cluster instead, SQLite reads
+    # every named face of the library for each person said.
+    both = said.filter(
+        Exists(
+            Face.objects.filter(
+                file=OuterRef("file"),
+                cluster__in=named_clusters,
+                cluster__person=OuterRef("person"),
+            )
+        )
+    )
     counts = defaultdict(Counter)
-    for folder_id, file_id, person_id in shown:
-        photos[folder_id].add(file_id)
-        counts[folder_id][person_id] += 1
+    for folder_id, person_id, count in _photos_per(
+        faces, "file__parent_id", "cluster__person_id", photo="file"
+    ):
+        counts[folder_id][person_id] += count
+    for folder_id, person_id, count in _photos_per(
+        said, "file__parent_id", "person_id", photo="file"
+    ):
+        counts[folder_id][person_id] += count
+    for folder_id, person_id, count in _photos_per(
+        both, "file__parent_id", "person_id", photo="file"
+    ):
+        counts[folder_id][person_id] -= count
     persons = {}
     for folder_id, counter in counts.items():
-        ((person_id, count),) = counter.most_common(1)
-        if count >= MIN_FOLDER_PHOTOS and 2 * count > len(photos[folder_id]):
+        # Ties go to the same person on every load.
+        person_id, count = max(
+            counter.items(), key=lambda item: (item[1], -int(item[0]))
+        )
+        if count >= MIN_FOLDER_PHOTOS and 2 * count > photos.get(folder_id, 0):
             persons[folder_id] = person_id
     return persons
 
 
-def _cards(user, person_ids):
+def _photos_per(rows, *group_by, photo):
+    """(*group_by values..., how many distinct *photo* they hold) for each
+    group of *rows*."""
+    return (
+        rows.order_by()
+        .values(*group_by)
+        .annotate(photo_count=Count(photo, distinct=True))
+        .values_list(*group_by, "photo_count")
+    )
+
+
+def _cards(person_ids, clusters):
     """{person id: PersonCard} for those of *person_ids* the user still sees
-    in their People, not hidden."""
+    in their People, not hidden, from *clusters* (ReviewReads.named)."""
     if not person_ids:
         return {}
-    clusters = (
-        named_face_clusters(user)
-        .filter(person__in=list(person_ids), photo_count__gt=0)
-        .select_related("person")
-    )
-    return {card.person.pk: card for card in person_cards(clusters) if not card.hidden}
+    theirs = [c for c in clusters if c.person_id in person_ids]
+    return {card.person.pk: card for card in person_cards(theirs) if not card.hidden}

@@ -373,6 +373,17 @@ class BlobStorageContract:
 
         self.assertTrue(free is None or free >= 0, free)
 
+    def test_a_closed_blob_reopens_through_its_file(self):
+        """A FieldFile read twice in one request reopens the file it closed."""
+        name = self.save("files/users/alice/doc.txt", b"hello")
+        handle = self.storage.open(name, "rb")
+        handle.read()
+        handle.close()
+
+        handle.open("rb")
+        with handle:
+            self.assertEqual(handle.read(), b"hello")
+
     def test_a_seek_before_the_start_is_refused_as_a_file_refuses_it(self):
         """zipfile probes a short archive by seeking back from its end, and
         takes OSError for "not a zip" - anything else escapes as a crash."""

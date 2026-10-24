@@ -37,29 +37,37 @@ def _get_webdav_app():
 _WEBDAV_METHODS = {"PROPFIND", "PROPPATCH", "MKCOL", "COPY", "MOVE", "LOCK", "UNLOCK"}
 
 CALDAV_ROOT = "/caldav/"
+CARDDAV_ROOT = "/carddav/"
 
 # A discovery PROPFIND is a few hundred bytes; anything past this is not one.
 _DISCOVERY_BODY_LIMIT = 64 * 1024
 
 
-def _is_caldav_discovery(environ):
-    """True for a PROPFIND on "/" from a calendar client looking for its account.
+def _discovery_root(environ):
+    """The service a PROPFIND on "/" is looking for: CalDAV, CardDAV or None.
 
     Clients given only the server address ask "/" who the user is
-    (``current-user-principal``) before trying ``/.well-known/caldav``, and
-    some take whatever answers as the principal. The file WebDAV app owns
-    "/", and knows nothing about calendars. The body is put back for
-    whichever app ends up reading it.
+    (``current-user-principal``) before trying ``/.well-known/caldav`` or
+    ``/.well-known/carddav``, and some take whatever answers as the
+    principal. The file WebDAV app owns "/", and knows nothing about
+    calendars or contacts. A body asking for the address book home without
+    the calendar one is a contacts client; any other principal question goes
+    to CalDAV, whose principal points at both homes. The body is put back
+    for whichever app ends up reading it.
     """
     try:
         length = int(environ.get("CONTENT_LENGTH") or 0)
     except ValueError:
-        return False
+        return None
     if not 0 < length <= _DISCOVERY_BODY_LIMIT:
-        return False
+        return None
     body = environ["wsgi.input"].read(length)
     environ["wsgi.input"] = io.BytesIO(body)
-    return b"current-user-principal" in body or b"calendar-home-set" in body
+    if b"addressbook-home-set" in body and b"calendar-home-set" not in body:
+        return CARDDAV_ROOT
+    if b"current-user-principal" in body or b"calendar-home-set" in body:
+        return CALDAV_ROOT
+    return None
 
 
 def application(environ, start_response):
@@ -72,9 +80,11 @@ def application(environ, start_response):
         environ["PATH_INFO"] = path[len(DAV_PREFIX) :] or "/"
         return _get_webdav_app()(environ, start_response)
 
-    if path == "/" and method == "PROPFIND" and _is_caldav_discovery(environ):
-        environ["PATH_INFO"] = CALDAV_ROOT
-        return _django_app(environ, start_response)
+    if path == "/" and method == "PROPFIND":
+        root = _discovery_root(environ)
+        if root is not None:
+            environ["PATH_INFO"] = root
+            return _django_app(environ, start_response)
 
     # Windows WebDAV MiniRedir sends PROPFIND to "/" to check quota before
     # uploading to /dav.  Route WebDAV methods on the root to the DAV app

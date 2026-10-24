@@ -12,7 +12,12 @@ SEARCH_TEXT_MAX_LENGTH = 1024
 
 SOURCE_MANUAL = "manual"
 SOURCE_IMPORT = "import"
-SOURCE_CHOICES = [(SOURCE_MANUAL, "Manual"), (SOURCE_IMPORT, "Import")]
+SOURCE_CARDDAV = "carddav"
+SOURCE_CHOICES = [
+    (SOURCE_MANUAL, "Manual"),
+    (SOURCE_IMPORT, "Import"),
+    (SOURCE_CARDDAV, "Synced from a device"),
+]
 
 
 def _one_scope_constraint(name):
@@ -24,6 +29,18 @@ def _one_scope_constraint(name):
         ),
         name=name,
     )
+
+
+def _unique_dav_name_constraints(prefix):
+    """A CardDAV resource name is unique within its address book."""
+    return [
+        models.UniqueConstraint(
+            fields=[scope, "dav_name"],
+            condition=models.Q(**{f"{scope}__isnull": False}) & ~models.Q(dav_name=""),
+            name=f"{prefix}_unique_dav_name_per_{scope}",
+        )
+        for scope in ("owner", "group")
+    ]
 
 
 def search_text_for(person):
@@ -78,6 +95,8 @@ class Person(models.Model):
     # The vCard UID the person came in with: a re-import finds it again by
     # this, before falling back to an email match.
     import_uid = models.CharField(max_length=255, blank=True, default="")
+    # CardDAV resource name in its address book; blank means "<uuid>.vcf".
+    dav_name = models.CharField(max_length=255, blank=True, default="")
     linked_user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -106,6 +125,7 @@ class Person(models.Model):
                 condition=models.Q(group__isnull=False, linked_user__isnull=False),
                 name="person_unique_linked_user_per_group",
             ),
+            *_unique_dav_name_constraints("person"),
         ]
         indexes = [
             models.Index(fields=["owner", "display_name"], name="person_owner_name"),
@@ -147,6 +167,12 @@ class PersonList(models.Model):
     )
     name = models.CharField(max_length=255)
     members = models.ManyToManyField(Person, related_name="lists", blank=True)
+    # The UID and CardDAV resource name a device created the list with.
+    import_uid = models.CharField(max_length=255, blank=True, default="")
+    dav_name = models.CharField(max_length=255, blank=True, default="")
+    # Member UIDs a device sent before their cards: served back as sent, and
+    # turned into members when the cards arrive.
+    pending_member_uids = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -163,7 +189,72 @@ class PersonList(models.Model):
                 condition=models.Q(group__isnull=False),
                 name="person_list_unique_name_per_group",
             ),
+            *_unique_dav_name_constraints("person_list"),
         ]
 
     def __str__(self):
         return self.name
+
+
+class AddressBook(models.Model):
+    """The sync state of one address book: a user's own, or a group's.
+
+    The address book itself is the scope (``owner`` or ``group``); this row
+    only exists once something in it changed, and holds the revision every
+    change bumps - the CardDAV sync token and ctag.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    owner = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="address_book",
+    )
+    group = models.OneToOneField(
+        "auth.Group",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="address_book",
+    )
+    sync_revision = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        constraints = [_one_scope_constraint("address_book_one_scope")]
+
+    def __str__(self):
+        return f"{self.owner_id or self.group_id}@{self.sync_revision}"
+
+
+class AddressBookChange(models.Model):
+    """The last revision at which one card of an address book changed.
+
+    A card is a person or a list. One row per card, rewritten on every
+    change. The card may be gone - deleted or moved to another book - which
+    is why ``object_uuid`` is no foreign key and ``name`` keeps the href to
+    report it under.
+    """
+
+    uuid = models.UUIDField(primary_key=True, default=uuid_v7_or_v4, editable=False)
+    address_book = models.ForeignKey(
+        AddressBook, on_delete=models.CASCADE, related_name="changes"
+    )
+    object_uuid = models.UUIDField()
+    name = models.CharField(max_length=255)
+    revision = models.PositiveBigIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["address_book", "object_uuid"],
+                name="unique_change_per_address_book",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["address_book", "revision"], name="abchange_book_rev"),
+        ]
+
+    def __str__(self):
+        return f"{self.address_book_id}/{self.name}@{self.revision}"

@@ -6,6 +6,7 @@ class PeopleConfig(AppConfig):
     name = "workspace.people"
 
     def ready(self):
+        import workspace.people.services.sync_log  # noqa: F401 - signal receivers
         from workspace.core.module_registry import ModuleInfo, registry
 
         registry.register(

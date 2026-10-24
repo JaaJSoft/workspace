@@ -182,10 +182,13 @@ class CalDavClientTests(StaticLiveServerTestCase):
         calendar = self.work_calendar()
         calendar.add_event(SERIES)
 
+        # post_filter=False: the client would otherwise drop out-of-range
+        # events itself and hide a server that ignores the time range.
         found = calendar.search(
             start=datetime(2026, 10, 1, tzinfo=UTC),
             end=datetime(2026, 11, 1, tzinfo=UTC),
             event=True,
+            post_filter=False,
         )
 
         self.assertEqual(
@@ -193,6 +196,19 @@ class CalDavClientTests(StaticLiveServerTestCase):
         )
 
     # ── Incremental sync ─────────────────────────────────────────────
+
+    # The client falls back to refetching the whole calendar when the server
+    # does not answer sync-collection, and keeps a "fake-" token: a broken
+    # REPORT would still pass these tests unless the fallback is ruled out.
+    def synced_collection(self, calendar):
+        return calendar.get_objects_by_sync_token(
+            load_objects=True, disable_fallback=True
+        )
+
+    def sync(self, collection):
+        result = collection.sync()
+        self.assertFalse(str(collection.sync_token).startswith("fake-"))
+        return result
 
     def test_sync_token_reports_changes_made_in_the_app(self):
         calendar = self.work_calendar()
@@ -203,7 +219,7 @@ class CalDavClientTests(StaticLiveServerTestCase):
             title="Dentist",
             start=datetime(2027, 3, 1, 9, tzinfo=UTC),
         )
-        collection = calendar.get_objects_by_sync_token(load_objects=True)
+        collection = self.synced_collection(calendar)
         self.assertEqual(len(list(collection)), 2)
 
         kept.title = "Dentist (moved)"
@@ -222,10 +238,10 @@ class CalDavClientTests(StaticLiveServerTestCase):
     def test_repeated_syncs_report_nothing_when_nothing_changed(self):
         calendar = self.work_calendar()
         calendar.add_event(SERIES)
-        collection = calendar.get_objects_by_sync_token(load_objects=True)
+        collection = self.synced_collection(calendar)
 
         for _ in range(3):
-            updated, deleted = collection.sync()
+            updated, deleted = self.sync(collection)
             self.assertEqual((list(updated), list(deleted)), ([], []))
         self.assertEqual(Event.objects.filter(recurrence_parent=None).count(), 1)
 

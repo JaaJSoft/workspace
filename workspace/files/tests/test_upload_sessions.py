@@ -17,6 +17,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from workspace.common.tests.media import local_storage_only
 from workspace.files.models import File, UploadSession
 from workspace.files.services import FileService, quota, uploads
 
@@ -356,6 +357,7 @@ class AppendServiceTests(TestCase):
         self.assertEqual(_read(stored), DATA)
         self.assertEqual(stored.content_hash, DATA_SHA256)
 
+    @local_storage_only
     def test_finalizing_moves_the_spool_into_place(self):
         uploads.append(self.session, 0, BytesIO(DATA), len(DATA))
         spool = uploads.spool_path(self.session)

@@ -13,7 +13,6 @@ on a worker that cached it until its entry expires.
 import base64
 import binascii
 import hashlib
-import hmac
 import os
 import threading
 import time
@@ -27,6 +26,10 @@ AUTH_TTL = 60  # seconds
 _auth_cache = {}
 _auth_lock = threading.Lock()
 _CACHE_KEY_SECRET = os.urandom(32)
+# 1 MiB of memory and a few milliseconds per derivation.
+_SCRYPT_N = 2**10
+_SCRYPT_R = 8
+_SCRYPT_P = 1
 
 
 def basic_credentials(authorization):
@@ -108,11 +111,19 @@ def _api_token_user(user_name, password):
 def _cache_key(user_name, password):
     """Return a deterministic, non-reversible cache key for the given credentials.
 
-    HMAC-SHA256 keyed with a process-local random secret: the digest cannot
-    be brute-forced without the in-memory key, and unlike a KDF it costs
-    microseconds. This runs on EVERY DAV request, before the cache lookup can
-    short-circuit anything - a KDF here would cost more than the bcrypt
-    verification the cache exists to avoid.
+    scrypt salted with a process-local random secret: the key cannot be
+    brute-forced without the in-memory salt, and the cost stays a password
+    hash's rather than a digest's should a memory dump expose both. The cost
+    is tuned for this call, which runs on EVERY DAV request before the cache
+    can short-circuit anything: about a hundredth of the account password
+    check the cache exists to avoid.
     """
     message = f"{user_name}:{password}".encode()
-    return hmac.new(_CACHE_KEY_SECRET, message, hashlib.sha256).hexdigest()
+    return hashlib.scrypt(
+        message,
+        salt=_CACHE_KEY_SECRET,
+        n=_SCRYPT_N,
+        r=_SCRYPT_R,
+        p=_SCRYPT_P,
+        dklen=32,
+    ).hex()

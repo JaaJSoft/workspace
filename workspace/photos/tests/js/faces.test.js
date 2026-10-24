@@ -1297,3 +1297,31 @@ test('a person\'s silhouettes move only to contacts with a face, never to them a
 
   assert.deepEqual(Array.from(component.silhouetteAssignOptions(), (p) => p.uuid), ['o']);
 });
+
+test('looking for new faces reloads the queue once, however often it is tapped', async () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1')] });
+  let finish;
+  component.$ajax = () => {
+    component.reloads += 1;
+    return new Promise((resolve) => { finish = resolve; });
+  };
+
+  const first = component.refresh();
+  assert.equal(component.refreshing, true);
+  await component.refresh();
+  finish();
+  await first;
+
+  assert.equal(component.reloads, 1);
+  assert.equal(component.refreshing, false);
+});
+
+test('looking for new faces waits for the card being settled', async () => {
+  const { component } = reviewPage({ cards: [clusterCard('c1', 'f1')] });
+  component.saving = 'c1';
+
+  await component.refresh();
+
+  assert.equal(component.reloads, 0);
+  assert.equal(component.refreshing, false);
+});

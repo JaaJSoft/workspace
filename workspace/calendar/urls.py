@@ -1,6 +1,6 @@
-from django.urls import path
+from django.urls import path, re_path
 
-from .views import calendars, events, external, invitees, polls
+from .views import caldav, calendars, events, external, feeds, invitees, polls
 
 urlpatterns = [
     path(
@@ -13,6 +13,12 @@ urlpatterns = [
         calendars.CalendarDetailView.as_view(),
         name="calendar-detail",
     ),
+    path(
+        "api/v1/calendars/<uuid:calendar_id>/feed",
+        feeds.CalendarFeedView.as_view(),
+        name="calendar-feed-settings",
+    ),
+    path("calendar/feeds/<str:token>.ics", feeds.calendar_feed, name="calendar-feed"),
     path("api/v1/events", events.EventListView.as_view(), name="calendar-events"),
     path(
         "api/v1/events/invitees",
@@ -76,5 +82,34 @@ urlpatterns = [
         "api/v1/external-calendars/<uuid:ext_id>/sync",
         external.ExternalCalendarSyncView.as_view(),
         name="external-calendar-sync",
+    ),
+    # CalDAV. Collections answer with or without their trailing slash: the
+    # hrefs we serve carry it, but clients are not consistent about keeping it.
+    re_path(r"^\.well-known/caldav/?$", caldav.well_known, name="caldav-well-known"),
+    re_path(r"^caldav/?$", caldav.CalDavRootView.as_view(), name="caldav-root"),
+    re_path(
+        r"^caldav/principals/?$",
+        caldav.CalDavRootView.as_view(),
+        name="caldav-principals",
+    ),
+    re_path(
+        r"^caldav/principals/(?P<username>[^/]+)/?$",
+        caldav.PrincipalView.as_view(),
+        name="caldav-principal",
+    ),
+    re_path(
+        r"^caldav/calendars/(?P<username>[^/]+)/?$",
+        caldav.CalendarHomeView.as_view(),
+        name="caldav-home",
+    ),
+    re_path(
+        r"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>[0-9a-fA-F-]{32,36})/?$",
+        caldav.CalendarCollectionView.as_view(),
+        name="caldav-calendar",
+    ),
+    re_path(
+        r"^caldav/calendars/(?P<username>[^/]+)/(?P<calendar_id>[0-9a-fA-F-]{32,36})/(?P<name>[^/]+)$",
+        caldav.CalendarObjectView.as_view(),
+        name="caldav-object",
     ),
 ]

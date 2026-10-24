@@ -30,6 +30,8 @@ window.calendarApp = function calendarApp() {
     showCalendarModal: false,
     calendarModalMode: 'create',
     calendarForm: { uuid: null, name: '', color: 'primary' },
+    // Read-only ICS feed of the calendar being edited
+    calendarFeed: { loading: false, busy: false, url: null },
 
     // External calendars
     externalCalendars: [],

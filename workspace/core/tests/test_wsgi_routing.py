@@ -6,6 +6,11 @@ from django.test import SimpleTestCase
 from workspace import wsgi
 
 DISCOVERY = b'<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>'
+CONTACTS_DISCOVERY = (
+    b'<d:propfind xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">'
+    b"<d:prop><d:current-user-principal/><card:addressbook-home-set/></d:prop>"
+    b"</d:propfind>"
+)
 QUOTA = b'<d:propfind xmlns:d="DAV:"><d:prop><d:quota-available-bytes/></d:prop></d:propfind>'
 
 
@@ -34,6 +39,12 @@ class RootPropfindRoutingTests(SimpleTestCase):
         self.assertEqual(result, [b"django"])
         self.assertEqual(environ["PATH_INFO"], "/caldav/")
         self.assertEqual(environ["wsgi.input"].read(), DISCOVERY)
+
+    def test_contacts_discovery_reaches_carddav(self):
+        result, environ = self._route(CONTACTS_DISCOVERY)
+        self.assertEqual(result, [b"django"])
+        self.assertEqual(environ["PATH_INFO"], "/carddav/")
+        self.assertEqual(environ["wsgi.input"].read(), CONTACTS_DISCOVERY)
 
     def test_file_client_still_reaches_webdav(self):
         result, environ = self._route(QUOTA)

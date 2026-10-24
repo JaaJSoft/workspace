@@ -27,6 +27,23 @@
     <li><strong>Import</strong> reads a <code>.vcf</code> back, updating a contact already there rather than duplicating it.</li>
   </ul>
   ---
+  smartphone | Sync with Your Devices
+  <p>Your address books sync both ways with the contacts app of your phone or computer (CardDAV). The server address is:</p>
+  <code
+    class="block bg-base-300 px-3 py-2 rounded text-sm mb-3"
+  >{{ request.scheme }}://{{ request.get_host }}/carddav/</code>
+  <p class="mb-3">
+    Sign in with your username and password. If your account uses single sign-on, create an API token in <strong>Settings &gt; API Tokens</strong> and enter it as the password.
+  </p>
+  <ul>
+    <li><strong>iPhone, iPad, Mac</strong>: Add a CardDAV account and enter the server address.</li>
+    <li><strong>Android</strong>: Use <strong>DAVx⁵</strong> with the server address.</li>
+    <li><strong>Thunderbird</strong>: New address book &gt; Add CardDAV address book, then the server address.</li>
+  </ul>
+  <p class="mt-3">
+    <strong>My contacts</strong> and each of your groups' books appear as separate address books, and lists sync as contact groups.
+  </p>
+  ---
   code | API Access
   <ul>
     <li><strong>Base URL:</strong> <code>/api/v1/people</code></li>

@@ -11,7 +11,7 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
 from .auth import authenticate_basic, basic_credentials
-from .xml import DavError
+from .xml import DAV, DavError, parse_body, qname, requested_properties
 
 DAV_METHODS = (
     "propfind",
@@ -72,6 +72,19 @@ def depth(request, default="infinity"):
     if value not in ("0", "1", "infinity"):
         raise DavError(400, message="Invalid Depth header.")
     return value
+
+
+def propfind_request(request):
+    """A ``PROPFIND`` as ``(depth, mode, requested)``; see ``requested_properties``.
+
+    Depth defaults to 0, and infinity is refused: walking every resource of
+    every collection in one answer is what RFC 4918 lets a server decline.
+    """
+    level = depth(request, default="0")
+    if level == "infinity":
+        raise DavError(403, qname(DAV, "propfind-finite-depth"))
+    mode, requested = requested_properties(parse_body(request.body))
+    return level, mode, requested
 
 
 def etag_matches(header, etag):

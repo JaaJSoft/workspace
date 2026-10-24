@@ -412,10 +412,41 @@ class ExportTests(SimpleTestCase):
         self.assertIn("FN:Friends\r\n", text)
         self.assertIn(f"UID:urn:uuid:{person_list.uuid}\r\n", text)
         self.assertIn(f"MEMBER:urn:uuid:{alice.uuid}\r\n", text)
-        self.assertIn("MEMBER:bob-uid\r\n", text)
+        # MEMBER is a URI: a bare UID takes the urn form Apple resolves.
+        self.assertIn("MEMBER:urn:uuid:bob-uid\r\n", text)
         (card,) = parse_vcards(text)
         self.assertEqual(card.kind, "group")
-        self.assertEqual(card.member_uids, [f"urn:uuid:{alice.uuid}", "bob-uid"])
+        self.assertEqual(
+            card.member_uids, [f"urn:uuid:{alice.uuid}", "urn:uuid:bob-uid"]
+        )
+
+    def test_group_card_v3_is_spelled_the_apple_way(self):
+        bob = make_person(display_name="Bob", import_uid="bob-uid")
+        person_list = PersonList(uuid=uuid.uuid4(), name="Friends", import_uid="g-1")
+        text = serialize_cards([list_to_vcard(person_list, [bob], version="3.0")])
+        self.assertIn("VERSION:3.0\r\n", text)
+        self.assertIn("UID:g-1\r\n", text)
+        self.assertIn("N:Friends;;;;\r\n", text)
+        self.assertIn("X-ADDRESSBOOKSERVER-KIND:group\r\n", text)
+        self.assertIn("X-ADDRESSBOOKSERVER-MEMBER:urn:uuid:bob-uid\r\n", text)
+        self.assertNotIn("\r\nKIND", text)
+        (card,) = parse_vcards(text)
+        self.assertEqual((card.kind, card.uid), ("group", "g-1"))
+
+    def test_version_3(self):
+        person = make_person(given_name="", family_name="", extra_properties={})
+        photo = tiny_jpeg()
+        text = serialize_cards(
+            [person_to_vcard(person, photo=photo, photo_type="jpeg", version="3.0")]
+        )
+        self.assertTrue(text.startswith("BEGIN:VCARD\r\nVERSION:3.0\r\n"))
+        self.assertIn("BDAY:1985-04-12\r\n", text)
+        # N is mandatory in 3.0, even with no name part to fill it.
+        self.assertIn("N:;;;;\r\n", text)
+        self.assertIn("PHOTO;ENCODING=b;TYPE=JPEG:", text)
+        (card,) = parse_vcards(text)
+        self.assertEqual(card.photo, photo)
+        self.assertEqual(card.fields["birthday"], person.birthday)
 
     def test_empty_columns_emit_no_property(self):
         person = make_person(

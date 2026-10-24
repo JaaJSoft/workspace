@@ -8,21 +8,15 @@ resolved by UID against the cards of the same file and the address book.
 """
 
 from dataclasses import dataclass, field
-from io import BytesIO
 
 from django.db import transaction
-from PIL import Image
-
-from workspace.common.uuids import parse_uuid_or_none
 
 from ..models import SOURCE_IMPORT, Person, PersonList
 from ..queries import person_with_email
-from .avatar import save_avatar
+from .avatar import save_avatar_from_card
 from .lists import add_members, create_list
 from .persons import create_person, update_person
-from .vcard import parse_vcards
-
-_UUID_URN_PREFIX = "urn:uuid:"
+from .vcard import own_uuid, parse_vcards, uid_key
 
 
 @dataclass
@@ -37,20 +31,11 @@ class ImportReport:
         return {"created": self.created, "updated": self.updated, "lists": self.lists}
 
 
-def _uid_key(uid):
-    return uid.strip().lower().removeprefix(_UUID_URN_PREFIX)
-
-
-def _own_uuid(uid):
-    """The person uuid a ``urn:uuid:`` UID names, or ``None``."""
-    return parse_uuid_or_none(_uid_key(uid)) if uid else None
-
-
 def _find_by_uid(scope, uid):
     person = Person.objects.filter(**scope, import_uid=uid).first()
     if person is not None:
         return person
-    own = _own_uuid(uid)
+    own = own_uuid(uid)
     if own is not None:
         return Person.objects.filter(**scope, uuid=own).first()
     return None
@@ -73,21 +58,6 @@ def _match(scope, card):
     return _find_by_email(scope, card.fields["emails"])
 
 
-def _apply_photo(person, photo):
-    try:
-        with Image.open(BytesIO(photo)) as image:
-            width, height = image.size
-    except OSError, ValueError, Image.DecompressionBombError:
-        return
-    side = min(width, height)
-    try:
-        save_avatar(
-            person, BytesIO(photo), (width - side) / 2, (height - side) / 2, side, side
-        )
-    except OSError, ValueError, Image.DecompressionBombError:
-        return
-
-
 def _store_person(scope, card, report):
     person = _match(scope, card)
     fields = dict(card.fields)
@@ -102,12 +72,12 @@ def _store_person(scope, card, report):
     else:
         # A person found by email adopts the card's UID so the next import
         # finds it straight away; our own urn is not an import uid.
-        if card.uid and not person.import_uid and _own_uuid(card.uid) != person.uuid:
+        if card.uid and not person.import_uid and own_uuid(card.uid) != person.uuid:
             fields["import_uid"] = card.uid
         update_person(person, **fields)
         report.updated += 1
     if card.photo is not None:
-        _apply_photo(person, card.photo)
+        save_avatar_from_card(person, card.photo)
     return person
 
 
@@ -136,13 +106,13 @@ def import_vcards(text, *, owner=None, group=None):
                 report.persons.append(person)
                 by_uid[str(person.uuid)] = person
                 if card.uid:
-                    by_uid[_uid_key(card.uid)] = person
+                    by_uid[uid_key(card.uid)] = person
         for card in cards:
             if card.kind != "group":
                 continue
             members = []
             for uid in card.member_uids:
-                member = by_uid.get(_uid_key(uid)) or _find_by_uid(scope, uid)
+                member = by_uid.get(uid_key(uid)) or _find_by_uid(scope, uid)
                 if member is not None and member not in members:
                     members.append(member)
             _store_list(scope, card, members, report)

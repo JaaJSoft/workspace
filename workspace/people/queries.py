@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from django.db.models import Q
 
 from workspace.common.text import fold_text
@@ -58,3 +60,51 @@ def person_with_email(persons, email):
         if any(e.get("value", "").lower() == needle for e in person.emails or []):
             return person
     return None
+
+
+PERSONAL_BOOK = "personal"
+_GROUP_BOOK_PREFIX = "group-"
+
+
+@dataclass(frozen=True)
+class AddressBookScope:
+    """One address book as a client sees it: the user's own, or a group's."""
+
+    slug: str
+    name: str
+    owner: object = None
+    group: object = None
+
+    @property
+    def scope(self):
+        return {"owner": self.owner, "group": self.group}
+
+    def persons(self):
+        return Person.objects.filter(**self.scope)
+
+    def lists(self):
+        return PersonList.objects.filter(**self.scope)
+
+
+def _group_book(group):
+    return AddressBookScope(
+        slug=f"{_GROUP_BOOK_PREFIX}{group.pk}", name=group.name, group=group
+    )
+
+
+def user_address_books(user):
+    """The address books the user can sync: their own, then each of their groups'."""
+    books = [AddressBookScope(slug=PERSONAL_BOOK, name="My contacts", owner=user)]
+    books += [_group_book(group) for group in user.groups.order_by("name")]
+    return books
+
+
+def reachable_address_book(user, slug):
+    """The address book *slug* names for the user, or None."""
+    if slug == PERSONAL_BOOK:
+        return AddressBookScope(slug=PERSONAL_BOOK, name="My contacts", owner=user)
+    group_id = slug.removeprefix(_GROUP_BOOK_PREFIX)
+    if group_id == slug or not group_id.isdigit():
+        return None
+    group = user.groups.filter(pk=int(group_id)).first()
+    return _group_book(group) if group is not None else None

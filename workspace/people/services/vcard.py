@@ -28,6 +28,8 @@ from vobject.base import (
 )
 from vobject.vcard import splitFields
 
+from workspace.common.uuids import parse_uuid_or_none
+
 # Properties with a column of their own, or metadata that describes the file
 # rather than the person: none of them belongs in ``extra_properties``.
 _CONSUMED = frozenset(
@@ -369,6 +371,29 @@ def person_uid(person):
     return person.import_uid or f"{_UUID_URN_PREFIX}{person.uuid}"
 
 
+def uid_key(uid):
+    """A UID compared the way Apple writes members: no ``urn:uuid:``, any case."""
+    return uid.strip().lower().removeprefix(_UUID_URN_PREFIX)
+
+
+def own_uuid(uid):
+    """The row uuid one of our ``urn:uuid:`` UIDs names, or ``None``."""
+    return parse_uuid_or_none(uid_key(uid)) if uid else None
+
+
+def list_uid(person_list):
+    return person_list.import_uid or f"{_UUID_URN_PREFIX}{person_list.uuid}"
+
+
+def member_uri(uid):
+    """A member reference as the URI ``MEMBER`` needs: a bare UID gets the urn form.
+
+    Apple writes ``urn:uuid:<UID>`` for a card whose UID has no prefix, and
+    resolves members only in that form.
+    """
+    return uid if ":" in uid else f"{_UUID_URN_PREFIX}{uid}"
+
+
 def _add(card, name, value, *, params=None, group=None):
     line = card.add(name)
     line.value = value
@@ -419,21 +444,27 @@ def _address_value(entry):
     )
 
 
-def person_to_vcard(person, *, photo=None, photo_type="webp"):
-    """A vCard 4.0 component for the person; ``photo`` is inlined when given."""
+def person_to_vcard(person, *, photo=None, photo_type="webp", version="4.0"):
+    """A vCard component for the person; ``photo`` is inlined when given.
+
+    *version* is ``"4.0"`` or ``"3.0"``, the one Apple clients read.
+    """
+    v3 = version == "3.0"
     card = vobject.vCard()
-    _add(card, "version", "4.0")
+    _add(card, "version", version)
     _add(card, "uid", person_uid(person))
     _add(card, "fn", person.display_name)
     extra = person.extra_properties or {}
-    if person.given_name or person.family_name or "N" in extra:
+    # N is mandatory in 3.0.
+    if v3 or person.given_name or person.family_name or "N" in extra:
         _add(card, "n", _name_value(person))
     if person.organization:
         _add(card, "org", [person.organization])
     if person.title:
         _add(card, "title", person.title)
     if person.birthday:
-        _add(card, "bday", person.birthday.strftime("%Y%m%d"))
+        birthday_format = "%Y-%m-%d" if v3 else "%Y%m%d"
+        _add(card, "bday", person.birthday.strftime(birthday_format))
     for entry in person.emails or []:
         _add_typed(card, "email", entry["value"], entry.get("type"))
     for entry in person.phones or []:
@@ -444,7 +475,11 @@ def person_to_vcard(person, *, photo=None, photo_type="webp"):
         _add(card, "note", person.notes)
     if photo is not None:
         encoded = base64.b64encode(photo).decode()
-        _add_raw(card, "photo", f"data:image/{photo_type};base64,{encoded}")
+        if v3:
+            params = {"ENCODING": ["b"], "TYPE": [photo_type.upper()]}
+            _add_raw(card, "photo", encoded, params=params)
+        else:
+            _add_raw(card, "photo", f"data:image/{photo_type};base64,{encoded}")
     for name, entries in extra.items():
         if name == "N":
             continue
@@ -494,14 +529,21 @@ def person_to_qr_vcard(person, *, include_notes=True):
     return card.serialize()
 
 
-def list_to_vcard(person_list, members):
+def list_to_vcard(person_list, members, *, version="4.0"):
+    """A group card for the list; 3.0 spells the group the Apple way."""
+    v3 = version == "3.0"
     card = vobject.vCard()
-    _add(card, "version", "4.0")
-    _add(card, "kind", "group")
-    _add(card, "uid", f"{_UUID_URN_PREFIX}{person_list.uuid}")
+    _add(card, "version", version)
+    _add(card, "uid", list_uid(person_list))
     _add(card, "fn", person_list.name)
+    if v3:
+        _add(card, "n", vobject.vcard.Name(family=person_list.name))
+        _add(card, "X-ADDRESSBOOKSERVER-KIND", "group")
+    else:
+        _add(card, "kind", "group")
+    member_property = "X-ADDRESSBOOKSERVER-MEMBER" if v3 else "member"
     for member in members:
-        _add(card, "member", person_uid(member))
+        _add(card, member_property, member_uri(person_uid(member)))
     return card
 
 

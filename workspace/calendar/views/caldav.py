@@ -27,20 +27,32 @@ from django.urls import get_script_prefix
 from django.views.decorators.csrf import csrf_exempt
 
 from workspace.common.cache import invalidate
-from workspace.common.dav.views import DavView, check_preconditions, depth
+from workspace.common.dav.properties import (
+    PropertySet,
+    failed_dependency,
+    hrefs,
+    parse_sync_token,
+    privilege_set,
+    resourcetype,
+    supported_report_set,
+)
+from workspace.common.dav.views import (
+    DavView,
+    check_preconditions,
+    propfind_request,
+)
 from workspace.common.dav.xml import (
     DAV,
     DavError,
     Multistatus,
     element,
-    href_element,
     parse_body,
     qname,
     register_prefix,
     requested_properties,
-    status_line,
 )
 from workspace.common.uuids import parse_uuid_or_none
+from workspace.people.views.carddav import CARDDAV, addressbook_home_path
 from workspace.users.services.settings import get_user_timezone
 
 from ..models import Calendar
@@ -123,35 +135,6 @@ def _calendar_path(username, calendar):
 # ── Properties ────────────────────────────────────────────────────────
 
 
-def _hrefs(tag, *paths):
-    return element(tag, children=[href_element(path) for path in paths])
-
-
-def _resourcetype(*kinds):
-    return element(_d("resourcetype"), children=[element(kind) for kind in kinds])
-
-
-def _privileges(writable):
-    names = [_d("read")]
-    if writable:
-        names += [_d("write"), _d("write-content"), _d("bind"), _d("unbind")]
-    privileges = [element(_d("privilege"), children=[element(name)]) for name in names]
-    return element(_d("current-user-privilege-set"), children=privileges)
-
-
-def _supported_reports(*reports):
-    return element(
-        _d("supported-report-set"),
-        children=[
-            element(
-                _d("supported-report"),
-                children=[element(_d("report"), children=[element(report)])],
-            )
-            for report in reports
-        ],
-    )
-
-
 def _color_hex(color):
     if color.startswith("#"):
         return color
@@ -177,64 +160,19 @@ def _sync_token(calendar):
     return f"{SYNC_TOKEN_PREFIX}{calendar.sync_revision}"
 
 
-def _parse_sync_token(token, calendar):
-    """The revision a client's token names; 403 for a token this server never issued."""
-    if not token:
-        return 0
-    revision = token.removeprefix(SYNC_TOKEN_PREFIX)
-    if (
-        revision == token
-        or not revision.isdigit()
-        or int(revision) > calendar.sync_revision
-    ):
-        raise DavError(403, _d("valid-sync-token"))
-    return int(revision)
-
-
-class _PropertySet:
-    """The properties of one resource, built only when asked for.
-
-    *builders* maps a qualified name to a callable returning the property
-    element; *expensive* names stay out of an ``allprop`` answer (RFC 4791
-    excludes calendar-data from it).
-    """
-
-    def __init__(self, builders, expensive=()):
-        self.builders = builders
-        self.expensive = set(expensive)
-
-    def add_to(self, multistatus, path, mode, requested):
-        if mode == "propname":
-            multistatus.add_propstat(
-                path, found=[element(tag) for tag in self.builders]
-            )
-            return
-        if mode == "allprop":
-            requested = [tag for tag in self.builders if tag not in self.expensive]
-        found, missing = [], []
-        for tag in requested:
-            builder = self.builders.get(tag)
-            value = builder() if builder else None
-            if value is None:
-                missing.append(tag)
-            else:
-                found.append(value)
-        multistatus.add_propstat(path, found=found, missing=missing)
-
-
 def _principal_ref(request):
-    return _hrefs(
+    return hrefs(
         _d("current-user-principal"), _principal_path(request.user.get_username())
     )
 
 
 def _collection_properties(request, displayname):
-    return _PropertySet(
+    return PropertySet(
         {
-            _d("resourcetype"): lambda: _resourcetype(_d("collection")),
+            _d("resourcetype"): lambda: resourcetype(_d("collection")),
             _d("displayname"): lambda: element(_d("displayname"), displayname),
             _d("current-user-principal"): lambda: _principal_ref(request),
-            _d("principal-collection-set"): lambda: _hrefs(
+            _d("principal-collection-set"): lambda: hrefs(
                 _d("principal-collection-set"), _principals_path()
             ),
         }
@@ -245,20 +183,20 @@ def _principal_properties(request):
     user = request.user
     username = user.get_username()
     addresses = [f"mailto:{user.email}"] if user.email else []
-    return _PropertySet(
+    return PropertySet(
         {
-            _d("resourcetype"): lambda: _resourcetype(_d("principal")),
+            _d("resourcetype"): lambda: resourcetype(_d("principal")),
             _d("displayname"): lambda: element(
                 _d("displayname"), user.get_full_name() or username
             ),
             _d("current-user-principal"): lambda: _principal_ref(request),
-            _d("principal-URL"): lambda: _hrefs(
+            _d("principal-URL"): lambda: hrefs(
                 _d("principal-URL"), _principal_path(username)
             ),
-            _d("principal-collection-set"): lambda: _hrefs(
+            _d("principal-collection-set"): lambda: hrefs(
                 _d("principal-collection-set"), _principals_path()
             ),
-            _cal("calendar-home-set"): lambda: _hrefs(
+            _cal("calendar-home-set"): lambda: hrefs(
                 _cal("calendar-home-set"), _home_path(username)
             ),
             _cal("calendar-user-address-set"): lambda: element(
@@ -271,7 +209,13 @@ def _principal_properties(request):
             _cal("calendar-user-type"): lambda: element(
                 _cal("calendar-user-type"), "INDIVIDUAL"
             ),
-            _d("supported-report-set"): _supported_reports,
+            # The principal of both services: a client that found this one
+            # from the bare server address finds the contacts from here.
+            qname(CARDDAV, "addressbook-home-set"): lambda: hrefs(
+                qname(CARDDAV, "addressbook-home-set"),
+                addressbook_home_path(username),
+            ),
+            _d("supported-report-set"): supported_report_set,
         }
     )
 
@@ -280,9 +224,9 @@ def _home_properties(request):
     username = request.user.get_username()
     properties = _collection_properties(request, username)
     properties.builders |= {
-        _d("owner"): lambda: _hrefs(_d("owner"), _principal_path(username)),
-        _d("current-user-privilege-set"): lambda: _privileges(False),
-        _d("supported-report-set"): _supported_reports,
+        _d("owner"): lambda: hrefs(_d("owner"), _principal_path(username)),
+        _d("current-user-privilege-set"): lambda: privilege_set(False),
+        _d("supported-report-set"): supported_report_set,
     }
     return properties
 
@@ -290,7 +234,7 @@ def _home_properties(request):
 def _calendar_properties(request, calendar, writable):
     owned = calendar.owner_id == request.user.pk
     builders = {
-        _d("resourcetype"): lambda: _resourcetype(_d("collection"), _cal("calendar")),
+        _d("resourcetype"): lambda: resourcetype(_d("collection"), _cal("calendar")),
         _d("displayname"): lambda: element(_d("displayname"), calendar.name),
         qname(APPLE_ICAL, "calendar-color"): lambda: element(
             qname(APPLE_ICAL, "calendar-color"), _color_hex(calendar.color)
@@ -317,20 +261,20 @@ def _calendar_properties(request, calendar, writable):
             f"{calendar.sync_revision}-{int(calendar.updated_at.timestamp())}",
         ),
         _d("current-user-principal"): lambda: _principal_ref(request),
-        _d("current-user-privilege-set"): lambda: _privileges(writable),
-        _d("supported-report-set"): lambda: _supported_reports(
+        _d("current-user-privilege-set"): lambda: privilege_set(writable),
+        _d("supported-report-set"): lambda: supported_report_set(
             _cal("calendar-multiget"), _cal("calendar-query"), _d("sync-collection")
         ),
     }
     if owned:
-        builders[_d("owner")] = lambda: _hrefs(
+        builders[_d("owner")] = lambda: hrefs(
             _d("owner"), _principal_path(request.user.get_username())
         )
-    return _PropertySet(builders)
+    return PropertySet(builders)
 
 
 def _object_properties(master, etag):
-    return _PropertySet(
+    return PropertySet(
         {
             _d("resourcetype"): lambda: element(_d("resourcetype")),
             _d("getetag"): lambda: element(_d("getetag"), etag),
@@ -362,19 +306,12 @@ class _CalDavView(DavView):
         if username != self.request.user.get_username():
             raise DavError(404)
 
-    def _propfind_args(self, request):
-        level = depth(request, default="0")
-        if level == "infinity":
-            raise DavError(403, _d("propfind-finite-depth"))
-        mode, requested = requested_properties(parse_body(request.body))
-        return level, mode, requested
-
 
 class CalDavRootView(_CalDavView):
     """``/caldav/`` and ``/caldav/principals/``: where a client asks who it is."""
 
     def propfind(self, request):
-        _level, mode, requested = self._propfind_args(request)
+        _level, mode, requested = propfind_request(request)
         multistatus = Multistatus()
         _collection_properties(request, "CalDAV").add_to(
             multistatus, request.path, mode, requested
@@ -385,7 +322,7 @@ class CalDavRootView(_CalDavView):
 class PrincipalView(_CalDavView):
     def propfind(self, request, username):
         self._require_self(username)
-        _level, mode, requested = self._propfind_args(request)
+        _level, mode, requested = propfind_request(request)
         multistatus = Multistatus()
         _principal_properties(request).add_to(
             multistatus, _principal_path(username), mode, requested
@@ -399,7 +336,7 @@ class PrincipalView(_CalDavView):
 class CalendarHomeView(_CalDavView):
     def propfind(self, request, username):
         self._require_self(username)
-        level, mode, requested = self._propfind_args(request)
+        level, mode, requested = propfind_request(request)
         multistatus = Multistatus()
         _home_properties(request).add_to(
             multistatus, _home_path(username), mode, requested
@@ -474,7 +411,7 @@ class CalendarCollectionView(_CalDavView):
 
     def propfind(self, request, username, calendar_id):
         calendar = self._calendar(request, username, calendar_id)
-        level, mode, requested = self._propfind_args(request)
+        level, mode, requested = propfind_request(request)
         path = _calendar_path(username, calendar)
         multistatus = Multistatus()
         _calendar_properties(request, calendar, _writable(request, calendar)).add_to(
@@ -523,7 +460,7 @@ class CalendarCollectionView(_CalDavView):
                 _calendar_path(username, calendar), forbidden=refused
             )
             if updates:
-                _failed_dependency(response, [tags[key] for key in updates])
+                failed_dependency(response, [tags[key] for key in updates])
             return multistatus.response()
 
         for key, value in updates.items():
@@ -613,8 +550,10 @@ class CalendarCollectionView(_CalDavView):
         level = (root.findtext(_d("sync-level")) or "1").strip()
         if level != "1":
             raise DavError(403, _d("sync-traversal-supported"))
-        revision = _parse_sync_token(
-            (root.findtext(_d("sync-token")) or "").strip(), calendar
+        revision = parse_sync_token(
+            (root.findtext(_d("sync-token")) or "").strip(),
+            SYNC_TOKEN_PREFIX,
+            calendar.sync_revision,
         )
 
         multistatus = Multistatus()
@@ -638,12 +577,6 @@ class CalendarCollectionView(_CalDavView):
             multistatus.add_status(f"{path}{name}", 404)
         multistatus.append(element(_d("sync-token"), _sync_token(calendar)))
         return multistatus.response()
-
-
-def _failed_dependency(response, tags):
-    propstat = ET.SubElement(response, _d("propstat"))
-    ET.SubElement(propstat, _d("prop")).extend(ET.Element(tag) for tag in tags)
-    ET.SubElement(propstat, _d("status")).text = status_line(424)
 
 
 class CalendarObjectView(_CalDavView):
@@ -670,7 +603,7 @@ class CalendarObjectView(_CalDavView):
         calendar, master, etag = self._resolve(request, username, calendar_id, name)
         if master is None:
             raise DavError(404)
-        _level, mode, requested = self._propfind_args(request)
+        _level, mode, requested = propfind_request(request)
         multistatus = Multistatus()
         _object_properties(master, etag).add_to(
             multistatus, f"{_calendar_path(username, calendar)}{name}", mode, requested

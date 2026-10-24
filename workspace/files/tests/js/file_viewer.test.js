@@ -19,10 +19,15 @@ function makeShell({ properties = false, favoriteOk = true } = {}) {
   const video = { currentTime: 0 };
   const panel = {
     blocked: false,
+    location: null,
     replaceChildren() {},
     querySelector(selector) {
       if (selector === 'video') return video;
       if (selector === '[data-viewer-blocked]') return this.blocked ? {} : null;
+      if (selector === '[data-viewer-location]' && this.location) {
+        const attrs = this.location;
+        return { getAttribute: (name) => (name in attrs ? attrs[name] : null) };
+      }
       return null;
     },
   };
@@ -142,6 +147,76 @@ test('the open that wins applies its start time and blocked state', async () => 
 
   assert.equal(video.currentTime, 30);
   assert.equal(shell.viewerBlocked, true);
+});
+
+function locationMarker(labels, url = '/files/f?open=a', space = 'personal') {
+  return {
+    'data-viewer-location': JSON.stringify(labels),
+    'data-viewer-location-url': url,
+    'data-viewer-location-space': space,
+  };
+}
+
+test('the header reads the folder off the merged panel', async () => {
+  const { shell, loads, panel } = makeShell();
+  panel.location = locationMarker(['My Files', 'Photos', 'Brittany']);
+
+  const opening = shell.openFile('a', 'a.jpg', 'image', false);
+  assert.equal(shell.fileLocation, null);
+  loads[0].resolve([{}]);
+  await opening;
+
+  assert.deepStrictEqual({ ...shell.fileLocation, labels: Array.from(shell.fileLocation.labels) }, {
+    labels: ['My Files', 'Photos', 'Brittany'],
+    url: '/files/f?open=a',
+    space: 'personal',
+  });
+  assert.equal(shell.locationLabel(), 'My Files / Photos / Brittany');
+  assert.equal(shell.locationTitle(), 'Show in Files: My Files / Photos / Brittany');
+});
+
+test('a superseded open does not name the folder of the newer file', async () => {
+  const { shell, loads, panel } = makeShell();
+
+  const first = shell.openFile('a', 'a.jpg', 'image', false);
+  const second = shell.openFile('b', 'b.jpg', 'image', false);
+  panel.location = locationMarker(['My Files', 'B']);
+  loads[1].resolve([{}]);
+  await second;
+  panel.location = locationMarker(['My Files', 'A']);
+  loads[0].resolve([{}]);
+  await first;
+
+  assert.equal(shell.locationLabel(), 'My Files / B');
+});
+
+test('a panel without a marker, or a closed viewer, names no folder', async () => {
+  const { shell, loads, panel } = makeShell();
+
+  const opening = shell.openFile('a', 'a.jpg', 'image', false);
+  loads[0].resolve([{}]);
+  await opening;
+  assert.equal(shell.fileLocation, null);
+  assert.equal(shell.locationLabel(), '');
+
+  panel.location = locationMarker(['My Files']);
+  const again = shell.openFile('b', 'b.jpg', 'image', false);
+  loads[1].resolve([{}]);
+  await again;
+  shell._onClosed();
+  assert.equal(shell.fileLocation, null);
+});
+
+test('a deep path keeps its root and the two folders nearest the file', async () => {
+  const { shell, loads, panel } = makeShell();
+  panel.location = locationMarker(['Family', 'Events', '2019', 'Wedding', 'Cake'], '', 'shared');
+
+  const opening = shell.openFile('a', 'a.jpg', 'image', false);
+  loads[0].resolve([{}]);
+  await opening;
+
+  assert.equal(shell.locationLabel(), 'Family / … / Wedding / Cake');
+  assert.equal(shell.locationTitle(), 'Family / Events / 2019 / Wedding / Cake');
 });
 
 test('without properties the shell offers no properties, whatever the registry says', async () => {

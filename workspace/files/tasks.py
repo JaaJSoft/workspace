@@ -104,10 +104,10 @@ def sync_user_files(self, user_id):
     }
 
 
-# A staged blob's bytes are written by the request that stages it (an upload
-# spool renamed into the staging area keeps the mtime of its last chunk), and
-# that request moves or deletes it before it ends: one untouched for a day
-# belongs to a worker that died.
+# Staged bytes are written by the request that stages them (an upload spool
+# renamed into the staging area keeps the mtime of its last chunk), and that
+# request moves, commits or deletes them before it ends: bytes untouched for a
+# day belong to a worker that died.
 STAGED_BLOB_TTL = timedelta(days=1)
 
 
@@ -118,10 +118,18 @@ STAGED_BLOB_TTL = timedelta(days=1)
     max_retries=0,
 )
 def purge_staged_blobs(self):
-    """Delete what a killed worker staged for a new file and never moved into place."""
+    """Delete what a killed worker staged and never moved into place.
+
+    Both kinds: the bytes of a new file waiting for its row, and a write
+    waiting for its commit (a ``.part`` file, or a multipart upload on object
+    storage).
+    """
+    from django.core.files.storage import storages
+
     from workspace.files.services._names import purge_staged
 
-    purged = purge_staged(timezone.now() - STAGED_BLOB_TTL)
+    before = timezone.now() - STAGED_BLOB_TTL
+    purged = purge_staged(before) + storages["files"].purge_staged(before)
     if purged:
         logger.info("Removed %d stale staged blobs", purged)
     return {"purged": purged}
@@ -170,6 +178,35 @@ def purge_trash(self):
         "files_deleted": files_count,
         "folders_deleted": folders_count,
         "retention_days": retention_days,
+    }
+
+
+@shared_task(
+    name="files.settle_relocations",
+    priority=BACKGROUND_PRIORITY,
+    bind=True,
+    max_retries=0,
+)
+def settle_relocations(self):
+    """Finish or undo the moves a dead worker or a rolled-back transaction
+    left half done, once they are old enough to be no one's any more."""
+    from workspace.files.services.relocations import settle_stale
+
+    settled = settle_stale()
+    if settled.entries:
+        logger.info(
+            "Settled %d unfinished move(s): %d leftover(s) dropped, %d blob(s) "
+            "put back, %d left for review.",
+            settled.entries,
+            len(settled.dropped),
+            len(settled.restored),
+            len(settled.undecided),
+        )
+    return {
+        "settled": settled.entries,
+        "dropped": len(settled.dropped),
+        "restored": len(settled.restored),
+        "undecided": len(settled.undecided),
     }
 
 

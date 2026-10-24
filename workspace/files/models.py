@@ -1,8 +1,10 @@
 import posixpath
 import secrets
+import unicodedata
 
 from django.contrib.auth import get_user_model
-from django.core.files.storage import FileSystemStorage
+from django.core.files.storage import storages
+from django.core.signals import setting_changed
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import F, Q, Value
@@ -10,11 +12,63 @@ from django.db.models.functions import Concat, Lower, Substr
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.utils import timezone
+from django.utils.functional import LazyObject, empty
 
 from workspace.common.text import caseless
 from workspace.common.uuids import uuid_v7_or_v4
 
 User = get_user_model()
+
+
+def canonical_name(name):
+    """*name* in the form node names are stored in: Unicode NFC.
+
+    macOS writes names decomposed (NFD), Linux and Windows composed, so one
+    visible name reaches the app as two different strings - two rows that
+    look alike, two storage keys - unless every name is composed on its way
+    in.
+    """
+    return unicodedata.normalize("NFC", name)
+
+
+def name_forms(name):
+    """The strings a lookup of *name* must match: as given, and composed.
+
+    A node named before names were composed can still be stored decomposed,
+    and a client on macOS asks for a composed one decomposed.
+    """
+    return list(dict.fromkeys((name, canonical_name(name))))
+
+
+class _FilesStorage(LazyObject):
+    """``storages["files"]``, looked up when used rather than when imported.
+
+    A FileField calls its storage callable once, when its model is built: a
+    plain ``storages["files"]`` would pin that instance for good, and a
+    ``STORAGES`` override (a test on object storage) would reach
+    ``default_storage`` but never File.content.
+    """
+
+    def _setup(self):
+        self._wrapped = storages["files"]
+
+
+_files_storage = _FilesStorage()
+
+
+@receiver(setting_changed)
+def _forget_files_storage(*, setting, **kwargs):
+    if setting == "STORAGES":
+        _files_storage._wrapped = empty
+
+
+def files_storage():
+    """The storage holding File.content (the "files" alias in STORAGES).
+
+    A blob's name is its node's tree path, so a new version is saved over the
+    previous one rather than beside it - unlike ``default_storage``.
+    """
+    return _files_storage
 
 
 def file_upload_path(instance, filename):
@@ -34,20 +88,6 @@ def file_upload_path(instance, filename):
         parent_parts = instance.path.split("/")[:-1]
         return posixpath.join(root, *parent_parts, filename)
     return posixpath.join(root, filename)
-
-
-class TreeStorage(FileSystemStorage):
-    """Stores a file under its name exactly, as rename, move and the trash do.
-
-    The tree on disk mirrors the names in the database, and the disk sync
-    matches the two by name. Django's default would rewrite ``a b.txt`` as
-    ``a_b.txt``, which another name may also give, and which the sync no
-    longer recognises as that file. ``File.save`` rejects the names that
-    would escape their folder.
-    """
-
-    def get_valid_name(self, name):
-        return name
 
 
 class CaselessKeyField(models.CharField):
@@ -130,7 +170,7 @@ class File(models.Model):
     # File-specific fields
     content = models.FileField(
         upload_to=file_upload_path,
-        storage=TreeStorage(allow_overwrite=True),
+        storage=files_storage,
         null=True,
         blank=True,
         max_length=1024,

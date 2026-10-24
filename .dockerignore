@@ -57,6 +57,8 @@ docs/
 *.bak
 *.tmp
 /files/
+/.staging/
+/.relocations/
 /NUL
 .claude/
 /thumbnails/

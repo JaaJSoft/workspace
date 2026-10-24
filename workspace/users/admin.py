@@ -10,6 +10,7 @@ from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationFo
 from workspace.files.admin import GroupStorageQuotaInline, UserStorageQuotaInline
 
 from .models import APITokenLabel, UserPresence, UserSetting
+from .validators import validate_username
 
 
 @admin.register(UserPresence)
@@ -50,10 +51,27 @@ admin.site.unregister(Group)
 admin.site.unregister(AuthToken)
 
 
+class WorkspaceUserCreationForm(UserCreationForm):
+    def clean_username(self):
+        username = super().clean_username()
+        if username is not None:
+            validate_username(username)
+        return username
+
+
+class WorkspaceUserChangeForm(UserChangeForm):
+    def clean_username(self):
+        username = self.cleaned_data["username"]
+        # An account named so before the rule existed stays editable.
+        if "username" in self.changed_data:
+            validate_username(username)
+        return username
+
+
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin, ModelAdmin):
-    form = UserChangeForm
-    add_form = UserCreationForm
+    form = WorkspaceUserChangeForm
+    add_form = WorkspaceUserCreationForm
     change_password_form = AdminPasswordChangeForm
     inlines = (UserStorageQuotaInline,)
     list_display = (

@@ -41,7 +41,7 @@ dependencies = [
     # vault
     "cbor2>=6.1.5",
     # utils
-    "mistune>=3.3.4",
+    "mistune>=3.4.0",
     "pygments>=2.21.0",
     "dj-database-url>=2.3.0",
     "psycopg[binary,pool]>=3.3.6",

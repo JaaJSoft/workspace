@@ -48,7 +48,8 @@ It is not faster on a healthy network: the same bytes travel, in more requests.
   upload starts, so two large uploads cannot each pass the check and together
   overflow it.
 - Chunks are written to `FILE_UPLOAD_TEMP_DIR` and hashed as they arrive. When
-  the last one is in, the file is renamed into place, as for a regular upload.
+  the last one is in, the file is stored as a regular upload is: renamed into
+  place on the disk, uploaded from the spool on object storage.
   With several web replicas the directory has to be on a volume they share,
   which it is by default (under `MEDIA_ROOT`).
 - An upload untouched for a day is deleted with what it received, by the
@@ -67,7 +68,7 @@ title, author, subject and keywords - so searching an author's name finds what t
 wrote, and a scanned PDF with no text layer stays findable by its title. Anything else -
 images, archives - stays searchable by name.
 
-The index holds only the extracted words, never a copy of the file: the blob on disk
+The index holds only the extracted words, never a copy of the file: the stored blob
 remains the single copy of the content. Files are indexed as they are created, renamed or
 edited, and the hourly catch-up indexes whatever that missed: files already there when
 the feature was installed, an edit whose indexing was lost, and every file once more after

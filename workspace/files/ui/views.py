@@ -1,3 +1,4 @@
+import json
 from urllib.parse import quote, urlencode
 
 from django.conf import settings
@@ -6,7 +7,7 @@ from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
-from django.utils.html import escape
+from django.utils.html import escape, format_html
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from workspace.common.charts import donut_chart
@@ -565,7 +566,7 @@ def storage(request, uuid=None):
         ]
     )
     if folder is None:
-        title = "My files"
+        title = "My Files"
         parent_url = None
     elif folder.group_id and folder.parent_id is None:
         title = folder.name
@@ -811,7 +812,40 @@ def view_file(request, uuid):
         viewer.render(request), sensitive_level(file_obj), blur_preference(request.user)
     )
 
-    return HttpResponse(render_viewer_panel(html))
+    return HttpResponse(
+        render_viewer_panel(
+            _viewer_location_marker(request.user, file_obj, perm) + html
+        )
+    )
+
+
+def _viewer_location_marker(user, file_obj, permission):
+    """The hidden element the viewer header reads the file's folder from.
+
+    The folders are the ones *user* may see (``FileService.visible_ancestors``):
+    a share recipient gets the shared folders under "Shared with me" and no
+    link, since Files lists none of those folders' content for them.
+    """
+    if file_obj.deleted_at is not None:
+        return ""
+    ancestors = FileService.visible_ancestors(user, file_obj, permission)
+    names = [folder.name for folder in ancestors]
+    if not FileService.reads_full_path(permission):
+        space, labels, url = "shared", ["Shared with me", *names], ""
+    elif file_obj.group_id:
+        space, labels = "group", names
+        url = f"/files/{ancestors[-1].uuid}?open={file_obj.uuid}" if ancestors else ""
+    else:
+        space, labels = "personal", ["My Files", *names]
+        folder = f"/{ancestors[-1].uuid}" if ancestors else ""
+        url = f"/files{folder}?open={file_obj.uuid}"
+    return format_html(
+        '<div hidden data-viewer-location="{}" data-viewer-location-url="{}" '
+        'data-viewer-location-space="{}"></div>',
+        json.dumps(labels),
+        url,
+        space,
+    )
 
 
 @login_required

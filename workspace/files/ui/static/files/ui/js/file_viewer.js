@@ -35,6 +35,10 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     fileUuid: null,
     fileName: '',
     fileType: '',
+    // The folder the file sits in, {labels, url, space}, read off the
+    // panel's [data-viewer-location] marker; null until it merges, and for
+    // an item the Files viewer endpoint does not serve.
+    fileLocation: null,
     // Where the download comes from (see _urls).
     downloadUrl: '',
     // Whether the item on screen is a Files file: only then do the action
@@ -185,6 +189,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.fileUuid = uuid;
       this.fileName = name || 'File';
       this.fileType = fileType || '';
+      this.fileLocation = null;
       this.downloadUrl = urls.download;
       this.filesItem = opener && 'isFile' in opener ? !!opener.isFile : this._filesItems;
       this.viewerBlocked = false;
@@ -213,6 +218,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       if (!await this.loadViewerPanel(viewerUrl)) return;
       const panel = document.getElementById(this._viewerPanelId());
       this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
+      this.fileLocation = this._readLocation(panel);
       const video = at != null && panel ? panel.querySelector('video') : null;
       // Before the metadata has loaded, this sets where playback starts.
       if (video) video.currentTime = at;
@@ -227,6 +233,7 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.fileUuid = null;
       this.fileName = '';
       this.fileType = '';
+      this.fileLocation = null;
       this.downloadUrl = '';
       this.filesItem = false;
       this.viewerBlocked = false;
@@ -236,6 +243,37 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
       this.canShowProperties = false;
       this.canFavorite = false;
       this.isFavorite = false;
+    },
+
+    _readLocation(panel) {
+      const marker = panel && panel.querySelector('[data-viewer-location]');
+      if (!marker) return null;
+      let labels;
+      try {
+        labels = JSON.parse(marker.getAttribute('data-viewer-location'));
+      } catch (_) {
+        return null;
+      }
+      if (!Array.isArray(labels) || !labels.length) return null;
+      return {
+        labels,
+        url: marker.getAttribute('data-viewer-location-url') || '',
+        space: marker.getAttribute('data-viewer-location-space') || 'personal',
+      };
+    },
+
+    // The header has one line for it: a deep path keeps its root and the
+    // two folders nearest the file, the full one goes in the tooltip.
+    locationLabel() {
+      const labels = this.fileLocation ? this.fileLocation.labels : [];
+      const shown = labels.length > 4 ? [labels[0], '…', ...labels.slice(-2)] : labels;
+      return shown.join(' / ');
+    },
+
+    locationTitle() {
+      const labels = this.fileLocation ? this.fileLocation.labels : [];
+      const path = labels.join(' / ');
+      return this.fileLocation && this.fileLocation.url ? 'Show in Files: ' + path : path;
     },
 
     async _loadActions(uuid) {

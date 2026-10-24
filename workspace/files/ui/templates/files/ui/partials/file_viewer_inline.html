@@ -31,9 +31,14 @@
     <div class="flex-1 min-w-0">
       <h3 class="font-bold truncate" x-text="fileName"></h3>
       <div class="flex items-center gap-2">
-        <p class="text-xs text-base-content/60" x-text="fileType"></p>
+        {% include "files/ui/partials/viewer_location.html" %}
+        <p
+          class="text-xs text-base-content/60 shrink-0"
+          :class="{ 'max-sm:hidden': fileLocation }"
+          x-text="fileType"
+        ></p>
         <span
-          class="text-xs text-base-content/40"
+          class="text-xs text-base-content/40 shrink-0 whitespace-nowrap"
           x-show="_totalViewable() > 1"
           x-text="(_currentIndex() + 1) + ' / ' + _totalViewable()"
         ></span>

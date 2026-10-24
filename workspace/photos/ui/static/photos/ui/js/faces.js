@@ -1408,6 +1408,8 @@ window.facesReview = function facesReview() {
     searching: false,
     // The key of the card being settled.
     saving: null,
+    // The queue is being read again from the server.
+    refreshing: false,
     // The card whose name field takes the keyboard next ({ key, scroll });
     // that field focuses itself and clears it.
     focusRequest: null,
@@ -1788,8 +1790,21 @@ window.facesReview = function facesReview() {
       window.AppAlert.success(message, { duration: 8000, actions });
     },
 
+    // A card being settled reloads the queue itself once it is the last.
+    async refresh() {
+      if (this.refreshing || this.saving !== null) return;
+      this.refreshing = true;
+      try {
+        await this._reloadQueue();
+      } catch (_) {
+        window.AppAlert.error('Could not look for new faces');
+      } finally {
+        this.refreshing = false;
+      }
+    },
+
     _reloadQueue() {
-      this.$ajax(window.location.pathname + window.location.search, {
+      return this.$ajax(window.location.pathname + window.location.search, {
         targets: ['photos-nav', 'photos-content'],
         focus: false,
       });

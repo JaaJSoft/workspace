@@ -17,14 +17,28 @@
         >
           <i data-lucide="arrow-left" class="w-4 h-4"></i>
         </a>
-        <h1 class="text-lg font-semibold truncate">Review people</h1>
+        <div class="min-w-0">
+          <h1 class="text-lg font-semibold truncate">Review people</h1>
+          <p
+            class="sm:hidden text-xs text-base-content/60 tabular-nums truncate"
+            x-text="leftLabel()"
+          >
+            {{ review_left_label }}
+          </p>
+        </div>
         <div class="ml-auto flex items-center gap-2">
           <span
-            class="text-sm text-base-content/60 tabular-nums whitespace-nowrap"
+            class="max-sm:hidden text-sm text-base-content/60 tabular-nums whitespace-nowrap"
             title="People to name: groups of faces nobody is named for yet. Faces to check: faces under a named person, or in no group, that may be someone else."
             x-text="leftLabel()"
           >{{ review_left_label }}</span>
-          {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="false" title="Look for new faces to check" %}
+          <span
+            class="contents"
+            @ajax:send="refreshing = true"
+            @ajax:after="refreshing = false"
+          >
+            {% include "ui/partials/refresh_button.html" with url_expr="'"|add:review_url|add:"'" target="photos-nav photos-content" loading_expr="refreshing" title="Look for new faces to check" %}
+          </span>
         </div>
       </div>
     </header>
@@ -39,12 +53,37 @@
       <template x-for="card in cards" :key="card.key">
         {% include "photos/ui/partials/review_card.html" %}
       </template>
-      <p
-        x-show="cards.length && toName + toCheck > cards.length"
-        x-cloak
-        class="text-xs text-center text-base-content/60"
-        x-text="'The next ' + (toName + toCheck - cards.length) + ' come once these are settled.'"
-      ></p>
+      <template x-if="cards.length">
+        <footer
+          class="rounded-box border-2 border-dashed border-base-300 bg-base-200/40 px-4 py-6 sm:py-8 mb-[env(safe-area-inset-bottom)] flex flex-col items-center gap-4 text-center"
+        >
+          <div class="rounded-full bg-module/10 p-3">
+            <i data-lucide="scan-face" class="w-6 h-6 text-module"></i>
+          </div>
+          <div class="space-y-1">
+            <h2
+              class="font-semibold"
+              x-text="toName + toCheck > cards.length ? (toName + toCheck - cards.length) + ' more waiting' : 'That’s all for now'"
+            ></h2>
+            <p
+              class="text-sm text-base-content/60 max-w-sm"
+              x-text="toName + toCheck > cards.length ? 'They come once these are settled. Look again to bring in the faces read since this page opened.' : 'Faces read since this page opened show up when you look again.'"
+            ></p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-module w-full sm:w-auto sm:min-w-56 gap-2 shadow-sm"
+            :class="{ 'pointer-events-none': refreshing }"
+            :aria-busy="refreshing"
+            @click="refresh()"
+          >
+            <span class="inline-flex" :class="refreshing && 'animate-spin'">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </span>
+            <span x-text="refreshing ? 'Looking…' : 'Look for new faces'"></span>
+          </button>
+        </footer>
+      </template>
 
       <template x-if="!cards.length">
         <div
@@ -57,11 +96,27 @@
           <p class="text-sm text-base-content/60 max-w-sm">
             New people and faces to check show up here as more photos are read for faces.
           </p>
-          <a
-            href="{{ people_url }}"
-            x-target.push="photos-nav photos-content"
-            class="btn btn-module btn-sm"
-          >Back to People</a>
+          <div
+            class="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm gap-2"
+              :class="{ 'pointer-events-none': refreshing }"
+              :aria-busy="refreshing"
+              @click="refresh()"
+            >
+              <span class="inline-flex" :class="refreshing && 'animate-spin'">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+              </span>
+              Look again
+            </button>
+            <a
+              href="{{ people_url }}"
+              x-target.push="photos-nav photos-content"
+              class="btn btn-module btn-sm"
+            >Back to People</a>
+          </div>
         </div>
       </template>
     </div>

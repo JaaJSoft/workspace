@@ -123,6 +123,7 @@ class ReviewReads:
             user_faces(self.user)
             .filter(cluster__in=list(clusters), assignment=Face.Assignment.AUTO)
             .values_list("pk", "cluster_id", "embedding")
+            .iterator(chunk_size=500)
         ):
             vector, centroid = _unit(blob), centroids[cluster_id]
             if vector is None or centroid is None:

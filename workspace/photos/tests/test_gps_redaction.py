@@ -281,3 +281,315 @@ class VideoTests(SimpleTestCase):
         )
 
         self.assertEqual(tags["com.apple.quicktime.make"], "Apple")
+
+
+def _box(kind, payload):
+    return struct.pack(">I", 8 + len(payload)) + kind + payload
+
+
+def _gps_tiff(**tags):
+    """A little-endian TIFF block whose IFD0 points at a GPS IFD."""
+    exif = _exif()
+    for tag, value in tags.items():
+        exif[getattr(ExifTags.Base, tag)] = value
+    return exif.tobytes()[6:]
+
+
+def _read_exif(tiff):
+    exif = Image.Exif()
+    exif.load(b"Exif\x00\x00" + tiff)
+    return exif
+
+
+def _located(tiff):
+    return bool(_read_exif(tiff).get_ifd(ExifTags.IFD.GPSInfo))
+
+
+def _png_crcs_hold(data):
+    position = 8
+    while position < len(data):
+        (length,) = struct.unpack(">I", data[position : position + 4])
+        chunk = data[position + 4 : position + 8 + length]
+        (crc,) = struct.unpack(
+            ">I", data[position + 8 + length : position + 12 + length]
+        )
+        if zlib.crc32(chunk) & 0xFFFFFFFF != crc:
+            return False
+        position += 12 + length
+    return True
+
+
+class RawTests(SimpleTestCase):
+    def test_dng(self):
+        from workspace.files.tests.rasters import dng_bytes
+
+        data = dng_bytes(gps=(48, 2))
+        self.assertTrue(Image.open(io.BytesIO(data)).getexif().get_ifd(0x8825))
+
+        served = _redacted(data)
+
+        self.assertEqual(len(served), len(data))
+        image = Image.open(io.BytesIO(served))
+        self.assertEqual(dict(image.getexif().get_ifd(ExifTags.IFD.GPSInfo)), {})
+        self.assertEqual(image.getexif().get(ExifTags.Base.Model), "EOS R6")
+
+    def test_olympus_and_panasonic_tiff_magics(self):
+        tiff = _gps_tiff()
+        for magic in (b"IIRO", b"IIRS", b"IIU\x00"):
+            with self.subTest(magic=magic):
+                served = _redacted(magic + tiff[4:])
+
+                self.assertFalse(_located(b"II*\x00" + served[4:]))
+
+    def test_the_jpeg_preview_of_a_panasonic_rw2(self):
+        preview = _encode("JPEG")
+        header = b"IIU\x00" + struct.pack("<I", 8)
+        directory = struct.pack("<HHHII", 1, 0x2E, 7, len(preview), 26) + bytes(4)
+
+        served = _redacted(header + directory + preview)
+
+        exif = Image.open(io.BytesIO(served[26:])).getexif()
+        self.assertEqual(dict(exif.get_ifd(ExifTags.IFD.GPSInfo)), {})
+
+    def test_the_jpeg_preview_of_a_fujifilm_raf(self):
+        preview = _encode("JPEG")
+        header = b"FUJIFILMCCD-RAW 0201FF383501".ljust(84, b"\x00")
+        header += struct.pack(">II", 100, len(preview))
+
+        served = _redacted(header.ljust(100, b"\x00") + preview)
+
+        exif = Image.open(io.BytesIO(served[100:])).getexif()
+        self.assertEqual(dict(exif.get_ifd(ExifTags.IFD.GPSInfo)), {})
+        self.assertEqual(exif[ExifTags.Base.Make], "Apple")
+
+    def test_the_gps_block_of_a_canon_cr3(self):
+        camera = Image.Exif()
+        camera[ExifTags.Base.Make] = "Canon"
+        position = Image.Exif()
+        position.update(GPS)
+        cmt1, cmt4 = camera.tobytes()[6:], position.tobytes()[6:]
+        canon = bytes.fromhex("85c0b687820f11e08111f4ce462b6a48")
+        moov = _box(b"uuid", canon + _box(b"CMT1", cmt1) + _box(b"CMT4", cmt4))
+        data = _box(b"ftyp", b"crx \x00\x00\x00\x01crx ") + _box(b"moov", moov)
+        self.assertEqual(_read_exif(cmt4)[ExifTags.GPS.GPSLatitudeRef], "N")
+
+        served = _redacted(data)
+
+        at = data.index(cmt4)
+        self.assertEqual(dict(_read_exif(served[at : at + len(cmt4)])), {})
+        at = data.index(cmt1)
+        self.assertEqual(_read_exif(served[at : at + len(cmt1)])[271], "Canon")
+
+    def test_a_tiff_photo(self):
+        served = _redacted(_gps_tiff())
+
+        self.assertFalse(_located(served))
+        self.assertEqual(_read_exif(served)[ExifTags.Base.Make], "Apple")
+
+    def test_a_directory_pointing_outside_the_file(self):
+        for data in (b"II*\x00" + struct.pack("<I", 10_000), b"MM\x00*\x00"):
+            self.assertEqual(location_patches(io.BytesIO(data)), [])
+
+
+class ContainerDetailTests(SimpleTestCase):
+    def test_a_big_endian_exif_block(self):
+        tiff = struct.pack(">2sHI", b"MM", 42, 8)
+        tiff += struct.pack(">HHHII", 1, 0x8825, 4, 1, 26) + bytes(4)
+        tiff += struct.pack(">HHHII", 1, 2, 5, 3, 44) + bytes(4)
+        tiff += struct.pack(">6I", 48, 1, 51, 1, 30, 1)
+
+        served = _redacted(tiff)
+
+        self.assertEqual(served[:26], tiff[:26])
+        self.assertEqual(served[26:], bytes(len(tiff) - 26))
+
+    def test_png_xmp(self):
+        from PIL.PngImagePlugin import PngInfo
+
+        info = PngInfo()
+        info.add_itxt("XML:com.adobe.xmp", XMP.decode())
+        buf = io.BytesIO()
+        _picture().save(buf, format="PNG", pnginfo=info)
+
+        served = _redacted(buf.getvalue())
+
+        self.assertNotIn(b"51.504", served)
+        self.assertTrue(_png_crcs_hold(served))
+
+    def test_a_compressed_png_xmp_is_left_as_is(self):
+        from PIL.PngImagePlugin import PngInfo
+
+        info = PngInfo()
+        info.add_itxt("XML:com.adobe.xmp", XMP.decode(), zip=True)
+        buf = io.BytesIO()
+        _picture().save(buf, format="PNG", pnginfo=info)
+
+        self.assertEqual(location_patches(io.BytesIO(buf.getvalue())), [])
+
+    def test_heic_xmp(self):
+        buf = io.BytesIO()
+        _picture().save(buf, format="HEIF", xmp=XMP, quality=-1)
+        self.assertIn(b"51.504", buf.getvalue())
+
+        self.assertNotIn(b"51.504", _redacted(buf.getvalue()))
+
+    def test_video_metadata_boxes(self):
+        xmp_uuid = bytes.fromhex("be7acfcb97a942e89c71999491e3afac")
+        udta = (
+            _box(b"XMP_", XMP)
+            + _box(b"loci", bytes(4) + b"home\x00" + bytes(20))
+            + _box(b"\xa9xyz", struct.pack(">HH", 18, 0) + b"+48.8584+002.2945/")
+        )
+        payload = _box(b"udta", udta)
+        # A 64-bit size, as a large moov writes it.
+        moov = struct.pack(">I4sQ", 1, b"moov", 16 + len(payload)) + payload
+        data = (
+            _box(b"ftyp", b"isom\x00\x00\x02\x00isom")
+            + _box(b"uuid", xmp_uuid + XMP)
+            + moov
+        )
+
+        served = _redacted(data)
+
+        self.assertEqual(len(served), len(data))
+        for value in (b"51.504", b"17.67", b"home", b"48.8584"):
+            self.assertNotIn(value, served)
+        self.assertEqual(served.count(b"free"), 2)
+
+    def test_a_box_running_to_the_end_of_the_file(self):
+        udta = _box(b"udta", _box(b"\xa9xyz", b"\x00\x12\x00\x00+48.8584+002.2945/"))
+        data = _box(b"ftyp", b"isom\x00\x00\x02\x00") + b"\x00\x00\x00\x00moov" + udta
+
+        self.assertNotIn(b"48.8584", _redacted(data))
+
+    def test_an_mpf_index_pointing_outside_its_segment(self):
+        jpeg = _encode("JPEG")
+        segment = b"MPF\x00II*\x00" + struct.pack("<I", 5000)
+        app2 = b"\xff\xe2" + struct.pack(">H", 2 + len(segment)) + segment
+        data = jpeg[:2] + app2 + jpeg[2:]
+
+        self.assertFalse(
+            Image.open(io.BytesIO(_redacted(data))).getexif().get_ifd(0x8825)
+        )
+
+
+class PatchedFileApiTests(SimpleTestCase):
+    def test_it_reads_like_the_file_it_wraps(self):
+        handle = io.BytesIO(b"abcdef")
+        handle.name = "photo.jpg"
+
+        with PatchedFile(handle, [(2, b"XY")]) as patched:
+            self.assertEqual(patched.name, "photo.jpg")
+            self.assertTrue(patched.seekable())
+            self.assertTrue(patched.readable())
+            self.assertFalse(patched.closed)
+            self.assertEqual(b"".join(patched), b"abXYef")
+        self.assertTrue(patched.closed)
+
+
+class DamagedFileTests(SimpleTestCase):
+    """Every file served to someone else is read here: a truncated or
+    corrupted one must never fail the response."""
+
+    def fixtures(self):
+        from workspace.files.tests.rasters import dng_bytes
+
+        second = _picture((32, 24), (1, 2, 3))
+        second.info["exif"] = _exif().tobytes()
+        mpo = io.BytesIO()
+        _picture().save(
+            mpo, format="MPO", save_all=True, append_images=[second], exif=_exif()
+        )
+        heic = io.BytesIO()
+        _picture().save(heic, format="HEIF", xmp=XMP, exif=_exif(), quality=-1)
+        xmp_uuid = bytes.fromhex("be7acfcb97a942e89c71999491e3afac")
+        video = _box(b"ftyp", b"isom\x00\x00\x02\x00isom") + _box(
+            b"moov",
+            _box(b"udta", _box(b"loci", bytes(24)) + _box(b"XMP_", XMP))
+            + _box(b"uuid", xmp_uuid + XMP),
+        )
+        return {
+            "jpeg": _encode("JPEG", xmp=XMP),
+            "mpo": mpo.getvalue(),
+            "png": _encode("PNG"),
+            "webp": _encode("WEBP", xmp=XMP, lossless=True),
+            "heic": heic.getvalue(),
+            "avif": _encode("AVIF"),
+            "dng": dng_bytes(gps=(48, 2)),
+            "tiff": _gps_tiff(),
+            "video": video,
+        }
+
+    def test_truncated_or_corrupted_files_never_fail(self):
+        import random
+
+        rng = random.Random(1169)
+        for name, data in self.fixtures().items():
+            with self.subTest(name=name):
+                for cut in range(len(data)):
+                    location_patches(io.BytesIO(data[:cut]))
+                for _ in range(600):
+                    damaged = bytearray(data)
+                    for _ in range(4):
+                        damaged[rng.randrange(len(damaged))] = rng.randrange(256)
+                    location_patches(io.BytesIO(bytes(damaged)))
+
+    def test_a_forged_value_count_allocates_nothing_big(self):
+        tiff = struct.pack("<2sHI", b"II", 42, 8)
+        tiff += struct.pack("<HHHII", 1, 0x8825, 4, 1, 26) + bytes(4)
+        tiff += struct.pack("<HHHII", 1, 2, 5, 100_000, 44) + bytes(4)
+
+        patches = location_patches(io.BytesIO(tiff))
+
+        self.assertEqual(patches, [(26, bytes(14))])
+
+
+class UnusualLayoutTests(SimpleTestCase):
+    def test_jpeg_fill_bytes_and_restart_markers_before_the_exif(self):
+        jpeg = _encode("JPEG")
+        data = jpeg[:2] + b"\xff\xd0\xff" + jpeg[2:]
+
+        served = _redacted(data)
+
+        exif = Image.open(io.BytesIO(served)).getexif()
+        self.assertEqual(dict(exif.get_ifd(ExifTags.IFD.GPSInfo)), {})
+
+    def test_a_webp_exif_chunk_with_the_jpeg_prefix(self):
+        exif = b"Exif\x00\x00" + _gps_tiff()
+        chunk = b"EXIF" + struct.pack("<I", len(exif)) + exif
+        data = b"RIFF" + struct.pack("<I", 4 + len(chunk)) + b"WEBP" + chunk
+
+        served = _redacted(data)
+
+        self.assertFalse(_located(served[26:]))
+
+    def test_a_raf_without_a_preview(self):
+        header = b"FUJIFILMCCD-RAW 0201FF383501".ljust(84, b"\x00")
+        for data in (header, header + struct.pack(">II", 92, 0)):
+            self.assertEqual(location_patches(io.BytesIO(data)), [])
+
+    def test_an_apple_location_key_in_a_movie_meta_box(self):
+        key = b"com.apple.quicktime.location.ISO6709"
+        keys = _box(
+            b"keys",
+            bytes(4)
+            + struct.pack(">I", 2)
+            + _box(b"mdta", b"other.key")
+            + _box(b"mdta", key),
+        )
+        value = b"+48.8584+002.2945/"
+        ilst = _box(
+            b"ilst",
+            _box(struct.pack(">I", 1), _box(b"data", struct.pack(">II", 1, 0) + b"x"))
+            + _box(
+                struct.pack(">I", 2), _box(b"data", struct.pack(">II", 1, 0) + value)
+            )
+            + _box(struct.pack(">I", 2), _box(b"name", b"short")),
+        )
+        meta = _box(b"meta", _box(b"hdlr", bytes(24)) + keys + ilst)
+        data = _box(b"ftyp", b"qt  \x00\x00\x02\x00") + _box(b"moov", meta)
+
+        served = _redacted(data)
+
+        self.assertNotIn(value, served)
+        self.assertIn(b"other.key", served)

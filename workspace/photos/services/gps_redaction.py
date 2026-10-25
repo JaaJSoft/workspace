@@ -12,7 +12,8 @@ download or a zip announcing its sizes up front all keep working, and the
 file is never buffered. Pixels and every other tag are left untouched.
 
 Covered: JPEG (and the secondary images an MPF index lists), PNG, WebP,
-HEIC / AVIF and MP4 / MOV. Not covered: a position stored in a video's timed
+HEIC / AVIF, TIFF, the camera RAWs (DNG, CR2, NEF, ARW, PEF, ORF and RW2 are
+TIFF inside, CR3 is ISO base media, RAF wraps a JPEG) and MP4 / MOV. Not covered: a position stored in a video's timed
 metadata track or in the media data itself (GoPro, drones); the album
 renditions (``album_renditions``) drop those tracks altogether.
 
@@ -22,6 +23,7 @@ never reading out of bounds.
 """
 
 import bisect
+import io
 import re
 import struct
 import zlib
@@ -32,8 +34,28 @@ MAX_BLOCK = 16 * 1024 * 1024
 # The most chunks or boxes walked at one level; a PNG writes one IDAT chunk
 # every 8 KB or so.
 MAX_CHUNKS = 100_000
+# The largest GPS value zeroed where it sits: real ones are a few dozen bytes.
+# A larger one is left, unreachable once its directory entry is zeroed: a
+# forged count would otherwise allocate megabytes per entry of a tiny file.
+MAX_GPS_VALUE = 64 * 1024
 
 _GPS_IFD_TAG = 0x8825
+# Panasonic RW2: a full JPEG preview carrying its own EXIF, GPS included.
+_RW2_PREVIEW_TAG = 0x002E
+# The byte order of a TIFF, by its first four bytes: the standard magic, and
+# the ones Olympus (ORF) and Panasonic (RW2) put in its place.
+_TIFF_MAGICS = {
+    b"II*\x00": "<",
+    b"MM\x00*": ">",
+    b"IIRO": "<",
+    b"IIRS": "<",
+    b"MMOR": ">",
+    b"IIU\x00": "<",
+}
+_RAF_MAGIC = b"FUJIFILMCCD-RAW"
+# Canon CR3: the uuid box of moov holding the EXIF blocks; CMT4 is a TIFF
+# whose first directory is the GPS one.
+_CANON_UUID = bytes.fromhex("85c0b687820f11e08111f4ce462b6a48")
 _MPF_ENTRY_TAG = 0xB002
 # Bytes per value, by TIFF field type.
 _TYPE_SIZES = {
@@ -92,6 +114,10 @@ def location_patches(handle):
             patches = _webp(handle)
         elif head[4:8] in _ISOBMFF_TOP:
             patches = _isobmff(handle)
+        elif head[:4] in _TIFF_MAGICS:
+            patches = _tiff_at(handle, 0)
+        elif head.startswith(_RAF_MAGIC[:16]):
+            patches = _raf(handle)
         else:
             patches = []
     finally:
@@ -183,41 +209,62 @@ def _unpack(fmt, data, offset):
 
 
 def _tiff(tiff, base):
-    """Patches emptying the GPS IFD of the TIFF block *tiff*, found at file
-    offset *base*: its entries, and the values longer than four bytes they
-    point to, all zeroed. An IFD of no entry is still valid TIFF."""
-    if tiff[:4] == b"II*\x00":
-        order = "<"
-    elif tiff[:4] == b"MM\x00*":
-        order = ">"
-    else:
+    """:func:`_tiff_at` over a TIFF block already read, found at file offset
+    *base*."""
+    return [(base + offset, data) for offset, data in _tiff_at(io.BytesIO(tiff), 0)]
+
+
+def _tiff_at(handle, start, *, gps_first=False):
+    """Patches emptying the GPS IFD of the TIFF starting at offset *start* of
+    *handle*: its entries, and the values longer than four bytes they point
+    to, all zeroed. An IFD of no entry is still valid TIFF. With *gps_first*,
+    the first directory is the GPS one.
+
+    Read by seeking rather than whole: in a RAW, the directories sit anywhere
+    in tens of megabytes, its offsets counted from *start*.
+    """
+    head = _read_at(handle, start, 8)
+    order = _TIFF_MAGICS.get(head[:4])
+    if order is None or len(head) < 8:
         return []
+    (first,) = struct.unpack(order + "I", head[4:])
     try:
-        (ifd0,) = _unpack(order + "I", tiff, 4)
-        (count,) = _unpack(order + "H", tiff, ifd0)
-        for index in range(count):
-            entry = ifd0 + 2 + 12 * index
-            tag, _type, _count, value = _unpack(order + "HHII", tiff, entry)
+        if gps_first:
+            return _empty_ifd(handle, start, first, order)
+        patches = []
+        for tag, _type, _count, value in _entries(handle, start, first, order):
             if tag == _GPS_IFD_TAG:
-                return _empty_ifd(tiff, value, order, base)
+                patches += _empty_ifd(handle, start, value, order)
+            elif tag == _RW2_PREVIEW_TAG:
+                preview = start + value
+                if _read_at(handle, preview, 2) == b"\xff\xd8":
+                    patches += _jpeg(handle, preview, nested=False)
+        return patches
     except _Malformed:
-        pass
-    return []
+        # A directory pointing outside the file holds no position to blank.
+        return []
 
 
-def _empty_ifd(tiff, ifd, order, base):
-    (count,) = _unpack(order + "H", tiff, ifd)
-    end = ifd + 2 + 12 * count
-    if end > len(tiff):
+def _entries(handle, start, ifd, order):
+    """``(tag, type, count, value)`` of each entry of the directory at *ifd*."""
+    head = _read_at(handle, start + ifd, 2)
+    if len(head) < 2:
         raise _Malformed
+    (count,) = struct.unpack(order + "H", head)
+    data = _read_at(handle, start + ifd + 2, 12 * count)
+    if len(data) < 12 * count:
+        raise _Malformed
+    return [_unpack(order + "HHII", data, 12 * index) for index in range(count)]
+
+
+def _empty_ifd(handle, start, ifd, order):
+    entries = _entries(handle, start, ifd, order)
     patches = []
-    for index in range(count):
-        entry = ifd + 2 + 12 * index
-        _tag, field_type, values, offset = _unpack(order + "HHII", tiff, entry)
+    for _tag, field_type, values, offset in entries:
         size = _TYPE_SIZES.get(field_type, 1) * values
-        if 4 < size and offset + size <= len(tiff):
-            patches.append((base + offset, bytes(size)))
-    patches.append((base + ifd, bytes(end - ifd)))
+        if 4 < size <= MAX_GPS_VALUE:
+            patches.append((start + offset, bytes(size)))
+    patches.append((start + ifd, bytes(2 + 12 * len(entries))))
     return patches
 
 
@@ -226,6 +273,17 @@ def _exif_payload(data, base):
     if data.startswith(b"Exif\x00\x00"):
         return _tiff(data[6:], base + 6)
     return _tiff(data, base)
+
+
+def _raf(handle):
+    """Fujifilm RAF: the embedded JPEG preview carries the EXIF, GPS included."""
+    head = _read_at(handle, 84, 8)
+    if len(head) < 8:
+        return []
+    (preview, _length) = struct.unpack(">II", head)
+    if _read_at(handle, preview, 2) != b"\xff\xd8":
+        return []
+    return _jpeg(handle, preview, nested=False)
 
 
 # ── XMP ──────────────────────────────────────────────────────
@@ -316,28 +374,24 @@ def _jpeg(handle, start, *, nested):
 def _mpf_image_offsets(index):
     """The offsets, from the MPF header, of the images after the first one
     (a depth map, a gain map, a preview), each a JPEG with its own EXIF."""
-    if index[:4] == b"II*\x00":
-        order = "<"
-    elif index[:4] == b"MM\x00*":
-        order = ">"
-    else:
+    order = _TIFF_MAGICS.get(index[:4])
+    if order is None or len(index) < 8:
         return []
+    (first,) = struct.unpack(order + "I", index[4:8])
     try:
-        (ifd,) = _unpack(order + "I", index, 4)
-        (count,) = _unpack(order + "H", index, ifd)
-        for position in range(count):
-            tag, _type, size, value = _unpack(
-                order + "HHII", index, ifd + 2 + 12 * position
-            )
-            if tag == _MPF_ENTRY_TAG:
-                entries = index[value : value + size]
-                return [
-                    _unpack(order + "I", entries, entry + 8)[0]
-                    for entry in range(0, len(entries) - 15, 16)
-                    if _unpack(order + "I", entries, entry + 8)[0]
-                ]
+        entries = _entries(io.BytesIO(index), 0, first, order)
     except _Malformed:
-        pass
+        # An index pointing outside its segment lists no image to follow.
+        return []
+    for tag, _type, size, value in entries:
+        if tag == _MPF_ENTRY_TAG:
+            table = index[value : value + size]
+            offsets = (
+                struct.unpack_from(order + "I", table, at + 8)[0]
+                for at in range(0, len(table) - 15, 16)
+            )
+            # Each image once, however often a forged table lists it.
+            return list(dict.fromkeys(offset for offset in offsets if offset))
     return []
 
 
@@ -611,6 +665,10 @@ def _moov(handle, start, end):
             patches += _udta(handle, payload, box_end)
         elif kind == b"meta":
             patches += _qt_meta(handle, payload, box_end)
+        elif kind == b"uuid" and _read_at(handle, payload, 16) == _CANON_UUID:
+            for block, _, data, _ in _boxes(handle, payload + 16, box_end):
+                if block == b"CMT4":
+                    patches += _tiff_at(handle, data, gps_first=True)
     return patches
 
 

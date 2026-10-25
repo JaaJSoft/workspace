@@ -39,6 +39,18 @@
   <div class="min-w-0 flex-1">
     <div class="flex items-center gap-1 min-w-0 min-h-8">
       <h1 class="text-lg font-semibold truncate">{{ album.card.album.title }}</h1>
+      {% if album.card.count %}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-square shrink-0"
+          title="Slideshow"
+          aria-label="Slideshow"
+          @click="playSlideshow()"
+          data-album-slideshow
+        >
+          <i data-lucide="play" class="w-4 h-4"></i>
+        </button>
+      {% endif %}
       <button
         type="button"
         class="btn btn-ghost btn-xs btn-square shrink-0"

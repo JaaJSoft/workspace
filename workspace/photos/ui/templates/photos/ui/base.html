@@ -113,7 +113,7 @@
         </div>
       {% endblock %}
     </div>
-    {% include "files/ui/partials/file_viewer_inline.html" with covers="photos-main" properties=True %}
+    {% include "files/ui/partials/file_viewer_inline.html" with covers="photos-main" properties=True slideshow=True %}
     {% comment %}
       Outside #photos-content so it survives the swap. The fade-in waits
       200 ms as a CSS transition-delay, so a view that answers at once never
@@ -200,6 +200,7 @@
 {% block extra_scripts %}
   <script src="{% static 'files/ui/js/file_actions.js' %}"></script>
   <script src="{% static 'files/ui/js/viewer_panel.js' %}"></script>
+  <script src="{% static 'files/ui/js/viewer_slideshow.js' %}"></script>
   <script src="{% static 'files/ui/js/file_viewer.js' %}"></script>
   <script src="{% static 'files/ui/js/properties_panel.js' %}"></script>
   {% properties_section_scripts %}
@@ -216,5 +217,8 @@
   <script src="{% static 'photos/ui/js/capture_details.js' %}"></script>
   <script src="{% static 'photos/ui/js/album_share.js' %}"></script>
   <script src="{% static 'photos/ui/js/timeline_sentinel.js' %}"></script>
+  {# The Map page's; any page can swap it in. Leaflet comes with the properties panel's Photo section. #}
+  <script src="{% static 'photos/ui/js/vendor/supercluster/supercluster.js' %}"></script>
+  <script src="{% static 'photos/ui/js/library_map.js' %}"></script>
   <script src="{% static 'photos/ui/js/photos.js' %}"></script>
 {% endblock %}

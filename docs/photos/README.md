@@ -81,10 +81,26 @@ forbids heavy use. The attribution is shown on the map and is required by
 every provider; HTML is allowed. Without a tile URL and an attribution there is
 no map.
 
-Each user turns the map on, from **Show on a map** in the panel or from the
-Photos preferences, which name the servers the location goes to. The map only
-changes what the viewer's own browser fetches: a photo shared or published
-through a link still carries its GPS position in the original.
+Each user turns the map on, from **Show on a map** in the panel, from the
+**Map** page or from the Photos preferences, which name the servers the
+location goes to. The map only changes what the viewer's own browser fetches:
+a photo shared or published through a link still carries its GPS position in
+the original.
+
+The same tile server draws the **Map** page of the sidebar: every located photo
+and video of the library on screen (it follows the Mine / All / Shared / group
+tabs, and the media type), grouped while they crowd. Each group shows its most
+recent photo and how many it holds; clicking one zooms in until it splits, and
+the grid beside the map lists what the area on screen holds, newest first. A
+slider over the months the library spans narrows both to a period. The page
+keeps its view and period in the URL, and **See nearby photos** under a photo's
+own map opens it around that photo. The entry is only in the sidebar on an
+instance with a tile server.
+
+All the positions of the library come down in one request
+(`GET /api/v1/photos/map`), and the grouping happens in the browser
+([Supercluster](https://github.com/mapbox/supercluster)): zooming and panning
+cost no request but the grid's, once the map rests.
 
 | Setting | Default | Meaning |
 |---|---|---|

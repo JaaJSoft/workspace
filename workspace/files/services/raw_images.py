@@ -31,6 +31,13 @@ RAW_LABELS = frozenset(RAW_FORMATS)
 
 # Enough to hold IFD0 and the strings it points to in every RAW seen so far.
 SNIFF_SIZE = 64 * 1024
+# The whole file is read to find its preview: past this, it is not opened.
+# Medium-format backs write about 200 MB.
+MAX_RAW_SIZE = 512 * 1024 * 1024
+# The bytes the preview search may walk, as a multiple of the file size. A
+# real RAW walks each of its JPEGs once and turns down a false start within
+# a few bytes, about 1x.
+SCAN_BUDGET_FACTOR = 4
 
 _TIFF_MAGICS = (b"II*\x00", b"MM\x00*")
 # Olympus and Panasonic write a TIFF under a magic number of their own.
@@ -123,8 +130,9 @@ _FRAME_MARKERS = frozenset(range(0xC0, 0xD0)) - {0xC4, 0xC8, 0xCC}
 
 
 def _jpeg_at(data, start):
-    """``(end, pixels)`` of the JPEG starting at *start*, or None when it is
-    not one. The size comes from the frame header, nothing is decoded.
+    """``(end, pixels, reached)`` of the JPEG starting at *start*: *end* is
+    None when it is not one, *reached* how far the walk read either way. The
+    size comes from the frame header, nothing is decoded.
 
     Walks the marker segments rather than looking for the next FFD9: the
     preview's own EXIF thumbnail is a JPEG nested inside it.
@@ -134,7 +142,7 @@ def _jpeg_at(data, start):
     pixels = 0
     while pos + 4 <= size:
         if data[pos] != 0xFF:
-            return None
+            return None, 0, pos
         marker = data[pos + 1]
         if marker == 0xFF:
             pos += 1
@@ -155,24 +163,31 @@ def _jpeg_at(data, start):
             elif follower == 0xFF:
                 pos += 1
             elif follower == 0xD9:
-                return pos + 2, pixels
+                return pos + 2, pixels, pos + 2
             else:
                 break
         else:
-            return None
-    return None
+            return None, 0, size
+    return None, 0, size
 
 
 def largest_jpeg(data):
-    """The largest JPEG embedded in *data*, by pixel count, or None."""
+    """The largest JPEG embedded in *data*, by pixel count, or None.
+
+    Every start-of-image byte pair is a candidate, and a forged one can walk
+    to the end of the file before failing: the bytes walked are capped at a
+    few times the file size, so a file full of them costs a linear scan
+    rather than a quadratic one.
+    """
+    budget = SCAN_BUDGET_FACTOR * len(data)
     best, best_pixels = None, 0
     pos = data.find(_SOI)
-    while pos != -1:
-        found = _jpeg_at(data, pos)
-        if found is None:
+    while pos != -1 and budget > 0:
+        end, pixels, reached = _jpeg_at(data, pos)
+        budget -= reached - pos
+        if end is None:
             pos = data.find(_SOI, pos + 3)
             continue
-        end, pixels = found
         if pixels > best_pixels:
             best, best_pixels = data[pos:end], pixels
         pos = data.find(_SOI, end)
@@ -257,7 +272,10 @@ class RawImageFile(JpegImagePlugin.JpegImageFile):
         if label is None:
             msg = "not a camera RAW"
             raise SyntaxError(msg)
-        data = head + self.fp.read()
+        data = head + self.fp.read(MAX_RAW_SIZE + 1 - len(head))
+        if len(data) > MAX_RAW_SIZE:
+            msg = "camera RAW too large to open"
+            raise SyntaxError(msg)
         preview = largest_jpeg(data)
         if preview is None:
             msg = "camera RAW without an embedded preview"

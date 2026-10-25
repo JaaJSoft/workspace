@@ -2,20 +2,26 @@
 
 import io
 from datetime import UTC, datetime
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.test import TestCase
-from PIL import ExifTags, Image, ImageOps
+from PIL import ExifTags, Image, ImageOps, UnidentifiedImageError
 
-from workspace.files.services import FileService
+from workspace.files.services import FileService, raw_images
 from workspace.files.services.detection import (
     detect_from_bytes,
     detect_from_name,
     detect_from_stream,
 )
 from workspace.files.services.image_edits import render_edited
-from workspace.files.services.raw_images import largest_jpeg, raw_label
+from workspace.files.services.raw_images import (
+    SCAN_BUDGET_FACTOR,
+    _jpeg_at,
+    largest_jpeg,
+    raw_label,
+)
 from workspace.files.tests.rasters import (
     cr3_bytes,
     jpeg_bytes,
@@ -150,3 +156,34 @@ class RawDecodingTests(TestCase):
         with Image.open(io.BytesIO(content)) as img:
             self.assertEqual(img.size, (64, 96))
             self.assertEqual(img.getexif()[ExifTags.Base.Make], "NIKON CORPORATION")
+
+
+def _forged_starts(count):
+    """Start-of-image pairs each hidden in an APP0 of the one before: from
+    any of them the segment walk reads to the end of the file."""
+    unit = b"\xff\xe0\x00\x05\xff\xd8\xff"
+    return b"\xff\xd8" + unit * count + b"\x00"
+
+
+class RawScanBoundsTests(TestCase):
+    def test_forged_starts_of_image_cost_a_bounded_scan(self):
+        # Unbounded, each start walks the rest of the file: quadratic.
+        data = _forged_starts(2000)
+        walked = []
+
+        def counting(data, start):
+            end, pixels, reached = _jpeg_at(data, start)
+            walked.append(reached - start)
+            return end, pixels, reached
+
+        with patch.object(raw_images, "_jpeg_at", counting):
+            self.assertIsNone(largest_jpeg(data))
+
+        self.assertLessEqual(sum(walked), (SCAN_BUDGET_FACTOR + 1) * len(data))
+
+    def test_a_raw_past_the_size_cap_is_not_opened(self):
+        data = tiff_raw_bytes()
+
+        with patch.object(raw_images, "MAX_RAW_SIZE", len(data) - 1):
+            with self.assertRaises(UnidentifiedImageError):
+                Image.open(io.BytesIO(data))

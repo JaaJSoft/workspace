@@ -72,3 +72,24 @@ test('a JPEG nested in the preview does not cut it short', () => {
 test('a RAW without a preview gives nothing', () => {
   assert.equal(preview(tiffHeader(1)), null);
 });
+
+test('forged starts of image cost a bounded scan', () => {
+  // Each start hides in an APP0 of the one before: unbounded, each walks the
+  // rest of the file.
+  const unit = [0xff, 0xe0, 0x00, 0x05, 0xff, 0xd8, 0xff];
+  const bytes = Uint8Array.from([0xff, 0xd8, ...Array.from({ length: 2000 }, () => unit).flat(), 0]);
+  const walk = ctx.rawPreview._jpegAt;
+  let walked = 0;
+  ctx.rawPreview._jpegAt = function (data, start) {
+    const jpeg = walk.call(this, data, start);
+    walked += jpeg.reached - start;
+    return jpeg;
+  };
+  try {
+    assert.equal(ctx.rawPreview._largestJpeg(bytes), null);
+  } finally {
+    ctx.rawPreview._jpegAt = walk;
+  }
+
+  assert.ok(walked <= (ctx.rawPreview._SCAN_BUDGET_FACTOR + 1) * bytes.length);
+});

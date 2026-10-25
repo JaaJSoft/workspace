@@ -8,22 +8,25 @@ window.rawPreview = {
 
   _TIFF_MAGICS: ['II*\0', 'MM\0*', 'IIRO', 'IIRS', 'MMOR', 'IIU\0'],
   _ORIENTATION: 0x0112,
+  // The bytes the preview search may walk, as a multiple of the file size
+  // (SCAN_BUDGET_FACTOR in raw_images.py).
+  _SCAN_BUDGET_FACTOR: 4,
 
   _ascii(bytes, start, length) {
     return String.fromCharCode(...bytes.subarray(start, start + length));
   },
 
-  // The JPEG starting at `start`: where it ends, its pixel count (from its
-  // frame header) and its APP1 segments, or null when it is not one. Walks
-  // the segments rather than looking for the next FFD9: the preview's own
-  // EXIF thumbnail is a JPEG nested inside it.
+  // The JPEG starting at `start`: where it ends (null when it is not one),
+  // its pixel count (from its frame header), its APP1 segments and how far
+  // the walk read. Walks the segments rather than looking for the next FFD9:
+  // the preview's own EXIF thumbnail is a JPEG nested inside it.
   _jpegAt(bytes, start) {
     const size = bytes.length;
     const app1 = [];
     let pixels = 0;
     let pos = start + 2;
     while (pos + 4 <= size) {
-      if (bytes[pos] !== 0xff) return null;
+      if (bytes[pos] !== 0xff) return { end: null, reached: pos };
       const marker = bytes[pos + 1];
       if (marker === 0xff) {
         pos += 1;
@@ -44,28 +47,32 @@ window.rawPreview = {
       pos += 2 + length;
       for (;;) {
         pos = bytes.indexOf(0xff, pos);
-        if (pos === -1 || pos + 1 >= size) return null;
+        if (pos === -1 || pos + 1 >= size) return { end: null, reached: size };
         const follower = bytes[pos + 1];
         if (follower === 0x00 || (follower >= 0xd0 && follower <= 0xd7)) {
           pos += 2;
         } else if (follower === 0xff) {
           pos += 1;
         } else if (follower === 0xd9) {
-          return { start, end: pos + 2, pixels, app1 };
+          return { start, end: pos + 2, pixels, app1, reached: pos + 2 };
         } else {
           break;
         }
       }
     }
-    return null;
+    return { end: null, reached: size };
   },
 
+  // A forged start of image can walk to the end of the file before failing:
+  // the bytes walked are capped, so a file full of them stays a linear scan.
   _largestJpeg(bytes) {
+    let budget = this._SCAN_BUDGET_FACTOR * bytes.length;
     let best = null;
     let pos = this._findSoi(bytes, 0);
-    while (pos !== -1) {
+    while (pos !== -1 && budget > 0) {
       const jpeg = this._jpegAt(bytes, pos);
-      if (!jpeg) {
+      budget -= jpeg.reached - pos;
+      if (jpeg.end === null) {
         pos = this._findSoi(bytes, pos + 3);
         continue;
       }

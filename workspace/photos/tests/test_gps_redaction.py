@@ -6,6 +6,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+import time
 import zlib
 from pathlib import Path
 from xml.etree import ElementTree
@@ -102,6 +103,15 @@ class ImageContainerTests(SimpleTestCase):
         self.assertNotIn(b"17.67", served)
         packet = served[served.index(b"<x:xmpmeta") :]
         ElementTree.fromstring(packet[: packet.index(b"</x:xmpmeta>") + 12])
+
+    def test_unclosed_gps_elements_take_linear_time(self):
+        crafted = b"<exif:GPSLatitude>" * 120_000
+        data = _encode("WEBP", xmp=crafted, lossless=True)
+
+        started = time.monotonic()
+        location_patches(io.BytesIO(data))
+
+        self.assertLess(time.monotonic() - started, 2)
 
     def test_png_keeps_a_valid_chunk_crc(self):
         served = self.assert_redacted(_encode("PNG"))

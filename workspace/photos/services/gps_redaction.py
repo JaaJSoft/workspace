@@ -65,6 +65,9 @@ _XMP_ELEMENT_RE = re.compile(
     rb"<([A-Za-z][\w.-]*:[Gg][Pp][Ss][\w.-]*)(?:\s[^<>]*)?(?<!/)>"
 )
 _XMP_TAG_RE = re.compile(rb"<[^<>]*>")
+# A GPS element is a few dozen bytes and a packet has about twenty of them.
+_MAX_XMP_VALUE = 4096
+_MAX_XMP_ELEMENTS = 256
 
 _ISOBMFF_TOP = {b"ftyp", b"moov", b"mdat", b"free", b"skip", b"wide", b"pnot"}
 _APPLE_LOCATION_KEY = b"com.apple.quicktime.location"
@@ -238,10 +241,20 @@ def _xmp(packet, base):
         start, end = match.span(group)
         if end > start:
             patches.append((base + start, b" " * (end - start)))
-    for match in _XMP_ELEMENT_RE.finditer(packet):
-        close = packet.find(b"</" + match.group(1), match.end())
+    covered = 0
+    for count, match in enumerate(_XMP_ELEMENT_RE.finditer(packet)):
+        if count >= _MAX_XMP_ELEMENTS:
+            break
+        if match.start() < covered:
+            continue
+        # A bounded search: a crafted packet of unclosed openers would
+        # otherwise rescan the rest of the packet once per opener.
+        close = packet.find(
+            b"</" + match.group(1), match.end(), match.end() + _MAX_XMP_VALUE
+        )
         if close < 0:
             continue
+        covered = close
         # Every text node up to the closing tag, nested rdf:Alt / rdf:li
         # values included; the tags stay, so the XML still parses.
         position = match.end()

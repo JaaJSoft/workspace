@@ -15,6 +15,7 @@
 //   _dismiss()      hide it, ending in _onClosed()
 //   _keysBlocked()  something above the viewer owns the keyboard
 //   _onOpened(uuid) optional, after each file starts loading
+//   _onShown(panel) optional, once its panel has merged, or failed to (null)
 //   _galleryRoot()  optional, the element the gallery pages through
 // and may override the configuration fields below (_openEvent, _history,
 // _filesItems, _gallery, _viewerUrl, _downloadUrl).
@@ -94,6 +95,8 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
     _downloadUrl: '/api/v1/files/{uuid}/content',
 
     _onOpened() {},
+
+    _onShown() {},
 
     _galleryRoot() {
       return document;
@@ -215,13 +218,17 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
         urls.viewer;
       // Not merged: a later open or a close took the panel over, and what is
       // in it now is not this file's.
-      if (!await this.loadViewerPanel(viewerUrl)) return;
+      if (!await this.loadViewerPanel(viewerUrl)) {
+        if (this.viewerError) this._onShown(null);
+        return;
+      }
       const panel = document.getElementById(this._viewerPanelId());
       this.viewerBlocked = !!(panel && panel.querySelector('[data-viewer-blocked]'));
       this.fileLocation = this._readLocation(panel);
       const video = at != null && panel ? panel.querySelector('video') : null;
       // Before the metadata has loaded, this sets where playback starts.
       if (video) video.currentTime = at;
+      this._onShown(panel);
     },
 
     // Every close path funnels here once the shell is hidden. Cancels any
@@ -463,6 +470,9 @@ window.fileViewerShellMixin = function fileViewerShellMixin() {
 // which children inherit and a transition-all card animates back: the
 // focus handed to it on close would land while it is still hidden.
 //
+// slideshow: true offers the slideshow (viewer_slideshow.js, which the page
+// loads first).
+//
 // Back on the listing, the row's `[data-viewer-focus]` element, if it has
 // one, takes the focus: the row's first control may be a checkbox, and an
 // input holding the focus mutes the listing's shortcuts.
@@ -472,8 +482,15 @@ window.fileViewerInline = function fileViewerInline(options) {
   let inerted = [];
   let keptObserver = null;
 
+  const shell = fileViewerShellMixin();
+  const slideshow = options && options.slideshow ? window.viewerSlideshowMixin() : {};
+
   return {
-    ...fileViewerShellMixin(),
+    ...shell,
+    ...slideshow,
+    slideshowEnabled: !!(options && options.slideshow),
+    slideshowPlaying: false,
+    slideshowIdle: false,
     _propertiesEnabled: !!(options && options.properties),
     // How far down the kept element pushes the viewer, in px.
     keptHeight: 0,
@@ -546,7 +563,13 @@ window.fileViewerInline = function fileViewerInline(options) {
       this.$nextTick(() => this.$refs.frame.focus({ preventScroll: true }));
     },
 
+    handleKeydown(event) {
+      if (this.slideshowEnabled && !this._keysBlocked() && this._slideshowKeydown(event)) return;
+      shell.handleKeydown.call(this, event);
+    },
+
     _dismiss() {
+      if (this.slideshowEnabled) this.stopSlideshow();
       this._uncover();
       const row = this.fileUuid ? this._row(this.fileUuid) : null;
       this._onClosed();
@@ -573,6 +596,7 @@ window.fileViewerInline = function fileViewerInline(options) {
       // content it covered, writing no history of its own.
       if (this._initialized) return;
       this._listen(this.$refs.frame);
+      if (this.slideshowEnabled) this._listenSlideshow();
       this._on(window, 'nav:change', () => {
         if (this.open && !new URLSearchParams(window.location.search).has('open')) {
           this._dismiss();

@@ -89,7 +89,32 @@ test('a tile opens the Files viewer with its uuid, name and type', () => {
   ctx.photosApp().openPhoto({ dataset: { uuid: 'u1', displayName: 'beach.jpg', fileType: 'jpeg' } });
   assert.equal(dispatched.length, 1);
   assert.equal(dispatched[0].type, 'open-file-viewer');
-  assert.deepEqual({ ...dispatched[0].detail }, { uuid: 'u1', name: 'beach.jpg', type: 'jpeg', at: null });
+  assert.deepEqual({ ...dispatched[0].detail }, { uuid: 'u1', name: 'beach.jpg', type: 'jpeg', at: null, slideshow: false });
+});
+
+test('the album play button opens the first tile shown with the slideshow', () => {
+  const tile = (uuid, shown) => ({ offsetParent: shown ? {} : null, dataset: { uuid, displayName: uuid + '.jpg', fileType: 'jpeg' } });
+  let selector = null;
+  const { ctx, dispatched } = load({
+    document: {
+      getElementById: () => null,
+      querySelector: () => null,
+      querySelectorAll: (s) => { selector = s; return [tile('hidden', false), tile('first', true), tile('second', true)]; },
+    },
+  });
+  ctx.photosApp().playSlideshow();
+  assert.equal(selector, '#photos-content [data-uuid][data-node-type="file"][data-viewable="1"]');
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].detail.uuid, 'first');
+  assert.equal(dispatched[0].detail.slideshow, true);
+});
+
+test('the album play button does nothing on an album with nothing to show', () => {
+  const { ctx, dispatched } = load({
+    document: { getElementById: () => null, querySelector: () => null, querySelectorAll: () => [] },
+  });
+  ctx.photosApp().playSlideshow();
+  assert.equal(dispatched.length, 0);
 });
 
 test('a video a search found opens at the moment that matched', () => {

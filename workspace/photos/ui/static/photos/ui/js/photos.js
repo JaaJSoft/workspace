@@ -558,15 +558,23 @@ window.photosApp = function photosApp() {
     },
 
     // A video found by a search opens at the moment that matched (data-at).
-    openPhoto(tile) {
+    openPhoto(tile, slideshow = false) {
       window.dispatchEvent(new CustomEvent('open-file-viewer', {
         detail: {
           uuid: tile.dataset.uuid,
           name: tile.dataset.displayName,
           type: tile.dataset.fileType,
           at: tile.dataset.at ? Number(tile.dataset.at) : null,
+          slideshow,
         },
       }));
+    },
+
+    // The album's play button: the slideshow from the first tile shown.
+    playSlideshow() {
+      const tiles = document.querySelectorAll('#photos-content [data-uuid][data-node-type="file"][data-viewable="1"]');
+      const first = Array.from(tiles).find((tile) => tile.offsetParent !== null);
+      if (first) this.openPhoto(first, true);
     },
 
     // Whether this instance embeds photos or videos ("photo", "video"), so

@@ -30,6 +30,8 @@
   @ajax:merge="_viewerMerge($event)"
   @pointermove="slideshowPlaying && slideshowWake()"
   @pointerdown="slideshowPlaying && slideshowWake()"
+  @focusin="slideshowPlaying && slideshowWake()"
+  @focusout="slideshowPlaying && slideshowWake()"
 >
   <div
     class="flex items-center gap-2 pl-4 lg:pl-6 pr-3 py-2 border-b border-base-300 bg-base-100 transition-opacity duration-300"

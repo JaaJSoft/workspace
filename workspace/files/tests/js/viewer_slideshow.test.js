@@ -30,6 +30,7 @@ function makeHost({ uuids = ['a', 'b', 'c'], blurSensitive = false, storage = {}
   const doc = new FakeElement({
     hidden: false,
     fullscreenElement: null,
+    activeElement: null,
     documentElement: { matches: () => blurSensitive },
     getElementById: () => host.panel,
     exitFullscreen() {
@@ -57,6 +58,7 @@ function makeHost({ uuids = ['a', 'b', 'c'], blurSensitive = false, storage = {}
     },
   });
   const frame = {
+    contains: (el) => !!(el && el.inFrame),
     requestFullscreen() {
       doc.fullscreenElement = frame;
       return Promise.resolve();
@@ -301,4 +303,41 @@ test('an opener asking for the slideshow starts it on the file it opened', () =>
   assert.equal(host.slideshowPlaying, false);
   win.dispatchEvent(Object.assign(new Event('open-file-viewer'), { detail: { uuid: 'a', slideshow: true } }));
   assert.equal(host.slideshowPlaying, true);
+});
+
+test('a full screen granted after the slideshow stopped is left at once', async () => {
+  const { host, doc, exits } = makeHost();
+  host.startSlideshow();
+  host.stopSlideshow();
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(exits.length, 1);
+  assert.equal(doc.fullscreenElement, null);
+});
+
+test('the controls fade once the pointer rests', () => {
+  const { host } = makeHost();
+  host.startSlideshow();
+
+  mock.timers.tick(2499);
+  assert.equal(host.slideshowIdle, false);
+  mock.timers.tick(1);
+  assert.equal(host.slideshowIdle, true);
+  host.slideshowWake();
+  assert.equal(host.slideshowIdle, false);
+});
+
+test('a control the keyboard is on stays shown, a clicked one does not hold them', () => {
+  const { host, doc } = makeHost();
+  host.startSlideshow();
+  doc.activeElement = { inFrame: true, matches: (s) => s === ':focus-visible' };
+  host.slideshowWake();
+  mock.timers.tick(10000);
+  assert.equal(host.slideshowIdle, false);
+
+  doc.activeElement = { inFrame: true, matches: () => false };
+  host.slideshowWake();
+  mock.timers.tick(2500);
+  assert.equal(host.slideshowIdle, true);
 });

@@ -79,15 +79,24 @@ window.viewerSlideshowMixin = function viewerSlideshowMixin() {
       }
     },
 
-    // Shows the controls again, and hides them once the pointer rests.
+    // Shows the controls again, and hides them once the pointer rests,
+    // unless the keyboard is on one of them: a faded control would still
+    // take the focus. A clicked button keeps the focus too, but not
+    // :focus-visible, so a mouse user still sees the controls go.
     slideshowWake() {
       this.slideshowIdle = false;
       clearTimeout(this._slideshowIdleTimer);
       this._slideshowIdleTimer = null;
       if (!this.slideshowPlaying) return;
       this._slideshowIdleTimer = setTimeout(() => {
-        if (this.slideshowPlaying) this.slideshowIdle = true;
+        if (this.slideshowPlaying && !this._slideshowControlFocused()) this.slideshowIdle = true;
       }, SLIDESHOW_IDLE_MS);
+    },
+
+    _slideshowControlFocused() {
+      const frame = this.$refs.frame;
+      const active = document.activeElement;
+      return !!(frame && active && active !== frame && frame.contains(active) && active.matches(':focus-visible'));
     },
 
     // The shell's hook, once a file's panel has merged.
@@ -205,8 +214,15 @@ window.viewerSlideshowMixin = function viewerSlideshowMixin() {
     _enterSlideshowFullscreen() {
       const frame = this.$refs.frame;
       if (document.fullscreenElement || !frame || !frame.requestFullscreen) return;
+      // Stopped while the request was pending: nothing would leave it.
       frame.requestFullscreen().then(
-        () => { this._slideshowFullscreen = true; },
+        () => {
+          if (this.slideshowPlaying) {
+            this._slideshowFullscreen = true;
+          } else if (document.fullscreenElement === frame && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+        },
         () => {},
       );
     },

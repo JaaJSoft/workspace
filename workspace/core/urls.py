@@ -28,7 +28,7 @@ urlpatterns = [
     path("api/v1/csp-report", CspReportView.as_view(), name="csp-report"),
     path("changelog", changelog_partial, name="changelog-partial"),
     path(
-        "jsi18n/<str:language>.js",
+        "i18n/<str:language>",
         WorkspaceJavaScriptCatalog.as_view(),
         name="javascript-catalog",
     ),

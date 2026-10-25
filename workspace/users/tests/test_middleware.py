@@ -249,4 +249,4 @@ class LanguageMiddlewareTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '<html\n  lang="fr"')
         self.assertContains(response, "Langue et région")
-        self.assertContains(response, "/jsi18n/fr.js")
+        self.assertContains(response, '<script src="/i18n/fr?v=')

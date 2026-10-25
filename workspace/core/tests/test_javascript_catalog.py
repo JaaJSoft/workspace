@@ -12,7 +12,7 @@ class JavaScriptCatalogTests(TestCase):
         cache.clear()
 
     def test_serves_the_catalog_of_the_language_in_the_url(self):
-        response = self.client.get("/jsi18n/fr.js")
+        response = self.client.get("/i18n/fr")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Type"].startswith("text/javascript"))
         self.assertEqual(response["Content-Language"], "fr")
@@ -23,28 +23,28 @@ class JavaScriptCatalogTests(TestCase):
         user = User.objects.create_user(username="catalog", password="pass")
         set_setting(user, "core", "language", "fr")
         self.client.force_login(user)
-        response = self.client.get("/jsi18n/en.js")
+        response = self.client.get("/i18n/en")
         self.assertEqual(response["Content-Language"], "en")
         self.assertNotContains(response, "Aujourd")
 
     def test_unknown_language_is_not_found(self):
-        self.assertEqual(self.client.get("/jsi18n/xx.js").status_code, 404)
+        self.assertEqual(self.client.get("/i18n/xx").status_code, 404)
 
     def test_django_own_catalogs_stay_out(self):
         # The admin's djangojs catalog translates "Today" in its own words
         # (with a straight apostrophe) and "Now", which no workspace catalog
         # carries.
-        response = self.client.get("/jsi18n/fr.js")
+        response = self.client.get("/i18n/fr")
         self.assertNotContains(response, "Aujourd'hui")
         self.assertNotContains(response, '"Now"')
 
     @override_settings(DEBUG=False)
     def test_browser_may_cache_it(self):
-        response = self.client.get("/jsi18n/fr.js")
+        response = self.client.get("/i18n/fr")
         self.assertIn("max-age=86400", response["Cache-Control"])
         self.assertIn("public", response["Cache-Control"])
 
     @override_settings(DEBUG=True)
     def test_revalidated_in_debug(self):
-        response = self.client.get("/jsi18n/fr.js")
+        response = self.client.get("/i18n/fr")
         self.assertEqual(response["Cache-Control"], "no-cache")
